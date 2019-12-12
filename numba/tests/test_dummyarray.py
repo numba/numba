@@ -262,6 +262,20 @@ class TestExtent(unittest.TestCase):
         self.assertEqual(len(list(arr[::2].iter_contiguous_extent())), 2)
 
 
+class TestIterate(unittest.TestCase):
+    def test_for_loop(self):
+        # for #4201
+        N = 5
+        nparr = np.empty(N)
+        arr = Array.from_desc(0, nparr.shape, nparr.strides,
+                              nparr.dtype.itemsize)
+
+        x = 0  # just a placeholder
+        # this loop should not raise AssertionError
+        for val in arr:
+            x = val
+
+
 if __name__ == '__main__':
     unittest.main()
 

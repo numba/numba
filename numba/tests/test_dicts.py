@@ -137,7 +137,7 @@ class TestCompiledDict(TestCase):
         with self.assertRaises(TypingError) as raises:
             foo(True)
         self.assertIn(
-            "Dict.value_type cannot be of type ?float64",
+            "Dict.value_type cannot be of type OptionalType(float64)",
             str(raises.exception),
         )
 
@@ -151,7 +151,7 @@ class TestCompiledDict(TestCase):
         with self.assertRaises(TypingError) as raises:
             foo(True)
         self.assertIn(
-            "Dict.key_type cannot be of type ?float64",
+            "Dict.key_type cannot be of type OptionalType(float64)",
             str(raises.exception),
         )
 

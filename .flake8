@@ -7,7 +7,7 @@ ignore =
     E741,  # Ambiguous variable names
     W503,  # line break before binary operator
     W504,  # line break after binary operator
-max-line-length = 120
+max-line-length = 80
 
 exclude =
     __pycache__
@@ -29,7 +29,6 @@ exclude =
     numba/smartarray.py
     numba/transforms.py
     numba/tracing.py
-    numba/compiler.py
     numba/ctypes_support.py
     numba/withcontexts.py
     numba/_version.py
@@ -55,7 +54,6 @@ exclude =
     numba/six.py
     numba/dummyarray.py
     numba/dataflow.py
-    numba/special.py
     numba/macro.py
     numba/runtests.py
     numba/pythonapi.py
@@ -98,7 +96,6 @@ exclude =
     numba/targets/removerefctpass.py
     numba/targets/boxing.py
     numba/targets/cffiimpl.py
-    numba/targets/arraymath.py
     numba/targets/linalg.py
     numba/targets/rangeobj.py
     numba/targets/npyfuncs.py
@@ -219,9 +216,6 @@ exclude =
     numba/tests/test_func_lifetime.py
     numba/tests/test_typeinfer.py
     numba/tests/test_return_values.py
-    numba/tests/test_parallel_backend.py
-    numba/tests/test_nrt.py
-    numba/tests/test_warnings.py
     numba/tests/test_mangling.py
     numba/tests/test_npdatetime.py
     numba/tests/test_fancy_indexing.py
@@ -245,19 +239,16 @@ exclude =
     numba/tests/serialize_usecases.py
     numba/tests/test_del.py
     numba/tests/test_gil.py
-    numba/tests/test_array_constants.py
     numba/tests/cffi_usecases.py
     numba/tests/test_slices.py
     numba/tests/test_mandelbrot.py
     numba/tests/compile_with_pycc.py
-    numba/tests/test_ir.py
     numba/tests/test_deprecations.py
     numba/tests/test_looplifting.py
     numba/tests/test_storeslice.py
     numba/tests/recursion_usecases.py
     numba/tests/dummy_module.py
     numba/tests/test_operators.py
-    numba/tests/test_exceptions.py
     numba/tests/test_comprehension.py
     numba/tests/ctypes_usecases.py
     numba/tests/test_locals.py
@@ -306,7 +297,6 @@ exclude =
     numba/tests/test_array_analysis.py
     numba/tests/test_serialize.py
     numba/tests/test_iteration.py
-    numba/tests/threading_backend_usecases.py
     numba/tests/test_runtests.py
     numba/tests/test_recarray_usecases.py
     numba/tests/test_target_overloadselector.py
@@ -319,7 +309,6 @@ exclude =
     numba/tests/test_hashing.py
     numba/tests/test_itanium_mangler.py
     numba/tests/test_sys_stdin_assignment.py
-    numba/tests/test_dispatcher.py
     numba/tests/test_ufuncs.py
     numba/tests/pdlike_usecase.py
     numba/tests/test_range.py
@@ -342,7 +331,6 @@ exclude =
     numba/tests/npyufunc/test_errors.py
     numba/tests/npyufunc/test_vectorize_decor.py
     numba/tests/npyufunc/test_parallel_ufunc_issues.py
-    numba/tests/npyufunc/test_dufunc.py
     numba/tests/npyufunc/test_parallel_env_variable.py
     numba/tests/npyufunc/test_gufunc.py
     numba/typing/cmathdecl.py
@@ -403,13 +391,9 @@ exclude =
     numba/testing/main.py
     numba/unsafe/ndarray.py
     numba/npyufunc/deviceufunc.py
-    numba/npyufunc/dufunc.py
-    numba/npyufunc/ufuncbuilder.py
     numba/npyufunc/sigparse.py
     numba/npyufunc/parfor.py
     numba/npyufunc/array_exprs.py
-    numba/npyufunc/wrappers.py
-    numba/npyufunc/parallel.py
     numba/npyufunc/decorators.py
     numba/servicelib/service.py
     numba/datamodel/models.py

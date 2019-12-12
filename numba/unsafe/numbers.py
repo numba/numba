@@ -23,3 +23,33 @@ def viewer(tyctx, val, viewty):
     retty = viewty.dtype
     sig = retty(val, viewty)
     return sig, codegen
+
+
+@intrinsic
+def trailing_zeros(typeingctx, src):
+    """Counts trailing zeros in the binary representation of an integer."""
+    if not isinstance(src, types.Integer):
+        raise TypeError(
+            "trailing_zeros is only defined for integers, but passed value was"
+            " '{}'.".format(src)
+        )
+
+    def codegen(context, builder, signature, args):
+        [src] = args
+        return builder.cttz(src, ir.Constant(ir.IntType(1), 0))
+    return src(src), codegen
+
+
+@intrinsic
+def leading_zeros(typeingctx, src):
+    """Counts leading zeros in the binary representation of an integer."""
+    if not isinstance(src, types.Integer):
+        raise TypeError(
+            "leading_zeros is only defined for integers, but passed value was "
+            "'{}'.".format(src)
+        )
+
+    def codegen(context, builder, signature, args):
+        [src] = args
+        return builder.ctlz(src, ir.Constant(ir.IntType(1), 0))
+    return src(src), codegen

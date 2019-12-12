@@ -7,6 +7,8 @@ import re
 import numpy as np
 
 from . import errors, types, config, utils
+# re-export
+from numba.cgutils import is_nonelike   # noqa: F401
 
 
 version = tuple(map(int, np.__version__.split('.')[:2]))
@@ -205,7 +207,8 @@ def map_arrayscalar_type(val):
         try:
             dtype = np.dtype(type(val))
         except TypeError:
-            raise NotImplementedError("no corresponding numpy dtype for %r" % type(val))
+            raise NotImplementedError("no corresponding numpy dtype "
+                                      "for %r" % type(val))
     return from_dtype(dtype)
 
 
@@ -235,7 +238,8 @@ def select_array_wrapper(inputs):
     selected_index = None
     for index, ty in enumerate(inputs):
         # Ties are broken by choosing the first winner, as in Numpy
-        if isinstance(ty, types.ArrayCompatible) and ty.array_priority > max_prio:
+        if (isinstance(ty, types.ArrayCompatible) and
+                ty.array_priority > max_prio):
             selected_index = index
             max_prio = ty.array_priority
 
@@ -594,3 +598,11 @@ def is_fortran(dims, strides, itemsize):
             return False
         ax += 1
     return True
+
+
+def type_can_asarray(arr):
+    """ Returns True if the type of 'arr' is supported by the Numba `np.asarray`
+    implementation, False otherwise.
+    """
+    ok = (types.Array, types.Sequence, types.Tuple, types.Number, types.Boolean)
+    return isinstance(arr, ok)

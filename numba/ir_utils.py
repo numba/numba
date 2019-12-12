@@ -21,7 +21,9 @@ from numba.targets.imputils import impl_ret_untracked
 from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.errors import (TypingError, UnsupportedError,
-                          NumbaPendingDeprecationWarning)
+                          NumbaPendingDeprecationWarning, NumbaWarning,
+                          feedback_details)
+
 import copy
 
 _unique_var_count = 0
@@ -500,7 +502,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
     if alias_map is None or arg_aliases is None:
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
                                                         func_ir)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("alias map:", alias_map)
     # keep set for easier search
     alias_set = set(alias_map.keys())
@@ -547,7 +549,8 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         # let external calls handle stmt if type matches
         if type(stmt) in remove_dead_extensions:
             f = remove_dead_extensions[type(stmt)]
-            stmt = f(stmt, lives, arg_aliases, alias_map, func_ir, typemap)
+            stmt = f(stmt, lives_n_aliases, arg_aliases, alias_map, func_ir,
+                     typemap)
             if stmt is None:
                 removed = True
                 continue
@@ -802,7 +805,7 @@ def copy_propagate(blocks, typemap):
                                  | (in_copies[label] - kill_copies[label]))
         old_point = new_point
         new_point = copy.deepcopy(out_copies)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("copy propagate out_copies:", out_copies)
     return in_copies, out_copies
 
@@ -1002,7 +1005,7 @@ def dprint_func_ir(func_ir, title, blocks=None):
     """Debug print function IR, with an optional blocks argument
     that may differ from the IR's original blocks.
     """
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         ir_blocks = func_ir.blocks
         func_ir.blocks = ir_blocks if blocks == None else blocks
         name = func_ir.func_id.func_qualname
@@ -1057,7 +1060,7 @@ def get_call_table(blocks, call_table=None, reverse_call_table=None, topological
         order = find_topo_order(blocks)
     else:
         order = list(blocks.keys())
-    
+
     for label in reversed(order):
         for inst in reversed(blocks[label].body):
             if isinstance(inst, ir.Assign):
@@ -1085,6 +1088,13 @@ def get_call_table(blocks, call_table=None, reverse_call_table=None, topological
                     if lhs in reverse_call_table:
                         call_var = reverse_call_table[lhs]
                         call_table[call_var].append(rhs.value)
+                if isinstance(rhs, ir.Var):
+                    if lhs in call_table:
+                        call_table[lhs].append(rhs.name)
+                        reverse_call_table[rhs.name] = lhs
+                    if lhs in reverse_call_table:
+                        call_var = reverse_call_table[lhs]
+                        call_table[call_var].append(rhs.name)
             for T, f in call_table_extensions.items():
                 if isinstance(inst, T):
                     f(inst, call_table, reverse_call_table)
@@ -1310,7 +1320,7 @@ def merge_adjacent_blocks(blocks):
                 break
             next_block = blocks[next_label]
             # XXX: commented out since scope objects are not consistent
-            # thoughout the compiler. for example, pieces of code are compiled
+            # throughout the compiler. for example, pieces of code are compiled
             # and inlined on the fly without proper scope merge.
             # if block.scope != next_block.scope:
             #     break
@@ -1355,7 +1365,7 @@ def simplify(func_ir, typemap, calltypes):
     # remove dead code to enable fusion
     remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap)
     func_ir.blocks = simplify_CFG(func_ir.blocks)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         dprint_func_ir(func_ir, "after simplify")
 
 class GuardException(Exception):
@@ -1500,7 +1510,7 @@ def find_const(func_ir, var):
     """
     require(isinstance(var, ir.Var))
     var_def = get_definition(func_ir, var)
-    require(isinstance(var_def, ir.Const))
+    require(isinstance(var_def, (ir.Const, ir.Global, ir.FreeVar)))
     return var_def.value
 
 def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
@@ -1513,8 +1523,8 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     if typingctx and other typing inputs are available and update typemap and
     calltypes.
     """
-    from numba import compiler
-    # mk_func can be actual function or make_function node
+    from numba import typed_passes
+    # mk_func can be actual function or make_function node, or a njit function
     if hasattr(mk_func, 'code'):
         code = mk_func.code
     elif hasattr(mk_func, '__code__'):
@@ -1540,7 +1550,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     # perform type inference if typingctx is available and update type
     # data structures typemap and calltypes
     if typingctx:
-        f_typemap, f_return_type, f_calltypes = compiler.type_inference_stage(
+        f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
                 typingctx, f_ir, arg_typs, None)
         # remove argument entries like arg.a from typemap
         arg_names = [vname for vname in f_typemap if vname.startswith("arg.")]
@@ -1550,14 +1560,15 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
         calltypes.update(f_calltypes)
     return f_ir
 
-def get_ir_of_code(glbls, fcode):
+def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     """
-    Compile a code object to get its IR.
+    Creates a function from a code object. Args:
+    * fcode - the code object
+    * func_env - string for the freevar placeholders
+    * func_arg - string for the function args (e.g. "a, b, c, d=None")
+    * func_clo - string for the closure args
+    * glbls - the function globals
     """
-    nfree = len(fcode.co_freevars)
-    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
-    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
-    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
     func_text = "def g():\n%s\n  def f(%s):\n    return (%s)\n  return f" % (
         func_env, func_arg, func_clo)
     loc = {}
@@ -1586,8 +1597,23 @@ def get_ir_of_code(glbls, fcode):
             fcode.co_cellvars)
 
     f = loc['g']()
+    # replace the code body
     f.__code__ = fcode
     f.__name__ = fcode.co_name
+    return f
+
+def get_ir_of_code(glbls, fcode):
+    """
+    Compile a code object to get its IR.
+    """
+    nfree = len(fcode.co_freevars)
+    func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
+    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
+    func_arg = ",".join(["x_%d" % i for i in range(fcode.co_argcount)])
+
+    f = _create_function_from_code_obj(fcode, func_env, func_arg, func_clo,
+                                       glbls)
+
     from numba import compiler
     ir = compiler.run_frontend(f)
     # we need to run the before inference rewrite pass to normalize the IR
@@ -1595,15 +1621,15 @@ def get_ir_of_code(glbls, fcode):
     # for example, Raise nodes need to become StaticRaise before type inference
     class DummyPipeline(object):
         def __init__(self, f_ir):
-            self.typingctx = None
-            self.targetctx = None
-            self.args = None
-            self.func_ir = f_ir
-            self.typemap = None
-            self.return_type = None
-            self.calltypes = None
-    rewrites.rewrite_registry.apply('before-inference',
-                                    DummyPipeline(ir), ir)
+            self.state = compiler.StateDict()
+            self.state.typingctx = None
+            self.state.targetctx = None
+            self.state.args = None
+            self.state.func_ir = f_ir
+            self.state.typemap = None
+            self.state.return_type = None
+            self.state.calltypes = None
+    rewrites.rewrite_registry.apply('before-inference', DummyPipeline(ir).state)
     # call inline pass to handle cases like stencils and comprehensions
     swapped = {} # TODO: get this from diagnostics store
     inline_pass = numba.inline_closurecall.InlineClosureCallPass(
@@ -1807,7 +1833,7 @@ def find_global_value(func_ir, var):
     """Check if a variable is a global value, and return the value,
     or raise GuardException otherwise.
     """
-    dfn = func_ir.get_definition(var)
+    dfn = get_definition(func_ir, var)
     if isinstance(dfn, ir.Global):
         return dfn.value
 
@@ -1816,7 +1842,7 @@ def find_global_value(func_ir, var):
         try:
             val = getattr(prev_val, dfn.attr)
             return val
-        except KeyError:
+        except AttributeError:
             raise GuardException
 
     raise GuardException
@@ -1831,6 +1857,21 @@ def raise_on_unsupported_feature(func_ir, typemap):
     unsupported features.
     """
     gdb_calls = [] # accumulate calls to gdb/gdb_init
+
+    # issue 2195: check for excessively large tuples
+    for arg_name in func_ir.arg_names:
+        if arg_name in typemap and \
+           isinstance(typemap[arg_name], types.containers.UniTuple) and \
+           typemap[arg_name].count > 1000:
+            # Raise an exception when len(tuple) > 1000. The choice of this number (1000)
+            # was entirely arbitrary
+            msg = ("Tuple '{}' length must be smaller than 1000.\n"
+                   "Large tuples lead to the generation of a prohibitively large "
+                   "LLVM IR which causes excessive memory pressure "
+                   "and large compile times.\n"
+                   "As an alternative, the use of a 'list' is recommended in "
+                   "place of a 'tuple' as lists do not suffer from this problem.".format(arg_name))
+            raise UnsupportedError(msg, func_ir.loc)
 
     for blk in func_ir.blocks.values():
         for stmt in blk.find_insts(ir.Assign):
@@ -1903,12 +1944,19 @@ def raise_on_unsupported_feature(func_ir, typemap):
             # checks for globals that are also reflected
             if isinstance(stmt.value, ir.Global):
                 ty = typemap[stmt.target.name]
-                msg = ("Writing to a %s defined in globals is not "
-                        "supported as globals are considered compile-time "
-                        "constants.")
+                msg = ("The use of a %s type, assigned to variable '%s' in "
+                       "globals, is not supported as globals are considered "
+                       "compile-time constants and there is no known way to "
+                       "compile a %s type as a constant.")
                 if (getattr(ty, 'reflected', False) or
                     isinstance(ty, types.DictType)):
-                    raise TypingError(msg % ty, loc=stmt.loc)
+                    raise TypingError(msg % (ty, stmt.value.name, ty), loc=stmt.loc)
+
+            # checks for generator expressions (yield in use when func_ir has
+            # not been identified as a generator).
+            if isinstance(stmt.value, ir.Yield) and not func_ir.is_generator:
+                msg = "The use of generator expressions is unsupported."
+                raise UnsupportedError(msg, loc=stmt.loc)
 
     # There is more than one call to function gdb/gdb_init
     if len(gdb_calls) > 1:
@@ -1921,6 +1969,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "nopython-mode\n\nConflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
         raise UnsupportedError(msg % buf)
+
 
 def warn_deprecated(func_ir, typemap):
     # first pass, just walk the type map
@@ -1941,3 +1990,121 @@ def warn_deprecated(func_ir, typemap):
                         "'%s' of function '%s'.\n\nFor more information visit "
                         "%s" % (tyname, arg, fname, url))
                 warnings.warn(NumbaPendingDeprecationWarning(msg, loc=loc))
+
+
+def resolve_func_from_module(func_ir, node):
+    """
+    This returns the python function that is being getattr'd from a module in
+    some IR, it resolves import chains/submodules recursively. Should it not be
+    possible to find the python function being called None will be returned.
+
+    func_ir - the FunctionIR object
+    node - the IR node from which to start resolving (should be a `getattr`).
+    """
+    getattr_chain = []
+    def resolve_mod(mod):
+        if getattr(mod, 'op', False) == 'getattr':
+            getattr_chain.insert(0, mod.attr)
+            try:
+                mod = func_ir.get_definition(mod.value)
+            except KeyError: # multiple definitions
+                return None
+            return resolve_mod(mod)
+        elif isinstance(mod, (ir.Global, ir.FreeVar)):
+            if isinstance(mod.value, pytypes.ModuleType):
+                return mod
+        return None
+
+    mod = resolve_mod(node)
+    if mod is not None:
+        defn = mod.value
+        for x in getattr_chain:
+            defn = getattr(defn, x, False)
+            if not defn:
+                break
+        else:
+            return defn
+    else:
+        return None
+
+
+def check_and_legalize_ir(func_ir):
+    """
+    This checks that the IR presented is legal, warns and legalizes if not
+    """
+    orig_ir = func_ir.copy()
+    post_proc = numba.postproc.PostProcessor(func_ir)
+    post_proc.run()
+    msg = ("\nNumba has detected inconsistencies in its internal "
+           "representation of the code at %s. Numba can probably recover from "
+           "this problem and is attempting to do, however something inside "
+           "Numba needs fixing...\n%s\n") % (func_ir.loc, feedback_details)
+    if not func_ir.equal_ir(orig_ir):
+        msg +=  func_ir.diff_str(orig_ir)
+        warnings.warn(NumbaWarning(msg, loc=func_ir.loc))
+
+
+def convert_code_obj_to_function(code_obj, caller_ir):
+    """
+    Converts a code object from a `make_function.code` attr in the IR into a
+    python function, caller_ir is the FunctionIR of the caller and is used for
+    the resolution of freevars.
+    """
+    fcode = code_obj.code
+    nfree = len(fcode.co_freevars)
+
+    # try and resolve freevars if they are consts in the caller's IR
+    # these can be baked into the new function
+    freevars = []
+    for x in fcode.co_freevars:
+        # not using guard here to differentiate between multiple definition and
+        # non-const variable
+        try:
+            freevar_def = caller_ir.get_definition(x)
+        except KeyError:
+            msg = ("Cannot capture a constant value for variable '%s' as there "
+                   "are multiple definitions present." % x)
+            raise TypingError(msg, loc=code_obj.loc)
+        if isinstance(freevar_def, ir.Const):
+            freevars.append(freevar_def.value)
+        else:
+            msg = ("Cannot capture the non-constant value associated with "
+                   "variable '%s' in a function that will escape." % x)
+            raise TypingError(msg, loc=code_obj.loc)
+
+    func_env = "\n".join(["  c_%d = %s" % (i, x) for i, x in enumerate(freevars)])
+    func_clo = ",".join(["c_%d" % i for i in range(nfree)])
+    co_varnames = list(fcode.co_varnames)
+
+    # This is horrible. The code object knows about the number of args present
+    # it also knows the name of the args but these are bundled in with other
+    # vars in `co_varnames`. The make_function IR node knows what the defaults
+    # are, they are defined in the IR as consts. The following finds the total
+    # number of args (args + kwargs with defaults), finds the default values
+    # and infers the number of "kwargs with defaults" from this and then infers
+    # the number of actual arguments from that.
+    n_kwargs = 0
+    n_allargs = fcode.co_argcount
+    kwarg_defaults = caller_ir.get_definition(code_obj.defaults)
+    if kwarg_defaults is not None:
+        if isinstance(kwarg_defaults, tuple):
+            d = [caller_ir.get_definition(x).value for x in kwarg_defaults]
+            kwarg_defaults_tup = tuple(d)
+        else:
+            kwarg_defaults_tup = kwarg_defaults.value
+        n_kwargs = len(kwarg_defaults_tup)
+    nargs = n_allargs - n_kwargs
+
+    func_arg = ",".join(["%s" % (co_varnames[i]) for i in range(nargs)])
+    if n_kwargs:
+        kw_const = ["%s = %s" % (co_varnames[i + nargs], kwarg_defaults_tup[i])
+                    for i in range(n_kwargs)]
+        func_arg += ", "
+        func_arg += ", ".join(kw_const)
+
+    # globals are the same as those in the caller
+    glbls = caller_ir.func_id.func.__globals__
+
+    # create the function and return it
+    return _create_function_from_code_obj(fcode, func_env, func_arg, func_clo,
+                                          glbls)

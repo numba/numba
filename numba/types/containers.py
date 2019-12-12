@@ -1,7 +1,9 @@
 from __future__ import print_function, division, absolute_import
 
-from .abstract import *
-from .common import *
+from ..six import Iterable
+from .abstract import (ConstSized, Container, Hashable, MutableSequence,
+                       Sequence, Type, TypeRef)
+from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
 from ..errors import TypingError
@@ -175,9 +177,6 @@ class _HomogeneousTuple(Sequence, BaseTuple):
     def iterator_type(self):
         return UniTupleIter(self)
 
-    def getitem(self, ind):
-        return self.dtype, intp
-
     def __getitem__(self, i):
         """
         Return element at position i
@@ -246,10 +245,18 @@ class _HeterogeneousTuple(BaseTuple):
     def __iter__(self):
         return iter(self.types)
 
+    @staticmethod
+    def is_types_iterable(types):
+        # issue 4463 - check if argument 'types' is iterable
+        if not isinstance(types, Iterable):
+            raise TypingError("Argument 'types' is not iterable")
+
 
 class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
     def __new__(cls, types):
+        _HeterogeneousTuple.is_types_iterable(types)
+
         if types and all(t == types[0] for t in types[1:]):
             return UniTuple(dtype=types[0], count=len(types))
         else:
@@ -308,6 +315,8 @@ class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
 class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
 
     def __init__(self, types, cls):
+        _HeterogeneousTuple.is_types_iterable(types)
+
         self.types = tuple(types)
         self.count = len(self.types)
         self.fields = tuple(cls._fields)
@@ -448,12 +457,78 @@ class SetEntry(Type):
         return self.set_type
 
 
+class ListType(IterableType):
+    """List type
+    """
+
+    mutable = True
+
+    def __init__(self, itemty):
+        assert not isinstance(itemty, TypeRef)
+        itemty = unliteral(itemty)
+        if isinstance(itemty, (Optional, NoneType)):
+            fmt = 'List.item_type cannot be of type {}'
+            raise TypingError(fmt.format(itemty))
+        # FIXME: _sentry_forbidden_types(itemty)
+        self.item_type = itemty
+        name = '{}[{}]'.format(
+            self.__class__.__name__,
+            itemty,
+        )
+        super(ListType, self).__init__(name)
+
+    def is_precise(self):
+        return not isinstance(self.item_type, Undefined)
+
+    @property
+    def iterator_type(self):
+        return ListTypeIterableType(self).iterator_type
+
+    @classmethod
+    def refine(cls, itemty):
+        """Refine to a precise list type
+        """
+        res = cls(itemty)
+        res.is_precise()
+        return res
+
+    def unify(self, typingctx, other):
+        """
+        Unify this with the *other* list.
+        """
+        # If other is list
+        if isinstance(other, ListType):
+            if not other.is_precise():
+                return self
+
+
+class ListTypeIterableType(SimpleIterableType):
+    """List iterable type
+    """
+    def __init__(self, parent):
+        assert isinstance(parent, ListType)
+        self.parent = parent
+        self.yield_type = self.parent.item_type
+        name = "list[{}]".format(self.parent.name)
+        iterator_type = ListTypeIteratorType(self)
+        super(ListTypeIterableType, self).__init__(name, iterator_type)
+
+
+class ListTypeIteratorType(SimpleIteratorType):
+    def __init__(self, iterable):
+        self.parent = iterable.parent
+        self.iterable = iterable
+        yield_type = iterable.yield_type
+        name = "iter[{}->{}]".format(iterable.parent, yield_type)
+        super(ListTypeIteratorType, self).__init__(name, yield_type)
+
+
 def _sentry_forbidden_types(key, value):
     # Forbids List and Set for now
     if isinstance(key, (Set, List)):
-        raise TypingError('{} as key is forbidded'.format(key))
+        raise TypingError('{} as key is forbidden'.format(key))
     if isinstance(value, (Set, List)):
-        raise TypingError('{} as value is forbidded'.format(value))
+        raise TypingError('{} as value is forbidden'.format(value))
 
 
 class DictType(IterableType):
@@ -510,7 +585,7 @@ class DictType(IterableType):
 
 
 class DictItemsIterableType(SimpleIterableType):
-    """Dictionary iteratable type for .items()
+    """Dictionary iterable type for .items()
     """
     def __init__(self, parent):
         assert isinstance(parent, DictType)
@@ -522,7 +597,7 @@ class DictItemsIterableType(SimpleIterableType):
 
 
 class DictKeysIterableType(SimpleIterableType):
-    """Dictionary iteratable type for .items()
+    """Dictionary iterable type for .keys()
     """
     def __init__(self, parent):
         assert isinstance(parent, DictType)
@@ -534,7 +609,7 @@ class DictKeysIterableType(SimpleIterableType):
 
 
 class DictValuesIterableType(SimpleIterableType):
-    """Dictionary iteratable type for .items()
+    """Dictionary iterable type for .values()
     """
     def __init__(self, parent):
         assert isinstance(parent, DictType)

@@ -8,14 +8,15 @@ import linecache
 import pprint
 import re
 import sys
-import warnings
 import operator
 from types import FunctionType, BuiltinFunctionType
+from functools import total_ordering
 
 from numba import config, errors
 from .utils import BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS, UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
+from .six import StringIO
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -40,6 +41,17 @@ class Loc(object):
         self.lines = None # the source lines from the linecache
         self.maybe_decorator = maybe_decorator
 
+    def __eq__(self, other):
+        # equivalence is solely based on filename, line and col
+        if type(self) is not type(other): return False
+        if self.filename != other.filename: return False
+        if self.line != other.line: return False
+        if self.col != other.col: return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     @classmethod
     def from_function_id(cls, func_id):
         return cls(func_id.filename, func_id.firstlineno, maybe_decorator=True)
@@ -59,7 +71,9 @@ class Loc(object):
         fn_name = None
         lines = self.get_lines()
         for x in reversed(lines[:self.line - 1]):
-            if 'def ' in x:
+            # the strip and startswith is to handle user code with commented out
+            # 'def' or use of 'def' in a docstring.
+            if x.strip().startswith('def '):
                 fn_name = x
                 break
 
@@ -179,9 +193,63 @@ class Loc(object):
         """
         return type(self)(self.filename, line, col)
 
+    def short(self):
+        """
+        Returns a short string
+        """
+        shortfilename = os.path.basename(self.filename)
+        return "%s:%s" % (shortfilename, self.line)
+
 
 # Used for annotating errors when source location is unknown.
 unknown_loc = Loc("unknown location", 0, 0)
+
+
+@total_ordering
+class SlotEqualityCheckMixin(object):
+    # some ir nodes are __dict__ free using __slots__ instead, this mixin
+    # should not trigger the unintended creation of __dict__.
+    __slots__ = tuple()
+
+    def __eq__(self, other):
+        if type(self) is type(other):
+            for name in self.__slots__:
+                if getattr(self, name) != getattr(other, name):
+                    return False
+            else:
+                return True
+        return False
+
+    def __le__(self, other):
+        return str(self) <= str(other)
+
+    def __hash__(self):
+        return id(self)
+
+
+@total_ordering
+class EqualityCheckMixin(object):
+    """ Mixin for basic equality checking """
+
+    def __eq__(self, other):
+        if type(self) is type(other):
+            def fixup(adict):
+                bad = ('loc', 'scope')
+                d = dict(adict)
+                for x in bad:
+                    d.pop(x, None)
+                return d
+            d1 = fixup(self.__dict__)
+            d2 = fixup(other.__dict__)
+            if d1 == d2:
+                return True
+        return False
+
+    def __le__(self, other):
+        return str(self) < str(other)
+
+    def __hash__(self):
+        return id(self)
 
 
 class VarMap(object):
@@ -215,6 +283,15 @@ class VarMap(object):
     def __iter__(self):
         return self._con.iterkeys()
 
+    def __eq__(self, other):
+        if type(self) is type(other):
+            # check keys only, else __eq__ ref cycles, scope -> varmap -> var
+            return self._con.keys() == other._con.keys()
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 
 class AbstractRHS(object):
     """Abstract base class for anything that can be the RHS of an assignment.
@@ -222,7 +299,7 @@ class AbstractRHS(object):
     """
 
 
-class Inst(AbstractRHS):
+class Inst(EqualityCheckMixin, AbstractRHS):
     """
     Base class for all IR instructions.
     """
@@ -748,7 +825,7 @@ class EnterWith(Stmt):
         contextmanager : IR value
         begin, end : int
             The beginning and the ending offset of the with-body.
-        loc : int
+        loc : ir.Loc instance
             Source location
         """
         assert isinstance(contextmanager, Var)
@@ -765,7 +842,7 @@ class EnterWith(Stmt):
         return [self.contextmanager]
 
 
-class Arg(AbstractRHS):
+class Arg(EqualityCheckMixin, AbstractRHS):
     def __init__(self, name, index, loc):
         assert isinstance(name, str)
         assert isinstance(index, int)
@@ -781,7 +858,7 @@ class Arg(AbstractRHS):
         raise ConstantInferenceError('%s' % self, loc=self.loc)
 
 
-class Const(AbstractRHS):
+class Const(EqualityCheckMixin, AbstractRHS):
     def __init__(self, value, loc, use_literal_type=True):
         assert isinstance(loc, Loc)
         self.value = value
@@ -795,7 +872,8 @@ class Const(AbstractRHS):
     def infer_constant(self):
         return self.value
 
-class Global(AbstractRHS):
+
+class Global(EqualityCheckMixin, AbstractRHS):
     def __init__(self, name, value, loc):
         assert isinstance(loc, Loc)
         self.name = name
@@ -814,7 +892,7 @@ class Global(AbstractRHS):
         return Global(self.name, self.value, copy.deepcopy(self.loc))
 
 
-class FreeVar(AbstractRHS):
+class FreeVar(EqualityCheckMixin, AbstractRHS):
     """
     A freevar, as loaded by LOAD_DECREF.
     (i.e. a variable defined in an enclosing non-global scope)
@@ -839,7 +917,7 @@ class FreeVar(AbstractRHS):
         return self.value
 
 
-class Var(AbstractRHS):
+class Var(EqualityCheckMixin, AbstractRHS):
     """
     Attributes
     -----------
@@ -861,7 +939,7 @@ class Var(AbstractRHS):
         self.loc = loc
 
     def __repr__(self):
-        return 'Var(%s, %s)' % (self.name, self.loc)
+        return 'Var(%s, %s)' % (self.name, self.loc.short())
 
     def __str__(self):
         return self.name
@@ -871,7 +949,7 @@ class Var(AbstractRHS):
         return self.name.startswith("$")
 
 
-class Intrinsic(object):
+class Intrinsic(EqualityCheckMixin):
     """
     A low-level "intrinsic" function.  Suitable as the callable of a "call"
     expression.
@@ -881,10 +959,10 @@ class Intrinsic(object):
     The *type* is the equivalent Numba signature of calling the intrinsic.
     """
 
-    def __init__(self, name, type, args):
+    def __init__(self, name, type, args, loc=None):
         self.name = name
         self.type = type
-        self.loc = None
+        self.loc = loc
         self.args = args
 
     def __repr__(self):
@@ -894,7 +972,7 @@ class Intrinsic(object):
         return self.name
 
 
-class Scope(object):
+class Scope(EqualityCheckMixin):
     """
     Attributes
     -----------
@@ -950,7 +1028,6 @@ class Scope(object):
         if name in self.redefined:
             name = "%s.%d" % (name, self.redefined[name])
 
-        v = Var(scope=self, name=name, loc=loc)
         if name not in self.localvars:
             return self.define(name, loc)
         else:
@@ -988,7 +1065,7 @@ class Scope(object):
                                                           self.loc)
 
 
-class Block(object):
+class Block(EqualityCheckMixin):
     """A code block
 
     """
@@ -1092,7 +1169,7 @@ class Block(object):
         return "<ir.Block at %s>" % (self.loc,)
 
 
-class Loop(object):
+class Loop(SlotEqualityCheckMixin):
     """Describes a loop-block
     """
     __slots__ = "entry", "exit"
@@ -1106,7 +1183,7 @@ class Loop(object):
         return "Loop(entry=%s, exit=%s)" % args
 
 
-class With(object):
+class With(SlotEqualityCheckMixin):
     """Describes a with-block
     """
     __slots__ = "entry", "exit"
@@ -1134,6 +1211,85 @@ class FunctionIR(object):
         self._definitions = definitions
 
         self._reset_analysis_variables()
+
+    def equal_ir(self, other):
+        """ Checks that the IR contained within is equal to the IR in other.
+        Equality is defined by being equal in fundamental structure (blocks,
+        labels, IR node type and the order in which they are defined) and the
+        IR nodes being equal. IR node equality essentially comes down to
+        ensuring a node's `.__dict__` or `.__slots__` is equal, with the
+        exception of ignoring 'loc' and 'scope' entries. The upshot is that the
+        comparison is essentially location and scope invariant, but otherwise
+        behaves as unsurprisingly as possible.
+        """
+        if type(self) is type(other):
+            return self.blocks == other.blocks
+        return False
+
+    def diff_str(self, other):
+        """
+        Compute a human readable difference in the IR, returns a formatted
+        string ready for printing.
+        """
+        msg = []
+        for label, block in self.blocks.items():
+            other_blk = other.blocks.get(label, None)
+            if other_blk is not None:
+                if block != other_blk:
+                    msg.append(("Block %s differs" % label).center(80, '-'))
+                    # see if the instructions are just a permutation
+                    block_del = [x for x in block.body if isinstance(x, Del)]
+                    oth_del = [x for x in other_blk.body if isinstance(x, Del)]
+                    if block_del != oth_del:
+                        # this is a common issue, dels are all present, but
+                        # order shuffled.
+                        if sorted(block_del) == sorted(oth_del):
+                            msg.append(("Block %s contains the same dels but "
+                                        "their order is different") % label)
+                    if len(block.body) > len(other_blk.body):
+                        msg.append("This block contains more statements")
+                    elif len(block.body) < len(other_blk.body):
+                        msg.append("Other block contains more statements")
+
+                    # find the indexes where they don't match
+                    tmp = []
+                    for idx, stmts in enumerate(zip(block.body,
+                                                    other_blk.body)):
+                        b_s, o_s = stmts
+                        if b_s != o_s:
+                            tmp.append(idx)
+
+                    def get_pad(ablock, l):
+                        pointer = '-> '
+                        sp = len(pointer) * ' '
+                        pad = []
+                        nstmt = len(ablock)
+                        for i in range(nstmt):
+                            if i in tmp:
+                                item = pointer
+                            elif i >= l:
+                                item = pointer
+                            else:
+                                item = sp
+                            pad.append(item)
+                        return pad
+
+                    min_stmt_len = min(len(block.body), len(other_blk.body))
+
+                    with StringIO() as buf:
+                        it = [("self", block), ("other", other_blk)]
+                        for name, _block in it:
+                            buf.truncate(0)
+                            _block.dump(file=buf)
+                            stmts = buf.getvalue().splitlines()
+                            pad = get_pad(_block.body, min_stmt_len)
+                            title = ("%s: block %s" % (name, label))
+                            msg.append(title.center(80, '-'))
+                            msg.extend(["{0}{1}".format(a, b) for a, b in
+                                        zip(pad, stmts)])
+        if msg == []:
+            msg.append("IR is considered equivalent.")
+        return '\n'.join(msg)
 
     def _reset_analysis_variables(self):
         from . import consts
@@ -1230,6 +1386,11 @@ class FunctionIR(object):
             print('label %s:' % (offset,), file=file)
             block.dump(file=file)
 
+    def dump_to_string(self):
+        with StringIO() as sb:
+            self.dump(file=sb)
+            return sb.getvalue()
+
     def dump_generator_info(self, file=None):
         file = file or sys.stdout
         gi = self.generator_info
@@ -1239,9 +1400,47 @@ class FunctionIR(object):
                   % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
                   file=file)
 
+    def render_dot(self, filename_prefix="numba_ir"):
+        """Render the CFG of the IR with GraphViz DOT via the
+        ``graphviz`` python binding.
+
+        Returns
+        -------
+        g : graphviz.Digraph
+            Use `g.view()` to open the graph in the default PDF application.
+        """
+
+        try:
+            import graphviz as gv
+        except ImportError:
+            raise ImportError(
+                "The feature requires `graphviz` but it is not available. "
+                "Please install with `pip install graphviz`"
+            )
+        g = gv.Digraph(
+            filename="{}{}.dot".format(
+                filename_prefix,
+                self.func_id.unique_name,
+            )
+        )
+        # Populate the nodes
+        for k, blk in self.blocks.items():
+            with StringIO() as sb:
+                blk.dump(sb)
+                label = sb.getvalue()
+            label = ''.join(
+                ['  {}\l'.format(x) for x in label.splitlines()],
+            )
+            label = "block {}\l".format(k) + label
+            g.node(str(k), label=label, shape='rect')
+        # Populate the edges
+        for src, blk in self.blocks.items():
+            for dst in blk.terminator.get_targets():
+                g.edge(str(src), str(dst))
+        return g
 
 # A stub for undefined global reference
-class UndefinedType(object):
+class UndefinedType(EqualityCheckMixin):
 
     _singleton = None
 
@@ -1256,5 +1455,6 @@ class UndefinedType(object):
 
     def __repr__(self):
         return "Undefined"
+
 
 UNDEFINED = UndefinedType()

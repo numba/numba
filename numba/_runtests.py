@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import json
 import re
+import logging
 
 
 def _main(argv, **kwds):
@@ -10,6 +11,10 @@ def _main(argv, **kwds):
     # is the name of the calling program.
     # The 'main' API function is invoked in-process, and thus
     # will synthesize that name.
+
+    if '--log' in argv:
+        logging.basicConfig(level=logging.DEBUG)
+        argv.remove('--log')
 
     if '--failed-first' in argv:
         # Failed first
@@ -24,7 +29,7 @@ def _main(argv, **kwds):
 
 
 def main(*argv, **kwds):
-    """keyword arguments are accepted for backward compatiblity only.
+    """keyword arguments are accepted for backward compatibility only.
     See `numba.testing.run_tests()` documentation for details."""
     return _main(['<main>'] + list(argv), **kwds)
 

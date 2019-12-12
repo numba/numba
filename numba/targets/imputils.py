@@ -317,12 +317,13 @@ def iternext_impl(ref_type=None):
     an _IternextResult() object easing the returning of the iternext()
     result pair.
 
-    new_ref: indicates whether the yielded item is a new ref or a borrowed
+    ref_type: a numba.targets.imputils.RefType value, the reference type used is
+    that specified through the RefType enum.
 
     The wrapped function will be called with the following signature:
         (context, builder, sig, args, iternext_result)
     """
-    if ref_type is None:
+    if ref_type not in [x for x in RefType]:
         raise ValueError("ref_type must be an enum member of imputils.RefType")
 
     def outer(func):

@@ -70,6 +70,8 @@ class Dim(object):
             return ret
         else:
             sliced = self[item:item + 1]
+            if sliced.size != 1:
+                raise IndexError
             return Dim(
                 start=sliced.start,
                 stop=sliced.stop,
@@ -162,7 +164,7 @@ class Array(object):
         self.shape = tuple(dim.size for dim in self.dims)
         self.strides = tuple(dim.stride for dim in self.dims)
         self.itemsize = itemsize
-        self.size = np.prod(self.shape)
+        self.size = functools.reduce(operator.mul, self.shape, 1)
         self.extent = self._compute_extent()
         self.flags = self._compute_layout()
 
@@ -195,7 +197,7 @@ class Array(object):
         lastidx = [s - 1 for s in self.shape]
         start = compute_index(firstidx, self.dims)
         stop = compute_index(lastidx, self.dims) + self.itemsize
-        stop = max(stop, start)   # ensure postive extent
+        stop = max(stop, start)   # ensure positive extent
         return Extent(start, stop)
 
     def __repr__(self):
@@ -272,7 +274,7 @@ class Array(object):
         if order not in 'CFA':
             raise ValueError('order not C|F|A')
 
-        newsize = np.prod(newdims)
+        newsize = functools.reduce(operator.mul, newdims, 1)
 
         if order == 'A':
             order = 'F' if self.is_f_contig else 'C'
@@ -348,8 +350,8 @@ class Array(object):
         if self.ndim <= 1:
             return self
 
-        elif (order == 'C' and self.is_c_contig or
-                          order == 'F' and self.is_f_contig):
+        elif (order in 'CA' and self.is_c_contig or
+                          order in 'FA' and self.is_f_contig):
             newshape = (self.size,)
             newstrides = (self.itemsize,)
             arr = self.from_desc(self.extent.begin, newshape, newstrides,

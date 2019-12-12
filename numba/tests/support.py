@@ -1,6 +1,7 @@
 """
 Assorted utilities for use in tests.
 """
+from __future__ import print_function
 
 import cmath
 import contextlib
@@ -16,6 +17,9 @@ import tempfile
 import time
 import io
 import ctypes
+import multiprocessing as mp
+import warnings
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -24,6 +28,7 @@ from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest
 from numba.runtime import rtsys
+from numba.six import PY2
 
 
 enable_pyobj_flags = Flags()
@@ -45,7 +50,10 @@ _windows_py27 = (sys.platform.startswith('win32') and
 _32bit = sys.maxsize <= 2 ** 32
 _reason = 'parfors not supported'
 skip_parfors_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
-
+skip_py38_or_later = unittest.skipIf(
+    utils.PYVERSION >= (3, 8),
+    "unsupported on py3.8 or later"
+)
 
 class CompilationCache(object):
     """
@@ -147,7 +155,8 @@ class TestCase(unittest.TestCase):
 
 
     _bool_types = (bool, np.bool_)
-    _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
+    _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,),
+                       (utils.text_type), (bytes, np.bytes_)]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]
     _float_types = (float, np.floating)
@@ -421,6 +430,14 @@ class TestCase(unittest.TestCase):
         self.assertPreciseEqual(got, expected)
         return got, expected
 
+    if PY2:
+        @contextmanager
+        def subTest(self, *args, **kwargs):
+            """A stub TestCase.subTest backport.
+            This implementation is a no-op.
+            """
+            yield
+
 
 class SerialMixin(object):
     """Mixin to mark test for serial execution.
@@ -489,7 +506,14 @@ def tweak_code(func, codestring=None, consts=None):
         codestring = co.co_code
     if consts is None:
         consts = co.co_consts
-    if sys.version_info >= (3,):
+    if sys.version_info >= (3, 8):
+        new_code = tp(co.co_argcount, co.co_posonlyargcount,
+                      co.co_kwonlyargcount, co.co_nlocals,
+                      co.co_stacksize, co.co_flags, codestring,
+                      consts, co.co_names, co.co_varnames,
+                      co.co_filename, co.co_name, co.co_firstlineno,
+                      co.co_lnotab)
+    elif sys.version_info >= (3,):
         new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
                       co.co_stacksize, co.co_flags, codestring,
                       consts, co.co_names, co.co_varnames,
@@ -714,3 +738,71 @@ def redirect_c_stdout():
     """
     fd = sys.__stdout__.fileno()
     return redirect_fd(fd)
+
+
+def run_in_new_process_caching(func, cache_dir_prefix=__name__, verbose=True):
+    """Spawn a new process to run `func` with a temporary cache directory.
+
+    The childprocess's stdout and stderr will be captured and redirected to
+    the current process's stdout and stderr.
+
+    Returns
+    -------
+    ret : dict
+        exitcode: 0 for success. 1 for exception-raised.
+        stdout: str
+        stderr: str
+    """
+    ctx = mp.get_context('spawn')
+    qout = ctx.Queue()
+    cache_dir = temp_directory(cache_dir_prefix)
+    with override_env_config('NUMBA_CACHE_DIR', cache_dir):
+        proc = ctx.Process(target=_remote_runner, args=[func, qout])
+        proc.start()
+        proc.join()
+        stdout = qout.get_nowait()
+        stderr = qout.get_nowait()
+        if verbose and stdout.strip():
+            print()
+            print('STDOUT'.center(80, '-'))
+            print(stdout)
+        if verbose and stderr.strip():
+            print(file=sys.stderr)
+            print('STDERR'.center(80, '-'), file=sys.stderr)
+            print(stderr, file=sys.stderr)
+    return {
+        'exitcode': proc.exitcode,
+        'stdout': stdout,
+        'stderr': stderr,
+    }
+
+
+def _remote_runner(fn, qout):
+    """Used by `run_in_new_process_caching()`
+    """
+    with captured_stderr() as stderr:
+        with captured_stdout() as stdout:
+            try:
+                fn()
+            except Exception:
+                traceback.print_exc()
+                exitcode = 1
+            else:
+                exitcode = 0
+        qout.put(stdout.getvalue())
+    qout.put(stderr.getvalue())
+    sys.exit(exitcode)
+
+class CheckWarningsMixin(object):
+    @contextlib.contextmanager
+    def check_warnings(self, messages, category=RuntimeWarning):
+        with warnings.catch_warnings(record=True) as catch:
+            warnings.simplefilter("always")
+            yield
+        found = 0
+        for w in catch:
+            for m in messages:
+                if m in str(w.message):
+                    self.assertEqual(w.category, category)
+                    found += 1
+        self.assertEqual(found, len(messages))

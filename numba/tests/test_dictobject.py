@@ -8,13 +8,15 @@ in test_dictimpl.py.
 from __future__ import print_function, absolute_import, division
 
 import sys
+import warnings
 
 import numpy as np
 
-from numba import njit, utils
+from numba import njit, utils, jitclass
 from numba import int32, int64, float32, float64, types
 from numba import dictobject, typeof
 from numba.typed import Dict
+from numba.typedobjectutils import _sentry_safe_cast
 from numba.utils import IS_PY3
 from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
@@ -896,11 +898,11 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
 class TestDictTypeCasting(TestCase):
     def check_good(self, fromty, toty):
-        dictobject._sentry_safe_cast(fromty, toty)
+        _sentry_safe_cast(fromty, toty)
 
     def check_bad(self, fromty, toty):
         with self.assertRaises(TypingError) as raises:
-            dictobject._sentry_safe_cast(fromty, toty)
+            _sentry_safe_cast(fromty, toty)
         self.assertIn(
             'cannot safely cast {fromty} to {toty}'.format(**locals()),
             str(raises.exception),
@@ -1227,6 +1229,23 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         # Value is correctly updated
         self.assertPreciseEqual(d[1], np.arange(10, dtype=np.int64) + 100)
 
+    @skip_py2
+    def test_storage_model_mismatch(self):
+        # https://github.com/numba/numba/issues/4520
+        # check for storage model mismatch in refcount ops generation
+        dct = Dict()
+        ref = [
+            ("a", True, "a"),
+            ("b", False, "b"),
+            ("c", False, "c"),
+        ]
+        # populate
+        for x in ref:
+            dct[x] = x
+        # test
+        for i, x in enumerate(ref):
+            self.assertEqual(dct[x], x)
+
 
 class TestDictForbiddenTypes(TestCase):
     def assert_disallow(self, expect, callable):
@@ -1236,7 +1255,7 @@ class TestDictForbiddenTypes(TestCase):
         self.assertIn(expect, msg)
 
     def assert_disallow_key(self, ty):
-        msg = '{} as key is forbidded'.format(ty)
+        msg = '{} as key is forbidden'.format(ty)
         self.assert_disallow(msg, lambda: Dict.empty(ty, types.intp))
 
         @njit
@@ -1245,7 +1264,7 @@ class TestDictForbiddenTypes(TestCase):
         self.assert_disallow(msg, foo)
 
     def assert_disallow_value(self, ty):
-        msg = '{} as value is forbidded'.format(ty)
+        msg = '{} as value is forbidden'.format(ty)
         self.assert_disallow(msg, lambda: Dict.empty(types.intp, ty))
 
         @njit
@@ -1334,6 +1353,30 @@ class TestDictInferred(TestCase):
             'cannot safely cast float64 to {}'.format(typeof(v)),
             str(raises.exception),
         )
+
+    def test_conflict_key_type_non_number(self):
+        # Allow non-number types to cast unsafely
+        @njit
+        def foo(k1, v1, k2):
+            d = Dict()
+            d[k1] = v1
+            return d, d[k2]
+
+        # k2 will unsafely downcast typeof(k1)
+        k1 = (np.int8(1), np.int8(2))
+        k2 = (np.int32(1), np.int32(2))
+        v1 = np.intp(123)
+
+        with warnings.catch_warnings(record=True) as w:
+            d, dk2 = foo(k1, v1, k2)
+        self.assertEqual(len(w), 1)
+        # Make sure the warning is about unsafe cast
+        self.assertIn('unsafe cast from tuple(int32 x 2) to tuple(int8 x 2)',
+                      str(w[0]))
+
+        keys = list(d.keys())
+        self.assertEqual(keys[0], (1, 2))
+        self.assertEqual(dk2, d[(np.int32(1), np.int32(2))])
 
     def test_ifelse_filled_both_branches(self):
         @njit
@@ -1499,3 +1542,26 @@ class TestNonCompiledInfer(TestCase):
         # It's typed now
         self.assertTrue(d._typed)
         self.assertEqual(d[1], 2)
+
+
+@jitclass(spec=[('a', types.intp)])
+class Bag(object):
+    def __init__(self, a):
+        self.a = a
+
+    def __hash__(self):
+        return hash(self.a)
+
+
+class TestDictWithJitclass(TestCase):
+    def test_jitclass_as_value(self):
+        @njit
+        def foo(x):
+            d = Dict()
+            d[0] = x
+            d[1] = Bag(101)
+            return d
+
+        d = foo(Bag(a=100))
+        self.assertEqual(d[0].a, 100)
+        self.assertEqual(d[1].a, 101)

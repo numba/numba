@@ -20,6 +20,7 @@ import functools
 import copy
 import warnings
 import logging
+import threading
 from itertools import product
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float)
@@ -34,22 +35,10 @@ from .drvapi import cu_occupancy_b2d_size
 from . import enums, drvapi, _extras
 from numba import config, serialize, errors
 from numba.utils import longint as long
+from numba.cuda.envvars import get_numba_envvar
 
-def get_numbapro_envvar(envvar, default=None):
-    # use vanilla get here so as to use `None` as a signal for not-set
-    value = os.environ.get(envvar)
-    if value is not None:
-        url = ("http://numba.pydata.org/numba-doc/latest/reference/"
-               "deprecation.html#deprecation-of-numbapro-environment-variables")
-        msg = ("\nEnvironment variables with the 'NUMBAPRO' prefix are "
-               "deprecated, found use of %s=%s.\n\nFor more information visit "
-               "%s" % (envvar, value, url))
-        warnings.warn(errors.NumbaDeprecationWarning(msg))
-        return value
-    else:
-        return default
 
-VERBOSE_JIT_LOG = int(get_numbapro_envvar('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
+VERBOSE_JIT_LOG = int(get_numba_envvar('VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
 SUPPORTS_IPC = sys.platform.startswith('linux')
 
@@ -98,7 +87,7 @@ class CudaAPIError(CudaDriverError):
 
 def find_driver():
 
-    envpath = get_numbapro_envvar('NUMBAPRO_CUDA_DRIVER')
+    envpath = get_numba_envvar('CUDA_DRIVER')
 
     if envpath == '0':
         # Force fail
@@ -123,10 +112,10 @@ def find_driver():
         try:
             envpath = os.path.abspath(envpath)
         except ValueError:
-            raise ValueError("NUMBAPRO_CUDA_DRIVER %s is not a valid path" %
+            raise ValueError("NUMBA_CUDA_DRIVER %s is not a valid path" %
                              envpath)
         if not os.path.isfile(envpath):
-            raise ValueError("NUMBAPRO_CUDA_DRIVER %s is not a valid file "
+            raise ValueError("NUMBA_CUDA_DRIVER %s is not a valid file "
                              "path.  Note it must be a filepath of the .so/"
                              ".dll/.dylib or the driver" % envpath)
         candidates = [envpath]
@@ -161,7 +150,7 @@ def find_driver():
 DRIVER_NOT_FOUND_MSG = """
 CUDA driver library cannot be found.
 If you are sure that a CUDA driver is installed,
-try setting environment variable NUMBAPRO_CUDA_DRIVER
+try setting environment variable NUMBA_CUDA_DRIVER
 with the file path of the CUDA driver shared library.
 """
 
@@ -362,15 +351,67 @@ class Driver(object):
         for dev in self.devices.values():
             dev.reset()
 
-    def get_context(self):
-        """Get current active context in CUDA driver runtime.
-        Note: Lowlevel calls that returns the handle.
+    def pop_active_context(self):
+        """Pop the active CUDA context and return the handle.
+        If no CUDA context is active, return None.
         """
-        handle = drvapi.cu_context(0)
-        driver.cuCtxGetCurrent(byref(handle))
-        if not handle.value:
-            return None
-        return handle
+        with self.get_active_context() as ac:
+            if ac.devnum is not None:
+                popped = drvapi.cu_context()
+                driver.cuCtxPopCurrent(byref(popped))
+                return popped
+
+    def get_active_context(self):
+        """Returns an instance of ``_ActiveContext``.
+        """
+        return _ActiveContext()
+
+
+class _ActiveContext(object):
+    """An contextmanager object to cache active context to reduce dependency
+    on querying the CUDA driver API.
+
+    Once entering the context, it is assumed that the active CUDA context is
+    not changed until the context is exited.
+    """
+    _tls_cache = threading.local()
+
+    def __enter__(self):
+        is_top = False
+        # check TLS cache
+        if hasattr(self._tls_cache, 'ctx_devnum'):
+            hctx, devnum = self._tls_cache.ctx_devnum
+        # Not cached. Query the driver API.
+        else:
+            hctx = drvapi.cu_context(0)
+            driver.cuCtxGetCurrent(byref(hctx))
+            hctx = hctx if hctx.value else None
+
+            if hctx is None:
+                devnum = None
+            else:
+                hdevice = drvapi.cu_device()
+                driver.cuCtxGetDevice(byref(hdevice))
+                devnum = hdevice.value
+
+                self._tls_cache.ctx_devnum = (hctx, devnum)
+                is_top = True
+
+        self._is_top = is_top
+        self.context_handle = hctx
+        self.devnum = devnum
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._is_top:
+            delattr(self._tls_cache, 'ctx_devnum')
+
+    def __bool__(self):
+        """Returns True is there's a valid and active CUDA context.
+        """
+        return self.context_handle is not None
+
+    __nonzero__ = __bool__
 
 
 driver = Driver()
@@ -617,13 +658,13 @@ class Context(object):
         """
         Clean up all owned resources in this context.
         """
-        _logger.info('reset context of device %s', self.device.id)
         # Free owned resources
         _logger.info('reset context of device %s', self.device.id)
         self.allocations.clear()
         self.modules.clear()
         # Clear trash
-        self.deallocations.clear()
+        if self.deallocations:
+            self.deallocations.clear()
 
     def get_memory_info(self):
         """Returns (free, total) memory in bytes in the context.
@@ -649,7 +690,10 @@ class Context(object):
     def get_max_potential_block_size(self, func, b2d_func, memsize, blocksizelimit, flags=None):
         """Suggest a launch configuration with reasonable occupancy.
         :param func: kernel for which occupancy is calculated
-        :param b2d_func: function that calculates how much per-block dynamic shared memory 'func' uses based on the block size.
+        :param b2d_func: function that calculates how much per-block dynamic
+                         shared memory 'func' uses based on the block size.
+                         Can also be the address of a C function.
+                         Use `0` to pass `NULL` to the underlying CUDA API.
         :param memsize: per-block dynamic shared memory usage intended, in bytes
         :param blocksizelimit: maximum block size the kernel is designed to handle"""
 
@@ -667,22 +711,27 @@ class Context(object):
                                                              memsize, blocksizelimit, flags)
         return (gridsize.value, blocksize.value)
 
+    def prepare_for_use(self):
+        """Initialize the context for use.
+        It's safe to be called multiple times.
+        """
+        # setup *deallocations* as the context becomes active for the first time
+        if self.deallocations is None:
+            self.deallocations = _PendingDeallocs(self.get_memory_info().total)
+
     def push(self):
         """
         Pushes this context on the current CPU Thread.
         """
         driver.cuCtxPushCurrent(self.handle)
-        # setup *deallocations* as the context becomes active for the first time
-        if self.deallocations is None:
-            self.deallocations = _PendingDeallocs(self.get_memory_info().total)
+        self.prepare_for_use()
 
     def pop(self):
         """
         Pops this context off the current CPU thread. Note that this context must
         be at the top of the context stack, otherwise an error will occur.
         """
-        popped = drvapi.cu_context()
-        driver.cuCtxPopCurrent(byref(popped))
+        popped = driver.pop_active_context()
         assert popped.value == self.handle.value
 
     def _attempt_allocation(self, allocator):
@@ -878,7 +927,7 @@ def load_module_image(context, image):
     """
     image must be a pointer
     """
-    logsz = int(get_numbapro_envvar('NUMBAPRO_CUDA_LOG_SIZE', 1024))
+    logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
 
     jitinfo = (c_char * logsz)()
     jiterrors = (c_char * logsz)()
@@ -1584,7 +1633,7 @@ FILE_EXTENSION_MAP = {
 
 class Linker(object):
     def __init__(self, max_registers=0):
-        logsz = int(get_numbapro_envvar('NUMBAPRO_CUDA_LOG_SIZE', 1024))
+        logsz = int(get_numba_envvar('CUDA_LOG_SIZE', 1024))
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
 
@@ -1700,8 +1749,9 @@ def get_devptr_for_active_ctx(ptr):
     pointer.
     """
     devptr = c_void_p(0)
-    attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
-    driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
+    if ptr != 0:
+        attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
+        driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
     return devptr
 
 

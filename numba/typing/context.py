@@ -110,9 +110,22 @@ class CallFrame(object):
         self.typeinfer = typeinfer
         self.func_id = func_id
         self.args = args
+        self._inferred_retty = set()
 
     def __repr__(self):
         return "CallFrame({}, {})".format(self.func_id, self.args)
+
+    def add_return_type(self, return_type):
+        """Add *return_type* to the list of inferred return-types.
+        If there are too many, raise `TypingError`.
+        """
+        # The maximum limit is picked arbitrarily.
+        # Don't think that this needs to be user configurable.
+        RETTY_LIMIT = 16
+        self._inferred_retty.add(return_type)
+        if len(self._inferred_retty) >= RETTY_LIMIT:
+            m = "Return type of recursive function does not converge"
+            raise errors.TypingError(m)
 
 
 class BaseContext(object):
@@ -256,10 +269,9 @@ class BaseContext(object):
         The attribute's type is returned, or None if resolution failed.
         """
         def core(typ):
-            for attrinfo in self._get_attribute_templates(typ):
-                ret = attrinfo.resolve(typ, attr)
-                if ret is not None:
-                    return ret
+            out = self.find_matching_getattr_template(typ, attr)
+            if out:
+                return out['return_type']
 
         out = core(typ)
         if out is not None:
@@ -274,6 +286,15 @@ class BaseContext(object):
             attrty = self.resolve_module_constants(typ, attr)
             if attrty is not None:
                 return attrty
+
+    def find_matching_getattr_template(self, typ, attr):
+        for template in self._get_attribute_templates(typ):
+            return_type = template.resolve(typ, attr)
+            if return_type is not None:
+                return {
+                    'template': template,
+                    'return_type': return_type,
+                }
 
     def resolve_setattr(self, target, attr, value):
         """
@@ -645,7 +666,8 @@ class BaseContext(object):
             # Can convert from second to first
             return first
 
-        if isinstance(first, types.Literal) or isinstance(second, types.Literal):
+        if isinstance(first, types.Literal) or \
+           isinstance(second, types.Literal):
             first = types.unliteral(first)
             second = types.unliteral(second)
             return self.unify_pairs(first, second)

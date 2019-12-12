@@ -17,6 +17,7 @@ Our supported platforms are:
 * NVIDIA GPUs of compute capability 2.0 and later
 * AMD ROC dGPUs (linux only and not for AMD Carrizo or Kaveri APU)
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
+* ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
 :ref:`numba-parallel` is only available on 64-bit platforms,
 and is not supported in Python 2.7 on Windows.
@@ -65,14 +66,9 @@ versions installed on the system) as the required components are bundled into
 the llvmlite wheel.
 
 To use CUDA with Numba installed by `pip`, you need to install the `CUDA SDK
-<https://developer.nvidia.com/cuda-downloads>`_ from NVIDIA.  Then you may need to
-set the following environment variables so Numba can locate the required
-libraries:
-
-* ``NUMBAPRO_CUDA_DRIVER`` - Path to the CUDA driver shared library file
-* ``NUMBAPRO_NVVM`` - Path to the CUDA libNVVM shared library file
-* ``NUMBAPRO_LIBDEVICE`` - Path to the CUDA libNVVM libdevice *directory* which contains .bc files
-
+<https://developer.nvidia.com/cuda-downloads>`_ from NVIDIA.  Please refer to
+:ref:`cudatoolkit-lookup` for details. Numba can also detect CUDA libraries
+installed system-wide on Linux.
 
 Enabling AMD ROCm GPU Support
 -----------------------------
@@ -91,13 +87,15 @@ See the `roc-examples <https://github.com/numba/roc-examples>`_ repository for
 sample notebooks.
 
 
+.. _numba-install-armv7:
+
 Installing on Linux ARMv7 Platforms
 -----------------------------------
 
 `Berryconda <https://github.com/jjhelmus/berryconda>`_ is a
 conda-based Python distribution for the Raspberry Pi.  We are now uploading
 packages to the ``numba`` channel on Anaconda Cloud for 32-bit little-endian,
-ARMv7-based boards, which currently incudes the the Raspberry Pi 2 and 3,
+ARMv7-based boards, which currently includes the Raspberry Pi 2 and 3,
 but not the Pi 1 or Zero.  These can be installed using conda from the
 ``numba`` channel::
 
@@ -107,24 +105,32 @@ Berryconda and Numba may work on other Linux-based ARMv7 systems, but this has
 not been tested.
 
 
-.. Hide this until we have the conda packages available
-    Installing on Linux ARMv8 (AArch64) Platforms
-    ---------------------------------------------
+Installing on Linux ARMv8 (AArch64) Platforms
+---------------------------------------------
 
-    Although many ARMv8 platforms are likely to require building Numba from
-    source, we do build and test conda packages on the `NVIDIA Jetson TX2
-    <https://www.nvidia.com/en-us/autonomous-machines/embedded-systems-dev-kits-modules/>`_.
-    These packages rely on an infrequently updated port of Berryconda to ARMv8
-    called `Jetconda <https://github.com/seibert/jetconda/releases>`_.  Jetconda
-    is built on Ubuntu 16.04 running on the Jetson TX2, although the packages may
-    work on other ARMv8 systems running Ubuntu 16.04.  Once Jetconda is installed,
-    Numba can be installed from the ``numba`` channel::
+We build and test conda packages on the `NVIDIA Jetson TX2
+<https://www.nvidia.com/en-us/autonomous-machines/embedded-systems-dev-kits-modules/>`_,
+but they are likely to work for other AArch64 platforms.  (Note that while the
+Raspberry Pi CPU is 64-bit, Raspbian runs it in 32-bit mode, so look at
+:ref:`numba-install-armv7` instead.)
 
-        $ conda install -c numba numba
+Conda-forge support for AArch64 is still quite experimental and packages are limited,
+but it does work enough for Numba to build and pass tests.  To set up the environment:
 
-    To enable CUDA support on the TX2, set the ``NUMBAPRO`` environment variables
-    as described above.
+* Install `conda4aarch64 <https://github.com/jjhelmus/conda4aarch64/releases>`_.
+  This will create a minimal conda environment.
+* Add the ``c4aarch64`` and ``conda-forge`` channels to your conda
+  configuration::
 
+    $ conda config --add channels c4aarch64
+    $ conda config --add channels conda-forge
+
+* Then you can install Numba from the ``numba`` channel::
+
+    $ conda install -c numba numba
+
+On CUDA-enabled systems, like the Jetson, the CUDA toolkit should be
+automatically detected in the environment.
 
 .. _numba-source-install-instructions:
 
@@ -140,7 +146,7 @@ development environment with conda.
 
 If you are building Numba from source for other reasons, first follow the
 `llvmlite installation guide <https://llvmlite.readthedocs.io/en/latest/admin-guide/install.html>`_.
-Once that is completed, you can download the latest Numba source code from 
+Once that is completed, you can download the latest Numba source code from
 `Github <https://github.com/numba/numba>`_::
 
     $ git clone git://github.com/numba/numba.git
@@ -149,15 +155,89 @@ Source archives of the latest release can also be found on
 `PyPI <https://pypi.org/project/numba/>`_.  In addition to ``llvmlite``, you will also need:
 
 * A C compiler compatible with your Python installation.  If you are using
-  Anaconda, you can install the Linux compiler conda packages ``gcc_linux-64`` 
-  and ``gxx_linux-64``, or macOS packages ``clang_osx-64`` and
-  ``clangxx_osx-64``.
+  Anaconda, you can use the following conda packages:
+
+  * Linux ``x86``: ``gcc_linux-32`` and ``gxx_linux-32``
+  * Linux ``x86_64``: ``gcc_linux-64`` and ``gxx_linux-64``
+  * Linux ``POWER``: ``gcc_linux-ppc64le`` and ``gxx_linux-ppc64le``
+  * Linux ``ARM``: no conda packages, use the system compiler
+  * Mac OSX: ``clang_osx-64`` and ``clangxx_osx-64`` or the system compiler at
+    ``/usr/bin/clang`` (Mojave onwards)
+  * Windows: a version of Visual Studio appropriate for the Python version in
+    use
+
 * `NumPy <http://www.numpy.org/>`_
 
 Then you can build and install Numba from the top level of the source tree::
 
     $ python setup.py install
 
+.. _numba-source-install-check:
+
+Dependency List
+---------------
+
+Numba has numerous required and optional dependencies which additionally may
+vary with target operating system and hardware. The following lists them all
+(as of September 2019).
+
+* Required build time:
+
+  * ``setuptools``
+  * ``numpy``
+  * ``llvmlite``
+  * ``funcsigs`` (Python 2)
+  * ``singledispatch`` (Python 2)
+  * Compiler toolchain mentioned above
+
+* Optional build time:
+
+  * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
+    Numba's threading backend
+  * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
+    threading backend.
+  * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
+    into Numba's threading backend
+
+* Required run time:
+
+  * ``setuptools``
+  * ``numpy``
+  * ``llvmlite``
+  * ``funcsigs`` (Python 2)
+  * ``singledispatch`` (Python 2)
+
+* Optional runtime are:
+
+  * ``scipy`` - provides cython bindings used in Numba's ``np.linalg.*``
+    support
+  * ``tbb`` - provides the TBB runtime libraries used by Numba's TBB threading
+    backend
+  * ``jinja2`` - for "pretty" type annotation output (HTML) via the ``numba``
+    CLI
+  * ``cffi`` - permits use of CFFI bindings in Numba compiled functions
+  * ``intel-openmp`` - (OSX) provides OpenMP library support for Numba's OpenMP
+    threading backend
+  * ``ipython`` - if in use, caching will use IPython's cache
+    directories/caching still works
+  * ``pyyaml`` - permits the use of a ``.numba_config.yaml``
+    file for storing per project configuration options
+  * ``colorama`` - makes error message highlighting work
+  * ``icc_rt`` - (numba channel) allows Numba to use Intel SVML for extra
+    performance
+  * ``pygments`` - for "pretty" type annotation
+  * ``gdb`` as an executable on the ``$PATH`` - if you would like to use the gdb
+    support
+  * Compiler toolchain mentioned above, if you would like to use ``pycc`` for
+    Ahead-of-Time (AOT) compilation
+
+* To build the documentation:
+
+  * ``sphinx``
+  * ``pygments``
+  * ``sphinx-bootstrap``
+  * ``numpydoc``
+  * ``make`` as an executable on the ``$PATH``
 
 Checking your installation
 --------------------------
@@ -172,38 +252,41 @@ You should be able to import Numba from the Python prompt::
     >>> numba.__version__
     '0.39.0+0.g4e49566.dirty'
 
-You can also try executing the `numba -s` command to report information about
-your system capabilities::
+You can also try executing the ``numba --sysinfo`` (or ``numba -s`` for short)
+command to report information about your system capabilities. See :ref:`cli` for
+further information.
+
+::
 
     $ numba -s
     System info:
     --------------------------------------------------------------------------------
     __Time Stamp__
     2018-08-28 15:46:24.631054
-    
+
     __Hardware Information__
     Machine                             : x86_64
     CPU Name                            : haswell
     CPU Features                        :
     aes avx avx2 bmi bmi2 cmov cx16 f16c fma fsgsbase lzcnt mmx movbe pclmul popcnt
     rdrnd sse sse2 sse3 sse4.1 sse4.2 ssse3 xsave xsaveopt
-    
+
     __OS Information__
     Platform                            : Darwin-17.6.0-x86_64-i386-64bit
     Release                             : 17.6.0
     System Name                         : Darwin
     Version                             : Darwin Kernel Version 17.6.0: Tue May  8 15:22:16 PDT 2018; root:xnu-4570.61.1~1/RELEASE_X86_64
     OS specific info                    : 10.13.5   x86_64
-    
+
     __Python Information__
     Python Compiler                     : GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)
     Python Implementation               : CPython
     Python Version                      : 2.7.15
     Python Locale                       : en_US UTF-8
-    
+
     __LLVM information__
     LLVM version                        : 6.0.0
-    
+
     __CUDA Information__
     Found 1 CUDA devices
     id 0         GeForce GT 750M                              [SUPPORTED]
@@ -212,3 +295,5 @@ your system capabilities::
                                   pci bus id: 1
 
 (output truncated due to length)
+
+

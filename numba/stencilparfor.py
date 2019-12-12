@@ -48,10 +48,11 @@ class StencilPass(object):
         stencil_calls = []
         stencil_dict = {}
         for call_varname, call_list in call_table.items():
-            if len(call_list)==1 and isinstance(call_list[0], StencilFunc):
-                # Remember all calls to StencilFuncs.
-                stencil_calls.append(call_varname)
-                stencil_dict[call_varname] = call_list[0]
+            for one_call in call_list:
+                if isinstance(one_call, StencilFunc):
+                    # Remember all calls to StencilFuncs.
+                    stencil_calls.append(call_varname)
+                    stencil_dict[call_varname] = one_call
         if not stencil_calls:
             return  # return early if no stencil calls found
 
@@ -130,7 +131,7 @@ class StencilPass(object):
         gen_nodes = []
         stencil_blocks = stencil_ir.blocks
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("_mk_stencil_parfor", label, in_args, out_arr, index_offsets,
                    return_type, stencil_func, stencil_blocks)
             ir_utils.dump_blocks(stencil_blocks)
@@ -147,12 +148,12 @@ class StencilPass(object):
             name_var_table,
             self.typemap,
             self.calltypes)
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after copy_propagate")
             ir_utils.dump_blocks(stencil_blocks)
         ir_utils.remove_dead(stencil_blocks, self.func_ir.arg_names, stencil_ir,
                              self.typemap)
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after removing dead code")
             ir_utils.dump_blocks(stencil_blocks)
 
@@ -171,7 +172,7 @@ class StencilPass(object):
              stencil_ir, parfor_vars, in_args, index_offsets, stencil_func,
              arg_to_arr_dict)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after replace stencil accesses")
             ir_utils.dump_blocks(stencil_blocks)
 
@@ -211,7 +212,7 @@ class StencilPass(object):
             tuple_assign = ir.Assign(tuple_call, parfor_ind_var, loc)
             for_replacing_ret.append(tuple_assign)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after creating parfor index var")
             ir_utils.dump_blocks(stencil_blocks)
 
@@ -323,7 +324,7 @@ class StencilPass(object):
         self.replace_return_with_setitem(stencil_blocks, exit_value_var,
                                          parfor_body_exit_label)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after replacing return")
             ir_utils.dump_blocks(stencil_blocks)
 
@@ -349,7 +350,7 @@ class StencilPass(object):
         stencil_blocks = ir_utils.simplify_CFG(stencil_blocks)
         stencil_blocks[max(stencil_blocks.keys())].body.pop()
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("stencil_blocks after adding SetItem")
             ir_utils.dump_blocks(stencil_blocks)
 
@@ -650,7 +651,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
     from numba.targets.cpu import CPUContext
     from numba.targets.registry import cpu_target
     from numba.annotations import type_annotations
-    from numba.compiler import type_inference_stage
+    from numba.typed_passes import type_inference_stage
 
     # get untyped IR
     stencil_func_ir = sf.kernel_ir.copy()
@@ -668,19 +669,19 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
         tp = DummyPipeline(typingctx, targetctx, args, stencil_func_ir)
 
         numba.rewrites.rewrite_registry.apply(
-            'before-inference', tp, tp.func_ir)
+            'before-inference', tp.state)
 
-        tp.typemap, tp.return_type, tp.calltypes = type_inference_stage(
-            tp.typingctx, tp.func_ir, tp.args, None)
+        tp.state.typemap, tp.state.return_type, tp.state.calltypes = type_inference_stage(
+            tp.state.typingctx, tp.state.func_ir, tp.state.args, None)
 
         type_annotations.TypeAnnotation(
-            func_ir=tp.func_ir,
-            typemap=tp.typemap,
-            calltypes=tp.calltypes,
+            func_ir=tp.state.func_ir,
+            typemap=tp.state.typemap,
+            calltypes=tp.state.calltypes,
             lifted=(),
             lifted_from=None,
-            args=tp.args,
-            return_type=tp.return_type,
+            args=tp.state.args,
+            return_type=tp.state.return_type,
             html_output=numba.config.HTML)
 
     # make block labels unique
@@ -690,24 +691,24 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
     max_label = max(stencil_blocks.keys())
     ir_utils._max_label = max_label
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("Initial stencil_blocks")
         ir_utils.dump_blocks(stencil_blocks)
 
     # rename variables,
     var_dict = {}
-    for v, typ in tp.typemap.items():
+    for v, typ in tp.state.typemap.items():
         new_var = ir.Var(scope, mk_unique_var(v), loc)
         var_dict[v] = new_var
         typemap[new_var.name] = typ  # add new var type for overall function
     ir_utils.replace_vars(stencil_blocks, var_dict)
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("After replace_vars")
         ir_utils.dump_blocks(stencil_blocks)
 
     # add call types to overall function
-    for call, call_typ in tp.calltypes.items():
+    for call, call_typ in tp.state.calltypes.items():
         calltypes[call] = call_typ
 
     arg_to_arr_dict = {}
@@ -715,13 +716,13 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
     for block in stencil_blocks.values():
         for stmt in block.body:
             if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Arg):
-                if config.DEBUG_ARRAY_OPT == 1:
+                if config.DEBUG_ARRAY_OPT >= 1:
                     print("input_dict", input_dict, stmt.value.index,
                                stmt.value.name, stmt.value.index in input_dict)
                 arg_to_arr_dict[stmt.value.name] = input_dict[stmt.value.index].name
                 stmt.value = input_dict[stmt.value.index]
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("arg_to_arr_dict", arg_to_arr_dict)
         print("After replace arg with arr")
         ir_utils.dump_blocks(stencil_blocks)
@@ -732,13 +733,15 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
 
 class DummyPipeline(object):
     def __init__(self, typingctx, targetctx, args, f_ir):
-        self.typingctx = typingctx
-        self.targetctx = targetctx
-        self.args = args
-        self.func_ir = f_ir
-        self.typemap = None
-        self.return_type = None
-        self.calltypes = None
+        from numba.compiler import StateDict
+        self.state = StateDict()
+        self.state.typingctx = typingctx
+        self.state.targetctx = targetctx
+        self.state.args = args
+        self.state.func_ir = f_ir
+        self.state.typemap = None
+        self.state.return_type = None
+        self.state.calltypes = None
 
 
 def _get_const_index_expr(stencil_ir, func_ir, index_var):

@@ -394,6 +394,11 @@ class Literal(Type):
     _literal_type_cache = None
 
     def __init__(self, value):
+        if type(self) is Literal:
+            raise TypeError(
+                "Cannot be constructed directly. "
+                "Use `numba.types.literal(value)` instead",
+            )
         self._literal_init(value)
         fmt = "Literal[{}]({})"
         super(Literal, self).__init__(fmt.format(type(value).__name__, value))

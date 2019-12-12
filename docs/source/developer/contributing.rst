@@ -99,7 +99,7 @@ Then create an environment with the right dependencies::
 .. note::
    This installs an environment based on Python 3.6, but you can of course
    choose another version supported by Numba.  To test additional features,
-   you may also need to install ``tbb`` and/or ``llvm-openmp`` and 
+   you may also need to install ``tbb`` and/or ``llvm-openmp`` and
    ``intel-openmp``.
 
 To activate the environment for the current shell session::
@@ -183,6 +183,14 @@ following test runner options:
 
     $ python -m numba.runtests --last-failed -m -v -b
 
+When debugging, it is useful to turn on logging.  Numba logs using the
+standard ``logging`` module.  One can use the standard ways (i.e.
+``logging.basicConfig``) to configure the logging behavior.  To enable logging
+in the test runner, there is a ``--log`` flag for convenience::
+
+    $ python -m numba.runtests --log
+
+
 Development rules
 -----------------
 
@@ -209,6 +217,25 @@ well-defined coding style (would it be nice to follow :pep:`7`?).
 Code and documentation should generally fit within 80 columns, for
 maximum readability with all existing tools (such as code review UIs).
 
+Numba uses `Flake8 <http://flake8.pycqa.org/en/latest/>`_ to ensure a consistent
+Python code format throughout the project. ``flake8`` can be installed
+with ``pip`` or ``conda`` and then run from the root of the Numba repository::
+
+    flake8 numba
+
+Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
+to automatically run ``flake8`` when you make a git commit. This can be
+done by installing ``pre-commit``::
+
+    pip install pre-commit
+
+and then running::
+
+    pre-commit install
+
+from the root of the Numba repository. Now ``flake8`` will be run each time
+you commit changes. You can skip this check with ``git commit --no-verify``.
+
 Stability
 '''''''''
 
@@ -225,7 +252,7 @@ Platform support
 Every commit to the master branch is automatically tested on all of the
 platforms Numba supports.  This includes ARMv7, ARMv8, POWER8, as well as both
 AMD and NVIDIA GPUs.  The build system however is internal to Anaconda, so we
-also use `Travis CI <https://travis-ci.org/numba/numba>`_ and 
+also use `Travis CI <https://travis-ci.org/numba/numba>`_ and
 `Azure <https://dev.azure.com/numba/numba/_build>`_ to provide public continuous
 integration information for as many combinations as can be supported by the
 service.  Travis CI automatically tests all pull requests on OS X and Linux, as
@@ -251,8 +278,9 @@ Main documentation
 ''''''''''''''''''
 
 This documentation is under the ``docs`` directory of the `Numba repository`_.
-It is built with `Sphinx <http://sphinx-doc.org/>`_, which is available
-using conda or pip.
+It is built with `Sphinx <http://sphinx-doc.org/>`_ and
+`numpydoc <https://numpydoc.readthedocs.io/>`_, which are available using
+conda or pip; i.e. ``conda install sphinx numpydoc``.
 
 To build the documentation, you need the bootstrap theme::
 

@@ -28,6 +28,7 @@ from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
 from numba.parfor import print_wrapped, ensure_parallel_support
 import types as pytypes
+import operator
 
 import warnings
 from ..errors import NumbaParallelSafetyWarning
@@ -95,7 +96,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     parfor_output_arrays = numba.parfor.get_parfor_outputs(
         parfor, parfor.params)
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
-        parfor, parfor.params, lowerer.fndesc.calltypes)
+        lowerer.func_ir, parfor, parfor.params, lowerer.fndesc.calltypes)
 
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
@@ -366,8 +367,18 @@ def _lower_parfor_parallel(lowerer, parfor):
                     if isinstance(inst, ir.Assign):
                         rhs = inst.value
                         # We probably need to generalize this since it only does substitutions in
-                        # inplace_ginops.
+                        # inplace_binops.
                         if isinstance(rhs, ir.Expr) and rhs.op == 'inplace_binop' and rhs.rhs.name == init_var.name:
+                            if config.DEBUG_ARRAY_OPT:
+                                print("Adding call to reduction", rhs)
+                            if rhs.fn == operator.isub:
+                                rhs.fn = operator.iadd
+                                rhs.immutable_fn = operator.add
+                            if rhs.fn == operator.itruediv or rhs.fn == operator.ifloordiv:
+                                rhs.fn = operator.imul
+                                rhs.immutable_fn = operator.mul
+                            if config.DEBUG_ARRAY_OPT:
+                                print("After changing sub to add or div to mul", rhs)
                             # Get calltype of rhs.
                             ct = lowerer.fndesc.calltypes[rhs]
                             assert(len(ct.args) == 2)
@@ -375,12 +386,15 @@ def _lower_parfor_parallel(lowerer, parfor):
                             ctargs = (ct.args[0], redvar_typ)
                             # Update the signature of the call.
                             ct = ct.replace(args=ctargs)
-                            # Remove so we can re-insrt since calltypes is unique dict.
+                            # Remove so we can re-insert since calltypes is unique dict.
                             lowerer.fndesc.calltypes.pop(rhs)
                             # Add calltype back in for the expr with updated signature.
                             lowerer.fndesc.calltypes[rhs] = ct
                     lowerer.lower_inst(inst)
 
+        # Cleanup reduction variable
+        for v in redarrs.values():
+            lowerer.lower_inst(ir.Del(v.name, loc=loc))
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
     lowerer.fndesc.typemap = orig_typemap
@@ -591,13 +605,21 @@ def find_vars(var, varset):
     return var
 
 def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
-                    typemap):
+                    typemap, stored_arrays):
+    if inst.target.name in stored_arrays:
+        not_hoisted.append((inst, "stored array"))
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("Instruction", inst, " could not be hoisted because the created array is stored.")
+        return False
+
     uses = set()
     visit_vars_inner(inst.value, find_vars, uses)
     diff = uses.difference(dep_on_param)
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("_hoist_internal:", inst, "uses:", uses, "diff:", diff)
     if len(diff) == 0 and is_pure(inst.value, None, call_table):
-        if config.DEBUG_ARRAY_OPT == 1:
-            print("Will hoist instruction", inst)
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("Will hoist instruction", inst, typemap[inst.target.name])
         hoisted.append(inst)
         if not isinstance(typemap[inst.target.name], types.npytypes.Array):
             dep_on_param += [inst.target.name]
@@ -605,25 +627,36 @@ def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
     else:
         if len(diff) > 0:
             not_hoisted.append((inst, "dependency"))
-            if config.DEBUG_ARRAY_OPT == 1:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("Instruction", inst, " could not be hoisted because of a dependency.")
         else:
             not_hoisted.append((inst, "not pure"))
-            if config.DEBUG_ARRAY_OPT == 1:
+            if config.DEBUG_ARRAY_OPT >= 1:
                 print("Instruction", inst, " could not be hoisted because it isn't pure.")
     return False
 
-def find_setitems_block(setitems, block):
+def find_setitems_block(setitems, itemsset, block, typemap):
     for inst in block.body:
         if isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
             setitems.add(inst.target.name)
+            # If we store a non-mutable object into an array then that is safe to hoist.
+            # If the stored object is mutable and you hoist then multiple entries in the
+            # outer array could reference the same object and changing one index would then
+            # change other indices.
+            if getattr(typemap[inst.value.name], "mutable", False):
+                itemsset.add(inst.value.name)
         elif isinstance(inst, parfor.Parfor):
-            find_setitems_block(setitems, inst.init_block)
-            find_setitems_body(setitems, inst.loop_body)
+            find_setitems_block(setitems, itemsset, inst.init_block, typemap)
+            find_setitems_body(setitems, itemsset, inst.loop_body, typemap)
 
-def find_setitems_body(setitems, loop_body):
+def find_setitems_body(setitems, itemsset, loop_body, typemap):
+    """
+      Find the arrays that are written into (goes into setitems) and the
+      mutable objects (mostly arrays) that are written into other arrays
+      (goes into itemsset).
+    """
     for label, block in loop_body.items():
-        find_setitems_block(setitems, block)
+        find_setitems_block(setitems, itemsset, block, typemap)
 
 def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = copy.copy(parfor_params)
@@ -635,28 +668,31 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
 
     setitems = set()
-    find_setitems_body(setitems, loop_body)
+    itemsset = set()
+    find_setitems_body(setitems, itemsset, loop_body, typemap)
     dep_on_param = list(set(dep_on_param).difference(setitems))
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("hoist - def_once:", def_once, "setitems:", setitems, "itemsset:", itemsset, "dep_on_param:", dep_on_param, "parfor_params:", parfor_params)
 
     for label, block in loop_body.items():
         new_block = []
         for inst in block.body:
             if isinstance(inst, ir.Assign) and inst.target.name in def_once:
                 if _hoist_internal(inst, dep_on_param, call_table,
-                                   hoisted, not_hoisted, typemap):
+                                   hoisted, not_hoisted, typemap, itemsset):
                     # don't add this instruction to the block since it is
                     # hoisted
                     continue
             elif isinstance(inst, parfor.Parfor):
                 new_init_block = []
-                if config.DEBUG_ARRAY_OPT == 1:
+                if config.DEBUG_ARRAY_OPT >= 1:
                     print("parfor")
                     inst.dump()
                 for ib_inst in inst.init_block.body:
                     if (isinstance(ib_inst, ir.Assign) and
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
-                                           hoisted, not_hoisted, typemap):
+                                           hoisted, not_hoisted, typemap, itemsset):
                             # don't add this instuction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)
@@ -705,6 +741,12 @@ def legalize_names_with_typemap(names, typemap):
             typemap[y] = typemap[x]
     return outdict
 
+def to_scalar_from_0d(x):
+    if isinstance(x, types.ArrayCompatible):
+        if x.ndim == 0:
+            return x.dtype
+    return x
+
 def _create_gufunc_for_parfor_body(
         lowerer,
         parfor,
@@ -747,7 +789,7 @@ def _create_gufunc_for_parfor_body(
     # Get all parfor reduction vars, and operators.
     typemap = lowerer.fndesc.typemap
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
-        parfor, parfor_params, lowerer.fndesc.calltypes)
+        lowerer.func_ir, parfor, parfor_params, lowerer.fndesc.calltypes)
     # Compute just the parfor inputs as a set difference.
     parfor_inputs = sorted(
         list(
@@ -763,7 +805,7 @@ def _create_gufunc_for_parfor_body(
         warnings.warn(NumbaParallelSafetyWarning(msg, loc))
     replace_var_with_array(races, loop_body, typemap, lowerer.fndesc.calltypes)
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
         print("parfor_outputs = ", parfor_outputs, " ", type(parfor_outputs))
         print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
@@ -787,7 +829,7 @@ def _create_gufunc_for_parfor_body(
     # Reorder all the params so that inputs go first then outputs.
     parfor_params = parfor_inputs + parfor_outputs + parfor_redarrs
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("parfor_params = ", parfor_params, " ", type(parfor_params))
         print("loop_indices = ", loop_indices, " ", type(loop_indices))
         print("loop_body = ", loop_body, " ", type(loop_body))
@@ -796,7 +838,7 @@ def _create_gufunc_for_parfor_body(
     # Some Var are not legal parameter names so create a dict of potentially illegal
     # param name to guaranteed legal name.
     param_dict = legalize_names_with_typemap(parfor_params + parfor_redvars, typemap)
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print(
             "param_dict = ",
             sorted(
@@ -809,7 +851,7 @@ def _create_gufunc_for_parfor_body(
     ind_dict = legalize_names_with_typemap(loop_indices, typemap)
     # Compute a new list of legal loop index names.
     legal_loop_indices = [ind_dict[v] for v in loop_indices]
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print("ind_dict = ", sorted(ind_dict.items()), " ", type(ind_dict))
         print(
             "legal_loop_indices = ",
@@ -821,7 +863,7 @@ def _create_gufunc_for_parfor_body(
             print("pd type = ", typemap[pd], " ", type(typemap[pd]))
 
     # Get the types of each parameter.
-    param_types = [typemap[v] for v in parfor_params]
+    param_types = [to_scalar_from_0d(typemap[v]) for v in parfor_params]
     # Calculate types of args passed to gufunc.
     func_arg_types = [typemap[v] for v in (parfor_inputs + parfor_outputs)] + parfor_red_arg_types
 
@@ -848,7 +890,7 @@ def _create_gufunc_for_parfor_body(
     loop_body_var_table = get_name_var_table(loop_body)
     sentinel_name = get_unused_var_name("__sentinel__", loop_body_var_table)
 
-    if config.DEBUG_ARRAY_OPT == 1:
+    if config.DEBUG_ARRAY_OPT >= 1:
         print(
             "legal parfor_params = ",
             parfor_params,
@@ -1147,10 +1189,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     '''
     context = lowerer.context
     builder = lowerer.builder
-    library = lowerer.library
 
-    from .parallel import (ParallelGUFuncBuilder, build_gufunc_wrapper,
-                           get_thread_count, _launch_threads)
+    from .parallel import (build_gufunc_wrapper,
+                           get_thread_count,
+                           _launch_threads)
 
     if config.DEBUG_ARRAY_OPT:
         print("make_parallel_loop")
@@ -1170,8 +1212,9 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     # These are necessary for build_gufunc_wrapper to find external symbols
     _launch_threads()
 
-    wrapper_ptr, env, wrapper_name = build_gufunc_wrapper(llvm_func, cres, sin,
-                                                          sout, {})
+    info = build_gufunc_wrapper(llvm_func, cres, sin, sout,
+                                cache=False, is_parfors=True)
+    wrapper_name = info.name
     cres.library._ensure_finalized()
 
     if config.DEBUG_ARRAY_OPT:
@@ -1213,8 +1256,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     sizeof_intp = context.get_abi_sizeof(intp_t)
 
     # Prepare sched, first pop it out of expr_args, outer_sig, and gu_signature
-    sched_name = expr_args.pop(0)
-    sched_typ = outer_sig.args[0]
+    expr_args.pop(0)
     sched_sig = sin.pop(0)
 
     if config.DEBUG_ARRAY_OPT:
@@ -1434,7 +1476,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
             sizeof = context.get_abi_sizeof(typ)
             # Set stepsize to the size of that dtype.
             stepsize = context.get_constant(types.intp, sizeof)
-            if red_stride != None:
+            if red_stride is not None:
                 for rs in red_stride:
                     stepsize = builder.mul(stepsize, rs)
         else:
@@ -1451,22 +1493,17 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     # ----------------------------------------------------------------------------
     # prepare data
-    data = builder.inttoptr(zero, byte_ptr_t)
+    data = cgutils.get_null_value(byte_ptr_t)
 
     fnty = lc.Type.function(lc.Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                              intp_ptr_t, byte_ptr_t])
-    # Use the dynamic address of the kernel so the backend knows this module
-    # cannot be cached.
-    fnptr = cres.target_context.add_dynamic_addr(
-        builder,
-        wrapper_ptr,
-        info="parallel gufunc kernel",
-        )
-    fn = builder.bitcast(fnptr, fnty.as_pointer())
+
+    fn = builder.module.get_or_insert_function(fnty, name=wrapper_name)
+    context.active_code_library.add_linking_library(info.library)
 
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "before calling kernel %p\n", fn)
-    result = builder.call(fn, [args, shapes, steps, data])
+    builder.call(fn, [args, shapes, steps, data])
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "after calling kernel %p\n", fn)
 
@@ -1475,5 +1512,4 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         only_elem_ptr = builder.gep(rv_arg, [context.get_constant(types.intp, 0)])
         builder.store(builder.load(only_elem_ptr), lowerer.getvar(k))
 
-    scope = init_block.scope
-    loc = init_block.loc
+    context.active_code_library.add_linking_library(cres.library)

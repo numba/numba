@@ -10,7 +10,7 @@ import functools
 
 from llvmlite import ir
 
-from . import utils, config
+from . import utils, config, types
 
 
 bool_t = ir.IntType(1)
@@ -101,7 +101,8 @@ class _StructProxy(object):
         self._context = context
         self._datamodel = self._context.data_model_manager[self._fe_type]
         if not isinstance(self._datamodel, datamodel.StructModel):
-            raise TypeError("Not a structure model: {0}".format(self._datamodel))
+            raise TypeError(
+                "Not a structure model: {0}".format(self._datamodel))
         self._builder = builder
 
         self._be_type = self._get_be_type(self._datamodel)
@@ -364,15 +365,16 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
     set the number of element to allocate.  The default is 1.  The optional
     ``name`` arg set the symbol name inside the llvm IR for debugging.
-    If ``zfill`` is set, also filling zeros to the memory.
+    If ``zfill`` is set, fill the memory with zeros at the current
+    use-site location.  Note that the memory is always zero-filled after the
+    ``alloca`` at init-site (the entry block).
     """
     if isinstance(size, utils.INT_TYPES):
         size = ir.Constant(intp_t, size)
     with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
-        # Zero-fill at the init-site
-        if zfill:
-            builder.store(ty(None), ptr)
+        # Always zero-fill at init-site.  This is safe.
+        builder.store(ty(None), ptr)
     # Also zero-fill at the use-site
     if zfill:
         builder.store(ty(None), ptr)
@@ -972,7 +974,8 @@ def raw_memmove(builder, dst, src, count, itemsize, align=1):
     Emit a raw memmove() call for `count` items of size `itemsize`
     from `src` to `dest`.
     """
-    return _raw_memcpy(builder, 'llvm.memmove', dst, src, count, itemsize, align)
+    return _raw_memcpy(builder, 'llvm.memmove', dst, src, count,
+                       itemsize, align)
 
 
 def muladd_with_overflow(builder, a, b, c):
@@ -1057,8 +1060,8 @@ def snprintf_stackbuffer(builder, bufsz, format, *args):
 if utils.PY3:
     def normalize_ir_text(text):
         """
-        Normalize the given string to latin1 compatible encoding that is suitable
-        for use in LLVM IR.
+        Normalize the given string to latin1 compatible encoding that is
+        suitable for use in LLVM IR.
         """
         # Just re-encoding to latin1 is enough
         return text.encode('utf8').decode('latin1')
@@ -1091,3 +1094,12 @@ def hexdump(builder, ptr, nbytes):
         val = builder.load(offset)
         printf(builder, " %02x", val)
     printf(builder, "\n")
+
+
+def is_nonelike(ty):
+    """ returns if 'ty' is none """
+    return (
+        ty is None or
+        isinstance(ty, types.NoneType) or
+        isinstance(ty, types.Omitted)
+    )

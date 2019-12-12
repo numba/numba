@@ -10,8 +10,9 @@ import math
 
 from llvmlite.llvmpy import core as lc
 
+from .imputils import impl_ret_untracked
 from .. import cgutils, typing, types, lowering, errors
-from . import cmathimpl, mathimpl, numbers
+from . import cmathimpl, mathimpl, numbers, npdatetime
 
 # some NumPy constants. Note that we could generate some of them using
 # the math library, but having the values copied from npy_math seems to
@@ -219,7 +220,7 @@ def np_int_urem_impl(context, builder, sig, args):
     bb_no_if = builder.basic_block
     with cgutils.if_unlikely(builder, den_not_zero):
         bb_if = builder.basic_block
-        mod = builder.srem(num,den)
+        mod = builder.urem(num,den)
 
     result = builder.phi(lty)
     result.add_incoming(ZERO, bb_no_if)
@@ -459,6 +460,34 @@ def np_complex_power_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     return numbers.complex_power_impl(context, builder, sig, args)
+
+
+########################################################################
+# numpy greatest common denominator
+
+def np_gcd_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    return mathimpl.gcd_impl(context, builder, sig, args)
+
+
+########################################################################
+# numpy lowest common multiple
+
+def np_lcm_impl(context, builder, sig, args):
+    import numpy as np
+
+    xty, yty = sig.args
+    assert xty == yty == sig.return_type
+    x, y = args
+
+    def lcm(a, b):
+        """
+        Like gcd, heavily cribbed from Julia.
+        """
+        return 0 if a == 0 else abs(a * (b // np.gcd(b, a)))
+
+    res = context.compile_internal(builder, lcm, sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 ########################################################################
@@ -1696,6 +1725,11 @@ def np_complex_fmin_impl(context, builder, sig, args):
 ########################################################################
 # NumPy floating point misc
 
+def np_int_isnan_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return cgutils.false_bit
+
+
 def np_real_isnan_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
     return mathimpl.is_nan(builder, args[0])
@@ -1710,6 +1744,16 @@ def np_complex_isnan_impl(context, builder, sig, args):
     return cmathimpl.is_nan(builder, complex_val)
 
 
+def np_int_isfinite_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return cgutils.true_bit
+
+
+def np_datetime_isfinite_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return builder.icmp_unsigned('!=', args[0], npdatetime.NAT)
+
+
 def np_real_isfinite_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
     return mathimpl.is_finite(builder, args[0])
@@ -1721,6 +1765,11 @@ def np_complex_isfinite_impl(context, builder, sig, args):
     ty, = sig.args
     complex_val = context.make_complex(builder, ty, value=x)
     return cmathimpl.is_finite(builder, complex_val)
+
+
+def np_int_isinf_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return cgutils.false_bit
 
 
 def np_real_isinf_impl(context, builder, sig, args):

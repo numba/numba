@@ -261,7 +261,7 @@ def box_series(typ, val, c):
 
 
 @overload_attribute(IndexType, 'is_monotonic_increasing')
-def index_is_monotonic_increasing(typ):
+def index_is_monotonic_increasing(index):
     """
     Index.is_monotonic_increasing
     """

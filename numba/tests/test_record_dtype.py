@@ -359,8 +359,8 @@ class TestRecordDtypeMakeCStruct(unittest.TestCase):
                 dtype = ty.dtype
             # get numpy alignment
             npalign = np.dtype(np.complex128).alignment
-            # llvm should align to wordsize
-            llalign = np.dtype(np.intp).alignment
+            # llvm should align to alignment of double.
+            llalign = np.dtype(np.double).alignment
             self.assertIn(
                 ("NumPy is using a different alignment ({}) "
                  "than Numba/LLVM ({}) for complex128. "
@@ -435,7 +435,8 @@ class TestRecordDtype(unittest.TestCase):
         rec = numpy_support.from_dtype(recordtype)
         cfunc = self.get_cfunc(pyfunc, (rec[:], types.intp))
         for i in range(self.refsample1d.size):
-            self.assertEqual(pyfunc(self.refsample1d, i), cfunc(self.nbsample1d, i))
+            self.assertEqual(pyfunc(self.refsample1d, i),
+                             cfunc(self.nbsample1d, i))
 
     @tag('important')
     def test_get_a(self):
@@ -764,9 +765,9 @@ class TestRecordDtype(unittest.TestCase):
     def test_record_two_arrays(self):
         """
         Tests that comparison of NestedArrays by key is working correctly. If
-        the two NestedArrays in recordwith2arrays compare equal (same length and
-        ndim but different shape) incorrect code will be generated for one of the
-        functions.
+        the two NestedArrays in recordwith2arrays compare equal (same length
+        and ndim but different shape) incorrect code will be generated for one
+        of the functions.
         """
         nbrecord = numpy_support.from_dtype(recordwith2arrays)
         rec = np.recarray(1, dtype=recordwith2arrays)[0]
@@ -861,7 +862,7 @@ class TestRecordDtypeWithStructArrays(TestRecordDtype):
         self.nbsample1d3 = np.zeros(3, dtype=recordtype)
 
 
-class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArrays):
+class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArrays):    # noqa: E501
     '''
     Same as TestRecordDtypeWithStructArrays, stressing the Dispatcher's type
     dispatch mechanism (issue #384) and caching of ndarray typecodes for void
@@ -884,7 +885,7 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
 
         arr[0]['n'] = 'abcde'  # no null-byte
         arr[1]['n'] = 'xyz'  # null-byte
-        arr[2]['n'] = 'u\x00v\x00\x00'  # null-byte at the middle and then at end
+        arr[2]['n'] = 'u\x00v\x00\x00'  # null-byte at the middle and at the end
 
     def setUp(self):
         self._createSampleaArray()
@@ -958,7 +959,8 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
                          recordwithcharseq['n'].itemsize)
 
         cfunc(self.nbsample1d, 0, cs_near_overflow)
-        self.assertEqual(self.nbsample1d[0]['n'].decode('ascii'), cs_near_overflow)
+        self.assertEqual(self.nbsample1d[0]['n'].decode('ascii'),
+                         cs_near_overflow)
         # Check that we didn't overwrite
         np.testing.assert_equal(self.refsample1d[1:], self.nbsample1d[1:])
 

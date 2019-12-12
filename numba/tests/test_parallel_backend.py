@@ -1,4 +1,4 @@
-# -*- coding: utf8 -*-
+# -*- coding: utf-8 -*-
 from __future__ import print_function, absolute_import
 
 """
@@ -10,29 +10,31 @@ import random
 import os
 import sys
 import subprocess
-import signal
-
-from numba import config, utils
-if utils.PYVERSION >= (3, 0):
-    import queue as t_queue
-    import faulthandler
-else:
-    import Queue as t_queue
 
 import numpy as np
 
+from numba import config, utils
+
 from numba import unittest_support as unittest
-from numba import jit, vectorize, guvectorize, njit
+from numba import jit, vectorize, guvectorize
 
 from .support import temp_directory, override_config, TestCase, tag
 
 from .test_parfors import skip_unsupported as parfors_skip_unsupported
 from .test_parfors import linux_only
 
+from numba.six.moves import queue as t_queue
+from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
+
+_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
+
+if utils.PYVERSION >= (3, 0):
+    import faulthandler
+
 # Check which backends are available
 # TODO: Put this in a subprocess so the address space is kept clean
 try:
-    from numba.npyufunc import tbbpool
+    from numba.npyufunc import tbbpool    # noqa: F401
     _HAVE_TBB_POOL = True
 except ImportError:
     _HAVE_TBB_POOL = False
@@ -44,7 +46,7 @@ except ImportError:
     _HAVE_OMP_POOL = False
 
 try:
-    import scipy.linalg.cython_lapack
+    import scipy.linalg.cython_lapack    # noqa: F401
     _HAVE_LAPACK = True
 except ImportError:
     _HAVE_LAPACK = False
@@ -146,10 +148,10 @@ def chooser(fnlist, **kwargs):
     try:
         if utils.PYVERSION >= (3, 0):
             faulthandler.enable()
-        for _ in range(10):
+        for _ in range(int(len(fnlist) * 1.5)):
             fn = random.choice(fnlist)
             fn()
-    except BaseException as e:
+    except Exception as e:
         q.put(e)
 
 
@@ -218,20 +220,27 @@ class TestParallelBackendBase(TestCase):
     Base class for testing the parallel backends
     """
 
-    all_impls = [jit_runner(nopython=True),
-                 jit_runner(nopython=True, cache=True),
-                 jit_runner(nopython=True, nogil=True),
-                 linalg_runner(nopython=True),
-                 linalg_runner(nopython=True, nogil=True),
-                 vectorize_runner(nopython=True),
-                 vectorize_runner(nopython=True, target='parallel'),
-                 guvectorize_runner(nopython=True),
-                 guvectorize_runner(nopython=True, target='parallel'),
-                 ]
+    all_impls = [
+        jit_runner(nopython=True),
+        jit_runner(nopython=True, cache=True),
+        jit_runner(nopython=True, nogil=True),
+        linalg_runner(nopython=True),
+        linalg_runner(nopython=True, nogil=True),
+        vectorize_runner(nopython=True),
+        vectorize_runner(nopython=True, target='parallel'),
+        vectorize_runner(nopython=True, target='parallel', cache=True),
+        guvectorize_runner(nopython=True),
+        guvectorize_runner(nopython=True, target='parallel'),
+        guvectorize_runner(nopython=True, target='parallel', cache=True),
+    ]
 
     if not _parfors_unsupported:
-        parfor_impls = [jit_runner(nopython=True, parallel=True),
-                        linalg_runner(nopython=True, parallel=True), ]
+        parfor_impls = [
+            jit_runner(nopython=True, parallel=True),
+            jit_runner(nopython=True, parallel=True, cache=True),
+            linalg_runner(nopython=True, parallel=True),
+            linalg_runner(nopython=True, parallel=True, cache=True),
+        ]
         all_impls.extend(parfor_impls)
 
     parallelism = ['threading', 'random']
@@ -243,14 +252,18 @@ class TestParallelBackendBase(TestCase):
     else:
         parallelism.append('multiprocessing_default')
 
-    runners = {'concurrent_jit': [jit_runner(nopython=True,
-                                             parallel=(not _parfors_unsupported)
-                                             )],
-               'concurrect_vectorize':
-                   [vectorize_runner(nopython=True, target='parallel')],
-               'concurrent_guvectorize':
-                   [guvectorize_runner(nopython=True, target='parallel')],
-               'concurrent_mix_use': all_impls}
+    runners = {
+        'concurrent_jit': [
+            jit_runner(nopython=True, parallel=(not _parfors_unsupported)),
+        ],
+        'concurrect_vectorize': [
+            vectorize_runner(nopython=True, target='parallel'),
+        ],
+        'concurrent_guvectorize': [
+            guvectorize_runner(nopython=True, target='parallel'),
+        ],
+        'concurrent_mix_use': all_impls,
+    }
 
     safe_backends = {'omp', 'tbb'}
 
@@ -344,8 +357,8 @@ class TestSpecificBackend(TestParallelBackendBase):
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,
                                  env=env)
-        # finish in 5 minutes or kill it
-        timeout = threading.Timer(5 * 60., popen.kill)
+        # finish in _TEST_TIMEOUT seconds or kill it
+        timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
         try:
             timeout.start()
             out, err = popen.communicate()
@@ -447,8 +460,8 @@ class ThreadLayerTestHelper(TestCase):
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE,
                                  env=env)
-        # finish in 5 minutes or kill it
-        timeout = threading.Timer(5 * 60., popen.kill)
+        # finish in _TEST_TIMEOUT seconds or kill it
+        timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
         try:
             timeout.start()
             out, err = popen.communicate()
@@ -799,6 +812,48 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         out, err = self.run_cmd(cmdline)
         if self._DEBUG:
             print(out, err)
+
+
+@parfors_skip_unsupported
+class TestInitSafetyIssues(TestCase):
+
+    _DEBUG = False
+
+    @linux_only # only linux can leak semaphores
+    @skip_unless_py3 # need multiprocessing.get_context to obtain spawn on linux
+    def test_orphaned_semaphore(self):
+        # sys path injection and separate usecase module to make sure everything
+        # is importable by children of multiprocessing
+
+        def run_cmd(cmdline):
+            popen = subprocess.Popen(cmdline,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE,)
+            # finish in _TEST_TIMEOUT seconds or kill it
+            timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
+            try:
+                timeout.start()
+                out, err = popen.communicate()
+                if popen.returncode != 0:
+                    raise AssertionError(
+                        "process failed with code %s: stderr follows\n%s\n" %
+                        (popen.returncode, err.decode()))
+            finally:
+                timeout.cancel()
+            return out.decode(), err.decode()
+
+        test_file = os.path.join(os.path.dirname(__file__),
+                                 "orphaned_semaphore_usecase.py")
+
+        cmdline = [sys.executable, test_file]
+        out, err = run_cmd(cmdline)
+
+        # assert no semaphore leaks reported on stderr
+        self.assertNotIn("leaked semaphore", err)
+
+        if self._DEBUG:
+            print("OUT:", out)
+            print("ERR:", err)
 
 
 if __name__ == '__main__':

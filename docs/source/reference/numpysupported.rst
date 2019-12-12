@@ -210,12 +210,26 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
 * :meth:`~numpy.ndarray.sort` (without arguments)
-* :meth:`~numpy.ndarray.sum` (with or without the ``axis`` argument)
+* :meth:`~numpy.ndarray.sum` (with or without the ``axis`` and/or ``dtype``
+  arguments.)
 
-  * If the ``axis`` argument is a compile-time constant, all valid values are supported.
+  * ``axis`` only supports ``integer`` values.
+  * If the ``axis`` argument is a compile-time constant, all valid values
+    are supported.
     An out-of-range value will result in a ``LoweringError`` at compile-time.
-  * If the ``axis`` argument is not a compile-time constant, only values from 0 to 3 are supported.
+  * If the ``axis`` argument is not a compile-time constant, only values
+    from 0 to 3 are supported.
     An out-of-range value will result in a runtime exception.
+  * All numeric ``dtypes`` are supported in the ``dtype`` parameter.
+    ``timedelta`` arrays can be used as input arrays but ``timedelta`` is not
+    supported as ``dtype`` parameter.
+  * When a ``dtype`` is given, it determines the type of the internal
+    accumulator. When it is not, the selection is made automatically based on
+    the input array's ``dtype``, mostly following the same rules as NumPy.
+    However, on 64-bit Windows, Numba uses a 64-bit accumulator for integer
+    inputs (``int64`` for ``int32`` inputs and ``uint64`` for ``uint32``
+    inputs), while NumPy would use a 32-bit accumulator in those cases.
+
 
 * :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
@@ -235,7 +249,7 @@ Basic linear algebra is supported on 1-D and 2-D contiguous arrays of
 floating-point and complex numbers:
 
 * :func:`numpy.dot`
-* :func:`numpy.kron`
+* :func:`numpy.kron` ('C' and 'F' order only)
 * :func:`numpy.outer`
 * :func:`numpy.trace` (only the first argument).
 * :func:`numpy.vdot`
@@ -280,28 +294,38 @@ The following reduction functions are supported:
 * :func:`numpy.nanmean` (only the first argument)
 * :func:`numpy.nanmedian` (only the first argument)
 * :func:`numpy.nanmin` (only the first argument)
-* :func:`numpy.nanpercentile` (only the 2 first arguments, requires NumPy >= 1.11)
+* :func:`numpy.nanpercentile` (only the 2 first arguments,
+  requires NumPy >= 1.11, complex dtypes unsupported)
+* :func:`numpy.nanquantile` (only the 2 first arguments, requires NumPy >= 1.15,
+  complex dtypes unsupported)
 * :func:`numpy.nanprod` (only the first argument)
 * :func:`numpy.nanstd` (only the first argument)
 * :func:`numpy.nansum` (only the first argument)
 * :func:`numpy.nanvar` (only the first argument)
-* :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10)
+* :func:`numpy.percentile` (only the 2 first arguments, requires NumPy >= 1.10,
+  complex dtypes unsupported)
+* :func:`numpy.quantile` (only the 2 first arguments, requires NumPy >= 1.15,
+  complex dtypes unsupported)
 
 Other functions
 ---------------
 
 The following top-level functions are supported:
 
+* :func:`numpy.append`
 * :func:`numpy.arange`
 * :func:`numpy.argsort` (``kind`` key word argument supported for values
   ``'quicksort'`` and ``'mergesort'``)
 * :func:`numpy.array` (only the 2 first arguments)
+* :func:`numpy.array_equal`
 * :func:`numpy.asarray` (only the 2 first arguments)
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`
 * :func:`numpy.atleast_3d`
+* :func:`numpy.bartlett`
 * :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.blackman`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
@@ -309,7 +333,14 @@ The following top-level functions are supported:
 * :func:`numpy.corrcoef` (only the 3 first arguments, requires NumPy >= 1.10 and
   SciPy >= 0.16; extreme value handling per NumPy 1.11+)
 * :func:`numpy.correlate` (only the 2 first arguments)
+* :func:`numpy.count_nonzero` (axis only supports scalar values)
 * :func:`numpy.cov` (only the 5 first arguments, requires NumPy >= 1.10 and SciPy >= 0.16)
+* :func:`numpy.cross` (only the 2 first arguments; at least one of the input
+  arrays should have ``shape[-1] == 3``)
+
+  * If ``shape[-1] == 2`` for both inputs, please replace your
+    :func:`numpy.cross` call with :func:`numba.numpy_extensions.cross2d`.
+
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`
 * :func:`numpy.digitize`
@@ -323,12 +354,16 @@ The following top-level functions are supported:
 * :func:`numpy.eye`
 * :func:`numpy.fill_diagonal`
 * :func:`numpy.flatten` (no order argument; 'C' order only)
+* :func:`numpy.flatnonzero`
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
+* :func:`numpy.hamming`
+* :func:`numpy.hanning`
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.kaiser`
 * :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
@@ -346,6 +381,10 @@ The following top-level functions are supported:
 * :func:`numpy.roots`
 * :func:`numpy.round_`
 * :func:`numpy.searchsorted` (only the 3 first arguments)
+* :func:`numpy.select` (only using homogeneous lists or tuples for the first
+  two arguments, condlist and choicelist). Additionally, these two arguments
+  can only contain arrays (unlike Numpy that also accepts tuples).
+* :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
 * :func:`numpy.stack`
@@ -354,7 +393,11 @@ The following top-level functions are supported:
 * :func:`numpy.trapz` (only the 3 first arguments)
 * :func:`numpy.tri` (only the 3 first arguments; third argument ``k`` must be an integer)
 * :func:`numpy.tril` (second argument ``k`` must be an integer)
+* :func:`numpy.tril_indices` (all arguments must be integer)
+* :func:`numpy.tril_indices_from` (second argument ``k`` must be an integer)
 * :func:`numpy.triu` (second argument ``k`` must be an integer)
+* :func:`numpy.triu_indices` (all arguments must be integer)
+* :func:`numpy.triu_indices_from` (second argument ``k`` must be an integer)
 * :func:`numpy.unique` (only the first argument)
 * :func:`numpy.vander`
 * :func:`numpy.vstack`
@@ -561,6 +604,8 @@ Math operations
  square              Yes          Yes
  reciprocal          Yes          Yes
  conjugate           Yes          Yes
+ gcd                 Yes          Yes
+ lcm                 Yes          Yes
 ==============  =============  ===============
 
 

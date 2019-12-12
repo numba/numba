@@ -2,9 +2,18 @@ import numba
 from .support import TestCase, unittest
 from numba import compiler, jitclass, ir
 from numba.targets.registry import cpu_target
-from numba.compiler import Pipeline, Flags, _PipelineManager
+from numba.compiler import CompilerBase, Flags
+from numba.compiler_machinery import PassManager
 from numba.targets import registry
 from numba import types, ir_utils, bytecode
+from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+                                  IRProcessing,)
+
+from numba.typed_passes import (NopythonTypeInference, type_inference_stage,
+                                DeadCodeElimination)
+
+# global constant for testing find_const
+GLOBAL_B = 11
 
 
 @jitclass([('val', numba.types.List(numba.intp))])
@@ -28,7 +37,7 @@ class TestIrUtils(TestCase):
 
         test_ir = compiler.run_frontend(test_func)
         typingctx = cpu_target.typing_context
-        typemap, _, _ = compiler.type_inference_stage(
+        typemap, _, _ = type_inference_stage(
             typingctx, test_ir, (), None)
         matched_call = ir_utils.find_callname(
             test_ir, test_ir.blocks[0].body[14].value, typemap)
@@ -38,7 +47,7 @@ class TestIrUtils(TestCase):
 
     def test_dead_code_elimination(self):
 
-        class Tester(Pipeline):
+        class Tester(CompilerBase):
 
             @classmethod
             def mk_pipeline(cls, args, return_type=None, flags=None, locals={},
@@ -54,28 +63,26 @@ class TestIrUtils(TestCase):
                 return cls(typing_context, target_context, library, args,
                            return_type, flags, locals)
 
-            def rm_dead_stage(self):
-                ir_utils.dead_code_elimination(
-                    self.func_ir, typemap=self.typemap)
-
             def compile_to_ir(self, func, DCE=False):
                 """
                 Compile and return IR
                 """
-                self.func_id = bytecode.FunctionIdentity.from_function(func)
-                self.bc = self.extract_bytecode(self.func_id)
-                self.lifted = []
+                func_id = bytecode.FunctionIdentity.from_function(func)
+                self.state.func_id = func_id
+                ExtractByteCode().run_pass(self.state)
+                state = self.state
 
-                pm = _PipelineManager()
-                pm.create_pipeline("pipeline")
-                self.add_preprocessing_stage(pm)
-                self.add_pre_typing_stage(pm)
-                self.add_typing_stage(pm)
+                name = "DCE_testing"
+                pm = PassManager(name)
+                pm.add_pass(TranslateByteCode, "analyzing bytecode")
+                pm.add_pass(FixupArgs, "fix up args")
+                pm.add_pass(IRProcessing, "processing IR")
+                pm.add_pass(NopythonTypeInference, "nopython frontend")
                 if DCE is True:
-                    pm.add_stage(self.rm_dead_stage, "DCE after typing")
+                    pm.add_pass(DeadCodeElimination, "DCE after typing")
                 pm.finalize()
-                pm.run(self.status)
-                return self.func_ir
+                pm.run(state)
+                return state.func_ir
 
         def check_initial_ir(the_ir):
             # dead stuff:
@@ -83,7 +90,7 @@ class TestIrUtils(TestCase):
             # an assign of above into to variable `dead`
             # del of both of the above
             # a const int above 0xdeaddead
-            # an assign of said into to variable `deaddead`
+            # an assign of said int to variable `deaddead`
             # del of both of the above
             # this is 8 things to remove
 
@@ -159,6 +166,34 @@ class TestIrUtils(TestCase):
         # check that the count of initial - removed = dce
         self.assertEqual(len(no_dce.blocks[0].body) - len(removed),
                          len(w_dce.blocks[0].body))
+
+    def test_find_const_global(self):
+        """
+        Test find_const() for values in globals (ir.Global) and freevars
+        (ir.FreeVar) that are considered constants for compilation.
+        """
+        FREEVAR_C = 12
+
+        def foo(a):
+            b = GLOBAL_B
+            c = FREEVAR_C
+            return a + b + c
+
+        f_ir = compiler.run_frontend(foo)
+        block = f_ir.blocks[0]
+        const_b = None
+        const_c = None
+
+        for inst in block.body:
+            if isinstance(inst, ir.Assign) and inst.target.name == 'b':
+                const_b = ir_utils.guard(
+                    ir_utils.find_const, f_ir, inst.target)
+            if isinstance(inst, ir.Assign) and inst.target.name == 'c':
+                const_c = ir_utils.guard(
+                    ir_utils.find_const, f_ir, inst.target)
+
+        self.assertEqual(const_b, GLOBAL_B)
+        self.assertEqual(const_c, FREEVAR_C)
 
 
 if __name__ == "__main__":

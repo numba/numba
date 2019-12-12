@@ -1,3 +1,5 @@
+.. _deprecation:
+
 ===================
 Deprecation Notices
 ===================
@@ -68,21 +70,38 @@ as::
 
   @njit
   def foo(x):
-    x.append(10)
+      x.append(10)
 
   a = [1, 2, 3]
   foo(a)
 
-is likely to require adjustment to use a ``typed.List`` instance (not
-implemented yet!), synonymous with the ``typed.Dict``.
+will require adjustment to use a ``typed.List`` instance, this typed container
+is synonymous to the :ref:`feature-typed-dict`. An example of translating the
+above is::
+
+    from numba import njit
+    from numba.typed import List
+
+    @njit
+    def foo(x):
+        x.append(10)
+
+    a = [1, 2, 3]
+    typed_a = List()
+    [typed_a.append(x) for x in a]
+    foo(typed_a)
+
+For more information about ``typed.List`` see :ref:`feature-typed-list`. Further
+usability enhancements for this feature are scheduled for the 0.47.0 release
+cycle.
 
 Schedule
 --------
 This feature will be removed with respect to this schedule:
 
 * Pending-deprecation warnings will be issued in version 0.44.0
-* Deprecation warnings and replacements will be issued in version 0.45.0
-* Support will be removed in version 0.46.0
+* Deprecation warnings and replacements will be issued in version 0.47.0
+* Support will be removed in version 0.48.0
 
 Recommendations
 ---------------
@@ -93,9 +112,10 @@ change.
 
 Expected Replacement
 --------------------
-As alluded to above, it is anticipated that a ``typed.List`` (not implemented
-yet!) will be used to permit similar functionality to reflection. The advantages
-to this approach are:
+As noted above ``typed.List`` will be used to permit similar functionality to
+reflection in the case of ``list`` s, a ``typed.Set`` will provide the
+equivalent for ``set`` (not implemented yet!). The advantages to this approach
+are:
 
 * That the containers are typed means type inference has to work less hard.
 * Nested containers (containers of containers of ...) are more easily
@@ -103,19 +123,6 @@ to this approach are:
 * Performance penalties currently incurred translating data to/from native
   formats are largely avoided.
 * Numba's ``typed.Dict`` will be able to use these containers as values.
-
-It is expected something similar to the following will act as the replacement::
-
-  from numba import njit, int64
-  from numba.typed import List
-
-  @njit
-  def foo(x):
-    x.append(10)
-
-  a = List.empty(int64)
-  a.extend([1, 2, 3])
-  foo(a)
 
 
 Deprecation of :term:`object mode` `fall-back` behaviour when using ``@jit``
@@ -216,90 +223,6 @@ supply the keyword argument ``forceobj=True`` to ensure the function is always
 compiled in :term:`object mode`.
 
 
-Deprecation of ``SmartArray``
-============================================================================
-``SmartArray`` is an experimental interface that provides an Array-like data
-type that was intended to automatically manage data movement to and from a CUDA
-compute device (GPU). It is being deprecated with view of removal in the near
-future.
-
-Reason for deprecation
-----------------------
-The appetite for the use of ``SmartArray`` was not large, and with advances in
-both associated software and hardware any advantages it may have lead to have
-been eroded away.
-
-Example(s) of the impact
-------------------------
-Code using ``SmartArray`` will cease to work, e.g. this will fail::
-
-    from numba import SmartArray
-    from numba.cuda.kernels.transpose import transpose
-    import numpy as np
-
-    a = SmartArray(np.arange(16, dtype=float).reshape(4,4))
-    c = SmartArray(where='gpu', shape=(4,4), dtype=float)
-
-    transpose(a, b)
-
-Schedule
---------
-This feature will be removed with respect to this schedule:
-
-* Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.45.0
-
-Recommendations
----------------
-Projects that need/rely on the deprecated behaviour should pin their dependency
-on Numba to a version prior to removal of this feature and consider migrating to
-using the ``numba.cuda`` API.
-
-
-Deprecation of ``NUMBAPRO`` environment variables
-=================================================
-As a piece of legacy behaviour inherited from the time of ``NumbaPro`` it is
-possible to specify various CUDA drivers, libraries and configuration to use
-with Numba via the following environment variables:
-
-* ``NUMBAPRO_NVVM``
-* ``NUMBAPRO_CUDALIB``
-* ``NUMBAPRO_LIBDEVICE``
-* ``NUMBAPRO_CUDA_LOG_SIZE``
-* ``NUMBAPRO_VERBOSE_CU_JIT_LOG``
-
-These are being deprecated with view of removal in the near future.
-
-Reason for deprecation
-----------------------
-First, ``NUMBAPRO`` as a name causes confusion for users, especially as the
-product ``NumbaPro`` was retired since its technology was predominantly made
-Open Source, with Numba inheriting a lot of this. Second, the environment
-variables are somewhat confusing and in some cases setting one will influence
-the impact of another, none of which is documented.
-
-Schedule
---------
-This feature will be removed with respect to this schedule:
-
-* Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.45.0
-
-Recommendations
----------------
-Projects that need/rely on the deprecated behaviour should pin their dependency
-on Numba to a version prior to removal of this behaviour, or consider following
-replacement instructions that will be issued outlining how to adjust to the
-change.
-
-Expected Replacement
---------------------
-Numba will gain a new set of CUDA related environment variables to replace the
-``NUMBAPRO`` environment variables. This change will be part of permitting
-discovery of system level CUDA drivers and libraries, as well as making it easy
-to point Numba to a particular CUDA SDK instance.
-
-
 Deprecation of ``numba.autojit``
 ================================
 The decorator ``numba.autojit`` was inherited from the time of ``NumbaPro`` and
@@ -324,3 +247,4 @@ Projects that need/rely on the deprecated behaviour should pin their dependency
 on Numba to a version prior to removal of this behaviour. The recommended method
 for accommodating the deprecation of ``numba.autojit`` is to simply replace it
 with the semantically and functionally equivalent ``numba.jit`` decorator.
+

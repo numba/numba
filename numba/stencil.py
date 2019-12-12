@@ -8,7 +8,8 @@ import copy
 import numpy as np
 from llvmlite import ir as lir
 
-from numba import compiler, types, ir_utils, ir, typing, numpy_support, utils
+from numba import (compiler, types, ir_utils, ir, typing, numpy_support, utils,
+                   typed_passes)
 from numba import config
 from numba.typing.templates import (CallableTemplate, signature, infer_global,
                                     AbstractTemplate)
@@ -131,7 +132,7 @@ class StencilFunc(object):
         const_dict = {}
         kernel_consts = []
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("add_indices_to_kernel", ndim, neighborhood)
             ir_utils.dump_blocks(kernel.blocks)
 
@@ -154,7 +155,7 @@ class StencilFunc(object):
             for stmt in block.body:
                 if (isinstance(stmt, ir.Assign) and
                     isinstance(stmt.value, ir.Const)):
-                    if config.DEBUG_ARRAY_OPT == 1:
+                    if config.DEBUG_ARRAY_OPT >= 1:
                         print("remembering in const_dict", stmt.target.name,
                               stmt.value.value)
                     # Remember consts for use later.
@@ -324,7 +325,7 @@ class StencilFunc(object):
 
 
     def get_return_type(self, argtys):
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("get_return_type", argtys)
             ir_utils.dump_blocks(self.kernel_ir.blocks)
 
@@ -332,7 +333,7 @@ class StencilFunc(object):
             raise ValueError("The first argument to a stencil kernel must "
                              "be the primary input array.")
 
-        typemap, return_type, calltypes = compiler.type_inference_stage(
+        typemap, return_type, calltypes = typed_passes.type_inference_stage(
                 self._typingctx,
                 self.kernel_ir,
                 argtys,
@@ -435,7 +436,7 @@ class StencilFunc(object):
         # 1) Construct a string containing a function definition for the stencil function
         #    that will execute the stencil kernel.  This function definition includes a
         #    unique stencil function name, the parameters to the stencil kernel, loop
-        #    nests across the dimenions of the input array.  Those loop nests use the
+        #    nests across the dimensions of the input array.  Those loop nests use the
         #    computed stencil kernel size so as not to try to compute elements where
         #    elements outside the bounds of the input array would be needed.
         # 2) The but of the loop nest in this new function is a special sentinel
@@ -468,12 +469,12 @@ class StencilFunc(object):
             raise ValueError("Cannot use the reserved word 'out' in stencil kernels.")
 
         sentinel_name = ir_utils.get_unused_var_name("__sentinel__", name_var_table)
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("name_var_table", name_var_table, sentinel_name)
 
         the_array = args[0]
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("_stencil_wrapper", return_type, return_type.dtype,
                                       type(return_type.dtype), args)
             ir_utils.dump_blocks(kernel_copy.blocks)
@@ -524,7 +525,7 @@ class StencilFunc(object):
         if self.neighborhood is None:
             self.neighborhood = kernel_size
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("After add_indices_to_kernel")
             ir_utils.dump_blocks(kernel_copy.blocks)
 
@@ -533,7 +534,7 @@ class StencilFunc(object):
         ret_blocks = self.replace_return_with_setitem(kernel_copy.blocks,
                                                       index_vars, out_name)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("After replace_return_with_setitem", ret_blocks)
             ir_utils.dump_blocks(kernel_copy.blocks)
 
@@ -627,7 +628,7 @@ class StencilFunc(object):
         func_text += "{} = 0\n".format(sentinel_name)
         func_text += "    return {}\n".format(out_name)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("new stencil func text")
             print(func_text)
 
@@ -661,7 +662,7 @@ class StencilFunc(object):
         # Adjust ret_blocks to account for addition of the offset.
         ret_blocks = [x + stencil_stub_last_label for x in ret_blocks]
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("ret_blocks w/ offsets", ret_blocks, stencil_stub_last_label)
             print("before replace sentinel stencil_ir")
             ir_utils.dump_blocks(stencil_ir.blocks)
@@ -716,7 +717,7 @@ class StencilFunc(object):
 
         new_stencil_param_types = list(array_types)
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("new_stencil_param_types", new_stencil_param_types)
             ir_utils.dump_blocks(stencil_ir.blocks)
 
@@ -753,7 +754,7 @@ class StencilFunc(object):
             array_types = tuple([typing.typeof.typeof(x) for x in args])
             array_types_full = array_types
 
-        if config.DEBUG_ARRAY_OPT == 1:
+        if config.DEBUG_ARRAY_OPT >= 1:
             print("__call__", array_types, args, kwargs)
 
         (real_ret, typemap, calltypes) = self.get_return_type(array_types)

@@ -2,32 +2,21 @@
 
 set -v -e
 
-network_tolerant_conda() {
-    local cmd=$1
-    shift
-    local attempts=$1
-    shift
-    for i in `seq $(($attempts + 1))`; do
-        conda $cmd -q -y $*
-        if [ $? == 0 ]; then
-                break;
-        else
-            if [ $i != $(($attempts + 1)) ]; then
-                echo "Connection/conda problem... retrying (attempt $i/$attempts)"
-            else
-                msg="Unresolved connection/conda problem...
-                     exiting after $attempts additional attempts"
-                echo $msg
-                exit 1
-            fi
-        fi
-    done
-}
+# first configure conda to have more tolerance of network problems, these
+# numbers are not scientifically chosen, just merely larger than defaults
+conda config --write-default
+conda config --set remote_connect_timeout_secs 30.15
+conda config --set remote_max_retries 10
+conda config --set remote_read_timeout_secs 120.2
+if [[ $(uname) == Linux ]]; then
+    if [[ "$CONDA_SUBDIR" != "linux-32" && "$BITS32" != "yes" ]] ; then
+        conda config --set restore_free_channel true
+    fi
+fi
+conda info
+conda config --show
 
-CONDA_INSTALL="network_tolerant_conda install 3"
-CONDA_CREATE="network_tolerant_conda create 3"
-CONDA_REMOVE="network_tolerant_conda remove 3"
-CONDA_EXPORT="network_tolerant_conda export 3"
+CONDA_INSTALL="conda install -q -y"
 PIP_INSTALL="pip install -q"
 
 
@@ -39,30 +28,38 @@ fi
 
 # Deactivate any environment
 source deactivate
-
 # Display root environment (for debugging)
 conda list
 # Clean up any left-over from a previous build
 # (note workaround for https://github.com/conda/conda/issues/2679:
 #  `conda env remove` issue)
-$CONDA_REMOVE --all -n $CONDA_ENV
+conda remove --all -q -y -n $CONDA_ENV
 
 # If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
 # is to catch tests/code paths that require an optional package and are not
 # guarding against the possibility that it does not exist in the environment.
 # Create a base env first and then add to it...
 
-$CONDA_CREATE -n $CONDA_ENV ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
 
 # Activate first
 set +v
 source activate $CONDA_ENV
 set -v
 
+# gitpython needed for CI testing
+if [ $PYTHON \< "3.8" ]; then
+    $CONDA_INSTALL gitpython
+else
+    $PIP_INSTALL gitpython
+fi
+
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi scipy jinja2 ipython pygments
+    if [ $PYTHON \< "3.8" ]; then
+        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi scipy jinja2 ipython pygments
+    fi
 fi
 
 # Install the compiler toolchain
@@ -80,13 +77,14 @@ fi
 
 # Install latest llvmlite build
 $CONDA_INSTALL -c numba/label/dev llvmlite
+
 # Install enum34 and singledispatch for Python < 3.4
 if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
 if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
 # Install funcsigs for Python < 3.3
 if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi

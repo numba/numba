@@ -24,6 +24,7 @@ class NumbaWarning(Warning):
     """
     Base category for all Numba compiler warnings.
     """
+
     def __init__(self, msg, loc=None, highlighting=True, ):
         self.msg = msg
         self.loc = loc
@@ -62,6 +63,12 @@ class NumbaParallelSafetyWarning(NumbaWarning):
     """
     Warning category for when an operation in a prange
     might not have parallel semantics.
+    """
+
+
+class NumbaTypeSafetyWarning(NumbaWarning):
+    """
+    Warning category for unsafe casting operations.
     """
 
 # These are needed in the color formatting of errors setup
@@ -305,9 +312,9 @@ If the code is valid and the unsupported functionality is important to you
 please file a feature request at: https://github.com/numba/numba/issues/new
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-http://numba.pydata.org/numba-doc/dev/reference/pysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/pysupported.html
 and
-http://numba.pydata.org/numba-doc/dev/reference/numpysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
 """
 
 constant_inference_info = """
@@ -329,9 +336,9 @@ This is not usually a problem with Numba itself but instead often caused by
 the use of unsupported features or an issue in resolving types.
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-http://numba.pydata.org/numba-doc/dev/reference/pysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/pysupported.html
 and
-http://numba.pydata.org/numba-doc/dev/reference/numpysupported.html
+http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
 
 For more information about typing errors and how to debug them visit:
 http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-doesn-t-compile
@@ -344,8 +351,9 @@ https://github.com/numba/numba/issues/new
 reportable_issue_info = """
 -------------------------------------------------------------------------------
 This should not have happened, a problem has occurred in Numba's internals.
+You are currently using Numba version %s.
 %s
-""" % feedback_details
+""" % (numba.__version__, feedback_details)
 
 error_extras = dict()
 error_extras['unsupported_error'] = unsupported_error_info
@@ -422,7 +430,15 @@ class WarningsFixer(object):
         """
         Emit all stored warnings.
         """
-        for (filename, lineno, category), messages in sorted(self._warnings.items()):
+        def key(arg):
+            # It is possible through codegen to create entirely identical
+            # warnings, this leads to comparing types when sorting which breaks
+            # on Python 3. Key as str() and if the worse happens then `id`
+            # creates some uniqueness
+            return str(arg) + str(id(arg))
+
+        for (filename, lineno, category), messages in sorted(
+                self._warnings.items(), key=key):
             for msg in sorted(messages):
                 warnings.warn_explicit(msg, category, filename, lineno)
         self._warnings.clear()
@@ -612,6 +628,55 @@ class RequireLiteralValue(TypingError):
     some of its arguments.
     """
     pass
+
+
+class ForceLiteralArg(NumbaError):
+    """A Pseudo-exception to signal the dispatcher to type an argument literally
+
+    Attributes
+    ----------
+    requested_args : frozenset[int]
+        requested positions of the arguments.
+    """
+    def __init__(self, arg_indices, fold_arguments=None, loc=None):
+        """
+        Parameters
+        ----------
+        arg_indices : Sequence[int]
+            requested positions of the arguments.
+        fold_arguments: callable
+            A function ``(tuple, dict) -> tuple`` that binds and flattens
+            the ``args`` and ``kwargs``.
+        loc : numba.ir.Loc or None
+        """
+        super(ForceLiteralArg, self).__init__(
+            "Pseudo-exception to force literal arguments in the dispatcher",
+            loc=loc,
+        )
+        self.requested_args = frozenset(arg_indices)
+        self.fold_arguments = fold_arguments
+
+    def bind_fold_arguments(self, fold_arguments):
+        """Bind the fold_arguments function
+        """
+        from numba import utils
+
+        e = ForceLiteralArg(self.requested_args, fold_arguments,
+                            loc=self.loc)
+        return utils.chain_exception(e, self)
+
+    def combine(self, other):
+        """Returns a new instance by or'ing the requested_args.
+        """
+        if not isinstance(other, ForceLiteralArg):
+            m = '*other* must be a {} but got a {} instead'
+            raise TypeError(m.format(ForceLiteralArg, type(other)))
+        return ForceLiteralArg(self.requested_args | other.requested_args)
+
+    def __or__(self, other):
+        """Same as self.combine(other)
+        """
+        return self.combine(other)
 
 
 class LiteralTypingError(TypingError):

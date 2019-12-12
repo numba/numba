@@ -1,3 +1,503 @@
+Version 0.46.0
+--------------
+
+This release significantly reworked one of the main parts of Numba, the compiler
+pipeline, to make it more extensible and easier to use. The purpose of this was
+to continue enhancing Numba's ability for use as a compiler toolkit. In a
+similar vein, Numba now has an extension registration mechanism to allow other
+Numba-using projects to automatically have their Numba JIT compilable functions
+discovered. There were also a number of other related compiler toolkit
+enhancement added along with some more NumPy features and a lot of bug fixes.
+
+This release has updated the CUDA Array Interface specification to version 2,
+which clarifies the `strides` attribute for C-contiguous arrays and specifies
+the treatment for zero-size arrays. The implementation in Numba has been
+changed and may affect downstream packages relying on the old behavior
+(see issue #4661).
+
+Enhancements from user contributed PRs (with thanks!):
+
+* Aaron Meurer fixed some Python issues in the code base in #4345 and #4341.
+* Ashwin Srinath fixed a CUDA performance bug via #4576.
+* Ethan Pronovost added support for triangular indices functions in #4601 (the
+  NumPy functions ``tril_indices``, ``tril_indices_from``, ``triu_indices``, and
+  ``triu_indices_from``).
+* Gerald Dalley fixed a tear down race occurring in Python 2.
+* Gregory R. Lee fixed the use of deprecated ``inspect.getargspec``.
+* Guilherme Leobas contributed five PRs, adding support for ``np.append`` and
+  ``np.count_nonzero`` in #4518 and #4386. The typed List was fixed to accept
+  unsigned integers in #4510. #4463 made a fix to NamedTuple internals and #4397
+  updated the docs for ``np.sum``.
+* James Bourbeau added a new feature to permit the automatic application of the
+  `jit` decorator to a whole module in #4331. Also some small fixes to the docs
+  and the code base were made in #4447 and #4433, and a fix to inplace array
+  operation in #4228.
+* Jim Crist fixed a bug in the rendering of patched errors in #4464.
+* Leo Fang updated the CUDA Array Interface contract in #4609.
+* Pearu Peterson added support for Unicode based NumPy arrays in #4425.
+* Peter Andreas Entschev fixed a CUDA concurrency bug in #4581.
+* Lucio Fernandez-Arjona extended Numba's ``np.sum`` support to now accept the
+  ``dtype`` kwarg in #4472.
+* Pedro A. Morales Maries added support for ``np.cross`` in #4128 and also added
+  the necessary extension ``numba.numpy_extensions.cross2d`` in #4595.
+* David Hoese, Eric Firing, Joshua Adelman, and Juan Nunez-Iglesias all made
+  documentation fixes in #4565, #4482, #4455, #4375 respectively.
+* Vyacheslav Smirnov and Rujal Desai enabled support for ``count()`` on unicode
+  strings in #4606.
+
+General Enhancements:
+
+* PR #4113: Add rewrite for semantic constants.
+* PR #4128: Add np.cross support
+* PR #4162: Make IR comparable and legalize it.
+* PR #4208: R&D inlining, jitted and overloaded.
+* PR #4331: Automatic JIT of called functions
+* PR #4353: Inspection tool to check what numba supports
+* PR #4386: Implement np.count_nonzero
+* PR #4425: Unicode array support
+* PR #4427: Entrypoints for numba extensions
+* PR #4467: Literal dispatch
+* PR #4472: Allow dtype input argument in np.sum
+* PR #4513: New compiler.
+* PR #4518: add support for np.append
+* PR #4554: Refactor NRT C-API
+* PR #4556: 0.46 scheduled deprecations
+* PR #4567: Add env var to disable performance warnings.
+* PR #4568: add np.array_equal support
+* PR #4595: Implement numba.cross2d
+* PR #4601: Add triangular indices functions
+* PR #4606: Enable support for count() method for unicode string
+
+Fixes:
+
+* PR #4228: Fix inplace operator error for arrays
+* PR #4282: Detect and raise unsupported on generator expressions
+* PR #4305: Don't allow the allocation of mutable objects written into a
+  container to be hoisted.
+* PR #4311: Avoid deprecated use of inspect.getargspec
+* PR #4328:  Replace GC macro with function call
+* PR #4330: Loosen up typed container casting checks
+* PR #4341: Fix some coding lines at the top of some files (utf8 -> utf-8)
+* PR #4345: Replace "import \*" with explicit imports in numba/types
+* PR #4346: Fix incorrect alg in isupper for ascii strings.
+* PR #4349: test using jitclass in typed-list
+* PR #4361: Add allocation hoisting info to LICM section at diagnostic L4
+* PR #4366: Offset search box to avoid wrapping on some pages with Safari.
+  Fixes #4365.
+* PR #4372: Replace all "except BaseException" with "except Exception".
+* PR #4407: Restore the "free" conda channel for NumPy 1.10 support.
+* PR #4408: Add lowering for constant bytes.
+* PR #4409: Add exception chaining for better error context
+* PR #4411: Name of type should not contain user facing description for debug.
+* PR #4412: Fix #4387. Limit the number of return types for recursive functions
+* PR #4426: Fixed two module teardown races in py2.
+* PR #4431: Fix and test numpy.random.random_sample(n) for np117
+* PR #4463: NamedTuple - Raises an error on non-iterable elements
+* PR #4464: Add a newline in patched errors
+* PR #4474: Fix liveness for remove dead of parfors (and other IR extensions)
+* PR #4510: Make List.__getitem__ accept unsigned parameters
+* PR #4512: Raise specific error at typing time for iteration on >1D array.
+* PR #4532: Fix static_getitem with Literal type as index
+* PR #4547: Update to inliner cost model information.
+* PR #4557: Use specific random number seed when generating arbitrary test data
+* PR #4559: Adjust test timeouts
+* PR #4564: Skip unicode array tests on ppc64le that trigger an LLVM bug
+* PR #4621: Fix packaging issue due to missing numba/cext
+* PR #4623: Fix issue 4520 due to storage model mismatch
+* PR #4644: Updates for llvmlite 0.30.0
+
+CUDA Enhancements/Fixes:
+
+* PR #4410: Fix #4111. cudasim mishandling recarray
+* PR #4576: Replace use of `np.prod` with `functools.reduce` for computing size
+  from shape
+* PR #4581: Prevent taking the GIL in ForAll
+* PR #4592: Fix #4589.  Just pass NULL for b2d_func for constant dynamic
+  sharedmem
+* PR #4609: Update CUDA Array Interface & Enforce Numba compliance
+* PR #4619: Implement math.{degrees, radians} for the CUDA target.
+* PR #4675: Bump cuda array interface to version 2
+
+Documentation Updates:
+
+* PR #4317: Add docs for ARMv8/AArch64
+* PR #4318: Add supported platforms to the docs.  Closes #4316
+* PR #4375: Add docstrings to inspect methods
+* PR #4388: Update Python 2.7 EOL statement
+* PR #4397: Add note about np.sum
+* PR #4447: Minor parallel performance tips edits
+* PR #4455: Clarify docs for typed dict with regard to arrays
+* PR #4482: Fix example in guvectorize docstring.
+* PR #4541: fix two typos in architecture.rst
+* PR #4548: Document numba.extending.intrinsic and inlining.
+* PR #4565: Fix typo in jit-compilation docs
+* PR #4607: add dependency list to docs
+* PR #4614: Add documentation for implementing new compiler passes.
+
+CI Updates:
+
+* PR #4415: Make 32bit incremental builds on linux not use free channel
+* PR #4433: Removes stale azure comment
+* PR #4493: Fix Overload Inliner wrt CUDA Intrinsics
+* PR #4593: Enable Azure CI batching
+
+Contributors:
+
+* Aaron Meurer
+* Ashwin Srinath
+* David Hoese
+* Ehsan Totoni (core dev)
+* Eric Firing
+* Ethan Pronovost
+* Gerald Dalley
+* Gregory R. Lee
+* Guilherme Leobas
+* James Bourbeau
+* Jim Crist
+* Joshua Adelman
+* Juan Nunez-Iglesias
+* Leo Fang
+* Lucio Fernandez-Arjona
+* Pearu Peterson
+* Pedro A. Morales Marie
+* Peter Andreas Entschev
+* Rujal Desai
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+* Vyacheslav Smirnov
+
+
+Version 0.45.1
+--------------
+
+This patch release addresses some regressions reported in the 0.45.0 release and
+adds support for NumPy 1.17:
+
+* PR #4325: accept scalar/0d-arrays
+* PR #4338: Fix #4299. Parfors reduction vars not deleted.
+* PR #4350: Use process level locks for fork() only.
+* PR #4354: Try to fix #4352.
+* PR #4357: Fix np1.17 isnan, isinf, isfinite ufuncs
+* PR #4363: Fix np.interp for np1.17 nan handling
+* PR #4371: Fix nump1.17 random function non-aliasing
+
+Contributors:
+
+* Siu Kwan Lam (core dev)
+* Stuart Archibald (core dev)
+* Valentin Haenel (core dev)
+
+
+Version 0.45.0
+--------------
+
+In this release, Numba gained an experimental :ref:`numba.typed.List
+<feature-typed-list>` container as a future replacement of the :ref:`reflected
+list <feature-reflected-list>`. In addition, functions decorated with
+``parallel=True`` can now be cached to reduce compilation overhead associated
+with the auto-parallelization.
+
+
+Enhancements from user contributed PRs (with thanks!):
+
+* James Bourbeau added the Numba version to reportable error messages in #4227,
+  added the ``signature`` parameter to ``inspect_types`` in #4200, improved the
+  docstring of ``normalize_signature`` in #4205, and fixed #3658 by adding
+  reference counting to ``register_dispatcher`` in #4254
+
+* Guilherme Leobas implemented the dominator tree and dominance frontier
+  algorithms in #4216 and #4149, respectively.
+
+* Nick White fixed the issue with ``round`` in the CUDA target in #4137.
+
+* Joshua Adelman added support for determining if a value is in a `range`
+  (i.e.  ``x in range(...)``) in #4129, and added windowing functions
+  (``np.bartlett``, ``np.hamming``, ``np.blackman``, ``np.hanning``,
+  ``np.kaiser``) from NumPy in #4076.
+
+* Lucio Fernandez-Arjona added support for ``np.select`` in #4077
+
+* Rob Ennis added support for ``np.flatnonzero`` in #4157
+
+* Keith Kraus extended the ``__cuda_array_interface__`` with an optional mask
+  attribute in #4199.
+
+* Gregory R. Lee replaced deprecated use of ``inspect.getargspec`` in #4311.
+
+
+General Enhancements:
+
+* PR #4328: Replace GC macro with function call
+* PR #4311: Avoid deprecated use of inspect.getargspec
+* PR #4296: Slacken window function testing tol on ppc64le
+* PR #4254: Add reference counting to register_dispatcher
+* PR #4239: Support len() of multi-dim arrays in array analysis
+* PR #4234: Raise informative error for np.kron array order
+* PR #4232: Add unicodetype db, low level str functions and examples.
+* PR #4229: Make hashing cacheable
+* PR #4227: Include numba version in reportable error message
+* PR #4216: Add dominator tree
+* PR #4200: Add signature parameter to inspect_types
+* PR #4196: Catch missing imports of internal functions.
+* PR #4180: Update use of unlowerable global message.
+* PR #4166: Add tests for PR #4149
+* PR #4157: Support for np.flatnonzero
+* PR #4149: Implement dominance frontier for SSA for the Numba IR
+* PR #4148: Call branch pruning in inline_closure_call()
+* PR #4132: Reduce usage of inttoptr
+* PR #4129: Support contains for range
+* PR #4112: better error messages for np.transpose and tuples
+* PR #4110: Add range attrs, start, stop, step
+* PR #4077: Add np select
+* PR #4076: Add numpy windowing functions support (np.bartlett, np.hamming,
+  np.blackman, np.hanning, np.kaiser)
+* PR #4095: Support ir.Global/FreeVar in find_const()
+* PR #3691: Make TypingError abort compiling earlier
+* PR #3646: Log internal errors encountered in typeinfer
+
+Fixes:
+
+* PR #4303: Work around scipy bug 10206
+* PR #4302: Fix flake8 issue on master
+* PR #4301: Fix integer literal bug in np.select impl
+* PR #4291: Fix pickling of jitclass type
+* PR #4262: Resolves #4251 - Fix bug in reshape analysis.
+* PR #4233: Fixes issue revealed by #4215
+* PR #4224: Fix #4223. Looplifting error due to StaticSetItem in objectmode
+* PR #4222: Fix bad python path.
+* PR #4178: Fix unary operator overload, check with unicode impl
+* PR #4173: Fix return type in np.bincount with weights
+* PR #4153: Fix slice shape assignment in array analysis
+* PR #4152: fix status check in dict lookup
+* PR #4145: Use callable instead of checking __module__
+* PR #4118: Fix inline assembly support on CPU.
+* PR #4088: Resolves #4075 - parfors array_analysis bug.
+* PR #4085: Resolves #3314 - parfors array_analysis bug with reshape.
+
+CUDA Enhancements/Fixes:
+
+* PR #4199: Extend `__cuda_array_interface__` with optional mask attribute,
+  bump version to 1
+* PR #4137: CUDA - Fix round Builtin
+* PR #4114: Support 3rd party activated CUDA context
+
+Documentation Updates:
+
+* PR #4317: Add docs for ARMv8/AArch64
+* PR #4318: Add supported platforms to the docs. Closes #4316
+* PR #4295: Alter deprecation schedules
+* PR #4253: fix typo in pysupported docs
+* PR #4252: fix typo on repomap
+* PR #4241: remove unused import
+* PR #4240: fix typo in jitclass docs
+* PR #4205: Update return value order in normalize_signature docstring
+* PR #4237: Update doc links to point to latest not dev docs.
+* PR #4197: hyperlink repomap
+* PR #4170: Clarify docs on accumulating into arrays in prange
+* PR #4147: fix docstring for DictType iterables
+* PR #3951: A guide to overloading
+
+CI Updates:
+
+* PR #4300: AArch64 has no faulthandler package
+* PR #4273: pin to MKL BLAS for testing to get consistent results
+* PR #4209: Revert previous network tol patch and try with conda config
+* PR #4138: Remove tbb before Azure test only on Python 3, since it was already
+  removed for Python 2
+
+Contributors:
+
+* Ehsan Totoni (core dev)
+* Gregory R. Lee
+* Guilherme Leobas
+* James Bourbeau
+* Joshua L. Adelman
+* Keith Kraus
+* Lucio Fernandez-Arjona
+* Nick White
+* Rob Ennis
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+
+
+Version 0.44.1
+--------------
+
+This patch release addresses some regressions reported in the 0.44.0 release:
+
+- PR #4165: Fix #4164 issue with NUMBAPRO_NVVM.
+- PR #4172: Abandon branch pruning if an arg name is redefined. (Fixes #4163)
+- PR #4183: Fix #4156. Problem with defining in-loop variables.
+
+
+Version 0.44.0
+--------------
+
+IMPORTANT: In this release a few significant deprecations (and some less
+significant ones) are being made, users are encouraged to read the related
+documentation.
+
+General enhancements in this release include:
+
+- Numba is backed by LLVM 8 on all platforms apart from ppc64le, which, due to
+  bugs, remains on the LLVM 7.x series.
+- Numba's dictionary support now includes type inference for keys and values.
+- The .view() method now works for NumPy scalar types.
+- Newly supported NumPy functions added: np.delete, np.nanquantile, np.quantile,
+  np.repeat, np.shape.
+
+In addition considerable effort has been made to fix some long standing bugs and
+a large number of other bugs, the "Fixes" section is very large this time!
+
+Enhancements from user contributed PRs (with thanks!):
+
+- Max Bolingbroke added support for the selective use of ``fastmath`` flags in
+  #3847.
+- Rob Ennis made min() and max() work on iterables in #3820 and added
+  np.quantile and np.nanquantile in #3899.
+- Sergey Shalnov added numerous unicode string related features, zfill in #3978,
+  ljust in #4001, rjust and center in #4044 and strip, lstrip and rstrip in
+  #4048.
+- Guilherme Leobas added support for np.delete in #3890
+- Christoph Deil exposed the Numba CLI via ``python -m numba`` in #4066 and made
+  numerous documentation fixes.
+- Leo Schwarz wrote the bulk of the code for jitclass default constructor
+  arguments in #3852.
+- Nick White enhanced the CUDA backend to use min/max PTX instructions where
+  possible in #4054.
+- Lucio Fernandez-Arjona implemented the unicode string ``__mul__`` function in
+  #3952.
+- Dimitri Vorona wrote the bulk of the code to implement getitem and setitem for
+  jitclass in #3861.
+
+General Enhancements:
+
+* PR #3820: Min max on iterables
+* PR #3842: Unicode type iteration
+* PR #3847: Allow fine-grained control of fastmath flags to partially address #2923
+* PR #3852: Continuation of PR #2894
+* PR #3861: Continuation of PR #3730
+* PR #3890: Add support for np.delete
+* PR #3899: Support for np.quantile and np.nanquantile
+* PR #3900: Fix 3457 :: Implements np.repeat
+* PR #3928: Add .view() method for NumPy scalars
+* PR #3939: Update icc_rt clone recipe.
+* PR #3952: __mul__ for strings, initial implementation and tests
+* PR #3956: Type-inferred dictionary
+* PR #3959: Create a view for string slicing to avoid extra allocations
+* PR #3978: zfill operation implementation
+* PR #4001: ljust operation implementation
+* PR #4010: Support `dict()` and `{}`
+* PR #4022: Support for llvm 8
+* PR #4034: Make type.Optional str more representative
+* PR #4041: Deprecation warnings
+* PR #4044: rjust and center operations implementation
+* PR #4048: strip, lstrip and rstrip operations implementation
+* PR #4066: Expose numba CLI via python -m numba
+* PR #4081: Impl `np.shape` and support function for `asarray`.
+* PR #4091: Deprecate the use of iternext_impl without RefType
+
+CUDA Enhancements/Fixes:
+
+* PR #3933: Adds `.nbytes` property to CUDA device array objects.
+* PR #4011: Add .inspect_ptx() to cuda device function
+* PR #4054: CUDA: Use min/max PTX Instructions
+* PR #4096: Update env-vars for CUDA libraries lookup
+
+Documentation Updates:
+
+* PR #3867: Code repository map
+* PR #3918: adding Joris' Fosdem 2019 presentation
+* PR #3926: order talks on applications of Numba by date
+* PR #3943: fix two small typos in vectorize docs
+* PR #3944: Fixup jitclass docs
+* PR #3990: mention preprint repo in FAQ. Fixes #3981
+* PR #4012: Correct runtests command in contributing.rst
+* PR #4043: fix typo
+* PR #4047: Ambiguous Documentation fix for guvectorize.
+* PR #4060: Remove remaining mentions of autojit in docs
+* PR #4063: Fix annotate example in docstring
+* PR #4065: Add FAQ entry explaining Numba project name
+* PR #4079: Add Documentation for atomicity of typed.Dict
+* PR #4105: Remove info about CUDA ENVVAR potential replacement
+
+Fixes:
+
+* PR #3719: Resolves issue #3528.  Adds support for slices when not using parallel=True.
+* PR #3727: Remove dels for known dead vars.
+* PR #3845: Fix mutable flag transmission in .astype
+* PR #3853: Fix some minor issues in the C source.
+* PR #3862: Correct boolean reinterpretation of data
+* PR #3863: Comments out the appveyor badge
+* PR #3869: fixes flake8 after merge
+* PR #3871: Add assert to ir.py to help enforce correct structuring
+* PR #3881: fix preparfor dtype transform for datetime64
+* PR #3884: Prevent mutation of objmode fallback IR.
+* PR #3885: Updates for llvmlite 0.29
+* PR #3886: Use `safe_load` from pyyaml.
+* PR #3887: Add tolerance to network errors by permitting conda to retry
+* PR #3893: Fix casting in namedtuple ctor.
+* PR #3894: Fix array inliner for multiple array definition.
+* PR #3905: Cherrypick #3903 to main
+* PR #3920: Raise better error if unsupported jump opcode found.
+* PR #3927: Apply flake8 to the numpy related files
+* PR #3935: Silence DeprecationWarning
+* PR #3938: Better error message for unknown opcode
+* PR #3941: Fix typing of ufuncs in parfor conversion
+* PR #3946: Return variable renaming dict from inline_closurecall
+* PR #3962: Fix bug in alignment computation of `Record.make_c_struct`
+* PR #3967: Fix error with pickling unicode
+* PR #3964: Unicode split algo versioning
+* PR #3975: Add handler for unknown locale to numba -s
+* PR #3991: Permit Optionals in ufunc machinery
+* PR #3995: Remove assert in type inference causing poor error message.
+* PR #3996: add is_ascii flag to UnicodeType
+* PR #4009: Prevent zero division error in np.linalg.cond
+* PR #4014: Resolves #4007.
+* PR #4021: Add a more specific error message for invalid write to a global.
+* PR #4023: Fix handling of titles in record dtype
+* PR #4024: Do a check if a call is const before saying that an object is multiply defined.
+* PR #4027: Fix issue #4020.  Turn off no_cpython_wrapper flag when compiling for…
+* PR #4033: [WIP] Fixing wrong dtype of array inside reflected list #4028
+* PR #4061: Change IPython cache dir name to numba_cache
+* PR #4067: Delete examples/notebooks/LinearRegr.py
+* PR #4070: Catch writes to global typed.Dict and raise.
+* PR #4078: Check tuple length
+* PR #4084: Fix missing incref on optional return None
+* PR #4089: Make the warnings fixer flush work for warning comparing on type.
+* PR #4094: Fix function definition finding logic for commented def
+* PR #4100: Fix alignment check on 32-bit.
+* PR #4104: Use PEP 508 compliant env markers for install deps
+
+Contributors:
+
+* Benjamin Zaitlen
+* Christoph Deil
+* David Hirschfeld
+* Dimitri Vorona
+* Ehsan Totoni (core dev)
+* Guilherme Leobas
+* Leo Schwarz
+* Lucio Fernandez-Arjona
+* Max Bolingbroke
+* NanduTej
+* Nick White
+* Ravi Teja Gutta
+* Rob Ennis
+* Sergey Shalnov
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+
+
 Version 0.43.1
 --------------
 
@@ -2331,7 +2831,7 @@ make it cleaner and more rational:
 * The numba.vectorize namespace is gone. The vectorize decorator will
   be in the main numba namespace.
 * Added a guvectorize decorator in the main numba namespace. It is
-  similiar to numba.vectorize, but takes a dimension signature. It
+  similar to numba.vectorize, but takes a dimension signature. It
   generates gufuncs. This is a replacement for the GUVectorize gufunc
   factory which has been deprecated.
 

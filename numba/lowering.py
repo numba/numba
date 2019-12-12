@@ -50,6 +50,8 @@ class Environment(_dynfunc.Environment):
             return
         if _keepalive is None:
             return
+        if time is None or time.time is None:
+            return
         _keepalive.append((time.time(), self))
         if len(_keepalive) > 10:
             cur = time.time()
@@ -338,7 +340,8 @@ class Lower(BaseLower):
             try:
                 impl = self.context.get_function('static_setitem', signature)
             except NotImplementedError:
-                return self.lower_setitem(inst.target, inst.index_var, inst.value, signature)
+                return self.lower_setitem(inst.target, inst.index_var,
+                                          inst.value, signature)
             else:
                 target = self.loadvar(inst.target.name)
                 value = self.loadvar(inst.value.name)
@@ -353,7 +356,8 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.SetItem):
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
-            return self.lower_setitem(inst.target, inst.index, inst.value, signature)
+            return self.lower_setitem(inst.target, inst.index, inst.value,
+                                      signature)
 
         elif isinstance(inst, ir.StoreMap):
             signature = self.fndesc.calltypes[inst]
@@ -372,8 +376,10 @@ class Lower(BaseLower):
 
             op = operator.delitem
             fnop = self.context.typing_context.resolve_value_type(op)
-            fnop.get_call_type(self.context.typing_context, signature.args, {})
-            impl = self.context.get_function(fnop, signature)
+            callsig = fnop.get_call_type(
+                self.context.typing_context, signature.args, {},
+            )
+            impl = self.context.get_function(fnop, callsig)
 
             assert targetty == signature.args[0]
             index = self.context.cast(self.builder, index, indexty,
@@ -422,8 +428,10 @@ class Lower(BaseLower):
 
         op = operator.setitem
         fnop = self.context.typing_context.resolve_value_type(op)
-        fnop.get_call_type(self.context.typing_context, signature.args, {})
-        impl = self.context.get_function(fnop, signature)
+        callsig = fnop.get_call_type(
+            self.context.typing_context, signature.args, {},
+        )
+        impl = self.context.get_function(fnop, callsig)
 
         # Convert argument to match
         if isinstance(targetty, types.Optional):
@@ -516,7 +524,8 @@ class Lower(BaseLower):
 
     def lower_binop(self, resty, expr, op):
         # if op in utils.OPERATORS_TO_BUILTINS:
-        # map operator.the_op => the corresponding types.Function() TODO: is this looks dodgy ...
+        # map operator.the_op => the corresponding types.Function()
+        # TODO: is this looks dodgy ...
         op = self.context.typing_context.resolve_value_type(op)
 
         lhs = expr.lhs
@@ -543,7 +552,8 @@ class Lower(BaseLower):
                 return None
             try:
                 if isinstance(op, types.Function):
-                    static_sig = op.get_call_type(self.context.typing_context, tys, {})
+                    static_sig = op.get_call_type(self.context.typing_context,
+                                                  tys, {})
                 else:
                     static_sig = typing.signature(signature.return_type, *tys)
             except TypingError:
@@ -588,8 +598,10 @@ class Lower(BaseLower):
         # Get implementation of getitem
         op = operator.getitem
         fnop = self.context.typing_context.resolve_value_type(op)
-        fnop.get_call_type(self.context.typing_context, signature.args, {})
-        impl = self.context.get_function(fnop, signature)
+        callsig = fnop.get_call_type(
+            self.context.typing_context, signature.args, {},
+        )
+        impl = self.context.get_function(fnop, callsig)
 
         argvals = (baseval, indexval)
         argtyps = (self.typeof(value.name),
@@ -702,7 +714,8 @@ class Lower(BaseLower):
             res = self._lower_call_ExternalFunction(fnty, expr, signature)
 
         elif isinstance(fnty, types.ExternalFunctionPointer):
-            res = self._lower_call_ExternalFunctionPointer(fnty, expr, signature)
+            res = self._lower_call_ExternalFunctionPointer(
+                fnty, expr, signature)
 
         elif isinstance(fnty, types.RecursiveCall):
             res = self._lower_call_RecursiveCall(fnty, expr, signature)
@@ -904,9 +917,10 @@ class Lower(BaseLower):
         elif expr.op == 'unary':
             val = self.loadvar(expr.value.name)
             typ = self.typeof(expr.value.name)
+            func_ty = self.context.typing_context.resolve_value_type(expr.fn)
             # Get function
             signature = self.fndesc.calltypes[expr]
-            impl = self.context.get_function(expr.fn, signature)
+            impl = self.context.get_function(func_ty, signature)
             # Convert argument to match
             val = self.context.cast(self.builder, val, typ, signature.args[0])
             res = impl(self.builder, [val])
@@ -1029,7 +1043,8 @@ class Lower(BaseLower):
                 # Both get_function() and the returned implementation can
                 # raise NotImplementedError if the types aren't supported
                 impl = self.context.get_function("static_getitem", signature)
-                return impl(self.builder, (self.loadvar(expr.value.name), expr.index))
+                return impl(self.builder,
+                            (self.loadvar(expr.value.name), expr.index))
             except NotImplementedError:
                 if expr.index_var is None:
                     raise
@@ -1056,7 +1071,8 @@ class Lower(BaseLower):
         elif expr.op == "build_list":
             itemvals = [self.loadvar(i.name) for i in expr.items]
             itemtys = [self.typeof(i.name) for i in expr.items]
-            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
+            castvals = [self.context.cast(self.builder, val, fromty,
+                                          resty.dtype)
                         for val, fromty in zip(itemvals, itemtys)]
             return self.context.build_list(self.builder, resty, castvals)
 
@@ -1065,7 +1081,8 @@ class Lower(BaseLower):
             items = expr.items[::-1]
             itemvals = [self.loadvar(i.name) for i in items]
             itemtys = [self.typeof(i.name) for i in items]
-            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
+            castvals = [self.context.cast(self.builder, val, fromty,
+                                          resty.dtype)
                         for val, fromty in zip(itemvals, itemtys)]
             return self.context.build_set(self.builder, resty, castvals)
 
@@ -1139,9 +1156,11 @@ class Lower(BaseLower):
         # Store variable
         ptr = self.getvar(name)
         if value.type != ptr.type.pointee:
-            msg = ("Storing {value.type} to ptr of {ptr.type.pointee} ('{name}'). "
-                   "FE type {fetype}").format(value=value, ptr=ptr,
-                                              fetype=fetype, name=name)
+            msg = ("Storing {value.type} to ptr of {ptr.type.pointee} "
+                   "('{name}'). FE type {fetype}").format(value=value,
+                                                          ptr=ptr,
+                                                          fetype=fetype,
+                                                          name=name)
             raise AssertionError(msg)
 
         self.builder.store(value, ptr)
@@ -1169,7 +1188,8 @@ class Lower(BaseLower):
         # Is user variable?
         is_uservar = not name.startswith('$')
         # Allocate space for variable
-        aptr = cgutils.alloca_once(self.builder, lltype, name=name, zfill=True)
+        aptr = cgutils.alloca_once(self.builder, lltype,
+                                   name=name, zfill=False)
         if is_uservar:
             # Emit debug info for user variable
             sizeof = self.context.get_abi_sizeof(lltype)

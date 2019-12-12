@@ -8,13 +8,11 @@ jobs:
   pool: 
     vmImage: ${{ parameters.vmImage }}
   strategy:
-    maxParallel: 11
     matrix:
       ${{ insert }}: ${{ parameters.matrix }}
 
   steps:
     - script: |
-        # Sleep 10 seconds because of race condition with background apt process
         if [ "$(uname)" == "Linux" ] && [[ "$CONDA_SUBDIR" == "linux-32" || "$BITS32" == "yes" ]]; then sudo apt-get install -y libc6-dev-i386; fi
         echo "Installing Miniconda"
         buildscripts/incremental/install_miniconda.sh

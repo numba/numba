@@ -5,9 +5,9 @@ import operator
 from functools import reduce
 from collections import namedtuple, defaultdict
 
-from numba import ir
+from numba import ir, errors
 from numba.controlflow import CFGraph
-from numba import types, consts
+from numba import types, consts, special
 
 #
 # Analysis related to variable lifetime
@@ -216,7 +216,7 @@ def compute_live_variables(cfg, blocks, var_def_map, var_dead_map):
         for offset in blocks:
             # vars available + variable defined
             avail = block_entry_vars[offset] | var_def_map[offset]
-            # substract variables deleted
+            # subtract variables deleted
             avail -= var_dead_map[offset]
             # add ``avail`` to each successors
             for succ, _data in cfg.successors(offset):
@@ -302,7 +302,10 @@ def dead_branch_prune(func_ir, called_args):
         lhs_none = isinstance(lhs_cond, types.NoneType)
         rhs_none = isinstance(rhs_cond, types.NoneType)
         if lhs_none or rhs_none:
-            take_truebr = condition.fn(lhs_cond, rhs_cond)
+            try:
+                take_truebr = condition.fn(lhs_cond, rhs_cond)
+            except Exception:
+                return False, None
             if DEBUG > 0:
                 kill = branch.falsebr if take_truebr else branch.truebr
                 print("Pruning %s" % kill, branch, lhs_cond, rhs_cond,
@@ -313,7 +316,10 @@ def dead_branch_prune(func_ir, called_args):
 
     def prune_by_value(branch, condition, blk, *conds):
         lhs_cond, rhs_cond = conds
-        take_truebr = condition.fn(lhs_cond, rhs_cond)
+        try:
+            take_truebr = condition.fn(lhs_cond, rhs_cond)
+        except Exception:
+            return False, None
         if DEBUG > 0:
             kill = branch.falsebr if take_truebr else branch.truebr
             print("Pruning %s" % kill, branch, lhs_cond, rhs_cond, condition.fn)
@@ -323,12 +329,11 @@ def dead_branch_prune(func_ir, called_args):
     class Unknown(object):
         pass
 
-    def resolve_input_arg_const(input_arg):
+    def resolve_input_arg_const(input_arg_idx):
         """
         Resolves an input arg to a constant (if possible)
         """
-        idx = func_ir.arg_names.index(input_arg)
-        input_arg_ty = called_args[idx]
+        input_arg_ty = called_args[input_arg_idx]
 
         # comparing to None?
         if isinstance(input_arg_ty, types.NoneType):
@@ -363,9 +368,10 @@ def dead_branch_prune(func_ir, called_args):
             prune = prune_by_value
             for arg in [condition.lhs, condition.rhs]:
                 resolved_const = Unknown()
-                if arg.name in func_ir.arg_names:
+                arg_def = guard(get_definition, func_ir, arg)
+                if isinstance(arg_def, ir.Arg):
                     # it's an e.g. literal argument to the function
-                    resolved_const = resolve_input_arg_const(arg.name)
+                    resolved_const = resolve_input_arg_const(arg_def.index)
                     prune = prune_by_type
                 else:
                     # it's some const argument to the function, cannot use guard
@@ -428,3 +434,110 @@ def dead_branch_prune(func_ir, called_args):
     if DEBUG > 1:
         print("after".center(80, '-'))
         print(func_ir.dump())
+
+
+def rewrite_semantic_constants(func_ir, called_args):
+    """
+    This rewrites values known to be constant by their semantics as ir.Const
+    nodes, this is to give branch pruning the best chance possible of killing
+    branches. An example might be rewriting len(tuple) as the literal length.
+
+    func_ir is the IR
+    called_args are the actual arguments with which the function is called
+    """
+    DEBUG = 0
+
+    if DEBUG > 1:
+        print(("rewrite_semantic_constants: " +
+              func_ir.func_id.func_name).center(80, '-'))
+        print("before".center(80, '*'))
+        func_ir.dump()
+
+    def rewrite_statement(func_ir, stmt, new_val):
+        """
+        Rewrites the stmt as a ir.Const new_val and fixes up the entries in
+        func_ir._definitions
+        """
+        stmt.value = ir.Const(new_val, stmt.loc)
+        defns = func_ir._definitions[stmt.target.name]
+        repl_idx = defns.index(val)
+        defns[repl_idx] = stmt.value
+
+    def rewrite_array_ndim(val, func_ir, called_args):
+        # rewrite Array.ndim as const(ndim)
+        if getattr(val, 'op', None) == 'getattr':
+            if val.attr == 'ndim':
+                arg_def = guard(get_definition, func_ir, val.value)
+                if isinstance(arg_def, ir.Arg):
+                    argty = called_args[arg_def.index]
+                    if isinstance(argty, types.Array):
+                        rewrite_statement(func_ir, stmt, argty.ndim)
+
+    def rewrite_tuple_len(val, func_ir, called_args):
+        # rewrite len(tuple) as const(len(tuple))
+        if getattr(val, 'op', None) == 'call':
+            func = guard(get_definition, func_ir, val.func)
+            if (func is not None and isinstance(func, ir.Global) and
+                    getattr(func, 'value', None) is len):
+
+                (arg,) = val.args
+                arg_def = guard(get_definition, func_ir, arg)
+                if isinstance(arg_def, ir.Arg):
+                    argty = called_args[arg_def.index]
+                    if isinstance(argty, types.BaseTuple):
+                        rewrite_statement(func_ir, stmt, argty.count)
+
+    from .ir_utils import get_definition, guard
+    for blk in func_ir.blocks.values():
+        for stmt in blk.body:
+            if isinstance(stmt, ir.Assign):
+                val = stmt.value
+                if isinstance(val, ir.Expr):
+                    rewrite_array_ndim(val, func_ir, called_args)
+                    rewrite_tuple_len(val, func_ir, called_args)
+
+    if DEBUG > 1:
+        print("after".center(80, '*'))
+        func_ir.dump()
+        print('-' * 80)
+
+
+def find_literally_calls(func_ir, argtypes):
+    """An analysis to find `numba.literally` call inside the given IR.
+    When an unsatisfied literal typing request is found, a `ForceLiteralArg`
+    exception is raised.
+
+    Parameters
+    ----------
+
+    func_ir : numba.ir.FunctionIR
+
+    argtypes : Sequence[numba.types.Type]
+        The argument types.
+    """
+    from numba import ir_utils
+
+    marked_args = set()
+    first_loc = {}
+    # Scan for literally calls
+    for blk in func_ir.blocks.values():
+        for assign in blk.find_exprs(op='call'):
+            var = ir_utils.guard(ir_utils.get_definition, func_ir, assign.func)
+            if isinstance(var, (ir.Global, ir.FreeVar)):
+                fnobj = var.value
+            else:
+                fnobj = ir_utils.guard(ir_utils.resolve_func_from_module,
+                                       func_ir, var)
+            if fnobj is special.literally:
+                # Found
+                [arg] = assign.args
+                defarg = func_ir.get_definition(arg)
+                if isinstance(defarg, ir.Arg):
+                    argindex = defarg.index
+                    marked_args.add(argindex)
+                    first_loc.setdefault(argindex, assign.loc)
+    # Signal the dispatcher to force literal typing
+    for pos in marked_args:
+        if not isinstance(argtypes[pos], types.Literal):
+            loc = first_loc[pos]
+            raise errors.ForceLiteralArg(marked_args, loc=loc)

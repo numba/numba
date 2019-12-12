@@ -5,12 +5,21 @@ from __future__ import print_function, division, absolute_import
 
 import functools
 import sys
+import inspect
+import os.path
+from collections import namedtuple
 from types import MethodType, FunctionType
 
+import numba
 from .. import types, utils
 from ..errors import TypingError, InternalError
+from ..targets.cpu_options import InlineOptions
 
 _IS_PY3 = sys.version_info >= (3,)
+
+# info store for inliner callback functions e.g. cost model
+_inline_info = namedtuple('inline_info',
+                          'func_ir typemap calltypes signature')
 
 
 class Signature(object):
@@ -289,8 +298,8 @@ class CallableTemplate(FunctionTemplate):
         if not isinstance(sig, Signature):
             # If not a signature, `sig` is assumed to be the return type
             if not isinstance(sig, types.Type):
-                raise TypeError("invalid return type for callable template: got %r"
-                                % (sig,))
+                raise TypeError("invalid return type for callable template: "
+                                "got %r" % (sig,))
             sig = signature(sig, *bound.args)
         if self.recvr is not None:
             sig.recvr = self.recvr
@@ -314,6 +323,13 @@ class ConcreteTemplate(FunctionTemplate):
     def apply(self, args, kws):
         cases = getattr(self, 'cases')
         return self._select(cases, args, kws)
+
+
+class _EmptyImplementationEntry(InternalError):
+    def __init__(self, reason):
+        super(_EmptyImplementationEntry, self).__init__(
+            "_EmptyImplementationEntry({!r})".format(reason),
+        )
 
 
 class _OverloadFunctionTemplate(AbstractTemplate):
@@ -421,14 +437,51 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Type the overloaded function by compiling the appropriate
         implementation for the given args.
         """
-        disp, args = self._get_impl(args, kws)
+        disp, new_args = self._get_impl(args, kws)
         if disp is None:
             return
         # Compile and type it for the given types
         disp_type = types.Dispatcher(disp)
-        sig = disp_type.get_call_type(self.context, args, kws)
-        # Store the compiled overload for use in the lowering phase
-        self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+        # Store the compiled overload for use in the lowering phase if there's
+        # no inlining required (else functions are being compiled which will
+        # never be used as they are inlined)
+        if not self._inline.is_never_inline:
+            # need to run the compiler front end up to type inference to compute
+            # a signature
+            from numba import compiler, typed_passes
+            ir = compiler.run_frontend(disp_type.dispatcher.py_func)
+            resolve = disp_type.dispatcher.get_call_template
+            template, pysig, folded_args, kws = resolve(new_args, kws)
+
+            typemap, return_type, calltypes = typed_passes.type_inference_stage(
+                self.context, ir, folded_args, None)
+            sig = Signature(return_type, folded_args, None)
+            # this stores a load of info for the cost model function if supplied
+            # it by default is None
+            self._inline_overloads[sig.args] = {'folded_args': folded_args}
+            # this stores the compiled overloads, if there's no compiled
+            # overload available i.e. function is always inlined, the key still
+            # needs to exist for type resolution
+
+            # NOTE: If lowering is failing on a `_EmptyImplementationEntry`,
+            #       the inliner has failed to inline this entry corretly.
+            impl_init = _EmptyImplementationEntry('always inlined')
+            self._compiled_overloads[sig.args] = impl_init
+            if not self._inline.is_always_inline:
+                # this branch is here because a user has supplied a function to
+                # determine whether to inline or not. As a result both compiled
+                # function and inliner info needed, delaying the computation of
+                # this leads to an internal state mess at present. TODO: Fix!
+                sig = disp_type.get_call_type(self.context, new_args, kws)
+                self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+                # store the inliner information, it's used later in the cost
+                # model function call
+                iinfo = _inline_info(ir, typemap, calltypes, sig)
+                self._inline_overloads[sig.args] = {'folded_args': folded_args,
+                                                    'iinfo': iinfo}
+        else:
+            sig = disp_type.get_call_type(self.context, new_args, kws)
+            self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
 
     def _get_impl(self, args, kws):
@@ -510,8 +563,45 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         """
         return self._compiled_overloads[sig.args]
 
+    @classmethod
+    def get_source_info(cls):
+        """Return a dictionary with information about the source code  of the
+        implementation.
 
-def make_overload_template(func, overload_func, jit_options, strict):
+        Returns
+        -------
+        info : dict
+            - "kind" : str
+                The implementation kind.
+            - "name" : str
+                The name of the function that provided the definition.
+            - "sig" : str
+                The formatted signature of the function.
+            - "filename" : str
+                The name of the source file.
+            - "lines": tuple (int, int)
+                First and list line number.
+            - "docstring": str
+                The docstring of the definition.
+        """
+        basepath = os.path.dirname(os.path.dirname(numba.__file__))
+        impl = cls._overload_func
+        code, firstlineno = inspect.getsourcelines(impl)
+        path = inspect.getsourcefile(impl)
+        sig = str(utils.pysignature(impl))
+        info = {
+            'kind': "overload",
+            'name': getattr(impl, '__qualname__', impl.__name__),
+            'sig': sig,
+            'filename': os.path.relpath(path, start=basepath),
+            'lines': (firstlineno, firstlineno + len(code) - 1),
+            'docstring': impl.__doc__
+        }
+        return info
+
+
+def make_overload_template(func, overload_func, jit_options, strict,
+                           inline):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -521,7 +611,8 @@ def make_overload_template(func, overload_func, jit_options, strict):
     base = _OverloadFunctionTemplate
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
-               _strict=strict)
+               _strict=strict, _inline=staticmethod(InlineOptions(inline)),
+               _inline_overloads={})
     return type(base)(name, (base,), dct)
 
 
@@ -618,6 +709,7 @@ class _OverloadAttributeTemplate(AttributeTemplate):
     """
     A base class of templates for @overload_attribute functions.
     """
+    is_method = False
 
     def __init__(self, context):
         super(_OverloadAttributeTemplate, self).__init__(context)
@@ -633,61 +725,38 @@ class _OverloadAttributeTemplate(AttributeTemplate):
 
         @lower_getattr(cls.key, attr)
         def getattr_impl(context, builder, typ, value):
-            sig_args = (typ,)
-            sig_kws = {}
-            typing_context = context.typing_context
-            disp = cls._get_dispatcher(typing_context, typ, attr, sig_args, sig_kws)
-            disp_type = types.Dispatcher(disp)
-            sig = disp_type.get_call_type(typing_context, sig_args, sig_kws)
-            call = context.get_function(disp_type, sig)
+            typingctx = context.typing_context
+            fnty = cls._get_function_type(typingctx, typ)
+            sig = cls._get_signature(typingctx, fnty, (typ,), {})
+            call = context.get_function(fnty, sig)
             return call(builder, (value,))
-
-    @classmethod
-    def _get_dispatcher(cls, context, typ, attr, sig_args, sig_kws):
-        """
-        Get the compiled dispatcher implementing the attribute for
-        the given formal signature.
-        """
-        cache_key = context, typ, attr, tuple(sig_args), tuple(sig_kws.items())
-        try:
-            disp = cls._impl_cache[cache_key]
-        except KeyError:
-            # Get the overload implementation for the given type
-            pyfunc = cls._overload_func(*sig_args, **sig_kws)
-            if pyfunc is None:
-                # No implementation => fail typing
-                cls._impl_cache[cache_key] = None
-                return
-
-            from numba import jit
-            disp = cls._impl_cache[cache_key] = jit(nopython=True)(pyfunc)
-        return disp
-
-    def _resolve_impl_sig(self, typ, attr, sig_args, sig_kws):
-        """
-        Compute the actual implementation sig for the given formal argument types.
-        """
-        disp = self._get_dispatcher(self.context, typ, attr, sig_args, sig_kws)
-        if disp is None:
-            return None
-
-        # Compile and type it for the given types
-        disp_type = types.Dispatcher(disp)
-        sig = disp_type.get_call_type(self.context, sig_args, sig_kws)
-        return sig
 
     def _resolve(self, typ, attr):
         if self._attr != attr:
             return None
-
-        sig = self._resolve_impl_sig(typ, attr, (typ,), {})
+        fnty = self._get_function_type(self.context, typ)
+        sig = self._get_signature(self.context, fnty, (typ,), {})
+        # There should only be one template
+        for template in fnty.templates:
+            self._inline_overloads.update(template._inline_overloads)
         return sig.return_type
+
+    @classmethod
+    def _get_signature(cls, typingctx, fnty, args, kws):
+        sig = fnty.get_call_type(typingctx, args, kws)
+        sig = sig.replace(pysig=utils.pysignature(cls._overload_func))
+        return sig
+
+    @classmethod
+    def _get_function_type(cls, typingctx, typ):
+        return typingctx.resolve_value_type(cls._overload_func)
 
 
 class _OverloadMethodTemplate(_OverloadAttributeTemplate):
     """
     A base class of templates for @overload_method functions.
     """
+    is_method = True
 
     @classmethod
     def do_class_init(cls):
@@ -701,10 +770,9 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         def method_impl(context, builder, sig, args):
             typ = sig.args[0]
             typing_context = context.typing_context
-            disp = cls._get_dispatcher(typing_context, typ, attr, sig.args, {})
-            disp_type = types.Dispatcher(disp)
-            sig = disp_type.get_call_type(typing_context, sig.args, {})
-            call = context.get_function(disp_type, sig)
+            fnty = cls._get_function_type(typing_context, typ)
+            sig = cls._get_signature(typing_context, fnty, sig.args, {})
+            call = context.get_function(fnty, sig)
             # Link dependent library
             context.add_linking_libs(getattr(call, 'libs', ()))
             return call(builder, args)
@@ -717,17 +785,24 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)
+            _inline = self._inline
+            _overload_func = staticmethod(self._overload_func)
+            _inline_overloads = self._inline_overloads
 
             def generic(_, args, kws):
                 args = (typ,) + tuple(args)
-                sig = self._resolve_impl_sig(typ, attr, args, kws)
+                fnty = self._get_function_type(self.context, typ)
+                sig = self._get_signature(self.context, fnty, args, kws)
+                sig = sig.replace(pysig=utils.pysignature(self._overload_func))
+                for template in fnty.templates:
+                    self._inline_overloads.update(template._inline_overloads)
                 if sig is not None:
                     return sig.as_method()
 
         return types.BoundFunction(MethodTemplate, typ)
 
 
-def make_overload_attribute_template(typ, attr, overload_func,
+def make_overload_attribute_template(typ, attr, overload_func, inline,
                                      base=_OverloadAttributeTemplate):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
@@ -737,18 +812,22 @@ def make_overload_attribute_template(typ, attr, overload_func,
     name = "OverloadTemplate_%s_%s" % (typ, attr)
     # Note the implementation cache is subclass-specific
     dct = dict(key=typ, _attr=attr, _impl_cache={},
+               _inline=staticmethod(InlineOptions(inline)),
+               _inline_overloads={},
                _overload_func=staticmethod(overload_func),
                )
     return type(base)(name, (base,), dct)
 
 
-def make_overload_method_template(typ, attr, overload_func):
+def make_overload_method_template(typ, attr, overload_func, inline):
     """
     Make a template class for method *attr* of *typ* overloaded by
     *overload_func*.
     """
-    return make_overload_attribute_template(typ, attr, overload_func,
-                                            base=_OverloadMethodTemplate)
+    return make_overload_attribute_template(
+        typ, attr, overload_func, inline=inline,
+        base=_OverloadMethodTemplate,
+    )
 
 
 def bound_function(template_key):

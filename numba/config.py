@@ -128,6 +128,11 @@ class _EnvReloader(object):
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
 
+        # disable performance warnings, will switch of the generation of
+        # warnings of the class NumbaPerformanceWarning
+        DISABLE_PERFORMANCE_WARNINGS = _readenv(
+            "NUMBA_DISABLE_PERFORMANCE_WARNINGS", int, 0)
+
         # Flag to enable full exception reporting
         FULL_TRACEBACKS = _readenv(
             "NUMBA_FULL_TRACEBACKS", int, DEVELOPER_MODE)
@@ -142,10 +147,14 @@ class _EnvReloader(object):
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 
+        # DEBUG print IR after pass names
+        DEBUG_PRINT_AFTER = _readenv("NUMBA_DEBUG_PRINT_AFTER", str, "none")
+
         # JIT Debug flag to trigger IR instruction print
         DEBUG_JIT = _readenv("NUMBA_DEBUG_JIT", int, 0)
 
-        # Enable debugging of front-end operation (up to and including IR generation)
+        # Enable debugging of front-end operation
+        # (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
 
         # How many recently deserialized functions to retain regardless
@@ -233,9 +242,9 @@ class _EnvReloader(object):
 
         HTML = _readenv("NUMBA_DUMP_HTML", fmt_html_path, None)
 
-        # Allow interpreter fallback so that Numba @jit decorator will never fail
-        # Use for migrating from old numba (<0.12) which supported closure, and other
-        # yet-to-be-supported features.
+        # Allow interpreter fallback so that Numba @jit decorator will never
+        # fail. Use for migrating from old numba (<0.12) which supported
+        # closure, and other yet-to-be-supported features.
         COMPATIBILITY_MODE = _readenv("NUMBA_COMPATIBILITY_MODE", int, 0)
 
         # x86-64 specific
@@ -247,7 +256,7 @@ class _EnvReloader(object):
                 # There are various performance issues with AVX and LLVM
                 # on some CPUs (list at
                 # http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
-                # For now we'd rather disable it, since it can pessimize the code.
+                # For now we'd rather disable it, since it can pessimize code
                 cpu_name = ll.get_host_cpu_name()
                 return cpu_name not in ('corei7-avx', 'core-avx-i',
                                         'sandybridge', 'ivybridge')
@@ -309,7 +318,7 @@ class _EnvReloader(object):
         # Indicates if a profiler detected. Only VTune can be detected for now
         RUNNING_UNDER_PROFILER = 'VS_PROFILER' in os.environ
 
-        # Enables jit events in LLVM in order to support profiling of dynamic code
+        # Enables jit events in LLVM to support profiling of dynamic code
         ENABLE_PROFILING = _readenv(
             "NUMBA_ENABLE_PROFILING", int, int(RUNNING_UNDER_PROFILER))
 

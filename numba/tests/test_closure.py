@@ -6,7 +6,7 @@ import numpy
 
 import numba.unittest_support as unittest
 from numba import njit, jit, testing, utils
-from numba.errors import (TypingError, LoweringError, UnsupportedError)
+from numba.errors import TypingError, UnsupportedError
 from .support import TestCase, tag
 from numba.six import exec_
 
@@ -423,28 +423,28 @@ class TestInlinedClosure(TestCase):
         msg = "Unsupported use of op_LOAD_CLOSURE encountered"
         self.assertIn(msg, str(raises.exception))
 
-        with self.assertRaises(UnsupportedError) as raises:
+        with self.assertRaises(TypingError) as raises:
             cfunc = jit(nopython=True)(outer11)
             cfunc(var)
-        msg = "make_function"
+        msg = "Cannot capture the non-constant value"
         self.assertIn(msg, str(raises.exception))
 
-        with self.assertRaises(TypingError) as raises:
+        with self.assertRaises(UnsupportedError) as raises:
             cfunc = jit(nopython=True)(outer16)
             cfunc(var)
-        msg = "with argument(s) of type(s): (none)"
+        msg = "The use of yield in a closure is unsupported."
         self.assertIn(msg, str(raises.exception))
 
-        with self.assertRaises(LoweringError) as raises:
+        with self.assertRaises(UnsupportedError) as raises:
             cfunc = jit(nopython=True)(outer17)
             cfunc(var)
-        msg = "'NoneType' object has no attribute 'yield_points'"
+        msg = "The use of yield in a closure is unsupported."
         self.assertIn(msg, str(raises.exception))
 
-        with self.assertRaises(TypingError) as raises:
+        with self.assertRaises(UnsupportedError) as raises:
             cfunc = jit(nopython=True)(outer18)
             cfunc(var)
-        msg = "Invalid use of getiter with parameters (none)"
+        msg = "The use of yield in a closure is unsupported."
         self.assertIn(msg, str(raises.exception))
 
 

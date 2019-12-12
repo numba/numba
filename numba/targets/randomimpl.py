@@ -16,7 +16,10 @@ from numba.extending import overload, register_jitable
 from numba.targets.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
 from numba.typing import signature
-from numba import _helperlib, cgutils, types
+from numba import _helperlib, cgutils, types, utils
+
+
+POST_PY38 = utils.PYVERSION >= (3, 8)
 
 
 registry = Registry()
@@ -219,6 +222,9 @@ def random_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @lower("np.random.random")
+@lower("np.random.random_sample")
+@lower("np.random.sample")
+@lower("np.random.ranf")
 def random_impl(context, builder, sig, args):
     state_ptr = get_state_ptr(context, builder, "np")
     res = get_next_double(context, builder, state_ptr)
@@ -550,10 +556,16 @@ def _gammavariate_impl(context, builder, sig, args, _random):
 
         elif alpha == 1.0:
             # expovariate(1)
-            u = _random()
-            while u <= 1e-7:
+
+            if POST_PY38:
+                # Adjust due to cpython
+                # commit 63d152232e1742660f481c04a811f824b91f6790
+                return -_log(1.0 - _random()) * beta
+            else:
                 u = _random()
-            return -_log(u) * beta
+                while u <= 1e-7:
+                    u = _random()
+                return -_log(u) * beta
 
         else:   # alpha is between 0 and 1 (exclusive)
             # Uses ALGORITHM GS of Statistical Computing - Kennedy & Gentle
@@ -1256,6 +1268,9 @@ for typing_key, arity in [
     ("np.random.poisson", 2),
     ("np.random.power", 2),
     ("np.random.random", 1),
+    ("np.random.random_sample", 1),
+    ("np.random.ranf", 1),
+    ("np.random.sample", 1),
     ("np.random.randint", 3),
     ("np.random.rayleigh", 2),
     ("np.random.standard_cauchy", 1),

@@ -34,7 +34,7 @@ ll_intp_p = intp_t.as_pointer()
 
 
 # fortran int type, this needs to match the F_INT C declaration in
-# _lapack.c and is present to accomodate potential future 64bit int
+# _lapack.c and is present to accommodate potential future 64bit int
 # based LAPACK use.
 F_INT_nptype = np.int32
 F_INT_nbtype = types.int32
@@ -2683,7 +2683,11 @@ else:
 def _kron_normaliser_impl(x):
     # makes x into a 2d array
     if isinstance(x, types.Array):
-        if x.ndim == 2:
+        if x.layout not in ('C', 'F'):
+            raise TypingError("np.linalg.kron only supports 'C' or 'F' layout "
+                              "input arrays. Receieved an input of "
+                              "layout '{}'.".format(x.layout))
+        elif x.ndim == 2:
             @register_jitable
             def nrm_shape(x):
                 xn = x.shape[-1]
