@@ -985,8 +985,8 @@ int create_numba_oneapi_kernel_arg (const void *arg_value,
 #if DEBUG
     printf("DEBUG: Kernel arg created\n");
     void **tp = (void**)kernel_arg->arg_value;
-    printf("DEBUG: create_kernel_arg (size %ld, addr %p)\n",
-            kernel_arg->arg_size, *tp);
+    printf("DEBUG: create_kernel_arg %p (size %ld, addr %p)\n",
+            kernel_arg, kernel_arg->arg_size, *tp);
 #endif
 
     *kernel_arg_t_ptr = kernel_arg;
@@ -1049,6 +1049,11 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
 #if DEBUG
     kernel_t_ptr->dump_fn(kernel_t_ptr);
 #endif
+#if DEBUG
+    for(i = 0; i < nargs; ++i) {
+        printf("arg[%ld] = %p, %p\n", i, array_of_args[i], &(array_of_args[i]));
+    }
+#endif
     // Set the kernel arguments
     for(i = 0; i < nargs; ++i) {
 #if DEBUG
@@ -1099,13 +1104,17 @@ int set_args_and_enqueue_numba_oneapi_kernel_auto_blocking (env_t env_t_ptr,
     size_t *global_work_size;
     size_t *local_work_size;
     int err;
+    int i;
 
     global_work_size = (size_t*)malloc(sizeof(size_t) * num_dims);
-    local_work_size  = (size_t*)malloc(sizeof(size_t) * num_dims);
+//    local_work_size  = (size_t*)malloc(sizeof(size_t) * num_dims);
     CHECK_MALLOC_ERROR(size_t, global_work_size);
-    CHECK_MALLOC_ERROR(size_t, local_work_size);
+//    CHECK_MALLOC_ERROR(size_t, local_work_size);
 
-    // FILL IN global_work_size and local_work_size!
+    assert(num_dims > 0 && num_dims < 4);
+    for (i = 0; i < num_dims; ++i) {
+        global_work_size[i] = dim_stops[i] - dim_starts[i];
+    }
 
     err = set_args_and_enqueue_numba_oneapi_kernel(env_t_ptr,
                                                    kernel_t_ptr,
@@ -1114,13 +1123,14 @@ int set_args_and_enqueue_numba_oneapi_kernel_auto_blocking (env_t env_t_ptr,
                                                    num_dims,
                                                    NULL,
                                                    global_work_size,
-                                                   local_work_size);
+                                                   NULL);
+                                                   //local_work_size);
     free(global_work_size);
-    free(local_work_size);
+//    free(local_work_size);
     return err;
 
 malloc_error:
     free(global_work_size);
-    free(local_work_size);
+//    free(local_work_size);
     return NUMBA_ONEAPI_FAILURE;
 }
