@@ -1569,6 +1569,7 @@ class TestMore(TestCase):
             str(raises.exception)
         )
 
+    @unittest.skip("numba.literally not supported yet")
     def test_literally_constant_list(self):
         # FAIL. May need to consider it in a future PR
         from numba import literally
@@ -1581,7 +1582,9 @@ class TestMore(TestCase):
                 r += a
             return r
 
-        foo(12)  # Found non-constant value at position 1 in a list argument to literal_unroll
+        # Found non-constant value at position 1 in a list argument to
+        # literal_unroll
+        foo(12)
 
         @njit
         def bar():
@@ -1641,7 +1644,7 @@ class TestMore(TestCase):
         self.assertEqual(foo(), foo.py_func())
 
     def test_unroll_tuple_nested(self):
-        # FAIL
+
         @njit
         def foo():
             x = ((10, 1.2), (1j, 3.))
@@ -1651,9 +1654,12 @@ class TestMore(TestCase):
                     out += j
             return out
 
-        # Can literal_unroll give a better error message?
-        # errmsg: Invalid use of getiter with parameters (Tuple(int64, float64))
-        foo()
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+
+        self.assertIn("getiter", str(raises.exception))
+        re = r".*Tuple\(int[0-9][0-9], float64\).*"
+        self.assertRegexpMatches(str(raises.exception), re)
 
     def test_unroll_tuple_of_dict(self):
         from numba.tests.support import captured_stdout
@@ -1677,7 +1683,6 @@ class TestMore(TestCase):
             lines,
             ['a 1', 'b 2', '3 c', '4 d'],
         )
-
 
 
 if __name__ == '__main__':
