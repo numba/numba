@@ -1535,6 +1535,7 @@ class TestLiteralUnrollPy2(TestCase):
                       str(raises.exception))
 
 
+@skip_lt_py36
 class TestMore(TestCase):
     def test_invalid_use_of_unroller(self):
         @njit
@@ -1735,6 +1736,7 @@ class CapturingCompiler(CompilerBase):
         return [pm]
 
 
+@skip_lt_py36
 class TestLiteralUnrollPassTriggering(TestCase):
 
     def test_literal_unroll_not_invoked(self):
