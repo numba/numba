@@ -277,14 +277,18 @@ static int dump_numba_oneapi_kernel_info (void *obj)
     value = (char*)malloc(size);
     err = clGetKernelInfo(kernel, CL_KERNEL_FUNCTION_NAME, size, value, NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not get kernel function name.");
-    printf("Kernel Function name: %s\n", value);
+#if DEBUG
+    printf("DEBUG: Kernel Function name: %s\n", value);
+#endif
     free(value);
 
     // print the number of kernel args
     err = clGetKernelInfo(kernel, CL_KERNEL_NUM_ARGS, sizeof(numKernelArgs),
             &numKernelArgs, NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not get kernel num args.");
-    printf("Number of kernel arguments : %d\n", numKernelArgs);
+#if DEBUG
+    printf("DEBUG: Number of kernel arguments : %d\n", numKernelArgs);
+#endif
 
     return NUMBA_ONEAPI_SUCCESS;
 
@@ -980,6 +984,9 @@ int create_numba_oneapi_kernel_arg (const void *arg_value,
 
 #if DEBUG
     printf("DEBUG: Kernel arg created\n");
+    void **tp = (void**)kernel_arg->arg_value;
+    printf("DEBUG: create_kernel_arg (size %ld, addr %p)\n",
+            kernel_arg->arg_size, *tp);
 #endif
 
     *kernel_arg_t_ptr = kernel_arg;
@@ -1044,14 +1051,17 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
 #endif
     // Set the kernel arguments
     for(i = 0; i < nargs; ++i) {
-    kernel_arg_t this_arg = array_of_args[i];
+#if DEBUG
+        printf("DEBUG: clSetKernelArgs for arg # %ld\n", i);
+#endif
+        kernel_arg_t this_arg = array_of_args[i];
+#if DEBUG
+        check_kernelarg_id(this_arg);
+#endif
 #if DEBUG
         void **tp = (void**)this_arg->arg_value;
         printf("DEBUG: clSetKernelArgs for arg # %ld (size %ld, addr %p)\n", i,
                 this_arg->arg_size, *tp);
-#endif
-#if DEBUG
-        check_kernelarg_id(this_arg);
 #endif
         err = clSetKernelArg(kernel, i, this_arg->arg_size,
                              this_arg->arg_value);
