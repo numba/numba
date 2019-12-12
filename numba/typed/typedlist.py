@@ -379,6 +379,24 @@ class ErrorHandler(object):
             builder.ret(self.pyapi.get_null_object())
 
 
+def _unbox_typed_list(context, builder, pyapi, val, c, lstruct):
+    """ Unbox a typed list during unboxing. """
+    miptr = pyapi.object_getattr_string(val, '_opaque')
+    native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
+
+    mi = native.value
+
+    data_pointer = context.nrt.meminfo_data(builder, mi)
+    data_pointer = builder.bitcast(
+        data_pointer,
+        listobject.ll_list_type.as_pointer(),
+    )
+
+    lstruct.data = builder.load(data_pointer)
+    lstruct.meminfo = mi
+    pyapi.decref(miptr)
+
+
 def _new_list(context, builder, pyapi, lstruct, itemty, size, error_handler):
     """ Initialize new typed list from struct during unboxing. """
     # create ptr to new typed list
@@ -407,21 +425,7 @@ def unbox_listtype(typ, val, c):
             as (is_numba_typed_list, is_python_list):
 
         with is_numba_typed_list:
-            miptr = c.pyapi.object_getattr_string(val, '_opaque')
-            native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
-
-            mi = native.value
-
-            data_pointer = context.nrt.meminfo_data(builder, mi)
-            data_pointer = builder.bitcast(
-                data_pointer,
-                listobject.ll_list_type.as_pointer(),
-            )
-
-            lstruct.data = builder.load(data_pointer)
-            lstruct.meminfo = mi
-            c.pyapi.decref(miptr)
-
+            _unbox_typed_list(context, builder, pyapi, val, c, lstruct)
         with is_python_list:
             errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
             error_handler = ErrorHandler(pyapi, errorptr)
