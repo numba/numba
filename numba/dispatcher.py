@@ -676,7 +676,7 @@ class Dispatcher(_DispatcherBase):
         self.targetoptions = targetoptions
         if "disable_reflected_list" in py_func.__globals__ and \
                 py_func.__globals__["disable_reflected_list"].__module__ \
-                == "numba.__future__":
+                == "numba.future":
             self.targetoptions["disable_reflected_list"] = True
 
         self.locals = locals
