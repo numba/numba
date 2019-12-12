@@ -1884,10 +1884,6 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
         print("num_expanded_args = ", num_expanded_args)
     # -----------------------------------------------------------------------
 
-    kernel_arg_array = cgutils.alloca_once(
-        builder, void_ptr_ptr_t, size=context.get_constant(
-            types.uintp, num_expanded_args), name="kernel_arg_array")
-
     # Create functions that we need to call ---------------------------------
 
     create_oneapi_kernel_arg_fnty = lc.Type.function(
@@ -1925,6 +1921,10 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
     enqueue_kernel = builder.module.get_or_insert_function(
                                   enqueue_kernel_fnty,
                                   name="set_args_and_enqueue_numba_oneapi_kernel_auto_blocking")
+
+    kernel_arg_array = cgutils.alloca_once(
+        builder, void_ptr_t, size=context.get_constant(
+            types.uintp, num_expanded_args), name="kernel_arg_array")
 
     # -----------------------------------------------------------------------
 
@@ -1975,7 +1975,12 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
                                            kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
             cur_arg += 1
-            builder.store(kernel_arg, dst)
+            builder.store(builder.load(kernel_arg), dst)
+
+            cgutils.printf(builder, "dst0 = ")
+            cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
+            cgutils.printf(builder, "\n")
+
             # Handle parent
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
             builder.call(
@@ -1984,7 +1989,12 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
                                            kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
             cur_arg += 1
-            builder.store(kernel_arg, dst)
+            builder.store(builder.load(kernel_arg), dst)
+
+            cgutils.printf(builder, "dst1 = ")
+            cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
+            cgutils.printf(builder, "\n")
+
             # Handle array size
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
             array_size_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 2)])
@@ -1994,7 +2004,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
                                            kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
             cur_arg += 1
-            builder.store(kernel_arg, dst)
+            builder.store(builder.load(kernel_arg), dst)
             # Handle itemsize
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
             item_size_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 3)])
@@ -2004,7 +2014,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
                                            kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
             cur_arg += 1
-            builder.store(kernel_arg, dst)
+            builder.store(builder.load(kernel_arg), dst)
             # Handle data
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
             data_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 4)])
@@ -2030,7 +2040,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             builder.call(create_oneapi_kernel_arg_from_buffer, [buffer_ptr, kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
             cur_arg += 1
-            builder.store(kernel_arg, dst)
+            builder.store(builder.load(kernel_arg), dst)
             # Handle shape
             shape_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 5)])
             for this_dim in range(arg_type.ndim):
@@ -2042,7 +2052,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
                                                kernel_arg])
                 dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
                 cur_arg += 1
-                builder.store(kernel_arg, dst)
+                builder.store(builder.load(kernel_arg), dst)
             # Handle strides
             stride_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 6)])
             for this_stride in range(arg_type.ndim):
@@ -2054,7 +2064,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
                                                kernel_arg])
                 dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
                 cur_arg += 1
-                builder.store(kernel_arg, dst)
+                builder.store(builder.load(kernel_arg), dst)
         else:
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
             # Handle non-arrays
@@ -2064,7 +2074,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
                                            kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
             cur_arg += 1
-            builder.store(kernel_arg, dst)
+            builder.store(builder.load(kernel_arg), dst)
 
     # -----------------------------------------------------------------------
 
@@ -2113,7 +2123,8 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
         enqueue_kernel, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
                          builder.inttoptr(context.get_constant(types.uintp, kernel_int), void_ptr_t),
                          context.get_constant(types.uintp, num_expanded_args),
-                         builder.load(kernel_arg_array),
+                         kernel_arg_array,
+                         #builder.bitcast(kernel_arg_array, void_ptr_ptr_t),
                          context.get_constant(types.uintp, num_dim),
                          dim_starts,
                          dim_stops])
