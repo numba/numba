@@ -16,7 +16,7 @@ conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy j
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build
-%CONDA_INSTALL% -c numba llvmlite
+%CONDA_INSTALL% -c numba/label/dev llvmlite
 @rem Install required backports for older Pythons
 if %PYTHON% LSS 3.4 (%CONDA_INSTALL% enum34)
 if %PYTHON% LSS 3.4 (%PIP_INSTALL% singledispatch)
