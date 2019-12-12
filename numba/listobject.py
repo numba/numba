@@ -275,6 +275,23 @@ def new_list(item, allocated=0):
     raise NotImplementedError
 
 
+def _add_meminfo(context, builder, lstruct):
+    alloc_size = context.get_abi_sizeof(
+        context.get_value_type(types.voidptr),
+    )
+    dtor = _imp_dtor(context, builder.module)
+    meminfo = context.nrt.meminfo_alloc_dtor(
+        builder,
+        context.get_constant(types.uintp, alloc_size),
+        dtor,
+    )
+
+    data_pointer = context.nrt.meminfo_data(builder, meminfo)
+    data_pointer = builder.bitcast(data_pointer, ll_list_type.as_pointer())
+    builder.store(lstruct.data, data_pointer)
+    lstruct.meminfo = meminfo
+
+
 @intrinsic
 def _make_list(typingctx, itemty, ptr):
     """Make a list struct with the given *ptr*
@@ -289,26 +306,11 @@ def _make_list(typingctx, itemty, ptr):
     list_ty = types.ListType(itemty.instance_type)
 
     def codegen(context, builder, signature, args):
-        [_, ptr] = args
+        ptr = args[1]
         ctor = cgutils.create_struct_proxy(list_ty)
         lstruct = ctor(context, builder)
         lstruct.data = ptr
-
-        alloc_size = context.get_abi_sizeof(
-            context.get_value_type(types.voidptr),
-        )
-        dtor = _imp_dtor(context, builder.module)
-        meminfo = context.nrt.meminfo_alloc_dtor(
-            builder,
-            context.get_constant(types.uintp, alloc_size),
-            dtor,
-        )
-
-        data_pointer = context.nrt.meminfo_data(builder, meminfo)
-        data_pointer = builder.bitcast(data_pointer, ll_list_type.as_pointer())
-        builder.store(ptr, data_pointer)
-        lstruct.meminfo = meminfo
-
+        _add_meminfo(context, builder, lstruct)
         return lstruct._getvalue()
 
     sig = list_ty(itemty, ptr)
