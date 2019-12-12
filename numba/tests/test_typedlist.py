@@ -9,7 +9,6 @@ from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
-from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, unittest
 
 from numba.unsafe.refcount import get_refcount
@@ -187,7 +186,8 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         """ Test getitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
-        and compare results agains the regular list in a quasi fuzzing approach.
+        and compare results against the regular list in a quasi fuzzing
+        approach.
 
         """
         # initialize regular list
@@ -234,7 +234,8 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         """ Test setitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
-        and compare results agains the regular list in a quasi fuzzing approach.
+        and compare results against the regular list in a quasi fuzzing
+        approach.
 
         """
 
@@ -370,7 +371,8 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         """ Test delitem using a slice.
 
         This tests suffers from combinatorial explosion, so we parametrize it
-        and compare results agains the regular list in a quasi fuzzing approach.
+        and compare results against the regular list in a quasi fuzzing
+        approach.
 
         """
 
@@ -443,6 +445,40 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             del rl[sa:so:se]
             del tl[sa:so:se]
             self.assertEqual(rl, list(tl))
+
+
+class TestAllocation(MemoryLeakMixin, TestCase):
+
+    def test_allocation(self):
+        # kwarg version
+        for i in range(16):
+            tl = List.empty_list(types.int32, allocated=i)
+            self.assertEqual(tl._allocated(), i)
+
+        # posarg version
+        for i in range(16):
+            tl = List.empty_list(types.int32, i)
+            self.assertEqual(tl._allocated(), i)
+
+    def test_growth_and_shrinkage(self):
+        tl = List.empty_list(types.int32)
+        growth_before = {0: 0, 4:4, 8:8, 16:16}
+        growth_after = {0: 4, 4:8, 8:16, 16:25}
+        for i in range(17):
+            if i in growth_before:
+                self.assertEqual(growth_before[i], tl._allocated())
+            tl.append(i)
+            if i in growth_after:
+                self.assertEqual(growth_after[i], tl._allocated())
+
+        shrink_before = {17: 25, 12:25, 9:18, 6:12, 4:8, 3:6, 2:5, 1:4}
+        shrink_after = {17: 25, 12:18, 9:12, 6:8, 4:6, 3:5, 2:4, 1:0}
+        for i in range(17, 0, -1):
+            if i in shrink_before:
+                self.assertEqual(shrink_before[i], tl._allocated())
+            tl.pop()
+            if i in shrink_after:
+                self.assertEqual(shrink_after[i], tl._allocated())
 
 
 class TestExtend(MemoryLeakMixin, TestCase):
@@ -576,22 +612,10 @@ class TestComparisons(MemoryLeakMixin, TestCase):
         expected = False, False, False, True, True, True
         self._cmp_dance(expected, pa, pb, na, nb)
 
-    def test_typing_mimatch(self):
-        self.disable_leak_check()
+    def test_equals_non_list(self):
         l = to_tl([1, 2, 3])
-
-        with self.assertRaises(TypingError) as raises:
-            cmp.py_func(l, 1)
-        self.assertIn(
-            "list can only be compared to list",
-            str(raises.exception),
-        )
-        with self.assertRaises(TypingError) as raises:
-            cmp(l, 1)
-        self.assertIn(
-            "list can only be compared to list",
-            str(raises.exception),
-        )
+        self.assertFalse(any(cmp.py_func(l, 1)))
+        self.assertFalse(any(cmp(l, 1)))
 
 
 class TestListInferred(TestCase):
@@ -650,6 +674,19 @@ class TestListInferred(TestCase):
         self.assertEqual(expected, got)
         self.assertEqual(list(got), [0, 1, 2])
         self.assertEqual(typeof(got).item_type, typeof(1))
+
+    def test_refine_list_extend_iter(self):
+        @njit
+        def foo():
+            l = List()
+            d = Dict()
+            d[0] = 0
+            # d.keys() provides a DictKeysIterableType
+            l.extend(d.keys())
+            return l
+
+        got = foo()
+        self.assertEqual(0, got[0])
 
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
@@ -829,3 +866,44 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         # test
         for i, x in enumerate(ref):
             self.assertEqual(lst[i], ref[i])
+
+    @skip_py2
+    def test_equals_on_list_with_dict_for_equal_lists(self):
+        # https://github.com/numba/numba/issues/4879
+        a, b = List(), Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c, d = List(), Dict()
+        d["a"] = 1
+        c.append(d)
+
+        self.assertEqual(a, c)
+
+    @skip_py2
+    def test_equals_on_list_with_dict_for_unequal_dicts(self):
+        # https://github.com/numba/numba/issues/4879
+        a, b = List(), Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c, d = List(), Dict()
+        d["a"] = 2
+        c.append(d)
+
+        self.assertNotEqual(a, c)
+
+    @skip_py2
+    def test_equals_on_list_with_dict_for_unequal_lists(self):
+        # https://github.com/numba/numba/issues/4879
+        a, b = List(), Dict()
+        b["a"] = 1
+        a.append(b)
+
+        c, d, e = List(), Dict(), Dict()
+        d["a"] = 1
+        e["b"] = 2
+        c.append(d)
+        c.append(e)
+
+        self.assertNotEqual(a, c)

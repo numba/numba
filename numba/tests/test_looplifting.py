@@ -38,6 +38,7 @@ def lift2(x):
 
 def lift3(x):
     # Output variable from the loop
+    _ = object()
     a = np.arange(5, dtype=np.int64)
     c = 0
     for i in range(a.shape[0]):
@@ -46,6 +47,7 @@ def lift3(x):
 
 def lift4(x):
     # Output two variables from the loop
+    _ = object()
     a = np.arange(5, dtype=np.int64)
     c = 0
     d = 0
@@ -55,6 +57,7 @@ def lift4(x):
     return c + d
 
 def lift5(x):
+    _ = object()
     a = np.arange(4)
     for i in range(a.shape[0]):
         # Inner has a break statement
@@ -87,13 +90,14 @@ def reject1(x):
 
 
 def reject_gen1(x):
+    _ = object()
     a = np.arange(4)
     for i in range(a.shape[0]):
         # Inner is a generator => cannot loop-lift
         yield a[i]
 
 def reject_gen2(x):
-    # Outer needs object mode because of np.empty()
+    _ = object()
     a = np.arange(3)
     for i in range(a.size):
         # Middle has a yield => cannot loop-lift
@@ -107,8 +111,8 @@ def reject_gen2(x):
 def reject_npm1(x):
     a = np.empty(3, dtype=np.int32)
     for i in range(a.size):
-        # Inner uses np.arange() => cannot loop-lift unless
-        # enable_pyobject_looplift is enabled.
+        # Inner uses object() => cannot loop-lift
+        _ = object()
         a[i] = np.arange(i + 1)[i]
 
     return a

@@ -22,6 +22,7 @@ Talks on Applications of Numba
 * SciPy 2018 - UMAP: Uniform Manifold Approximation and Projection for Dimensional Reduction - Leland McInnes (`Video <https://www.youtube.com/watch?v=nq6iPZVUxZU>`__, `Github <https://github.com/lmcinnes/umap>`__)
 * PyData Berlin 2018 - Extending Pandas using Apache Arrow and Numba - Uwe L. Korn (`Video <https://www.youtube.com/watch?v=tvmX8YAFK80>`__, `Blog <https://uwekorn.com/2018/08/03/use-numba-to-work-with-apache-arrow-in-pure-python.html>`__)
 * FOSDEM 2019 - Extending Numba - Joris Geessels  (`Video, Slides & Examples <https://fosdem.org/2019/schedule/event/python_extending_numba/>`__)
+* PyCon India 2019 - Real World Numba: Taking the Path of Least Resistance - Ankit Mahato (`Video <https://www.youtube.com/watch?v=rhbegsr8stc>`__)
 
 Tutorials
 ---------

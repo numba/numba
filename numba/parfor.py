@@ -427,6 +427,29 @@ replace_functions_map = {
     ('linspace', 'numpy'): linspace_parallel_impl,
 }
 
+def fill_parallel_impl(return_type, arr, val):
+    """Parallel implemention of ndarray.fill.  The array on
+       which to operate is retrieved from get_call_name and
+       is passed along with the value to fill.
+    """
+    if arr.ndim == 1:
+        def fill_1(in_arr, val):
+            numba.parfor.init_prange()
+            for i in numba.parfor.internal_prange(len(in_arr)):
+                in_arr[i] = val
+            return None
+    else:
+        def fill_1(in_arr, val):
+            numba.parfor.init_prange()
+            for i in numba.pndindex(in_arr.shape):
+                in_arr[i] = val
+            return None
+    return fill_1
+
+replace_functions_ndarray = {
+    'fill': fill_parallel_impl,
+}
+
 @register_jitable
 def max_checker(arr_size):
     if arr_size == 0:
@@ -1336,6 +1359,16 @@ class PreParforPass(object):
                             func_def = get_definition(self.func_ir, expr.func)
                             callname = find_callname(self.func_ir, expr)
                             repl_func = replace_functions_map.get(callname, None)
+                            if (repl_func is None and
+                                len(callname) == 2 and
+                                isinstance(callname[1], ir.Var) and
+                                isinstance(self.typemap[callname[1].name],
+                                           types.npytypes.Array)):
+                                repl_func = replace_functions_ndarray.get(callname[0], None)
+                                if repl_func is not None:
+                                    # Add the array that the method is on to the arg list.
+                                    expr.args.insert(0, callname[1])
+
                             require(repl_func != None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
                             try:
@@ -1534,7 +1567,14 @@ class ParforPass(object):
             # prepare for parallel lowering
             # add parfor params to parfors here since lowering is destructive
             # changing the IR after this is not allowed
-            parfor_ids = get_parfor_params(self.func_ir.blocks, self.options.fusion, self.nested_fusion_info)
+            parfor_ids, parfors = get_parfor_params(self.func_ir.blocks,
+                                                    self.options.fusion,
+                                                    self.nested_fusion_info)
+            for p in parfors:
+                numba.parfor.get_parfor_reductions(self.func_ir,
+                                                   p,
+                                                   p.params,
+                                                   self.calltypes)
             if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
                 n_parfors = len(parfor_ids)
@@ -2860,6 +2900,7 @@ def get_parfor_params(blocks, options_fusion, fusion_info):
     # that could be undefined before. So we only consider variables that are
     # actually defined before the parfor body in the program.
     parfor_ids = set()
+    parfors = []
     pre_defs = set()
     _, all_defs = compute_use_defs(blocks)
     topo_order = find_topo_order(blocks)
@@ -2873,9 +2914,10 @@ def get_parfor_params(blocks, options_fusion, fusion_info):
             pre_defs |= before_defs
             parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info) | parfor.races
             parfor_ids.add(parfor.id)
+            parfors.append(parfor)
 
         pre_defs |= all_defs[label]
-    return parfor_ids
+    return parfor_ids, parfors
 
 
 def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
@@ -2884,7 +2926,7 @@ def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)
     live_map = compute_live_map(cfg, blocks, usedefs.usemap, usedefs.defmap)
-    parfor_ids = get_parfor_params(blocks, options_fusion, fusion_info)
+    parfor_ids, _ = get_parfor_params(blocks, options_fusion, fusion_info)
     n_parfors = len(parfor_ids)
     if n_parfors > 0:
         if config.DEBUG_ARRAY_OPT_STATS:
@@ -2928,7 +2970,7 @@ def get_parfor_outputs(parfor, parfor_params):
     outputs = list(set(outputs) & set(parfor_params))
     return sorted(outputs)
 
-def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
+def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=None,
         reduce_varnames=None, param_uses=None, param_nodes=None,
         var_to_param=None):
     """find variables that are updated using their previous values and an array
@@ -2976,7 +3018,7 @@ def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
                 param_nodes[cur_param].append(stmt_cp)
             if isinstance(stmt, Parfor):
                 # recursive parfors can have reductions like test_prange8
-                get_parfor_reductions(stmt, parfor_params, calltypes,
+                get_parfor_reductions(func_ir, stmt, parfor_params, calltypes,
                     reductions, reduce_varnames, param_uses, param_nodes, var_to_param)
     for param, used_vars in param_uses.items():
         # a parameter is a reduction variable if its value is used to update it
@@ -2985,7 +3027,7 @@ def get_parfor_reductions(parfor, parfor_params, calltypes, reductions=None,
         if param in used_vars and param not in reduce_varnames:
             reduce_varnames.append(param)
             param_nodes[param].reverse()
-            reduce_nodes = get_reduce_nodes(param, param_nodes[param])
+            reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
             gri_out = guard(get_reduction_init, reduce_nodes)
             if gri_out is not None:
                 init_val, redop = gri_out
@@ -3014,7 +3056,17 @@ def get_reduction_init(nodes):
         return 1, acc_expr.fn
     return None, None
 
-def get_reduce_nodes(name, nodes):
+def supported_reduction(x, func_ir):
+    if x.op == 'inplace_binop' or x.op == 'binop':
+        return True
+    if x.op == 'call':
+        callname = guard(find_callname, func_ir, x)
+        callname = tuple(i if i != '__builtin__' else 'builtins' for i in callname)
+        if callname == ('max', 'builtins') or callname == ('min', 'builtins'):
+            return True
+    return False
+
+def get_reduce_nodes(name, nodes, func_ir):
     """
     Get nodes that combine the reduction variable with a sentinel variable.
     Recognizes the first node that combines the reduction variable with another
@@ -3039,6 +3091,15 @@ def get_reduce_nodes(name, nodes):
         if isinstance(rhs, ir.Expr):
             in_vars = set(lookup(v, True).name for v in rhs.list_vars())
             if name in in_vars:
+                next_node = nodes[i+1]
+                if not (isinstance(next_node, ir.Assign) and next_node.target.name == name):
+                    raise ValueError(("Use of reduction variable " + name +
+                                      " other than in a supported reduction"
+                                      " function is not permitted."))
+
+                if not supported_reduction(rhs, func_ir):
+                    raise ValueError(("Use of reduction variable " + name +
+                                      " in an unsupported reduction function."))
                 args = [ (x.name, lookup(x, True)) for x in get_expr_args(rhs) ]
                 non_red_args = [ x for (x, y) in args if y.name != name ]
                 assert len(non_red_args) == 1
