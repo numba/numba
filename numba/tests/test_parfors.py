@@ -146,9 +146,6 @@ class TestParforsBase(TestCase):
         # parfor result
         parfor_output = cpfunc.entry_point(*copy_args(*args))
 
-        #print("py_expected", py_expected)
-        #print("njit_output", njit_output)
-        #print("parfor_output", parfor_output)
         np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
         np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
 
@@ -2656,7 +2653,6 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.arange(12).reshape((3,4)))
 
 
-#    @skip_unsupported
     @test_disabled
     def test_parfor_slice16(self):
         """ This test is disabled because if n is larger than the array size

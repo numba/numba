@@ -95,7 +95,6 @@ def wrap_index(typingctx, idx, size):
         pos_res = builder.select(pos_oversize, size, idx)
         neg_res = builder.select(neg_oversize, zero, builder.add(idx, size))
         mod = builder.select(idx_negative, neg_res, pos_res)
-        #cgutils.printf(builder, "wrap_index: idx=%d size=%d neg_size=%d idx_neg=%d pos_over=%d neg_over=%d pos_res=%d neg_res=%d mod=%d\n", idx, size, neg_size, idx_negative, pos_oversize, neg_oversize, pos_res, neg_res, mod)
         return mod
 
     return signature(idx, idx, size), codegen
@@ -901,9 +900,8 @@ class WrapIndexMeta(object):
         self.slice_size = slice_size
         self.dim_size = dim_size
 
-aa_count = 0
-
 class ArrayAnalysis(object):
+    aa_count = 0
 
     """Analyzes Numpy array computations for properties such as
     shape/size equivalence, and keeps track of them on a per-block
@@ -958,9 +956,8 @@ class ArrayAnalysis(object):
         else:
             init_equiv_set = equiv_set
 
-        global aa_count
-        aa_count_save = aa_count
-        aa_count += 1
+        aa_count_save = ArrayAnalysis.aa_count
+        ArrayAnalysis.aa_count += 1
         if config.DEBUG_ARRAY_OPT >= 1:
             print("Starting ArrayAnalysis:", aa_count_save)
         dprint_func_ir(self.func_ir, "before array analysis", blocks)
@@ -1243,18 +1240,29 @@ class ArrayAnalysis(object):
             return var, []
         return None
 
-    def gen_literal_slice_part(self, arg_val, loc, scope, stmts, equiv_set, name="static_literal_slice_part"):
+    def gen_literal_slice_part(self, arg_val, loc, scope, stmts, equiv_set,
+                               name="static_literal_slice_part"):
         # Create var to hold the calculated slice size.
         static_literal_slice_part_var = ir.Var(scope, mk_unique_var(name), loc)
         static_literal_slice_part_val = ir.Const(arg_val, loc)
         static_literal_slice_part_typ = types.IntegerLiteral(arg_val)
         # We'll prepend this slice size calculation to the get/setitem.
-        stmts.append(ir.Assign(value=static_literal_slice_part_val, target=static_literal_slice_part_var, loc=loc))
-        self._define(equiv_set, static_literal_slice_part_var, static_literal_slice_part_typ, static_literal_slice_part_val)
+        stmts.append(ir.Assign(value=static_literal_slice_part_val,
+                               target=static_literal_slice_part_var,
+                               loc=loc))
+        self._define(equiv_set,
+                     static_literal_slice_part_var,
+                     static_literal_slice_part_typ,
+                     static_literal_slice_part_val)
         return static_literal_slice_part_var, static_literal_slice_part_typ
 
     def gen_static_slice_size(self, lhs_rel, rhs_rel, loc, scope, stmts, equiv_set):
-        the_var, the_typ = self.gen_literal_slice_part(rhs_rel - lhs_rel, loc, scope, stmts, equiv_set, name="static_slice_size")
+        the_var, the_typ = self.gen_literal_slice_part(rhs_rel - lhs_rel,
+                                                       loc,
+                                                       scope,
+                                                       stmts,
+                                                       equiv_set,
+                                                       name="static_slice_size")
         return the_var
 
     def gen_explicit_neg(self, arg, arg_rel, arg_typ, size_typ, loc, scope,
@@ -1266,13 +1274,19 @@ class ArrayAnalysis(object):
         # Determine the type of that var.  Can be literal if we know the
         # literal size of the dimension.
         explicit_neg_typ = types.intp
-        self.calltypes[explicit_neg_val] = signature(explicit_neg_typ, size_typ, arg_typ)
+        self.calltypes[explicit_neg_val] = signature(explicit_neg_typ,
+                                                     size_typ, arg_typ)
         # We'll prepend this slice size calculation to the get/setitem.
-        stmts.append(ir.Assign(value=explicit_neg_val, target=explicit_neg_var, loc=loc))
-        self._define(equiv_set, explicit_neg_var, explicit_neg_typ, explicit_neg_val)
+        stmts.append(ir.Assign(value=explicit_neg_val,
+                               target=explicit_neg_var, loc=loc))
+        self._define(equiv_set, explicit_neg_var,
+                     explicit_neg_typ, explicit_neg_val)
         return explicit_neg_var, explicit_neg_typ
 
-    def update_replacement_slice(self, lhs, lhs_typ, lhs_rel, dsize_rel, replacement_slice, slice_index, need_replacement, loc, scope, stmts, equiv_set, size_typ, dsize):
+    def update_replacement_slice(self, lhs, lhs_typ, lhs_rel, dsize_rel,
+                                 replacement_slice, slice_index,
+                                 need_replacement, loc, scope, stmts,
+                                 equiv_set, size_typ, dsize):
         # Do compile-time calculation of real index value if both the given
         # index value and the array length are known at compile time.
         known = False
@@ -1294,9 +1308,11 @@ class ArrayAnalysis(object):
                         wil, loc, scope, stmts, equiv_set)
                     assert(slice_index == 0 or slice_index == 1)
                     if slice_index == 0:
-                        replacement_slice.args = (literal_var, replacement_slice.args[1])
+                        replacement_slice.args = (literal_var,
+                                                  replacement_slice.args[1])
                     else:
-                        replacement_slice.args = (replacement_slice.args[0], literal_var)
+                        replacement_slice.args = (replacement_slice.args[0],
+                                                  literal_var)
                     # Update lhs information with the negative removed.
                     lhs = replacement_slice.args[slice_index]
                     lhs_typ = literal_typ
@@ -1309,9 +1325,11 @@ class ArrayAnalysis(object):
                 explicit_neg_var, explicit_neg_typ = self.gen_explicit_neg(lhs,
                     lhs_rel, lhs_typ, size_typ, loc, scope, dsize, stmts, equiv_set)
                 if slice_index == 0:
-                    replacement_slice.args = (explicit_neg_var, replacement_slice.args[1])
+                    replacement_slice.args = (explicit_neg_var,
+                                              replacement_slice.args[1])
                 else:
-                    replacement_slice.args = (replacement_slice.args[0], explicit_neg_var)
+                    replacement_slice.args = (replacement_slice.args[0],
+                                              explicit_neg_var)
                 # Update lhs information with the negative removed.
                 lhs = replacement_slice.args[slice_index]
                 lhs_typ = explicit_neg_typ
@@ -1439,25 +1457,19 @@ class ArrayAnalysis(object):
         sig = self.context.resolve_function_type(fnty, (orig_slice_typ, size_typ,), {})
         self._define(equiv_set, wrap_var, fnty, wrap_def)
 
-        if not lhs_known:
-            var1 = ir.Var(scope, mk_unique_var("var"), loc)
-            var1_typ = types.intp
-            value1 = ir.Expr.call(wrap_var, [lhs, dsize], {}, loc)
-            self._define(equiv_set, var1, var1_typ, value1)
-            self.calltypes[value1] = sig
-        else:
-            var1 = lhs
-            var1_typ = lhs_typ
+        def gen_wrap_if_not_known(val, val_typ):
+            if not lhs_known:
+                var = ir.Var(scope, mk_unique_var("var"), loc)
+                var_typ = types.intp
+                value1 = ir.Expr.call(wrap_var, [lhs, dsize], {}, loc)
+                self._define(equiv_set, var, var_typ, value1)
+                self.calltypes[value1] = sig
+                return (var, var_typ)
+            else:
+                return (val, val_typ)
 
-        if not rhs_known:
-            var2 = ir.Var(scope, mk_unique_var("var"), loc)
-            var2_typ = types.intp
-            value2 = ir.Expr.call(wrap_var, [rhs, dsize], {}, loc)
-            self._define(equiv_set, var2, var2_typ, value2)
-            self.calltypes[value2] = sig
-        else:
-            var2 = rhs
-            var2_typ = rhs_typ
+        var1, var1_typ = gen_wrap_if_not_known(lhs, lhs_typ)
+        var2, var2_typ = gen_wrap_if_not_known(rhs, rhs_typ)
 
         post_wrap_size_var = ir.Var(scope, mk_unique_var("post_wrap_slice_size"), loc)
         post_wrap_size_val = ir.Expr.binop(operator.sub, var2, var1, loc=loc)
@@ -2218,8 +2230,6 @@ class ArrayAnalysis(object):
         # filter out those that are already equivalent
         if config.DEBUG_ARRAY_OPT >= 2:
             print("make_assert_equiv:", _args, names)
-            import pdb
-#            pdb.set_trace()
         if names == None:
             names = [x.name for x in _args]
         args = []
