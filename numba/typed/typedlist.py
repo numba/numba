@@ -421,25 +421,8 @@ def unbox_listtype(typ, val, c):
             # setup method table
             listobject._list_codegen_set_method_table(
                 context, builder, ptr, itemty)
-
             # setup builder representation for typed-list
-            alloc_size = context.get_abi_sizeof(
-                context.get_value_type(types.voidptr),
-            )
-            dtor = listobject._imp_dtor(context, builder.module)
-            meminfo = context.nrt.meminfo_alloc_dtor(
-                builder,
-                context.get_constant(types.uintp, alloc_size),
-                dtor,
-            )
-
-            data_pointer = context.nrt.meminfo_data(builder, meminfo)
-            data_pointer = builder.bitcast(
-                data_pointer,
-                listobject.ll_list_type.as_pointer(),
-            )
-            builder.store(ptr, data_pointer)
-            lstruct.meminfo = meminfo
+            listobject._add_meminfo(context, builder, lstruct)
 
             # now convert python list to typed list
             def check_element_type(nth, itemobj, expected_typobj):
