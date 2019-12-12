@@ -695,6 +695,9 @@ int write_numba_oneapi_mem_buffer_to_device (env_t env_t_ptr,
     err = clReleaseMemObject(mem);
     CHECK_OPEN_CL_ERROR(err, "Failed to release the buffer memory object.");
 
+#if DEBUG
+    printf("DEBUG: CL buffer written to device...\n");
+#endif
     //--- TODO: Implement a version that uses clEnqueueMapBuffer
 
     return NUMBA_ONEAPI_SUCCESS;
@@ -736,6 +739,9 @@ int read_numba_oneapi_mem_buffer_from_device (env_t env_t_ptr,
     err = clReleaseMemObject(mem);
     CHECK_OPEN_CL_ERROR(err, "Failed to release the buffer memory object.");
 
+#if DEBUG
+    printf("DEBUG: CL buffer read from device...\n");
+#endif
     //--- TODO: Implement a version that uses clEnqueueMapBuffer
 
     return NUMBA_ONEAPI_SUCCESS;
@@ -984,6 +990,15 @@ malloc_error:
     return NUMBA_ONEAPI_FAILURE;
 }
 
+/*!
+ *
+ */
+int create_numba_oneapi_kernel_arg_from_buffer (buffer_t *buffer_t_ptr,
+                                    kernel_arg_t *kernel_arg_t_ptr)
+{
+    check_buffer_id(*buffer_t_ptr);
+    return create_numba_oneapi_kernel_arg(&((*buffer_t_ptr)->buffer_ptr), (*buffer_t_ptr)->sizeof_buffer_ptr, kernel_arg_t_ptr);
+}
 
 /*!
  *
@@ -1029,13 +1044,17 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
 #endif
     // Set the kernel arguments
     for(i = 0; i < nargs; ++i) {
+	kernel_arg_t this_arg = array_of_args[i];
 #if DEBUG
-        void **tp = (void**)array_of_args[i]->arg_value;
+        void **tp = (void**)this_arg->arg_value;
         printf("DEBUG: clSetKernelArgs for arg # %ld (size %ld, addr %p)\n", i,
-                array_of_args[i]->arg_size, *tp);
+                this_arg->arg_size, *tp);
 #endif
-        err = clSetKernelArg(kernel, i, array_of_args[i]->arg_size,
-                             array_of_args[i]->arg_value);
+#if DEBUG
+        check_kernelarg_id(this_arg);
+#endif
+        err = clSetKernelArg(kernel, i, this_arg->arg_size,
+                             this_arg->arg_value);
         CHECK_OPEN_CL_ERROR(err, "Could not set arguments to the kernel");
     }
 

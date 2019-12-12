@@ -201,6 +201,13 @@ int create_numba_oneapi_kernel_arg (const void *arg_value,
 /*!
  *
  */
+int create_numba_oneapi_kernel_arg_from_buffer (buffer_t *buffer_t_ptr,
+                                                kernel_arg_t *kernel_arg_t_ptr);
+
+
+/*!
+ *
+ */
 int destroy_numba_oneapi_kernel_arg (kernel_arg_t *kernel_arg_t_ptr);
 
 
