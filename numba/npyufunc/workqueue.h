@@ -62,4 +62,4 @@ set_num_threads(int count);
 static int
 get_num_threads(void);
 static int
-get_thread_num(void);
+get_thread_id(void);

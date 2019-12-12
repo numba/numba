@@ -63,7 +63,7 @@ get_num_threads(void)
 }
 
 static int
-get_thread_num(void)
+get_thread_id(void)
 {
     return omp_get_thread_num();
 }
@@ -249,7 +249,7 @@ MOD_INIT(omppool)
                            PyLong_FromVoidPtr((void*)&set_num_threads));
     PyObject_SetAttrString(m, "get_num_threads",
                            PyLong_FromVoidPtr((void*)&get_num_threads));
-    PyObject_SetAttrString(m, "get_thread_num",
-                           PyLong_FromVoidPtr((void*)&get_thread_num));
+    PyObject_SetAttrString(m, "get_thread_id",
+                           PyLong_FromVoidPtr((void*)&get_thread_id));
     return MOD_SUCCESS_VAL(m);
 }

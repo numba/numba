@@ -468,7 +468,7 @@ def _load_num_threads_funcs(lib):
 
     ll.add_symbol('get_num_threads', lib.get_num_threads)
     ll.add_symbol('set_num_threads', lib.set_num_threads)
-    ll.add_symbol('get_thread_num', lib.get_thread_num)
+    ll.add_symbol('get_thread_id', lib.get_thread_id)
 
     global _set_num_threads
     _set_num_threads = CFUNCTYPE(None, c_int)(lib.set_num_threads)
@@ -477,8 +477,8 @@ def _load_num_threads_funcs(lib):
     global _get_num_threads
     _get_num_threads = CFUNCTYPE(c_int)(lib.get_num_threads)
 
-    global _get_thread_num
-    _get_thread_num = CFUNCTYPE(c_int)(lib.get_thread_num)
+    global _get_thread_id
+    _get_thread_id = CFUNCTYPE(c_int)(lib.get_thread_id)
 
 
 # Some helpers to make set_num_threads jittable
@@ -572,18 +572,18 @@ def ol_get_num_threads():
         return _get_num_threads()
     return impl
 
-def get_thread_num():
+def get_thread_id():
     """
     docs
     """
     _launch_threads()
-    return _get_thread_num()
+    return _get_thread_id()
 
-@overload(get_thread_num)
-def ol_get_thread_num():
+@overload(get_thread_id)
+def ol_get_thread_id():
     _launch_threads()
     def impl():
-        return _get_thread_num()
+        return _get_thread_id()
     return impl
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
