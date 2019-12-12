@@ -379,6 +379,19 @@ class ErrorHandler(object):
             builder.ret(self.pyapi.get_null_object())
 
 
+def _new_list(context, builder, pyapi, lstruct, itemty, size, error_handler):
+    """ Initialize new typed list from struct during unboxing. """
+    # create ptr to new typed list
+    ptr = listobject._list_new_codegen(
+        context, builder, itemty, size, error_handler)
+    lstruct.data = ptr
+    # setup method table
+    listobject._list_codegen_set_method_table(
+        context, builder, ptr, itemty)
+    # setup builder representation for typed-list
+    listobject._add_meminfo(context, builder, lstruct)
+
+
 @unbox(types.ListType)
 def unbox_listtype(typ, val, c):
     context = c.context
@@ -411,18 +424,12 @@ def unbox_listtype(typ, val, c):
 
         with is_python_list:
             errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+            error_handler = ErrorHandler(pyapi, errorptr)
             size = c.pyapi.list_size(val)
             itemty = typ.item_type
-            # create ptr to new typed list
-            error_handler = ErrorHandler(pyapi, errorptr)
-            ptr = listobject._list_new_codegen(
-                context, builder, itemty, size, error_handler)
-            lstruct.data = ptr
-            # setup method table
-            listobject._list_codegen_set_method_table(
-                context, builder, ptr, itemty)
-            # setup builder representation for typed-list
-            listobject._add_meminfo(context, builder, lstruct)
+            # populate the lstruct
+            _new_list(
+                context, builder, pyapi, lstruct, itemty, size, error_handler)
 
             # now convert python list to typed list
             def check_element_type(nth, itemobj, expected_typobj):
@@ -490,7 +497,7 @@ def unbox_listtype(typ, val, c):
                     status = builder.call(
                         fn,
                         [
-                            ptr,
+                            lstruct.data,
                             _as_bytes(builder, ptr_item),
                         ],
                     )
