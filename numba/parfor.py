@@ -427,6 +427,29 @@ replace_functions_map = {
     ('linspace', 'numpy'): linspace_parallel_impl,
 }
 
+def fill_parallel_impl(return_type, arr, val):
+    """Parallel implemention of ndarray.fill.  The array on
+       which to operate is retrieved from get_call_name and
+       is passed along with the value to fill.
+    """
+    if arr.ndim == 1:
+        def fill_1(in_arr, val):
+            numba.parfor.init_prange()
+            for i in numba.parfor.internal_prange(len(in_arr)):
+                in_arr[i] = val
+            return None
+    else:
+        def fill_1(in_arr, val):
+            numba.parfor.init_prange()
+            for i in numba.pndindex(in_arr.shape):
+                in_arr[i] = val
+            return None
+    return fill_1
+
+replace_functions_ndarray = {
+    'fill': fill_parallel_impl,
+}
+
 @register_jitable
 def max_checker(arr_size):
     if arr_size == 0:
@@ -1336,6 +1359,16 @@ class PreParforPass(object):
                             func_def = get_definition(self.func_ir, expr.func)
                             callname = find_callname(self.func_ir, expr)
                             repl_func = replace_functions_map.get(callname, None)
+                            if (repl_func is None and
+                                len(callname) == 2 and
+                                isinstance(callname[1], ir.Var) and
+                                isinstance(self.typemap[callname[1].name],
+                                           types.npytypes.Array)):
+                                repl_func = replace_functions_ndarray.get(callname[0], None)
+                                if repl_func is not None:
+                                    # Add the array that the method is on to the arg list.
+                                    expr.args.insert(0, callname[1])
+
                             require(repl_func != None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
                             try:

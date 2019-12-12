@@ -40,6 +40,8 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM,
                               _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
                               _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
                               _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER,
+                              _Py_TAB, _Py_LINEFEED,
+                              _Py_CARRIAGE_RETURN, _Py_SPACE,
                               _PyUnicode_IsAlpha, _PyUnicode_IsNumeric,
                               _Py_ISALPHA,)
 
@@ -423,25 +425,43 @@ def unicode_len(s):
 
 @overload(operator.eq)
 def unicode_eq(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    accept = (types.UnicodeType, types.StringLiteral, types.UnicodeCharSeq)
+    a_unicode = isinstance(a, accept)
+    b_unicode = isinstance(b, accept)
+    if a_unicode and b_unicode:
         def eq_impl(a, b):
             if len(a) != len(b):
                 return False
             return _cmp_region(a, 0, b, 0, len(a)) == 0
         return eq_impl
+    elif a_unicode ^ b_unicode:
+        # one of the things is unicode, everything compares False
+        def eq_impl(a, b):
+            return False
+        return eq_impl
 
 
 @overload(operator.ne)
 def unicode_ne(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    accept = (types.UnicodeType, types.StringLiteral, types.UnicodeCharSeq)
+    a_unicode = isinstance(a, accept)
+    b_unicode = isinstance(b, accept)
+    if a_unicode and b_unicode:
         def ne_impl(a, b):
             return not (a == b)
         return ne_impl
+    elif a_unicode ^ b_unicode:
+        # one of the things is unicode, everything compares True
+        def eq_impl(a, b):
+            return True
+        return eq_impl
 
 
 @overload(operator.lt)
 def unicode_lt(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
+    b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
+    if a_unicode and b_unicode:
         def lt_impl(a, b):
             minlen = min(len(a), len(b))
             eqcode = _cmp_region(a, 0, b, 0, minlen)
@@ -455,7 +475,9 @@ def unicode_lt(a, b):
 
 @overload(operator.gt)
 def unicode_gt(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
+    b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
+    if a_unicode and b_unicode:
         def gt_impl(a, b):
             minlen = min(len(a), len(b))
             eqcode = _cmp_region(a, 0, b, 0, minlen)
@@ -469,7 +491,9 @@ def unicode_gt(a, b):
 
 @overload(operator.le)
 def unicode_le(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
+    b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
+    if a_unicode and b_unicode:
         def le_impl(a, b):
             return not (a > b)
         return le_impl
@@ -477,7 +501,9 @@ def unicode_le(a, b):
 
 @overload(operator.ge)
 def unicode_ge(a, b):
-    if isinstance(a, types.UnicodeType) and isinstance(b, types.UnicodeType):
+    a_unicode = isinstance(a, (types.UnicodeType, types.StringLiteral))
+    b_unicode = isinstance(b, (types.UnicodeType, types.StringLiteral))
+    if a_unicode and b_unicode:
         def ge_impl(a, b):
             return not (a < b)
         return ge_impl
@@ -743,6 +769,72 @@ def unicode_endswith(a, b):
         def endswith_impl(a, b):
             return a.endswith(str(b))
         return endswith_impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11519-L11595    # noqa: E501
+@overload_method(types.UnicodeType, 'expandtabs')
+def unicode_expandtabs(data, tabsize=8):
+    """Implements str.expandtabs()"""
+    thety = tabsize
+    # if the type is omitted, the concrete type is the value
+    if isinstance(tabsize, types.Omitted):
+        thety = tabsize.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(tabsize, types.Optional):
+        thety = tabsize.type
+
+    accepted = (types.Integer, int)
+    if thety is not None and not isinstance(thety, accepted):
+        raise TypingError(
+            '"tabsize" must be {}, not {}'.format(accepted, tabsize))
+
+    def expandtabs_impl(data, tabsize=8):
+        length = len(data)
+        j = line_pos = 0
+        found = False
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if code_point == _Py_TAB:
+                found = True
+                if tabsize > 0:
+                    # cannot overflow
+                    incr = tabsize - (line_pos % tabsize)
+                    if j > sys.maxsize - incr:
+                        raise OverflowError('new string is too long')
+                    line_pos += incr
+                    j += incr
+            else:
+                if j > sys.maxsize - 1:
+                    raise OverflowError('new string is too long')
+                line_pos += 1
+                j += 1
+                if code_point in (_Py_LINEFEED, _Py_CARRIAGE_RETURN):
+                    line_pos = 0
+
+        if not found:
+            return data
+
+        res = _empty_string(data._kind, j, data._is_ascii)
+        j = line_pos = 0
+        for i in range(length):
+            code_point = _get_code_point(data, i)
+            if code_point == _Py_TAB:
+                if tabsize > 0:
+                    incr = tabsize - (line_pos % tabsize)
+                    line_pos += incr
+                    for idx in range(j, j + incr):
+                        _set_code_point(res, idx, _Py_SPACE)
+                    j += incr
+            else:
+                line_pos += 1
+                _set_code_point(res, j, code_point)
+                j += 1
+                if code_point in (_Py_LINEFEED, _Py_CARRIAGE_RETURN):
+                    line_pos = 0
+
+        return res
+
+    return expandtabs_impl
 
 
 @overload_method(types.UnicodeType, 'split')

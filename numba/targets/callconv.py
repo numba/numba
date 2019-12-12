@@ -11,6 +11,9 @@ from numba import cgutils, types
 from .base import PYOBJECT, GENERIC_POINTER
 
 
+TryStatus = namedtuple('TryStatus', ['in_try', 'excinfo'])
+
+
 Status = namedtuple("Status",
                     ("code",
                      # If the function returned ok (a value or None)
@@ -345,8 +348,8 @@ class CPUCallConv(BaseCallConv):
         builder.store(retval, retptr)
         self._return_errcode_raw(builder, RETCODE_OK)
 
-    def return_user_exc(self, builder, exc, exc_args=None, loc=None,
-                        func_name=None):
+    def set_static_user_exc(self, builder, exc, exc_args=None, loc=None,
+                            func_name=None):
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
@@ -376,12 +379,68 @@ class CPUCallConv(BaseCallConv):
         struct_gv = pyapi.serialize_object(exc)
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(struct_gv, excptr)
-        self._return_errcode_raw(builder, RETCODE_USEREXC)
+
+    def return_user_exc(self, builder, exc, exc_args=None, loc=None,
+                        func_name=None):
+        try_info = getattr(builder, '_in_try_block', False)
+        self.set_static_user_exc(builder, exc, exc_args=exc_args,
+                                   loc=loc, func_name=func_name)
+        trystatus = self.check_try_status(builder)
+        if try_info:
+            # This is a hack for old-style impl.
+            # We will branch directly to the exception handler.
+            builder.branch(try_info['target'])
+        else:
+            # Return from the current function
+            self._return_errcode_raw(builder, RETCODE_USEREXC)
+
+    def _get_try_state(self, builder):
+        try:
+            return builder.__eh_try_state
+        except AttributeError:
+            ptr = cgutils.alloca_once(
+                builder, cgutils.intp_t, name='try_state', zfill=True,
+            )
+            builder.__eh_try_state = ptr
+            return ptr
+
+    def check_try_status(self, builder):
+        try_state_ptr = self._get_try_state(builder)
+        try_depth = builder.load(try_state_ptr)
+        # try_depth > 0
+        in_try = builder.icmp_unsigned('>', try_depth, try_depth.type(0))
+
+        excinfoptr = self._get_excinfo_argument(builder.function)
+        excinfo = builder.load(excinfoptr)
+
+        return TryStatus(in_try=in_try, excinfo=excinfo)
+
+    def set_try_status(self, builder):
+        try_state_ptr = self._get_try_state(builder)
+        # Increment try depth
+        old = builder.load(try_state_ptr)
+        new = builder.add(old, old.type(1))
+        builder.store(new, try_state_ptr)
+
+    def unset_try_status(self, builder):
+        try_state_ptr = self._get_try_state(builder)
+        # Decrement try depth
+        old = builder.load(try_state_ptr)
+        new = builder.sub(old, old.type(1))
+        builder.store(new, try_state_ptr)
+
+        # Needs to reset the exception state so that the exception handler
+        # will run normally.
+        excinfoptr = self._get_excinfo_argument(builder.function)
+        null = cgutils.get_null_value(excinfoptr.type.pointee)
+        builder.store(null, excinfoptr)
 
     def return_status_propagate(self, builder, status):
+        trystatus = self.check_try_status(builder)
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(status.excinfoptr, excptr)
-        self._return_errcode_raw(builder, status.code)
+        with builder.if_then(builder.not_(trystatus.in_try)):
+            self._return_errcode_raw(builder, status.code)
 
     def _return_errcode_raw(self, builder, code):
         builder.ret(code)
