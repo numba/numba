@@ -216,15 +216,126 @@ likely never be supported.
 tuple
 -----
 
-The following operations are supported:
+Tuple support is categorised into two categories based on the contents of a
+tuple. The first category is homogeneous tuples, these are tuples where the type
+of all the values in the tuple are the same, the second is heterogeneous tuples,
+these are tuples where the types of the values are different.
 
-* tuple construction
-* tuple unpacking
-* comparison between tuples
-* iteration and indexing over homogeneous tuples
-* addition (concatenation) between tuples
-* slicing tuples with a constant slice
-* the index method on tuples
+.. note::
+
+    The ``tuple()`` constructor itself is NOT supported.
+
+homogeneous tuples
+------------------
+
+An example of a homogeneous tuple:
+
+.. code-block:: python
+
+    homogeneous_tuple = (1, 2, 3, 4)
+
+The following operations are supported on homogeneous tuples:
+
+* Tuple construction.
+* Tuple unpacking.
+* Comparison between tuples.
+* Iteration and indexing.
+* Addition (concatenation) between tuples.
+* Slicing tuples with a constant slice.
+* The index method on tuples.
+
+heterogeneous tuples
+--------------------
+
+An example of a heterogeneous tuple:
+
+.. code-block:: python
+
+    heterogeneous_tuple = (1, 2j, 3.0, "a")
+
+The following operations are supported on heterogeneous tuples:
+
+* Comparison between tuples.
+* Indexing using an index value that is a compile time constant
+  e.g. ``mytuple[7]``, where ``7`` is evidently a constant.
+* Iteration over a tuple (requires experimental :func:`literal_unroll` feature,
+  see below).
+
+.. warning::
+   The following feature (:func:`literal_unroll`) is experimental and was added
+   in version 0.47.
+
+To permit iteration over a heterogeneous tuple the special function
+:func:`numba.literal_unroll` must be used. This function has no effect other
+than to act as a token to permit the use of this feature. Example use:
+
+.. code-block:: python
+
+    from numba import njit, literal_unroll
+
+    @njit
+    def foo()
+        heterogeneous_tuple = (1, 2j, 3.0, "a")
+        for i in literal_unroll(heterogeneous_tuple):
+            print(i)
+
+.. warning::
+    The following restrictions apply to the use of :func:`literal_unroll`:
+
+    * This feature is only available for Python versions >= 3.6.
+    * :func:`literal_unroll` can only be used on tuples and constant lists of
+      compile time constants, e.g. ``[1, 2j, 3, "a"]`` and the list not being
+      mutated.
+    * The only supported use pattern for :func:`literal_unroll` is loop
+      iteration.
+    * Only one :func:`literal_unroll` call is permitted per loop nest (i.e.
+      nested heterogeneous tuple iteration loops are forbidden).
+    * The usual type inference/stability rules still apply.
+
+A more involved use of :func:`literal_unroll` might be type specific dispatch,
+recall that string and integer literal values are considered their own type,
+for example:
+
+.. code-block:: python
+
+    from numba import njit, types, literal_unroll
+    from numba.extending import overload
+
+    def dt(x):
+        # dummy function to overload
+        pass
+
+    @overload(dt, inline='always')
+    def ol_dt(li):
+        if isinstance(li, types.StringLiteral):
+            value = li.literal_value
+            if value == "apple":
+                def impl(li):
+                    return 1
+            elif value == "orange":
+                def impl(li):
+                    return 2
+            elif value == "banana":
+                def impl(li):
+                    return 3
+            return impl
+        elif isinstance(li, types.IntegerLiteral):
+            value = li.literal_value
+            if value == 0xca11ab1e:
+                def impl(li):
+                    # capture the dispatcher literal value
+                    return 0x5ca1ab1e + value
+                return impl
+
+    @njit
+    def foo():
+        acc = 0
+        for t in literal_unroll(('apple', 'orange', 'banana', 3390155550)):
+            acc += dt(t)
+        return acc
+
+    print(foo())
+
 
 list
 ----

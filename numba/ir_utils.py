@@ -405,6 +405,8 @@ def visit_vars_inner(node, callback, cbdata):
         #     node.rhs.name = callback, cbdata.get(rhs, rhs)
         for arg in node._kws.keys():
             node._kws[arg] = visit_vars_inner(node._kws[arg], callback, cbdata)
+    elif isinstance(node, ir.Yield):
+        node.value = visit_vars_inner(node.value, callback, cbdata)
     return node
 
 
@@ -451,6 +453,35 @@ def find_max_label(blocks):
         if l > max_label:
             max_label = l
     return max_label
+
+
+def flatten_labels(blocks):
+    """makes the labels in range(0, len(blocks)), useful to compare CFGs
+    """
+    # first bulk move the labels out of the rewrite range
+    blocks = add_offset_to_labels(blocks, find_max_label(blocks) + 1)
+    # order them in topo order because it's easier to read
+    new_blocks = {}
+    topo_order = find_topo_order(blocks)
+    l_map = dict()
+    idx = 0
+    for x in topo_order:
+        l_map[x] = idx
+        idx += 1
+
+    for t_node in topo_order:
+        b = blocks[t_node]
+        # some parfor last blocks might be empty
+        term = None
+        if b.body:
+            term = b.body[-1]
+        if isinstance(term, ir.Jump):
+            b.body[-1] = ir.Jump(l_map[term.target], term.loc)
+        if isinstance(term, ir.Branch):
+            b.body[-1] = ir.Branch(term.cond, l_map[term.truebr],
+                                   l_map[term.falsebr], term.loc)
+        new_blocks[l_map[t_node]] = b
+    return new_blocks
 
 
 def remove_dels(blocks):
@@ -1019,7 +1050,7 @@ def find_topo_order(blocks, cfg = None):
     """find topological order of blocks such that true branches are visited
     first (e.g. for_break test in test_dataflow).
     """
-    if cfg == None:
+    if cfg is None:
         cfg = compute_cfg_from_blocks(blocks)
     post_order = []
     seen = set()
@@ -2091,7 +2122,9 @@ def convert_code_obj_to_function(code_obj, caller_ir):
             d = [caller_ir.get_definition(x).value for x in kwarg_defaults]
             kwarg_defaults_tup = tuple(d)
         else:
-            kwarg_defaults_tup = kwarg_defaults.value
+            d = [caller_ir.get_definition(x).value
+                 for x in kwarg_defaults.items]
+            kwarg_defaults_tup = tuple(d)
         n_kwargs = len(kwarg_defaults_tup)
     nargs = n_allargs - n_kwargs
 

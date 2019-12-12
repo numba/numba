@@ -188,7 +188,19 @@ class BaseLower(object):
 
         if config.DUMP_LLVM:
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
-            print(self.module)
+            if config.HIGHLIGHT_DUMPS:
+                try:
+                    from pygments import highlight
+                    from pygments.lexers import LlvmLexer as lexer
+                    from pygments.formatters import Terminal256Formatter
+                    print(highlight(self.module.__repr__(), lexer(),
+                                    Terminal256Formatter(
+                                        style='solarized-light')))
+                except ImportError:
+                    msg = "Please install pygments to see highlighted dumps"
+                    raise ValueError(msg)
+            else:
+                print(self.module)
             print('=' * 80)
 
         # Special optimization to remove NRT on functions that do not need it.
@@ -1053,7 +1065,15 @@ class Lower(BaseLower):
                 signature = self.fndesc.calltypes[expr]
                 return self.lower_getitem(resty, expr, expr.value,
                                           expr.index_var, signature)
-
+        elif expr.op == "typed_getitem":
+            signature = typing.signature(
+                resty,
+                self.typeof(expr.value.name),
+                self.typeof(expr.index.name),
+            )
+            impl = self.context.get_function("typed_getitem", signature)
+            return impl(self.builder, (self.loadvar(expr.value.name),
+                        self.loadvar(expr.index.name)))
         elif expr.op == "getitem":
             signature = self.fndesc.calltypes[expr]
             return self.lower_getitem(resty, expr, expr.value, expr.index,

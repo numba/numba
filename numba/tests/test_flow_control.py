@@ -980,6 +980,48 @@ class TestCFGraph(TestCase):
         for node in [7, 10, 23]:
             self.assertEqual(g.in_loops(node), [loop])
 
+    def test_equals(self):
+
+        def get_new():
+            g = self.from_adj_list({0: [18, 12], 12: [21], 18: [21], 21: []})
+            g.set_entry_point(0)
+            g.process()
+            return g
+
+        x = get_new()
+        y = get_new()
+
+        # identical
+        self.assertEqual(x, y)
+
+        # identical but defined in a different order
+        g = self.from_adj_list({0: [12, 18], 18: [21], 21: [], 12: [21]})
+        g.set_entry_point(0)
+        g.process()
+        self.assertEqual(x, g)
+
+        # different entry point
+        z = get_new()
+        z.set_entry_point(18)
+        z.process()
+        self.assertNotEqual(x, z)
+
+        # extra node/edge, same entry point
+        z = self.from_adj_list({0: [18, 12], 12: [21], 18: [21], 21: [22],
+                                22: []})
+        z.set_entry_point(0)
+        z.process()
+        self.assertNotEqual(x, z)
+
+        # same nodes, different edges
+        a = self.from_adj_list({0: [18, 12], 12: [0], 18: []})
+        a.set_entry_point(0)
+        a.process()
+        z = self.from_adj_list({0: [18, 12], 12: [18], 18: []})
+        z.set_entry_point(0)
+        z.process()
+        self.assertNotEqual(a, z)
+
 
 class TestRealCodeDomFront(TestCase):
     """Test IDOM and DOMFRONT computation on real python bytecode.

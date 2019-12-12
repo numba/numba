@@ -726,6 +726,18 @@ class TupleModel(StructModel):
         super(TupleModel, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.UnionType)
+class UnionModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('tag', types.uintp),
+            # XXX: it should really be a MemInfoPointer(types.voidptr)
+            ('payload', types.Tuple.from_types(fe_type.types)),
+        ]
+        super(UnionModel, self).__init__(dmm, fe_type, members)
+
+
+
 @register_default(types.Pair)
 class PairModel(StructModel):
     def __init__(self, dmm, fe_type):
