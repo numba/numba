@@ -10,9 +10,9 @@ from numba.testing import unittest
 from numba.extending import overload
 from numba.compiler_machinery import PassManager, register_pass, FunctionPass
 from numba.compiler import CompilerBase
-from numba.untyped_passes import (TranslateByteCode, IRProcessing,
+from numba.untyped_passes import (FixupArgs, TranslateByteCode, IRProcessing,
                                   InlineClosureLikes, SimplifyCFG,
-                                  IterLoopCanonicalization)
+                                  IterLoopCanonicalization, LiteralUnroll)
 from numba.typed_passes import (NopythonTypeInference, IRLegalization,
                                 NoPythonBackend, PartialTypeInference)
 from numba.ir_utils import (compute_cfg_from_blocks, flatten_labels)
@@ -1565,7 +1565,8 @@ class TestMore(TestCase):
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo(10)
         self.assertIn(
-            "Found non-constant value at position 1 in a list argument to literal_unroll",
+            ("Found non-constant value at position 1 in a list argument to "
+             "literal_unroll"),
             str(raises.exception)
         )
 
@@ -1590,7 +1591,9 @@ class TestMore(TestCase):
         def bar():
             return foo(12)
 
-        bar()  # Found non-constant value at position 1 in a list argument to literal_unroll
+        # Found non-constant value at position 1 in a list argument to
+        # literal_unroll
+        bar()
 
     def test_inlined_unroll_list(self):
         @njit(inline='always')
@@ -1683,6 +1686,165 @@ class TestMore(TestCase):
             lines,
             ['a 1', 'b 2', '3 c', '4 d'],
         )
+
+
+def capture(real_pass):
+    """ Returns a compiler pass that captures the mutation state reported
+    by the pass used in the argument"""
+    @register_pass(mutates_CFG=False, analysis_only=True)
+    class ResultCapturer(FunctionPass):
+        _name = "capture_%s" % real_pass._name
+        _real_pass = real_pass
+
+        def __init__(self):
+            FunctionPass.__init__(self)
+
+        def run_pass(self, state):
+            result = real_pass().run_pass(state)
+            mutation_results = state.metadata.setdefault('mutation_results', {})
+            mutation_results[real_pass] = result
+            return result
+
+    return ResultCapturer
+
+
+class CapturingCompiler(CompilerBase):
+    """ Simple pipeline that wraps passes with the ResultCapturer pass"""
+
+    def define_pipelines(self):
+        pm = PassManager("Capturing Compiler")
+
+        def add_pass(x, y):
+            return pm.add_pass(capture(x), y)
+
+        add_pass(TranslateByteCode, "analyzing bytecode")
+        add_pass(FixupArgs, "fix up args")
+        add_pass(IRProcessing, "processing IR")
+        add_pass(LiteralUnroll, "handles literal_unroll")
+
+        # typing
+        add_pass(NopythonTypeInference, "nopython frontend")
+
+        # legalise
+        add_pass(IRLegalization,
+                 "ensure IR is legal prior to lowering")
+
+        # lower
+        add_pass(NoPythonBackend, "nopython mode backend")
+        pm.finalize()
+        return [pm]
+
+
+class TestLiteralUnrollPassTriggering(TestCase):
+
+    def test_literal_unroll_not_invoked(self):
+        @njit(pipeline_class=CapturingCompiler)
+        def foo():
+            acc = 0
+            for i in (1, 2, 3):
+                acc += i
+            return acc
+
+        foo()
+        cres = foo.overloads[foo.signatures[0]]
+        self.assertFalse(cres.metadata['mutation_results'][LiteralUnroll])
+
+    def test_literal_unroll_is_invoked(self):
+        @njit(pipeline_class=CapturingCompiler)
+        def foo():
+            acc = 0
+            for i in literal_unroll((1, 2, 3)):
+                acc += i
+            return acc
+
+        foo()
+        cres = foo.overloads[foo.signatures[0]]
+        self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
+
+    def test_literal_unroll_is_invoked_via_alias(self):
+        alias = literal_unroll
+        @njit(pipeline_class=CapturingCompiler)
+        def foo():
+            acc = 0
+            for i in alias((1, 2, 3)):
+                acc += i
+            return acc
+
+        foo()
+        cres = foo.overloads[foo.signatures[0]]
+        self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
+
+    def test_literal_unroll_assess_empty_function(self):
+        @njit(pipeline_class=CapturingCompiler)
+        def foo():
+            pass
+
+        foo()
+        cres = foo.overloads[foo.signatures[0]]
+        self.assertFalse(cres.metadata['mutation_results'][LiteralUnroll])
+
+    def test_literal_unroll_not_in_globals(self):
+        f = """def foo():\n\tpass"""
+        l = {}
+        exec(f, {}, l)
+        foo = njit(pipeline_class=CapturingCompiler)(l['foo'])
+        foo()
+        cres = foo.overloads[foo.signatures[0]]
+        self.assertFalse(cres.metadata['mutation_results'][LiteralUnroll])
+
+    def test_literal_unroll_globals_and_locals(self):
+        f = """def foo():\n\tfor x in literal_unroll((1,)):\n\t\tpass"""
+        l = {}
+        exec(f, {}, l)
+        foo = njit(pipeline_class=CapturingCompiler)(l['foo'])
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        self.assertIn("Untyped global name 'literal_unroll'",
+                      str(raises.exception))
+
+        # same as above but now add literal_unroll to globals
+        l = {}
+        exec(f, {'literal_unroll': literal_unroll}, l)
+        foo = njit(pipeline_class=CapturingCompiler)(l['foo'])
+        foo()
+        cres = foo.overloads[foo.signatures[0]]
+        self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
+
+        # same as above, but now with import
+        from textwrap import dedent
+        f = """
+            def gen():
+                from numba import literal_unroll
+                def foo():
+                    for x in literal_unroll((1,)):
+                        pass
+                return foo
+            bar = gen()
+            """
+        l = {}
+        exec(dedent(f), {}, l)
+        foo = njit(pipeline_class=CapturingCompiler)(l['bar'])
+        foo()
+        cres = foo.overloads[foo.signatures[0]]
+        self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
+
+        # same as above, but now with import as something else
+        from textwrap import dedent
+        f = """
+            def gen():
+                from numba import literal_unroll as something_else
+                def foo():
+                    for x in something_else((1,)):
+                        pass
+                return foo
+            bar = gen()
+            """
+        l = {}
+        exec(dedent(f), {}, l)
+        foo = njit(pipeline_class=CapturingCompiler)(l['bar'])
+        foo()
+        cres = foo.overloads[foo.signatures[0]]
+        self.assertTrue(cres.metadata['mutation_results'][LiteralUnroll])
 
 
 if __name__ == '__main__':
