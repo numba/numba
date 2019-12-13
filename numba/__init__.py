@@ -72,6 +72,8 @@ __all__ = """
     vectorize
     objmode
     literal_unroll
+    get_num_threads
+    set_num_threads
     """.split() + types.__all__ + errors.__all__
 
 
