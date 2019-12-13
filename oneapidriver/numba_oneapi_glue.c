@@ -688,6 +688,7 @@ int write_numba_oneapi_mem_buffer_to_device (env_t env_t_ptr,
     err = clRetainCommandQueue(queue);
     CHECK_OPEN_CL_ERROR(err, "Failed to retain the buffer memory object.");
 
+    printf("write_numba_oneapi_mem_buffer_from_device mem: %p offset: %ld, buffersize: %ld, data_ptr: %p\n", mem, offset, buffersize, data_ptr);
     // Not using any events for the time being. Eventually we want to figure
     // out the event dependencies using parfor analysis.
     err = clEnqueueWriteBuffer(queue, mem, blocking?CL_TRUE:CL_FALSE,
@@ -732,6 +733,7 @@ int read_numba_oneapi_mem_buffer_from_device (env_t env_t_ptr,
     err = clRetainCommandQueue(queue);
     CHECK_OPEN_CL_ERROR(err, "Failed to retain the command queue.");
 
+    printf("read_numba_oneapi_mem_buffer_from_device mem: %p offset: %ld, buffersize: %ld, data_ptr: %p\n", mem, offset, buffersize, data_ptr);
     // Not using any events for the time being. Eventually we want to figure
     // out the event dependencies using parfor analysis.
     err = clEnqueueReadBuffer(queue, mem, blocking?CL_TRUE:CL_FALSE,
@@ -746,6 +748,7 @@ int read_numba_oneapi_mem_buffer_from_device (env_t env_t_ptr,
 #if DEBUG
     printf("DEBUG: CL buffer read from device...\n");
 #endif
+    fflush(stdout);
     //--- TODO: Implement a version that uses clEnqueueMapBuffer
 
     return NUMBA_ONEAPI_SUCCESS;
@@ -984,9 +987,9 @@ int create_numba_oneapi_kernel_arg (const void *arg_value,
 
 #if DEBUG
     printf("DEBUG: Kernel arg created\n");
-    void **tp = (void**)kernel_arg->arg_value;
-    printf("DEBUG: create_kernel_arg %p (size %ld, addr %p)\n",
-            kernel_arg, kernel_arg->arg_size, *tp);
+//    void **tp = (void**)kernel_arg->arg_value;
+//    printf("DEBUG: create_kernel_arg %p (size %ld, addr %p)\n",
+//            kernel_arg, kernel_arg->arg_size, *tp);
 #endif
 
     *kernel_arg_t_ptr = kernel_arg;
@@ -1049,24 +1052,19 @@ int set_args_and_enqueue_numba_oneapi_kernel (env_t env_t_ptr,
 #if DEBUG
     kernel_t_ptr->dump_fn(kernel_t_ptr);
 #endif
-#if DEBUG
-    for(i = 0; i < nargs; ++i) {
-        printf("arg[%ld] = %p, %p\n", i, array_of_args[i], &(array_of_args[i]));
-    }
-#endif
     // Set the kernel arguments
     for(i = 0; i < nargs; ++i) {
 #if DEBUG
-        printf("DEBUG: clSetKernelArgs for arg # %ld\n", i);
+//        printf("DEBUG: clSetKernelArgs for arg # %ld\n", i);
 #endif
         kernel_arg_t this_arg = array_of_args[i];
 #if DEBUG
         check_kernelarg_id(this_arg);
 #endif
 #if DEBUG
-        void **tp = (void**)this_arg->arg_value;
-        printf("DEBUG: clSetKernelArgs for arg # %ld (size %ld, addr %p)\n", i,
-                this_arg->arg_size, *tp);
+//        void **tp = (void**)this_arg->arg_value;
+//        printf("DEBUG: clSetKernelArgs for arg # %ld (size %ld, addr %p)\n", i,
+//                this_arg->arg_size, *tp);
 #endif
         err = clSetKernelArg(kernel, i, this_arg->arg_size,
                              this_arg->arg_value);
@@ -1102,9 +1100,9 @@ int set_args_and_enqueue_numba_oneapi_kernel_auto_blocking (env_t env_t_ptr,
                                                             size_t *dim_stops)
 {
     size_t *global_work_size;
-    size_t *local_work_size;
+//    size_t *local_work_size;
     int err;
-    int i;
+    unsigned i;
 
     global_work_size = (size_t*)malloc(sizeof(size_t) * num_dims);
 //    local_work_size  = (size_t*)malloc(sizeof(size_t) * num_dims);
