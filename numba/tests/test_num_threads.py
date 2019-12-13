@@ -267,31 +267,65 @@ class TestNumThreads(TestCase):
             for i in prange(N):
                 buf[fid, i] = get_num_threads()
 
-        @njit(parallel=True)
-        def test_func(nthreads):
-            acc = 0
-            buf = np.zeros((M, N))
-            set_num_threads(nthreads)
-            for i in prange(M):
-                local_mask = 1 + i % mask
-                set_num_threads(local_mask)  # set threads in parent function
-                if local_mask < N:
-                    child_func(buf, local_mask)
-                acc += get_num_threads()
-            return acc, buf
+        def get_test(test_type):
+            if test_type == 'njit':
+                def test_func(nthreads, py_func=False):
+                    @njit(parallel=True)
+                    def _test_func(nthreads):
+                        acc = 0
+                        buf = np.zeros((M, N))
+                        set_num_threads(nthreads)
+                        for i in prange(M):
+                            local_mask = 1 + i % mask
+                            set_num_threads(local_mask)  # set threads in parent function
+                            if local_mask < N:
+                                child_func(buf, local_mask)
+                            acc += get_num_threads()
+                        return acc, buf
+                    if py_func:
+                        return _test_func.py_func(nthreads)
+                    else:
+                        return _test_func(nthreads)
 
-        got_acc, got_arr = test_func(mask)
-        exp_acc, exp_arr = test_func.py_func(mask)
-        self.assertEqual(exp_acc, got_acc)
-        np.testing.assert_equal(exp_arr, got_arr)
+            elif test_type == 'guvectorize':
+                def test_func(nthreads, py_func=False):
+                    def _test_func(acc, buf, local_mask):
+                        set_num_threads(nthreads)
+                        set_num_threads(local_mask[0])  # set threads in parent function
+                        if local_mask[0] < N:
+                            child_func(buf, local_mask[0])
+                        acc[0] += get_num_threads()
 
-        # check the maths reconciles
-        math_acc = np.sum(1 + np.arange(M) % mask)
-        self.assertEqual(math_acc, got_acc)
-        math_arr = np.zeros((M, N))
-        for i in range(1, N):  # there's branches on 1, ..., num_threads - 1
-            math_arr[i, :] = i
-        np.testing.assert_equal(math_arr, got_arr)
+                    buf = np.zeros((M, N), dtype=np.int64)
+                    acc = np.array([0])
+                    local_mask = (1 + np.arange(M) % mask).reshape((M, 1))
+                    if not py_func:
+                        _test_func = guvectorize(['void(int64[:], int64[:, :], int64[:])'],
+                                                 '(k), (n, m), (p)', nopython=True,
+                                                 target='parallel')(_test_func)
+                    else:
+                        _test_func = guvectorize(['void(int64[:], int64[:, :], int64[:])'],
+                                                 '(k), (n, m), (p)', forceobj=True)(_test_func)
+                    _test_func(acc, buf, local_mask)
+                    return acc, buf
+
+            return test_func
+
+        for test_type in ['njit', 'guvectorize']:
+            test_func = get_test(test_type)
+
+            got_acc, got_arr = test_func(mask)
+            exp_acc, exp_arr = test_func(mask, py_func=True)
+            self.assertEqual(exp_acc, got_acc, test_type)
+            np.testing.assert_equal(exp_arr, got_arr)
+
+            # check the maths reconciles
+            math_acc = np.sum(1 + np.arange(M) % mask)
+            self.assertEqual(math_acc, got_acc)
+            math_arr = np.zeros((M, N))
+            for i in range(1, N):  # there's branches on 1, ..., num_threads - 1
+                math_arr[i, :] = i
+            np.testing.assert_equal(math_arr, got_arr)
 
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
