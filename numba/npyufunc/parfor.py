@@ -2015,7 +2015,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
             cur_arg += 1
             builder.store(builder.load(kernel_arg), dst)
-
+            # Calculate total buffer size
             total_size = cgutils.alloca_once(builder, intp_t,  size=context.get_constant(types.uintp, 1), name="total_size" + str(cur_arg))
             builder.store(builder.mul(builder.load(array_size_member), builder.load(item_size_member)), total_size)
             # Handle data
@@ -2027,7 +2027,6 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             builder.call(
                 create_oneapi_rw_mem_buffer, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
                                               builder.load(total_size),
-                                              #builder.load(array_size_member),
                                               buffer_ptr])
 
             if index < num_inputs:
@@ -2037,7 +2036,6 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
                                                  context.get_constant(types.uintp, 1),
                                                  context.get_constant(types.uintp, 0),
                                                  builder.load(total_size),
-                                                 #builder.load(array_size_member),
                                                  builder.bitcast(builder.load(data_member), void_ptr_t)])
             else:
                 read_bufs_after_enqueue.append((buffer_ptr, total_size, data_member))
