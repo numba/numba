@@ -6,7 +6,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import int32, uint32, float32, float64, jit, vectorize
-from ..support import tag
+from ..support import tag, CheckWarningsMixin
 
 
 pi = math.pi
@@ -60,7 +60,7 @@ class BaseVectorizeDecor(object):
         func = self.funcs['func1']
         A = np.arange(100, dtype=np.float64)
         self._run_and_compare(func, sig, A)
-    
+
     @tag('important')
     def test_3(self):
         sig = ['float64(float64, uint32)']
@@ -100,6 +100,57 @@ class TestParallelVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
 class TestCPUVectorizeJitted(unittest.TestCase, BaseVectorizeDecor):
     target = 'cpu'
     wrapper = staticmethod(jit)  # staticmethod required for py27
+
+
+class BaseVectorizeNopythonArg(unittest.TestCase, CheckWarningsMixin):
+    """
+    Test passing the nopython argument to the vectorize decorator.
+    """
+    def _test_target_nopython(self, target, warnings, with_sig=True):
+        a = np.array([2.0], dtype=np.float32)
+        b = np.array([3.0], dtype=np.float32)
+        sig = [float32(float32, float32)]
+        args = with_sig and [sig] or []
+        with self.check_warnings(warnings):
+            f = vectorize(*args, target=target, nopython=True)(vector_add)
+            f(a, b)
+
+class TestVectorizeNopythonArg(BaseVectorizeNopythonArg):
+    def test_target_cpu_nopython(self):
+        self._test_target_nopython('cpu', [])
+
+    def test_target_cpu_nopython_no_sig(self):
+        self._test_target_nopython('cpu', [], False)
+
+    def test_target_parallel_nopython(self):
+        self._test_target_nopython('parallel', [])
+
+
+class BaseVectorizeUnrecognizedArg(unittest.TestCase, CheckWarningsMixin):
+    """
+    Test passing an unrecognized argument to the vectorize decorator.
+    """
+    def _test_target_unrecognized_arg(self, target, with_sig=True):
+        a = np.array([2.0], dtype=np.float32)
+        b = np.array([3.0], dtype=np.float32)
+        sig = [float32(float32, float32)]
+        args = with_sig and [sig] or []
+        with self.assertRaises(KeyError) as raises:
+            f = vectorize(*args, target=target, nonexistent=2)(vector_add)
+            f(a, b)
+        self.assertIn("does not support option", str(raises.exception))
+
+class TestVectorizeUnrecognizedArg(BaseVectorizeUnrecognizedArg):
+    def test_target_cpu_unrecognized_arg(self):
+        self._test_target_unrecognized_arg('cpu')
+
+    def test_target_cpu_unrecognized_arg_no_sig(self):
+        self._test_target_unrecognized_arg('cpu', False)
+
+    def test_target_parallel_unrecognized_arg(self):
+        self._test_target_unrecognized_arg('parallel')
+
+
 
 
 if __name__ == '__main__':

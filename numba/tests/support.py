@@ -18,9 +18,14 @@ import time
 import io
 import ctypes
 import multiprocessing as mp
+import warnings
 from contextlib import contextmanager
 
 import numpy as np
+try:
+    import scipy
+except ImportError:
+    scipy = None
 
 from numba import config, errors, typing, utils, numpy_support, testing
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
@@ -53,6 +58,18 @@ skip_py38_or_later = unittest.skipIf(
     utils.PYVERSION >= (3, 8),
     "unsupported on py3.8 or later"
 )
+skip_tryexcept_unsupported = unittest.skipIf(
+    utils.PYVERSION < (3, 7),
+    "try-except unsupported on py3.6 or earlier"
+)
+skip_tryexcept_supported = unittest.skipIf(
+    utils.PYVERSION >= (3, 7),
+    "try-except supported on py3.7 or later"
+)
+
+_msg = "SciPy needed for test"
+skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
+
 
 class CompilationCache(object):
     """
@@ -791,3 +808,17 @@ def _remote_runner(fn, qout):
         qout.put(stdout.getvalue())
     qout.put(stderr.getvalue())
     sys.exit(exitcode)
+
+class CheckWarningsMixin(object):
+    @contextlib.contextmanager
+    def check_warnings(self, messages, category=RuntimeWarning):
+        with warnings.catch_warnings(record=True) as catch:
+            warnings.simplefilter("always")
+            yield
+        found = 0
+        for w in catch:
+            for m in messages:
+                if m in str(w.message):
+                    self.assertEqual(w.category, category)
+                    found += 1
+        self.assertEqual(found, len(messages))

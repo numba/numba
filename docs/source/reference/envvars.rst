@@ -75,6 +75,11 @@ These variables influence what is printed out during compilation of
 
    *Default value:* ``no_color``. The type of the value is ``string``.
 
+.. envvar:: NUMBA_HIGHLIGHT_DUMPS
+
+   If set to non-zero and ``pygments`` is installed, syntax highlighting is
+   applied to Numba IR, LLVM IR and assembly dumps. Default is zero.
+
 .. envvar:: NUMBA_DISABLE_PERFORMANCE_WARNINGS
 
    If set to non-zero the issuing of performance warnings is disabled. Default

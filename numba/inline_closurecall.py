@@ -414,7 +414,13 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
     """Get arguments for calling 'callee', including the default arguments.
     keyword arguments are currently only handled when 'callee' is a function.
     """
-    args = list(call_expr.args)
+    if call_expr.op == 'call':
+        args = list(call_expr.args)
+    elif call_expr.op == 'getattr':
+        args = [call_expr.value]
+    else:
+        raise TypeError("Unsupported ir.Expr.{}".format(call_expr.op))
+
     debug_print = _make_debug_print("inline_closure_call default handling")
 
     # handle defaults and kw arguments using pysignature if callee is function
@@ -428,7 +434,10 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
             raise NotImplementedError(
                 "Stararg not supported in inliner for arg {} {}".format(
                     index, param))
-        kws = dict(call_expr.kws)
+        if call_expr.op == 'call':
+            kws = dict(call_expr.kws)
+        else:
+            kws = {}
         return numba.typing.fold_arguments(
             pysig, args, kws, normal_handler, default_handler,
             stararg_handler)
@@ -451,11 +460,12 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
                 args = args + defaults_list
             elif (isinstance(callee_defaults, ir.Var)
                     or isinstance(callee_defaults, str)):
-                defaults = func_ir.get_definition(callee_defaults)
-                assert(isinstance(defaults, ir.Const))
-                loc = defaults.loc
-                args = args + [ir.Const(value=v, loc=loc)
-                            for v in defaults.value]
+                default_tuple = func_ir.get_definition(callee_defaults)
+                assert(isinstance(default_tuple, ir.Expr))
+                assert(default_tuple.op == "build_tuple")
+                const_vals = [func_ir.get_definition(x) for
+                              x in default_tuple.items]
+                args = args + const_vals
             else:
                 raise NotImplementedError(
                     "Unsupported defaults to make_function: {}".format(
