@@ -1092,10 +1092,20 @@ def sorted_impl(context, builder, sig, args):
         sig = typing.signature(sig.return_type, *sig.args + (types.boolean,))
         args = tuple(args) + (cgutils.false_bit,)
 
-    def sorted_impl(it, reverse):
-        lst = list(it)
-        lst.sort(reverse=reverse)
-        return lst
+    from numba.typed import List
+    if context.disable_reflected_list:
+        def sorted_impl(it, reverse):
+            lst = List()
+            for i in it:
+                lst.append(i)
+            lst.sort(reverse=reverse)
+            return lst
+
+    else:
+        def sorted_impl(it, reverse):
+            lst = list(it)
+            lst.sort(reverse=reverse)
+            return lst
 
     return context.compile_internal(builder, sorted_impl, sig, args)
 

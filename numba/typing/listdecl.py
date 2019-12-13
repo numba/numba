@@ -35,13 +35,16 @@ class ListBuiltin(AbstractTemplate):
 class SortedBuiltin(CallableTemplate):
 
     def generic(self):
+        correct_list_type = (types.ListType
+                             if self.context.disable_reflected_list
+                             else types.List)
         def typer(iterable, reverse=None):
             if not isinstance(iterable, types.IterableType):
                 return
             if (reverse is not None and
                 not isinstance(reverse, types.Boolean)):
                 return
-            return types.List(iterable.iterator_type.yield_type)
+            return correct_list_type(iterable.iterator_type.yield_type)
 
         return typer
 
