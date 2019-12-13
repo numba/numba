@@ -20,7 +20,9 @@ from .ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                        GuardException,  convert_code_obj_to_function,
                        mk_unique_var, build_definitions,
                        replace_var_names, get_name_var_table,
-                       compile_to_numba_ir, get_definition)
+                       compile_to_numba_ir, get_definition,
+                       find_max_label, rename_labels,
+                       )
 
 
 @contextmanager
@@ -417,6 +419,8 @@ class FindLiterallyCalls(FunctionPass):
 
 @register_pass(mutates_CFG=True, analysis_only=False)
 class CanonicalizeLoopExit(FunctionPass):
+    """A pass to canonicalize loop exit by splitting it from function exit.
+    """
     _name = "canonicalize_loop_exit"
 
     def __init__(self):
@@ -441,14 +445,21 @@ class CanonicalizeLoopExit(FunctionPass):
     def _split_exit_block(self, fir, cfg, exit_label):
         curblock = fir.blocks[exit_label]
         newlabel = exit_label + 1   # XXX
+        newlabel = find_max_label(fir.blocks) + 1
         fir.blocks[newlabel] = curblock
         newblock = ir.Block(scope=curblock.scope, loc=curblock.loc)
         newblock.append(ir.Jump(newlabel, loc=curblock.loc))
         fir.blocks[exit_label] = newblock
+        # Rename all labels
+        fir.blocks = rename_labels(fir.blocks)
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
 class CanonicalizeLoopEntry(FunctionPass):
+    """A pass to canonicalize loop header by splitting it from function entry.
+
+    This is needed for loop-lifting; esp in py3.8
+    """
     _name = "canonicalize_loop_entry"
 
     def __init__(self):
@@ -510,13 +521,13 @@ class CanonicalizeLoopEntry(FunctionPass):
         new_block = entry_block.copy()
         new_block.body = new_block.body[splitpt:]
         new_block.loc = new_block.body[0].loc
-        new_label = entry_label + 1 # XXX
-        assert new_label not in fir.blocks
-
+        new_label = find_max_label(fir.blocks) + 1
         entry_block.body = entry_block.body[:splitpt]
         entry_block.append(ir.Jump(new_label, loc=new_block.loc))
 
         fir.blocks[new_label] = new_block
+        # Rename all labels
+        fir.blocks = rename_labels(fir.blocks)
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)

@@ -117,7 +117,7 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
             # Post-Py3.8 ends up here usually
             returnto = an_exit
 
-        local_block_ids = set(loop.body) | set(loop.entries) #| set(loop.exits)
+        local_block_ids = set(loop.body) | set(loop.entries)
         inputs, outputs = find_region_inout_vars(
             blocks=blocks,
             livemap=livemap,

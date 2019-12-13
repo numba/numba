@@ -268,10 +268,6 @@ class VarMap(object):
         except KeyError:
             raise NotDefinedError(name)
 
-    @property
-    def is_temp(self):
-        return self.name.startswith('$')
-
     def __contains__(self, name):
         return name in self._con
 
