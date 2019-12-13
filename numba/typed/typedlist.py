@@ -491,6 +491,8 @@ def _convert_python_list_to_numba_typed_list(
             )
             msg = "failed to append to list during unboxing"
             error_handler(builder, status, msg)
+            if context.enable_nrt:
+                context.nrt.decref(builder, itemty , native.value)
 
         c.pyapi.decref(expected_typobj)
 
