@@ -449,7 +449,7 @@ class TestNumThreads(TestCase):
             return acc, np.unique(tid)
 
         @njit(parallel=True)
-        def test_func(nthreads):
+        def test_func_jit(nthreads):
             set_num_threads(nthreads)
             lens = np.zeros(nthreads)
             total = 0
@@ -463,9 +463,30 @@ class TestNumThreads(TestCase):
         expected_acc = BIG * NT
         expected_thread_count = NT + 1
 
-        got_acc, got_tc = test_func(NT)
+        got_acc, got_tc = test_func_jit(NT)
         self.assertEqual(expected_acc, got_acc)
         np.testing.assert_equal(expected_thread_count, got_tc)
+
+        def test_guvectorize(nthreads):
+            @guvectorize(['int64[:], int64[:]'],
+                         '(n), (m)',
+                         nopython=True,
+                         target='parallel')
+            def test_func_guvectorize(total, lens):
+                my_acc, tids = work(nthreads + 1)
+                lens[:] = len(tids)
+                total += my_acc
+
+            total = np.array([0])
+            lens = np.zeros(nthreads, dtype=np.int64).reshape((nthreads, 1))
+
+            test_func_guvectorize(total, lens)
+            return total, np.unique(lens)
+
+        got_acc, got_tc = test_guvectorize(NT)
+        self.assertEqual(expected_acc, got_acc)
+        np.testing.assert_equal(expected_thread_count, got_tc)
+
 
     def tearDown(self):
         set_num_threads(config.NUMBA_NUM_THREADS)
