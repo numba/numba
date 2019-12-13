@@ -269,10 +269,9 @@ class BaseContext(object):
         The attribute's type is returned, or None if resolution failed.
         """
         def core(typ):
-            for attrinfo in self._get_attribute_templates(typ):
-                ret = attrinfo.resolve(typ, attr)
-                if ret is not None:
-                    return ret
+            out = self.find_matching_getattr_template(typ, attr)
+            if out:
+                return out['return_type']
 
         out = core(typ)
         if out is not None:
@@ -287,6 +286,15 @@ class BaseContext(object):
             attrty = self.resolve_module_constants(typ, attr)
             if attrty is not None:
                 return attrty
+
+    def find_matching_getattr_template(self, typ, attr):
+        for template in self._get_attribute_templates(typ):
+            return_type = template.resolve(typ, attr)
+            if return_type is not None:
+                return {
+                    'template': template,
+                    'return_type': return_type,
+                }
 
     def resolve_setattr(self, target, attr, value):
         """
@@ -390,6 +398,7 @@ class BaseContext(object):
         # Initialize declarations
         from . import builtins, arraydecl, npdatetime  # noqa: F401
         from . import ctypes_utils, bufproto           # noqa: F401
+        from numba.unsafe import eh                    # noqa: F401
 
         self.install_registry(templates.builtin_registry)
 

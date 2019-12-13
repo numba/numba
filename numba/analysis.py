@@ -216,7 +216,7 @@ def compute_live_variables(cfg, blocks, var_def_map, var_dead_map):
         for offset in blocks:
             # vars available + variable defined
             avail = block_entry_vars[offset] | var_def_map[offset]
-            # substract variables deleted
+            # subtract variables deleted
             avail -= var_dead_map[offset]
             # add ``avail`` to each successors
             for succ, _data in cfg.successors(offset):

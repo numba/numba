@@ -45,6 +45,7 @@
  * The following additional functions are implemented for the list, these are
  * needed to make the list work within Numba.
  *
+ * - Accessing the allocation numba_list_allocated
  * - Copying an item          copy_item
  * - Calling incref on item   list_incref_item
  * - Calling decref on item   list_decref_item
@@ -215,6 +216,15 @@ numba_list_free(NB_List *lp) {
 Py_ssize_t
 numba_list_length(NB_List *lp) {
     return lp->size;
+}
+
+/* Return the current allocation of a list.
+ *
+ * lp: a list
+ */
+Py_ssize_t
+numba_list_allocated(NB_List *lp) {
+    return lp->allocated;
 }
 
 /* Set an item in a list.

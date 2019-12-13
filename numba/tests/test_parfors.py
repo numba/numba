@@ -40,6 +40,7 @@ from numba.bytecode import ByteCodeIter
 from .support import tag, override_env_config, skip_parfors_unsupported
 from .matmul_usecase import needs_blas
 from .test_linalg import needs_lapack
+import cmath
 
 
 
@@ -1040,6 +1041,20 @@ class TestParfors(TestParforsBase):
             self.assertIn(msg, str(e.exception))
 
     @skip_unsupported
+    def test_use_of_reduction_var1(self):
+        def test_impl():
+            acc = 0
+            for i in prange(1):
+                acc = cmath.sqrt(acc)
+            return acc
+
+        # checks that invalid use of reduction variable is detected
+        msg = ("Use of reduction variable acc in an unsupported reduction function.")
+        with self.assertRaises(ValueError) as e:
+            pcfunc = self.compile_parallel(test_impl, ())
+        self.assertIn(msg, str(e.exception))
+
+    @skip_unsupported
     def test_argmin(self):
         def test_impl1(A):
             return A.argmin()
@@ -1471,6 +1486,24 @@ class TestParfors(TestParforsBase):
 
         msg = ("The reshape API may only include one negative argument.")
         self.assertIn(msg, str(raised.exception))
+
+    @skip_unsupported
+    def test_ndarray_fill(self):
+        def test_impl(x):
+            x.fill(7.0)
+            return x
+        x = np.zeros(10)
+        self.check(test_impl, x)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'),)) == 1)
+
+    @skip_unsupported
+    def test_ndarray_fill2d(self):
+        def test_impl(x):
+            x.fill(7.0)
+            return x
+        x = np.zeros((2,2))
+        self.check(test_impl, x)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'),)) == 1)
 
     @skip_unsupported
     def test_0d_array(self):
@@ -2944,7 +2977,7 @@ class TestParforsDiagnostics(TestParforsBase):
         self.assertEqual(a, b)
 
     def _fusion_equivalent(self, thing):
-        # parfors indexes the Parfors class instance id's from whereever the
+        # parfors indexes the Parfors class instance id's from wherever the
         # internal state happens to be. To assert fusion equivalence we just
         # check that the relative difference between fusion adjacency lists
         # is the same. For example:

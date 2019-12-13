@@ -505,6 +505,14 @@ class Expr(Inst):
         return cls(op=op, loc=loc, value=value, index=index)
 
     @classmethod
+    def typed_getitem(cls, value, dtype, index, loc):
+        assert isinstance(value, Var)
+        assert isinstance(loc, Loc)
+        op = 'typed_getitem'
+        return cls(op=op, loc=loc, value=value, dtype=dtype,
+                   index=index)
+
+    @classmethod
     def static_getitem(cls, value, index, index_var, loc):
         assert isinstance(value, Var)
         assert index_var is None or isinstance(index_var, Var)
@@ -712,6 +720,43 @@ class StaticRaise(Terminator):
 
     def get_targets(self):
         return []
+
+
+class TryRaise(Stmt):
+    """A raise statement inside a try-block
+    Similar to ``Raise`` but does not terminate.
+    """
+    def __init__(self, exception, loc):
+        assert exception is None or isinstance(exception, Var)
+        assert isinstance(loc, Loc)
+        self.exception = exception
+        self.loc = loc
+
+    def __str__(self):
+        return "try_raise %s" % self.exception
+
+
+class StaticTryRaise(Stmt):
+    """A raise statement inside a try-block.
+    Similar to ``StaticRaise`` but does not terminate.
+    """
+
+    def __init__(self, exc_class, exc_args, loc):
+        assert exc_class is None or isinstance(exc_class, type)
+        assert isinstance(loc, Loc)
+        assert exc_args is None or isinstance(exc_args, tuple)
+        self.exc_class = exc_class
+        self.exc_args = exc_args
+        self.loc = loc
+
+    def __str__(self):
+        if self.exc_class is None:
+            return "static_try_raise"
+        elif self.exc_args is None:
+            return "static_try_raise %s" % (self.exc_class,)
+        else:
+            return "static_try_raise %s(%s)" % (self.exc_class,
+                                     ", ".join(map(repr, self.exc_args)))
 
 
 class Return(Terminator):
@@ -1383,12 +1428,52 @@ class FunctionIR(object):
                                % (name,))
             value = defs[0]
 
+    def get_assignee(self, rhs_value, in_blocks=None):
+        """
+        Finds the assignee for a given RHS value. If in_blocks is given the
+        search will be limited to the specified blocks.
+        """
+        if in_blocks is None:
+            blocks = self.blocks.values()
+        elif isinstance(in_blocks, int):
+            blocks = [self.blocks[in_blocks]]
+        else:
+            blocks = [self.blocks[blk] for blk in list(in_blocks)]
+
+        assert isinstance(rhs_value, AbstractRHS)
+
+        for blk in blocks:
+            for assign in blk.find_insts(Assign):
+                if assign.value == rhs_value:
+                    return assign.target
+
+        raise ValueError("Could not find an assignee for %s" % rhs_value)
+
+
     def dump(self, file=None):
+        from numba.six import StringIO
+        nofile = file is None
         # Avoid early bind of sys.stdout as default value
-        file = file or sys.stdout
+        file = file or StringIO()
         for offset, block in sorted(self.blocks.items()):
             print('label %s:' % (offset,), file=file)
             block.dump(file=file)
+        if nofile:
+            text = file.getvalue()
+            if config.HIGHLIGHT_DUMPS:
+                try:
+                    import pygments
+                except ImportError:
+                    msg = "Please install pygments to see highlighted dumps"
+                    raise ValueError(msg)
+                else:
+                    from pygments import highlight
+                    from pygments.lexers import DelphiLexer as lexer
+                    from pygments.formatters import Terminal256Formatter
+                    print(highlight(text, lexer(), Terminal256Formatter()))
+            else:
+                print(text)
+
 
     def dump_to_string(self):
         with StringIO() as sb:
@@ -1404,7 +1489,7 @@ class FunctionIR(object):
                   % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
                   file=file)
 
-    def render_dot(self, filename_prefix="numba_ir"):
+    def render_dot(self, filename_prefix="numba_ir", include_ir=True):
         """Render the CFG of the IR with GraphViz DOT via the
         ``graphviz`` python binding.
 
@@ -1432,11 +1517,15 @@ class FunctionIR(object):
             with StringIO() as sb:
                 blk.dump(sb)
                 label = sb.getvalue()
-            label = ''.join(
-                ['  {}\l'.format(x) for x in label.splitlines()],
-            )
-            label = "block {}\l".format(k) + label
-            g.node(str(k), label=label, shape='rect')
+            if include_ir:
+                label = ''.join(
+                    ['  {}\l'.format(x) for x in label.splitlines()],
+                )
+                label = "block {}\l".format(k) + label
+                g.node(str(k), label=label, shape='rect')
+            else:
+                label = "{}\l".format(k)
+                g.node(str(k), label=label, shape='circle')
         # Populate the edges
         for src, blk in self.blocks.items():
             for dst in blk.terminator.get_targets():

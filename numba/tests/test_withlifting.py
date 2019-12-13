@@ -16,16 +16,7 @@ from numba.targets import cpu
 from numba.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof, objmode
 from numba.extending import overload
-from .support import MemoryLeak, TestCase, captured_stdout
-
-
-try:
-    import scipy
-except ImportError:
-    scipy = None
-
-_msg = "SciPy needed for test"
-skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
+from .support import MemoryLeak, TestCase, captured_stdout, skip_unless_scipy
 
 
 def get_func_ir(func):

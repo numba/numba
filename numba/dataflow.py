@@ -917,3 +917,11 @@ class BlockInfo(object):
     @terminator.setter
     def terminator(self, inst):
         self._term = inst
+
+    @property
+    def active_try_block(self):
+        """Try except not supported.
+
+        See byteflow.py
+        """
+        return None
