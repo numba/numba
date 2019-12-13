@@ -25,6 +25,9 @@ from numba.extending import (
 from numba.utils import IS_PY3
 from llvmlite import ir
 
+from numba.future import disable_reflected_list
+disable_reflected_list()
+
 
 @njit
 def _make_list(itemty, allocated=0):
