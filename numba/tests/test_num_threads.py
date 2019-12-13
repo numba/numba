@@ -250,28 +250,22 @@ class TestNumThreads(TestCase):
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
     @skip_parfors_unsupported
-    @unittest.skipIf(config.NUMBA_NUM_THREADS < 4, "Not enough CPU cores")
+    @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def test_nested_parallelism_1(self):
         if threading_layer() == 'workqueue':
             self.skipTest("workqueue is not threadsafe")
 
-        # check that _get_thread_id is ok in nesting
+        # check that get_num_threads is ok in nesting
         mask = config.NUMBA_NUM_THREADS - 1
 
-        N = 4
-        M = 8
+        N = config.NUMBA_NUM_THREADS
+        M = 2*config.NUMBA_NUM_THREADS
 
-        def gen(fid):
-            @njit(parallel=True)
-            def child_func(buf):
-                M, N = buf.shape
-                for i in prange(N):
-                    buf[fid, i] = get_num_threads()
-            return child_func
-
-        child1 = gen(1)
-        child2 = gen(2)
-        child3 = gen(3)
+        @njit(parallel=True)
+        def child_func(buf, fid):
+            M, N = buf.shape
+            for i in prange(N):
+                buf[fid, i] = get_num_threads()
 
         @njit(parallel=True)
         def test_func(nthreads):
@@ -281,12 +275,8 @@ class TestNumThreads(TestCase):
             for i in prange(M):
                 local_mask = 1 + i % mask
                 set_num_threads(local_mask)  # set threads in parent function
-                if local_mask == 1:
-                    child1(buf)
-                elif local_mask == 2:
-                    child2(buf)
-                elif local_mask == 3:
-                    child3(buf)
+                if local_mask < N:
+                    child_func(buf, local_mask)
                 acc += get_num_threads()
             return acc, buf
 
@@ -299,22 +289,23 @@ class TestNumThreads(TestCase):
         math_acc = np.sum(1 + np.arange(M) % mask)
         self.assertEqual(math_acc, got_acc)
         math_arr = np.zeros((M, N))
-        for i in range(1, 4):  # there's branches on 1, 2, 3
+        for i in range(1, N):  # there's branches on 1, ..., num_threads - 1
             math_arr[i, :] = i
         np.testing.assert_equal(math_arr, got_arr)
 
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
     @skip_parfors_unsupported
-    @unittest.skipIf(config.NUMBA_NUM_THREADS < 4, "Not enough CPU cores")
+    @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def test_nested_parallelism_2(self):
         if threading_layer() == 'workqueue':
             self.skipTest("workqueue is not threadsafe")
 
-        # check that _get_thread_id is ok in nesting
+        # check that get_num_threads is ok in nesting
 
-        N = 5
-        M = 17
+        N = config.NUMBA_NUM_THREADS + 1
+        M = 4*config.NUMBA_NUM_THREADS + 1
+
         def get_impl(flag):
 
             if flag == True:
@@ -324,18 +315,12 @@ class TestNumThreads(TestCase):
             else:
                 def dec(x): return x
 
-            def gen(fid):
-                @dec
-                def child_func(buf):
-                    M, N = buf.shape
-                    set_num_threads(fid)  # set threads in child function
-                    for i in prange(N):
-                        buf[fid, i] = get_num_threads()
-                return child_func
-
-            child1 = gen(1)
-            child2 = gen(2)
-            child3 = gen(3)
+            @dec
+            def child(buf, fid):
+                M, N = buf.shape
+                set_num_threads(fid)  # set threads in child function
+                for i in prange(N):
+                    buf[fid, i] = get_num_threads()
 
             @dec
             def test_func(nthreads):
@@ -346,14 +331,8 @@ class TestNumThreads(TestCase):
                     # when the threads exit the child functions they should have
                     # a TLS slot value of the local mask as it was set in
                     # child
-                    if local_mask == 1:
-                        child1(buf)
-                        assert get_num_threads() == local_mask
-                    elif local_mask == 2:
-                        child2(buf)
-                        assert get_num_threads() == local_mask
-                    elif local_mask == 3:
-                        child3(buf)
+                    if local_mask < config.NUMBA_NUM_THREADS:
+                        child(buf, local_mask)
                         assert get_num_threads() == local_mask
                 return buf
             return test_func
@@ -371,8 +350,7 @@ class TestNumThreads(TestCase):
 
         # check the maths reconciles
         math_arr = np.zeros((M, N))
-        for i in range(
-                1, 4):  # there's branches on modulo mask but only 3 funcs
+        for i in range(1, config.NUMBA_NUM_THREADS):  # there's branches on modulo mask but only NUMBA_NUM_THREADS funcs
             math_arr[i, :] = i
 
         np.testing.assert_equal(math_arr, pf_arr)
