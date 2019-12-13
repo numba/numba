@@ -688,7 +688,7 @@ int write_numba_oneapi_mem_buffer_to_device (env_t env_t_ptr,
     err = clRetainCommandQueue(queue);
     CHECK_OPEN_CL_ERROR(err, "Failed to retain the buffer memory object.");
 
-    printf("write_numba_oneapi_mem_buffer_from_device mem: %p offset: %ld, buffersize: %ld, data_ptr: %p\n", mem, offset, buffersize, data_ptr);
+    //printf("write_numba_oneapi_mem_buffer_from_device mem: %p offset: %ld, buffersize: %ld, data_ptr: %p\n", mem, offset, buffersize, data_ptr);
     // Not using any events for the time being. Eventually we want to figure
     // out the event dependencies using parfor analysis.
     err = clEnqueueWriteBuffer(queue, mem, blocking?CL_TRUE:CL_FALSE,
@@ -733,7 +733,7 @@ int read_numba_oneapi_mem_buffer_from_device (env_t env_t_ptr,
     err = clRetainCommandQueue(queue);
     CHECK_OPEN_CL_ERROR(err, "Failed to retain the command queue.");
 
-    printf("read_numba_oneapi_mem_buffer_from_device mem: %p offset: %ld, buffersize: %ld, data_ptr: %p\n", mem, offset, buffersize, data_ptr);
+    //printf("read_numba_oneapi_mem_buffer_from_device mem: %p offset: %ld, buffersize: %ld, data_ptr: %p\n", mem, offset, buffersize, data_ptr);
     // Not using any events for the time being. Eventually we want to figure
     // out the event dependencies using parfor analysis.
     err = clEnqueueReadBuffer(queue, mem, blocking?CL_TRUE:CL_FALSE,
@@ -1111,7 +1111,7 @@ int set_args_and_enqueue_numba_oneapi_kernel_auto_blocking (env_t env_t_ptr,
 
     assert(num_dims > 0 && num_dims < 4);
     for (i = 0; i < num_dims; ++i) {
-        global_work_size[i] = dim_stops[i] - dim_starts[i];
+        global_work_size[i] = dim_stops[i] - dim_starts[i] + 1;
     }
 
     err = set_args_and_enqueue_numba_oneapi_kernel(env_t_ptr,
@@ -1122,7 +1122,6 @@ int set_args_and_enqueue_numba_oneapi_kernel_auto_blocking (env_t env_t_ptr,
                                                    NULL,
                                                    global_work_size,
                                                    NULL);
-                                                   //local_work_size);
     free(global_work_size);
 //    free(local_work_size);
     return err;
