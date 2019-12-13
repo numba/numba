@@ -57,12 +57,6 @@ class TestNumThreads(TestCase):
         self.assertEqual(set_get_n(2), 2)
         self.assertEqual(set_get_n(max_threads), max_threads)
 
-        with self.assertRaises(ValueError):
-            set_get_n(0)
-
-        with self.assertRaises(ValueError):
-            set_get_n(max_threads + 1)
-
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def test_set_num_threads_basic_guvectorize(self):
@@ -103,12 +97,6 @@ class TestNumThreads(TestCase):
         x[0] = max_threads
         set_get_n(x)
         np.testing.assert_equal(x, max_threads)
-
-        with self.assertRaises(ValueError):
-            set_get_n(np.array([0]))
-
-        with self.assertRaises(ValueError):
-            set_get_n(np.array([max_threads + 1]))
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
