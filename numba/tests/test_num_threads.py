@@ -340,54 +340,91 @@ class TestNumThreads(TestCase):
         N = config.NUMBA_NUM_THREADS + 1
         M = 4*config.NUMBA_NUM_THREADS + 1
 
-        def get_impl(flag):
+        def get_impl(child_type, test_type):
 
-            if flag == True:
-                dec = njit(parallel=True)
-            elif flag == False:
-                dec = njit(parallel=False)
-            else:
-                def dec(x): return x
+            if child_type == 'parallel':
+                child_dec = njit(parallel=True)
+            elif child_type == 'njit':
+                child_dec = njit(parallel=False)
+            elif child_type == 'none':
+                def child_dec(x): return x
 
-            @dec
+            @child_dec
             def child(buf, fid):
                 M, N = buf.shape
                 set_num_threads(fid)  # set threads in child function
                 for i in prange(N):
                     buf[fid, i] = get_num_threads()
 
-            @dec
-            def test_func(nthreads):
-                buf = np.zeros((M, N))
-                set_num_threads(nthreads)
-                for i in prange(M):
-                    local_mask = 1 + i % mask
-                    # when the threads exit the child functions they should have
-                    # a TLS slot value of the local mask as it was set in
-                    # child
-                    if local_mask < config.NUMBA_NUM_THREADS:
-                        child(buf, local_mask)
-                        assert get_num_threads() == local_mask
-                return buf
+
+            if test_type in ['parallel', 'njit', 'none']:
+                if test_type == 'parallel':
+                    test_dec = njit(parallel=True)
+                elif test_type == 'njit':
+                    test_dec = njit(parallel=False)
+                elif test_type == 'none':
+                    def test_dec(x): return x
+
+                @test_dec
+                def test_func(nthreads):
+                    buf = np.zeros((M, N))
+                    set_num_threads(nthreads)
+                    for i in prange(M):
+                        local_mask = 1 + i % mask
+                        # when the threads exit the child functions they should have
+                        # a TLS slot value of the local mask as it was set in
+                        # child
+                        if local_mask < config.NUMBA_NUM_THREADS:
+                            child(buf, local_mask)
+                            assert get_num_threads() == local_mask
+                    return buf
+            else:
+                if test_type == 'guvectorize':
+                    test_dec = guvectorize(['int64[:,:], int64[:]'],
+                                           '(n, m), (k)', nopython=True,
+                                           target='parallel')
+                elif test_type == 'guvectorize-obj':
+                    test_dec = guvectorize(['int64[:,:], int64[:]'],
+                                           '(n, m), (k)', forceobj=True)
+
+                def test_func(nthreads):
+                    @test_dec
+                    def _test_func(buf, local_mask):
+                        set_num_threads(nthreads)
+                        # when the threads exit the child functions they should have
+                        # a TLS slot value of the local mask as it was set in
+                        # child
+                        if local_mask[0] < config.NUMBA_NUM_THREADS:
+                            child(buf, local_mask[0])
+                            assert get_num_threads() == local_mask[0]
+
+                    buf = np.zeros((M, N), dtype=np.int64)
+                    local_mask = (1 + np.arange(M) % mask).reshape((M, 1))
+                    _test_func(buf, local_mask)
+                    return buf
+
             return test_func
 
         mask = config.NUMBA_NUM_THREADS - 1
-        set_num_threads(mask)
-        pf_arr = get_impl(True)(mask)
-        set_num_threads(mask)
-        nj_arr = get_impl(False)(mask)
-        set_num_threads(mask)
-        py_arr = get_impl(None)(mask)
 
-        np.testing.assert_equal(pf_arr, py_arr)
-        np.testing.assert_equal(nj_arr, py_arr)
+        res_arrays = {}
+        for test_type in ['parallel', 'njit', 'none', 'guvectorize', 'guvectorize-obj']:
+            for child_type in ['parallel', 'njit', 'none']:
+                if child_type == 'none' and test_type != 'none':
+                    continue
+                set_num_threads(mask)
+                res_arrays[test_type, child_type] = get_impl(child_type, test_type)(mask)
+
+        py_arr = res_arrays['none', 'none']
+        for arr in res_arrays.values():
+            np.testing.assert_equal(arr, py_arr)
 
         # check the maths reconciles
         math_arr = np.zeros((M, N))
         for i in range(1, config.NUMBA_NUM_THREADS):  # there's branches on modulo mask but only NUMBA_NUM_THREADS funcs
             math_arr[i, :] = i
 
-        np.testing.assert_equal(math_arr, pf_arr)
+        np.testing.assert_equal(math_arr, py_arr)
 
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
