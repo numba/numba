@@ -468,9 +468,9 @@ def _convert_python_list_to_numba_typed_list(
             # list element, since that would require keeping
             # of which unboxings have been successful.
             native = c.unbox(typ.dtype, itemobj)
-            #with c.builder.if_then(native.is_error, likely=False):
-            #    c.builder.store(cgutils.true_bit, errorptr)
-            #    loop.do_break()
+            with c.builder.if_then(native.is_error, likely=False):
+                c.builder.store(cgutils.true_bit, error_handler.errorptr)
+                loop.do_break()
 
             dm_item = context.data_model_manager[itemty]
 
