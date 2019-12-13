@@ -159,7 +159,7 @@ of are supported:
     except:
         ...
 
-* matching against exactly the *Exception* class:
+* using exactly the ``Exception`` class in the ``except`` clause:
 
   .. code-block:: python
 
@@ -167,6 +167,15 @@ of are supported:
       ...
     except Exception:
       ...
+
+  This will match any exception that is a subclass of ``Exception`` as
+  expected. Currently, instances of ``Exception`` and it's subclasses are the
+  only kind of exception that can be raised in compiled code.
+
+.. warning:: Numba currently masks signals like ``KeyboardInterrupt`` and
+  ``SystemExit``. These signaling exceptions are ignored during the execution of
+  Numba compiled code. The Python interpreter will handle them as soon as
+  the control is returned to it.
 
 Currently, exception objects are not materialized inside compiled functions.
 As a result, it is not possible to store an exception object into a user
