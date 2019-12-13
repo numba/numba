@@ -826,10 +826,13 @@ class TestListInferred(TestCase):
         self.assertEqual(0, got[0])
 
 
-class TestListBuiltinConstructors(TestCase):
+class TestDisableReflectedListBase(MemoryLeakMixin, TestCase):
 
     def _njit_both(self, func):
         return (njit(func, disable_reflected_list=p) for p in (True, False))
+
+
+class TestListBuiltinConstructors(TestDisableReflectedListBase):
 
     def test_simple_refine_list_builtin(self):
         def foo():
@@ -959,7 +962,7 @@ class TestListBuiltinConstructors(TestCase):
         )
 
 
-class TestConversionListToImmutableTypedList(TestCase):
+class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
 
     def test_simple_conversion(self):
         @njit(disable_reflected_list=True)
