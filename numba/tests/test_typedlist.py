@@ -1032,35 +1032,6 @@ class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
         )
 
 
-class TestSorted(TestDisableReflectedListBase):
-
-    def test_sorted(self):
-        def foo():
-            return sorted((3, 2, 1))
-        foo_true, foo_false = self._njit_both(foo)
-        foo_true_received, foo_false_received = foo_true(), foo_false()
-        foo_true_expected, foo_false_expected = List(), [1, 2, 3]
-        for i in (1, 2, 3):
-            foo_true_expected.append(i)
-        self.assertEqual(foo_true_expected, foo_true_received)
-        self.assertEqual(foo_false_expected, foo_false_received)
-        self.assertEqual(List, type(foo_true_received))
-        self.assertEqual(list, type(foo_false_received))
-
-    def test_sorted_reverse(self):
-        def foo():
-            return sorted((1, 2, 3), reverse=True)
-        foo_true, foo_false = self._njit_both(foo)
-        foo_true_received, foo_false_received = foo_true(), foo_false()
-        foo_true_expected, foo_false_expected = List(), [3, 2, 1]
-        for i in (3, 2, 1):
-            foo_true_expected.append(i)
-        self.assertEqual(foo_true_expected, foo_true_received)
-        self.assertEqual(foo_false_expected, foo_false_received)
-        self.assertEqual(List, type(foo_true_received))
-        self.assertEqual(list, type(foo_false_received))
-
-
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     @skip_py2
