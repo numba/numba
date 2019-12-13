@@ -1977,9 +1977,9 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             cur_arg += 1
             builder.store(builder.load(kernel_arg), dst)
 
-            cgutils.printf(builder, "dst0 = ")
-            cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
-            cgutils.printf(builder, "\n")
+            #cgutils.printf(builder, "dst0 = ")
+            #cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
+            #cgutils.printf(builder, "\n")
 
             # Handle parent
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
@@ -1991,9 +1991,9 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             cur_arg += 1
             builder.store(builder.load(kernel_arg), dst)
 
-            cgutils.printf(builder, "dst1 = ")
-            cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
-            cgutils.printf(builder, "\n")
+            #cgutils.printf(builder, "dst1 = ")
+            #cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
+            #cgutils.printf(builder, "\n")
 
             # Handle array size
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
@@ -2015,6 +2015,9 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
             cur_arg += 1
             builder.store(builder.load(kernel_arg), dst)
+
+            total_size = cgutils.alloca_once(builder, intp_t,  size=context.get_constant(types.uintp, 1), name="total_size" + str(cur_arg))
+            builder.store(builder.mul(builder.load(array_size_member), builder.load(item_size_member)), total_size)
             # Handle data
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
             data_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 4)])
@@ -2023,7 +2026,8 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             # env, buffer_size, buffer_ptr
             builder.call(
                 create_oneapi_rw_mem_buffer, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
-                                              builder.load(array_size_member),
+                                              builder.load(total_size),
+                                              #builder.load(array_size_member),
                                               buffer_ptr])
 
             if index < num_inputs:
@@ -2032,10 +2036,11 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
                                                  builder.load(buffer_ptr),
                                                  context.get_constant(types.uintp, 1),
                                                  context.get_constant(types.uintp, 0),
-                                                 builder.load(array_size_member),
-                                                 builder.bitcast(data_member, void_ptr_t)])
+                                                 builder.load(total_size),
+                                                 #builder.load(array_size_member),
+                                                 builder.bitcast(builder.load(data_member), void_ptr_t)])
             else:
-                read_bufs_after_enqueue.append((buffer_ptr, array_size_member, data_member))
+                read_bufs_after_enqueue.append((buffer_ptr, total_size, data_member))
 
             builder.call(create_oneapi_kernel_arg_from_buffer, [buffer_ptr, kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
@@ -2131,12 +2136,12 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
 
     for read_buf in read_bufs_after_enqueue:
         buffer_ptr, array_size_member, data_member = read_buf
-        #print("read_buf:", buffer_ptr, "array_size_member:", array_size_member, "data_member:", data_member)
+        print("read_buf:", buffer_ptr, "array_size_member:", array_size_member, "data_member:", data_member)
         builder.call(
             read_mem_buffer_from_device, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
                                           builder.load(buffer_ptr),
                                           context.get_constant(types.uintp, 1),
                                           context.get_constant(types.uintp, 0),
                                           builder.load(array_size_member),
-                                          builder.bitcast(data_member, void_ptr_t)])
+                                          builder.bitcast(builder.load(data_member), void_ptr_t)])
 
