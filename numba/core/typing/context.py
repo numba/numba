@@ -173,6 +173,9 @@ class BaseContext(object):
                 param = param or hasattr(tpl, 'generic')
                 defns.extend(getattr(tpl, 'cases', []))
 
+        elif isinstance(func, types.FunctionType):
+            defns.append(func)
+
         else:
             msg = "No type info available for {func!r} as a callable."
             desc.append(msg.format(func=func))

@@ -537,7 +537,7 @@ class BaseContext(object):
         assert sig is not None
         sig = sig.as_function()
         if isinstance(fn, (types.Function, types.BoundFunction,
-                           types.Dispatcher)):
+                           types.Dispatcher, types.FunctionType)):
             key = fn.get_impl_key(sig)
             overloads = self._defns[key]
         else:

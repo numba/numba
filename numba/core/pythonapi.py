@@ -532,6 +532,11 @@ class PythonAPI(object):
         else:
             raise OverflowError("integer too big (%d bits)" % (bits))
 
+    def long_from_voidptr(self, ival):
+        fnty = Type.function(self.pyobj, [self.voidptr])
+        fn = self._get_function(fnty, name="PyLong_FromVoidPtr")
+        return self.builder.call(fn, [ival])
+
     def _get_number_operator(self, name):
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_%s" % name)

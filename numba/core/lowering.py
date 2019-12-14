@@ -770,6 +770,9 @@ class Lower(BaseLower):
         elif isinstance(fnty, types.RecursiveCall):
             res = self._lower_call_RecursiveCall(fnty, expr, signature)
 
+        elif isinstance(fnty, types.FunctionType):
+            res = self._lower_call_FunctionType(fnty, expr, signature)
+
         else:
             res = self._lower_call_normal(fnty, expr, signature)
 
@@ -929,6 +932,23 @@ class Lower(BaseLower):
             res = self.context.call_unresolved(
                 self.builder, mangled_name, signature, argvals,
             )
+        return res
+
+    def _lower_call_FunctionType(self, fnty, expr, signature):
+        print(f'_lower_call_FunctionType({fnty}, {expr}, {signature})')
+        argvals = self.fold_call_args(
+            fnty, signature, expr.args, expr.vararg, expr.kws,
+        )
+        print(f'argvals={argvals}')
+        print(self.getvar(expr.func.name))
+        pointer = self.loadvar(expr.func.name)
+        print(f'pointer={pointer}')
+        cgutils.printf(self.builder, "LOWER CALL pointer=%p\n", pointer)
+        p = self.builder.load(pointer)
+        cgutils.printf(self.builder, "LOWER CALL p=%p\n", p)
+        res = self.context.call_function_pointer(
+            self.builder, p, argvals, fnty.cconv,
+        )
         return res
 
     def _lower_call_normal(self, fnty, expr, signature):
