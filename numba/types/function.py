@@ -20,7 +20,7 @@ class FunctionType(Type):
         return self.name
 
     def cast_python_value(self, value):
-        raise NotImplementedError(f'cast_python_value({value})')
+        raise NotImplementedError('cast_python_value({value})'.format_map(locals()))
 
     def get_call_type(self, context, args, kws):
         from numba import typing
@@ -30,9 +30,9 @@ class FunctionType(Type):
     def get_call_signatures(self):
         # see explain_function_type in numba/typing/context.py
         # will be used when FunctionType is derived from Callable
-        print(f'get_call_signatures()')
+        print('get_call_signatures()')
         #return (), False   
-        raise NotImplementedError(f'get_call_signature()')
+        raise NotImplementedError('get_call_signature()')
 
     def signature(self):
         from numba import typing

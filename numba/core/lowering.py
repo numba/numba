@@ -935,14 +935,14 @@ class Lower(BaseLower):
         return res
 
     def _lower_call_FunctionType(self, fnty, expr, signature):
-        print(f'_lower_call_FunctionType({fnty}, {expr}, {signature})')
+        print('_lower_call_FunctionType({}, {}, {})'.format(fnty, expr, signature))
         argvals = self.fold_call_args(
             fnty, signature, expr.args, expr.vararg, expr.kws,
         )
-        print(f'argvals={argvals}')
+        print('argvals={}'.format(argvals))
         print(self.getvar(expr.func.name))
         pointer = self.loadvar(expr.func.name)
-        print(f'pointer={pointer}')
+        print('pointer={}'.format(pointer))
         cgutils.printf(self.builder, "LOWER CALL pointer=%p\n", pointer)
         p = self.builder.load(pointer)
         cgutils.printf(self.builder, "LOWER CALL p=%p\n", p)

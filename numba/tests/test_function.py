@@ -6,9 +6,9 @@ def dump(foo):
     foo_type = function.fromobject(foo)
     foo_sig = foo_type.signature()
     foo.compile(foo_sig)
-    print(f'{" LLVM IR OF "+foo.__name__+" ":*^70}')
+    print('{" LLVM IR OF "+foo.__name__+" ":*^70}')
     print(foo.inspect_llvm(foo_sig.args))
-    print(f'{"":*^70}')
+    print('{"":*^70}')
 
 class TestFuncionType(TestCase):
 
@@ -71,7 +71,7 @@ class TestFuncionType(TestCase):
         r = bar()
         dump(bar)
         print('bar RETURNS', r, hex(r))
-        print(f'CORRECT wrapper address={a._wrapper_address} {hex(a._wrapper_address)}')
+        print('CORRECT wrapper address={} {}'.format(a._wrapper_address, hex(a._wrapper_address)))
         return
         self.assertEqual(foo(a), bar())
         self.assertEqual(foo(a), foo(a))

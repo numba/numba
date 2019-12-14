@@ -18,52 +18,15 @@ from numba import cgutils
 from llvmlite import ir
 from numba.dispatcher import Dispatcher
 from numba.typing import signature
-
-
-class FunctionType(nbtypes.Type):
-    """
-    Represents a first-class function type.
-    """
-    mutable = True
-    cconv = None
-
-    def __init__(self, rtype, atypes):
-        self.rtype = rtype
-        self.atypes = tuple(atypes)
-        name = 'FT'+mangle(self)
-        super(FunctionType, self).__init__(name)
-
-    @property
-    def key(self):
-        return self.name
-
-    def cast_python_value(self, value):
-        raise NotImplementedError(f'cast_python_value({value})')
-
-    def get_call_type(self, context, args, kws):
-        # TODO: match self.atypes with args
-        return signature(self.rtype, *self.atypes)
-        
-    def get_call_signatures(self):
-        # see explain_function_type in numba/typing/context.py
-        # will be used when FunctionType is derived from Callable
-        print(f'get_call_signatures()')
-        #return (), False   
-        raise NotImplementedError(f'get_call_signature()')
-
-    def signature(self):
-        return signature(self.rtype, *self.atypes)
-
-# A hacky alternative to insert `from numba.function import
-# FunctionType` to numba/types/__init__.py
-# TODO: update numba/types/__init__.py
-nbtypes.FunctionType = FunctionType
+from numba.types import FunctionType
 
 #
 # Python objects that can be types as FunctionType are
 #  - plain Python functions
 #  - numba Dispatcher instances that wrap plain Python functions
 #  - numba CFunc instances
+#
+# Disabled the first ones as it interfers with existing numba tests
 #
 #@typeof_impl.register(types.FunctionType)
 def typeof_function(val, c):
@@ -85,7 +48,7 @@ class FunctionModel(models.PrimitiveModel):
     """Functions data model holds a pointer to a function address.
     """
     def __init__(self, dmm, fe_type):
-        print(f'FunctionModel({fe_type})')
+        print('FunctionModel({fe_type})'.format_map(locals()))
         be_type = lower_nbtype(fe_type).as_pointer()
         super(FunctionModel, self).__init__(dmm, fe_type, be_type)
 
@@ -106,7 +69,7 @@ def lower_constant_function_type(context, builder, typ, pyval):
 
     Return llvm ir object.
     """
-    print(f'LOWER_constant_function_type({context}, {builder}, {type}, {pyval})')
+    print('LOWER_constant_function_type({context}, {builder}, {typ}, {pyval})'.format_map(locals()))
     
     if isinstance(pyval, CFunc):
         addr = addr_cfunc_cache.get(pyval)
@@ -114,7 +77,7 @@ def lower_constant_function_type(context, builder, typ, pyval):
             addr = pyval._wrapper_address
             cfunc_addr_cache[pyval] = addr
             addr_cfunc_cache[addr] = pyval
-        print(f'addr={addr} {hex(addr)}')
+        print('addr={} {}'.format(addr, hex(addr)))
         #cgutils.printf(builder, "Entering LOWER CONST\n")
         fnty = lower_nbtype(typ)
         fptr = cgutils.alloca_once(builder, fnty, name="fptr_const@%s" % (addr))
@@ -143,7 +106,7 @@ def unbox_function_type(typ, obj, c):
 
     Return llvm ir object wrapped to NativeValue.
     """
-    print(f'UNBOX_function_type({typ}, {obj})')
+    print('UNBOX_function_type({typ}, {obj})'.format_map(locals()))
     cgutils.printf(c.builder, "Entering UNBOX\n")
     fnty = lower_nbtype(typ)
     # Assume obj is pointer to CFunc object
@@ -164,7 +127,7 @@ def box_function_type(typ, val, c):
 
     Return llvm ir object representing a Python object.
     """
-    print(f'BOX_function_type({typ}, {val}, {type(val)})')
+    print('BOX_function_type({}, {}, {})'.format(typ, val, type(val)))
     fnty = lower_nbtype(typ)
     cgutils.printf(c.builder, "Entering BOX\n")
     cgutils.printf(c.builder, "val=%p\n", val)
