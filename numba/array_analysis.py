@@ -1293,7 +1293,10 @@ class ArrayAnalysis(object):
         if isinstance(lhs_rel, int):
             # If the index and the array size are known then the real index
             # can be calculated at compile time.
-            if isinstance(dsize_rel, int):
+            if lhs_rel == 0:
+                # Special-case 0 as nothing needing to be done.
+                known = True
+            elif isinstance(dsize_rel, int):
                 known = True
                 # Calculate the real index.
                 wil = wrap_index_literal(lhs_rel, dsize_rel)
@@ -1409,6 +1412,9 @@ class ArrayAnalysis(object):
         rhs, rhs_typ, rhs_rel, replacement_slice, need_replacement, rhs_known = self.update_replacement_slice(
               rhs, rhs_typ, rhs_rel, dsize_rel, replacement_slice, 1,
               need_replacement, loc, scope, stmts, equiv_set, size_typ, dsize)
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("lhs_known:", lhs_known)
+            print("rhs_known:", rhs_known)
 
         # If neither of the parts of the slice were negative constants
         # then we don't need to do slice replacement in the IR.
@@ -1457,19 +1463,19 @@ class ArrayAnalysis(object):
         sig = self.context.resolve_function_type(fnty, (orig_slice_typ, size_typ,), {})
         self._define(equiv_set, wrap_var, fnty, wrap_def)
 
-        def gen_wrap_if_not_known(val, val_typ):
-            if not lhs_known:
+        def gen_wrap_if_not_known(val, val_typ, known):
+            if not known:
                 var = ir.Var(scope, mk_unique_var("var"), loc)
                 var_typ = types.intp
-                value1 = ir.Expr.call(wrap_var, [lhs, dsize], {}, loc)
-                self._define(equiv_set, var, var_typ, value1)
-                self.calltypes[value1] = sig
-                return (var, var_typ)
+                new_value = ir.Expr.call(wrap_var, [val, dsize], {}, loc)
+                self._define(equiv_set, var, var_typ, new_value)
+                self.calltypes[new_value] = sig
+                return (var, var_typ, new_value)
             else:
-                return (val, val_typ)
+                return (val, val_typ, None)
 
-        var1, var1_typ = gen_wrap_if_not_known(lhs, lhs_typ)
-        var2, var2_typ = gen_wrap_if_not_known(rhs, rhs_typ)
+        var1, var1_typ, value1 = gen_wrap_if_not_known(lhs, lhs_typ, lhs_known)
+        var2, var2_typ, value2 = gen_wrap_if_not_known(rhs, rhs_typ, rhs_known)
 
         post_wrap_size_var = ir.Var(scope, mk_unique_var("post_wrap_slice_size"), loc)
         post_wrap_size_val = ir.Expr.binop(operator.sub, var2, var1, loc=loc)
@@ -1478,8 +1484,10 @@ class ArrayAnalysis(object):
 
         stmts.append(ir.Assign(value=size_val, target=size_var, loc=loc))
         stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
-        stmts.append(ir.Assign(value=value1, target=var1, loc=loc))
-        stmts.append(ir.Assign(value=value2, target=var2, loc=loc))
+        if value1 is not None:
+            stmts.append(ir.Assign(value=value1, target=var1, loc=loc))
+        if value2 is not None:
+            stmts.append(ir.Assign(value=value2, target=var2, loc=loc))
         stmts.append(ir.Assign(value=post_wrap_size_val, target=post_wrap_size_var, loc=loc))
 
         # rel_map keeps a map of relative sizes that we have seen so
