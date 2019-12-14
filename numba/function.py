@@ -65,11 +65,11 @@ nbtypes.FunctionType = FunctionType
 #  - numba Dispatcher instances that wrap plain Python functions
 #  - numba CFunc instances
 #
-@typeof_impl.register(types.FunctionType)
+#@typeof_impl.register(types.FunctionType)
 def typeof_function(val, c):
     return fromobject(val)
 
-@typeof_impl.register(Dispatcher)
+#@typeof_impl.register(Dispatcher)
 def typeof_Dispatcher(val, c):
     return fromobject(val.py_func)
 

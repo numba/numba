@@ -50,6 +50,8 @@ from numba.core.withcontexts import objmode_context as objmode
 
 # Enable bytes/unicode array support
 import numba.cpython.charseq
+import numba.function
+
 
 # Keep this for backward compatibility.
 test = runtests.main
