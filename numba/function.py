@@ -96,7 +96,7 @@ def lower_constant_function_type(context, builder, typ, pyval):
 
     # TODO: Dispatcher
     
-    raise NotImplementedError(f'lower_constant_CFunc({context}, {builder}, {typ}, {pyval})')
+    raise NotImplementedError('lower_constant_CFunc({}, {}, {}, {})'.format(context, builder, typ, pyval))
 
 
 @unbox(FunctionType)
