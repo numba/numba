@@ -1019,7 +1019,9 @@ class ArrayAnalysis(object):
             for inst in block.body:
                 redefined = set()
                 if isinstance(inst, ir.StaticSetItem):
+                    orig_calltype = self.calltypes[inst]
                     inst = ir.SetItem(inst.target, inst.index_var, inst.value, inst.loc)
+                    self.calltypes[inst] = orig_calltype
                 pre, post = self._analyze_inst(label, scope, equiv_set, inst, redefined)
                 # Remove anything multiply defined in this block from every block equivs.
                 self.remove_redefineds(redefined)
