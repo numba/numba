@@ -94,6 +94,8 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
                 debugging. You can also set the NUMBA_BOUNDSCHECK environment
                 variable to 0 or 1 to globally override this flag.
 
+            firstclass: bool
+                Set to True to enable first-class function support.
     Returns
     --------
     A callable usable as a compiled function.  Actual compiling will be
@@ -145,6 +147,10 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
 
     options['boundscheck'] = boundscheck
+
+    if options.pop('firstclass', False):
+        # First-class function must have cfunc wrapper enabled
+        options['no_cfunc_wrapper'] = False
 
     # Handle signature
     if signature_or_function is None:

@@ -19,6 +19,9 @@ class _CFuncCompiler(_FunctionCompiler):
 
     def _customize_flags(self, flags):
         flags.set('no_cpython_wrapper', True)
+        # TODO: enable cfunc wrapper generation from first-class
+        # function support:
+        flags.set('no_cfunc_wrapper', True)
         # Disable compilation of the IR module, because we first want to
         # add the cfunc wrapper.
         flags.set('no_compile', True)
@@ -82,6 +85,9 @@ class CFunc(object):
         cres = self._compiler.compile(sig.args, sig.return_type)
         assert not cres.objectmode  # disabled by compiler above
         fndesc = cres.fndesc
+
+        # TODO: eliminate C wrapper compilation because first-class
+        # function support aleady implements it.
 
         # Compile C wrapper
         # Note we reuse the same library to allow inlining the Numba
@@ -176,3 +182,6 @@ class CFunc(object):
 
     def __repr__(self):
         return "<Numba C callback %r>" % (self.__qualname__,)
+
+    def __call__(self, *args, **kwargs):
+        return self._pyfunc(*args, **kwargs)

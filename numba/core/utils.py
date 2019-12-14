@@ -1,6 +1,7 @@
 import atexit
 import builtins
 import functools
+import inspect
 import os
 import operator
 import threading
@@ -449,3 +450,17 @@ def chain_exception(new_exc, old_exc):
     if DEVELOPER_MODE:
         new_exc.__cause__ = old_exc
     return new_exc
+
+
+def get_nargs_range(pyfunc):
+    """Return the minimal and maximal number of Python function
+    positional arguments.
+    """
+    sig = pysignature(pyfunc)
+    min_nargs = 0
+    max_nargs = 0
+    for p in sig.parameters.values():
+        max_nargs += 1
+        if p.default == inspect._empty:
+            min_nargs += 1
+    return min_nargs, max_nargs

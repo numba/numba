@@ -10,7 +10,7 @@ from .iterators import *
 from .misc import *
 from .npytypes import *
 from .scalars import *
-
+from .function import *
 
 # Short names
 

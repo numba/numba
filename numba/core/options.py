@@ -62,6 +62,11 @@ class TargetOptions(object):
         if kws.pop('no_cpython_wrapper', False):
             flags.set('no_cpython_wrapper')
 
+        if kws.pop('no_cfunc_wrapper', True):
+            flags.set('no_cfunc_wrapper')
+        else:
+            flags.set('no_cfunc_wrapper', False)
+
         if 'parallel' in kws:
             flags.set('auto_parallel', kws.pop('parallel'))
 

@@ -51,6 +51,7 @@ class Flags(utils.ConfigOptions):
         'boundscheck': False,
         'forceinline': False,
         'no_cpython_wrapper': False,
+        'no_cfunc_wrapper': True,
         # Enable automatic parallel optimization, can be fine-tuned by taking
         # a dictionary of sub-options instead of a boolean, see parfor.py for
         # detail.

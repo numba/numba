@@ -129,6 +129,16 @@ class Signature(object):
         sig = signature(self.return_type, *((self.recvr,) + self.args))
         return sig
 
+    def as_type(self):
+        """
+        Convert this signature to a first-class function type.
+        """
+        return types.FunctionType.fromobject(self)
+
+    def __unliteral__(self):
+        return signature(types.unliteral(self.return_type),
+                         *map(types.unliteral, self.args))
+
 
 def make_concrete_template(name, key, signatures):
     baseclasses = (ConcreteTemplate,)

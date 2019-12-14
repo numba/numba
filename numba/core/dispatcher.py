@@ -99,7 +99,6 @@ class _FunctionCompiler(object):
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
         flags = self._customize_flags(flags)
-
         impl = self._get_implementation(args, {})
         cres = compiler.compile_extra(self.targetdescr.typing_context,
                                       self.targetdescr.target_context,
@@ -761,6 +760,95 @@ class Dispatcher(_DispatcherBase):
         self._memo[u] = self
         self._recent.append(self)
 
+    def matches(self, other):
+        """Check if the set of self specializations can be a subset of the set
+        of other's specializations. If other does not have a certain
+        self's specialization, then the compilation of other will be
+        triggered.
+        """
+        if not isinstance(other, type(self)):
+            # TODO: other is CFunc instance
+            return False
+        for atypes in self.overloads:
+            if atypes in other.overloads:
+                continue
+            try:
+                other.compile(atypes)
+            except:
+                # TODO: don't ignore compilation failures when config.DEBUG is True
+                return False
+        return True
+
+    def ___compile_for_args(self, *args, **kws):
+        #print(f'{type(self).__name__}[{self.py_func.__name__}]._compile_for_args({args})')
+
+        # compile Dispatcher arguments
+        # for existing compilation results.
+        for atypes in self.overloads:
+            matching_args_count = 0
+            for atype, arg in zip(atypes, args):
+                a = self.typeof_pyval(arg)
+                if (isinstance(atype, types.FunctionType)
+                    and isinstance(arg, Dispatcher)):
+                    break
+                    mn, mx = utils.get_nargs_range(arg.py_func)
+                    if atype.ftype.atypes in arg.overloads:
+                        matching_args_count += 1
+                    elif mn <= atype.nargs <= mx:
+                        try:
+                            arg.compile(atype.ftype.atypes)
+                            matching_args_count += 1
+                        except:
+                            # TODO: don't ignore compilation failures when config.DEBUG is True
+                            break
+                    else:
+                        break
+                elif isinstance(atype, types.Dispatcher):
+                    """
+# Example:
+@njit
+def a(x):
+    return x+1
+@njit
+def b(x):
+    return b+2
+@njit
+def foo(f, x):
+    return f(x)
+
+foo(a, 0) -> 1 # triggers `a.compile((int64,))` and
+               # `foo.compile((int64(int64), int64))`
+
+foo(b, 0) -> 2 # triggers `b.compile((int64,))`, notice that `foo`
+               # will not be compiled because `b` is a first-class
+               # function that realizations match with `a`
+               # realizations
+
+foo(a, 1) -> 2 # no compilations are triggered
+foo(b, 1) -> 3 # no compilations are triggered
+                    """
+                    if atype.dispatcher.matches(arg):
+                        matching_args_count += 1
+                    else:
+                        break
+                else:
+                    # TODO: use penalties to find better matches
+                    if isinstance(arg, float) and isinstance(atype, types.Float):
+                        matching_args_count += 1
+                    elif isinstance(arg, int) and isinstance(atype, types.Integer):
+                        # TODO: check arg fits into atype range
+                        matching_args_count += 1
+                    else:
+                        if 0 and isinstance(atype, types.DispatcherFunctionType) and isinstance(arg, Dispatcher) and atype.dispatcher.matches(arg):
+                            matching_args_count += 1
+                        else:
+                            print(f'NOT IMPL: {atype=}, {arg=}')
+            if matching_args_count == len(args):
+                return self.overloads[atypes].entry_point
+            else:
+                print(f'No match: {atypes=}, {args=}')
+        return super(Dispatcher, self)._compile_for_args(*args, **kws)
+
     @global_compiler_lock
     def compile(self, sig):
         if not self._can_compile:
@@ -790,9 +878,29 @@ class Dispatcher(_DispatcherBase):
                 def folded(args, kws):
                     return self._compiler.fold_argument_types(args, kws)[1]
                 raise e.bind_fold_arguments(folded)
+
+            if 0:
+                print('='*20, f'{type(self).__name__}[{self.py_func.__name__}].compile({sig})', '='*20)
+                print(cres.library.get_llvm_str())
+                print('='*100)
+
             self.add_overload(cres)
             self._cache.save_overload(sig, cres)
+
             return cres.entry_point
+
+    def get_compile_result(self, sig):
+        """Compile (if needed) and return the compilation result with the
+        given signature.
+        """
+        args, return_type = sigutils.normalize_signature(sig)
+        atypes = tuple(args)
+        if atypes not in self.overloads:
+            try:
+                self.compile(atypes)
+            except Exception as msg:
+                return
+        return self.overloads[atypes]
 
     def recompile(self):
         """

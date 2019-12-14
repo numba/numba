@@ -279,6 +279,13 @@ class BaseLower(object):
                                             self.env, self.call_helper,
                                             release_gil=release_gil)
 
+    def create_cfunc_wrapper(self):
+        """
+        Create C wrapper around this function.
+        """
+        self.context.create_cfunc_wrapper(self.library, self.fndesc,
+                                          self.env, self.call_helper)
+
     def setup_function(self, fndesc):
         # Setup function
         self.function = self.context.declare_function(self.module, fndesc)
@@ -765,6 +772,9 @@ class Lower(BaseLower):
         elif isinstance(fnty, types.RecursiveCall):
             res = self._lower_call_RecursiveCall(fnty, expr, signature)
 
+        elif isinstance(fnty, types.FunctionType):
+            res = self._lower_call_FunctionType(fnty, expr, signature)
+
         else:
             res = self._lower_call_normal(fnty, expr, signature)
 
@@ -925,6 +935,28 @@ class Lower(BaseLower):
                 self.builder, mangled_name, signature, argvals,
             )
         return res
+
+    def _lower_call_FunctionType(self, fnty, expr, signature):
+        self.debug_print("# calling first-class function type")
+        sig = types.unliteral(signature)
+        ftype = fnty.get_ftype(sig)
+        argvals = self.fold_call_args(
+            fnty, sig, expr.args, expr.vararg, expr.kws,
+        )
+        func_ptr = self.__get_function_pointer(ftype, expr.func.name)
+        res = self.builder.call(func_ptr, argvals, cconv=fnty.cconv)
+        return res
+
+    def __get_function_pointer(self, ftype, fname):
+        llty = self.context.get_value_type(ftype)
+        fstruct = self.loadvar(fname)
+        addr = self.builder.extract_value(fstruct, 0,
+                                          name='addr_of_%s' % (fname))
+        # TODO: catch calling addr == -1 and raise an exception
+        fptr = cgutils.alloca_once(self.builder, llty,
+                                   name="fptr_of_%s" % (fname))
+        self.builder.store(self.builder.bitcast(addr, llty), fptr)
+        return self.builder.load(fptr)
 
     def _lower_call_normal(self, fnty, expr, signature):
         # Normal function resolution

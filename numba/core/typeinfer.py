@@ -1405,6 +1405,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         """
         Resolve a call to a given function type.  A signature is returned.
         """
+        if isinstance(fnty, types.FunctionType):
+            return fnty.get_call_type(self, pos_args, kw_args)
         if isinstance(fnty, types.RecursiveCall) and not self._skip_recursion:
             # Recursive call
             disp = fnty.dispatcher_type.dispatcher
