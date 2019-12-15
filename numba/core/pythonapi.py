@@ -467,6 +467,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyLong_AsLongLong")
         return self.builder.call(fn, [numobj])
 
+    def long_as_long(self, numobj):
+        fnty = Type.function(self.ulonglong, [self.pyobj])
+        fn = self._get_function(fnty, name="PyLong_AsLong")
+        return self.builder.call(fn, [numobj])
+
     def long_as_voidptr(self, numobj):
         """
         Convert the given Python integer to a void*.  This is recommended
