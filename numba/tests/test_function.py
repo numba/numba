@@ -42,22 +42,17 @@ class TestFuncionType(TestCase):
     def test_cfunc_in_out(self):
         """njitted function returns Python functions
         """
-        def a(i: int) -> int:
+
+        @cfunc('int64(int64)')
+        def a(i):
             return i + 1
 
-        def b(i: int) -> int:
+        @cfunc('int64(int64)')
+        def b(i):
             return i + 2
 
-        a_type = function.fromobject(a)
-        a_sig = a_type.signature()
-        a = cfunc(a_sig)(a)
-
-        b_type = function.fromobject(b)
-        b_sig = b_type.signature()
-        b = cfunc(b_sig)(b)
-
         @njit
-        def foo(f: a_sig):
+        def foo(f):
             f(123)
             return f
 
@@ -72,31 +67,23 @@ class TestFuncionType(TestCase):
 
     def _test_pyfunc_in_out(self):
 
-        def a(i: int) -> int:
+        @cfunc('int64(int64)')
+        def a(i):
             return i + 1
 
-        a_type = function.fromobject(a)
-        a_sig = a_type.signature()
-
         @njit
-        def foo(f: a_sig):
+        def foo(f):
             return f
 
         @njit
         def bar():
             return a
 
-        foo.compile((a_type,))
-        print(foo.inspect_llvm((a_type,)))
-
     def test_cfunc_in_call(self):
 
-        def a(i: int) -> int:
+        @cfunc('int64(int64)')
+        def a(i):
             return i + 123456
-
-        a_type = function.fromobject(a)
-        a_sig = a_type.signature()
-        a = cfunc(a_sig)(a)
 
         # make sure that `a` is can be called via its address
         a_addr = a._wrapper_address
@@ -105,32 +92,29 @@ class TestFuncionType(TestCase):
         self.assertEqual(afunc(c_long(123)), 123456 + 123)
 
         @njit
-        def foo(f: 'int(int)') -> int:
+        def foo(f):
             return f(123)
 
         self.assertEqual(foo(a), 123456 + 123)
 
         @njit
-        def bar() -> int:
+        def bar():
             return a(321)
 
         self.assertEqual(bar(), 123456 + 321)
 
     def test_cfunc_seq(self):
 
-        def a(i: int) -> int:
+        @cfunc('int64(int64)')
+        def a(i):
             return i + 123
 
-        def b(i: int) -> int:
+        @cfunc('int64(int64)')
+        def b(i):
             return i + 456
 
-        a_type = function.fromobject(a)
-        a_sig = a_type.signature()
-        a = cfunc(a_sig)(a)
-        b = cfunc(a_sig)(b)
-
         @njit
-        def foo(f: 'int(int)', g: 'int(int)', i: int) -> int:
+        def foo(f, g, i):
             s = 0
             seq = (f, g)
             for f_ in seq:
@@ -141,19 +125,16 @@ class TestFuncionType(TestCase):
 
     def test_cfunc_choose(self):
 
-        def a(i: int) -> int:
+        @cfunc('int64(int64)')
+        def a(i):
             return i + 123
 
-        def b(i: int) -> int:
+        @cfunc('int64(int64)')
+        def b(i):
             return i + 456
 
-        a_type = function.fromobject(a)
-        a_sig = a_type.signature()
-        a = cfunc(a_sig)(a)
-        b = cfunc(a_sig)(b)
-
         @njit
-        def foo(choose_a: bool) -> int:
+        def foo(choose_a):
             if choose_a:
                 f = a
             else:

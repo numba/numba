@@ -30,6 +30,7 @@ from numba.types import FunctionType, FunctionProtoType
 
 # @typeof_impl.register(types.FunctionType)
 def typeof_function(val, c):
+    # Python function must use annotations to specify the signature
     return fromobject(val)
 
 
@@ -40,7 +41,7 @@ def typeof_Dispatcher(val, c):
 
 @typeof_impl.register(CFunc)
 def typeof_CFunc(val, c):
-    return fromobject(val._pyfunc)
+    return fromobject(val._sig)
 
 
 @register_model(FunctionProtoType)
@@ -188,6 +189,9 @@ def fromobject(obj):
             #return cls(*map(fromobject, _commasplit(obj[1:-1].strip())))
             pass # numba does not have a type to represent struct
         raise ValueError('Failed to construct numba type from {!r}'.format(obj))
+    if isinstance(obj, numba.typing.Signature):
+        ptype = FunctionProtoType(obj.return_type, obj.args)
+        return FunctionType(ptype)
     if inspect.isclass(obj):
         t = {int: nbtypes.int64,
              float: nbtypes.float64,
@@ -215,8 +219,7 @@ def fromobject(obj):
             atypes.append(atype)
         ptype = FunctionProtoType(rtype, atypes)
         return FunctionType(ptype)
-    if isinstance(obj, numba.typing.Signature):
-        return FunctionType(obj.return_type, obj.args)
+
     raise NotImplementedError(
         'constructing numba type from %s instance' % (type(obj)))
 

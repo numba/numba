@@ -29,7 +29,12 @@ class FunctionType(Type):
         return self.name
 
     def cast_python_value(self, value):
-        raise NotImplementedError('cast_python_value({})'.format(value))
+        from numba import typing
+        if isinstance(value, typing.Signature):
+            ptype = FunctionProtoType(value.return_type, value.args)
+            return FunctionType(ptype)
+        raise NotImplementedError(
+            'cast_python_value({}, {})'.format(value, type(value)))
 
     def __get_call_type(self, context, args, kws):
         from numba import typing
