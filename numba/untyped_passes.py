@@ -658,6 +658,12 @@ class MixedContainerUnroller(FunctionPass):
         - A type specific switch table with each case containing a versioned
           loop body suitable for injection as a replacement for the loop_ir.
         """
+
+        # Switch IR came from code gen, immediately relabel to prevent
+        # collisions with IR derived from the user code (caller)
+        switch_ir.blocks = self.add_offset_to_labels_w_ignore(
+            switch_ir.blocks, caller_max_label + 1)
+
         # Find the sentinels and validate the form
         sentinel_exits = set()
         sentinel_blocks = []
@@ -692,7 +698,8 @@ class MixedContainerUnroller(FunctionPass):
         # replace the sentinel_blocks with the loop body
         for lbl, branch_ty in zip(sentinel_blocks, switch_data.keys()):
             loop_blocks = deepcopy(loop_ir.blocks)
-            # relabel blocks
+            # relabel blocks WRT switch table, each block replacement will shift
+            # the maximum label
             max_label = max(switch_ir.blocks.keys())
             loop_blocks = self.add_offset_to_labels_w_ignore(
                 loop_blocks, max_label + 1, ignore_set)
@@ -754,10 +761,6 @@ class MixedContainerUnroller(FunctionPass):
             remaining_keys.remove(loop_start_lbl)
             for k in remaining_keys:
                 switch_ir.blocks[k] = deepcopy(loop_blocks[k])
-
-        # now relabel the switch_ir WRT the caller max label
-        switch_ir.blocks = self.add_offset_to_labels_w_ignore(
-            switch_ir.blocks, caller_max_label + 1, ignore_set)
 
         if self._DEBUG:
             print("-" * 80 + "EXIT STUFFER")
@@ -1044,16 +1047,16 @@ class MixedContainerUnroller(FunctionPass):
 
         # compute the unrolled body
         unrolled_body = self.inject_loop_body(
-            branches, new_ir, max(func_ir.blocks.keys()),
+            branches, new_ir, max(func_ir.blocks.keys()) + 1,
             dont_replace, switch_data)
 
         # 6. Patch in the unrolled body and fix up
         blks = state.func_ir.blocks
         orig_lbl = tuple(this_loop_body)
-        data = unrolled_body, this_loop.header
+
         # python 2 can't star unpack
         replace, delete = orig_lbl[0], orig_lbl[1:]
-        unroll, header_block = data
+        unroll, header_block = unrolled_body, this_loop.header
         unroll_lbl = [x for x in sorted(unroll.blocks.keys())]
         blks[replace] = unroll.blocks[unroll_lbl[0]]
         [blks.pop(d) for d in delete]
