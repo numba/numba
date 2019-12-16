@@ -506,8 +506,7 @@ class CanonicalizeLoopEntry(FunctionPass):
                         if expr.value.is_temp:
                             deps.add(expr.value)
                     elif expr.op == 'call':
-                        # XXX handle error
-                        defn = fir.get_definition(expr.func)
+                        defn = guard(get_definition, fir, expr.func)
                         if isinstance(defn, ir.Global):
                             if expr.func.is_temp:
                                 deps.add(expr.func)
