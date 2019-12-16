@@ -111,10 +111,10 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
         [callfrom] = loop.entries   # requirement checked earlier
         an_exit = next(iter(loop.exits))  # anyone of the exit block
         if len(loop.exits) > 1:
-            # Pre-Py3.8 ends up here usually
+            # Pre-Py3.8 may have multiple exits
             [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
         else:
-            # Post-Py3.8 ends up here usually
+            # Post-Py3.8 DO NOT have multiple exits
             returnto = an_exit
 
         local_block_ids = set(loop.body) | set(loop.entries)
@@ -185,7 +185,7 @@ def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
 
     loopblockkeys = set(loop.body) | set(loop.entries)
     if len(loop.exits) > 1:
-        # Pre-Py3.8 ends up here usually
+        # Pre-Py3.8 may have multiple exits
         loopblockkeys |= loop.exits
     loopblocks = dict((k, blocks[k].copy()) for k in loopblockkeys)
     # Modify the loop blocks
