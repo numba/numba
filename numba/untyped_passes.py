@@ -444,7 +444,7 @@ class CanonicalizeLoopExit(FunctionPass):
 
     def _split_exit_block(self, fir, cfg, exit_label):
         curblock = fir.blocks[exit_label]
-        newlabel = exit_label + 1   # XXX
+        newlabel = exit_label + 1
         newlabel = find_max_label(fir.blocks) + 1
         fir.blocks[newlabel] = curblock
         newblock = ir.Block(scope=curblock.scope, loc=curblock.loc)
