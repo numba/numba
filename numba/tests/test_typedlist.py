@@ -890,6 +890,7 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
         self.assertEqual(List, type(foo_true_received))
         self.assertEqual(list, type(foo_false_received))
 
+    @skip_py2
     def test_dict_in_list_for_square_bracket_builtin(self):
         def foo():
             l = [{"a": 1}]
