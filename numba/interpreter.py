@@ -15,6 +15,7 @@ from .utils import (
     OPERATORS_TO_BUILTINS,
     )
 from numba.byteflow import Flow, AdaptDFA, AdaptCFA
+from numba.unsafe import eh
 
 
 _logger = logging.getLogger(__name__)
@@ -86,6 +87,9 @@ class Interpreter(object):
         self.blocks = {}
         # { name: [definitions] } of local variables
         self.definitions = collections.defaultdict(list)
+        # A set to keep track of all exception variables.
+        # To be used in _legalize_exception_vars()
+        self._exception_vars = set()
 
     def interpret(self, bytecode):
         """
@@ -127,11 +131,36 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
 
+        self._legalize_exception_vars()
+
+        # Prepare FunctionIR
         fir = ir.FunctionIR(self.blocks, self.is_generator, self.func_id,
                              self.first_loc, self.definitions,
                              self.arg_count, self.arg_names)
         _logger.debug(fir.dump_to_string())
         return fir
+
+    def _legalize_exception_vars(self):
+        """Search for unsupported use of exception variables.
+        Note, they cannot be stored into user variable.
+        """
+        # Build a set of exception variables
+        excvars = self._exception_vars.copy()
+        # Propagate the exception variables to LHS of assignment
+        for varname, defnvars in self.definitions.items():
+            for v in defnvars:
+                if isinstance(v, ir.Var):
+                    k = v.name
+                    if k in excvars:
+                        excvars.add(varname)
+        # Filter out the user variables.
+        uservar = list(filter(lambda x: not x.startswith('$'), excvars))
+        if uservar:
+            # Complain about the first user-variable storing an exception
+            first = uservar[0]
+            loc = self.current_scope.get(first).loc
+            msg = "Exception object cannot be stored into variable ({})."
+            raise errors.UnsupportedError(msg.format(first), loc=loc)
 
     def init_first_block(self):
         # Define variables receiving the function arguments
@@ -158,8 +187,24 @@ class Interpreter(object):
         self.insert_block(offset)
         # Ensure the last block is terminated
         if oldblock is not None and not oldblock.is_terminated:
-            jmp = ir.Jump(offset, loc=self.loc)
-            oldblock.append(jmp)
+            # Handle ending try block.
+            tryblk = self.dfainfo.active_try_block
+            # If there's an active try-block and the handler block is live.
+            if tryblk is not None and tryblk['end'] in self.cfa.graph.nodes():
+                # We are in a try-block, insert a branch to except-block.
+                # This logic cannot be in self._end_current_block()
+                # because we the non-raising next block-offset.
+                branch = ir.Branch(
+                    cond=self.get('$exception_check'),
+                    truebr=tryblk['end'],
+                    falsebr=offset,
+                    loc=self.loc,
+                )
+                oldblock.append(branch)
+            # Handle normal case
+            else:
+                jmp = ir.Jump(offset, loc=self.loc)
+                oldblock.append(jmp)
         # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
@@ -171,8 +216,73 @@ class Interpreter(object):
                 break
 
     def _end_current_block(self):
+        # Handle try block
+        if not self.current_block.is_terminated:
+            tryblk = self.dfainfo.active_try_block
+            if tryblk is not None:
+                self._insert_exception_check()
+        # Handle normal block cleanup
         self._remove_unused_temporaries()
         self._insert_outgoing_phis()
+
+    def _inject_call(self, func, gv_name, res_name=None):
+        """A helper function to inject a call to *func* which is a python
+        function.
+
+        Parameters
+        ----------
+        func : callable
+            The function object to be called.
+        gv_name : str
+            The variable name to be used to store the function object.
+        res_name : str; optional
+            The variable name to be used to store the call result.
+            If ``None``, a name is created automatically.
+        """
+        gv_fn = ir.Global(gv_name, func, loc=self.loc)
+        self.store(value=gv_fn, name=gv_name, redefine=True)
+        callres = ir.Expr.call(self.get(gv_name), (), (), loc=self.loc)
+        res_name = res_name or '$callres_{}'.format(gv_name)
+        self.store(value=callres, name=res_name, redefine=True)
+
+    def _insert_try_block_begin(self):
+        """Insert IR-nodes to mark the start of a `try` block.
+        """
+        self._inject_call(eh.mark_try_block, 'mark_try_block')
+
+    def _insert_try_block_end(self):
+        """Insert IR-nodes to mark the end of a `try` block.
+        """
+        self._inject_call(eh.end_try_block, 'end_try_block')
+
+    def _insert_exception_variables(self):
+        """Insert IR-nodes to initialize the exception variables.
+        """
+        tryblk = self.dfainfo.active_try_block
+        # Get exception variables
+        endblk = tryblk['end']
+        edgepushed = self.dfainfo.outgoing_edgepushed.get(endblk)
+        # Note: the last value on the stack is the exception value
+        # Note: due to the current limitation, all exception variables are None
+        if edgepushed:
+            scope = self.current_scope
+            const_none = ir.Const(value=None, loc=self.loc)
+            # For each variable going to the handler block.
+            for var in edgepushed:
+                if var in self.definitions:
+                    raise AssertionError(
+                        "exception variable CANNOT be defined by other code",
+                    )
+                self.store(value=const_none, name=var)
+                self._exception_vars.add(var)
+
+    def _insert_exception_check(self):
+        """Called before the end of a block to inject checks if raised.
+        """
+        self._insert_exception_variables()
+        # Do exception check
+        self._inject_call(eh.exception_check, 'exception_check',
+                          '$exception_check')
 
     def _remove_unused_temporaries(self):
         """
@@ -277,7 +387,7 @@ class Interpreter(object):
     def store(self, value, name, redefine=False):
         """
         Store *value* (a Expr or Var instance) into the variable named *name*
-        (a str object).
+        (a str object). Returns the target variable.
         """
         if redefine or self.current_block_offset in self.cfa.backbone:
             rename = not (name in self.code_cellvars)
@@ -289,6 +399,7 @@ class Interpreter(object):
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
         self.definitions[target.name].append(value)
+        return target
 
     def get(self, name):
         """
@@ -580,6 +691,10 @@ class Interpreter(object):
         value = self.get(value)
         self.store(value=value, name=dstname)
 
+    def op_DELETE_FAST(self, inst):
+        dstname = self.code_locals[inst.arg]
+        self.current_block.append(ir.Del(dstname, loc=self.loc))
+
     def op_DUP_TOPX(self, inst, orig, duped):
         for src, dst in zip(orig, duped):
             self.store(value=self.get(src), name=dst)
@@ -606,7 +721,16 @@ class Interpreter(object):
 
     def op_LOAD_CONST(self, inst, res):
         value = self.code_consts[inst.arg]
-        const = ir.Const(value, loc=self.loc)
+        if isinstance(value, tuple):
+            st = []
+            for x in value:
+                nm = '$const_%s' % str(x)
+                val_const = ir.Const(x, loc=self.loc)
+                target = self.store(val_const, name=nm, redefine=True)
+                st.append(target)
+            const = ir.Expr.build_tuple(st, loc=self.loc)
+        else:
+            const = ir.Const(value, loc=self.loc)
         self.store(const, res)
 
     def op_LOAD_GLOBAL(self, inst, res):
@@ -651,6 +775,13 @@ class Interpreter(object):
             begin=inst.offset, end=exitpt, loc=self.loc,
             ))
 
+    def op_SETUP_EXCEPT(self, inst):
+        # Removed since python3.8
+        self._insert_try_block_begin()
+
+    def op_SETUP_FINALLY(self, inst):
+        self._insert_try_block_begin()
+
     def op_WITH_CLEANUP(self, inst):
         "no-op"
 
@@ -663,10 +794,13 @@ class Interpreter(object):
     def op_END_FINALLY(self, inst):
         "no-op"
 
-    def op_BEGIN_FINALLY(self, inst, state):
-        "no-op"
-        none = ir.Const(None, loc=self.loc)
-        self.store(value=none, name=state)
+    def op_BEGIN_FINALLY(self, inst, temps):
+        # The *temps* are the exception variables
+        const_none = ir.Const(None, loc=self.loc)
+        for tmp in temps:
+            # Set to None for now
+            self.store(const_none, name=tmp)
+            self._exception_vars.add(tmp)
 
     if PYVERSION < (3, 6):
 
@@ -710,7 +844,16 @@ class Interpreter(object):
             for inst in self.current_block.body:
                 if isinstance(inst, ir.Assign) and inst.target is names:
                     self.current_block.remove(inst)
-                    keys = inst.value.value
+                    # scan up the block looking for the values, remove them
+                    # and find their name strings
+                    named_items = []
+                    for x in inst.value.items:
+                        for y in self.current_block.body[::-1]:
+                            if x == y.target:
+                                self.current_block.remove(y)
+                                named_items.append(y.value.value)
+                                break
+                    keys = named_items
                     break
 
             nkeys = len(keys)
@@ -750,7 +893,16 @@ class Interpreter(object):
         for inst in self.current_block.body:
             if isinstance(inst, ir.Assign) and inst.target is keyvar:
                 self.current_block.remove(inst)
-                keytup = inst.value.value
+                # scan up the block looking for the values, remove them
+                # and find their name strings
+                named_items = []
+                for x in inst.value.items:
+                    for y in self.current_block.body[::-1]:
+                        if x == y.target:
+                            self.current_block.remove(y)
+                            named_items.append(y.value.value)
+                            break
+                keytup = named_items
                 break
         assert len(keytup) == len(values)
         keyconsts = [ir.Const(value=x, loc=self.loc) for x in keytup]
@@ -961,8 +1113,11 @@ class Interpreter(object):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
         self.current_block.append(jmp)
 
-    def op_POP_BLOCK(self, inst):
-        self.syntax_blocks.pop()
+    def op_POP_BLOCK(self, inst, kind=None):
+        if kind is None:
+            self.syntax_blocks.pop()
+        elif kind == 'try':
+            self._insert_try_block_end()
 
     def op_RETURN_VALUE(self, inst, retval, castval):
         self.store(ir.Expr.cast(self.get(retval), loc=self.loc), castval)
@@ -979,6 +1134,18 @@ class Interpreter(object):
             tmp = self.get(res)
             out = ir.Expr.unary('not', value=tmp, loc=self.loc)
             self.store(out, res)
+        elif op == 'exception match':
+            gv_fn = ir.Global(
+                "exception_match", eh.exception_match, loc=self.loc,
+            )
+            exc_match_name = '$exc_match'
+            self.store(value=gv_fn, name=exc_match_name, redefine=True)
+            lhs = self.get(lhs)
+            rhs = self.get(rhs)
+            exc = ir.Expr.call(
+                self.get(exc_match_name), args=(lhs, rhs), kws=(), loc=self.loc,
+            )
+            self.store(exc, res)
         else:
             self._binop(op, lhs, rhs, res)
 
@@ -1022,8 +1189,17 @@ class Interpreter(object):
     def op_RAISE_VARARGS(self, inst, exc):
         if exc is not None:
             exc = self.get(exc)
-        stmt = ir.Raise(exception=exc, loc=self.loc)
-        self.current_block.append(stmt)
+        tryblk = self.dfainfo.active_try_block
+        if tryblk is not None:
+            # In a try block
+            stmt = ir.TryRaise(exception=exc, loc=self.loc)
+            self.current_block.append(stmt)
+            self._insert_try_block_end()
+            self.current_block.append(ir.Jump(tryblk['end'], loc=self.loc))
+        else:
+            # Not in a try block
+            stmt = ir.Raise(exception=exc, loc=self.loc)
+            self.current_block.append(stmt)
 
     def op_YIELD_VALUE(self, inst, value, res):
         # initialize index to None.  it's being set later in post-processing
@@ -1041,7 +1217,16 @@ class Interpreter(object):
                 defaults = tuple([self.get(name) for name in defaults])
             else:
                 defaults = self.get(defaults)
-        fcode = self.definitions[code][0].value
+
+        assume_code_const = self.definitions[code][0]
+        if not isinstance(assume_code_const, ir.Const):
+            msg = (
+                "Unsupported use of closure. "
+                "Probably caused by complex control-flow constructs; "
+                "e.g. try-except"
+            )
+            raise errors.UnsupportedError(msg, loc=self.loc)
+        fcode = assume_code_const.value
         if name:
             name = self.get(name)
         if closure:

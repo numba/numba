@@ -460,11 +460,12 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
                 args = args + defaults_list
             elif (isinstance(callee_defaults, ir.Var)
                     or isinstance(callee_defaults, str)):
-                defaults = func_ir.get_definition(callee_defaults)
-                assert(isinstance(defaults, ir.Const))
-                loc = defaults.loc
-                args = args + [ir.Const(value=v, loc=loc)
-                            for v in defaults.value]
+                default_tuple = func_ir.get_definition(callee_defaults)
+                assert(isinstance(default_tuple, ir.Expr))
+                assert(default_tuple.op == "build_tuple")
+                const_vals = [func_ir.get_definition(x) for
+                              x in default_tuple.items]
+                args = args + const_vals
             else:
                 raise NotImplementedError(
                     "Unsupported defaults to make_function: {}".format(

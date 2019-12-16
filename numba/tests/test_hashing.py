@@ -20,7 +20,6 @@ if utils.IS_PY3:
     from numba.unicode import compile_time_get_string_data
 
 
-
 def hash_usecase(x):
     return hash(x)
 
@@ -206,7 +205,6 @@ class TestNumberHashing(BaseTest):
             check(ty(a1), ty(a2), ty(a3))
 
 
-@skip_py38_or_later
 class TestTupleHashing(BaseTest):
     """
     Test hashing of tuples.
@@ -241,6 +239,12 @@ class TestTupleHashing(BaseTest):
 
         self.check_tuples(self.int_samples(), split2)
         self.check_tuples(self.int_samples(), split3)
+
+        # Check exact. Sample values from:
+        # https://github.com/python/cpython/blob/b738237d6792acba85b1f6e6c8993a812c7fd815/Lib/test/test_tuple.py#L80-L93
+        # Untypable empty tuples are replaced with (7,).
+        self.check_hash_values([(7,), (0,), (0, 0), (0.5,),
+                                (0.5, (7,), (-2, 3, (4, 6)))])
 
     @tag('important')
     def test_heterogeneous_tuples(self):
