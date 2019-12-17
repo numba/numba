@@ -597,12 +597,12 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         Recursively re-type a reflected list (of type List) to be a typed list
         (of type ListType).
         """
-        if hasattr(tp, "dtype"):
-            if hasattr(self, "targetoptions") \
-                    and self.targetoptions.get("_disable_reflected_list", False) \
-                    and isinstance(tp, types.List):
-                dt = self._convert_reflected_list(tp.dtype)
-                tp = types.ListType(dt, mutable=False)
+        orig_dt = getattr(tp, "dtype", None)
+        if orig_dt and hasattr(self, "targetoptions") \
+                and self.targetoptions.get("_disable_reflected_list", False) \
+                and isinstance(tp, types.List):
+            dt = self._convert_reflected_list(orig_dt)
+            tp = types.ListType(dt, mutable=False)
         return tp
 
     def typeof_pyval(self, val):
