@@ -1022,14 +1022,20 @@ class TestHighLevelExtending(TestCase):
             ),
         )
 
-        # Expected failure
-        with self.assertRaises(errors.LoweringError) as raises:
-            foo(obj, 1, 2, (3,))
-        self.assertRegexpMatches(
-            str(raises.exception),
-            r"Cannot cast UniTuple\(int(64|32) x 1\) to int(64|32)",
+        # Check cases that put tuple type into stararg
+        # NOTE: the expected result has an extra tuple because of stararg.
+        self.assertEqual(
+            foo(obj, 1, 2, (3,)),
+            (1, 2, ((3,),)),
         )
-
+        self.assertEqual(
+            foo(obj, 1, 2, (3, 4)),
+            (1, 2, ((3, 4),)),
+        )
+        self.assertEqual(
+            foo(obj, 1, 2, (3, (4, 5))),
+            (1, 2, ((3, (4, 5)),)),
+        )
 
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
