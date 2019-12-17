@@ -536,29 +536,6 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         """
         from numba import jit
 
-        def normalize_args(pyfunc, args, kws):
-            pysig = utils.pysignature(pyfunc)
-            ba = pysig.bind(*args, **kws)
-            starargs = None
-            for i, (k, parm) in enumerate(pysig.parameters.items()):
-                if parm.kind == parm.VAR_POSITIONAL and k in ba.arguments:
-                    starargs = ba.arguments[k]
-                    del ba.arguments[k]
-
-            new_args = ba.args
-            if starargs is not None:
-                if (len(starargs) and isinstance(starargs[0], types.Tuple) and
-                        len(starargs[0]) == 0):
-                    # empty tuple means no starargs
-                    pass
-                else:
-                    new_args += starargs
-
-            new_kws = ba.kwargs
-            return new_args, new_kws
-
-        # args, kws = normalize_args(self._overload_func, args, kws)
-
         # Get the overload implementation for the given types
         ovf_result = self._overload_func(*args, **kws)
         if ovf_result is None:
