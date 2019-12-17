@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, absolute_import, division
 
+import sys
+
 import numpy as np
 
 from numba import (njit, set_num_threads, get_num_threads, prange, config,
@@ -8,6 +10,7 @@ from numba import (njit, set_num_threads, get_num_threads, prange, config,
 from numba.npyufunc.parallel import _get_thread_id
 from numba import unittest_support as unittest
 from .support import TestCase, skip_parfors_unsupported
+from .test_parallel_backend import TestInSubprocess
 
 class TestNumThreads(TestCase):
     _numba_parallel_test_ = False
@@ -19,7 +22,7 @@ class TestNumThreads(TestCase):
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
-    def test_set_num_threads_basic(self):
+    def _test_set_num_threads_basic(self):
         max_threads = config.NUMBA_NUM_THREADS
 
         self.assertEqual(get_num_threads(), max_threads)
@@ -36,7 +39,7 @@ class TestNumThreads(TestCase):
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
-    def test_set_num_threads_basic_jit(self):
+    def _test_set_num_threads_basic_jit(self):
         max_threads = config.NUMBA_NUM_THREADS
 
         @njit
@@ -59,7 +62,7 @@ class TestNumThreads(TestCase):
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
-    def test_set_num_threads_basic_guvectorize(self):
+    def _test_set_num_threads_basic_guvectorize(self):
         max_threads = config.NUMBA_NUM_THREADS
 
         @guvectorize(['void(int64[:])'],
@@ -100,7 +103,7 @@ class TestNumThreads(TestCase):
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
-    def test_set_num_threads_outside_jit(self):
+    def _test_set_num_threads_outside_jit(self):
 
         # Test set_num_threads outside a jitted function
         set_num_threads(2)
@@ -130,7 +133,7 @@ class TestNumThreads(TestCase):
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
-    def test_set_num_threads_inside_jit(self):
+    def _test_set_num_threads_inside_jit(self):
         # Test set_num_threads inside a jitted function
         @njit(parallel=True)
         def test_func(nthreads):
@@ -147,7 +150,7 @@ class TestNumThreads(TestCase):
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
-    def test_set_num_threads_inside_guvectorize(self):
+    def _test_set_num_threads_inside_guvectorize(self):
         # Test set_num_threads inside a jitted guvectorize function
         @guvectorize(['void(int64[:])'],
                      '(n)',
@@ -165,7 +168,7 @@ class TestNumThreads(TestCase):
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
-    def test_get_num_threads_truth_outside_jit(self):
+    def _test_get_num_threads_truth_outside_jit(self):
 
         for mask in range(2, min(6, config.NUMBA_NUM_THREADS + 1)):
             set_num_threads(mask)
@@ -200,7 +203,7 @@ class TestNumThreads(TestCase):
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
-    def test_get_num_threads_truth_inside_jit(self):
+    def _test_get_num_threads_truth_inside_jit(self):
 
         for mask in range(2, min(6, config.NUMBA_NUM_THREADS + 1)):
 
@@ -239,7 +242,7 @@ class TestNumThreads(TestCase):
     # set or >= 2) and TBB backends
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
-    def test_nested_parallelism_1(self):
+    def _test_nested_parallelism_1(self):
         if threading_layer() == 'workqueue':
             self.skipTest("workqueue is not threadsafe")
 
@@ -319,7 +322,7 @@ class TestNumThreads(TestCase):
     # set or >= 2) and TBB backends
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
-    def test_nested_parallelism_2(self):
+    def _test_nested_parallelism_2(self):
         if threading_layer() == 'workqueue':
             self.skipTest("workqueue is not threadsafe")
 
@@ -418,7 +421,7 @@ class TestNumThreads(TestCase):
     # set or >= 2) and TBB backends
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 3, "Not enough CPU cores")
-    def test_nested_parallelism_3(self):
+    def _test_nested_parallelism_3(self):
         if threading_layer() == 'workqueue':
             self.skipTest("workqueue is not threadsafe")
 
@@ -479,6 +482,37 @@ class TestNumThreads(TestCase):
     def tearDown(self):
         set_num_threads(config.NUMBA_NUM_THREADS)
 
+
+class TestNumThreadsBackends(TestInSubprocess, TestCase):
+    _class = TestNumThreads
+    _DEBUG = False
+
+    @classmethod
+    def _inject(cls, name, backend, backend_guard):
+        themod = cls.__module__
+        thecls = cls._class.__name__
+        injected_method = '%s.%s.%s' % (themod, thecls, name)
+
+        def test_template(self):
+            o, e = self.run_test_in_separate_process(injected_method, backend)
+            if self._DEBUG:
+                print('stdout:\n "%s"\n stderr:\n "%s"' % (o, e))
+            self.assertIn('OK', e)
+            self.assertTrue('FAIL' not in e)
+            self.assertTrue('ERROR' not in e)
+        injected_test = "%s_%s" % (name[1:], backend)
+        setattr(cls, injected_test,
+                backend_guard(test_template))
+
+    @classmethod
+    def generate(cls):
+        for name in cls._class.__dict__.copy():
+            for backend, backend_guard in cls.backends.items():
+                if not name.startswith('_test_'):
+                    continue
+                cls._inject(name, backend, backend_guard)
+
+TestNumThreadsBackends.generate()
 
 if __name__ == '__main__':
     unittest.main()

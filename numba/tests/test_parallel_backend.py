@@ -337,17 +337,7 @@ class TestParallelBackend(TestParallelBackendBase):
 TestParallelBackend.generate()
 
 
-class TestSpecificBackend(TestParallelBackendBase):
-    """
-    This is quite contrived, for each test in the TestParallelBackend tests it
-    generates a test that will run the TestParallelBackend test in a new python
-    process with an environment modified to ensure a specific threadsafe backend
-    is used. This is with view of testing the backends independently and in an
-    isolated manner such that if they hang/crash/have issues, it doesn't kill
-    the test suite.
-    """
-    _DEBUG = False
-
+class TestInSubprocess(object):
     backends = {'tbb': skip_no_tbb,
                 'omp': skip_no_omp,
                 'workqueue': unittest.skipIf(False, '')}
@@ -376,6 +366,17 @@ class TestSpecificBackend(TestParallelBackendBase):
         env_copy['NUMBA_THREADING_LAYER'] = str(threading_layer)
         cmdline = [sys.executable, "-m", "numba.runtests", test]
         return self.run_cmd(cmdline, env_copy)
+
+class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
+    """
+    This is quite contrived, for each test in the TestParallelBackend tests it
+    generates a test that will run the TestParallelBackend test in a new python
+    process with an environment modified to ensure a specific threadsafe backend
+    is used. This is with view of testing the backends independently and in an
+    isolated manner such that if they hang/crash/have issues, it doesn't kill
+    the test suite.
+    """
+    _DEBUG = False
 
     @classmethod
     def _inject(cls, p, name, backend, backend_guard):
