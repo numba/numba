@@ -358,6 +358,10 @@ def box_lsttype(typ, val, c):
 
 
 class ErrorHandler(object):
+    """ErrorHandler for calling codegen functions from listobject.py
+
+    Stores the state needed to raise a Python Exception.
+    """
 
     def __init__(self, pyapi, errorptr):
         self.pyapi = pyapi
