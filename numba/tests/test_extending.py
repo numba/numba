@@ -1022,6 +1022,13 @@ class TestHighLevelExtending(TestCase):
             ),
         )
 
+        # Expected failure
+        with self.assertRaises(errors.LoweringError) as raises:
+            foo(obj, 1, 2, (3,))
+        self.assertIn("Cannot cast UniTuple(int64 x 1) to int64",
+                      str(raises.exception))
+
+
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
     hit = cfunc._cache_hits[cfunc.signatures[0]]

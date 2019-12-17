@@ -177,8 +177,11 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
             # is simply the empty tuple
             if name in ba.arguments:
                 argval = ba.arguments[name]
-                # FIXME: avoid wrapping the tuple type for stararg in another
-                #        tuple
+                # NOTE: avoid wrapping the tuple type for stararg in another
+                #       tuple.
+                # FIXME: known problem. cannot distinguish between a tuple
+                #        given for stararg vs an implicit tuple created
+                #        internally for stararg.
                 if len(argval) == 1 and isinstance(argval[0], types.BaseTuple):
                     argval = tuple(argval[0])
             else:
