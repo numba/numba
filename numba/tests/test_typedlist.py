@@ -1115,6 +1115,29 @@ class TestMutableImmutableCombinations(MemoryLeakMixin, TestCase):
 
         self.assertEqual(foo([1, 2, 3]), expected)
 
+    def test_create_nested_mutable_with_nested_immutable(self):
+        @njit(_disable_reflected_list=True)
+        def foo(immutable):
+            mutable = list(immutable)
+            return mutable
+
+        expected = List()
+
+        nested01 = List()
+        for i in (1, 2):
+            nested01.append(i)
+        expected.append(nested01)
+
+        nested02 = List()
+        for i in (3, 4):
+            nested02.append(i)
+        expected.append(nested02)
+        received = foo([[1, 2], [3, 4]])
+        self.assertEqual(received, expected)
+        self.assertTrue(received._numba_type_.mutable)
+        self.assertFalse(received[0]._numba_type_.mutable)
+        self.assertFalse(received[1]._numba_type_.mutable)
+
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
