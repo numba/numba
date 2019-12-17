@@ -1025,8 +1025,10 @@ class TestHighLevelExtending(TestCase):
         # Expected failure
         with self.assertRaises(errors.LoweringError) as raises:
             foo(obj, 1, 2, (3,))
-        self.assertIn("Cannot cast UniTuple(int64 x 1) to int64",
-                      str(raises.exception))
+        self.assertRegexpMatches(
+            str(raises.exception),
+            r"Cannot cast UniTuple\(int(64|32) x 1\) to int(64|32)",
+        )
 
 
 
