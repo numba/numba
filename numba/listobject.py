@@ -104,9 +104,10 @@ def _check_for_mutable(lst):
         raise TypingError("unable to mutate immutable typed list")
 
 
-def _check_for_none_typed(lst):
+def _check_for_none_typed(lst, method):
     if isinstance(lst.dtype, NoneType):
-        raise TypingError("method support for List[None] is limited")
+        raise TypingError("method support for List[None] is limited, "
+                          "not supported: '{}'.".format(method))
 
 
 @intrinsic
@@ -601,10 +602,10 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
     assert(op in ("pop", "getitem"))
     # FIXME: typed lists with None as type have a quirky path
     IS_NOT_NONE = not isinstance(l.item_type, types.NoneType)
-    if IS_NOT_NONE:
-        resty = types.Tuple([types.int32, types.Optional(l.item_type)])
-    else:
-        resty = types.Tuple([types.int32, types.Optional(types.int64)])
+    resty = types.Tuple([types.int32,
+                         types.Optional(l.item_type
+                                        if IS_NOT_NONE
+                                        else types.int64)])
     sig = resty(l, index)
 
     def codegen(context, builder, sig, args):
@@ -633,10 +634,10 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
         # Load item if output is available
         found = builder.icmp_signed('>=', status,
                                     status.type(int(ListStatus.LIST_OK)))
-        if IS_NOT_NONE:
-            out = context.make_optional_none(builder, tl.item_type)
-        else:
-            out = context.make_optional_none(builder, types.int64)
+        out = context.make_optional_none(builder,
+                                         tl.item_type
+                                         if IS_NOT_NONE
+                                         else types.int64)
         pout = cgutils.alloca_once_value(builder, out)
 
         with builder.if_then(found):
@@ -806,7 +807,7 @@ def impl_pop(l, index=-1):
         return
 
     _check_for_mutable(l)
-    _check_for_none_typed(l)
+    _check_for_none_typed(l, 'pop')
 
     indexty = INDEXTY
 
@@ -894,7 +895,7 @@ def impl_contains(l, item):
         return
 
     itemty = l.item_type
-    _check_for_none_typed(l)
+    _check_for_none_typed(l, "__contains__")
 
     def impl(l, item):
         casteditem = _cast(item, itemty)
@@ -911,7 +912,7 @@ def impl_count(l, item):
     if not isinstance(l, types.ListType):
         return
 
-    _check_for_none_typed(l)
+    _check_for_none_typed(l, 'count')
 
     itemty = l.item_type
 
@@ -980,7 +981,7 @@ def impl_insert(l, index, item):
         return
 
     _check_for_mutable(l)
-    _check_for_none_typed(l)
+    _check_for_none_typed(l, 'insert')
     # insert can refine
     if isinstance(item, NoneType):
         raise TypingError("method support for List[None] is limited")
@@ -1027,7 +1028,7 @@ def impl_remove(l, item):
     if not isinstance(l, types.ListType):
         return
 
-    _check_for_none_typed(l)
+    _check_for_none_typed(l, 'remove')
 
     itemty = l.item_type
 
@@ -1063,7 +1064,7 @@ def impl_reverse(l):
         return
 
     _check_for_mutable(l)
-    _check_for_none_typed(l)
+    _check_for_none_typed(l, 'reverse')
 
     def impl(l):
         front = 0
@@ -1079,7 +1080,7 @@ def impl_reverse(l):
 @overload_method(types.ListType, 'copy')
 def impl_copy(l):
 
-    _check_for_none_typed(l)
+    _check_for_none_typed(l, 'copy')
 
     itemty = l.item_type
 
@@ -1098,7 +1099,7 @@ def impl_index(l, item, start=None, end=None):
     if not isinstance(l, types.ListType):
         return
 
-    _check_for_none_typed(l)
+    _check_for_none_typed(l, 'index')
 
     itemty = l.item_type
 
