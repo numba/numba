@@ -11,7 +11,7 @@ from numba import (njit, set_num_threads, get_num_threads, prange, config,
                    threading_layer, guvectorize)
 from numba.npyufunc.parallel import _get_thread_id
 from numba import unittest_support as unittest
-from .support import TestCase, skip_parfors_unsupported
+from .support import TestCase, skip_parfors_unsupported, tag
 from .test_parallel_backend import TestInSubprocess
 
 class TestNumThreads(TestCase):
@@ -519,7 +519,7 @@ class TestNumThreadsBackends(TestInSubprocess, TestCase):
 
         injected_test = "%s_%s_%s_threads" % (name[1:], backend, num_threads)
         setattr(cls, injected_test,
-                backend_guard(test_template))
+                tag('long_running')(backend_guard(test_template)))
 
     @classmethod
     def generate(cls):
