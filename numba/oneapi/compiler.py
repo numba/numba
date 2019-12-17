@@ -252,7 +252,7 @@ class OneAPIKernel(OneAPIKernelBase):
         # DeviceArray and ndarray. This is a hack to get around the issue,
         # till I understand the typing infrastructure of NUMBA better.
         if isinstance(val, driver.DeviceArray):
-            _unpack_device_array_argument(val, kernelargs)
+            self._unpack_device_array_argument(val, kernelargs)
 
         elif isinstance(ty, types.Array):
             # DRD: This unpack routine is commented out for the time-being.
