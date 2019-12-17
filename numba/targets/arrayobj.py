@@ -1967,8 +1967,8 @@ def np_repeat_impl_repeats_scaler(a, repeats):
 
 @extending.overload_method(types.Array, 'repeat')
 def array_repeat(a, repeats):
-    def array_repeat_impl(a, repeat):
-        return np.repeat(a, repeat)
+    def array_repeat_impl(a, repeats):
+        return np.repeat(a, repeats)
 
     return array_repeat_impl
 
@@ -2225,7 +2225,7 @@ def array_complex_attr(context, builder, typ, value, attr):
         ^   ^   ^
 
     (`R` indicates a float for the real part;
-     `C` indicates a float for the imaginery part;
+     `C` indicates a float for the imaginary part;
      the `^` indicates the start of each element)
 
     To get the real part, we can simply change the dtype and itemsize to that
@@ -3765,25 +3765,18 @@ def _arange_dtype(*args):
     elif any(isinstance(a, types.Float) for a in bounds):
         dtype = types.float64
     else:
-        # It's not possible for the dtype to replicate NumPy as integer literals
-        # are intp size in Numba but np.dtype(int) (i.e. intc) in NumPy. The
-        # NumPy logic is to basically do max(np.long, *[type(x) for x in args]).
-        # On windows 64, in NumPy, that would mean:
-        # * np.arange(1, 10) -> max(np.long, np.intc, np.intc) -> int32
-        # but in Numba:
-        # * np.arange(1, 10) -> max(np.long, np.intp, np.intp) -> int64
-        #
-        # It's therefore not possible to replicate the case where integer
-        # literals are supplied, however best effort is made to correctly handle
-        # cases like:
-        # * np.arange(np.int8(10)) -> max(np.long, np.int8) -> np.long
-        #
-        # Alg ref:
-        # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/ctors.c#L3376-L3377    # noqa: E501
-        #
-        # Also not Py2.7 on 32 bit linux as a 32bit np.long where as Py3 has a
-        # 64bit, numba is not replicating this!
-        dtype = max(bounds + [types.long_,])
+        # numerous attempts were made at guessing this type from the NumPy
+        # source but it turns out on running `np.arange(10).dtype` on pretty
+        # much all platform and python combinations that it matched np.int?!
+        # Windows 64 is broken by default here because Numba (as of 0.47) does
+        # not differentiate between Python and NumPy integers, so a `typeof(1)`
+        # on w64 is `int64`, i.e. `intp`. This means an arange(<some int>) will
+        # be typed as arange(int64) and the following will yield int64 opposed
+        # to int32. Example: without a load of analysis to work out of the args
+        # were wrapped in NumPy int*() calls it's not possible to detect the
+        # difference between `np.arange(10)` and `np.arange(np.int64(10)`.
+        NPY_TY = getattr(types, "int%s" % (8 * np.dtype(np.int).itemsize))
+        dtype = max(bounds + [NPY_TY,])
 
     return dtype
 

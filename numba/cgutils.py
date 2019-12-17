@@ -10,7 +10,7 @@ import functools
 
 from llvmlite import ir
 
-from . import utils, config
+from . import utils, config, types
 
 
 bool_t = ir.IntType(1)
@@ -864,7 +864,7 @@ def memset(builder, ptr, size, value):
     ptr = builder.bitcast(ptr, voidptr_t)
     if isinstance(value, int):
         value = int8_t(value)
-    builder.call(fn, [ptr, value, size, int32_t(0), bool_t(0)])
+    builder.call(fn, [ptr, value, size, bool_t(0)])
 
 
 def global_constant(builder_or_module, name, value, linkage='internal'):
@@ -954,12 +954,10 @@ def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
 
     memcpy = builder.module.declare_intrinsic(func_name,
                                               [voidptr_t, voidptr_t, size_t])
-    align = ir.Constant(ir.IntType(32), align)
     is_volatile = false_bit
     builder.call(memcpy, [builder.bitcast(dst, voidptr_t),
                           builder.bitcast(src, voidptr_t),
                           builder.mul(count, itemsize),
-                          align,
                           is_volatile])
 
 
@@ -1096,3 +1094,12 @@ def hexdump(builder, ptr, nbytes):
         val = builder.load(offset)
         printf(builder, " %02x", val)
     printf(builder, "\n")
+
+
+def is_nonelike(ty):
+    """ returns if 'ty' is none """
+    return (
+        ty is None or
+        isinstance(ty, types.NoneType) or
+        isinstance(ty, types.Omitted)
+    )

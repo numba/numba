@@ -905,9 +905,11 @@ def impl_extend(l, iterable):
             ty = iterable.dtype
         elif hasattr(iterable, "item_type"):  # lists
             ty = iterable.item_type
+        elif hasattr(iterable, "yield_type"):  # iterators and generators
+            ty = iterable.yield_type
         else:
             raise TypingError("unable to extend list, iterable is missing "
-                              "either *dtype* or *item_type*")
+                              "either *dtype*, *item_type* or *yield_type*.")
         l = l.refine(ty)
         # Create the signature that we wanted this impl to have
         sig = typing.signature(types.void, l, iterable)
@@ -1005,9 +1007,13 @@ def impl_reverse(l):
 
 @overload_method(types.ListType, 'copy')
 def impl_copy(l):
+    itemty = l.item_type
     if isinstance(l, types.ListType):
         def impl(l):
-            return l[:]
+            newl = new_list(itemty, len(l))
+            for i in l:
+                newl.append(i)
+            return newl
 
         return impl
 
@@ -1038,6 +1044,35 @@ def impl_index(l, item, start=None, end=None):
     return impl
 
 
+def _equals_helper(this, other, OP):
+    if not isinstance(this, types.ListType):
+        return
+    if not isinstance(other, types.ListType):
+        return lambda this, other: False
+
+    def impl(this, other):
+        def equals(this, other):
+            if len(this) != len(other):
+                return False
+            for i in range(len(this)):
+                if this[i] != other[i]:
+                    return False
+            else:
+                return True
+        return OP(equals(this, other))
+    return impl
+
+
+@overload(operator.eq)
+def impl_equals(this, other):
+    return _equals_helper(this, other, operator.truth)
+
+
+@overload(operator.ne)
+def impl_not_equals(this, other):
+    return _equals_helper(this, other, operator.not_)
+
+
 @register_jitable
 def compare(this, other):
     """Oldschool (python 2.x) cmp.
@@ -1060,21 +1095,11 @@ def compare_helper(this, other, accepted):
     if not isinstance(this, types.ListType):
         return
     if not isinstance(other, types.ListType):
-        raise TypingError("list can only be compared to list")
+        return lambda this, other: False
 
     def impl(this, other):
         return compare(this, other) in accepted
     return impl
-
-
-@overload(operator.eq)
-def impl_equal(this, other):
-    return compare_helper(this, other, (0,))
-
-
-@overload(operator.ne)
-def impl_not_equal(this, other):
-    return compare_helper(this, other, (-1, 1))
 
 
 @overload(operator.lt)
