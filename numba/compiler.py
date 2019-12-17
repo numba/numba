@@ -61,7 +61,7 @@ class Flags(utils.ConfigOptions):
         'fastmath': cpu.FastMathOptions(False),
         'noalias': False,
         'inline': cpu.InlineOptions('never'),
-        'disable_reflected_list': False,
+        '_disable_reflected_list': False,
     }
 
 
@@ -261,9 +261,9 @@ def _make_subtarget(targetctx, flags):
         subtargetoptions['auto_parallel'] = flags.auto_parallel
     if flags.fastmath:
         subtargetoptions['fastmath'] = flags.fastmath
-    if flags.disable_reflected_list:
-        subtargetoptions['disable_reflected_list'] = \
-            flags.disable_reflected_list
+    if flags._disable_reflected_list:
+        subtargetoptions['_disable_reflected_list'] = \
+            flags._disable_reflected_list
     error_model = callconv.create_error_model(flags.error_model, targetctx)
     subtargetoptions['error_model'] = error_model
 
@@ -317,12 +317,12 @@ class CompilerBase(object):
         )
 
     def _activate_disable_reflected_list(self):
-        self.state.old_dlr = self.state.typingctx.disable_reflected_list
-        self.state.typingctx.disable_reflected_list = \
-            self.state.flags.disable_reflected_list
+        self.state.old_dlr = self.state.typingctx._disable_reflected_list
+        self.state.typingctx._disable_reflected_list = \
+            self.state.flags._disable_reflected_list
 
     def _deactivate_disable_reflected_list(self):
-        self.state.typingctx.disable_reflected_list = self.state.old_dlr
+        self.state.typingctx._disable_reflected_list = self.state.old_dlr
 
     def compile_extra(self, func):
         self.state.func_id = bytecode.FunctionIdentity.from_function(func)

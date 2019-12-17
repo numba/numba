@@ -75,9 +75,9 @@ class TargetOptions(object):
         if 'inline' in kws:
             flags.set('inline', kws.pop('inline'))
 
-        if 'disable_reflected_list' in kws:
-            flags.set('disable_reflected_list',
-                      kws.pop('disable_reflected_list'))
+        if '_disable_reflected_list' in kws:
+            flags.set('_disable_reflected_list',
+                      kws.pop('_disable_reflected_list'))
 
         flags.set("enable_pyobject_looplift")
 

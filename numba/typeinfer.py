@@ -1545,7 +1545,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                                               loc=inst.loc)
             self.constraints.append(constraint)
         elif expr.op == 'build_list':
-            if self.context.disable_reflected_list:
+            if self.context._disable_reflected_list:
                 constraint = BuildTypedListConstraint(
                     target.name, items=expr.items, loc=inst.loc)
             else:

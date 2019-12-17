@@ -460,7 +460,7 @@ def build_list(context, builder, list_type, items):
 @lower_builtin(list, types.IterableType)
 def list_constructor(context, builder, sig, args):
 
-    if context.disable_reflected_list:
+    if context._disable_reflected_list:
         from numba.typed import List
         def list_impl(iterable):
             res = List()
@@ -476,7 +476,7 @@ def list_constructor(context, builder, sig, args):
 
 @lower_builtin(list)
 def list_constructor(context, builder, sig, args):
-    if context.disable_reflected_list:
+    if context._disable_reflected_list:
         from numba.typed import List
         listtype = sig.return_type
         it = listtype.item_type

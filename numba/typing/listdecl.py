@@ -20,7 +20,7 @@ class ListBuiltin(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         correct_list_type = (types.ListType
-                             if self.context.disable_reflected_list
+                             if self.context._disable_reflected_list
                              else types.List)
         if args:
             iterable, = args

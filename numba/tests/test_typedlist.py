@@ -526,7 +526,7 @@ class TestNoneType(MemoryLeakMixin, TestCase):
         self.assertEqual(impl.py_func(), impl())
 
     def test_square_bracket_builtin_with_None(self):
-        @njit(disable_reflected_list=True)
+        @njit(_disable_reflected_list=True)
         def foo():
             l = [None, None, None]
             return l
@@ -538,7 +538,7 @@ class TestNoneType(MemoryLeakMixin, TestCase):
         self.assertEqual(expected, received)
 
     def test_list_comprehension_with_none(self):
-        @njit(disable_reflected_list=True)
+        @njit(_disable_reflected_list=True)
         def foo():
             l = List()
             # the following construct results in a List[None] that is discarded
@@ -560,7 +560,7 @@ class TestNoneType(MemoryLeakMixin, TestCase):
                     {}
                     {}
                 """.format(line1, line2)), context)
-            return njit(context["bar"], disable_reflected_list=True)
+            return njit(context["bar"], _disable_reflected_list=True)
         for line1, line2 in (
                 ("lst.append(None)", "lst.pop()"),
                 ("lst.append(None)", "lst.count(None)"),
@@ -829,7 +829,7 @@ class TestListInferred(TestCase):
 class TestDisableReflectedListBase(MemoryLeakMixin, TestCase):
 
     def _njit_both(self, func):
-        return (njit(func, disable_reflected_list=p) for p in (True, False))
+        return (njit(func, _disable_reflected_list=p) for p in (True, False))
 
 
 class TestListBuiltinConstructors(TestDisableReflectedListBase):
@@ -966,7 +966,7 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
 class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
 
     def test_simple_conversion(self):
-        @njit(disable_reflected_list=True)
+        @njit(_disable_reflected_list=True)
         def foo(lst):
             return lst
         # Python list goes in and Numba immutable typed list comes out
@@ -978,7 +978,7 @@ class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
 
     def test_nested_conversion(self):
         # nested lists are incompatible with reflected list
-        @njit(disable_reflected_list=True)
+        @njit(_disable_reflected_list=True)
         def foo(lst):
             return lst
         a = List()
@@ -1002,7 +1002,7 @@ class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
                 def bar(lst):
                     {}
                 """.format(line)), context)
-            return njit(context["bar"], disable_reflected_list=True)
+            return njit(context["bar"], _disable_reflected_list=True)
         for line in ("lst.append(0)",
                      "lst[0] = 0",
                      "lst.pop()",

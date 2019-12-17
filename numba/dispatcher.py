@@ -599,7 +599,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         if hasattr(tp, "dtype"):
             if hasattr(self, "targetoptions") \
-                    and self.targetoptions.get("disable_reflected_list", False) \
+                    and self.targetoptions.get("_disable_reflected_list", False) \
                     and isinstance(tp, types.List):
                 dt = self._convert_reflected_list(tp.dtype)
                 tp = types.ListType(dt, mutable=False)
@@ -674,10 +674,10 @@ class Dispatcher(_DispatcherBase):
         functools.update_wrapper(self, py_func)
 
         self.targetoptions = targetoptions
-        if "disable_reflected_list" in py_func.__globals__ and \
-                py_func.__globals__["disable_reflected_list"].__module__ \
+        if "_disable_reflected_list" in py_func.__globals__ and \
+                py_func.__globals__["_disable_reflected_list"].__module__ \
                 == "numba.future":
-            self.targetoptions["disable_reflected_list"] = True
+            self.targetoptions["_disable_reflected_list"] = True
 
         self.locals = locals
         self._cache = NullCache()
