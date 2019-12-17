@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 
 import sys
 import os
+import re
 
 import numpy as np
 
@@ -495,7 +496,7 @@ class TestNumThreadsBackends(TestInSubprocess, TestCase):
         env_copy = os.environ.copy()
         env_copy['NUMBA_THREADING_LAYER'] = str(threading_layer)
         env_copy['NUMBA_NUM_THREADS'] = str(num_threads)
-        cmdline = [sys.executable, "-m", "numba.runtests", test]
+        cmdline = [sys.executable, "-m", "numba.runtests", "-v", test]
         return self.run_cmd(cmdline, env_copy)
 
     @classmethod
@@ -512,6 +513,10 @@ class TestNumThreadsBackends(TestInSubprocess, TestCase):
             self.assertIn('OK', e)
             self.assertTrue('FAIL' not in e)
             self.assertTrue('ERROR' not in e)
+            m = re.search(r"\.\.\. skipped '(.*?)'", e)
+            if m:
+                self.skipTest(m.group(1))
+
         injected_test = "%s_%s_%s_threads" % (name[1:], backend, num_threads)
         setattr(cls, injected_test,
                 backend_guard(test_template))
