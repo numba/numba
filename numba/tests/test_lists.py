@@ -1130,7 +1130,7 @@ class TestListOfList(ManagedListTestCase):
 
     def test_returning_list_of_list(self):
         def pyfunc():
-            a = [[np.ones(i)] for i in range(4)]
+            a = [[np.arange(i)] for i in range(4)]
             return a
 
         self.compile_and_test(pyfunc)
