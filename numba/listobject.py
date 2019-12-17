@@ -19,7 +19,7 @@ from numba.extending import (
     models,
     lower_builtin,
 )
-from numba.targets.imputils import iternext_impl
+from numba.targets.imputils import iternext_impl, lower_cast
 from numba import types
 from numba.types import (
     ListType,
@@ -1319,3 +1319,10 @@ def build_list(context, builder, list_type, items):
             context.compile_internal(builder, append, sig, args)
 
     return l
+
+
+@lower_cast(types.ListType, types.ListType)
+def list_to_list(context, builder, fromty, toty, val):
+    # Casting from mutable to immutable
+    assert fromty.dtype == toty.dtype
+    return val

@@ -1057,6 +1057,50 @@ class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
         )
 
 
+class TestMutableImmutableCombinations(MemoryLeakMixin, TestCase):
+
+    def test_extend_mutable_with_immutable(self):
+
+        @njit(_disable_reflected_list=True)
+        def foo(x):
+            y = [1]
+            y.extend(x)
+            return y
+
+        expected = List()
+        for i in (1, 2):
+            expected.append(i)
+
+        self.assertEqual(foo([2]), expected)
+
+    def test_extend_imprecise_mutable_with_immutable(self):
+
+        @njit(_disable_reflected_list=True)
+        def foo(x):
+            y = []
+            y.extend(x)
+            return y
+
+        expected = List()
+        for i in (2, ):
+            expected.append(i)
+
+        self.assertEqual(foo([2]), expected)
+
+    def test_create_mutable_from_immutable(self):
+
+        @njit(_disable_reflected_list=True)
+        def foo(immutable):
+            mutable = list(immutable)
+            return mutable
+
+        expected = List()
+        for i in (1, 2, 3):
+            expected.append(i)
+
+        self.assertEqual(foo([1, 2, 3]), expected)
+
+
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     @skip_py2
