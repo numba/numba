@@ -1040,7 +1040,7 @@ class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypeError) as raises:
             foo([1, 2j])
         self.assertIn(
-            "can't unbox heterogeneous list:",
+            "can't unbox heterogeneous list",
             str(raises.exception),
         )
 
@@ -1052,7 +1052,7 @@ class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypeError) as raises:
             foo([[1, 2], [1j, 2j]])
         self.assertIn(
-            "can't unbox heterogeneous list:",
+            "can't unbox heterogeneous list",
             str(raises.exception),
         )
 
