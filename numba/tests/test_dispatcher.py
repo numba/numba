@@ -39,7 +39,7 @@ from numba.caching import _UserWideCacheLocator
 from numba.dispatcher import Dispatcher
 from numba import parfor
 from .test_linalg import needs_lapack
-from .support import skip_parfors_unsupported, skip_py38_or_later
+from .support import skip_parfors_unsupported
 
 import llvmlite.binding as ll
 
@@ -337,7 +337,6 @@ class TestDispatcher(BaseTest):
         m = "No matching definition for argument type(s) array(float64, 1d, C)"
         self.assertEqual(str(raises.exception), m)
 
-    @skip_py38_or_later
     def test_fingerprint_failure(self):
         """
         Failure in computing the fingerprint cannot affect a nopython=False
@@ -1172,7 +1171,6 @@ class TestCache(BaseCacheUsecasesTest):
         self.assertPreciseEqual(f(2, 3), 6)
         self.check_pycache(0)
 
-    @skip_py38_or_later
     def test_looplifted(self):
         # Loop-lifted functions can't be cached and raise a warning
         mod = self.import_module()
