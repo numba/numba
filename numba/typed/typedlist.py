@@ -531,7 +531,7 @@ def unbox_listtype(typ, val, c):
             )
 
     lstobj = lstruct._getvalue()
-    return NativeValue(lstobj)
+    return NativeValue(lstobj, is_error=builder.load(errorptr))
 
 #
 # The following contains the logic for the type-inferred constructor

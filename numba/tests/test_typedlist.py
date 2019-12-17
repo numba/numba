@@ -1032,6 +1032,30 @@ class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
+    def test_type_heterogeneity_raises_exception(self):
+        self.disable_leak_check()
+        @njit(_disable_reflected_list=True)
+        def foo(x):
+            return x
+        with self.assertRaises(TypeError) as raises:
+            foo([1, 2j])
+        self.assertIn(
+            "can't unbox heterogeneous list:",
+            str(raises.exception),
+        )
+
+    def test_type_heterogeneity_raises_exception_for_nested_list(self):
+        self.disable_leak_check()
+        @njit(_disable_reflected_list=True)
+        def foo(x):
+            return x
+        with self.assertRaises(TypeError) as raises:
+            foo([[1, 2], [1j, 2j]])
+        self.assertIn(
+            "can't unbox heterogeneous list:",
+            str(raises.exception),
+        )
+
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
