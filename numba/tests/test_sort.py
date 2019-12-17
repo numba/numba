@@ -942,7 +942,9 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(x, key=None):
-            return sorted(x[:], key=key), x[:].sort(key=key)
+            new_x = x[:]
+            new_x.sort(key=key)
+            return sorted(x[:], key=key), new_x
 
         self.assertPreciseEqual(foo(a[:]), foo.py_func(a[:]))
         self.assertPreciseEqual(foo(a[:], external_key),
@@ -956,7 +958,9 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
         def foo(x):
             def closure_key(z):
                 return 1. / z
-            return sorted(x[:], key=closure_key), x[:].sort(key=closure_key)
+            new_x = x[:]
+            new_x.sort(key=closure_key)
+            return sorted(x[:], key=closure_key), new_x
 
         self.assertPreciseEqual(foo(a[:]), foo.py_func(a[:]))
 
@@ -968,7 +972,9 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
 
             @compiler
             def bar(x, func):
-                return sorted(x[:], key=func), x[:].sort(key=func)
+                new_x = x[:]
+                new_x.sort(key=func)
+                return sorted(x[:], key=func), new_x
 
             @compiler
             def foo(x):
@@ -991,7 +997,9 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(x, key=None):
-            return sorted(x[:], key=key), x[:].sort(key=key)
+            new_x = x[:]
+            new_x.sort(key=key)
+            return sorted(x[:], key=key), new_x
 
         self.assertPreciseEqual(foo(a[:]), foo.py_func(a[:]))
         self.assertPreciseEqual(foo(a[:], external_key),
@@ -1008,8 +1016,9 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
 
         @njit
         def foo(x, key=None, reverse=False):
-            return (sorted(x[:], key=key, reverse=reverse),
-                    x[:].sort(key=key, reverse=reverse))
+            new_x = x[:]
+            new_x.sort(key=key, reverse=reverse)
+            return (sorted(x[:], key=key, reverse=reverse), new_x)
 
         for key, rev in itertools.product((None, external_key),
                                           (True, False, 1, -12, 0)):
@@ -1027,8 +1036,10 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
             else:
                 closure_key = None
 
-            return (sorted(x[:], key=closure_key),
-                    x[:].sort(key=closure_key))
+            new_x = x[:]
+            new_x.sort(key=closure_key)
+
+            return (sorted(x[:], key=closure_key), new_x)
 
         with self.assertRaises(errors.TypingError) as raises:
             TF = True
@@ -1045,7 +1056,9 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
 
         @njit
         def foo_sort(x, key=None, reverse=False):
-            return x[:].sort(key=key, reverse=reverse)
+            new_x = x[:]
+            new_x.sort(key=key, reverse=reverse)
+            return new_x
 
         @njit
         def external_key(z):

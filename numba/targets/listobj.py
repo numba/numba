@@ -1062,8 +1062,7 @@ def _sort_check_key(key):
         msg = ("Key must concretely be None or a Numba JIT compiled function, "
                "an Optional (union of None and a value) was found")
         raise errors.TypingError(msg)
-    if not (isinstance(key, (types.NoneType, types.Omitted)) or key is None or
-            isinstance(key, types.Dispatcher)):
+    if not (cgutils.is_nonelike(key) or isinstance(key, types.Dispatcher)):
         msg = "Key must be None or a Numba JIT compiled function"
         raise errors.TypingError(msg)
 
@@ -1074,7 +1073,7 @@ def ol_list_sort(lst, key=None, reverse=False):
     _sort_check_key(key)
     _sort_check_reverse(reverse)
 
-    if (isinstance(key, (types.NoneType, types.Omitted)) or key is None):
+    if cgutils.is_nonelike(key):
         KEY = False
         sort_f = sort_forwards
         sort_b = sort_backwards
