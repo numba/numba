@@ -33,7 +33,7 @@ def _extract_loop_lifting_candidates(cfg, blocks):
                 return False
             outedges |= succs
         ok = len(outedges) == 1
-        _logger.debug("same_exit_point=%s", ok)
+        _logger.debug("same_exit_point=%s (%s)", ok, outedges)
         return ok
 
     def one_entry(loop):
@@ -110,9 +110,14 @@ def _loop_lift_get_candidate_infos(cfg, blocks, livemap):
 
         [callfrom] = loop.entries   # requirement checked earlier
         an_exit = next(iter(loop.exits))  # anyone of the exit block
-        [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
+        if len(loop.exits) > 1:
+            # Pre-Py3.8 may have multiple exits
+            [(returnto, _)] = cfg.successors(an_exit)  # requirement checked earlier
+        else:
+            # Post-Py3.8 DO NOT have multiple exits
+            returnto = an_exit
 
-        local_block_ids = set(loop.body) | set(loop.entries) | set(loop.exits)
+        local_block_ids = set(loop.body) | set(loop.entries)
         inputs, outputs = find_region_inout_vars(
             blocks=blocks,
             livemap=livemap,
@@ -177,7 +182,11 @@ def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
 
     # Copy loop blocks
     loop = loopinfo.loop
-    loopblockkeys = set(loop.body) | set(loop.entries) | set(loop.exits)
+
+    loopblockkeys = set(loop.body) | set(loop.entries)
+    if len(loop.exits) > 1:
+        # Pre-Py3.8 may have multiple exits
+        loopblockkeys |= loop.exits
     loopblocks = dict((k, blocks[k].copy()) for k in loopblockkeys)
     # Modify the loop blocks
     _loop_lift_prepare_loop_func(loopinfo, loopblocks)
@@ -214,6 +223,9 @@ def loop_lifting(func_ir, typingctx, targetctx, flags, locals):
     loopinfos = _loop_lift_get_candidate_infos(cfg, blocks,
                                                func_ir.variable_lifetime.livemap)
     loops = []
+    if loopinfos:
+        _logger.debug('loop lifting this IR with %d candidates:\n%s',
+                      len(loopinfos), func_ir.dump_to_string())
     for loopinfo in loopinfos:
         lifted = _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
                                           typingctx, targetctx, flags, locals)

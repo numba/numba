@@ -20,7 +20,9 @@ from .ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                        GuardException,  convert_code_obj_to_function,
                        mk_unique_var, build_definitions,
                        replace_var_names, get_name_var_table,
-                       compile_to_numba_ir, get_definition)
+                       compile_to_numba_ir, get_definition,
+                       find_max_label, rename_labels,
+                       )
 
 
 @contextmanager
@@ -416,6 +418,133 @@ class FindLiterallyCalls(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
+class CanonicalizeLoopExit(FunctionPass):
+    """A pass to canonicalize loop exit by splitting it from function exit.
+    """
+    _name = "canonicalize_loop_exit"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        fir = state.func_ir
+        cfg = compute_cfg_from_blocks(fir.blocks)
+        status = False
+        for loop in cfg.loops().values():
+            for exit_label in loop.exits:
+                if exit_label in cfg.exit_points():
+                    self._split_exit_block(fir, cfg, exit_label)
+                    status = True
+
+        fir._reset_analysis_variables()
+
+        vlt = postproc.VariableLifetime(fir.blocks)
+        fir.variable_lifetime = vlt
+        return status
+
+    def _split_exit_block(self, fir, cfg, exit_label):
+        curblock = fir.blocks[exit_label]
+        newlabel = exit_label + 1
+        newlabel = find_max_label(fir.blocks) + 1
+        fir.blocks[newlabel] = curblock
+        newblock = ir.Block(scope=curblock.scope, loc=curblock.loc)
+        newblock.append(ir.Jump(newlabel, loc=curblock.loc))
+        fir.blocks[exit_label] = newblock
+        # Rename all labels
+        fir.blocks = rename_labels(fir.blocks)
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class CanonicalizeLoopEntry(FunctionPass):
+    """A pass to canonicalize loop header by splitting it from function entry.
+
+    This is needed for loop-lifting; esp in py3.8
+    """
+    _name = "canonicalize_loop_entry"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        fir = state.func_ir
+        cfg = compute_cfg_from_blocks(fir.blocks)
+        status = False
+        for loop in cfg.loops().values():
+            if len(loop.entries) == 1:
+                [entry_label] = loop.entries
+                if entry_label == cfg.entry_point():
+                    self._split_entry_block(fir, cfg, loop, entry_label)
+                    status = True
+        fir._reset_analysis_variables()
+
+        vlt = postproc.VariableLifetime(fir.blocks)
+        fir.variable_lifetime = vlt
+        return status
+
+    def _split_entry_block(self, fir, cfg, loop, entry_label):
+        # Find iterator inputs into the for-loop header
+        header_block = fir.blocks[loop.header]
+        deps = set()
+        for expr in header_block.find_exprs(op="iternext"):
+            deps.add(expr.value)
+        # Find the getiter for each iterator
+        entry_block = fir.blocks[entry_label]
+
+        # Find the start of loop entry statement that needs to be included.
+        startpt = None
+        list_of_insts = list(entry_block.find_insts(ir.Assign))
+        for assign in reversed(list_of_insts):
+            if assign.target in deps:
+                rhs = assign.value
+                if isinstance(rhs, ir.Var):
+                    if rhs.is_temp:
+                        deps.add(rhs)
+                elif isinstance(rhs, ir.Expr):
+                    expr = rhs
+                    if expr.op == 'getiter':
+                        startpt = assign
+                        if expr.value.is_temp:
+                            deps.add(expr.value)
+                    elif expr.op == 'call':
+                        defn = guard(get_definition, fir, expr.func)
+                        if isinstance(defn, ir.Global):
+                            if expr.func.is_temp:
+                                deps.add(expr.func)
+                elif isinstance(rhs, ir.Global) and rhs.value is range:
+                    startpt = assign
+
+        if startpt is None:
+            return
+
+        splitpt = entry_block.body.index(startpt)
+        new_block = entry_block.copy()
+        new_block.body = new_block.body[splitpt:]
+        new_block.loc = new_block.body[0].loc
+        new_label = find_max_label(fir.blocks) + 1
+        entry_block.body = entry_block.body[:splitpt]
+        entry_block.append(ir.Jump(new_label, loc=new_block.loc))
+
+        fir.blocks[new_label] = new_block
+        # Rename all labels
+        fir.blocks = rename_labels(fir.blocks)
+
+
+@register_pass(mutates_CFG=False, analysis_only=True)
+class PrintIRCFG(FunctionPass):
+    _name = "print_ir_cfg"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+        self._ver = 0
+
+    def run_pass(self, state):
+        fir = state.func_ir
+        self._ver += 1
+        fir.render_dot(filename_prefix='v{}'.format(self._ver)).render()
+        return False
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
 class MakeFunctionToJitFunction(FunctionPass):
     """
     This swaps an ir.Expr.op == "make_function" i.e. a closure, for a compiled
@@ -658,6 +787,12 @@ class MixedContainerUnroller(FunctionPass):
         - A type specific switch table with each case containing a versioned
           loop body suitable for injection as a replacement for the loop_ir.
         """
+
+        # Switch IR came from code gen, immediately relabel to prevent
+        # collisions with IR derived from the user code (caller)
+        switch_ir.blocks = self.add_offset_to_labels_w_ignore(
+            switch_ir.blocks, caller_max_label + 1)
+
         # Find the sentinels and validate the form
         sentinel_exits = set()
         sentinel_blocks = []
@@ -692,7 +827,8 @@ class MixedContainerUnroller(FunctionPass):
         # replace the sentinel_blocks with the loop body
         for lbl, branch_ty in zip(sentinel_blocks, switch_data.keys()):
             loop_blocks = deepcopy(loop_ir.blocks)
-            # relabel blocks
+            # relabel blocks WRT switch table, each block replacement will shift
+            # the maximum label
             max_label = max(switch_ir.blocks.keys())
             loop_blocks = self.add_offset_to_labels_w_ignore(
                 loop_blocks, max_label + 1, ignore_set)
@@ -754,10 +890,6 @@ class MixedContainerUnroller(FunctionPass):
             remaining_keys.remove(loop_start_lbl)
             for k in remaining_keys:
                 switch_ir.blocks[k] = deepcopy(loop_blocks[k])
-
-        # now relabel the switch_ir WRT the caller max label
-        switch_ir.blocks = self.add_offset_to_labels_w_ignore(
-            switch_ir.blocks, caller_max_label + 1, ignore_set)
 
         if self._DEBUG:
             print("-" * 80 + "EXIT STUFFER")
@@ -1044,16 +1176,16 @@ class MixedContainerUnroller(FunctionPass):
 
         # compute the unrolled body
         unrolled_body = self.inject_loop_body(
-            branches, new_ir, max(func_ir.blocks.keys()),
+            branches, new_ir, max(func_ir.blocks.keys()) + 1,
             dont_replace, switch_data)
 
         # 6. Patch in the unrolled body and fix up
         blks = state.func_ir.blocks
         orig_lbl = tuple(this_loop_body)
-        data = unrolled_body, this_loop.header
+
         # python 2 can't star unpack
         replace, delete = orig_lbl[0], orig_lbl[1:]
-        unroll, header_block = data
+        unroll, header_block = unrolled_body, this_loop.header
         unroll_lbl = [x for x in sorted(unroll.blocks.keys())]
         blks[replace] = unroll.blocks[unroll_lbl[0]]
         [blks.pop(d) for d in delete]
