@@ -87,6 +87,10 @@ class ListStatus(IntEnum):
 
 
 class ErrorHandler(object):
+    """ErrorHandler for calling codegen functions from this file.
+
+    Stores the state needed to raise an exception from nopython mode.
+    """
 
     def __init__(self, context):
         self.context = context
