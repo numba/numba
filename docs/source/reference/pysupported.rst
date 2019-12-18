@@ -565,7 +565,7 @@ Disable Reflected List
 As of Numba 0.47.0 a new switch, ``disable_reflected_list`` has been introduced
 to the ``numba.future`` module. Using this switch will disable the
 *reflected-list* fully across the Numba code-base. This means, that the
-built-in constructors ``list()`` and ``[]`` will result in a *typed-list* Also,
+built-in constructors ``list()`` and ``[]`` will result in a *typed-list*. Also,
 this means that any Python list that is passed into a Numba compiled function
 will be converted into an *immutable typed-list*.
 
