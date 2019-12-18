@@ -124,6 +124,12 @@ are:
   formats are largely avoided.
 * Numba's ``typed.Dict`` will be able to use these containers as values.
 
+As of Numba 0.47.0 a feature switch, `disable_reflected_list` has been
+introduced that allows library authors and users to opt-in to the
+``typed.List`` for all use-cases. As of 0.47.0, is the recommended way to
+replace any use of the reflected ``list``.  For more information, please see:
+feature-disable-reflected-list_.
+
 
 Deprecation of :term:`object mode` `fall-back` behaviour when using ``@jit``
 ============================================================================
