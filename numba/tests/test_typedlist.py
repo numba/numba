@@ -1019,7 +1019,7 @@ class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
             )
 
     def test_empty_list_raises_value_error(self):
-        @njit
+        @njit(_disable_reflected_list=True)
         def foo(lst):
             return lst
         with self.assertRaises(ValueError) as raises:
