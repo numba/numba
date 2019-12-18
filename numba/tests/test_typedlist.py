@@ -944,7 +944,7 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
                     foo_false_expected, foo_false_received, list)
 
     def test_square_bracket_builtin_from_iter_type_exception(self):
-        @njit
+        @njit(_disable_reflected_list=True)
         def foo():
             l = [1, "a"]
             return l
