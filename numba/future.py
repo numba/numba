@@ -69,8 +69,11 @@ def disable_reflected_list():
         @njit
         def foo():
             a = []         # empty typed list
+            a.append(1)
             b = list()     # empty typed list too
+            b.append(2.0)
             c = [1, 2, 3]  # typed list initialised with three integers
+            return a, b, c
 
     """
     pass
