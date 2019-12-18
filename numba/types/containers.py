@@ -202,7 +202,9 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
-        name = "UniTuple(%s x %d)" % (dtype, count)
+        name = "%s(%s x %d)" % (
+            self.__class__.__name__, dtype, count,
+        )
         super(UniTuple, self).__init__(name)
 
     @property
@@ -276,7 +278,10 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
         self.types = tuple(types)
         self.count = len(self.types)
         self.dtype = UnionType(types)
-        name = "Tuple(%s)" % ', '.join(str(i) for i in self.types)
+        name = "%s(%s)" % (
+            self.__class__.__name__,
+            ', '.join(str(i) for i in self.types),
+        )
         super(Tuple, self).__init__(name)
 
     @property
