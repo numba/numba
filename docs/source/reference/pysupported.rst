@@ -560,7 +560,7 @@ Finally, here's an example of using a nested `List()`:
 
 
 Disabling Reflected Lists
-''''''''''''''''''''''
+''''''''''''''''''''''''''
 
 As of Numba 0.47.0 a switch, ``disable_reflected_list``, has been introduced
 to the ``numba.future`` module. Using this switch will disable the
