@@ -17,7 +17,7 @@ from . import config, errors, _runtests as runtests, types
 # Re-export typeof
 from .special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
-    literally
+    literally, literal_unroll
 )
 
 # Re-export error classes
@@ -70,10 +70,11 @@ __all__ = """
     stencil
     vectorize
     objmode
+    literal_unroll
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 30, 0)
+_min_llvmlite_version = (0, 31, 0)
 _min_llvm_version = (7, 0, 0)
 
 def _ensure_llvm():

@@ -2928,6 +2928,23 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y0 = x0 + (1 + x0) * 1.0j
         np.testing.assert_almost_equal(cfunc(x0, x, y), y0)
 
+    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
+    def test_interp_float_precision_handled_per_numpy(self):
+        # test cases from https://github.com/numba/numba/issues/4890
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+        dtypes = [np.float32, np.float64, np.int32, np.int64]
+
+        for combo in itertools.combinations_with_replacement(dtypes, 3):
+            xp_dtype, fp_dtype, x_dtype = combo
+            xp = np.arange(10, dtype=xp_dtype)
+            fp = (xp ** 2).astype(fp_dtype)
+            x = np.linspace(2, 3, 10, dtype=x_dtype)
+
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got)
+
     def test_asarray(self):
 
         def input_variations():
@@ -3236,7 +3253,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for M in [0, 1, 5, 12]:
                 expected = np_pyfunc(M)
                 got = np_nbfunc(M)
-                self.assertPreciseEqual(expected, got)
+                self.assertPreciseEqual(expected, got, prec='double')
 
             for M in ['a', 1.1, 1j]:
                 with self.assertRaises(TypingError) as raises:
@@ -3543,3 +3560,7 @@ def foo():
         with self.assertTypingError():
             cfunc = jit(nopython=True)(iinfo)
             cfunc(np.float64(7))
+
+
+if __name__ == '__main__':
+    unittest.main()
