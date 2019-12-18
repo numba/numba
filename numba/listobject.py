@@ -597,7 +597,7 @@ def _list_pop(typingctx, l, index):
 def _list_getitem_pop_helper(typingctx, l, index, op):
     """Wrap numba_list_getitem and numba_list_pop
 
-    Returns 2-tuple of (intp, ?item_type)
+    Returns 2-tuple of (int32, ?item_type)
 
     This is a helper that is parametrized on the type of operation, which can
     be either 'pop' or 'getitem'. This is because, signature wise, getitem and
