@@ -39,6 +39,15 @@ class _TypeMetaclass(ABCMeta):
     and hashing), then looking it up in the _typecache registry.
     """
 
+    def __init__(cls, name, bases, orig_vars):
+        # __init__ is hooked to mark whether a Type class being defined is a
+        # Numba internal type (one which is defined somewhere under the `numba`
+        # module) or an external type (one which is defined elsewhere, for
+        # example a user defined type).
+        super(_TypeMetaclass, cls).__init__(name, bases, orig_vars)
+        root = (cls.__module__.split('.'))[0]
+        cls._is_internal = root == "numba"
+
     def _intern(cls, inst):
         # Try to intern the created instance
         wr = weakref.ref(inst, _on_type_disposal)
@@ -206,6 +215,12 @@ class Type(object):
     def cast_python_value(self, args):
         raise NotImplementedError
 
+
+    @property
+    def is_internal(self):
+        """ Returns True if this class is an internally defined Numba type by
+        virtue of the module in which it is instantiated, False else."""
+        return self._is_internal
 
 # XXX we should distinguish between Dummy (no meaningful
 # representation, e.g. None or a builtin function) and Opaque (has a
