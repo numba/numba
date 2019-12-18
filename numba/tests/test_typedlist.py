@@ -975,7 +975,6 @@ class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(received, expected)
 
     def test_nested_conversion(self):
-        # nested lists are incompatible with reflected list
         @njit(_disable_reflected_list=True)
         def foo(lst):
             return lst
