@@ -22,7 +22,7 @@ from numba.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.errors import (TypingError, UnsupportedError,
                           NumbaPendingDeprecationWarning, NumbaWarning,
-                          feedback_details)
+                          NumbaDeprecationWarning, feedback_details)
 
 import copy
 
@@ -2012,15 +2012,22 @@ def warn_deprecated(func_ir, typemap):
                 loc = func_ir.loc
                 arg = name.split('.')[1]
                 fname = func_ir.func_id.func_qualname
-                tyname = 'list' if isinstance(ty, types.List) else 'set'
+                if isinstance(ty, types.List):
+                    note = "deprecated"
+                    tyname = 'list'
+                    depclass = NumbaDeprecationWarning
+                elif isinstance(ty, types.Set):
+                    note = "scheduled for deprecation"
+                    tyname = 'set'
+                    depclass = NumbaPendingDeprecationWarning
                 url = ("http://numba.pydata.org/numba-doc/latest/reference/"
                        "deprecation.html#deprecation-of-reflection-for-list-and"
                        "-set-types")
-                msg = ("\nEncountered the use of a type that is scheduled for "
-                        "deprecation: type 'reflected %s' found for argument "
+                msg = ("\nEncountered the use of a type that is %s: "
+                       "type 'reflected %s' found for argument "
                         "'%s' of function '%s'.\n\nFor more information visit "
-                        "%s" % (tyname, arg, fname, url))
-                warnings.warn(NumbaPendingDeprecationWarning(msg, loc=loc))
+                        "%s" % (note, tyname, arg, fname, url))
+                warnings.warn(depclass(msg, loc=loc))
 
 
 def resolve_func_from_module(func_ir, node):

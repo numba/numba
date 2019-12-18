@@ -46,20 +46,20 @@ class TestDeprecation(unittest.TestCase):
         def foo_set(a):
             return a.add(1)
 
-        for f in [foo_list, foo_set]:
+        for f, depclazz in ((foo_list, NumbaDeprecationWarning),
+                            (foo_set, NumbaPendingDeprecationWarning)):
             container = f.__name__.strip('foo_')
             inp = eval(container)([10, ])
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("ignore", category=NumbaWarning)
                 warnings.simplefilter("always",
-                                      category=NumbaPendingDeprecationWarning)
+                                      category=depclazz)
                 jit(nopython=True)(f)(inp)
                 self.assertEqual(len(w), 1)
-                self.assertEqual(w[0].category, NumbaPendingDeprecationWarning)
+                self.assertEqual(w[0].category, depclazz)
                 warn_msg = str(w[0].message)
-                msg = ("Encountered the use of a type that is scheduled for "
-                       "deprecation")
-                self.assertIn(msg, warn_msg)
+                msg = (".*Encountered the use of a type that is.*deprecat.*")
+                self.assertRegexpMatches(warn_msg, msg)
                 msg = ("\'reflected %s\' found for argument" % container)
                 self.assertIn(msg, warn_msg)
                 self.assertIn("http://numba.pydata.org", warn_msg)
