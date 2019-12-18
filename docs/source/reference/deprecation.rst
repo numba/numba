@@ -124,9 +124,9 @@ are:
   formats are largely avoided.
 * Numba's ``typed.Dict`` will be able to use these containers as values.
 
-As of Numba 0.47.0 a feature switch, `disable_reflected_list` has been
+As of Numba 0.47.0 a feature switch, ``disable_reflected_list`` has been
 introduced that allows library authors and users to opt-in to the
-``typed.List`` for all use-cases. As of 0.47.0, is the recommended way to
+``typed.List`` for all use-cases. Using this switch is the recommended way to
 replace any use of the reflected ``list``.  For more information, please see:
 :ref:`feature-disable-reflected-list`.
 
@@ -253,4 +253,3 @@ Projects that need/rely on the deprecated behaviour should pin their dependency
 on Numba to a version prior to removal of this behaviour. The recommended method
 for accommodating the deprecation of ``numba.autojit`` is to simply replace it
 with the semantically and functionally equivalent ``numba.jit`` decorator.
-
