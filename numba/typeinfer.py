@@ -1546,12 +1546,11 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.constraints.append(constraint)
         elif expr.op == 'build_list':
             if self.context._disable_reflected_list:
-                constraint = BuildTypedListConstraint(
-                    target.name, items=expr.items, loc=inst.loc)
+                constrainer = BuildTypedListConstraint
             else:
-                constraint = BuildListConstraint(
-                    target.name, items=expr.items, loc=inst.loc)
-            self.constraints.append(constraint)
+                constrainer = BuildListConstraint
+            self.constraints.append(constrainer(
+                target.name, items=expr.items, loc=inst.loc))
         elif expr.op == 'build_set':
             constraint = BuildSetConstraint(target.name, items=expr.items,
                                             loc=inst.loc)
