@@ -342,6 +342,7 @@ class ShapeEquivSet(EquivSet):
         # It is used to retrieve defined shape variables given an equivalence
         # index.
         self.ind_to_var = ind_to_var if ind_to_var else {}
+        # ind_to_const maps index number to a constant, if known.
         self.ind_to_const = ind_to_const if ind_to_const else {}
 
         super(ShapeEquivSet, self).__init__(obj_to_ind, ind_to_obj, next_id)
@@ -504,8 +505,8 @@ class ShapeEquivSet(EquivSet):
                     else:
                         varlist.append(var)
                 if isinstance(var, ir.Const) and not (var.value in constlist):
-                    # favor those already defined, move to front of constlist
                     constlist.append(var.value)
+
         # try to populate ind_to_var if variables are present
         for obj in varlist:
             name = obj.name
@@ -514,12 +515,15 @@ class ShapeEquivSet(EquivSet):
                 self.obj_to_ind[name] = self.next_ind
                 self.ind_to_var[self.next_ind] = [obj]
                 self.next_ind += 1
+
+        # create equivalence classes for previously unseen constants
         for const in constlist:
             if const in names and not (const in self.obj_to_ind):
                 self.ind_to_obj[self.next_ind] = [const]
                 self.obj_to_ind[const] = self.next_ind
                 self.ind_to_const[self.next_ind] = const
                 self.next_ind += 1
+
         for i in range(ndim):
             names = [obj_name[i] for obj_name in obj_names]
             super(ShapeEquivSet, self).insert_equiv(*names)
