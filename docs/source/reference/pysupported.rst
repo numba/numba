@@ -520,7 +520,7 @@ explicitly from the `numba.typed` module::
 .. note::
     The typed-list is considered stable with Numba version 0.47.0. Using
     the ``disable_reflected_list`` switch from the ``numba.future`` module will
-    mean that the constructors `[]` and `list()` will create a typed-list
+    mean that the constructors ``[]`` and ``list()`` will create a typed-list
     instead of a reflected one.
 
 
@@ -617,7 +617,8 @@ as arguments and have them converted to *immutable typed-lists*:
     total = foo(z)
 
 Immutability in this case, means that the contents of the *typed-list* cannot
-be modified, for example, by using methods such as `append`, `pop` or `clear`.
+be modified, for example, by using methods such as ``append``, ``pop`` or
+``clear``.
 
 .. code-block:: python
 
