@@ -930,6 +930,7 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
 
     def test_square_bracket_builtin_from_iter_type_coercion(self):
         def foo():
+            # FIXME: the first item is coerced to float
             l = [1, 1.0]
             return l
         foo_true, foo_false = self._njit_both(foo)
@@ -938,7 +939,6 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
         foo_true_expected.append(1.0)
         foo_false_expected = [1.0, 1.0]
         foo_true_received, foo_false_received = foo_true(), foo_false()
-        # FIXME: the first item is coerced to float
 
         self._check(foo_true_expected, foo_true_received, List,
                     foo_false_expected, foo_false_received, list)
