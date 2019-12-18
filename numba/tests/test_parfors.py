@@ -54,6 +54,9 @@ _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
 
+_GLOBAL_INT_FOR_TESTING1 = 17
+_GLOBAL_INT_FOR_TESTING2 = 5
+
 class TestParforsBase(TestCase):
     """
     Base class for testing parfors.
@@ -876,6 +879,13 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, C)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 2)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
+
+    @skip_unsupported
+    def test_issue4963(self):
+        def test_impl():
+            buf = np.zeros((_GLOBAL_INT_FOR_TESTING1, _GLOBAL_INT_FOR_TESTING2))
+            return buf
+        self.check(test_impl)
 
     @skip_unsupported
     def test_random_parfor(self):
