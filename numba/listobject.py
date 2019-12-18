@@ -604,7 +604,6 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
     pop and are the same.
     """
     assert(op in ("pop", "getitem"))
-    # FIXME: typed lists with None as type have a quirky path
     IS_NOT_NONE = not isinstance(l.item_type, types.NoneType)
     resty = types.Tuple([types.int32,
                          types.Optional(l.item_type
