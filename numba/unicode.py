@@ -425,6 +425,10 @@ def unicode_len(s):
 
 @overload(operator.eq)
 def unicode_eq(a, b):
+    # ignore extension types
+    if a.is_extension_type or b.is_extension_type:
+        return
+
     accept = (types.UnicodeType, types.StringLiteral, types.UnicodeCharSeq)
     a_unicode = isinstance(a, accept)
     b_unicode = isinstance(b, accept)

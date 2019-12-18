@@ -206,6 +206,21 @@ class Type(object):
     def cast_python_value(self, args):
         raise NotImplementedError
 
+    @property
+    def is_extension_type(self):
+        """ Returns True if this class is an extension type by virtue of using
+        the ExtensionTypeMixin or otherwise, False else."""
+        return hasattr(self, '_extension_type')
+
+
+class ExtensionTypeMixin(object):
+    """
+    A type class definition should use this mixin to declare that it is a type
+    that is an extension to the otherwise closed Numba type system and therefore
+    should not take part in "default"/catch all overloading behaviours.
+    """
+    _extension_type = True
+
 
 # XXX we should distinguish between Dummy (no meaningful
 # representation, e.g. None or a builtin function) and Opaque (has a
