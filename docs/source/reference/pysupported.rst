@@ -562,12 +562,12 @@ Finally, here's an example of using a nested `List()`:
 Disabling Reflected Lists
 ''''''''''''''''''''''''''
 
-As of Numba 0.47.0 a switch, ``disable_reflected_list``, has been introduced
-to the ``numba.future`` module. Using this switch will disable the
-*reflected-list* fully across the Numba code-base. This means that the
-built-in constructors ``list()`` and ``[]`` will result in a *typed-list*. Also,
-this means that any Python list that is passed into a Numba compiled function
-will be converted into an *immutable typed-list*.
+As of Numba 0.47.0 a switch, ``disable_reflected_list``, has been introduced to
+the ``numba.future`` module. Using this switch will disable the
+*reflected-list* fully across the Numba code-base. This means that the built-in
+constructors ``list()`` and ``[]`` will result in a *typed-list*. This also
+means that any Python list that is passed into a Numba compiled function will
+be converted into an *immutable typed-list*.
 
 In order to use the switch add the following statement at the module level:
 
