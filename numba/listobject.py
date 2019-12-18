@@ -1132,18 +1132,17 @@ def _equals_helper(this, other, OP):
     if not isinstance(other, types.ListType):
         return lambda this, other: False
 
+    this_is_none = isinstance(this.dtype, types.NoneType)
+    other_is_none = isinstance(other.dtype, types.NoneType)
+
     def impl(this, other):
         def equals(this, other):
             if len(this) != len(other):
                 return False
+            if this_is_none or other_is_none:
+                return this_is_none == other_is_none
             for i in range(len(this)):
-                if this[i] is None:
-                    if other[i] is not None:
-                        return False
-                elif other[i] is None:
-                    if this[i] is not None:
-                        return False
-                elif this[i] != other[i]:
+                if this[i] != other[i]:
                     return False
             else:
                 return True
@@ -1162,7 +1161,7 @@ def impl_not_equals(this, other):
 
 
 @register_jitable
-def compare(this, other):
+def compare(this, other, this_is_none, other_is_none):
     """Oldschool (python 2.x) cmp.
 
        if this < other return -1
@@ -1171,15 +1170,16 @@ def compare(this, other):
     """
     if len(this) != len(other):
         return -1 if len(this) < len(other) else 1
+    if this_is_none or other_is_none:
+        if this_is_none and other_is_none:
+            return 0
+        elif this_is_none and not other_is_none:
+            return -1
+        elif not this_is_none and other_is_none:
+            return 1
     for i in range(len(this)):
         this_item, other_item = this[i], other[i]
-        if this_item is None:
-            if other_item is not None:
-                return -1
-        elif other_item is None:
-            if this_item is not None:
-                return 1
-        elif this_item != other_item:
+        if this_item != other_item:
             return -1 if this_item < other_item else 1
     else:
         return 0
@@ -1191,8 +1191,11 @@ def compare_helper(this, other, accepted):
     if not isinstance(other, types.ListType):
         return lambda this, other: False
 
+    this_is_none = isinstance(this.dtype, types.NoneType)
+    other_is_none = isinstance(other.dtype, types.NoneType)
+
     def impl(this, other):
-        return compare(this, other) in accepted
+        return compare(this, other, this_is_none, other_is_none) in accepted
     return impl
 
 
