@@ -587,7 +587,9 @@ in a Numba compiled function:
     @njit
     def foo():
         a = list()     # create an empty typed-list
+        a.append(1)
         b = []         # create another empty typed-list
+        b.append(2.0)
         c = [1, 2, 3]  # create typed-list containing 1, 2 and 3
         return a, b, c # return all three
 
