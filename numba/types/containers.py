@@ -512,10 +512,9 @@ class ListType(IterableType):
         if isinstance(other, ListType):
             if not other.is_precise():
                 return self
-            mutable = self.mutable or other.mutable
-            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
-            if dtype is not None:
-                return ListType(dtype, mutable=mutable)
+            mutable = self.mutable and other.mutable
+            if self.dtype == other.dtype:
+                return ListType(self.dtype, mutable=mutable)
 
 
 
