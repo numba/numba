@@ -2977,7 +2977,7 @@ def array_nonzero(context, builder, sig, args):
     one = context.get_constant(types.intp, 1)
     count = cgutils.alloca_once_value(builder, zero)
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
-        ptr = cgutils.get_item_pointer2(builder, data, shape, strides,
+        ptr = cgutils.get_item_pointer2(context, builder, data, shape, strides,
                                         layout, indices)
         val = load_item(context, builder, aryty, ptr)
         nz = context.is_true(builder, aryty.dtype, val)
@@ -2994,7 +2994,7 @@ def array_nonzero(context, builder, sig, args):
     # And fill them up
     index = cgutils.alloca_once_value(builder, zero)
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
-        ptr = cgutils.get_item_pointer2(builder, data, shape, strides,
+        ptr = cgutils.get_item_pointer2(context, builder, data, shape, strides,
                                         layout, indices)
         val = load_item(context, builder, aryty, ptr)
         nz = context.is_true(builder, aryty.dtype, val)
@@ -3005,7 +3005,7 @@ def array_nonzero(context, builder, sig, args):
                 indices = (zero,)
             cur = builder.load(index)
             for i in range(nouts):
-                ptr = cgutils.get_item_pointer2(builder, out_datas[i],
+                ptr = cgutils.get_item_pointer2(context, builder, out_datas[i],
                                                 out_shape, (),
                                                 'C', [cur])
                 store_item(context, builder, outaryty, indices[i], ptr)

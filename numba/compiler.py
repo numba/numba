@@ -50,7 +50,7 @@ class Flags(utils.ConfigOptions):
         'release_gil': False,
         'no_compile': False,
         'debuginfo': False,
-        'boundcheck': False,
+        'boundscheck': False,
         'forceinline': False,
         'no_cpython_wrapper': False,
         # Enable automatic parallel optimization, can be fine-tuned by taking
@@ -254,8 +254,8 @@ def _make_subtarget(targetctx, flags):
     subtargetoptions = {}
     if flags.debuginfo:
         subtargetoptions['enable_debuginfo'] = True
-    if flags.boundcheck:
-        subtargetoptions['enable_boundcheck'] = True
+    if flags.boundscheck:
+        subtargetoptions['enable_boundscheck'] = True
     if flags.nrt:
         subtargetoptions['enable_nrt'] = True
     if flags.auto_parallel:
@@ -428,7 +428,6 @@ class DefaultPassBuilder(object):
       - objectmode
       - interpreted
     """
-
     @staticmethod
     def define_nopython_pipeline(state, name='nopython'):
         """Returns an nopython mode pipeline based PassManager
