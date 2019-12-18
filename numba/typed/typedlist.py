@@ -463,7 +463,7 @@ def _convert_python_list_to_numba_typed_list(
         [listobject.ll_list_type, listobject.ll_bytes],
     )
     fn = builder.module.get_or_insert_function(fnty, name='numba_list_append')
-    # Traverse Python list and unbox objects into typed list
+    # Traverse a Python list and unbox the objects into a typed list
     from numba.targets.boxing import _NumbaTypeHelper
     with _NumbaTypeHelper(c) as nth:
         # Note: *expected_typobj* can't be NULL
@@ -508,7 +508,7 @@ def unbox_listtype(typ, val, c):
     ctor = cgutils.create_struct_proxy(typ)
     lstruct = ctor(context, builder)
 
-    # 'val' could be either a Pyton list or a Numba typed-list, the presence of
+    # 'val' could be either a Python list or a Numba typed-list, the presence of
     # the '_opaque' attribute will tell us what it is.
     has_opaque = c.pyapi.object_hasattr_string(val, '_opaque')
 

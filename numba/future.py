@@ -20,10 +20,10 @@ def disable_reflected_list():
     """Disable the Numba reflected list.
 
     This will disable support for the Numba reflected list in favour of the
-    Numba typed list. This implies two things
+    Numba typed list. This implies two things:
 
     a) Any Python lists that are arguments to a Numba compiled function will
-    automatically be converted to a immutable Numba typed lists. The advantage
+    automatically be converted to immutable Numba typed lists. The advantage
     of this is that nested Python lists can now be used as arguments to Numba
     compiled functions. The disadvantage is that such lists can not longer be
     mutated. If you need to mutate the list within a Numba compiled function,

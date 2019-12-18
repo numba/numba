@@ -3,7 +3,7 @@ from numba.typed import List
 from .support import TestCase, MemoryLeakMixin
 
 
-# import the symbol from _future_
+# import the symbol from numba.future
 from numba.future import disable_reflected_list
 # make sure we can call it to avoid linter complaints
 disable_reflected_list()

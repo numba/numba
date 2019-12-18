@@ -500,7 +500,7 @@ class TestNoneType(MemoryLeakMixin, TestCase):
 
         self.assertEqual(impl.py_func(), impl())
 
-    def test_unequals_none(self):
+    def test_not_equals_none(self):
         @njit
         def impl():
             l = List()
@@ -973,7 +973,7 @@ class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
         received = foo([1, 2, 3])
         expected = List()
         [expected.append(i) for i in (1, 2, 3)]
-        # FIXME: this may fail if mutability is included in equality
+        # NOTE: this may fail if mutability is included in equality
         self.assertEqual(received, expected)
 
     def test_nested_conversion(self):
@@ -1011,7 +1011,7 @@ class TestConversionListToImmutableTypedList(MemoryLeakMixin, TestCase):
                      "lst.insert(0, 0)",
                      "lst.clear()",
                      "lst.reverse()",
-                     # FIXME: sort is missing because not implemented
+                     # FIXME: sort is missing because it's not implemented
                      ):
             with self.assertRaises(TypingError) as raises:
                 foo = generate_function(line)
