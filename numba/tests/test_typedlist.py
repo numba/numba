@@ -841,8 +841,6 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
             return l
         foo_true, foo_false = self._njit_both(foo)
         foo_true_received, foo_false_received = foo_true(), foo_false()
-        foo_true, foo_false = self._njit_both(foo)
-        foo_true_received, foo_false_received = foo_true(), foo_false()
         foo_true_expected, foo_false_expected = List(), list([1])
         foo_true_expected.append(1)
         self.assertEqual(foo_true_expected, foo_true_received)
