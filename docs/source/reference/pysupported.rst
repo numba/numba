@@ -430,7 +430,8 @@ list
     feature. As of version 0.47.0 a switch, ``disable_reflected_list`` is
     available from the ``numba.future`` module that can be used to opt-in to
     fully disable the reflected list for all use-cases (see below).
-    For more information about the deprecation schedule, please see: :ref:`deprecation`.
+    For more information about the deprecation schedule, please see:
+    :ref:`deprecation`.
 
 Creating and returning lists from JIT-compiled functions is supported,
 as well as all methods and operations.  Lists must be strictly homogeneous:
@@ -534,8 +535,8 @@ jit-compiled function and letting the compiler infer the item type:
    :dedent: 4
    :linenos:
 
-Here's an example of using ``List()`` to create a ``numba.typed.List`` outside of
-a jit-compiled function and then using it as an argument to a jit-compiled
+Here's an example of using ``List()`` to create a ``numba.typed.List`` outside
+of a jit-compiled function and then using it as an argument to a jit-compiled
 function:
 
 .. literalinclude:: ../../../examples/typed_list_usage.py
