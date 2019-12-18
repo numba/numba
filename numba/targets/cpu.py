@@ -12,7 +12,7 @@ from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.utils import cached_property
 from numba.targets import (
-    callconv, codegen, externals, intrinsics, listobj, setobj, dictimpl,
+    callconv, codegen, externals, intrinsics, setobj, dictimpl,
 )
 from .options import TargetOptions
 from numba.runtime import rtsys
@@ -127,10 +127,10 @@ class CPUContext(BaseContext):
         Build a list from the Numba *list_type* and its initial *items*.
         """
         if self._disable_reflected_list:
-            from numba import listobject
-            return listobject.build_list(self, builder, list_type, items)
+            from numba import listobject as listobj_impl
         else:
-            return listobj.build_list(self, builder, list_type, items)
+            from numba.targets import listobj as listobj_impl
+        return listobj_impl.build_list(self, builder, list_type, items)
 
     def build_set(self, builder, set_type, items):
         """
