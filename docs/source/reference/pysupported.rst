@@ -427,7 +427,10 @@ list
     However, it was scheduled for deprecation from version 0.44.0 onwards due
     to its limitations. As of version 0.45.0 a new implementation, the
     so-called *typed-list* (see below), is available as an experimental
-    feature. For more information, please see: :ref:`deprecation`.
+    feature. As of version 0.47.0 a new switch, ``disable_reflected_list`` is
+    available from the ``numba.future`` module that can be used to opt-in to
+    fully disable the reflected list for all use-cases (see below).
+    For more information, please see: :ref:`deprecation`.
 
 Creating and returning lists from JIT-compiled functions is supported,
 as well as all methods and operations.  Lists must be strictly homogeneous:
@@ -514,9 +517,10 @@ explicitly from the `numba.typed` module::
 
 
 .. note::
-    As the typed-list stabilizes it will fully replace the reflected-list and the
-    constructors `[]` and `list()` will create a typed-list instead of a
-    reflected one.
+    The typed-list is beginning to stabilize with Numba version 0.47.0. Using
+    the ``disable_reflected_list`` switch from the ``numba.future`` module will
+    mean that the constructors `[]` and `list()` will create a typed-list
+    instead of a reflected one.
 
 
 Here's an example using ``List()`` to create ``numba.typed.List`` inside a
@@ -551,6 +555,119 @@ Finally, here's an example of using a nested `List()`:
    :end-before: magictoken.ex_nested_list.end
    :dedent: 4
    :linenos:
+
+.. _feature-disable-reflected-list:
+
+
+Disable Reflected List
+''''''''''''''''''''''
+
+As of Numba 0.47.0 a new switch, ``disable_reflected_list`` has been introduced
+to the ``numba.future`` module. Using this switch will disable the
+*reflected-list* fully across the Numba code-base. This means, that the
+built-in constructors ``list()`` and ``[]`` will result in a *typed-list* Also,
+this means that any Python list that is passed into a Numba compiled function
+will be converted into an *immutable typed-list*.
+
+In order to use the switch add the following statement at the module level:
+
+.. code-block:: python
+
+    from numba.typed import disable_reflected_list
+    disable_reflected_list()  # this can be called to make linters happy
+
+You can then use the ``list`` and ``[]`` constructors to create a *typed-list*
+in a Numba compiled function:
+
+.. code-block:: python
+
+    from numba import njit
+    from numba.future import disable_reflected_list
+
+    @njit
+    def foo():
+        a = list()     # create an empty typed-list
+        b = []         # create another empty typed-list
+        c = [1, 2, 3]  # create typed-list containing 1, 2 and 3
+        return a, b, c # return all three
+
+
+Additionally, it is possible to hand Python lists into Numba compiled functions
+as arguments and have them converted to *immutable typed-lists*:
+
+.. code-block:: python
+
+    from numba import njit
+    from numba.future import disable_reflected_list
+
+    z = [1, 2, 3]
+
+    @njit
+    def foo(lst):
+        acc = 0
+        # if lst was a Python list, Numba has converted it into an immutable
+        # typed-list
+        for i in lst:  
+            acc += i
+        return acc
+
+    total = foo(z)
+
+Immutability in this case, means that the contents of the *typed-list* can not
+be modified, for example using methods such as `append`, `pop` or `clear`.
+
+.. code-block:: python
+
+    from numba import njit
+    from numba.future import disable_reflected_list
+
+    @njit
+    def foo(lst):
+        # if lst was a Python list, the following will all fail
+        lst.append(3)
+        lst.pop()
+        lst.clear()
+
+The reason for this limitation is that it is no longer possible to reflect any
+changes made to the original. Effectively, this means that any modifications
+made to the list within a Numba compiled function would not be visible outside
+of that function. If you need to make modifications to the list from within a
+Numba compiled function, consider using a typed-list to begin with:
+
+.. code-block:: python
+
+    from numba import njit
+    from numba.typed import List
+
+    @njit
+    def append_three(lst):
+        lst.append(3)
+
+    l = List()
+    l.append(1)
+    l.append(2)
+
+    append_three(l)
+    # l now contains 1, 2, 3
+
+An important advantage over the previous behaviour of the reflected list, is
+that nested lists can now be used as arguments for Numba compiled functions:
+
+.. code-block:: python
+
+    from numba import njit
+    from numba.future import disable_reflected_list
+
+    @njit
+    def sum_nested(lst):
+        acc = 0
+        for n in lst
+            for i in n:
+                acc += i
+        return acc
+
+    # the following now works
+    result = sum_nested([[1, 2], [3, 4]])
 
 .. _pysupported-comprehension:
 
