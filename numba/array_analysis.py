@@ -328,7 +328,7 @@ class ShapeEquivSet(EquivSet):
     """
 
     def __init__(self, typemap, defs=None, ind_to_var=None,
-                 obj_to_ind=None, ind_to_obj=None, next_id=0):
+                 obj_to_ind=None, ind_to_obj=None, next_id=0, ind_to_const=None):
         """Create a new ShapeEquivSet object, where typemap is a dictionary
         that maps variable names to their types, and it will not be modified.
         Optional keyword arguments are for internal use only.
@@ -342,6 +342,7 @@ class ShapeEquivSet(EquivSet):
         # It is used to retrieve defined shape variables given an equivalence
         # index.
         self.ind_to_var = ind_to_var if ind_to_var else {}
+        self.ind_to_const = ind_to_const if ind_to_const else {}
 
         super(ShapeEquivSet, self).__init__(obj_to_ind, ind_to_obj, next_id)
 
@@ -359,11 +360,12 @@ class ShapeEquivSet(EquivSet):
             ind_to_var=copy.copy(self.ind_to_var),
             obj_to_ind=copy.deepcopy(self.obj_to_ind),
             ind_to_obj=copy.deepcopy(self.ind_to_obj),
-            next_id=self.next_ind)
+            next_id=self.next_ind,
+            ind_to_const=copy.deepcopy(self.ind_toconst))
 
     def __repr__(self):
-        return "ShapeEquivSet({}, ind_to_var={})".format(
-            self.ind_to_obj, self.ind_to_var)
+        return "ShapeEquivSet({}, ind_to_var={}, ind_to_const={})".format(
+            self.ind_to_obj, self.ind_to_var, self.ind_to_const)
 
     def _get_names(self, obj):
         """Return a set of names for the given obj, where array and tuples
@@ -454,17 +456,25 @@ class ShapeEquivSet(EquivSet):
             if obj in self.obj_to_ind:
                 inds.append(self.obj_to_ind[obj])
         varlist = []
+        constval = None
         names = set()
         for i in sorted(inds):
-            for x in self.ind_to_var[i]:
-                if not (x.name in names):
-                    varlist.append(x)
-                    names.add(x.name)
+            if i in self.ind_to_var:
+                for x in self.ind_to_var[i]:
+                    if not (x.name in names):
+                        varlist.append(x)
+                        names.add(x.name)
+            if i in self.ind_to_const:
+                assert(constval is None)
+                constval = self.ind_to_const[i]
         super(ShapeEquivSet, self)._insert(objs)
         new_ind = self.obj_to_ind[objs[0]]
         for i in set(inds):
-            del self.ind_to_var[i]
+            if i in self.ind_to_var:
+                del self.ind_to_var[i]
         self.ind_to_var[new_ind] = varlist
+        if constval is not None:
+            self.ind_to_const[new_ind] = constval
 
     def insert_equiv(self, *objs):
         """Overload EquivSet.insert_equiv to handle Numba IR variables and
@@ -482,6 +492,7 @@ class ShapeEquivSet(EquivSet):
         assert all(ndim == x for x in ndims), (
             "Dimension mismatch for {}".format(objs))
         varlist = []
+        constlist = []
         for obj in objs:
             if not isinstance(obj, tuple):
                 obj = (obj,)
@@ -492,6 +503,9 @@ class ShapeEquivSet(EquivSet):
                         varlist.insert(0, var)
                     else:
                         varlist.append(var)
+                if isinstance(var, ir.Const) and not (var.value in constlist):
+                    # favor those already defined, move to front of constlist
+                    constlist.append(var.value)
         # try to populate ind_to_var if variables are present
         for obj in varlist:
             name = obj.name
@@ -499,6 +513,12 @@ class ShapeEquivSet(EquivSet):
                 self.ind_to_obj[self.next_ind] = [name]
                 self.obj_to_ind[name] = self.next_ind
                 self.ind_to_var[self.next_ind] = [obj]
+                self.next_ind += 1
+        for const in constlist:
+            if const in names and not (const in self.obj_to_ind):
+                self.ind_to_obj[self.next_ind] = [const]
+                self.obj_to_ind[const] = self.next_ind
+                self.ind_to_const[self.next_ind] = const
                 self.next_ind += 1
         for i in range(ndim):
             names = [obj_name[i] for obj_name in obj_names]
@@ -525,8 +545,12 @@ class ShapeEquivSet(EquivSet):
         for i in inds:
             require(i in self.ind_to_var)
             vs = self.ind_to_var[i]
-            require(vs != [])
-            shape.append(vs[0])
+            if vs != []:
+                shape.append(vs[0])
+            else:
+                require(i in self.ind_to_const)
+                vs = self.ind_to_const[i]
+                shape.append(vs)
         return tuple(shape)
 
     def get_shape_classes(self, name):
@@ -1101,7 +1125,11 @@ class ArrayAnalysis(object):
                 return pre, post
 
             if isinstance(typ, types.ArrayCompatible):
-                if (shape == None or isinstance(shape, tuple) or
+                if (shape is not None and
+                    isinstance(shape, ir.Var) and
+                    isinstance(self.typemap[shape.name], types.containers.Tuple)):
+                    pass
+                elif (shape == None or isinstance(shape, tuple) or
                     (isinstance(shape, ir.Var) and
                      not equiv_set.has_shape(shape))):
                     (shape, post) = self._gen_shape_call(equiv_set, lhs,
