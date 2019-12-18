@@ -831,6 +831,15 @@ class TestDisableReflectedListBase(MemoryLeakMixin, TestCase):
     def _njit_both(self, func):
         return (njit(func, _disable_reflected_list=p) for p in (True, False))
 
+    def _check(self,
+               foo_true_expected, foo_true_received, foo_true_type,
+               foo_false_expected, foo_false_received, foo_false_type,
+               ):
+        self.assertEqual(foo_true_expected, foo_true_received)
+        self.assertEqual(foo_false_expected, foo_false_received)
+        self.assertEqual(foo_true_type, type(foo_true_received))
+        self.assertEqual(foo_false_type, type(foo_false_received))
+
 
 class TestListBuiltinConstructors(TestDisableReflectedListBase):
 
@@ -843,10 +852,8 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
         foo_true_received, foo_false_received = foo_true(), foo_false()
         foo_true_expected, foo_false_expected = List(), list([1])
         foo_true_expected.append(1)
-        self.assertEqual(foo_true_expected, foo_true_received)
-        self.assertEqual(foo_false_expected, foo_false_received)
-        self.assertEqual(List, type(foo_true_received))
-        self.assertEqual(list, type(foo_false_received))
+        self._check(foo_true_expected, foo_true_received, List,
+                    foo_false_expected, foo_false_received, list)
 
     def test_simple_refine_square_braket_builtin(self):
         def foo():
@@ -857,10 +864,8 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
         foo_true_received, foo_false_received = foo_true(), foo_false()
         foo_true_expected, foo_false_expected = List(), list([1])
         foo_true_expected.append(1)
-        self.assertEqual(foo_true_expected, foo_true_received)
-        self.assertEqual(foo_false_expected, foo_false_received)
-        self.assertEqual(List, type(foo_true_received))
-        self.assertEqual(list, type(foo_false_received))
+        self._check(foo_true_expected, foo_true_received, List,
+                    foo_false_expected, foo_false_received, list)
 
     def test_square_bracket_builtin_from_iter(self):
         def foo():
@@ -870,10 +875,8 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
         foo_true_received, foo_false_received = foo_true(), foo_false()
         foo_true_expected, foo_false_expected = List(), list([1, 2, 3])
         [foo_true_expected.append(i) for i in (1, 2, 3)]
-        self.assertEqual(foo_true_expected, foo_true_received)
-        self.assertEqual(foo_false_expected, foo_false_received)
-        self.assertEqual(List, type(foo_true_received))
-        self.assertEqual(list, type(foo_false_received))
+        self._check(foo_true_expected, foo_true_received, List,
+                    foo_false_expected, foo_false_received, list)
 
     def test_list_and_square_bracket_builtin_from_iter(self):
         def foo():
@@ -883,10 +886,8 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
         foo_true_received, foo_false_received = foo_true(), foo_false()
         foo_true_expected, foo_false_expected = List(), list([1, 2, 3])
         [foo_true_expected.append(i) for i in (1, 2, 3)]
-        self.assertEqual(foo_true_expected, foo_true_received)
-        self.assertEqual(foo_false_expected, foo_false_received)
-        self.assertEqual(List, type(foo_true_received))
-        self.assertEqual(list, type(foo_false_received))
+        self._check(foo_true_expected, foo_true_received, List,
+                    foo_false_expected, foo_false_received, list)
 
     @skip_py2
     def test_dict_in_list_for_square_bracket_builtin(self):
@@ -899,10 +900,8 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
         foo_true_received, foo_false_received = foo_true(), foo_false()
         foo_true_expected, foo_false_expected = List(), [d]
         foo_true_expected.append(d)
-        self.assertEqual(foo_true_expected, foo_true_received)
-        self.assertEqual(foo_false_expected, foo_false_received)
-        self.assertEqual(List, type(foo_true_received))
-        self.assertEqual(list, type(foo_false_received))
+        self._check(foo_true_expected, foo_true_received, List,
+                    foo_false_expected, foo_false_received, list)
 
     def test_square_bracket_builtin_from_nested_iter(self):
         def foo():
@@ -919,14 +918,13 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
         foo_true_expected.append(a)
         foo_true_expected.append(b)
 
-        self.assertEqual(foo_true_expected, foo_true_received)
-        self.assertEqual(foo_false_expected, foo_false_received)
+        self._check(foo_true_expected, foo_true_received, List,
+                    foo_false_expected, foo_false_received, list)
 
-        self.assertEqual(List, type(foo_true_received))
+        # check nested elements too
         self.assertEqual(List, type(foo_true_received[0]))
         self.assertEqual(List, type(foo_true_received[1]))
 
-        self.assertEqual(list, type(foo_false_received))
         self.assertEqual(list, type(foo_false_received[0]))
         self.assertEqual(list, type(foo_false_received[1]))
 
@@ -942,10 +940,8 @@ class TestListBuiltinConstructors(TestDisableReflectedListBase):
         foo_true_received, foo_false_received = foo_true(), foo_false()
         # FIXME: the first item is coerced to float
 
-        self.assertEqual(foo_true_expected, foo_true_received)
-        self.assertEqual(foo_false_expected, foo_false_received)
-        self.assertEqual(List, type(foo_true_received))
-        self.assertEqual(list, type(foo_false_received))
+        self._check(foo_true_expected, foo_true_received, List,
+                    foo_false_expected, foo_false_received, list)
 
     def test_square_bracket_builtin_from_iter_type_exception(self):
         @njit
