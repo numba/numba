@@ -1044,8 +1044,44 @@ def impl_index(l, item, start=None, end=None):
     return impl
 
 
-# Borrow implementation from reflected list
-overload_method(types.ListType, "sort")(listobj.ol_list_sort)
+@overload_method(types.ListType, "sort")
+def ol_list_sort(lst, key=None, reverse=False):
+    # The following is mostly borrowed from listobj.ol_list_sort
+    from numba.typed import List
+
+    listobj._sort_check_key(key)
+    listobj._sort_check_reverse(reverse)
+
+    if cgutils.is_nonelike(key):
+        KEY = False
+        sort_f = listobj.sort_forwards
+        sort_b = listobj.sort_backwards
+    elif isinstance(key, types.Dispatcher):
+        KEY = True
+        sort_f = listobj.arg_sort_forwards
+        sort_b = listobj.arg_sort_backwards
+
+    def impl(lst, key=None, reverse=False):
+        if KEY is True:
+            # There's an unknown refct problem in reflected list.
+            # Using an explicit loop with typedlist somehow "fixed" it.
+            _lst = List()
+            for x in lst:
+                _lst.append(key(x))
+        else:
+            _lst = lst
+        if reverse is False or reverse == 0:
+            tmp = sort_f(_lst)
+        else:
+            tmp = sort_b(_lst)
+        if KEY is True:
+            # There's an unknown refct problem in reflected list.
+            # Using an explicit loop with typedlist somehow "fixed" it.
+            ordered = List()
+            for i in tmp:
+                ordered.append(lst[i])
+            lst[:] = ordered
+    return impl
 
 
 def _equals_helper(this, other, OP):
