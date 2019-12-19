@@ -999,7 +999,7 @@ class TestListSort(MemoryLeakMixin, TestCase):
     def test_sort_on_arrays(self):
         @njit
         def foo(lst):
-            lst.sort(key=lambda arr: np.linalg.norm(arr))
+            lst.sort(key=lambda arr: np.sum(arr))
             return lst
 
         arrays = [np.random.random(3) for _ in range(10)]
