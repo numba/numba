@@ -140,6 +140,11 @@ def _index(l, item, start, end):
     return l.index(item, start, end)
 
 
+@njit
+def _sort(l, key, reverse):
+    return l.sort(key, reverse)
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -298,6 +303,16 @@ class List(MutableSequence):
 
     def index(self, item, start=None, stop=None):
         return _index(self, item, start, stop)
+
+    def sort(self, key=None, reverse=False):
+        """Sort the list inplace.
+
+        See also ``list.sort()``
+        """
+        # If key is not already a dispatcher object, make it so
+        if callable(key) and not isinstance(key, types.Dispatcher):
+            key = njit(key)
+        return _sort(self, key, reverse)
 
     def __str__(self):
         buf = []

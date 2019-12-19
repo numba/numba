@@ -907,3 +907,50 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         c.append(e)
 
         self.assertNotEqual(a, c)
+
+
+class TestListSort(MemoryLeakMixin, TestCase):
+    def setUp(self):
+        super(TestListSort, self).setUp()
+        np.random.seed(0)
+
+    def make(self, ctor, data):
+        lst = ctor()
+        lst.extend(data)
+        return lst
+
+    def make_both(self, data):
+        return {
+            'py': self.make(list, data),
+            'nb': self.make(List, data),
+        }
+
+    def test_sort_no_args(self):
+        def udt(lst):
+            lst.sort()
+            return lst
+
+        for nelem in [13, 29, 127]:
+            my_lists = self.make_both(np.random.randint(0, nelem, nelem))
+            self.assertEqual(list(udt(my_lists['nb'])), udt(my_lists['py']))
+
+    def test_sort_all_args(self):
+        def udt(lst, key, reverse):
+            lst.sort(key=key, reverse=reverse)
+            return lst
+
+        possible_keys = [
+            lambda x: -x,           # negative
+            lambda x: 1 / (1 + x),  # make float
+            lambda x: (x, -x),      # tuple
+            lambda x: x,            # identity
+        ]
+        possible_reverse = [True, False]
+        for key, reverse in product(possible_keys, possible_reverse):
+            my_lists = self.make_both(np.random.randint(0, 100, 23))
+            msg = "case for key={} reverse={}".format(key, reverse)
+            self.assertEqual(
+                list(udt(my_lists['nb'], key=key, reverse=reverse)),
+                udt(my_lists['py'], key=key, reverse=reverse),
+                msg=msg,
+            )

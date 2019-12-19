@@ -37,7 +37,7 @@ from numba.typedobjectutils import (_as_bytes,
                                     _container_get_data,
                                     _container_get_meminfo,
                                     )
-
+from numba.targets import listobj
 
 ll_list_type = cgutils.voidptr_t
 ll_listiter_type = cgutils.voidptr_t
@@ -1042,6 +1042,10 @@ def impl_index(l, item, start=None, end=None):
             raise ValueError("item not in list")
 
     return impl
+
+
+# Borrow implementation from reflected list
+overload_method(types.ListType, "sort")(listobj.ol_list_sort)
 
 
 def _equals_helper(this, other, OP):
