@@ -9,7 +9,8 @@ from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
-from .support import TestCase, MemoryLeakMixin, unittest
+from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
+                      forbid_codegen)
 
 from numba.unsafe.refcount import get_refcount
 
@@ -445,6 +446,12 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             del rl[sa:so:se]
             del tl[sa:so:se]
             self.assertEqual(rl, list(tl))
+
+    def test_list_create_no_jit(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                l = List.empty_list(types.int32)
+                self.assertEqual(type(l), list)
 
 
 class TestAllocation(MemoryLeakMixin, TestCase):

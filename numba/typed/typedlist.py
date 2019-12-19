@@ -13,6 +13,7 @@ from numba.six import MutableSequence
 from numba.types import ListType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
 from numba import listobject
+from numba import config
 from numba import njit, types, cgutils, errors, typeof
 from numba.extending import (
     overload_method,
@@ -160,7 +161,10 @@ class List(MutableSequence):
         allocated: int
             number of items to pre-allocate
         """
-        return cls(lsttype=ListType(item_type), allocated=allocated)
+        if config.DISABLE_JIT:
+            return []
+        else:
+            return cls(lsttype=ListType(item_type), allocated=allocated)
 
     def __init__(self, **kwargs):
         """

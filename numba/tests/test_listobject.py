@@ -17,7 +17,8 @@ from numba import int32, types
 from numba.errors import TypingError
 from numba import listobject
 from numba.utils import IS_PY3
-from .support import TestCase, MemoryLeakMixin, unittest
+from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
+                      forbid_codegen)
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
@@ -37,8 +38,10 @@ class TestCreateAppendLength(MemoryLeakMixin, TestCase):
             self.assertEqual(foo(i), i)
 
     def test_list_create_no_jit(self):
-        l = listobject.new_list(int32)
-        self.assertTrue(isinstance(l, list))
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                l = listobject.new_list(int32)
+                self.assertEqual(type(l), list)
 
 
 class TestBool(MemoryLeakMixin, TestCase):
