@@ -1741,13 +1741,26 @@ class ParforPass(object):
                     args = inst.value.args
                     loop_kind, loop_replacing = self._get_loop_kind(inst.value.func.name,
                                                                     call_table)
+                    # Get the body of the header of the loops minus the branch terminator
+                    # The general approach is to prepend the header block to the first
+                    # body block and then let dead code removal handle removing unneeded
+                    # statements.  Not all statements in the header block are unnecessary.
+                    header_body = blocks[loop.header].body[:-1]
                     # find loop index variable (pair_first in header block)
-                    for stmt in blocks[loop.header].body:
+                    loop_index = None
+                    for hbi, stmt in enumerate(header_body):
                         if (isinstance(stmt, ir.Assign)
                                 and isinstance(stmt.value, ir.Expr)
                                 and stmt.value.op == 'pair_first'):
                             loop_index = stmt.target.name
+                            li_index = hbi
                             break
+                    assert(loop_index is not None)
+                    # Remove pair_first from header.
+                    # We have to remove the pair_first by hand since it causes problems
+                    # for some code below if we don't.
+                    header_body = header_body[:li_index] + header_body[li_index+1:]
+
                     # loop_index may be assigned to other vars
                     # get header copies to find all of them
                     cps, _ = get_block_copies({0: blocks[loop.header]},
@@ -1762,8 +1775,6 @@ class ParforPass(object):
                     init_block = ir.Block(scope, loc)
                     init_block.body = self._get_prange_init_block(blocks[entry],
                                                             call_table, args)
-                    # set l=l for remove dead prange call
-                    inst.value = inst.target
                     loop_body = {l: blocks[l] for l in body_labels}
                     # Add an empty block to the end of loop body
                     end_label = next_label()
@@ -1924,6 +1935,13 @@ class ParforPass(object):
                         loops = [LoopNest(index_var, start, size_var, step)]
                         self.typemap[index_var.name] = index_var_typ
 
+                        # We can't just drop the header block since there can be things
+                        # in there other than the prange looping infrastructure.
+                        # So we just add the header to the first loop body block (minus the
+                        # branch) and let dead code elimination remove the unnecessary parts.
+                        first_body_label = min(loop_body.keys())
+                        loop_body[first_body_label].body = header_body + loop_body[first_body_label].body
+
                     index_var_map = {v: index_var for v in loop_index_vars}
                     replace_vars(loop_body, index_var_map)
                     if unsigned_index:
@@ -1974,7 +1992,7 @@ class ParforPass(object):
                         index_set.add(stmt.target.name)
                         added_indices.add(stmt.target.name)
                     # make sure parallel index is not overwritten
-                    elif stmt.target.name in index_set:
+                    elif stmt.target.name in index_set and stmt.target.name != stmt.value.name:
                         raise ValueError(
                             "Overwrite of parallel loop index at {}".format(
                             stmt.target.loc))

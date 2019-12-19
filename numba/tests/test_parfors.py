@@ -139,6 +139,8 @@ class TestParforsBase(TestCase):
                     new_args.append(x.copy())
                 elif isinstance(x, numbers.Number):
                     new_args.append(x)
+                elif isinstance(x, list):
+                    new_args.append(x[:])
                 else:
                     raise ValueError('Unsupported argument type encountered')
             return tuple(new_args)
@@ -2381,6 +2383,13 @@ class TestPrange(TestPrangeBase):
         self.assertEqual(python_res, njit_res)
         self.assertEqual(python_res, pa_res)
 
+    @skip_unsupported
+    def test_list_comprehension_prange(self):
+        # issue4569
+        def test_impl(x):
+            return np.array([len(x[i]) for i in range(len(x))])
+        x = [np.array([1,2,3], dtype=int),np.array([1,2], dtype=int)]
+        self.prange_tester(test_impl, x)
 
 @skip_parfors_unsupported
 @x86_only

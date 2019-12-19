@@ -301,6 +301,7 @@ def replace_var_names(blocks, namedict):
 def replace_var_callback(var, vardict):
     assert isinstance(var, ir.Var)
     while var.name in vardict.keys():
+        assert(vardict[var.name].name != var.name)
         new_var = vardict[var.name]
         var = ir.Var(new_var.scope, new_var.name, new_var.loc)
     return var
@@ -534,7 +535,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
                                                         func_ir)
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("alias map:", alias_map)
+        print("remove_dead alias map:", alias_map)
     # keep set for easier search
     alias_set = set(alias_map.keys())
 
@@ -648,7 +649,9 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == ['stencil', numba] or
             call_list == ['log', numpy] or
             call_list == ['dtype', numpy] or
-            call_list == [numba.array_analysis.wrap_index]):
+            call_list == [numba.array_analysis.wrap_index] or
+            call_list == [numba.special.prange] or
+            call_list == [numba.parfor.internal_prange]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
@@ -911,7 +914,11 @@ def get_block_copies(blocks, typemap):
                     rhs = stmt.value.name
                     # copy is valid only if same type (see
                     # TestCFunc.test_locals)
-                    if typemap[lhs] == typemap[rhs]:
+                    # Some transformations can produce assignments of the
+                    # form A = A.  We don't put these mapping in the
+                    # copy propagation set because then you get cycles and
+                    # infinite loops in the replacement phase.
+                    if typemap[lhs] == typemap[rhs] and lhs != rhs:
                         assign_dict[lhs] = rhs
                         continue
                 if isinstance(stmt.value,
