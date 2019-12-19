@@ -1,21 +1,12 @@
 from __future__ import print_function, absolute_import
 import warnings
-from numba import jit, autojit
+from numba import jit
 from numba.errors import (NumbaDeprecationWarning,
                           NumbaPendingDeprecationWarning, NumbaWarning)
 import numba.unittest_support as unittest
 
 
 class TestDeprecation(unittest.TestCase):
-
-    def test_autojit(self):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-
-            def dummy():
-                pass
-            autojit(dummy)
-            self.assertEqual(len(w), 1)
 
     def check_warning(self, warnings, expected_str, category):
         self.assertEqual(len(warnings), 1)

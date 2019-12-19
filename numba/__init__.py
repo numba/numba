@@ -27,8 +27,7 @@ from .errors import *
 from .types import *
 
 # Re-export decorators
-from .decorators import (autojit, cfunc, generated_jit, jit, njit, stencil,
-                         jit_module)
+from .decorators import (cfunc, generated_jit, jit, njit, stencil, jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
 from .npyufunc import vectorize, guvectorize, threading_layer
@@ -53,7 +52,6 @@ test = runtests.main
 
 
 __all__ = """
-    autojit
     cfunc
     from_dtype
     guvectorize

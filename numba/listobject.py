@@ -254,7 +254,8 @@ def new_list(item, allocated=0):
         number of items to pre-allocate
 
     """
-    raise NotImplementedError
+    # With JIT disabled, ignore all arguments and return a Python list.
+    return list()
 
 
 @intrinsic

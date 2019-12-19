@@ -54,6 +54,9 @@ _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
 
+_GLOBAL_INT_FOR_TESTING1 = 17
+_GLOBAL_INT_FOR_TESTING2 = 5
+
 class TestParforsBase(TestCase):
     """
     Base class for testing parfors.
@@ -876,6 +879,22 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, C)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), )) == 2)
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
+
+    @skip_unsupported
+    def test_issue4963_globals(self):
+        def test_impl():
+            buf = np.zeros((_GLOBAL_INT_FOR_TESTING1, _GLOBAL_INT_FOR_TESTING2))
+            return buf
+        self.check(test_impl)
+
+    @skip_unsupported
+    def test_issue4963_freevars(self):
+        _FREEVAR_INT_FOR_TESTING1 = 17
+        _FREEVAR_INT_FOR_TESTING2 = 5
+        def test_impl():
+            buf = np.zeros((_FREEVAR_INT_FOR_TESTING1, _FREEVAR_INT_FOR_TESTING2))
+            return buf
+        self.check(test_impl)
 
     @skip_unsupported
     def test_random_parfor(self):
@@ -2085,6 +2104,34 @@ class TestPrange(TestPrangeBase):
         A = np.zeros(32)[::2]
         self.prange_tester(test_impl, A, scheduler_type='unsigned',
                            check_fastmath=True, check_fastmath_result=True)
+
+    @skip_unsupported
+    def test_prange_two_instances_same_reduction_var(self):
+        # issue4922 - multiple uses of same reduction variable
+        def test_impl(n):
+            c = 0
+            for i in range(n):
+                c += 1
+                if i > 10:
+                    c += 1
+            return c
+        self.prange_tester(test_impl, 9)
+
+    @skip_unsupported
+    def test_prange_conflicting_reduction_ops(self):
+        def test_impl(n):
+            c = 0
+            for i in range(n):
+                c += 1
+                if i > 10:
+                    c *= 1
+            return c
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            self.prange_tester(test_impl, 9)
+        msg = ('Reduction variable c has multiple conflicting reduction '
+               'operators.')
+        self.assertIn(msg, str(raises.exception))
 
 #    @skip_unsupported
     @test_disabled
