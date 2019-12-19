@@ -280,6 +280,7 @@ class TestFuncionTypeSupport(TestCase):
 class TestFuncionTypeExtensions(TestCase):
 
     def test_wrapper_address_protocol(self):
+        import os
         import sys
         import time
         from numba.types import WrapperAddressProtocol
@@ -287,11 +288,18 @@ class TestFuncionTypeExtensions(TestCase):
         class LibC(WrapperAddressProtocol):
 
             def __init__(self, fname):
-                if sys.platform[:5] == 'linux':
-                    self.libc = ctypes.CDLL("libc.so.6")
-                else:
+                libc = None
+                if os.name == 'nt':
+                    libc = ctypes.cdll.msvcrt
+                elif os.name == 'posix':
+                    if sys.platform == 'darwin':
+                        libc = ctypes.cdll.LoadLibrary("/usr/lib/libc.dylib")
+                    else:
+                        libc = ctypes.CDLL("libc.so.6")
+                if libc is None:
                     raise NotImplementedError(
                         f'loading libc on platform {sys.platform}')
+                self.libc = libc
                 self.fname = fname
 
             def __wrapper_address__(self, sig):

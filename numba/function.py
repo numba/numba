@@ -72,24 +72,11 @@ class FunctionModel(models.StructModel):
         super(FunctionModel, self).__init__(dmm, fe_type, members)
 
 
-# TODO: use numba registers? On the other hand, perhaps these are not
-# needed as the FunctionModel can hold the Python functions.
-pyfunc_cfunc_cache = {}
-cfunc_pyfunc_cache = {}
-cfunc_addr_cache = {}
-addr_cfunc_cache = {}
-
-
 @lower_constant(FunctionType)
 def lower_constant_function_type(context, builder, typ, pyval):
-    # print('LOWER_CONSTANT_function_type({}, {}, {})'.format(typ,
-    # pyval, type(pyval)))
+    # TODO: implement wrapper address protocol
     if isinstance(pyval, CFunc):
-        addr = addr_cfunc_cache.get(pyval)
-        if addr is None:
-            addr = pyval._wrapper_address
-            cfunc_addr_cache[pyval] = addr
-            addr_cfunc_cache[addr] = pyval
+        addr = pyval._wrapper_address
         sfunc = cgutils.create_struct_proxy(typ)(context, builder)
         sfunc.addr = ir.Constant(ir.IntType(64), addr)
         llty = context.get_value_type(nbtypes.voidptr)
@@ -100,12 +87,9 @@ def lower_constant_function_type(context, builder, typ, pyval):
         return sfunc._getvalue()
 
     if isinstance(pyval, types.FunctionType):
+        # TODO: is this used??
         # TODO: make sure pyval matches with typ signature
-        cfunc = pyfunc_cfunc_cache.get(pyval)
-        if cfunc is None:
-            cfunc = numba.cfunc(typ.signature())(pyval)
-            pyfunc_cfunc_cache[pyval] = cfunc
-            cfunc_pyfunc_cache[cfunc] = pyval
+        cfunc = numba.cfunc(typ.signature())(pyval)
         return lower_constant_function_type(context, builder, typ, cfunc)
 
     raise NotImplementedError(
