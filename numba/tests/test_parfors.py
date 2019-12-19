@@ -2090,9 +2090,10 @@ class TestPrange(TestPrangeBase):
                     c *= 1
             return c
 
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(errors.UnsupportedError) as raises:
             self.prange_tester(test_impl, 9)
-        msg = 'Reduction variable c has multiple conflicting reduction operators.'
+        msg = ('Reduction variable c has multiple conflicting reduction '
+               'operators.')
         self.assertIn(msg, str(raises.exception))
 
 #    @skip_unsupported
