@@ -175,8 +175,19 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
         if param.kind == param.VAR_POSITIONAL:
             # stararg may be omitted, in which case its "default" value
             # is simply the empty tuple
-            ba.arguments[name] = stararg_handler(i, param,
-                                                 ba.arguments.get(name, ()))
+            if name in ba.arguments:
+                argval = ba.arguments[name]
+                # NOTE: avoid wrapping the tuple type for stararg in another
+                #       tuple.
+                if (len(argval) == 1 and
+                        isinstance(argval[0], (types.StarArgTuple,
+                                               types.StarArgUniTuple))):
+                    argval = tuple(argval[0])
+            else:
+                argval = ()
+            out = stararg_handler(i, param, argval)
+
+            ba.arguments[name] = out
         elif name in ba.arguments:
             # Non-stararg, present
             ba.arguments[name] = normal_handler(i, param, ba.arguments[name])

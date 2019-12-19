@@ -1554,6 +1554,33 @@ class ParforPass(object):
         if config.DEBUG_ARRAY_OPT >= 1:
             print("variable types: ", sorted(self.typemap.items()))
             print("call types: ", self.calltypes)
+
+        if config.DEBUG_ARRAY_OPT >= 3:
+            for(block_label, block) in self.func_ir.blocks.items():
+                new_block = []
+                scope = block.scope
+                for stmt in block.body:
+                    new_block.append(stmt)
+                    if isinstance(stmt, ir.Assign):
+                        loc = stmt.loc
+                        lhs = stmt.target
+                        rhs = stmt.value
+                        lhs_typ = self.typemap[lhs.name]
+                        print("Adding print for assignment to ", lhs.name, lhs_typ, type(lhs_typ))
+                        if lhs_typ in types.number_domain or isinstance(lhs_typ, types.Literal):
+                            str_var = ir.Var(scope, mk_unique_var("str_var"), loc)
+                            self.typemap[str_var.name] = types.StringLiteral(lhs.name)
+                            lhs_const = ir.Const(lhs.name, loc)
+                            str_assign = ir.Assign(lhs_const, str_var, loc)
+                            new_block.append(str_assign)
+                            str_print = ir.Print([str_var], None, loc)
+                            self.calltypes[str_print] = signature(types.none, self.typemap[str_var.name])
+                            new_block.append(str_print)
+                            ir_print = ir.Print([lhs], None, loc)
+                            self.calltypes[ir_print] = signature(types.none, lhs_typ)
+                            new_block.append(ir_print)
+                block.body = new_block
+
         # run post processor again to generate Del nodes
         post_proc = postproc.PostProcessor(self.func_ir)
         post_proc.run()
@@ -2999,7 +3026,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
         for stmt in reversed(parfor.loop_body[label].body):
             if (isinstance(stmt, ir.Assign)
                     and (stmt.target.name in parfor_params
-                        or stmt.target.name in var_to_param)):
+                      or stmt.target.name in var_to_param)):
                 lhs = stmt.target.name
                 rhs = stmt.value
                 cur_param = lhs if lhs in parfor_params else var_to_param[lhs]
@@ -3020,6 +3047,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
                 # recursive parfors can have reductions like test_prange8
                 get_parfor_reductions(func_ir, stmt, parfor_params, calltypes,
                     reductions, reduce_varnames, param_uses, param_nodes, var_to_param)
+
     for param, used_vars in param_uses.items():
         # a parameter is a reduction variable if its value is used to update it
         # check reduce_varnames since recursive parfors might have processed
@@ -3028,6 +3056,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
             reduce_varnames.append(param)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
+            check_conflicting_reduction_operators(param, reduce_nodes)
             gri_out = guard(get_reduction_init, reduce_nodes)
             if gri_out is not None:
                 init_val, redop = gri_out
@@ -3035,7 +3064,27 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
                 init_val = None
                 redop = None
             reductions[param] = (init_val, reduce_nodes, redop)
+
     return reduce_varnames, reductions
+
+def check_conflicting_reduction_operators(param, nodes):
+    """In prange, a user could theoretically specify conflicting
+       reduction operators.  For example, in one spot it is += and
+       another spot *=.  Here, we raise an exception if multiple
+       different reduction operators are used in one prange.
+    """
+    first_red_func = None
+    for node in nodes:
+        if (isinstance(node, ir.Assign) and
+            isinstance(node.value, ir.Expr) and
+            node.value.op=='inplace_binop'):
+            if first_red_func is None:
+                first_red_func = node.value.fn
+            else:
+                if first_red_func != node.value.fn:
+                    msg = ("Reduction variable %s has multiple conflicting "
+                           "reduction operators." % param)
+                    raise errors.UnsupportedError(msg, node.loc)
 
 def get_reduction_init(nodes):
     """

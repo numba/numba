@@ -4,11 +4,10 @@ import numpy as np
 
 from numba import config, jit, types
 from numba.compiler import compile_isolated
-from numba.tests.support import override_config, skip_py38_or_later
+from numba.tests.support import override_config
 
 
 class TestJITMethod(unittest.TestCase):
-    @skip_py38_or_later
     def test_bound_jit_method_with_loop_lift(self):
         class Something(object):
             def __init__(self, x0):

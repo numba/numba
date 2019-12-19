@@ -657,16 +657,53 @@ def unpack_tuple(builder, tup, count=None):
     return vals
 
 
-def get_item_pointer(builder, aryty, ary, inds, wraparound=False):
+def get_item_pointer(context, builder, aryty, ary, inds, wraparound=False,
+                     boundscheck=False):
+    # Set boundscheck=True for any pointer access that should be
+    # boundschecked. do_boundscheck() will handle enabling or disabling the
+    # actual boundschecking based on the user config.
     shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
     strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
-    return get_item_pointer2(builder, data=ary.data, shape=shapes,
+    return get_item_pointer2(context, builder, data=ary.data, shape=shapes,
                              strides=strides, layout=aryty.layout, inds=inds,
-                             wraparound=wraparound)
+                             wraparound=wraparound, boundscheck=boundscheck)
 
 
-def get_item_pointer2(builder, data, shape, strides, layout, inds,
-                      wraparound=False):
+def do_boundscheck(context, builder, ind, dimlen, axis=None):
+    def _dbg():
+        # Remove this when we figure out how to include this information
+        # in the error message.
+        if axis is not None:
+            if isinstance(axis, int):
+                printf(builder, "debug: IndexError: index %d is out of bounds "
+                       "for axis {} with size %d\n".format(axis), ind, dimlen)
+            else:
+                printf(builder, "debug: IndexError: index %d is out of bounds "
+                       "for axis %d with size %d\n".format(axis), ind, axis,
+                       dimlen)
+        else:
+            printf(builder,
+                   "debug: IndexError: index %d is out of bounds for size %d\n",
+                   ind, dimlen)
+
+    msg = "index is out of bounds"
+    out_of_bounds_upper = builder.icmp_signed('>=', ind, dimlen)
+    with if_unlikely(builder, out_of_bounds_upper):
+        if config.FULL_TRACEBACKS:
+            _dbg()
+        context.call_conv.return_user_exc(builder, IndexError, (msg,))
+    out_of_bounds_lower = builder.icmp_signed('<', ind, ind.type(0))
+    with if_unlikely(builder, out_of_bounds_lower):
+        if config.FULL_TRACEBACKS:
+            _dbg()
+        context.call_conv.return_user_exc(builder, IndexError, (msg,))
+
+
+def get_item_pointer2(context, builder, data, shape, strides, layout, inds,
+                      wraparound=False, boundscheck=False):
+    # Set boundscheck=True for any pointer access that should be
+    # boundschecked. do_boundscheck() will handle enabling or disabling the
+    # actual boundschecking based on the user config.
     if wraparound:
         # Wraparound
         indices = []
@@ -677,6 +714,10 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
             indices.append(selected)
     else:
         indices = inds
+    if boundscheck:
+        for axis, (ind, dimlen) in enumerate(zip(indices, shape)):
+            do_boundscheck(context, builder, ind, dimlen, axis)
+
     if not indices:
         # Indexing with empty tuple
         return builder.gep(data, [int32_t(0)])

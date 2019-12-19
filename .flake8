@@ -323,7 +323,6 @@ exclude =
     numba/tests/test_sets.py
     numba/tests/test_dyn_array.py
     numba/tests/test_objects.py
-    numba/tests/test_types.py
     numba/tests/test_random.py
     numba/tests/test_nan.py
     numba/tests/pycc_distutils_usecase/source_module.py

@@ -419,6 +419,7 @@ class ExternalFuncPointerModel(PrimitiveModel):
 
 @register_default(types.UniTuple)
 @register_default(types.NamedUniTuple)
+@register_default(types.StarArgUniTuple)
 class UniTupleModel(DataModel):
     def __init__(self, dmm, fe_type):
         super(UniTupleModel, self).__init__(dmm, fe_type)
@@ -720,6 +721,7 @@ class ComplexModel(StructModel):
 
 @register_default(types.Tuple)
 @register_default(types.NamedTuple)
+@register_default(types.StarArgTuple)
 class TupleModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('f' + str(i), t) for i, t in enumerate(fe_type)]

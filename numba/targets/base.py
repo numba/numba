@@ -14,7 +14,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-from numba import types, utils, cgutils, typing, funcdesc, debuginfo
+from numba import types, utils, cgutils, typing, funcdesc, debuginfo, config
 from numba import _dynfunc, _helperlib
 from numba.compiler_lock import global_compiler_lock
 from numba.pythonapi import PythonAPI
@@ -197,7 +197,15 @@ class BaseContext(object):
     DIBuilder = debuginfo.DIBuilder
 
     # Bound checking
-    enable_boundcheck = False
+    @property
+    def enable_boundscheck(self):
+        if config.BOUNDSCHECK is not None:
+            return config.BOUNDSCHECK
+        return self._boundscheck
+
+    @enable_boundscheck.setter
+    def enable_boundscheck(self, value):
+        self._boundscheck = value
 
     # NRT
     enable_nrt = False
@@ -244,6 +252,8 @@ class BaseContext(object):
         self._pid = None
         self._codelib_stack = []
 
+        self._boundscheck = False
+
         self.data_model_manager = datamodel.default_manager
 
         # Initialize
@@ -262,7 +272,7 @@ class BaseContext(object):
         # Populate built-in registry
         from . import (arraymath, enumimpl, iterators, linalg, numbers,
                        optional, polynomial, rangeobj, slicing, tupleobj,
-                       gdb_hook, hashing, heapq, literal_dispatch)
+                       gdb_hook, hashing, heapq, literal)
         try:
             from . import npdatetime
         except NotImplementedError:
@@ -728,7 +738,9 @@ class BaseContext(object):
         """
         Return the truth value of a value of the given Numba type.
         """
-        impl = self.get_function(bool, typing.signature(types.boolean, typ))
+        fnty = self.typing_context.resolve_value_type(bool)
+        sig = fnty.get_call_type(self.typing_context, (typ,), {})
+        impl = self.get_function(fnty, sig)
         return impl(builder, (val,))
 
     def get_c_value(self, builder, typ, name, dllimport=False):
