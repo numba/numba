@@ -296,9 +296,12 @@ class TestFuncionTypeExtensions(TestCase):
 
             def __wrapper_address__(self, sig):
                 if (self.fname, sig) == ('time', 'int32()'):
-                    return ctypes.cast(self.libc.time, ctypes.c_voidp).value
-                raise NotImplementedError(
-                    f'wrapper address of `{self.fname}` with signature `{sig}`')
+                    addr = ctypes.cast(self.libc.time, ctypes.c_voidp).value
+                else:
+                    raise NotImplementedError(
+                        f'wrapper address of `{self.fname}`'
+                        f' with signature `{sig}`')
+                return addr
 
             def signature(self):
                 if self.fname == 'time':

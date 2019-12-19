@@ -67,7 +67,7 @@ class FunctionModel(models.StructModel):
             ('addr', nbtypes.intp),
             # address of PyObject* referencing the Python function
             # object, currently it is CFunc:
-            ('pyaddr', nbtypes.intp),
+            ('pyaddr', nbtypes.voidptr),
         ]
         super(FunctionModel, self).__init__(dmm, fe_type, members)
 
@@ -92,7 +92,11 @@ def lower_constant_function_type(context, builder, typ, pyval):
             addr_cfunc_cache[addr] = pyval
         sfunc = cgutils.create_struct_proxy(typ)(context, builder)
         sfunc.addr = ir.Constant(ir.IntType(64), addr)
-        sfunc.pyaddr = ir.Constant(ir.IntType(64), id(pyval))
+        llty = context.get_value_type(nbtypes.voidptr)
+        # TODO: is incref(pyval) needed? See also related comments in
+        # unboxing below.
+        sfunc.pyaddr = builder.inttoptr(
+            ir.Constant(ir.IntType(64), id(pyval)), llty)
         return sfunc._getvalue()
 
     if isinstance(pyval, types.FunctionType):
@@ -156,6 +160,9 @@ def _get_wrapper_address(func, sig):
     if not isinstance(addr, int):
         raise TypeError(
             f'wrapper address must be integer, got {type(addr)} instance')
+    if addr <= 0:
+        raise ValueError(f'wrapper address of {type(func)} instance must be'
+                         f' positive integer but got {addr}')
     return addr
 
 
@@ -185,8 +192,10 @@ def unbox_function_type(typ, obj, c):
             # propagate any errors in getting pyaddr to the caller
             c.builder.ret(c.pyapi.get_null_object())
         with orelse:
-            # _get_wrapper_address checks that pyaddr is int, so no
-            # need to check it here
+            # _get_wrapper_address checks that pyaddr is int and
+            # nonzero, so no need to check it here. But it will be
+            # impossible to tell if the addr value actually
+            # corresponds to a memory location of a valid function.
             sfunc.addr = c.pyapi.long_as_long(addr)
             c.pyapi.decref(addr)
             # TODO: the following does not work on 32-bit systems
@@ -195,7 +204,7 @@ def unbox_function_type(typ, obj, c):
             # TODO: see
             # https://github.com/numba/numba/blob/77cb53ba8966a38bfbd3413559e4f04b12812535/numba/targets/boxing.py#L505
             # as an alternative way for boxing
-            llty = c.context.get_value_type(nbtypes.intp)
+            llty = c.context.get_value_type(nbtypes.voidptr)
             sfunc.pyaddr = c.builder.ptrtoint(obj, llty)
 
     return NativeValue(sfunc._getvalue())
@@ -209,7 +218,16 @@ def box_function_type(typ, val, c):
     # TODO: reconsider the boxing model, see the limitations in the
     # unbox function above.
     pyaddr_ptr = cgutils.alloca_once(c.builder, c.pyapi.pyobj)
-    c.builder.store(c.builder.inttoptr(sfunc.pyaddr, c.pyapi.pyobj), pyaddr_ptr)
+    raw_ptr = c.builder.inttoptr(sfunc.pyaddr, c.pyapi.pyobj)
+    with c.builder.if_else(cgutils.is_null(c.builder, raw_ptr),
+                           likely=False) as (then, orelse):
+        with then:
+            cstr = f"first-class function {typ} parent object not set"
+            c.pyapi.err_set_string("PyExc_MemoryError", cstr)
+            c.builder.ret(c.pyapi.get_null_object())
+        with orelse:
+            pass
+    c.builder.store(raw_ptr, pyaddr_ptr)
     cfunc = c.builder.load(pyaddr_ptr)
     c.pyapi.incref(cfunc)
     return cfunc
