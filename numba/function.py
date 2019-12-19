@@ -64,7 +64,7 @@ class FunctionModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             # address of cfunc-ded function:
-            ('addr', nbtypes.intp),
+            ('addr', nbtypes.voidptr),
             # address of PyObject* referencing the Python function
             # object, currently it is CFunc:
             ('pyaddr', nbtypes.voidptr),
@@ -78,8 +78,8 @@ def lower_constant_function_type(context, builder, typ, pyval):
     if isinstance(pyval, CFunc):
         addr = pyval._wrapper_address
         sfunc = cgutils.create_struct_proxy(typ)(context, builder)
-        sfunc.addr = ir.Constant(ir.IntType(64), addr)
         llty = context.get_value_type(nbtypes.voidptr)
+        sfunc.addr = builder.inttoptr(ir.Constant(ir.IntType(64), addr), llty)
         # TODO: is incref(pyval) needed? See also related comments in
         # unboxing below.
         sfunc.pyaddr = builder.inttoptr(
@@ -180,8 +180,9 @@ def unbox_function_type(typ, obj, c):
             # nonzero, so no need to check it here. But it will be
             # impossible to tell if the addr value actually
             # corresponds to a memory location of a valid function.
-            sfunc.addr = c.pyapi.long_as_long(addr)
+            sfunc.addr = c.pyapi.long_as_voidptr(addr)
             c.pyapi.decref(addr)
+
             # TODO: the following does not work on 32-bit systems
             # TODO: is incref(obj) needed? where the corresponding
             # decref should be called?

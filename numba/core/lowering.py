@@ -945,7 +945,7 @@ class Lower(BaseLower):
                                      name='addr_of_%s' % (expr.func.name))
         fptr = cgutils.alloca_once(builder, llty,
                                    name="fptr_of_%s" % (expr.func.name))
-        builder.store(builder.inttoptr(addr, llty), fptr)
+        builder.store(builder.bitcast(addr, llty), fptr)
         ptr = builder.load(fptr)
         res = self.context.call_function_pointer(
             self.builder, ptr, argvals, fnty.cconv,
