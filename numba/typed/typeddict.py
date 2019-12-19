@@ -1,6 +1,7 @@
 """
 Python wrapper that connects CPython interpreter to the numba dictobject.
 """
+from numba import config
 from numba.six import MutableMapping
 from numba.types import DictType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
@@ -85,7 +86,10 @@ class Dict(MutableMapping):
         """Create a new empty Dict with *key_type* and *value_type*
         as the types for the keys and values of the dictionary respectively.
         """
-        return cls(dcttype=DictType(key_type, value_type))
+        if config.DISABLE_JIT:
+            return dict()
+        else:
+            return cls(dcttype=DictType(key_type, value_type))
 
     def __init__(self, **kwargs):
         """

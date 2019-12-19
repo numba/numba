@@ -19,7 +19,8 @@ from numba.typed import Dict
 from numba.typedobjectutils import _sentry_safe_cast
 from numba.utils import IS_PY3
 from numba.errors import TypingError
-from .support import TestCase, MemoryLeakMixin, unittest
+from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
+                      forbid_codegen)
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
@@ -64,13 +65,6 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(n=2), 2)
         # Insert 100 entries
         self.assertEqual(foo(n=100), 100)
-
-    def test_dict_create_no_jit(self):
-        """
-        Exercise dictionary creation with JIT disabled.
-        """
-        d = dictobject.new_dict(int32, float32)
-        self.assertTrue(isinstance(d, dict))
 
     def test_dict_get(self):
         """
@@ -1592,3 +1586,26 @@ class TestDictWithJitclass(TestCase):
         d = foo(Bag(a=100))
         self.assertEqual(d[0].a, 100)
         self.assertEqual(d[1].a, 101)
+
+
+class TestNoJit(TestCase):
+    """Exercise dictionary creation with JIT disabled. """
+
+    def test_dict_create_no_jit_using_new_dict(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                d = dictobject.new_dict(int32, float32)
+                self.assertEqual(type(d), dict)
+
+    @unittest.expectedFailure
+    def test_dict_create_no_jit_using_Dict(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                d = Dict()
+                self.assertEqual(type(d), dict)
+
+    def test_dict_create_no_jit_using_empty(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                d = Dict.empty(types.int32, types.float32)
+                self.assertEqual(type(d), dict)

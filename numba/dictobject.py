@@ -82,7 +82,7 @@ def new_dict(key, value):
         Key type and value type of the new dict.
     """
     # With JIT disabled, ignore all arguments and return a Python dict.
-    return {}
+    return dict()
 
 
 @register_model(DictType)
