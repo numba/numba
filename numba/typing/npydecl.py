@@ -285,6 +285,9 @@ _math_operations = [ "add", "subtract", "multiply",
                      "sqrt", "square", "reciprocal",
                      "divide", "mod", "abs", "fabs" ]
 
+if numpy_version >= (1, 15):
+    _math_operations += ["gcd", "lcm"]
+
 _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
                              "arccos", "arctan", "arctan2",
                              "hypot", "sinh", "cosh", "tanh",

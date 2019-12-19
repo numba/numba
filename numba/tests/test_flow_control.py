@@ -5,9 +5,9 @@ import itertools
 import numba.unittest_support as unittest
 from numba.controlflow import CFGraph, ControlFlowAnalysis
 from numba.compiler import compile_isolated, Flags
-from numba import types, errors
+from numba import types
 from numba.bytecode import FunctionIdentity, ByteCode
-from numba.utils import IS_PY3, PYVERSION
+from numba.utils import IS_PY3
 from .support import TestCase, tag
 
 enable_pyobj_flags = Flags()
@@ -396,17 +396,6 @@ class TestFlowControl(TestCase):
 
     def test_double_infinite_loop_npm(self):
         self.test_double_infinite_loop(flags=no_pyobj_flags)
-
-    def test_try_except_raises(self):
-        pyfunc = try_except_usecase
-        for f in [no_pyobj_flags, enable_pyobj_flags]:
-            with self.assertRaises(errors.UnsupportedError) as e:
-                compile_isolated(pyfunc, (), flags=f)
-            if PYVERSION >= (3, 8):
-                msg = "Use of unsupported opcode (SETUP_FINALLY) found"
-            else:
-                msg = "Use of unsupported opcode (SETUP_EXCEPT) found"
-            self.assertIn(msg, str(e.exception))
 
 
 class TestCFGraph(TestCase):
@@ -979,6 +968,48 @@ class TestCFGraph(TestCase):
             self.assertEqual(g.in_loops(node), [])
         for node in [7, 10, 23]:
             self.assertEqual(g.in_loops(node), [loop])
+
+    def test_equals(self):
+
+        def get_new():
+            g = self.from_adj_list({0: [18, 12], 12: [21], 18: [21], 21: []})
+            g.set_entry_point(0)
+            g.process()
+            return g
+
+        x = get_new()
+        y = get_new()
+
+        # identical
+        self.assertEqual(x, y)
+
+        # identical but defined in a different order
+        g = self.from_adj_list({0: [12, 18], 18: [21], 21: [], 12: [21]})
+        g.set_entry_point(0)
+        g.process()
+        self.assertEqual(x, g)
+
+        # different entry point
+        z = get_new()
+        z.set_entry_point(18)
+        z.process()
+        self.assertNotEqual(x, z)
+
+        # extra node/edge, same entry point
+        z = self.from_adj_list({0: [18, 12], 12: [21], 18: [21], 21: [22],
+                                22: []})
+        z.set_entry_point(0)
+        z.process()
+        self.assertNotEqual(x, z)
+
+        # same nodes, different edges
+        a = self.from_adj_list({0: [18, 12], 12: [0], 18: []})
+        a.set_entry_point(0)
+        a.process()
+        z = self.from_adj_list({0: [18, 12], 12: [18], 18: []})
+        z.set_entry_point(0)
+        z.process()
+        self.assertNotEqual(a, z)
 
 
 class TestRealCodeDomFront(TestCase):

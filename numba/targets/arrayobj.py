@@ -279,7 +279,7 @@ def _getitem_array1d(context, builder, arrayty, array, idx, wraparound):
     """
     Look up and return an element from a 1D array.
     """
-    ptr = cgutils.get_item_pointer(builder, arrayty, array, [idx],
+    ptr = cgutils.get_item_pointer(context, builder, arrayty, array, [idx],
                                    wraparound=wraparound)
     return load_item(context, builder, arrayty, ptr)
 
@@ -315,7 +315,8 @@ def iternext_array(context, builder, sig, args, result):
 # ------------------------------------------------------------------------------
 # Basic indexing (with integers and slices only)
 
-def basic_indexing(context, builder, aryty, ary, index_types, indices):
+def basic_indexing(context, builder, aryty, ary, index_types, indices,
+                   boundscheck=None):
     """
     Perform basic indexing on the given array.
     A (data pointer, shapes, strides) tuple is returned describing
@@ -354,6 +355,8 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
         elif isinstance(idxty, types.Integer):
             ind = fix_integer_index(context, builder, idxty, indexval,
                                     shapes[ax])
+            if boundscheck:
+                cgutils.do_boundscheck(context, builder, ind, shapes[ax], ax)
             output_indices.append(ind)
         else:
             raise NotImplementedError("unexpected index type: %s" % (idxty,))
@@ -368,9 +371,9 @@ def basic_indexing(context, builder, aryty, ary, index_types, indices):
 
     # No need to check wraparound, as negative indices were already
     # fixed in the loop above.
-    dataptr = cgutils.get_item_pointer(builder, aryty, ary,
+    dataptr = cgutils.get_item_pointer(context, builder, aryty, ary,
                                        output_indices,
-                                       wraparound=False)
+                                       wraparound=False, boundscheck=False)
     return (dataptr, output_shapes, output_strides)
 
 
@@ -397,7 +400,8 @@ def _getitem_array_generic(context, builder, return_type, aryty, ary,
     returning either a scalar or a view.
     """
     dataptr, view_shapes, view_strides = \
-        basic_indexing(context, builder, aryty, ary, index_types, indices)
+        basic_indexing(context, builder, aryty, ary, index_types, indices,
+                       boundscheck=context.enable_boundscheck)
 
     if isinstance(return_type, types.Buffer):
         # Build array view
@@ -475,7 +479,8 @@ def setitem_array(context, builder, sig, args):
                                              index_types, indices)
     try:
         dataptr, shapes, strides = \
-            basic_indexing(context, builder, aryty, ary, index_types, indices)
+            basic_indexing(context, builder, aryty, ary, index_types, indices,
+                           boundscheck=context.enable_boundscheck)
     except NotImplementedError:
         use_fancy_indexing = True
     else:
@@ -1025,8 +1030,9 @@ def fancy_getitem(context, builder, sig, args,
 
     # No need to check for wraparound, as the indexers all ensure
     # a positive index is returned.
-    ptr = cgutils.get_item_pointer2(builder, data, shapes, strides,
-                                    aryty.layout, indices, wraparound=False)
+    ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
+                                    aryty.layout, indices, wraparound=False,
+                                    boundscheck=context.enable_boundscheck)
     val = load_item(context, builder, aryty, ptr)
 
     # Since the destination is C-contiguous, no need for multi-dimensional
@@ -1162,10 +1168,10 @@ def maybe_copy_source(context, builder, use_copy,
         intp_t = context.get_value_type(types.intp)
 
         with cgutils.loop_nest(builder, src_shapes, intp_t) as indices:
-            src_ptr = cgutils.get_item_pointer2(builder, src_data,
+            src_ptr = cgutils.get_item_pointer2(context, builder, src_data,
                                                 src_shapes, src_strides,
                                                 srcty.layout, indices)
-            dest_ptr = cgutils.get_item_pointer2(builder, data,
+            dest_ptr = cgutils.get_item_pointer2(context, builder, data,
                                                  copy_shapes, copy_strides,
                                                  copy_layout, indices)
             builder.store(builder.load(src_ptr), dest_ptr)
@@ -1176,14 +1182,15 @@ def maybe_copy_source(context, builder, use_copy,
         with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):
             with if_copy:
                 builder.store(
-                    cgutils.get_item_pointer2(builder, builder.load(copy_data),
+                    cgutils.get_item_pointer2(context, builder,
+                                              builder.load(copy_data),
                                               copy_shapes, copy_strides,
                                               copy_layout, source_indices,
                                               wraparound=False),
                     src_ptr)
             with otherwise:
                 builder.store(
-                    cgutils.get_item_pointer2(builder, src_data,
+                    cgutils.get_item_pointer2(context, builder, src_data,
                                               src_shapes, src_strides,
                                               srcty.layout, source_indices,
                                               wraparound=False),
@@ -1391,7 +1398,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
 
     # No need to check for wraparound, as the indexers all ensure
     # a positive index is returned.
-    dest_ptr = cgutils.get_item_pointer2(builder, dest_data,
+    dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                          dest_shapes, dest_strides,
                                          aryty.layout, dest_indices,
                                          wraparound=False)
@@ -1967,8 +1974,8 @@ def np_repeat_impl_repeats_scaler(a, repeats):
 
 @extending.overload_method(types.Array, 'repeat')
 def array_repeat(a, repeats):
-    def array_repeat_impl(a, repeat):
-        return np.repeat(a, repeat)
+    def array_repeat_impl(a, repeats):
+        return np.repeat(a, repeats)
 
     return array_repeat_impl
 
@@ -2225,7 +2232,7 @@ def array_complex_attr(context, builder, typ, value, attr):
         ^   ^   ^
 
     (`R` indicates a float for the real part;
-     `C` indicates a float for the imaginery part;
+     `C` indicates a float for the imaginary part;
      the `^` indicates the start of each element)
 
     To get the real part, we can simply change the dtype and itemsize to that
@@ -2614,7 +2621,7 @@ def make_nditer_cls(nditerty):
 
         def compute_pointer(self, context, builder, indices, arrty, arr):
             assert len(indices) == self.ndim
-            return cgutils.get_item_pointer(builder, arrty, arr,
+            return cgutils.get_item_pointer(context, builder, arrty, arr,
                                             indices, wraparound=False)
 
     class ZeroDimSubIter(BaseSubIter):
@@ -3116,8 +3123,9 @@ def _make_flattening_iter_cls(flatiterty, kind):
                     index = builder.udiv(index, shapes[dim])
                 indices.reverse()
 
-                ptr = cgutils.get_item_pointer2(builder, arr.data, shapes,
-                                                strides, arrty.layout, indices)
+                ptr = cgutils.get_item_pointer2(context, builder, arr.data,
+                                                shapes, strides, arrty.layout,
+                                                indices)
                 return ptr
 
             def getitem(self, context, builder, arrty, arr, index):
@@ -3765,25 +3773,18 @@ def _arange_dtype(*args):
     elif any(isinstance(a, types.Float) for a in bounds):
         dtype = types.float64
     else:
-        # It's not possible for the dtype to replicate NumPy as integer literals
-        # are intp size in Numba but np.dtype(int) (i.e. intc) in NumPy. The
-        # NumPy logic is to basically do max(np.long, *[type(x) for x in args]).
-        # On windows 64, in NumPy, that would mean:
-        # * np.arange(1, 10) -> max(np.long, np.intc, np.intc) -> int32
-        # but in Numba:
-        # * np.arange(1, 10) -> max(np.long, np.intp, np.intp) -> int64
-        #
-        # It's therefore not possible to replicate the case where integer
-        # literals are supplied, however best effort is made to correctly handle
-        # cases like:
-        # * np.arange(np.int8(10)) -> max(np.long, np.int8) -> np.long
-        #
-        # Alg ref:
-        # https://github.com/numpy/numpy/blob/maintenance/1.17.x/numpy/core/src/multiarray/ctors.c#L3376-L3377    # noqa: E501
-        #
-        # Also not Py2.7 on 32 bit linux as a 32bit np.long where as Py3 has a
-        # 64bit, numba is not replicating this!
-        dtype = max(bounds + [types.long_,])
+        # numerous attempts were made at guessing this type from the NumPy
+        # source but it turns out on running `np.arange(10).dtype` on pretty
+        # much all platform and python combinations that it matched np.int?!
+        # Windows 64 is broken by default here because Numba (as of 0.47) does
+        # not differentiate between Python and NumPy integers, so a `typeof(1)`
+        # on w64 is `int64`, i.e. `intp`. This means an arange(<some int>) will
+        # be typed as arange(int64) and the following will yield int64 opposed
+        # to int32. Example: without a load of analysis to work out of the args
+        # were wrapped in NumPy int*() calls it's not possible to detect the
+        # difference between `np.arange(10)` and `np.arange(np.int64(10)`.
+        NPY_TY = getattr(types, "int%s" % (8 * np.dtype(np.int).itemsize))
+        dtype = max(bounds + [NPY_TY,])
 
     return dtype
 
@@ -3874,6 +3875,8 @@ def numpy_linspace_3(context, builder, sig, args):
 
     def linspace(start, stop, num):
         arr = np.empty(num, dtype)
+        if num == 0:
+            return arr
         div = num - 1
         delta = stop - start
         arr[0] = start
@@ -3911,10 +3914,10 @@ def _array_copy(context, builder, sig, args):
         intp_t = context.get_value_type(types.intp)
 
         with cgutils.loop_nest(builder, shapes, intp_t) as indices:
-            src_ptr = cgutils.get_item_pointer2(builder, src_data,
+            src_ptr = cgutils.get_item_pointer2(context, builder, src_data,
                                                 shapes, src_strides,
                                                 arytype.layout, indices)
-            dest_ptr = cgutils.get_item_pointer2(builder, dest_data,
+            dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                                  shapes, dest_strides,
                                                  rettype.layout, indices)
             builder.store(builder.load(src_ptr), dest_ptr)
@@ -4024,10 +4027,10 @@ def array_astype(context, builder, sig, args):
     intp_t = context.get_value_type(types.intp)
 
     with cgutils.loop_nest(builder, shapes, intp_t) as indices:
-        src_ptr = cgutils.get_item_pointer2(builder, src_data,
+        src_ptr = cgutils.get_item_pointer2(context, builder, src_data,
                                             shapes, src_strides,
                                             arytype.layout, indices)
-        dest_ptr = cgutils.get_item_pointer2(builder, dest_data,
+        dest_ptr = cgutils.get_item_pointer2(context, builder, dest_data,
                                              shapes, dest_strides,
                                              rettype.layout, indices)
         item = load_item(context, builder, arytype, src_ptr)
@@ -4239,7 +4242,7 @@ def assign_sequence_to_array(context, builder, data, shapes, strides,
     """
 
     def assign_item(indices, valty, val):
-        ptr = cgutils.get_item_pointer2(builder, data, shapes, strides,
+        ptr = cgutils.get_item_pointer2(context, builder, data, shapes, strides,
                                         arrty.layout, indices, wraparound=False)
         val = context.cast(builder, val, valty, arrty.dtype)
         store_item(context, builder, arrty, val, ptr)
@@ -4515,12 +4518,12 @@ def _do_concatenate(context, builder, axis,
                                       order=retty.layout)
 
         with loop_nest as indices:
-            src_ptr = cgutils.get_item_pointer2(builder, arr_data,
+            src_ptr = cgutils.get_item_pointer2(context, builder, arr_data,
                                                 arr_sh, arr_st,
                                                 arrty.layout, indices)
             val = load_item(context, builder, arrty, src_ptr)
             val = context.cast(builder, val, arrty.dtype, retty.dtype)
-            dest_ptr = cgutils.get_item_pointer2(builder, ret_data,
+            dest_ptr = cgutils.get_item_pointer2(context, builder, ret_data,
                                                  ret_shapes, ret_strides,
                                                  retty.layout, indices)
             store_item(context, builder, retty, val, dest_ptr)

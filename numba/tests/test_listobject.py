@@ -3,7 +3,7 @@
 The tests here should exercise everything within an `@njit` context.
 Importantly, the tests should not return a typed list from within such a
 context as this would require code from numba/typed/typedlist.py (this is
-tested seperately).  Tests in this file build on each other in the order of
+tested separately).  Tests in this file build on each other in the order of
 writing. For example, the first test, tests the creation, append and len of the
 list. These are the barebones to do anything useful with a list. The subsequent
 test for getitem assumes makes use of these three operations and therefore
@@ -39,6 +39,21 @@ class TestCreateAppendLength(MemoryLeakMixin, TestCase):
     def test_list_create_no_jit(self):
         l = listobject.new_list(int32)
         self.assertTrue(isinstance(l, list))
+
+
+class TestBool(MemoryLeakMixin, TestCase):
+    """Test list bool."""
+
+    def test_list_bool(self):
+        @njit
+        def foo(n):
+            l = listobject.new_list(int32)
+            for i in range(n):
+                l.append(i)
+            return bool(l)
+
+        for i in (0, 1, 2, 100):
+            self.assertEqual(foo(i), i > 0)
 
 
 class TestAllocation(MemoryLeakMixin, TestCase):
