@@ -1171,12 +1171,11 @@ def compare(this, other, this_is_none, other_is_none):
     if len(this) != len(other):
         return -1 if len(this) < len(other) else 1
     if this_is_none or other_is_none:
-        if this_is_none and other_is_none:
+        if this_is_none and other_is_none: # both none
             return 0
-        elif this_is_none and not other_is_none:
-            return -1
-        elif not this_is_none and other_is_none:
-            return 1
+        # to get here there is precisely one none, and if the first is none, by
+        # induction, the second cannot be
+        return -1 if this_is_none else 1
     for i in range(len(this)):
         this_item, other_item = this[i], other[i]
         if this_item != other_item:
