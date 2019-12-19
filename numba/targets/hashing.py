@@ -19,6 +19,7 @@ from numba import types, errors
 from numba.unsafe.bytes import grab_byte, grab_uint64_t
 
 _py34_or_later = sys.version_info[:2] >= (3, 4)
+_py38_or_later = sys.version_info[:2] >= (3, 8)
 
 if _py34_or_later:
     # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
@@ -54,6 +55,7 @@ else:
     _Py_HASH_CUTOFF = 0
     # set this as siphash24 for py27... TODO: implement py27 string first!
     _Py_hashfunc_name = "siphash24"
+
 
 # hash(obj) is implemented by calling obj.__hash__()
 
@@ -251,24 +253,74 @@ def complex_hash(val):
     return impl
 
 
-# This is a translation of CPython's tuplehash:
-# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369    # noqa: E501
-@register_jitable(locals={'x': _Py_uhash_t,
-                          'y': _Py_hash_t,
-                          'mult': _Py_uhash_t,
-                          'l': _Py_hash_t, })
-def _tuple_hash(tup):
-    tl = len(tup)
-    mult = _PyHASH_MULTIPLIER
-    x = _Py_uhash_t(0x345678)
-    # in C this is while(--l >= 0), i is indexing tup instead of *tup++
-    for i, l in enumerate(range(tl - 1, -1, -1)):
-        y = hash(tup[i])
-        xxory = (x ^ y)
-        x = xxory * mult
-        mult += _Py_hash_t((_Py_uhash_t(82520) + l + l))
-    x += _Py_uhash_t(97531)
-    return process_return(x)
+if _py38_or_later:
+    # Python 3.8 strengthened its hash alg for tuples.
+    # This is a translation of CPython's tuplehash for Python >=3.8
+    # https://github.com/python/cpython/blob/b738237d6792acba85b1f6e6c8993a812c7fd815/Objects/tupleobject.c#L338-L391    # noqa: E501
+
+    # These consts are needed for this alg variant, they are from:
+    # https://github.com/python/cpython/blob/b738237d6792acba85b1f6e6c8993a812c7fd815/Objects/tupleobject.c#L353-L363    # noqa: E501
+    if _Py_uhash_t.bitwidth // 8 > 4:
+        _PyHASH_XXPRIME_1 = _Py_uhash_t(11400714785074694791)
+        _PyHASH_XXPRIME_2 = _Py_uhash_t(14029467366897019727)
+        _PyHASH_XXPRIME_5 = _Py_uhash_t(2870177450012600261)
+        @register_jitable(locals={'x': types.uint64})
+        def _PyHASH_XXROTATE(x):
+            # Rotate left 31 bits
+            return ((x << types.uint64(31)) | (x >> types.uint64(33)))
+    else:
+        _PyHASH_XXPRIME_1 = _Py_uhash_t(2654435761)
+        _PyHASH_XXPRIME_2 = _Py_uhash_t(2246822519)
+        _PyHASH_XXPRIME_5 = _Py_uhash_t(374761393)
+        @register_jitable(locals={'x': types.uint64})
+        def _PyHASH_XXROTATE(x):
+            # Rotate left 13 bits
+            return ((x << types.uint64(13)) | (x >> types.uint64(16)))
+
+    # Python 3.7+ has literal_unroll, this means any homogeneous and
+    # heterogeneous tuples can use the same alg and just be unrolled.
+    from numba import literal_unroll
+
+    @register_jitable(locals={'acc': _Py_uhash_t, 'lane': _Py_uhash_t,
+                              '_PyHASH_XXPRIME_5': _Py_uhash_t,
+                              '_PyHASH_XXPRIME_1': _Py_uhash_t,
+                              'tl': _Py_uhash_t})
+    def _tuple_hash(tup):
+        tl = len(tup)
+        acc = _PyHASH_XXPRIME_5
+        for x in literal_unroll(tup):
+            lane = hash(x)
+            if lane == _Py_uhash_t(-1):
+                return -1
+            acc += lane * _PyHASH_XXPRIME_2
+            acc = _PyHASH_XXROTATE(acc)
+            acc *= _PyHASH_XXPRIME_1
+
+        acc += tl ^ (_PyHASH_XXPRIME_5 ^ _Py_uhash_t(3527539))
+
+        if acc == _Py_uhash_t(-1):
+            return process_return(1546275796)
+
+        return process_return(acc)
+else:
+    # This is a translation of CPython's tuplehash:
+    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369    # noqa: E501
+    @register_jitable(locals={'x': _Py_uhash_t,
+                              'y': _Py_hash_t,
+                              'mult': _Py_uhash_t,
+                              'l': _Py_hash_t, })
+    def _tuple_hash(tup):
+        tl = len(tup)
+        mult = _PyHASH_MULTIPLIER
+        x = _Py_uhash_t(0x345678)
+        # in C this is while(--l >= 0), i is indexing tup instead of *tup++
+        for i, l in enumerate(range(tl - 1, -1, -1)):
+            y = hash(tup[i])
+            xxory = (x ^ y)
+            x = xxory * mult
+            mult += _Py_hash_t((_Py_uhash_t(82520) + l + l))
+        x += _Py_uhash_t(97531)
+        return process_return(x)
 
 # This is an obfuscated translation of CPython's tuplehash:
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Objects/tupleobject.c#L347-L369    # noqa: E501
@@ -312,7 +364,7 @@ def _tuple_hash_resolve(tyctx, val):
 
 @overload_method(types.BaseTuple, '__hash__')
 def tuple_hash(val):
-    if isinstance(val, types.Sequence):
+    if _py38_or_later or isinstance(val, types.Sequence):
         def impl(val):
             return _tuple_hash(val)
         return impl
@@ -576,7 +628,7 @@ if _Py_hashfunc_name == 'siphash24':
         return t
 
 elif _Py_hashfunc_name == 'fnv':
-    #TODO: Should this instead warn and switch to siphash24?
+    # TODO: Should this instead warn and switch to siphash24?
     raise NotImplementedError("FNV hashing is not implemented")
 else:
     msg = "Unsupported hashing algorithm in use %s" % _Py_hashfunc_name

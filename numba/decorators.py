@@ -39,7 +39,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
-        pipeline_class=None, **options):
+        pipeline_class=None, boundscheck=False, **options):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -99,6 +99,16 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
                 NOTE: This inlining is performed at the Numba IR level and is in
                 no way related to LLVM inlining.
 
+            boundscheck: bool
+                Set to True to enable bounds checking for array indices. Out
+                of bounds accesses will raise IndexError. The default is to
+                not do bounds checking. If bounds checking is disabled, out of
+                bounds accesses can produce garbage results or segfaults.
+                However, enabling bounds checking will slow down typical
+                functions, so it is recommended to only use this flag for
+                debugging. You can also set the NUMBA_BOUNDSCHECK environment
+                variable to 0 or 1 to globally override this flag.
+
     Returns
     --------
     A callable usable as a compiled function.  Actual compiling will be
@@ -148,6 +158,8 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
+
+    options['boundscheck'] = boundscheck
 
     # Handle signature
     if signature_or_function is None:

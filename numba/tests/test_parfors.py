@@ -22,7 +22,7 @@ from collections import defaultdict
 import numba
 from numba.utils import PYVERSION
 from numba import unittest_support as unittest
-from .support import TestCase, captured_stdout, MemoryLeakMixin
+from .support import TestCase, captured_stdout, MemoryLeakMixin, override_env_config
 from numba import njit, prange, stencil, inline_closurecall
 from numba import compiler, typing, errors, typed_passes
 from numba.targets import cpu
@@ -1488,6 +1488,24 @@ class TestParfors(TestParforsBase):
         self.assertIn(msg, str(raised.exception))
 
     @skip_unsupported
+    def test_ndarray_fill(self):
+        def test_impl(x):
+            x.fill(7.0)
+            return x
+        x = np.zeros(10)
+        self.check(test_impl, x)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'),)) == 1)
+
+    @skip_unsupported
+    def test_ndarray_fill2d(self):
+        def test_impl(x):
+            x.fill(7.0)
+            return x
+        x = np.zeros((2,2))
+        self.check(test_impl, x)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'),)) == 1)
+
+    @skip_unsupported
     def test_0d_array(self):
         def test_impl(n):
             return np.sum(n) + np.prod(n) + np.min(n) + np.max(n) + np.var(n)
@@ -2429,11 +2447,13 @@ class TestParforsVectorizer(TestPrangeBase):
 
         arg = np.zeros(10)
 
-        novec_asm = self.get_gufunc_asm(will_not_vectorize, 'signed', arg,
-                                        fastmath=True)
+        # Boundschecking breaks vectorization
+        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
+            novec_asm = self.get_gufunc_asm(will_not_vectorize, 'signed', arg,
+                                            fastmath=True)
 
-        vec_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
-                                      fastmath=True)
+            vec_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
+                                          fastmath=True)
 
         for v in novec_asm.values():
             # vector variant should not be present
@@ -2476,10 +2496,12 @@ class TestParforsVectorizer(TestPrangeBase):
                 A += i
             return A
 
-        signed_asm = self.get_gufunc_asm(signed_variant, 'signed',
-                                         fastmath=True)
-        unsigned_asm = self.get_gufunc_asm(unsigned_variant, 'unsigned',
-                                           fastmath=True)
+        # Boundschecking breaks the diff check below because of the pickled exception
+        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
+            signed_asm = self.get_gufunc_asm(signed_variant, 'signed',
+                                             fastmath=True)
+            unsigned_asm = self.get_gufunc_asm(unsigned_variant, 'unsigned',
+                                               fastmath=True)
 
         def strip_instrs(asm):
             acc = []
@@ -2666,7 +2688,6 @@ class TestParforsSlice(TestParforsBase):
         def test_impl(a):
             (m,n) = a.shape
             b = a.copy()
-            c = -1
             b[1,:-1] = a[0,-3:4]
             return b
 
@@ -2677,14 +2698,18 @@ class TestParforsSlice(TestParforsBase):
         def test_impl(a):
             (m,n) = a.shape
             b = a.copy()
-            c = -1
             b[1,-(n-1):] = a[0,-3:4]
             return b
 
         self.check(test_impl, np.arange(12).reshape((3,4)))
 
-    @skip_unsupported
+
+    @test_disabled
     def test_parfor_slice16(self):
+        """ This test is disabled because if n is larger than the array size
+            then n and n-1 will both be the end of the array and thus the
+            slices will in fact be of different sizes and unable to fuse.
+        """
         def test_impl(a, b, n):
             assert(a.shape == b.shape)
             a[1:n] = 10
@@ -2727,7 +2752,7 @@ class TestParforsSlice(TestParforsBase):
 
     @skip_unsupported
     def test_parfor_slice20(self):
-        # issues #4075, slice size
+        # issue #4075, slice size
         def test_impl():
             a = np.ones(10)
             c = a[1:]
@@ -2758,6 +2783,47 @@ class TestParforsSlice(TestParforsBase):
         x1 = np.zeros((10,7))
         x2 = np.array(4)
         self.check(test_impl, x1, x2)
+
+    @skip_unsupported
+    def test_parfor_slice23(self):
+        # issue #4630
+        def test_impl(x):
+            x[:0] = 2
+            return x
+
+        self.check(test_impl, np.ones(10))
+
+    @skip_unsupported
+    def test_parfor_slice24(self):
+        def test_impl(m, A, n):
+            B = np.zeros(m)
+            C = B[n:]
+            C = A[:len(C)]
+            return B
+
+        for i in range(-15, 15):
+            self.check(test_impl, 10, np.ones(10), i)
+
+    @skip_unsupported
+    def test_parfor_slice25(self):
+        def test_impl(m, A, n):
+            B = np.zeros(m)
+            C = B[:n]
+            C = A[:len(C)]
+            return B
+
+        for i in range(-15, 15):
+            self.check(test_impl, 10, np.ones(10), i)
+
+    @skip_unsupported
+    def test_parfor_slice26(self):
+        def test_impl(a):
+            (n,) = a.shape
+            b = a.copy()
+            b[-(n-1):] = a[-3:4]
+            return b
+
+        self.check(test_impl, np.arange(4))
 
 class TestParforsOptions(TestParforsBase):
 
@@ -2959,7 +3025,7 @@ class TestParforsDiagnostics(TestParforsBase):
         self.assertEqual(a, b)
 
     def _fusion_equivalent(self, thing):
-        # parfors indexes the Parfors class instance id's from whereever the
+        # parfors indexes the Parfors class instance id's from wherever the
         # internal state happens to be. To assert fusion equivalence we just
         # check that the relative difference between fusion adjacency lists
         # is the same. For example:
@@ -3080,7 +3146,7 @@ class TestParforsDiagnostics(TestParforsBase):
         self.check(test_impl,)
         cpfunc = self.compile_parallel(test_impl, ())
         diagnostics = cpfunc.metadata['parfor_diagnostics']
-        self.assert_diagnostics(diagnostics, parfors_count=2)
+        self.assert_diagnostics(diagnostics, parfors_count=1)
 
     def test_allocation_hoisting(self):
         def test_impl():

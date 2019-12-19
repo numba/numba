@@ -1137,12 +1137,12 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                            'homogeneous sequence')):
             cfunc(np.array([1.]))
 
-        with check_raises(('type (int64, reflected list(int64)) does '
+        with check_raises(('type Tuple(int64, reflected list(int64)) does '
                           'not have a regular shape')):
             cfunc((np.int64(1), [np.int64(2)]))
 
         with check_raises(
-                "cannot convert (int64, Record(a[type=int32;offset=0],"
+                "cannot convert Tuple(int64, Record(a[type=int32;offset=0],"
                 "b[type=float32;offset=4];8;False)) to a homogeneous type",
             ):
             st = np.dtype([('a', 'i4'), ('b', 'f4')])

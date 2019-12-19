@@ -4,7 +4,7 @@ import sys
 import traceback
 
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types
+from numba import jit, types, errors, njit
 from numba import unittest_support as unittest
 from .support import TestCase, tag
 
@@ -13,11 +13,14 @@ force_pyobj_flags.set("force_pyobject")
 
 no_pyobj_flags = Flags()
 
+
 class MyError(Exception):
     pass
 
+
 class OtherError(Exception):
     pass
+
 
 class UDEArgsToSuper(Exception):
     def __init__(self, arg, value0):
@@ -53,7 +56,7 @@ class UDENoArgSuper(Exception):
 
     def __hash__(self):
         return hash((super(UDENoArgSuper).__hash__(), self.deferarg,
-                    self.value0))
+                     self.value0))
 
 
 def raise_class(exc):
@@ -68,6 +71,7 @@ def raise_class(exc):
         return i
     return raiser
 
+
 def raise_instance(exc, arg):
     def raiser(i):
         if i == 1:
@@ -79,8 +83,10 @@ def raise_instance(exc, arg):
         return i
     return raiser
 
+
 def reraise():
     raise
+
 
 def outer_function(inner):
     def outer(i):
@@ -89,11 +95,13 @@ def outer_function(inner):
         return inner(i)
     return outer
 
+
 def assert_usecase(i):
     assert i == 1, "bar"
 
+
 def ude_bug_usecase():
-    raise UDEArgsToSuper() # oops user forgot args to exception ctor
+    raise UDEArgsToSuper()  # oops user forgot args to exception ctor
 
 
 class TestRaising(TestCase):
@@ -138,20 +146,19 @@ class TestRaising(TestCase):
             # location it was raised.
             try:
                 pyfunc(*args)
-            except Exception as e:
+            except Exception:
                 py_frames = traceback.format_exception(*sys.exc_info())
                 expected_frames = py_frames[-2:]
 
             try:
                 cfunc(*args)
-            except Exception as e:
+            except Exception:
                 c_frames = traceback.format_exception(*sys.exc_info())
                 got_frames = c_frames[-2:]
 
             # check exception and the injected frame are the same
             for expf, gotf in zip(expected_frames, got_frames):
                 self.assertEqual(expf, gotf)
-
 
     def check_raise_class(self, flags):
         pyfunc = raise_class(MyError)
@@ -228,7 +235,7 @@ class TestRaising(TestCase):
                 def impl():
                     try:
                         op()
-                    except err as e:
+                    except err:
                         fn()
                 return impl
             pybased = gen_impl(pyfunc)
@@ -256,10 +263,23 @@ class TestRaising(TestCase):
         self.check_raise_invalid_class(1, flags=force_pyobj_flags)
 
     def test_raise_invalid_class_nopython(self):
-        with self.assertTypingError():
+        msg = "Encountered unsupported constant type used for exception"
+        with self.assertRaises(errors.UnsupportedError) as raises:
             self.check_raise_invalid_class(int, flags=no_pyobj_flags)
-        with self.assertTypingError():
+        self.assertIn(msg, str(raises.exception))
+        with self.assertRaises(errors.UnsupportedError) as raises:
             self.check_raise_invalid_class(1, flags=no_pyobj_flags)
+        self.assertIn(msg, str(raises.exception))
+
+    def test_raise_bare_string_nopython(self):
+        @njit
+        def foo():
+            raise "illegal"
+        msg = ("Directly raising a string constant as an exception is not "
+               "supported")
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo()
+        self.assertIn(msg, str(raises.exception))
 
     def check_assert_statement(self, flags):
         pyfunc = assert_usecase
@@ -280,7 +300,7 @@ class TestRaising(TestCase):
         assert_raise = "def f(a):\n  assert a != 1"
         for f_text, exc in [(assert_raise, AssertionError),
                             (simple_raise, UDEArgsToSuper),
-                            (simple_raise,UDENoArgSuper)]:
+                            (simple_raise, UDENoArgSuper)]:
             loc = {}
             exec(f_text, {'exc': exc}, loc)
             pyfunc = loc['f']
@@ -303,11 +323,12 @@ class TestRaising(TestCase):
         cfunc = cres.entry_point
         self.check_against_python(flags, pyfunc, cfunc, TypeError)
 
-    def test_user_code_error_traceback(self):
+    def test_user_code_error_traceback_objmode(self):
         self.check_user_code_error_traceback(flags=force_pyobj_flags)
 
-    def test_user_code_error_traceback(self):
+    def test_user_code_error_traceback_nopython(self):
         self.check_user_code_error_traceback(flags=no_pyobj_flags)
+
 
 if __name__ == '__main__':
     unittest.main()

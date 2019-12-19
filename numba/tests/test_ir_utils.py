@@ -195,6 +195,86 @@ class TestIrUtils(TestCase):
         self.assertEqual(const_b, GLOBAL_B)
         self.assertEqual(const_c, FREEVAR_C)
 
+    def test_flatten_labels(self):
+        """ tests flatten_labels """
+        def foo(a):
+            acc = 0
+            if a > 3:
+                acc += 1
+                if a > 19:
+                    return 53
+            elif a < 1000:
+                if a >= 12:
+                    acc += 1
+                for x in range(10):
+                    acc -= 1
+                    if acc < 2:
+                        break
+                else:
+                    acc += 7
+            else:
+                raise ValueError("some string")
+            return acc
+
+        def bar(a):
+            acc = 0
+            z = 12
+            if a > 3:
+                acc += 1
+                z += 12
+                if a > 19:
+                    z += 12
+                    return 53
+            elif a < 1000:
+                if a >= 12:
+                    z += 12
+                    acc += 1
+                for x in range(10):
+                    z += 12
+                    acc -= 1
+                    if acc < 2:
+                        break
+                else:
+                    z += 12
+                    acc += 7
+            else:
+                raise ValueError("some string")
+            return acc
+
+        def baz(a):
+            acc = 0
+            if a > 3:
+                acc += 1
+                if a > 19:
+                    return 53
+                else: # extra control flow in comparison to foo
+                    return 55
+            elif a < 1000:
+                if a >= 12:
+                    acc += 1
+                for x in range(10):
+                    acc -= 1
+                    if acc < 2:
+                        break
+                else:
+                    acc += 7
+            else:
+                raise ValueError("some string")
+            return acc
+
+        def get_flat_cfg(func):
+            func_ir = ir_utils.compile_to_numba_ir(func, dict())
+            flat_blocks = ir_utils.flatten_labels(func_ir.blocks)
+            self.assertEqual(max(flat_blocks.keys()) + 1, len(func_ir.blocks))
+            return ir_utils.compute_cfg_from_blocks(flat_blocks)
+
+        foo_cfg = get_flat_cfg(foo)
+        bar_cfg = get_flat_cfg(bar)
+        baz_cfg = get_flat_cfg(baz)
+
+        self.assertEqual(foo_cfg, bar_cfg)
+        self.assertNotEqual(foo_cfg, baz_cfg)
+
 
 if __name__ == "__main__":
     unittest.main()
