@@ -15,20 +15,22 @@ from numba.ccallback import CFunc
 from numba import cgutils
 from llvmlite import ir
 # from numba.dispatcher import Dispatcher
-from numba.types import FunctionType, FunctionProtoType, numbatype
+from numba.types import (
+    FunctionType, FunctionProtoType, numbatype, WrapperAddressProtocol)
 
-#
-# Python objects that can be types as FunctionType are
-#  - plain Python functions
-#  - numba Dispatcher instances that wrap plain Python functions
-#  - numba CFunc instances
-#
-# Disabled the first two as it interfers with existing numba tests
-#
+
+@typeof_impl.register(WrapperAddressProtocol)
+def typeof_WrapperAddressProtocol(val, c):
+    return numbatype(val.signature())
+
+
+@typeof_impl.register(CFunc)
+def typeof_CFunc(val, c):
+    return numbatype(val._sig)
 
 
 # TODO: when enabled, some numba tests fail. What is the reason?
-#@typeof_impl.register(types.FunctionType)
+# @typeof_impl.register(types.FunctionType)
 def typeof_function(val, c):
     return FunctionType(val)
 
@@ -36,11 +38,6 @@ def typeof_function(val, c):
 # @typeof_impl.register(Dispatcher)
 def typeof_Dispatcher(val, c):
     return numbatype(val.py_func)
-
-
-@typeof_impl.register(CFunc)
-def typeof_CFunc(val, c):
-    return numbatype(val._sig)
 
 
 @register_model(FunctionProtoType)

@@ -1,5 +1,5 @@
 from numba import njit, function, cfunc, types
-# import ctypes
+import ctypes
 from .support import TestCase
 
 
@@ -275,3 +275,48 @@ class TestFuncionTypeSupport(TestCase):
                     target_type, worker(source_type),
                     msg=(f'expected {target_type} ({type(target_type)})'
                          f' from {source_type} ({type(source_type)})'))
+
+
+class TestFuncionTypeExtensions(TestCase):
+
+    def test_wrapper_address_protocol(self):
+        import sys
+        import time
+        from numba.types import WrapperAddressProtocol
+
+        class LibC(WrapperAddressProtocol):
+
+            def __init__(self, fname):
+                if sys.platform[:5] == 'linux':
+                    self.libc = ctypes.CDLL("libc.so.6")
+                else:
+                    raise NotImplementedError(
+                        f'loading libc on platform {sys.platform}')
+                self.fname = fname
+
+            def __wrapper_address__(self, sig):
+                if (self.fname, sig) == ('time', 'int32()'):
+                    return ctypes.cast(self.libc.time, ctypes.c_voidp).value
+                raise NotImplementedError(
+                    f'wrapper address of `{self.fname}` with signature `{sig}`')
+
+            def signature(self):
+                if self.fname == 'time':
+                    return 'int32()'
+                raise NotImplementedError(f'signature of `{self.fname}`')
+
+        wap = LibC('time')
+
+        @njit
+        def get_time(f):
+            return f()
+
+        t0 = time.time()
+        # libc.time returns int, so make sure t1 will be ahead of t0
+        # at least 1 second:
+        time.sleep(1.01)
+        t1 = get_time(wap)
+        t2 = time.time()
+
+        self.assertLess(t0, t1)
+        self.assertLess(t1, t2)

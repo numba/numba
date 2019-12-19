@@ -1,5 +1,6 @@
 
-__all__ = ['FunctionType', 'FunctionProtoType', 'numbatype']
+__all__ = ['FunctionType', 'FunctionProtoType', 'numbatype',
+           'WrapperAddressProtocol']
 
 import inspect
 import types as pytypes
@@ -85,8 +86,12 @@ class FunctionProtoType(Type):
     cconv = None
 
     def __init__(self, rtype, atypes):
+        from numba.types import void
         self.rtype = rtype
-        self.atypes = tuple(atypes)
+        atypes = tuple(atypes)
+        if len(atypes) == 1 and atypes[0] == void:
+            atypes = ()
+        self.atypes = atypes
 
         # Note that numbatype must be able to reconstruct the function
         # type from the name.
@@ -154,7 +159,7 @@ def numbatype(obj):
                 raise NumbaTypeParseError(
                     'mismatching parenthesis in `%s`' % (obj))
             rtype = numbatype(obj[:i])
-            atypes = map(numbatype, _commasplit(obj[i + 1:-1].strip()))
+            atypes = tuple(map(numbatype, _commasplit(obj[i + 1:-1].strip())))
             ftype = FunctionProtoType(rtype, atypes)
             return FunctionType(ftype)
         if obj.startswith('{') and obj.endswith('}'):
@@ -248,3 +253,40 @@ def _commasplit(s):
     if p1 == p2 == 0:
         return rlst
     raise NumbaTypeParseError('failed to comma-split `%s`' % s)
+
+
+class WrapperAddressProtocol(object):
+    """Base class for Wrapper Address Protocol.
+
+    Objects that type is derived from WrapperAddressProtocol can be
+    passed as arguments to numba njitted functions where it can be
+    used as first-class functions.  As minimum, the derived types must
+    implement the two methods __wrapper_address__ and signature.
+    """
+
+    def __wrapper_address__(self, sig):
+        """Return the address of a library function with given signature.
+
+        Parameters
+        ----------
+        sig : str
+          A function signature
+
+        Returns
+        -------
+        addr : int
+
+        """
+        raise NotImplementedError(
+            f'{type(self).__name__}.__wrapper_address__(sig) method')
+
+    def signature(self):
+        """Return a numba function type.
+
+        The return value can be any object that passed through
+        numbatype results in a numba.types.FunctionType instance.
+        Typically, the return value is a string object containing the
+        signature of the numba function.
+        """
+        raise NotImplementedError(
+            f'{type(self).__name__}.signature() method')
