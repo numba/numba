@@ -32,12 +32,13 @@ class TestTypedList(MemoryLeakMixin, TestCase):
 
     def test_with_global_removed(self):
         # remove the global for this test
-        dlr = globals().pop('disable_reflected_list')
+        src = """def foo():\n\tl = [0]\n\treturn l"""
+        glbls = dict(globals())
+        glbls.pop('disable_reflected_list')
+        lcl = {}
+        exec(src, glbls, lcl)
 
-        @njit
-        def foo():
-            l = [0]
-            return l
+        foo = njit(lcl['foo'])
 
         # Both JITed and non-JITed version will return a Python list
         pyfunc_expected = cfunc_expected = [0]
@@ -46,6 +47,3 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(cfunc_expected, cfunc_received)
         self.assertTrue(isinstance(pyfunc_received, list))
         self.assertTrue(isinstance(cfunc_received, list))
-
-        # add the global for future tests
-        globals()['disable_reflected_list'] = dlr
