@@ -162,7 +162,7 @@ class List(MutableSequence):
             number of items to pre-allocate
         """
         if config.DISABLE_JIT:
-            return []
+            return list()
         else:
             return cls(lsttype=ListType(item_type), allocated=allocated)
 
