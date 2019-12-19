@@ -995,3 +995,16 @@ class TestListSort(MemoryLeakMixin, TestCase):
 
         lst = self.make(List, np.random.randint(0, 100, 31))
         self.assertEqual(udt(lst), udt.py_func(lst))
+
+    def test_sort_on_arrays(self):
+        @njit
+        def foo(lst):
+            lst.sort(key=lambda arr: np.linalg.norm(arr))
+            return lst
+
+        arrays = [np.random.random(3) for _ in range(10)]
+        my_lists = self.make_both(arrays)
+        self.assertEqual(
+            list(foo(my_lists['nb'])),
+            foo.py_func(my_lists['py']),
+        )

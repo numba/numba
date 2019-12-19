@@ -707,7 +707,7 @@ def impl_setitem(l, index, item):
 
         def impl_slice(l, index, item):
             # special case "a[i:j] = a", need to copy first
-            if l == item:
+            if l is item:
                 item = item.copy()
             slice_range = handle_slice(l, index)
             # non-extended (simple) slices
