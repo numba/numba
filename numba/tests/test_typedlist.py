@@ -973,3 +973,25 @@ class TestListSort(MemoryLeakMixin, TestCase):
             list(udt(my_lists['nb'], key=nb_key)),
             list(udt(my_lists['nb'], key=py_key)),
         )
+
+    def test_sort_in_jit_w_lambda_key(self):
+        @njit
+        def udt(lst):
+            lst.sort(key=lambda x: -x)
+            return lst
+
+        lst = self.make(List, np.random.randint(0, 100, 31))
+        self.assertEqual(udt(lst), udt.py_func(lst))
+
+    def test_sort_in_jit_w_global_key(self):
+        @njit
+        def keyfn(x):
+            return -x
+
+        @njit
+        def udt(lst):
+            lst.sort(key=keyfn)
+            return lst
+
+        lst = self.make(List, np.random.randint(0, 100, 31))
+        self.assertEqual(udt(lst), udt.py_func(lst))
