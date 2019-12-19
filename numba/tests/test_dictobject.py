@@ -1597,7 +1597,6 @@ class TestNoJit(TestCase):
                 d = dictobject.new_dict(int32, float32)
                 self.assertEqual(type(d), dict)
 
-    @unittest.expectedFailure
     def test_dict_create_no_jit_using_Dict(self):
         with override_config('DISABLE_JIT', True):
             with forbid_codegen():

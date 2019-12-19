@@ -81,6 +81,13 @@ class Dict(MutableMapping):
 
     Implements the MutableMapping interface.
     """
+
+    def __new__(cls, dcttype=None, meminfo=None):
+        if config.DISABLE_JIT:
+            return dict.__new__(dict)
+        else:
+            return object.__new__(cls)
+
     @classmethod
     def empty(cls, key_type, value_type):
         """Create a new empty Dict with *key_type* and *value_type*
