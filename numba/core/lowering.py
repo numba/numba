@@ -935,19 +935,17 @@ class Lower(BaseLower):
         return res
 
     def _lower_call_FunctionType(self, fnty, expr, signature):
-        from .function import lower_nbtype
         builder = self.builder
         argvals = self.fold_call_args(
             fnty, signature, expr.args, expr.vararg, expr.kws,
         )
-
-        be_fnty = lower_nbtype(fnty)
+        llty = self.context.get_value_type(fnty.ftype)
         fstruct = self.loadvar(expr.func.name)
         addr = builder.extract_value(fstruct, 0,
                                      name='addr_of_%s' % (expr.func.name))
-        fptr = cgutils.alloca_once(builder, be_fnty.as_pointer(),
+        fptr = cgutils.alloca_once(builder, llty,
                                    name="fptr_of_%s" % (expr.func.name))
-        builder.store(builder.inttoptr(addr, be_fnty.as_pointer()), fptr)
+        builder.store(builder.inttoptr(addr, llty), fptr)
         ptr = builder.load(fptr)
         res = self.context.call_function_pointer(
             self.builder, ptr, argvals, fnty.cconv,

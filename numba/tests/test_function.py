@@ -1,4 +1,5 @@
-from numba import njit, function, cfunc
+from numba import njit, function, cfunc, types
+# import ctypes
 from .support import TestCase
 
 
@@ -13,7 +14,7 @@ def dump(foo):  # FOR DEBUGGING, TO BE REMOVED
 
 class TestFuncionType(TestCase):
 
-    def _test_issue_3405(self):
+    def _test_issue_3405_original(self):
 
         @njit
         def a():
@@ -34,10 +35,29 @@ class TestFuncionType(TestCase):
         self.assertEqual(g(True), 2)
         self.assertEqual(g(False), 3)
 
-        print(njit(g).inspect_types())
-
         self.assertEqual(njit(g)(True), g(True))
         self.assertEqual(njit(g)(False), g(False))
+
+    def test_issue_3405_using_cfunc(self):
+
+        @cfunc('int64()')
+        def a():
+            return 2
+
+        @cfunc('int64()')
+        def b():
+            return 3
+
+        def g(arg):
+            if arg:
+                f = a
+            else:
+                f = b
+            out = f()
+            return out
+
+        self.assertEqual(njit(g)(True), 2)
+        self.assertEqual(njit(g)(False), 3)
 
     def test_cfunc_in_out(self):
         """njitted function returns Python functions
@@ -103,6 +123,36 @@ class TestFuncionType(TestCase):
 
         self.assertEqual(bar(), 123456 + 321)
 
+    def test_njit_in_call(self):
+
+        @njit
+        def a(i):
+            return i + 123456
+
+        @njit
+        def foo(f):
+            return f(123)
+
+        self.assertEqual(foo(a), 123456 + 123)
+
+    def _test_pyfunc_in_call(self):
+        # disabled as the pure python function support infers badly
+        # with other numba tests, see numba/function.py.
+
+        def a(i):
+            return i + 123456
+
+        @njit
+        def foo(f):
+            return f(123)
+
+        @njit
+        def bar(f):
+            return f(123.45)
+
+        self.assertEqual(foo(a), 123456 + 123)
+        self.assertEqual(bar(a), 123456 + 123.45)
+
     def test_cfunc_seq(self):
 
         @cfunc('int64(int64)')
@@ -143,3 +193,62 @@ class TestFuncionType(TestCase):
 
         self.assertEqual(foo(True), 123 + 123)
         self.assertEqual(foo(False), 123 + 456)
+
+
+class TestFuncionTypeSupport(TestCase):
+
+    def test_numbatype(self):
+        worker = types.function.numbatype
+        cptr = types.CPointer
+
+        def foo(i: int) -> int:
+            pass
+
+        for target_type, type_sources in [
+                # primitive types
+                (types.boolean, ['bool', 'boolean', bool, types.boolean, 'b1']),
+                (types.none, ['void', types.none]),
+                (types.int8, ['int8', types.int8, 'i1']),
+                (types.int16, ['int16', types.int16, 'i2']),
+                (types.int32, ['int32', types.int32, 'i4']),
+                (types.int64, ['int64', int, types.int64, 'i8']),
+                (types.uint8, ['uint8', types.uint8, 'u1', 'byte']),
+                (types.uint16, ['uint16', types.uint16, 'u2']),
+                (types.uint32, ['uint32', types.uint32, 'u4']),
+                (types.uint64, ['uint64', types.uint64, 'u8']),
+                (types.float32, ['float32', 'float', types.float32, 'f4']),
+                (types.float64,
+                 ['float64', 'double', float, types.float64, 'f8']),
+                (types.complex64,
+                 ['complex64', 'complex', types.complex64, 'c8']),
+                (types.complex128,
+                 ['complex128', complex, types.complex128, 'c16']),
+                (types.unicode_type,
+                 ['str', str, types.unicode_type, 'unicode', 'string']),
+                (types.none, ['void', 'none', types.void, types.none]),
+                (types.voidptr, [types.voidptr, 'void*']),
+                (types.pyobject, [types.pyobject]),
+                (types.pyfunc_type, [types.pyfunc_type]),
+                (types.slice2_type, [types.slice2_type]),
+                (types.slice3_type, [types.slice3_type]),
+                (types.code_type, [types.code_type]),
+                (types.undefined, [types.undefined]),
+                (types.Any, [types.Any]),
+                (types.range_iter32_type, [types.range_iter32_type]),
+                (types.range_iter64_type, [types.range_iter64_type]),
+                (types.unsigned_range_iter64_type,
+                 [types.unsigned_range_iter64_type]),
+                (types.range_state32_type, [types.range_state32_type]),
+                (types.range_state64_type, [types.range_state64_type]),
+                (types.ellipsis, [types.ellipsis]),
+                # composite types
+                (cptr(types.int64), ['int64*', 'i8 *']),
+                (types.FunctionType((types.int64, (types.int64,))),
+                 ['int64(int64)', 'i8(i8)', 'int(i8)',
+                  types.int64(types.int64), foo]),
+        ]:
+            for source_type in type_sources:
+                self.assertEqual(
+                    target_type, worker(source_type),
+                    msg=(f'expected {target_type} ({type(target_type)})'
+                         f' from {source_type} ({type(source_type)})'))
