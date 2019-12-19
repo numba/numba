@@ -518,7 +518,7 @@ explicitly from the `numba.typed` module::
 
 
 .. note::
-    The typed-list is considered stable with Numba version 0.47.0. Using
+    The typed-list is considered stable in Numba version 0.47.0. Using
     the ``disable_reflected_list`` switch from the ``numba.future`` module will
     mean that the constructors ``[]`` and ``list()`` will create a typed-list
     instead of a reflected one.
