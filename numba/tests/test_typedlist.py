@@ -447,10 +447,16 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             del tl[sa:so:se]
             self.assertEqual(rl, list(tl))
 
-    def test_list_create_no_jit(self):
+    def test_list_create_no_jit_using_empty_list(self):
         with override_config('DISABLE_JIT', True):
             with forbid_codegen():
                 l = List.empty_list(types.int32)
+                self.assertEqual(type(l), list)
+
+    def test_list_create_no_jit_using_List(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                l = List()
                 self.assertEqual(type(l), list)
 
 

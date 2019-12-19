@@ -150,6 +150,13 @@ class List(MutableSequence):
 
     Implements the MutableSequence interface.
     """
+
+    def __new__(cls, lsttype=None, meminfo=None, allocated=None):
+        if config.DISABLE_JIT:
+            return list.__new__(list)
+        else:
+            return object.__new__(cls)
+
     @classmethod
     def empty_list(cls, item_type, allocated=0):
         """Create a new empty List.
