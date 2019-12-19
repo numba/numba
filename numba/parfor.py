@@ -3022,9 +3022,9 @@ def check_conflicting_reduction_operators(param, nodes):
                 first_red_func = node.value.fn
             else:
                 if first_red_func != node.value.fn:
-                    raise ValueError("Reduction variable " + param +
-                                     " has multiple conflicting reduction" +
-                                     " operators.")
+                    msg = ("Reduction variable %s has multiple conflicting "
+                           "reduction operators." % param)
+                    raise errors.UnsupportedError(msg, node.loc)
 
 def get_reduction_init(nodes):
     """
