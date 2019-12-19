@@ -59,6 +59,29 @@ class TestFuncionType(TestCase):
         self.assertEqual(njit(g)(True), 2)
         self.assertEqual(njit(g)(False), 3)
 
+    def test_pr4967_example(self):
+
+        @cfunc('int64(int64)')
+        def a(i):
+            return i + 1
+
+        @cfunc('int64(int64)')
+        def b(i):
+            return i + 2
+
+        @njit
+        def foo(f, g):
+            i = f(2)
+            seq = (f, g)
+            for fun in seq:
+                i += fun(i)
+            return i
+
+        a_ = a._pyfunc
+        b_ = b._pyfunc
+        self.assertEqual(foo(a, b),
+                         a_(2) + a_(a_(2)) + b_(a_(2) + a_(a_(2))))
+
     def test_cfunc_in_out(self):
         """njitted function returns Python functions
         """
