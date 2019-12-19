@@ -13,6 +13,7 @@ from numba.six import MutableSequence
 from numba.types import ListType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
 from numba import listobject
+from numba.dispatcher import Dispatcher
 from numba import njit, types, cgutils, errors, typeof
 from numba.extending import (
     overload_method,
@@ -310,7 +311,7 @@ class List(MutableSequence):
         See also ``list.sort()``
         """
         # If key is not already a dispatcher object, make it so
-        if callable(key) and not isinstance(key, types.Dispatcher):
+        if callable(key) and not isinstance(key, Dispatcher):
             key = njit(key)
         return _sort(self, key, reverse)
 

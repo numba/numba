@@ -954,3 +954,22 @@ class TestListSort(MemoryLeakMixin, TestCase):
                 udt(my_lists['py'], key=key, reverse=reverse),
                 msg=msg,
             )
+
+    def test_sort_dispatcher_key(self):
+        def udt(lst, key):
+            lst.sort(key=key)
+            return lst
+
+        my_lists = self.make_both(np.random.randint(0, 100, 31))
+        py_key = lambda x: x + 1
+        nb_key = njit(lambda x: x + 1)
+        # test typedlist with jitted function
+        self.assertEqual(
+            list(udt(my_lists['nb'], key=nb_key)),
+            udt(my_lists['py'], key=py_key),
+        )
+        # test typedlist with and without jitted function
+        self.assertEqual(
+            list(udt(my_lists['nb'], key=nb_key)),
+            list(udt(my_lists['nb'], key=py_key)),
+        )
