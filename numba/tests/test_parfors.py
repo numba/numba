@@ -2086,6 +2086,34 @@ class TestPrange(TestPrangeBase):
         self.prange_tester(test_impl, A, scheduler_type='unsigned',
                            check_fastmath=True, check_fastmath_result=True)
 
+    @skip_unsupported
+    def test_prange_two_instances_same_reduction_var(self):
+        # issue4922 - multiple uses of same reduction variable
+        def test_impl(n):
+            c = 0
+            for i in range(n):
+                c += 1
+                if i > 10:
+                    c += 1
+            return c
+        self.prange_tester(test_impl, 9)
+
+    @skip_unsupported
+    def test_prange_conflicting_reduction_ops(self):
+        def test_impl(n):
+            c = 0
+            for i in range(n):
+                c += 1
+                if i > 10:
+                    c *= 1
+            return c
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            self.prange_tester(test_impl, 9)
+        msg = ('Reduction variable c has multiple conflicting reduction '
+               'operators.')
+        self.assertIn(msg, str(raises.exception))
+
 #    @skip_unsupported
     @test_disabled
     def test_check_error_model(self):
