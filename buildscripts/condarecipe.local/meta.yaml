@@ -66,8 +66,6 @@ test:
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or armv6l or armv7l or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or armv6l or armv7l or aarch64)]
-  files:
-    - mandel.py
 
 about:
   home: http://numba.pydata.org/

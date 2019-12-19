@@ -21,19 +21,6 @@ _logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Decorators
 
-def autojit(*args, **kws):
-    """Deprecated.
-
-    Use jit instead.  Calls to jit internally.
-    """
-    url = ("http://numba.pydata.org/numba-doc/latest/reference/"
-            "deprecation.html#deprecation-of-numba-autojit")
-    msg = ("autojit is deprecated, use jit instead, which provides "
-           "the same functionality. For more information visit %s" % url)
-    warnings.warn(NumbaDeprecationWarning(msg))
-    return jit(*args, **kws)
-
-
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
