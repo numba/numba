@@ -285,7 +285,7 @@ class BaseContext(object):
 
     def load_additional_registries(self):
         """
-        Load target-specific registries.  Can be overriden by subclasses.
+        Load target-specific registries.  Can be overridden by subclasses.
         """
 
     def mangler(self, name, types):

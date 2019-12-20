@@ -1943,7 +1943,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                             (use, expr)
                     raise UnsupportedError(msg, stmt.value.loc)
 
-            # this checks for gdb initilization calls, only one is permitted
+            # this checks for gdb initialization calls, only one is permitted
             if isinstance(stmt.value, (ir.Global, ir.FreeVar)):
                 val = stmt.value
                 val = getattr(val, 'value', None)

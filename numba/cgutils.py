@@ -778,7 +778,7 @@ def is_scalar_zero(builder, value):
 
 def is_not_scalar_zero(builder, value):
     """
-    Return a predicate representin whether a *value* is not equal to zero.
+    Return a predicate representing whether a *value* is not equal to zero.
     (not exactly "not is_scalar_zero" because of nans)
     """
     return _scalar_pred_against_zero(

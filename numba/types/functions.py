@@ -376,7 +376,7 @@ class NamedTupleClass(Callable, Opaque):
         super(NamedTupleClass, self).__init__(name)
 
     def get_call_type(self, context, args, kws):
-        # Overriden by the __call__ constructor resolution in typing.collections
+        # Overridden by the __call__ constructor resolution in typing.collections
         return None
 
     def get_call_signatures(self):
@@ -398,7 +398,7 @@ class NumberClass(Callable, DTypeSpec, Opaque):
         super(NumberClass, self).__init__(name)
 
     def get_call_type(self, context, args, kws):
-        # Overriden by the __call__ constructor resolution in typing.builtins
+        # Overridden by the __call__ constructor resolution in typing.builtins
         return None
 
     def get_call_signatures(self):

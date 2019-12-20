@@ -61,7 +61,7 @@ def iternext_enumerate(context, builder, sig, args, result):
 
     with builder.if_then(is_valid):
         srcval = srcres.yielded_value()
-        # As a iternext_impl function, this will incref the yieled value.
+        # As a iternext_impl function, this will incref the yielded value.
         # We need to release the new reference from call_iternext.
         if context.enable_nrt:
             context.nrt.decref(builder, enumty.yield_type[1], srcval)

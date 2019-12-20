@@ -3027,7 +3027,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             def check(a, repeats):
                 self.assertPreciseEqual(pyfunc(a, repeats), nbfunc(a, repeats))
 
-            # test array argumens
+            # test array arguments
             target_numpy_values = [
                 np.ones(1),
                 np.arange(1000),

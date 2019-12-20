@@ -99,7 +99,7 @@ class Type(object):
     @property
     def key(self):
         """
-        A property used for __eq__, __ne__ and __hash__.  Can be overriden
+        A property used for __eq__, __ne__ and __hash__.  Can be overridden
         in subclasses.
         """
         return self.name
@@ -365,7 +365,7 @@ class ArrayCompatible(Type):
     exposing an __array__ method).
     Derived classes should implement the *as_array* attribute.
     """
-    # If overriden by a subclass, it should also implement typing
+    # If overridden by a subclass, it should also implement typing
     # for '__array_wrap__' with arguments (input, formal result).
     array_priority = 0.0
 

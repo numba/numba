@@ -800,7 +800,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
     array_var = ir.Var(scope, mk_unique_var("array"), loc)
     empty_func = ir.Var(scope, mk_unique_var("empty_func"), loc)
     if dtype_def and dtype_mod_def:
-        # when dtype is present, we'll call emtpy with dtype
+        # when dtype is present, we'll call empty with dtype
         dtype_mod_var = ir.Var(scope, mk_unique_var("dtype_mod"), loc)
         dtype_var = ir.Var(scope, mk_unique_var("dtype"), loc)
         stmts.append(_new_definition(func_ir, dtype_mod_var, dtype_mod_def, loc))

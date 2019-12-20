@@ -302,7 +302,7 @@ class ClassBuilder(object):
         """
         for meth in instance_type.jitmethods:
 
-            # There's no way to retrive the particular method name
+            # There's no way to retrieve the particular method name
             # inside the implementation function, so we have to register a
             # specific closure for each different name
             if meth not in self.implemented_methods:

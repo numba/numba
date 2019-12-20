@@ -169,7 +169,7 @@ class DIBuilder(AbstractDIBuilder):
             mflags.add(debuginfo_version)
 
     def _add_subprogram(self, name, linkagename, line):
-        """Emit subprogram metdata
+        """Emit subprogram metadata
         """
         subp = self._di_subprogram(name, linkagename, line)
         self.subprograms.append(subp)
