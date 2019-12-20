@@ -43,8 +43,8 @@ up-to-data Nvidia driver.
 Software
 --------
 
-You will need the CUDA toolkit installed.  If you are using Conda, just
-type::
+You will need the CUDA toolkit version 8.0 or later installed.  If you are
+using Conda, just type::
 
    $ conda install cudatoolkit
 
