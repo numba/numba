@@ -1,5 +1,7 @@
+import types as pytypes
 from numba import njit, function, cfunc, types
 import ctypes
+
 from .support import TestCase
 
 
@@ -10,6 +12,74 @@ def dump(foo):  # FOR DEBUGGING, TO BE REMOVED
     print('{" LLVM IR OF "+foo.__name__+" ":*^70}')
     print(foo.inspect_llvm(foo_sig.args))
     print('{"":*^70}')
+
+
+# Decorators for tranforming a Python function to different kinds of functions:
+def pure_func(func, sig='int64(int64)'):
+    assert isinstance(func, pytypes.FunctionType), repr(func)
+    func.pyfunc = func
+    return func
+
+
+def cfunc_func(func, sig='int64(int64)'):
+    assert isinstance(func, pytypes.FunctionType), repr(func)
+    f = cfunc(sig)(func)
+    f.pyfunc = func
+    return f
+
+
+def njit_func(func, sig='int64(int64)'):
+    assert isinstance(func, pytypes.FunctionType), repr(func)
+    f = njit(func)
+    f.pyfunc = func
+    return f
+
+
+def njit2_func(func, sig='int64(int64)'):
+    assert isinstance(func, pytypes.FunctionType), repr(func)
+    f = njit(sig)(func)
+    f.pyfunc = func
+    return f
+
+
+def ctypes_func(func, sig='int64(int64)'):
+    assert isinstance(func, pytypes.FunctionType), repr(func)
+    cfunc = cfunc_func(func, sig)
+    addr = cfunc._wrapper_address
+    if sig == 'int64(int64)':
+        f = ctypes.CFUNCTYPE(ctypes.c_int64)(addr)
+        f.pyfunc = func
+        return f
+    # TODO: numbatype(sig) to ctypes converter, see RBC for an example
+    raise NotImplementedError(
+        f'ctypes decorator for {func} with signature {sig}')
+
+
+class WAP(types.WrapperAddressProtocol):
+
+    def __init__(self, func, sig):
+        self.pyfunc = func
+        self.cfunc = cfunc_func(func, sig)
+        self.sig = sig
+
+    def __wrapper_address__(self, sig):
+        assert self.sig == sig, (self.sig, sig)
+        return self.cfunc._wrapper_address
+
+    def signature(self):
+        return self.sig
+
+    def __call__(self, *args, **kwargs):
+        return self.pyfunc(*args, **kwargs)
+
+
+def wap_func(func, sig='int64(int64)'):
+    return WAP(func, sig)
+
+
+all_func_kinds = [pure_func, cfunc_func, njit_func,
+                  njit2_func, ctypes_func, wap_func]
+supported_func_kinds = [cfunc_func]
 
 
 class TestFuncionType(TestCase):
@@ -82,140 +152,309 @@ class TestFuncionType(TestCase):
         self.assertEqual(foo(a, b),
                          a_(2) + a_(a_(2)) + b_(a_(2) + a_(a_(2))))
 
-    def test_cfunc_in_out(self):
-        """njitted function returns Python functions
-        """
+    def _test_in(self, decor):
 
-        @cfunc('int64(int64)')
+        @decor
         def a(i):
             return i + 1
 
-        @cfunc('int64(int64)')
-        def b(i):
-            return i + 2
+        def foo(f):
+            return 0
 
-        @njit
+        self.assertEqual(njit(foo)(a), foo(a.pyfunc))
+
+    def _test_in_call(self, decor):
+
+        @decor
+        def a(i):
+            return i + 1
+
+        def foo(f):
+            r = f(123)
+            return r
+
+        self.assertEqual(njit(foo)(a), foo(a.pyfunc))
+
+    def _test_in_call_out(self, decor):
+
+        @decor
+        def a(i):
+            return i + 1
+
         def foo(f):
             f(123)
             return f
 
-        @njit
-        def bar():
-            a(321)
-            return a
+        self.assertEqual(njit(foo)(a), foo(a.pyfunc))
 
-        self.assertEqual(bar(), a)
-        self.assertEqual(foo(a), a)
-        self.assertEqual(foo(b), b)
+    def _test_in_seq_call(self, decor):
 
-    def _test_pyfunc_in_out(self):
-
-        @cfunc('int64(int64)')
+        @decor
         def a(i):
             return i + 1
 
-        @njit
-        def foo(f):
-            return f
+        @decor
+        def b(i):
+            return i + 2
 
-        @njit
-        def bar():
+        def foo(f, g):
+            r = 0
+            for f_ in (f, g):
+                r = r + f_(r)
+            return r
+
+        self.assertEqual(njit(foo)(a, b), foo(a.pyfunc, b.pyfunc))
+
+    def _test_in_ns_seq_call(self, decor):
+
+        @decor
+        def a(i):
+            return i + 1
+
+        @decor
+        def b(i):
+            return i + 2
+
+        def w(op, a_, b_):
+            def foo(f):
+                r = 0
+                for f_ in (f, b_):
+                    r = r + f_(r)
+                return r
+            return op(foo)(a_)
+
+        self.assertEqual(w(njit, a, b), w(lambda f:f, a.pyfunc, b.pyfunc))
+
+    def _test_ns_call(self, decor):
+
+        @decor
+        def a(i):
+            return i + 1
+
+        def foo():
+            r = a(123)
+            return r
+
+        self.assertEqual(njit(foo)(), a.pyfunc(123))
+
+    def _test_ns_out(self, decor):
+
+        @decor
+        def a(i):
+            return i + 1
+
+        def foo():
             return a
 
-    def test_cfunc_in_call(self):
+        self.assertEqual(njit(foo)(), a)
 
-        @cfunc('int64(int64)')
+    def _test_ns_call_out(self, decor):
+
+        @decor
         def a(i):
-            return i + 123456
+            return i + 1
 
-        # make sure that `a` is can be called via its address
-        a_addr = a._wrapper_address
-        from ctypes import CFUNCTYPE, c_long
-        afunc = CFUNCTYPE(c_long)(a_addr)
-        self.assertEqual(afunc(c_long(123)), 123456 + 123)
+        def foo():
+            a(123)
+            return a
 
-        @njit
+        self.assertEqual(njit(foo)(), a)
+
+    def _test_in_overload(self, decor):
+
+        @decor
+        def a(i):
+            return i + 1
+
         def foo(f):
-            return f(123)
+            r1 = f(123)
+            r2 = f(123.45)
+            return (r1, r2)
 
-        self.assertEqual(foo(a), 123456 + 123)
+        self.assertEqual(njit(foo)(a), foo(a.pyfunc))
 
-        @njit
-        def bar():
-            return a(321)
+    def _test_ns_overload(self, decor):
 
-        self.assertEqual(bar(), 123456 + 321)
-
-    def test_njit_in_call(self):
-
-        @njit
+        @decor
         def a(i):
-            return i + 123456
+            return i + 1
 
-        @njit
-        def foo(f):
-            return f(123)
+        def w(op, a):
+            def foo():
+                r1 = a(123)
+                r2 = a(123.45)
+                return (r1, r2)
+            return op(foo)()
 
-        self.assertEqual(foo(a), 123456 + 123)
+        self.assertEqual(w(njit, a), w(lambda f:f, a.pyfunc))
 
-    def _test_pyfunc_in_call(self):
-        # disabled as the pure python function support infers badly
-        # with other numba tests, see numba/function.py.
+    def _test_in_choose(self, decor):
 
+        @decor
         def a(i):
-            return i + 123456
+            return i + 1
 
-        @njit
-        def foo(f):
-            return f(123)
-
-        @njit
-        def bar(f):
-            return f(123.45)
-
-        self.assertEqual(foo(a), 123456 + 123)
-        self.assertEqual(bar(a), 123456 + 123.45)
-
-    def test_cfunc_seq(self):
-
-        @cfunc('int64(int64)')
-        def a(i):
-            return i + 123
-
-        @cfunc('int64(int64)')
+        @decor
         def b(i):
-            return i + 456
+            return i + 2
 
-        @njit
-        def foo(f, g, i):
-            s = 0
-            seq = (f, g)
-            for f_ in seq:
-                s += f_(i)
-            return s
+        def w(op, a, b, choose_left):
+            def foo(a, b, choose_left):
+                if choose_left:
+                    r = a(1)
+                else:
+                    r = b(2)
+                return r
+            return op(foo)(a, b, choose_left)
 
-        self.assertEqual(foo(a, b, 78), 78 + 123 + 78 + 456)
+        self.assertEqual(w(njit, a, b, True),
+                         w(lambda f:f, a.pyfunc, b.pyfunc, True))
+        self.assertEqual(w(njit, a, b, False),
+                         w(lambda f:f, a.pyfunc, b.pyfunc, False))
+        self.assertNotEqual(w(njit, a, b, True),
+                            w(lambda f:f, a.pyfunc, b.pyfunc, False))
 
-    def test_cfunc_choose(self):
+    def _test_ns_choose(self, decor):
 
-        @cfunc('int64(int64)')
+        @decor
         def a(i):
-            return i + 123
+            return i + 1
 
-        @cfunc('int64(int64)')
+        @decor
         def b(i):
-            return i + 456
+            return i + 2
 
-        @njit
-        def foo(choose_a):
-            if choose_a:
-                f = a
-            else:
-                f = b
-            return f(123)
+        def w(op, a, b, choose_left):
+            def foo(choose_left):
+                if choose_left:
+                    r = a(1)
+                else:
+                    r = b(2)
+                return r
+            return op(foo)(choose_left)
 
-        self.assertEqual(foo(True), 123 + 123)
-        self.assertEqual(foo(False), 123 + 456)
+        self.assertEqual(w(njit, a, b, True),
+                         w(lambda f:f, a.pyfunc, b.pyfunc, True))
+        self.assertEqual(w(njit, a, b, False),
+                         w(lambda f:f, a.pyfunc, b.pyfunc, False))
+        self.assertNotEqual(w(njit, a, b, True),
+                            w(lambda f:f, a.pyfunc, b.pyfunc, False))
+
+    def _test_in_choose_out(self, decor):
+
+        @decor
+        def a(i):
+            return i + 1
+
+        @decor
+        def b(i):
+            return i + 2
+
+        def w(op, a, b, choose_left):
+            def foo(a, b, choose_left):
+                if choose_left:
+                    return a
+                else:
+                    return b
+            return op(foo)(a, b, choose_left)
+
+        self.assertEqual(w(njit, a, b, True), w(lambda f:f, a, b, True))
+        self.assertEqual(w(njit, a, b, False), w(lambda f:f, a, b, False))
+        self.assertNotEqual(w(njit, a, b, True), w(lambda f:f, a, b, False))
+
+    def _test_in_choose_func(self, decor):
+
+        @decor
+        def a(i):
+            return i + 1
+
+        @decor
+        def b(i):
+            return i + 2
+
+        def w(op, a, b, choose_left):
+            def foo(a, b, choose_left):
+                if choose_left:
+                    f = a
+                else:
+                    f = b
+                return f(1)
+            return op(foo)(a, b, choose_left)
+
+        self.assertEqual(w(njit, a, b, True),
+                         w(lambda f:f, a.pyfunc, b.pyfunc, True))
+        self.assertEqual(w(njit, a, b, False),
+                         w(lambda f:f, a.pyfunc, b.pyfunc, False))
+        self.assertNotEqual(w(njit, a, b, True),
+                            w(lambda f:f, a.pyfunc, b.pyfunc, False))
+
+    def _test_in_pick_func_call(self, decor):
+
+        @decor
+        def a(i):
+            return i + 1
+
+        @decor
+        def b(i):
+            return i + 2
+
+        def w(op, a, b, index):
+            def foo(funcs, i):
+                r = funcs[i](123)
+                return r
+            return op(foo)((a, b), index)
+
+        self.assertEqual(w(njit, a, b, 0), w(lambda f:f, a.pyfunc, b.pyfunc, 0))
+        self.assertEqual(w(njit, a, b, 1), w(lambda f:f, a.pyfunc, b.pyfunc, 1))
+        self.assertNotEqual(w(njit, a, b, 0),
+                            w(lambda f:f, a.pyfunc, b.pyfunc, 1))
+
+    def _test_in_iter_func_call(self, decor):
+
+        @decor
+        def a(i):
+            return i + 1
+
+        @decor
+        def b(i):
+            return i + 2
+
+        def w(op, a, b):
+            def foo(funcs, n):
+                r = 0
+                for i in range(n):
+                    f = funcs[i]
+                    r = r + f(r)
+                return r
+            return op(foo)((a, b), 2)
+
+        self.assertEqual(w(njit, a, b), w(lambda f:f, a.pyfunc, b.pyfunc))
+
+    def test_all(self):
+        test_methods = [
+            self._test_in, self._test_in_call, self._test_in_call_out,
+            self._test_ns_call, self._test_ns_out, self._test_ns_call_out,
+            self._test_in_seq_call, self._test_in_ns_seq_call,
+            self._test_in_overload, self._test_ns_overload,
+            self._test_in_choose, self._test_ns_choose,
+            self._test_in_choose_out, self._test_in_choose_func,
+            self._test_in_pick_func_call, self._test_in_iter_func_call
+        ]
+        count = 0
+        success = 0
+        for mth in test_methods:
+            for decor in all_func_kinds:
+                count += 1
+                try:
+                    mth(decor)
+                except Exception as msg:
+                    msgline = str(msg).splitlines(1)[0].strip()
+                    print(f'{mth.__name__}[{decor.__name__}] support failed:'
+                          f' {msgline}')
+                else:
+                    success += 1
+                    print(f'{mth.__name__}[{decor.__name__}] support works OK')
+        print(f'test_all success rate: {success}/{count}')
 
 
 class TestFuncionTypeSupport(TestCase):
@@ -283,6 +522,7 @@ class TestFuncionTypeExtensions(TestCase):
         import os
         import sys
         import time
+        import ctypes.util
         from numba.types import WrapperAddressProtocol
 
         class LibC(WrapperAddressProtocol):
@@ -292,10 +532,13 @@ class TestFuncionTypeExtensions(TestCase):
                 if os.name == 'nt':
                     libc = ctypes.cdll.msvcrt
                 elif os.name == 'posix':
-                    if sys.platform == 'darwin':
-                        libc = ctypes.cdll.LoadLibrary("/usr/lib/libc.dylib")
+                    libpath = ctypes.util.find_library('c')
+                    print(f'libpath={libpath}')
+                    if 1 or sys.platform == 'darwin':
+                        libc = ctypes.cdll.LoadLibrary(libpath)
                     else:
-                        libc = ctypes.CDLL("libc.so.6")
+                        # TODO: find libc.so in a more portable way
+                        libc = ctypes.CDLL(libpath)
                 if libc is None:
                     raise NotImplementedError(
                         f'loading libc on platform {sys.platform}')
@@ -304,6 +547,10 @@ class TestFuncionTypeExtensions(TestCase):
 
             def __wrapper_address__(self, sig):
                 if (self.fname, sig) == ('time', 'int32()'):
+                    assert self.libc.time.restype == ctypes.c_int, (
+                        self.libc.time.restype, ctypes.c_int)
+                    assert ctypes.sizeof(ctypes.c_int) == 4, (
+                        ctypes.sizeof(ctypes.c_int), 4)
                     addr = ctypes.cast(self.libc.time, ctypes.c_voidp).value
                 else:
                     raise NotImplementedError(
