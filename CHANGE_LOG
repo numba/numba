@@ -4,7 +4,8 @@ Version 0.47.0
 This release expands the capability of Numba in a number of important areas and
 is also significant as it is the last major point release with support for
 Python 2 and Python 3.5 included. The next release (0.48.0) will be for Python
-3.6+ only!
+3.6+ only!  (This follows NumPy's deprecation schedule as specified in
+`NEP 29 <https://numpy.org/neps/nep-0029-deprecation_policy.html>`_.)
 
 Highlights of core feature changes include:
 
@@ -167,6 +168,8 @@ Fixes:
 * PR #4973: Fixes a bug in the relabelling logic in literal_unroll.
 * PR #4978: Fix overload_method problem with stararg
 * PR #4981: Add ind_to_const to enable fewer equivalence classes.
+* PR #4991: Let dead code removal handle removing more of the unneeded code after prange conversion to parfor
+* PR #4994: Remove xfail for test which has since had underlying issue fixed
 
 CUDA Enhancements/Fixes:
 
