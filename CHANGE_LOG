@@ -1,5 +1,5 @@
-Version 0.47.0
---------------
+Version 0.47.0  (Dec 20, 2019)
+------------------------------
 
 This release expands the capability of Numba in a number of important areas and
 is also significant as it is the last major point release with support for
