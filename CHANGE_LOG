@@ -32,6 +32,7 @@ Enhancements from user contributed PRs (with thanks!):
 * Brian Wignall kindly fixed some spelling mistakes and typos in #4909
 * Denis Smirnov wrote numerous methods to considerable enhance string support
   including:
+
   * ``str.rindex()`` in #4861
   * ``str.isprintable()`` in #4836
   * ``str.index()`` in #4860
@@ -40,6 +41,7 @@ Enhancements from user contributed PRs (with thanks!):
   * ``str.isidentifier()`` #4837
   * ``str.rpartition()`` in #4841
   * ``str.lower()`` and ``str.islower()`` in #4651
+
 * Elena Totmenina implemented both ``str.isalnum()``, ``str.isalpha()`` and
   ``str.isascii`` in #4839, #4840 and #4847 respectively.
 * Eric Larson fixed a bug in literal comparison in #4710
@@ -47,20 +49,23 @@ Enhancements from user contributed PRs (with thanks!):
   the use of the ``dtype`` key word argument and also added ``bool``
   implementations for several types in #4715.
 * Graham Markall fixed some issues with the CUDA target, namely:
-  * #4931: Added physical limits for Compute Capability 7.0 / 7.5 to CUDA
-    autotune
+
+  * #4931: Added physical limits for CC 7.0 / 7.5 to CUDA autotune
   * #4934: Fixed bugs in TestCudaWarpOperations
   * #4938: Improved errors / warnings for the CUDA vectorize decorator
+
 * Guilherme Leobas fixed a typo in the ``urem`` implementation in #4667
 * Isaac Virshup contributed a number of patches that fixed bugs, added support
   for more NumPy functions and enhanced Python feature support. These
   contributions included:
+
   * #4729: Allow array construction with mixed type shape tuples
   * #4904: Implementing ``np.lcm``
   * #4780: Implement np.gcd and math.gcd
   * #4779: Make slice constructor more similar to python.
   * #4707: Added support for slice.indices
   * #4578: Clarify numba ufunc supported features
+
 * James Bourbeau fixed some issues with tooling, #4794 add ``setuptools`` as a
   dependency and #4501 add pre-commit hooks for ``flake8`` compliance.
 * Leo Fang made ``numba.dummyarray.Array`` iterable in #4629
@@ -72,7 +77,7 @@ Enhancements from user contributed PRs (with thanks!):
 * Matti Picus fixed an issue with ``collections.abc`` in #4734
   from Azure Pipelines.
 * Rob Ennis patched a bug in ``np.interp`` ``float32`` handling in #4911
-* VDimir fixed bug in array transposition layouts in #4777 and re-enabled and
+* VDimir fixed a bug in array transposition layouts in #4777 and re-enabled and
   fixed some idle tests in #4776.
 * Vyacheslav Smirnov Enable support for `str.istitle()`` in #4645
 
@@ -168,8 +173,9 @@ Fixes:
 * PR #4973: Fixes a bug in the relabelling logic in literal_unroll.
 * PR #4978: Fix overload_method problem with stararg
 * PR #4981: Add ind_to_const to enable fewer equivalence classes.
-* PR #4991: Let dead code removal handle removing more of the unneeded code after prange conversion to parfor
-* PR #4994: Remove xfail for test which has since had underlying issue fixed
+* PR #4991: Continuation of #4588 (Let dead code removal handle removing more of
+  the unneeded code after prange conversion to parfor)
+* PR #4994: Remove xfail for test which has since had underlying issue fixed.
 
 CUDA Enhancements/Fixes:
 
