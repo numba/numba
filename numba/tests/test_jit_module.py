@@ -129,6 +129,7 @@ jit_module({jit_options})
         jit_options = {"nopython": True,
                        "nogil": False,
                        "error_model": "numpy",
+                       "boundscheck": False,
                        }
         with self.create_temp_jitted_module(**jit_options) as test_module:
             self.assertEqual(test_module.inc.targetoptions, jit_options)
@@ -148,13 +149,15 @@ jit_module({jit_options})
 """
         jit_options = {"nopython": True,
                        "error_model": "numpy",
+                       "boundscheck": False,
                        }
         with self.create_temp_jitted_module(source_lines=source_lines,
                                             **jit_options) as test_module:
             self.assertEqual(test_module.add.targetoptions, jit_options)
             # Test that manual jit-wrapping overrides jit_module options
             self.assertEqual(test_module.inc.targetoptions,
-                             {'nogil': True, 'forceobj': True})
+                             {'nogil': True, 'forceobj': True,
+                              'boundscheck': False})
 
     def test_jit_module_logging_output(self):
         logger = logging.getLogger('numba.decorators')

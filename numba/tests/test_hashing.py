@@ -13,7 +13,7 @@ import numpy as np
 
 from numba import jit, types, utils
 import numba.unittest_support as unittest
-from .support import TestCase, tag, CompilationCache
+from .support import TestCase, tag, CompilationCache, skip_py38_or_later
 from numba.targets import hashing
 
 if utils.IS_PY3:
@@ -239,6 +239,12 @@ class TestTupleHashing(BaseTest):
 
         self.check_tuples(self.int_samples(), split2)
         self.check_tuples(self.int_samples(), split3)
+
+        # Check exact. Sample values from:
+        # https://github.com/python/cpython/blob/b738237d6792acba85b1f6e6c8993a812c7fd815/Lib/test/test_tuple.py#L80-L93
+        # Untypable empty tuples are replaced with (7,).
+        self.check_hash_values([(7,), (0,), (0, 0), (0.5,),
+                                (0.5, (7,), (-2, 3, (4, 6)))])
 
     @tag('important')
     def test_heterogeneous_tuples(self):

@@ -22,7 +22,6 @@ class TestNumbaModule(TestCase):
         self.check_member("vectorize")
         self.check_member("guvectorize")
         self.check_member("njit")
-        self.check_member("autojit")
         # errors
         self.check_member("NumbaError")
         self.check_member("TypingError")

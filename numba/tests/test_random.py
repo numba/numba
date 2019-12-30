@@ -1496,7 +1496,12 @@ class TestProcesses(ConcurrencyBaseTest):
                 q.put(e)
                 raise
 
-        procs = [multiprocessing.Process(target=target)
+        if hasattr(multiprocessing, 'get_context'):
+            # The test works only in fork context.
+            mpc = multiprocessing.get_context('fork')
+        else:
+            mpc = multiprocessing
+        procs = [mpc.Process(target=target)
                  for i in range(nprocs)]
         for p in procs:
             p.start()

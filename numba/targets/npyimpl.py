@@ -136,7 +136,8 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder',
         return _ArrayIndexingHelper(self, indices)
 
     def _load_effective_address(self, indices):
-        return cgutils.get_item_pointer2(self.builder,
+        return cgutils.get_item_pointer2(self.context,
+                                         self.builder,
                                          data=self.data,
                                          shape=self.shape,
                                          strides=self.strides,

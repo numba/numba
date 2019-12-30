@@ -17,7 +17,7 @@ from . import config, errors, _runtests as runtests, types
 # Re-export typeof
 from .special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
-    literally
+    literally, literal_unroll
 )
 
 # Re-export error classes
@@ -27,8 +27,7 @@ from .errors import *
 from .types import *
 
 # Re-export decorators
-from .decorators import (autojit, cfunc, generated_jit, jit, njit, stencil,
-                         jit_module)
+from .decorators import (cfunc, generated_jit, jit, njit, stencil, jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
 from .npyufunc import vectorize, guvectorize, threading_layer
@@ -53,7 +52,6 @@ test = runtests.main
 
 
 __all__ = """
-    autojit
     cfunc
     from_dtype
     guvectorize
@@ -70,10 +68,11 @@ __all__ = """
     stencil
     vectorize
     objmode
+    literal_unroll
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 30, 0)
+_min_llvmlite_version = (0, 31, 0)
 _min_llvm_version = (7, 0, 0)
 
 def _ensure_llvm():
