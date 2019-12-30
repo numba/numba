@@ -1539,26 +1539,26 @@ def unicode_replace(s, old_str, new_str, count=-1):
         raise TypingError('The object must be a UnicodeType.'
                           ' Given: {}'.format(new_str))
 
-    def impl(s, old, new, count=-1):
+    def impl(s, old_str, new_str, count=-1):
         if count == 0:
             return s
-        if old == '':
+        if old_str == '':
             schars = list(s)
             if count == -1:
-                return new + new.join(schars) + new
-            split_result = [new]
+                return new_str + new_str.join(schars) + new_str
+            split_result = [new_str]
             min_count = min(len(schars), count)
             for i in range(min_count):
                 split_result.append(schars[i])
                 if i + 1 != min_count:
-                    split_result.append(new)
+                    split_result.append(new_str)
                 else:
                     split_result.append(''.join(schars[(i + 1):]))
             if count > len(schars):
-                split_result.append(new)
+                split_result.append(new_str)
             return ''.join(split_result)
-        schars = s.split(old, count)
-        result = new.join(schars)
+        schars = s.split(old_str, count)
+        result = new_str.join(schars)
         return result
 
     return impl
