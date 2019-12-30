@@ -3,12 +3,14 @@ from __future__ import print_function
 import itertools
 import functools
 import sys
+import operator
 
 import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import jit, typeof, errors, types, utils, config, njit
+from numba.six import PY2
 from .support import TestCase, tag
 
 
@@ -162,6 +164,9 @@ def sum_usecase(x):
 def type_unary_usecase(a, b):
     return type(a)(b)
 
+def truth_usecase(p):
+    return operator.truth(p)
+
 def unichr_usecase(x):
     return unichr(x)
 
@@ -242,6 +247,13 @@ class TestBuiltins(TestCase):
         cfunc = cr.entry_point
         for x in complex_values:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
+
+        for unsigned_type in types.unsigned_domain:
+            unsigned_values = [0, 10, 2, 2 ** unsigned_type.bitwidth - 1]
+            cr = compile_isolated(pyfunc, (unsigned_type,), flags=flags)
+            cfunc = cr.entry_point
+            for x in unsigned_values:
+                self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     @tag('important')
     def test_abs_npm(self):
@@ -886,6 +898,13 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_sum(flags=no_pyobj_flags)
 
+    def test_truth(self):
+        pyfunc = truth_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+
+        self.assertEqual(pyfunc(True), cfunc(True))
+        self.assertEqual(pyfunc(False), cfunc(False))
+
     def test_type_unary(self):
         # Test type(val) and type(val)(other_val)
         pyfunc = type_unary_usecase
@@ -1012,6 +1031,39 @@ class TestBuiltins(TestCase):
 
         for fn in sample_functions(op=max):
             self._check_min_max(fn)
+
+
+class TestOperatorMixedTypes(TestCase):
+
+    def test_eq_ne(self):
+        for opstr in ('eq', 'ne'):
+            op = getattr(operator, opstr)
+
+            @njit
+            def func(a, b):
+                return op(a, b)
+
+            # all these things should evaluate to being equal or not, all should
+            # survive typing.
+            things = (1, 0, True, False, 1.0, 2.0, 1.1, 1j, None,)
+            if not PY2:
+                things = things + ("", "1")
+            for x, y in itertools.product(things, things):
+                self.assertPreciseEqual(func.py_func(x, y), func(x, y))
+
+    def test_cmp(self):
+        for opstr in ('gt', 'lt', 'ge', 'le', 'eq', 'ne'):
+            op = getattr(operator, opstr)
+            @njit
+            def func(a, b):
+                return op(a, b)
+
+            # numerical things should all be comparable
+            things = (1, 0, True, False, 1.0, 0.0, 1.1)
+            for x, y in itertools.product(things, things):
+                expected = func.py_func(x, y)
+                got = func(x, y)
+                self.assertEqual(expected, got)
 
 
 if __name__ == '__main__':

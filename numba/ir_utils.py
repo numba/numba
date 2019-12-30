@@ -301,6 +301,7 @@ def replace_var_names(blocks, namedict):
 def replace_var_callback(var, vardict):
     assert isinstance(var, ir.Var)
     while var.name in vardict.keys():
+        assert(vardict[var.name].name != var.name)
         new_var = vardict[var.name]
         var = ir.Var(new_var.scope, new_var.name, new_var.loc)
     return var
@@ -405,6 +406,8 @@ def visit_vars_inner(node, callback, cbdata):
         #     node.rhs.name = callback, cbdata.get(rhs, rhs)
         for arg in node._kws.keys():
             node._kws[arg] = visit_vars_inner(node._kws[arg], callback, cbdata)
+    elif isinstance(node, ir.Yield):
+        node.value = visit_vars_inner(node.value, callback, cbdata)
     return node
 
 
@@ -451,6 +454,35 @@ def find_max_label(blocks):
         if l > max_label:
             max_label = l
     return max_label
+
+
+def flatten_labels(blocks):
+    """makes the labels in range(0, len(blocks)), useful to compare CFGs
+    """
+    # first bulk move the labels out of the rewrite range
+    blocks = add_offset_to_labels(blocks, find_max_label(blocks) + 1)
+    # order them in topo order because it's easier to read
+    new_blocks = {}
+    topo_order = find_topo_order(blocks)
+    l_map = dict()
+    idx = 0
+    for x in topo_order:
+        l_map[x] = idx
+        idx += 1
+
+    for t_node in topo_order:
+        b = blocks[t_node]
+        # some parfor last blocks might be empty
+        term = None
+        if b.body:
+            term = b.body[-1]
+        if isinstance(term, ir.Jump):
+            b.body[-1] = ir.Jump(l_map[term.target], term.loc)
+        if isinstance(term, ir.Branch):
+            b.body[-1] = ir.Branch(term.cond, l_map[term.truebr],
+                                   l_map[term.falsebr], term.loc)
+        new_blocks[l_map[t_node]] = b
+    return new_blocks
 
 
 def remove_dels(blocks):
@@ -503,7 +535,7 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
                                                         func_ir)
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("alias map:", alias_map)
+        print("remove_dead alias map:", alias_map)
     # keep set for easier search
     alias_set = set(alias_map.keys())
 
@@ -617,7 +649,9 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == ['stencil', numba] or
             call_list == ['log', numpy] or
             call_list == ['dtype', numpy] or
-            call_list == [numba.array_analysis.wrap_index]):
+            call_list == [numba.array_analysis.wrap_index] or
+            call_list == [numba.special.prange] or
+            call_list == [numba.parfor.internal_prange]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
@@ -880,7 +914,11 @@ def get_block_copies(blocks, typemap):
                     rhs = stmt.value.name
                     # copy is valid only if same type (see
                     # TestCFunc.test_locals)
-                    if typemap[lhs] == typemap[rhs]:
+                    # Some transformations can produce assignments of the
+                    # form A = A.  We don't put these mapping in the
+                    # copy propagation set because then you get cycles and
+                    # infinite loops in the replacement phase.
+                    if typemap[lhs] == typemap[rhs] and lhs != rhs:
                         assign_dict[lhs] = rhs
                         continue
                 if isinstance(stmt.value,
@@ -1019,7 +1057,7 @@ def find_topo_order(blocks, cfg = None):
     """find topological order of blocks such that true branches are visited
     first (e.g. for_break test in test_dataflow).
     """
-    if cfg == None:
+    if cfg is None:
         cfg = compute_cfg_from_blocks(blocks)
     post_order = []
     seen = set()
@@ -1320,7 +1358,7 @@ def merge_adjacent_blocks(blocks):
                 break
             next_block = blocks[next_label]
             # XXX: commented out since scope objects are not consistent
-            # thoughout the compiler. for example, pieces of code are compiled
+            # throughout the compiler. for example, pieces of code are compiled
             # and inlined on the fly without proper scope merge.
             # if block.scope != next_block.scope:
             #     break
@@ -2091,7 +2129,9 @@ def convert_code_obj_to_function(code_obj, caller_ir):
             d = [caller_ir.get_definition(x).value for x in kwarg_defaults]
             kwarg_defaults_tup = tuple(d)
         else:
-            kwarg_defaults_tup = kwarg_defaults.value
+            d = [caller_ir.get_definition(x).value
+                 for x in kwarg_defaults.items]
+            kwarg_defaults_tup = tuple(d)
         n_kwargs = len(kwarg_defaults_tup)
     nargs = n_allargs - n_kwargs
 

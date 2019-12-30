@@ -87,7 +87,7 @@ def make_zip_object(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin('iternext', types.ZipType)
-@iternext_impl(RefType.BORROWED)
+@iternext_impl(RefType.NEW)
 def iternext_zip(context, builder, sig, args, result):
     [zip_type] = sig.args
     [zipobj] = args

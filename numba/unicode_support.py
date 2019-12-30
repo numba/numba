@@ -49,6 +49,12 @@ _Py_UCS4 = types.uint32
 #
 
 
+_Py_TAB = 0x9
+_Py_LINEFEED = 0xa
+_Py_CARRIAGE_RETURN = 0xd
+_Py_SPACE = 0x20
+
+
 class _PyUnicode_TyperecordMasks(IntEnum):
     ALPHA_MASK = 0x01
     DECIMAL_MASK = 0x02
@@ -217,14 +223,18 @@ def _PyUnicode_IsDigit(ch):
     raise NotImplementedError
 
 
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L140-L145    # noqa: E501
 @register_jitable
 def _PyUnicode_IsNumeric(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.NUMERIC_MASK != 0
 
 
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L160-L165    # noqa: E501
 @register_jitable
 def _PyUnicode_IsPrintable(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.PRINTABLE_MASK != 0
 
 
 # From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L170-L175    # noqa: E501
@@ -321,6 +331,7 @@ def _PyUnicode_IsDecimalDigit(ch):
     return 1
 
 
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L291-L296    # noqa: E501
 @register_jitable
 def _PyUnicode_IsSpace(ch):
     ctype = _PyUnicode_gettyperecord(ch)
@@ -329,7 +340,9 @@ def _PyUnicode_IsSpace(ch):
 
 @register_jitable
 def _PyUnicode_IsAlpha(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.ALPHA_MASK != 0
+
 
 # End code related to/from CPython's unicodectype impl
 # ------------------------------------------------------------------------------

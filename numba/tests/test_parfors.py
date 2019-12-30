@@ -9,6 +9,7 @@ from math import sqrt
 import numbers
 import re
 import sys
+import dis
 import platform
 import types as pytypes
 import warnings
@@ -19,8 +20,9 @@ import operator
 from collections import defaultdict
 
 import numba
+from numba.utils import PYVERSION
 from numba import unittest_support as unittest
-from .support import TestCase, captured_stdout, MemoryLeakMixin
+from .support import TestCase, captured_stdout, MemoryLeakMixin, override_env_config
 from numba import njit, prange, stencil, inline_closurecall
 from numba import compiler, typing, errors, typed_passes
 from numba.targets import cpu
@@ -38,6 +40,7 @@ from numba.bytecode import ByteCodeIter
 from .support import tag, override_env_config, skip_parfors_unsupported
 from .matmul_usecase import needs_blas
 from .test_linalg import needs_lapack
+import cmath
 
 
 
@@ -50,6 +53,9 @@ test_disabled = unittest.skipIf(True, 'Test disabled')
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
+
+_GLOBAL_INT_FOR_TESTING1 = 17
+_GLOBAL_INT_FOR_TESTING2 = 5
 
 class TestParforsBase(TestCase):
     """
@@ -133,6 +139,8 @@ class TestParforsBase(TestCase):
                     new_args.append(x.copy())
                 elif isinstance(x, numbers.Number):
                     new_args.append(x)
+                elif isinstance(x, list):
+                    new_args.append(x[:])
                 else:
                     raise ValueError('Unsupported argument type encountered')
             return tuple(new_args)
@@ -875,6 +883,22 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'), )) == 2)
 
     @skip_unsupported
+    def test_issue4963_globals(self):
+        def test_impl():
+            buf = np.zeros((_GLOBAL_INT_FOR_TESTING1, _GLOBAL_INT_FOR_TESTING2))
+            return buf
+        self.check(test_impl)
+
+    @skip_unsupported
+    def test_issue4963_freevars(self):
+        _FREEVAR_INT_FOR_TESTING1 = 17
+        _FREEVAR_INT_FOR_TESTING2 = 5
+        def test_impl():
+            buf = np.zeros((_FREEVAR_INT_FOR_TESTING1, _FREEVAR_INT_FOR_TESTING2))
+            return buf
+        self.check(test_impl)
+
+    @skip_unsupported
     def test_random_parfor(self):
         """
         Test function with only a random call to make sure a random function
@@ -1036,6 +1060,20 @@ class TestParfors(TestParforsBase):
             with self.assertRaises(ValueError) as e:
                 pcfunc.entry_point(np.array([], dtype=np.int64))
             self.assertIn(msg, str(e.exception))
+
+    @skip_unsupported
+    def test_use_of_reduction_var1(self):
+        def test_impl():
+            acc = 0
+            for i in prange(1):
+                acc = cmath.sqrt(acc)
+            return acc
+
+        # checks that invalid use of reduction variable is detected
+        msg = ("Use of reduction variable acc in an unsupported reduction function.")
+        with self.assertRaises(ValueError) as e:
+            pcfunc = self.compile_parallel(test_impl, ())
+        self.assertIn(msg, str(e.exception))
 
     @skip_unsupported
     def test_argmin(self):
@@ -1471,6 +1509,24 @@ class TestParfors(TestParforsBase):
         self.assertIn(msg, str(raised.exception))
 
     @skip_unsupported
+    def test_ndarray_fill(self):
+        def test_impl(x):
+            x.fill(7.0)
+            return x
+        x = np.zeros(10)
+        self.check(test_impl, x)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'),)) == 1)
+
+    @skip_unsupported
+    def test_ndarray_fill2d(self):
+        def test_impl(x):
+            x.fill(7.0)
+            return x
+        x = np.zeros((2,2))
+        self.check(test_impl, x)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 2, 'C'),)) == 1)
+
+    @skip_unsupported
     def test_0d_array(self):
         def test_impl(n):
             return np.sum(n) + np.prod(n) + np.min(n) + np.max(n) + np.var(n)
@@ -1506,6 +1562,15 @@ class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
         self.check(test_impl, arr)
 
 
+
+def iterate_bytecode(code):
+    if PYVERSION >= (3, 4):   # available since Py3.4
+        return dis.Bytecode(code)
+    else:
+        offsets, insts = zip(*ByteCodeIter(code))
+        return insts
+
+
 class TestPrangeBase(TestParforsBase):
 
     def __init__(self, *args):
@@ -1533,7 +1598,7 @@ class TestPrangeBase(TestParforsBase):
             range_idx = pyfunc_code.co_names.index('range')
             range_locations = []
             # look for LOAD_GLOBALs that point to 'range'
-            for _, instr in ByteCodeIter(pyfunc_code):
+            for instr in iterate_bytecode(pyfunc_code):
                 if instr.opname == 'LOAD_GLOBAL':
                     if instr.arg == range_idx:
                         range_locations.append(instr.offset + 1)
@@ -1551,6 +1616,9 @@ class TestPrangeBase(TestParforsBase):
 
         # create new code parts
         co_args = [pyfunc_code.co_argcount]
+
+        if sys.version_info >= (3, 8):
+            co_args.append(pyfunc_code.co_posonlyargcount)
         if sys.version_info > (3, 0):
             co_args.append(pyfunc_code.co_kwonlyargcount)
         co_args.extend([pyfunc_code.co_nlocals,
@@ -2039,6 +2107,34 @@ class TestPrange(TestPrangeBase):
         self.prange_tester(test_impl, A, scheduler_type='unsigned',
                            check_fastmath=True, check_fastmath_result=True)
 
+    @skip_unsupported
+    def test_prange_two_instances_same_reduction_var(self):
+        # issue4922 - multiple uses of same reduction variable
+        def test_impl(n):
+            c = 0
+            for i in range(n):
+                c += 1
+                if i > 10:
+                    c += 1
+            return c
+        self.prange_tester(test_impl, 9)
+
+    @skip_unsupported
+    def test_prange_conflicting_reduction_ops(self):
+        def test_impl(n):
+            c = 0
+            for i in range(n):
+                c += 1
+                if i > 10:
+                    c *= 1
+            return c
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            self.prange_tester(test_impl, 9)
+        msg = ('Reduction variable c has multiple conflicting reduction '
+               'operators.')
+        self.assertIn(msg, str(raises.exception))
+
 #    @skip_unsupported
     @test_disabled
     def test_check_error_model(self):
@@ -2287,6 +2383,13 @@ class TestPrange(TestPrangeBase):
         self.assertEqual(python_res, njit_res)
         self.assertEqual(python_res, pa_res)
 
+    @skip_unsupported
+    def test_list_comprehension_prange(self):
+        # issue4569
+        def test_impl(x):
+            return np.array([len(x[i]) for i in range(len(x))])
+        x = [np.array([1,2,3], dtype=int),np.array([1,2], dtype=int)]
+        self.prange_tester(test_impl, x)
 
 @skip_parfors_unsupported
 @x86_only
@@ -2400,11 +2503,13 @@ class TestParforsVectorizer(TestPrangeBase):
 
         arg = np.zeros(10)
 
-        novec_asm = self.get_gufunc_asm(will_not_vectorize, 'signed', arg,
-                                        fastmath=True)
+        # Boundschecking breaks vectorization
+        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
+            novec_asm = self.get_gufunc_asm(will_not_vectorize, 'signed', arg,
+                                            fastmath=True)
 
-        vec_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
-                                      fastmath=True)
+            vec_asm = self.get_gufunc_asm(will_vectorize, 'unsigned', arg,
+                                          fastmath=True)
 
         for v in novec_asm.values():
             # vector variant should not be present
@@ -2447,10 +2552,12 @@ class TestParforsVectorizer(TestPrangeBase):
                 A += i
             return A
 
-        signed_asm = self.get_gufunc_asm(signed_variant, 'signed',
-                                         fastmath=True)
-        unsigned_asm = self.get_gufunc_asm(unsigned_variant, 'unsigned',
-                                           fastmath=True)
+        # Boundschecking breaks the diff check below because of the pickled exception
+        with override_env_config('NUMBA_BOUNDSCHECK', '0'):
+            signed_asm = self.get_gufunc_asm(signed_variant, 'signed',
+                                             fastmath=True)
+            unsigned_asm = self.get_gufunc_asm(unsigned_variant, 'unsigned',
+                                               fastmath=True)
 
         def strip_instrs(asm):
             acc = []
@@ -2637,7 +2744,6 @@ class TestParforsSlice(TestParforsBase):
         def test_impl(a):
             (m,n) = a.shape
             b = a.copy()
-            c = -1
             b[1,:-1] = a[0,-3:4]
             return b
 
@@ -2648,14 +2754,18 @@ class TestParforsSlice(TestParforsBase):
         def test_impl(a):
             (m,n) = a.shape
             b = a.copy()
-            c = -1
             b[1,-(n-1):] = a[0,-3:4]
             return b
 
         self.check(test_impl, np.arange(12).reshape((3,4)))
 
-    @skip_unsupported
+
+    @test_disabled
     def test_parfor_slice16(self):
+        """ This test is disabled because if n is larger than the array size
+            then n and n-1 will both be the end of the array and thus the
+            slices will in fact be of different sizes and unable to fuse.
+        """
         def test_impl(a, b, n):
             assert(a.shape == b.shape)
             a[1:n] = 10
@@ -2698,7 +2808,7 @@ class TestParforsSlice(TestParforsBase):
 
     @skip_unsupported
     def test_parfor_slice20(self):
-        # issues #4075, slice size
+        # issue #4075, slice size
         def test_impl():
             a = np.ones(10)
             c = a[1:]
@@ -2729,6 +2839,47 @@ class TestParforsSlice(TestParforsBase):
         x1 = np.zeros((10,7))
         x2 = np.array(4)
         self.check(test_impl, x1, x2)
+
+    @skip_unsupported
+    def test_parfor_slice23(self):
+        # issue #4630
+        def test_impl(x):
+            x[:0] = 2
+            return x
+
+        self.check(test_impl, np.ones(10))
+
+    @skip_unsupported
+    def test_parfor_slice24(self):
+        def test_impl(m, A, n):
+            B = np.zeros(m)
+            C = B[n:]
+            C = A[:len(C)]
+            return B
+
+        for i in range(-15, 15):
+            self.check(test_impl, 10, np.ones(10), i)
+
+    @skip_unsupported
+    def test_parfor_slice25(self):
+        def test_impl(m, A, n):
+            B = np.zeros(m)
+            C = B[:n]
+            C = A[:len(C)]
+            return B
+
+        for i in range(-15, 15):
+            self.check(test_impl, 10, np.ones(10), i)
+
+    @skip_unsupported
+    def test_parfor_slice26(self):
+        def test_impl(a):
+            (n,) = a.shape
+            b = a.copy()
+            b[-(n-1):] = a[-3:4]
+            return b
+
+        self.check(test_impl, np.arange(4))
 
 class TestParforsOptions(TestParforsBase):
 
@@ -2930,7 +3081,7 @@ class TestParforsDiagnostics(TestParforsBase):
         self.assertEqual(a, b)
 
     def _fusion_equivalent(self, thing):
-        # parfors indexes the Parfors class instance id's from whereever the
+        # parfors indexes the Parfors class instance id's from wherever the
         # internal state happens to be. To assert fusion equivalence we just
         # check that the relative difference between fusion adjacency lists
         # is the same. For example:
@@ -3051,7 +3202,7 @@ class TestParforsDiagnostics(TestParforsBase):
         self.check(test_impl,)
         cpfunc = self.compile_parallel(test_impl, ())
         diagnostics = cpfunc.metadata['parfor_diagnostics']
-        self.assert_diagnostics(diagnostics, parfors_count=2)
+        self.assert_diagnostics(diagnostics, parfors_count=1)
 
     def test_allocation_hoisting(self):
         def test_impl():

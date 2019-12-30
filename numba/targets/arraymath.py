@@ -2127,9 +2127,9 @@ def np_interp_impl_inner(x, xp, fp, dtype):
     # https://github.com/numpy/numpy/blob/maintenance/1.15.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
     # Permanent reference:
     # https://github.com/numpy/numpy/blob/3430d78c01a3b9a19adad75f1acb5ae18286da73/numpy/core/src/multiarray/compiled_base.c#L532    # noqa: E501
-    dz = np.asarray(x)
-    dx = np.asarray(xp)
-    dy = np.asarray(fp)
+    dz = np.asarray(x, dtype=np.float64)
+    dx = np.asarray(xp, dtype=np.float64)
+    dy = np.asarray(fp, dtype=np.float64)
 
     if len(dx) == 0:
         raise ValueError('array of sample points is empty')
@@ -2212,9 +2212,9 @@ def np_interp_impl_inner_factory(np117_nan_handling):
         # https://github.com/numpy/numpy/blob/maintenance/1.16.x/numpy/core/src/multiarray/compiled_base.c    # noqa: E501
         # Permanent reference:
         # https://github.com/numpy/numpy/blob/971e2e89d08deeae0139d3011d15646fdac13c92/numpy/core/src/multiarray/compiled_base.c#L473     # noqa: E501
-        dz = np.asarray(x)
-        dx = np.asarray(xp)
-        dy = np.asarray(fp)
+        dz = np.asarray(x, dtype=np.float64)
+        dx = np.asarray(xp, dtype=np.float64)
+        dy = np.asarray(fp, dtype=np.float64)
 
         if len(dx) == 0:
             raise ValueError('array of sample points is empty')
@@ -2977,7 +2977,7 @@ def array_nonzero(context, builder, sig, args):
     one = context.get_constant(types.intp, 1)
     count = cgutils.alloca_once_value(builder, zero)
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
-        ptr = cgutils.get_item_pointer2(builder, data, shape, strides,
+        ptr = cgutils.get_item_pointer2(context, builder, data, shape, strides,
                                         layout, indices)
         val = load_item(context, builder, aryty, ptr)
         nz = context.is_true(builder, aryty.dtype, val)
@@ -2994,7 +2994,7 @@ def array_nonzero(context, builder, sig, args):
     # And fill them up
     index = cgutils.alloca_once_value(builder, zero)
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
-        ptr = cgutils.get_item_pointer2(builder, data, shape, strides,
+        ptr = cgutils.get_item_pointer2(context, builder, data, shape, strides,
                                         layout, indices)
         val = load_item(context, builder, aryty, ptr)
         nz = context.is_true(builder, aryty.dtype, val)
@@ -3005,7 +3005,7 @@ def array_nonzero(context, builder, sig, args):
                 indices = (zero,)
             cur = builder.load(index)
             for i in range(nouts):
-                ptr = cgutils.get_item_pointer2(builder, out_datas[i],
+                ptr = cgutils.get_item_pointer2(context, builder, out_datas[i],
                                                 out_shape, (),
                                                 'C', [cur])
                 store_item(context, builder, outaryty, indices[i], ptr)

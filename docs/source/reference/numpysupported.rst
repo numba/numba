@@ -604,6 +604,8 @@ Math operations
  square              Yes          Yes
  reciprocal          Yes          Yes
  conjugate           Yes          Yes
+ gcd                 Yes          Yes
+ lcm                 Yes          Yes
 ==============  =============  ===============
 
 
