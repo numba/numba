@@ -16,7 +16,10 @@ from numba.extending import overload, register_jitable
 from numba.targets.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
 from numba.typing import signature
-from numba import _helperlib, cgutils, types
+from numba import _helperlib, cgutils, types, utils
+
+
+POST_PY38 = utils.PYVERSION >= (3, 8)
 
 
 registry = Registry()
@@ -553,10 +556,16 @@ def _gammavariate_impl(context, builder, sig, args, _random):
 
         elif alpha == 1.0:
             # expovariate(1)
-            u = _random()
-            while u <= 1e-7:
+
+            if POST_PY38:
+                # Adjust due to cpython
+                # commit 63d152232e1742660f481c04a811f824b91f6790
+                return -_log(1.0 - _random()) * beta
+            else:
                 u = _random()
-            return -_log(u) * beta
+                while u <= 1e-7:
+                    u = _random()
+                return -_log(u) * beta
 
         else:   # alpha is between 0 and 1 (exclusive)
             # Uses ALGORITHM GS of Statistical Computing - Kennedy & Gentle

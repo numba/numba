@@ -8,11 +8,12 @@ import math
 import operator
 
 from llvmlite import ir
-from numba import types, cgutils, typing
+from numba import types, cgutils, typing, errors
 from numba.targets.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked,
                                     RefType)
+from numba.extending import overload_method, overload
 from numba.utils import cached_property
 from . import quicksort, slicing
 
@@ -1031,57 +1032,84 @@ def list_reverse(context, builder, sig, args):
 # -----------------------------------------------------------------------------
 # Sorting
 
-_sorting_init = False
+def gt(a, b):
+    return a > b
 
-def load_sorts():
-    """
-    Load quicksort lazily, to avoid circular imports accross the jit() global.
-    """
-    g = globals()
-    if g['_sorting_init']:
-        return
+sort_forwards = quicksort.make_jit_quicksort().run_quicksort
+sort_backwards = quicksort.make_jit_quicksort(lt=gt).run_quicksort
 
-    def gt(a, b):
-        return a > b
-
-    default_sort = quicksort.make_jit_quicksort()
-    reversed_sort = quicksort.make_jit_quicksort(lt=gt)
-    g['run_default_sort'] = default_sort.run_quicksort
-    g['run_reversed_sort'] = reversed_sort.run_quicksort
-    g['_sorting_init'] = True
+arg_sort_forwards = quicksort.make_jit_quicksort(is_argsort=True,
+                                                 is_list=True).run_quicksort
+arg_sort_backwards = quicksort.make_jit_quicksort(is_argsort=True, lt=gt,
+                                                  is_list=True).run_quicksort
 
 
-@lower_builtin("list.sort", types.List)
-@lower_builtin("list.sort", types.List, types.Boolean)
-def list_sort(context, builder, sig, args):
-    load_sorts()
+def _sort_check_reverse(reverse):
+    if isinstance(reverse, types.Omitted):
+        rty = reverse.value
+    elif isinstance(reverse, types.Optional):
+        rty = reverse.type
+    else:
+        rty = reverse
+    if not isinstance(rty, (types.Boolean, types.Integer, int, bool)):
+        msg = "an integer is required for 'reverse' (got type %s)" % reverse
+        raise errors.TypingError(msg)
+    return rty
 
-    if len(args) == 1:
-        sig = typing.signature(sig.return_type, *sig.args + (types.boolean,))
-        args = tuple(args) + (cgutils.false_bit,)
 
-    def list_sort_impl(lst, reverse):
-        if reverse:
-            run_reversed_sort(lst)
+def _sort_check_key(key):
+    if isinstance(key, types.Optional):
+        msg = ("Key must concretely be None or a Numba JIT compiled function, "
+               "an Optional (union of None and a value) was found")
+        raise errors.TypingError(msg)
+    if not (cgutils.is_nonelike(key) or isinstance(key, types.Dispatcher)):
+        msg = "Key must be None or a Numba JIT compiled function"
+        raise errors.TypingError(msg)
+
+
+@overload_method(types.List, "sort")
+def ol_list_sort(lst, key=None, reverse=False):
+
+    _sort_check_key(key)
+    _sort_check_reverse(reverse)
+
+    if cgutils.is_nonelike(key):
+        KEY = False
+        sort_f = sort_forwards
+        sort_b = sort_backwards
+    elif isinstance(key, types.Dispatcher):
+        KEY = True
+        sort_f = arg_sort_forwards
+        sort_b = arg_sort_backwards
+
+    def impl(lst, key=None, reverse=False):
+        if KEY is True:
+            _lst = [key(x) for x in lst]
         else:
-            run_default_sort(lst)
+            _lst = lst
+        if reverse is False or reverse == 0:
+            tmp = sort_f(_lst)
+        else:
+            tmp = sort_b(_lst)
+        if KEY is True:
+            lst[:] = [lst[i] for i in tmp]
+    return impl
 
-    return context.compile_internal(builder, list_sort_impl, sig, args)
 
-@lower_builtin(sorted, types.IterableType)
-@lower_builtin(sorted, types.IterableType, types.Boolean)
-def sorted_impl(context, builder, sig, args):
-    if len(args) == 1:
-        sig = typing.signature(sig.return_type, *sig.args + (types.boolean,))
-        args = tuple(args) + (cgutils.false_bit,)
+@overload(sorted)
+def ol_sorted(iterable, key=None, reverse=False):
 
-    def sorted_impl(it, reverse):
-        lst = list(it)
-        lst.sort(reverse=reverse)
+    if not isinstance(iterable, types.IterableType):
+        return False
+
+    _sort_check_key(key)
+    _sort_check_reverse(reverse)
+
+    def impl(iterable, key=None, reverse=False):
+        lst = list(iterable)
+        lst.sort(key=key, reverse=reverse)
         return lst
-
-    return context.compile_internal(builder, sorted_impl, sig, args)
-
+    return impl
 
 # -----------------------------------------------------------------------------
 # Implicit casting

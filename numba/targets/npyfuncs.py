@@ -10,6 +10,7 @@ import math
 
 from llvmlite.llvmpy import core as lc
 
+from .imputils import impl_ret_untracked
 from .. import cgutils, typing, types, lowering, errors
 from . import cmathimpl, mathimpl, numbers, npdatetime
 
@@ -459,6 +460,34 @@ def np_complex_power_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     return numbers.complex_power_impl(context, builder, sig, args)
+
+
+########################################################################
+# numpy greatest common denominator
+
+def np_gcd_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    return mathimpl.gcd_impl(context, builder, sig, args)
+
+
+########################################################################
+# numpy lowest common multiple
+
+def np_lcm_impl(context, builder, sig, args):
+    import numpy as np
+
+    xty, yty = sig.args
+    assert xty == yty == sig.return_type
+    x, y = args
+
+    def lcm(a, b):
+        """
+        Like gcd, heavily cribbed from Julia.
+        """
+        return 0 if a == 0 else abs(a * (b // np.gcd(b, a)))
+
+    res = context.compile_internal(builder, lcm, sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 ########################################################################

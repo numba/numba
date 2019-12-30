@@ -536,7 +536,7 @@ def _atomic_dispatcher(dispatch_fn):
                             (aryty.ndim, len(indty)))
 
         lary = context.make_array(aryty)(context, builder, ary)
-        ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
+        ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
         # dispatcher to implementation base on dtype
         return dispatch_fn(context, builder, dtype, ptr, val)
     return imp
@@ -607,7 +607,7 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
 
     lary = context.make_array(aryty)(context, builder, ary)
     zero = context.get_constant(types.intp, 0)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, (zero,))
+    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, (zero,))
     if aryty.dtype == types.int32:
         lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_cas_int32(lmod),

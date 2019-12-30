@@ -14,7 +14,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-from numba import types, utils, cgutils, typing, funcdesc, debuginfo
+from numba import types, utils, cgutils, typing, funcdesc, debuginfo, config
 from numba import _dynfunc, _helperlib
 from numba.compiler_lock import global_compiler_lock
 from numba.pythonapi import PythonAPI
@@ -197,7 +197,15 @@ class BaseContext(object):
     DIBuilder = debuginfo.DIBuilder
 
     # Bound checking
-    enable_boundcheck = False
+    @property
+    def enable_boundscheck(self):
+        if config.BOUNDSCHECK is not None:
+            return config.BOUNDSCHECK
+        return self._boundscheck
+
+    @enable_boundscheck.setter
+    def enable_boundscheck(self, value):
+        self._boundscheck = value
 
     # NRT
     enable_nrt = False
@@ -244,6 +252,8 @@ class BaseContext(object):
         self._pid = None
         self._codelib_stack = []
 
+        self._boundscheck = False
+
         self.data_model_manager = datamodel.default_manager
 
         # Initialize
@@ -262,7 +272,7 @@ class BaseContext(object):
         # Populate built-in registry
         from . import (arraymath, enumimpl, iterators, linalg, numbers,
                        optional, polynomial, rangeobj, slicing, tupleobj,
-                       gdb_hook, hashing, heapq, literal_dispatch)
+                       gdb_hook, hashing, heapq, literal)
         try:
             from . import npdatetime
         except NotImplementedError:
@@ -707,7 +717,8 @@ class BaseContext(object):
         cav = self.cast(builder, av, at, ty)
         cbv = self.cast(builder, bv, bt, ty)
         fnty = self.typing_context.resolve_value_type(key)
-        cmpsig = fnty.get_call_type(self.typing_context, argtypes, {})
+        # the sig is homogeneous in the unified casted type
+        cmpsig = fnty.get_call_type(self.typing_context, (ty, ty), {})
         cmpfunc = self.get_function(fnty, cmpsig)
         self.add_linking_libs(getattr(cmpfunc, 'libs', ()))
         return cmpfunc(builder, (cav, cbv))
@@ -727,7 +738,9 @@ class BaseContext(object):
         """
         Return the truth value of a value of the given Numba type.
         """
-        impl = self.get_function(bool, typing.signature(types.boolean, typ))
+        fnty = self.typing_context.resolve_value_type(bool)
+        sig = fnty.get_call_type(self.typing_context, (typ,), {})
+        impl = self.get_function(fnty, sig)
         return impl(builder, (val,))
 
     def get_c_value(self, builder, typ, name, dllimport=False):
@@ -1124,7 +1137,8 @@ class _wrap_impl(object):
     """
 
     def __init__(self, imp, context, sig):
-        self._imp = _wrap_missing_loc(imp)
+        self._callable = _wrap_missing_loc(imp)
+        self._imp = self._callable()
         self._context = context
         self._sig = sig
 
@@ -1137,8 +1151,7 @@ class _wrap_impl(object):
         return getattr(self._imp, item)
 
     def __repr__(self):
-        return "<wrapped %s>" % self._imp
-
+        return "<wrapped %s>" % repr(self._callable)
 
 def _has_loc(fn):
     """Does function *fn* take ``loc`` argument?
@@ -1147,27 +1160,36 @@ def _has_loc(fn):
     return 'loc' in sig.parameters
 
 
-def _wrap_missing_loc(fn):
-    """Wrap function for missing ``loc`` keyword argument.
-    Otherwise, return the original *fn*.
-    """
-    if not _has_loc(fn):
-        def wrapper(*args, **kwargs):
-            kwargs.pop('loc')     # drop unused loc
-            return fn(*args, **kwargs)
+class _wrap_missing_loc(object):
 
-        # Copy the following attributes from the wrapped.
-        # Following similar implementation as functools.wraps but
-        # ignore attributes if not available (i.e fix py2.7)
-        attrs = '__name__', 'libs'
-        for attr in attrs:
-            try:
-                val = getattr(fn, attr)
-            except AttributeError:
-                pass
-            else:
-                setattr(wrapper, attr, val)
+    def __init__(self, fn):
+        self.func = fn # store this to help with debug
 
-        return wrapper
-    else:
-        return fn
+    def __call__(self):
+        """Wrap function for missing ``loc`` keyword argument.
+        Otherwise, return the original *fn*.
+        """
+        fn = self.func
+        if not _has_loc(fn):
+            def wrapper(*args, **kwargs):
+                kwargs.pop('loc')     # drop unused loc
+                return fn(*args, **kwargs)
+
+            # Copy the following attributes from the wrapped.
+            # Following similar implementation as functools.wraps but
+            # ignore attributes if not available (i.e fix py2.7)
+            attrs = '__name__', 'libs'
+            for attr in attrs:
+                try:
+                    val = getattr(fn, attr)
+                except AttributeError:
+                    pass
+                else:
+                    setattr(wrapper, attr, val)
+
+            return wrapper
+        else:
+            return fn
+
+    def __repr__(self):
+        return "<wrapped %s>" % self.func

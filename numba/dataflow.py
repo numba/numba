@@ -125,6 +125,9 @@ class DataFlowAnalysis(object):
             info.pop(discard=True)
         return block
 
+    def op_NOP(self, info, inst):
+        pass
+
     def op_DUP_TOPX(self, info, inst):
         count = inst.arg
         assert 1 <= count <= 5, "Invalid DUP_TOPX count"
@@ -914,3 +917,11 @@ class BlockInfo(object):
     @terminator.setter
     def terminator(self, inst):
         self._term = inst
+
+    @property
+    def active_try_block(self):
+        """Try except not supported.
+
+        See byteflow.py
+        """
+        return None

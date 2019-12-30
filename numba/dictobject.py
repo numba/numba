@@ -74,14 +74,15 @@ class Status(IntEnum):
 
 
 def new_dict(key, value):
-    """Construct a new dict. (Not implemented in the interpreter yet)
+    """Construct a new dict.
 
     Parameters
     ----------
     key, value : TypeRef
         Key type and value type of the new dict.
     """
-    raise NotImplementedError
+    # With JIT disabled, ignore all arguments and return a Python dict.
+    return dict()
 
 
 @register_model(DictType)

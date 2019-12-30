@@ -23,23 +23,34 @@ Constructs
 ----------
 
 Numba strives to support as much of the Python language as possible, but
-some language features are not available inside Numba-compiled functions. The following Python language features are not currently supported:
+some language features are not available inside Numba-compiled functions.
+Below is a quick reference for the support level of Python constructs.
 
-* Class definition
-* Exception handling (``try .. except``, ``try .. finally``)
-* Context management (the ``with`` statement)
-* Some comprehensions (list comprehension is supported, but not dict, set or generator comprehensions)
-* Generator delegation (``yield from``)
 
-The ``raise`` statement is supported in several forms:
+**Supported** constructs:
 
-* ``raise`` (to re-raise the current exception)
-* ``raise SomeException``
-* ``raise SomeException(<arguments>)``: in :term:`nopython mode`, constructor
-  arguments must be :term:`compile-time constants <compile-time constant>`
+- conditional branch: ``if .. elif .. else``
+- loops: ``while``, ``for .. in``, ``break``, ``continue``
+- basic generator: ``yield``
+- assertion: ``assert``
 
-Similarly, the ``assert`` statement is supported with or without an error
-message.
+**Partially supported** constructs:
+
+- exceptions: ``try .. except``, ``raise``
+  (See details in this :ref:`section <pysupported-exception-handling>`)
+
+- context manager:
+  ``with`` (only support :ref:`numba.objmode() <with_objmode>`)
+
+- list comprehension (see details in this
+  :ref:`section <pysupported-comprehension>`)
+
+**Unsupported** constructs:
+
+- async features: ``async with``, ``async for`` and ``async def``
+- class definition: ``class`` (except for :ref:`@jitclass <jitclass>`)
+- set, dict and generator comprehensions
+- generator delegation: ``yield from``
 
 Functions
 ---------
@@ -117,6 +128,74 @@ Coroutine features of generators are not supported (i.e. the
 :meth:`generator.send`, :meth:`generator.throw`, :meth:`generator.close`
 methods).
 
+.. _pysupported-exception-handling:
+
+Exception handling
+------------------
+
+``raise`` statement
+'''''''''''''''''''
+
+The ``raise`` statement is only supported in the following forms:
+
+* ``raise SomeException``
+* ``raise SomeException(<arguments>)``: in :term:`nopython mode`, constructor
+  arguments must be :term:`compile-time constants <compile-time constant>`
+
+It is currently unsupported to re-raise an exception created in compiled code.
+
+``try .. except``
+'''''''''''''''''
+
+The ``try .. except`` construct is partially supported. The following forms
+of are supported:
+
+* the *bare* except that captures all exceptions:
+
+  .. code-block:: python
+
+    try:
+        ...
+    except:
+        ...
+
+* using exactly the ``Exception`` class in the ``except`` clause:
+
+  .. code-block:: python
+
+    try:
+      ...
+    except Exception:
+      ...
+
+  This will match any exception that is a subclass of ``Exception`` as
+  expected. Currently, instances of ``Exception`` and it's subclasses are the
+  only kind of exception that can be raised in compiled code.
+
+.. warning:: Numba currently masks signals like ``KeyboardInterrupt`` and
+  ``SystemExit``. These signaling exceptions are ignored during the execution of
+  Numba compiled code. The Python interpreter will handle them as soon as
+  the control is returned to it.
+
+Currently, exception objects are not materialized inside compiled functions.
+As a result, it is not possible to store an exception object into a user
+variable or to re-raise an exception. With this limitation, the only realistic
+use-case would look like:
+
+.. code-block:: python
+
+  try:
+     do_work()
+  except Exception:
+     handle_error_case()
+     return error_code
+
+The ``finally`` block and the ``else`` block of a ``try .. except`` are
+supported.
+
+The ``try .. finally`` construct without the ``except`` is currently
+**unsupported**.
+
 .. _pysupported-builtin-types:
 
 Built-in types
@@ -171,6 +250,7 @@ The following functions, attributes and methods are currently supported:
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
 * ``.startswith()``
 * ``.endswith()``
+* ``.expandtabs()``
 * ``.isspace()``
 * ``.isidentifier()``
 * ``.find()``
@@ -186,13 +266,18 @@ The following functions, attributes and methods are currently supported:
 * ``.upper()``
 * ``.islower()``
 * ``.lower()``
+* ``.isprintable()``
 * ``.zfill()``
 * ``.rpartition()``
 * ``.count()``
 * ``.istitle()``
 * ``.replace()``
 * ``.rfind()``
+* ``.rindex()``
+* ``.index()``
 * ``.title()``
+* ``.isalpha()``
+* ``.isalnum()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
@@ -211,15 +296,126 @@ likely never be supported.
 tuple
 -----
 
-The following operations are supported:
+Tuple support is categorised into two categories based on the contents of a
+tuple. The first category is homogeneous tuples, these are tuples where the type
+of all the values in the tuple are the same, the second is heterogeneous tuples,
+these are tuples where the types of the values are different.
 
-* tuple construction
-* tuple unpacking
-* comparison between tuples
-* iteration and indexing over homogeneous tuples
-* addition (concatenation) between tuples
-* slicing tuples with a constant slice
-* the index method on tuples
+.. note::
+
+    The ``tuple()`` constructor itself is NOT supported.
+
+homogeneous tuples
+------------------
+
+An example of a homogeneous tuple:
+
+.. code-block:: python
+
+    homogeneous_tuple = (1, 2, 3, 4)
+
+The following operations are supported on homogeneous tuples:
+
+* Tuple construction.
+* Tuple unpacking.
+* Comparison between tuples.
+* Iteration and indexing.
+* Addition (concatenation) between tuples.
+* Slicing tuples with a constant slice.
+* The index method on tuples.
+
+heterogeneous tuples
+--------------------
+
+An example of a heterogeneous tuple:
+
+.. code-block:: python
+
+    heterogeneous_tuple = (1, 2j, 3.0, "a")
+
+The following operations are supported on heterogeneous tuples:
+
+* Comparison between tuples.
+* Indexing using an index value that is a compile time constant
+  e.g. ``mytuple[7]``, where ``7`` is evidently a constant.
+* Iteration over a tuple (requires experimental :func:`literal_unroll` feature,
+  see below).
+
+.. warning::
+   The following feature (:func:`literal_unroll`) is experimental and was added
+   in version 0.47.
+
+To permit iteration over a heterogeneous tuple the special function
+:func:`numba.literal_unroll` must be used. This function has no effect other
+than to act as a token to permit the use of this feature. Example use:
+
+.. code-block:: python
+
+    from numba import njit, literal_unroll
+
+    @njit
+    def foo()
+        heterogeneous_tuple = (1, 2j, 3.0, "a")
+        for i in literal_unroll(heterogeneous_tuple):
+            print(i)
+
+.. warning::
+    The following restrictions apply to the use of :func:`literal_unroll`:
+
+    * This feature is only available for Python versions >= 3.6.
+    * :func:`literal_unroll` can only be used on tuples and constant lists of
+      compile time constants, e.g. ``[1, 2j, 3, "a"]`` and the list not being
+      mutated.
+    * The only supported use pattern for :func:`literal_unroll` is loop
+      iteration.
+    * Only one :func:`literal_unroll` call is permitted per loop nest (i.e.
+      nested heterogeneous tuple iteration loops are forbidden).
+    * The usual type inference/stability rules still apply.
+
+A more involved use of :func:`literal_unroll` might be type specific dispatch,
+recall that string and integer literal values are considered their own type,
+for example:
+
+.. code-block:: python
+
+    from numba import njit, types, literal_unroll
+    from numba.extending import overload
+
+    def dt(x):
+        # dummy function to overload
+        pass
+
+    @overload(dt, inline='always')
+    def ol_dt(li):
+        if isinstance(li, types.StringLiteral):
+            value = li.literal_value
+            if value == "apple":
+                def impl(li):
+                    return 1
+            elif value == "orange":
+                def impl(li):
+                    return 2
+            elif value == "banana":
+                def impl(li):
+                    return 3
+            return impl
+        elif isinstance(li, types.IntegerLiteral):
+            value = li.literal_value
+            if value == 0xca11ab1e:
+                def impl(li):
+                    # capture the dispatcher literal value
+                    return 0x5ca1ab1e + value
+                return impl
+
+    @njit
+    def foo():
+        acc = 0
+        for t in literal_unroll(('apple', 'orange', 'banana', 3390155550)):
+            acc += dt(t)
+        return acc
+
+    print(foo())
+
 
 list
 ----
@@ -460,7 +656,7 @@ Further to the above in relation to type specification, there are limitations
 placed on the types that can be used as keys and/or values in the typed
 dictionary, most notably the Numba ``Set`` and ``List`` types are currently
 unsupported. Acceptable key/value types include but are not limited to: unicode
-strings, arrays (value only), scalars, tuples. It is expected that these 
+strings, arrays (value only), scalars, tuples. It is expected that these
 limitations will be relaxed as Numba continues to improve.
 
 Here's an example of using ``dict()`` and ``{}`` to create ``numba.typed.Dict``
@@ -679,6 +875,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.floor`
 * :func:`math.frexp`
 * :func:`math.gamma`
+* :func:`math.gcd`
 * :func:`math.hypot`
 * :func:`math.isfinite`
 * :func:`math.isinf`
@@ -790,7 +987,7 @@ startup with entropy drawn from the operating system.
    random module <numpy-random>`.
 
 ``heapq``
-------------
+---------
 
 The following functions from the :mod:`heapq` module are supported:
 

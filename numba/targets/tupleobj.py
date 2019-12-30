@@ -11,7 +11,7 @@ from .imputils import (lower_builtin, lower_getattr_generic, lower_cast,
                        iternext_impl, impl_ret_borrowed, impl_ret_untracked,
                        RefType)
 from .. import typing, types, cgutils
-from ..extending import overload_method
+from ..extending import overload_method, overload, intrinsic
 
 
 @lower_builtin(types.NamedTupleClass, types.VarArg(types.Any))
@@ -55,6 +55,7 @@ def tuple_cmp_ordered(context, builder, op, sig, args):
     builder.branch(bbend)
     builder.position_at_end(bbend)
     return builder.load(res)
+
 
 @lower_builtin(operator.eq, types.BaseTuple, types.BaseTuple)
 def tuple_eq(context, builder, sig, args):
@@ -184,6 +185,91 @@ def iternext_unituple(context, builder, sig, args, result):
         result.yield_(getitem_out)
         nidx = builder.add(idx, context.get_constant(types.intp, 1))
         builder.store(nidx, iterval.index)
+
+
+@lower_builtin('typed_getitem', types.BaseTuple, types.Any)
+def getitem_typed(context, builder, sig, args):
+    tupty, _ = sig.args
+    tup, idx = args
+    errmsg_oob = ("tuple index out of range",)
+
+    if len(tupty) == 0:
+        # Empty tuple.
+
+        # Always branch and raise IndexError
+        with builder.if_then(cgutils.true_bit):
+            context.call_conv.return_user_exc(builder, IndexError,
+                                              errmsg_oob)
+        # This is unreachable in runtime,
+        # but it exists to not terminate the current basicblock.
+        res = context.get_constant_null(sig.return_type)
+        return impl_ret_untracked(context, builder,
+                                  sig.return_type, res)
+    else:
+        # The tuple is not empty
+
+        bbelse = builder.append_basic_block("typed_switch.else")
+        bbend = builder.append_basic_block("typed_switch.end")
+        switch = builder.switch(idx, bbelse)
+
+        with builder.goto_block(bbelse):
+            context.call_conv.return_user_exc(builder, IndexError,
+                                            errmsg_oob)
+
+        lrtty = context.get_value_type(sig.return_type)
+        voidptrty = context.get_value_type(types.voidptr)
+        with builder.goto_block(bbend):
+            phinode = builder.phi(voidptrty)
+
+        for i in range(tupty.count):
+            ki = context.get_constant(types.intp, i)
+            bbi = builder.append_basic_block("typed_switch.%d" % i)
+            switch.add_case(ki, bbi)
+            # handle negative indexing, create case (-tuple.count + i) to
+            # reference same block as i
+            kin = context.get_constant(types.intp, -tupty.count + i)
+            switch.add_case(kin, bbi)
+            with builder.goto_block(bbi):
+                value = builder.extract_value(tup, i)
+                # Dragon warning...
+                # The fact the code has made it this far suggests that type
+                # inference decided whatever was being done with the item pulled
+                # from the tuple was legitimate, it is not the job of lowering
+                # to argue about that. However, here lies a problem, the tuple
+                # lowering is implemented as a switch table with each case
+                # writing to a phi node slot that is returned. The type of this
+                # phi node slot needs to be "correct" for the current type but
+                # it also needs to survive stores being made to it from the
+                # other cases that will in effect never run. To do this a stack
+                # slot is made for each case for the specific type and then cast
+                # to a void pointer type, this is then added as an incoming on
+                # the phi node, at the end of the switch the phi node is then
+                # cast back to the required return type for this typed_getitem.
+                # The only further complication is that if the value is not a
+                # pointer then the void* juggle won't work so a cast is made
+                # prior to store, again, that type inference has permitted it
+                # suggests this is safe.
+                # End Dragon warning...
+                DOCAST = context.typing_context.unify_types(sig.args[0][i],
+                                        sig.return_type) == sig.return_type
+                if DOCAST:
+                    value_slot = builder.alloca(lrtty,
+                                                name="TYPED_VALUE_SLOT%s" % i)
+                    casted = context.cast(builder, value, sig.args[0][i],
+                                        sig.return_type)
+                    builder.store(casted, value_slot)
+                else:
+                    value_slot = builder.alloca(value.type,
+                                                name="TYPED_VALUE_SLOT%s" % i)
+                    builder.store(value, value_slot)
+                phinode.add_incoming(builder.bitcast(value_slot, voidptrty),
+                                     bbi)
+                builder.branch(bbend)
+
+        builder.position_at_end(bbend)
+        res = builder.bitcast(phinode, lrtty.as_pointer())
+        res = builder.load(res)
+        return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
 @lower_builtin(operator.getitem, types.UniTuple, types.intp)
