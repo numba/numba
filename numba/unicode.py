@@ -2068,34 +2068,6 @@ def unicode_casefold(data):
     """Implements str.casefold()"""
     return _do_casefold
 
-
-@overload_method(types.UnicodeType, 'istitle')
-def unicode_istitle(s):
-    """
-    Implements UnicodeType.istitle()
-    The algorithm is an approximate translation from CPython:
-    https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11829-L11885 # noqa: E501
-    """
-
-    def impl(s):
-        cased = False
-        previous_is_cased = False
-        for char in s:
-            if _PyUnicode_IsUppercase(char) or _PyUnicode_IsTitlecase(char):
-                if previous_is_cased:
-                    return False
-                cased = True
-                previous_is_cased = True
-            elif _PyUnicode_IsLowercase(char):
-                if not previous_is_cased:
-                    return False
-            else:
-                previous_is_cased = False
-
-        return cased
-    return impl
-
-
 if sys.version_info[:2] >= (3, 7):
     @overload_method(types.UnicodeType, 'isascii')
     def unicode_isascii(data):
@@ -2105,6 +2077,42 @@ if sys.version_info[:2] >= (3, 7):
             return data._is_ascii
         return impl
 
+@overload_method(types.UnicodeType, 'istitle')
+def unicode_istitle(data):
+    """
+    Implements UnicodeType.istitle()
+    The algorithm is an approximate translation from CPython:
+    https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11829-L11885 # noqa: E501
+    """
+
+    def impl(data):
+        length = len(data)
+        if length == 1:
+            char = _get_code_point(data, 0)
+            return _PyUnicode_IsUppercase(char) or _PyUnicode_IsTitlecase(char)
+
+        if length == 0:
+            return False
+
+        cased = False
+        previous_is_cased = False
+        for idx in range(length):
+            char = _get_code_point(data, idx)
+            if _PyUnicode_IsUppercase(char) or _PyUnicode_IsTitlecase(char):
+                if previous_is_cased:
+                    return False
+                previous_is_cased = True
+                cased = True
+            elif _PyUnicode_IsLowercase(char):
+                if not previous_is_cased:
+                    return False
+                previous_is_cased = True
+                cased = True
+            else:
+                previous_is_cased = False
+
+        return cased
+    return impl
 
 @overload_method(types.UnicodeType, 'islower')
 def unicode_islower(data):
