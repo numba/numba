@@ -1179,9 +1179,14 @@ def gen_unicode_Xjust(STRING_FIRST):
             raise TypingError('The width must be an Integer')
 
         if isinstance(fillchar, types.UnicodeCharSeq):
-            def rjust_impl(string, width, fillchar=' '):
-                return string.rjust(width, str(fillchar))
-            return rjust_impl
+            if STRING_FIRST:
+                def ljust_impl(string, width, fillchar=' '):
+                    return string.ljust(width, str(fillchar))
+                return ljust_impl
+            else:
+                def rjust_impl(string, width, fillchar=' '):
+                    return string.rjust(width, str(fillchar))
+                return rjust_impl
 
         if not (fillchar == ' ' or
                 isinstance(fillchar, (types.Omitted, types.UnicodeType))):
