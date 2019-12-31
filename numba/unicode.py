@@ -48,7 +48,6 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM,
                               _PyUnicode_IsAlpha, _PyUnicode_IsNumeric,
                               _Py_ISALPHA, _PyUnicode_IsDigit,
                               _PyUnicode_IsDecimalDigit)
-                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER)
 
 
 _py38_or_later = sys.version_info[:2] >= (3, 8)
@@ -528,23 +527,6 @@ def unicode_contains(a, b):
             # note parameter swap: contains(a, b) == b in a
             return _find(a, b) > -1
         return contains_impl
-
-
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354    # noqa: E501
-@register_jitable
-def _adjust_indices(length, start, end):
-    if end > length:
-        end = length
-    if end < 0:
-        end += length
-        if end < 0:
-            end = 0
-    if start < 0:
-        start += length
-        if start < 0:
-            start = 0
-
-    return start, end
 
 
 def unicode_idx_check_type(ty, name):
@@ -2071,6 +2053,8 @@ def generate_operation_func(ascii_func, unicode_nres_func):
             _set_code_point(res, i, _get_code_point(tmp, i))
 
         return res
+
+    return impl
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12017-L12045    # noqa: E501

@@ -186,6 +186,7 @@ def endswith_with_start_only_usecase(x, y, start):
 def endswith_with_start_end_usecase(x, y, start, end):
     return x.endswith(y, start, end)
 
+
 def split_usecase(x, y):
     return x.split(y)
 
@@ -840,7 +841,7 @@ class TestUnicode(BaseTest):
                                 "'{0}'.c_count('{1}', {2}, {3}) = {5}")
 
         for s, sub in UNICODE_COUNT_EXAMPLES:
-            for i , j in product(range(-18, 18), (-18, 18)):
+            for i, j in product(range(-18, 18), (-18, 18)):
                 py_result = pyfunc(s, sub, i, j)
                 c_result = cfunc(s, sub, i, j)
                 self.assertEqual(py_result, c_result,
