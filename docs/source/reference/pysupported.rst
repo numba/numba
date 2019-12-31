@@ -279,6 +279,7 @@ The following functions, attributes and methods are currently supported:
 * ``.rpartition()``
 * ``.count()``
 * ``.istitle()``
+* ``.replace()``
 * ``.rfind()``
 * ``.rindex()``
 * ``.index()``
