@@ -45,7 +45,7 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM,
                               _Py_TAB, _Py_LINEFEED,
                               _Py_CARRIAGE_RETURN, _Py_SPACE,
                               _PyUnicode_IsAlpha, _PyUnicode_IsNumeric,
-                              _Py_ISALPHA,)
+                              _Py_ISALPHA, _PyUnicode_IsDigit)
 
 # DATA MODEL
 
@@ -1714,10 +1714,8 @@ def unicode_isspace(data):
 @overload_method(types.UnicodeType, 'isnumeric')
 def unicode_isnumeric(data):
     """Implements UnicodeType.isnumeric()"""
-
     def impl(data):
         length = len(data)
-
         if length == 1:
             return _PyUnicode_IsNumeric(_get_code_point(data, 0))
 
@@ -1726,6 +1724,30 @@ def unicode_isnumeric(data):
 
         for i in range(length):
             if not _PyUnicode_IsNumeric(_get_code_point(data, i)):
+                return False
+
+        return True
+
+    return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12056-L12085    # noqa: E501
+@overload_method(types.UnicodeType, 'isdigit')
+def unicode_isdigit(data):
+    """Implements UnicodeType.isdigit()"""
+
+    def impl(data):
+        length = len(data)
+
+        if length == 1:
+            ch = _get_code_point(data, 0)
+            return _PyUnicode_IsDigit(ch)
+
+        if length == 0:
+            return False
+
+        for i in range(length):
+            if not _PyUnicode_IsDigit(_get_code_point(data, i)):
                 return False
 
         return True

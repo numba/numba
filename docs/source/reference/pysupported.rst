@@ -266,6 +266,7 @@ The following functions, attributes and methods are currently supported:
 * ``.isupper()``
 * ``.upper()``
 * ``.isnumeric()``
+* ``.isdigit()``
 * ``.islower()``
 * ``.lower()``
 * ``.partition()``
