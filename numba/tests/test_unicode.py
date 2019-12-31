@@ -1891,6 +1891,21 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
 
+    def test_casefold(self):
+        def pyfunc(x):
+            return x.casefold()
+
+        cfunc = njit(pyfunc)
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L774-L781    # noqa: E501
+        cpython = ['hello', 'hELlo', 'ß', 'ﬁ', '\u03a3',
+                   'A\u0345\u03a3', '\u00b5']
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L924    # noqa: E501
+        cpython_extras = ['\U00010000\U00100000']
+
+        msg = 'Results of "{}".casefold() must be equal'
+        for s in UNICODE_EXAMPLES + [''] + cpython + cpython_extras:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
     def test_isalpha(self):
         def pyfunc(x):
             return x.isalpha()

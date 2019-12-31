@@ -1,6 +1,5 @@
 import sys
 import operator
-import sys
 
 import numpy as np
 from llvmlite.ir import IntType, Constant
@@ -35,6 +34,7 @@ from numba.unsafe.bytes import memcpy_region
 from numba.errors import TypingError
 from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM,
                               _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
+                              _PyUnicode_ToFoldedFull,
                               _PyUnicode_ToTitleFull, _PyUnicode_IsPrintable,
                               _PyUnicode_IsSpace, _Py_ISSPACE,
                               _PyUnicode_IsXidStart, _PyUnicode_IsXidContinue,
@@ -1199,72 +1199,6 @@ def unicode_rjust(string, width, fillchar=' '):
     return rjust_impl
 
 
-def generate_splitlines_func(is_line_break_func):
-    """Generate splitlines performer based on ascii or unicode line breaks."""
-    def impl(data, keepends):
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/split.h#L335-L389    # noqa: E501
-        length = len(data)
-        result = []
-        i = j = 0
-        while i < length:
-            # find a line and append it
-            while i < length:
-                code_point = _get_code_point(data, i)
-                if is_line_break_func(code_point):
-                    break
-                i += 1
-
-            # skip the line break reading CRLF as one line break
-            eol = i
-            if i < length:
-                if i + 1 < length:
-                    cur_cp = _get_code_point(data, i)
-                    next_cp = _get_code_point(data, i + 1)
-                    if _Py_ISCARRIAGERETURN(cur_cp) and _Py_ISLINEFEED(next_cp):
-                        i += 1
-                i += 1
-                if keepends:
-                    eol = i
-
-            result.append(data[j:eol])
-            j = i
-
-        return result
-
-    return impl
-
-
-_ascii_splitlines = register_jitable(generate_splitlines_func(_Py_ISLINEBREAK))
-_unicode_splitlines = register_jitable(generate_splitlines_func(
-    _PyUnicode_IsLineBreak))
-
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10196-L10229    # noqa: E501
-@overload_method(types.UnicodeType, 'splitlines')
-def unicode_splitlines(data, keepends=False):
-    """Implements str.splitlines()"""
-    thety = keepends
-    # if the type is omitted, the concrete type is the value
-    if isinstance(keepends, types.Omitted):
-        thety = keepends.value
-    # if the type is optional, the concrete type is the captured type
-    elif isinstance(keepends, types.Optional):
-        thety = keepends.type
-
-    accepted = (types.Integer, int, types.Boolean, bool)
-    if thety is not None and not isinstance(thety, accepted):
-        raise TypingError(
-            '"{}" must be {}, not {}'.format('keepends', accepted, keepends))
-
-    def splitlines_impl(data, keepends=False):
-        if data._is_ascii:
-            return _ascii_splitlines(data, keepends)
-
-        return _unicode_splitlines(data, keepends)
-
-    return splitlines_impl
-
-
 @register_jitable
 def join_list(sep, parts):
     parts_len = len(parts)
@@ -1948,6 +1882,33 @@ def unicode_isdigit(data):
     return impl
 
 
+def generate_operation_func(ascii_func, unicode_nres_func):
+    """Generate common case operation performer."""
+    def impl(data):
+        length = len(data)
+        if length == 0:
+            return _empty_string(data._kind, length, data._is_ascii)
+
+        if data._is_ascii:
+            res = _empty_string(data._kind, length, 1)
+            ascii_func(data, res)
+
+            return res
+
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9863-L9908    # noqa: E501
+        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
+        # maxchar should be inside of a list to be pass as argument by reference
+        maxchars = [0]
+        newlength = unicode_nres_func(data, length, tmp, maxchars)
+        maxchar = maxchars[0]
+        newkind = _codepoint_to_kind(maxchar)
+        res = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
+        for i in range(newlength):
+            _set_code_point(res, i, _get_code_point(tmp, i))
+
+        return res
+
+
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12017-L12045    # noqa: E501
 @overload_method(types.UnicodeType, 'isdecimal')
 def unicode_isdecimal(data):
@@ -1969,6 +1930,43 @@ def unicode_isdecimal(data):
         return True
 
     return impl
+
+
+@register_jitable
+def _unicode_casefold_doer(data, length, res, maxchars):
+    k = 0
+    mapped = np.zeros(3, dtype=_Py_UCS4)
+    for idx in range(length):
+        mapped.fill(0)
+        code_point = _get_code_point(data, idx)
+        n_res = _PyUnicode_ToFoldedFull(code_point, mapped)
+        for m in mapped[:n_res]:
+            maxchar = maxchars[0]
+            maxchars[0] = max(maxchar, m)
+            _set_code_point(res, k, m)
+            k += 1
+
+    return k
+
+
+@register_jitable
+def _ascii_casefold_doer(data, res):
+    for idx in range(len(data)):
+        code_point = _get_code_point(data, idx)
+        _set_code_point(res, idx, _Py_TOLOWER(code_point))
+
+
+_do_casefold = register_jitable(generate_operation_func(_ascii_casefold_doer,
+                                                        _unicode_casefold_doer))
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10782-L10791    # noqa: E501
+# mixed with
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9819-L9834    # noqa: E501
+@overload_method(types.UnicodeType, 'casefold')
+def unicode_casefold(data):
+    """Implements str.casefold()"""
+    return _do_casefold
 
 
 @overload_method(types.UnicodeType, 'istitle')
