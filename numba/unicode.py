@@ -1172,66 +1172,44 @@ def unicode_center(string, width, fillchar=' '):
     return center_impl
 
 
-@overload_method(types.UnicodeType, 'ljust')
-def unicode_ljust(string, width, fillchar=' '):
-    if not isinstance(width, types.Integer):
-        raise TypingError('The width must be an Integer')
+def gen_unicode_Xjust(STRING_FIRST):
+    def unicode_Xjust(string, width, fillchar=' '):
+        if not isinstance(width, types.Integer):
+            raise TypingError('The width must be an Integer')
 
-    if isinstance(fillchar, types.UnicodeCharSeq):
-        def ljust_impl(string, width, fillchar=' '):
-            return string.ljust(width, str(fillchar))
-        return ljust_impl
+        if isinstance(fillchar, types.UnicodeCharSeq):
+            def rjust_impl(string, width, fillchar=' '):
+                return string.rjust(width, str(fillchar))
+            return rjust_impl
 
-    if not (fillchar == ' ' or isinstance(
-            fillchar, (types.Omitted, types.UnicodeType))):
-        raise TypingError('The fillchar must be a UnicodeType')
+        if not (fillchar == ' ' or
+                isinstance(fillchar, (types.Omitted, types.UnicodeType))):
+            raise TypingError('The fillchar must be a UnicodeType')
 
-    def ljust_impl(string, width, fillchar=' '):
-        str_len = len(string)
-        fillchar_len = len(fillchar)
+        def impl(string, width, fillchar=' '):
+            str_len = len(string)
+            fillchar_len = len(fillchar)
 
-        if fillchar_len != 1:
-            raise ValueError('The fill character must be exactly one '
-                             'character long')
+            if fillchar_len != 1:
+                raise ValueError('The fill character must be exactly one '
+                                 'character long')
 
-        if width <= str_len:
-            return string
+            if width <= str_len:
+                return string
 
-        newstr = string + (fillchar * (width - str_len))
+            newstr = (fillchar * (width - str_len))
+            if STRING_FIRST:
+                return string + newstr
+            else:
+                return newstr + string
 
-        return newstr
-    return ljust_impl
+        return impl
+
+    return unicode_Xjust
 
 
-@overload_method(types.UnicodeType, 'rjust')
-def unicode_rjust(string, width, fillchar=' '):
-    if not isinstance(width, types.Integer):
-        raise TypingError('The width must be an Integer')
-
-    if isinstance(fillchar, types.UnicodeCharSeq):
-        def rjust_impl(string, width, fillchar=' '):
-            return string.rjust(width, str(fillchar))
-        return rjust_impl
-
-    if not (fillchar == ' ' or
-            isinstance(fillchar, (types.Omitted, types.UnicodeType))):
-        raise TypingError('The fillchar must be a UnicodeType')
-
-    def rjust_impl(string, width, fillchar=' '):
-        str_len = len(string)
-        fillchar_len = len(fillchar)
-
-        if fillchar_len != 1:
-            raise ValueError('The fill character must be exactly one '
-                             'character long')
-
-        if width <= str_len:
-            return string
-
-        newstr = (fillchar * (width - str_len)) + string
-
-        return newstr
-    return rjust_impl
+overload_method(types.UnicodeType, 'rjust')(gen_unicode_Xjust(False))
+overload_method(types.UnicodeType, 'ljust')(gen_unicode_Xjust(True))
 
 
 def generate_splitlines_func(is_line_break_func):
