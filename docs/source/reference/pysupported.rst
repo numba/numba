@@ -282,6 +282,7 @@ The following functions, attributes and methods are currently supported:
 * ``.rfind()``
 * ``.rindex()``
 * ``.index()``
+* ``.swapcase()``
 * ``.title()``
 * ``.isalpha()``
 * ``.isalnum()``
