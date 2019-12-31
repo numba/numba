@@ -1710,6 +1710,29 @@ def unicode_isspace(data):
     return impl
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12096-L12124    # noqa: E501
+@overload_method(types.UnicodeType, 'isnumeric')
+def unicode_isnumeric(data):
+    """Implements UnicodeType.isnumeric()"""
+
+    def impl(data):
+        length = len(data)
+
+        if length == 1:
+            return _PyUnicode_IsNumeric(_get_code_point(data, 0))
+
+        if length == 0:
+            return False
+
+        for i in range(length):
+            if not _PyUnicode_IsNumeric(_get_code_point(data, i)):
+                return False
+
+        return True
+
+    return impl
+
+
 @overload_method(types.UnicodeType, 'istitle')
 def unicode_istitle(s):
     """

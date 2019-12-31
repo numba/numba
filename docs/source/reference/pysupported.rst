@@ -265,6 +265,7 @@ The following functions, attributes and methods are currently supported:
 * ``.strip()``
 * ``.isupper()``
 * ``.upper()``
+* ``.isnumeric()``
 * ``.islower()``
 * ``.lower()``
 * ``.partition()``
