@@ -183,6 +183,18 @@ def split_whitespace_usecase(x):
     return x.split()
 
 
+def splitlines_usecase(s):
+    return s.splitlines()
+
+
+def splitlines_with_keepends_usecase(s, keepends):
+    return s.splitlines(keepends)
+
+
+def splitlines_with_keepends_kwarg_usecase(s, keepends):
+    return s.splitlines(keepends=keepends)
+
+
 def lstrip_usecase(x):
     return x.lstrip()
 
@@ -1202,6 +1214,47 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(test_str),
                              cfunc(test_str),
                              "'%s'.split()?" % (test_str,))
+
+    def test_split_exception_invalid_keepends(self):
+        pyfunc = splitlines_with_keepends_usecase
+        cfunc = njit(pyfunc)
+
+        accepted_types = (types.Integer, int, types.Boolean, bool)
+        for ty, keepends in (('none', None), ('unicode_type', 'None')):
+            with self.assertRaises(TypingError) as raises:
+                cfunc('\n', keepends)
+            msg = '"keepends" must be {}, not {}'.format(accepted_types, ty)
+            self.assertIn(msg, str(raises.exception))
+
+    def test_splitlines(self):
+        pyfunc = splitlines_usecase
+        cfunc = njit(pyfunc)
+
+        cases = ['', '\n', 'abc\r\rabc\r\n', '🐍⚡\v', '\f🐍⚡\f\v\v🐍\x85',
+                 '\u2028aba\u2029baba', '\n\r\na\v\fb\x0b\x0cc\x1c\x1d\x1e']
+
+        msg = 'Results of "{}".splitlines() must be equal'
+        for s in cases:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
+    def test_splitlines_with_keepends(self):
+        pyfuncs = [
+            splitlines_with_keepends_usecase,
+            splitlines_with_keepends_kwarg_usecase
+        ]
+        messages = [
+            'Results of "{}".splitlines({}) must be equal',
+            'Results of "{}".splitlines(keepends={}) must be equal'
+        ]
+        cases = ['', '\n', 'abc\r\rabc\r\n', '🐍⚡\v', '\f🐍⚡\f\v\v🐍\x85',
+                 '\u2028aba\u2029baba', '\n\r\na\v\fb\x0b\x0cc\x1c\x1d\x1e']
+        all_keepends = [True, False, 0, 1, -1, 100]
+
+        for pyfunc, msg in zip(pyfuncs, messages):
+            cfunc = njit(pyfunc)
+            for s, keepends in product(cases, all_keepends):
+                self.assertEqual(pyfunc(s, keepends), cfunc(s, keepends),
+                                 msg=msg.format(s, keepends))
 
     def test_join_empty(self):
         # Can't pass empty list to nopython mode, so we have to make a
