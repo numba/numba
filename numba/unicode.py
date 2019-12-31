@@ -1711,34 +1711,50 @@ def unicode_not(a):
         return impl
 
 
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11928-L11964    # noqa: E501
-@overload_method(types.UnicodeType, 'isalpha')
-def unicode_isalpha(data):
-    """Implements UnicodeType.isalpha()"""
+# generates isalpha/isalnum
+def gen_isAlX(ascii_func, unicode_func):
+    def unicode_isAlX(data):
 
-    def impl(data):
-        length = len(data)
-        if length == 0:
-            return False
-
-        if length == 1:
-            code_point = _get_code_point(data, 0)
-            return _PyUnicode_IsAlpha(code_point)
-
-        if data._is_ascii:
-            for i in range(length):
-                code_point = _get_code_point(data, i)
-                if not _Py_ISALPHA(code_point):
-                    return False
-
-        for i in range(length):
-            code_point = _get_code_point(data, i)
-            if not _PyUnicode_IsAlpha(code_point):
+        def impl(data):
+            length = len(data)
+            if length == 0:
                 return False
 
-        return True
+            if length == 1:
+                code_point = _get_code_point(data, 0)
+                if data._is_ascii:
+                    return ascii_func(code_point)
+                else:
+                    return unicode_func(code_point)
 
-    return impl
+            if data._is_ascii:
+                for i in range(length):
+                    code_point = _get_code_point(data, i)
+                    if not ascii_func(code_point):
+                        return False
+
+            for i in range(length):
+                code_point = _get_code_point(data, i)
+                if not unicode_func(code_point):
+                    return False
+
+            return True
+
+        return impl
+    return unicode_isAlX
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11928-L11964    # noqa: E501
+overload_method(types.UnicodeType, 'isalpha')(gen_isAlX(_Py_ISALPHA,
+                                                        _PyUnicode_IsAlpha))
+
+_unicode_is_alnum = register_jitable(lambda x:
+                                     (_PyUnicode_IsNumeric(x) or
+                                      _PyUnicode_IsAlpha(x)))
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11975-L12006    # noqa: E501
+overload_method(types.UnicodeType, 'isalnum')(gen_isAlX(_Py_ISALNUM,
+                                                        _unicode_is_alnum))
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10765-L10774    # noqa: E501
@@ -2076,41 +2092,6 @@ def unicode_istitle(s):
                 previous_is_cased = False
 
         return cased
-    return impl
-
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11975-L12006    # noqa: E501
-@overload_method(types.UnicodeType, 'isalnum')
-def unicode_isalnum(data):
-    """Implements UnicodeType.isalnum()"""
-
-    def impl(data):
-        length = len(data)
-
-        if length == 1:
-            code_point = _get_code_point(data, 0)
-            if data._is_ascii:
-                return _Py_ISALNUM(code_point)
-            return (_PyUnicode_IsNumeric(code_point) or
-                    _PyUnicode_IsAlpha(code_point))
-
-        if length == 0:
-            return False
-
-        if data._is_ascii:
-            for i in range(length):
-                code_point = _get_code_point(data, i)
-                if not _Py_ISALNUM(code_point):
-                    return False
-
-        for i in range(length):
-            code_point = _get_code_point(data, i)
-            if (not _PyUnicode_IsNumeric(code_point) and
-                    not _PyUnicode_IsAlpha(code_point)):
-                return False
-
-        return True
-
     return impl
 
 
