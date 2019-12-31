@@ -199,6 +199,22 @@ def splitlines_with_keepends_kwarg_usecase(s, keepends):
     return s.splitlines(keepends=keepends)
 
 
+def rsplit_usecase(s, sep):
+    return s.rsplit(sep)
+
+
+def rsplit_with_maxsplit_usecase(s, sep, maxsplit):
+    return s.rsplit(sep, maxsplit)
+
+
+def rsplit_with_maxsplit_kwarg_usecase(s, sep, maxsplit):
+    return s.rsplit(sep, maxsplit=maxsplit)
+
+
+def rsplit_whitespace_usecase(s):
+    return s.rsplit()
+
+
 def lstrip_usecase(x):
     return x.lstrip()
 
@@ -1297,6 +1313,103 @@ class TestUnicode(BaseTest):
             for s, keepends in product(cases, all_keepends):
                 self.assertEqual(pyfunc(s, keepends), cfunc(s, keepends),
                                  msg=msg.format(s, keepends))
+
+    def test_rsplit_exception_empty_sep(self):
+        self.disable_leak_check()
+
+        pyfunc = rsplit_usecase
+        cfunc = njit(pyfunc)
+
+        # Handle empty separator exception
+        for func in [pyfunc, cfunc]:
+            with self.assertRaises(ValueError) as raises:
+                func('a', '')
+            self.assertIn('empty separator', str(raises.exception))
+
+    def test_rsplit_exception_noninteger_maxsplit(self):
+        pyfunc = rsplit_with_maxsplit_usecase
+        cfunc = njit(pyfunc)
+
+        accepted_types = (types.Integer, int)
+        for sep in [' ', None]:
+            with self.assertRaises(TypingError) as raises:
+                cfunc('a', sep, 2.4)
+            msg = '"maxsplit" must be {}, not float'.format(accepted_types)
+            self.assertIn(msg, str(raises.exception))
+
+    def test_rsplit(self):
+        pyfunc = rsplit_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            (' a ', None),
+            ('', '⚡'),
+            ('abcabc', '⚡'),
+            ('🐍⚡', '⚡'),
+            ('🐍⚡🐍', '⚡'),
+            ('abababa', 'a'),
+            ('abababa', 'b'),
+            ('abababa', 'c'),
+            ('abababa', 'ab'),
+            ('abababa', 'aba'),
+        ]
+        msg = 'Results of "{}".rsplit("{}") must be equal'
+        for s, sep in CASES:
+            self.assertEqual(pyfunc(s, sep), cfunc(s, sep),
+                             msg=msg.format(s, sep))
+
+    def test_rsplit_with_maxsplit(self):
+        pyfuncs = [rsplit_with_maxsplit_usecase,
+                   rsplit_with_maxsplit_kwarg_usecase]
+        CASES = [
+            (' a ', None, 1),
+            ('', '⚡', 1),
+            ('abcabc', '⚡', 1),
+            ('🐍⚡', '⚡', 1),
+            ('🐍⚡🐍', '⚡', 1),
+            ('abababa', 'a', 2),
+            ('abababa', 'b', 1),
+            ('abababa', 'c', 2),
+            ('abababa', 'ab', 1),
+            ('abababa', 'aba', 5),
+        ]
+        messages = [
+            'Results of "{}".rsplit("{}", {}) must be equal',
+            'Results of "{}".rsplit("{}", maxsplit={}) must be equal'
+        ]
+
+        for pyfunc, msg in zip(pyfuncs, messages):
+            cfunc = njit(pyfunc)
+            for test_str, sep, maxsplit in CASES:
+                self.assertEqual(pyfunc(test_str, sep, maxsplit),
+                                 cfunc(test_str, sep, maxsplit),
+                                 msg=msg.format(test_str, sep, maxsplit))
+
+    def test_rsplit_whitespace(self):
+        pyfunc = rsplit_whitespace_usecase
+        cfunc = njit(pyfunc)
+
+        # list copied from
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodetype_db.h#L5996-L6031    # noqa: E501
+        all_whitespace = ''.join(map(chr, [
+            0x0009, 0x000A, 0x000B, 0x000C, 0x000D, 0x001C, 0x001D, 0x001E,
+            0x001F, 0x0020, 0x0085, 0x00A0, 0x1680, 0x2000, 0x2001, 0x2002,
+            0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A,
+            0x2028, 0x2029, 0x202F, 0x205F, 0x3000
+        ]))
+
+        CASES = [
+            '',
+            'abcabc',
+            '🐍 ⚡',
+            '🐍 ⚡ 🐍',
+            '🐍   ⚡ 🐍  ',
+            '  🐍   ⚡ 🐍',
+            ' 🐍' + all_whitespace + '⚡ 🐍  ',
+        ]
+        msg = 'Results of "{}".rsplit() must be equal'
+        for s in CASES:
+            self.assertEqual(pyfunc(s), cfunc(s), msg.format(s))
 
     def test_join_empty(self):
         # Can't pass empty list to nopython mode, so we have to make a
