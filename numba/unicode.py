@@ -1094,22 +1094,23 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
         def _rsplit_char(data, ch, maxsplit):
             # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/split.h#L242-L284    # noqa: E501
             result = []
+            ch_code_point = _get_code_point(ch, 0)
             i = j = len(data) - 1
             while i >= 0 and maxsplit > 0:
                 data_code_point = _get_code_point(data, i)
-                ch_code_point = _get_code_point(ch, 0)
                 if data_code_point == ch_code_point:
-                    result.append(data[i + 1:j + 1])
+                    result.append(data[i + 1 : j + 1])
                     j = i = i - 1
                     maxsplit -= 1
                 i -= 1
             if j >= -1:
-                result.append(data[0:j + 1])
+                result.append(data[0 : j + 1])
 
             return result[::-1]
 
         if maxsplit < 0:
             maxsplit = sys.maxsize
+
         sep_length = len(sep)
 
         if sep_length == 0:
