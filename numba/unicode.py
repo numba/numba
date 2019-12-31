@@ -1938,72 +1938,52 @@ def unicode_upper(a):
             return ret
     return impl
 
+# generator for simple unicode "isX" methods
+
+
+def gen_isX(_PyUnicode_IS_func, empty_is_false=True):
+    def unicode_isX(data):
+        def impl(data):
+            length = len(data)
+            if length == 1:
+                return _PyUnicode_IS_func(_get_code_point(data, 0))
+
+            if empty_is_false and length == 0:
+                return False
+
+            for i in range(length):
+                code_point = _get_code_point(data, i)
+                if not _PyUnicode_IS_func(code_point):
+                    return False
+
+            return True
+
+        return impl
+    return unicode_isX
+
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11896-L11925    # noqa: E501
-@overload_method(types.UnicodeType, 'isspace')
-def unicode_isspace(data):
-    """Implements UnicodeType.isspace()"""
-
-    def impl(data):
-        length = len(data)
-        if length == 1:
-            return _PyUnicode_IsSpace(_get_code_point(data, 0))
-
-        if length == 0:
-            return False
-
-        for i in range(length):
-            code_point = _get_code_point(data, i)
-            if not _PyUnicode_IsSpace(code_point):
-                return False
-
-        return True
-
-    return impl
-
+overload_method(types.UnicodeType, 'isspace')(gen_isX(_PyUnicode_IsSpace))
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12096-L12124    # noqa: E501
-@overload_method(types.UnicodeType, 'isnumeric')
-def unicode_isnumeric(data):
-    """Implements UnicodeType.isnumeric()"""
-    def impl(data):
-        length = len(data)
-        if length == 1:
-            return _PyUnicode_IsNumeric(_get_code_point(data, 0))
-
-        if length == 0:
-            return False
-
-        for i in range(length):
-            if not _PyUnicode_IsNumeric(_get_code_point(data, i)):
-                return False
-
-        return True
-
-    return impl
-
+overload_method(types.UnicodeType, 'isnumeric')(gen_isX(_PyUnicode_IsNumeric))
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12056-L12085    # noqa: E501
-@overload_method(types.UnicodeType, 'isdigit')
-def unicode_isdigit(data):
-    """Implements UnicodeType.isdigit()"""
+overload_method(types.UnicodeType, 'isdigit')(gen_isX(_PyUnicode_IsDigit))
 
-    def impl(data):
-        length = len(data)
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12017-L12045    # noqa: E501
+overload_method(
+    types.UnicodeType,
+    'isdecimal')(
+        gen_isX(_PyUnicode_IsDecimalDigit))
 
-        if length == 1:
-            ch = _get_code_point(data, 0)
-            return _PyUnicode_IsDigit(ch)
-        if length == 0:
-            return False
-
-        for i in range(length):
-            if not _PyUnicode_IsDigit(_get_code_point(data, i)):
-                return False
-
-        return True
-
-    return impl
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12188-L12213    # noqa: E501
+overload_method(
+    types.UnicodeType,
+    'isprintable')(
+        gen_isX(
+            _PyUnicode_IsPrintable,
+            False))
 
 
 def generate_operation_func(ascii_func, unicode_nres_func):
@@ -2031,29 +2011,6 @@ def generate_operation_func(ascii_func, unicode_nres_func):
             _set_code_point(res, i, _get_code_point(tmp, i))
 
         return res
-
-    return impl
-
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12017-L12045    # noqa: E501
-@overload_method(types.UnicodeType, 'isdecimal')
-def unicode_isdecimal(data):
-    """Implements UnicodeType.isdecimal()"""
-
-    def impl(data):
-        length = len(data)
-
-        if length == 1:
-            return _PyUnicode_IsDecimalDigit(_get_code_point(data, 0))
-
-        if length == 0:
-            return False
-
-        for i in range(length):
-            if not _PyUnicode_IsDecimalDigit(_get_code_point(data, i)):
-                return False
-
-        return True
 
     return impl
 
@@ -2119,26 +2076,6 @@ def unicode_istitle(s):
                 previous_is_cased = False
 
         return cased
-    return impl
-
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12188-L12213    # noqa: E501
-@overload_method(types.UnicodeType, 'isprintable')
-def unicode_isprintable(data):
-    """Implements UnicodeType.isprintable()"""
-
-    def impl(data):
-        length = len(data)
-        if length == 1:
-            return _PyUnicode_IsPrintable(_get_code_point(data, 0))
-
-        for i in range(length):
-            code_point = _get_code_point(data, i)
-            if not _PyUnicode_IsPrintable(code_point):
-                return False
-
-        return True
-
     return impl
 
 

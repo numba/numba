@@ -248,46 +248,46 @@ The following functions, attributes and methods are currently supported:
 * ``*`` (repetition of strings)
 * ``in``, ``.contains()``
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
+* ``.capitalize()``
 * ``.casefold()``
-* ``.startswith()``
+* ``.center()``
+* ``.count()``
+* ``.endswith()``
 * ``.endswith()``
 * ``.expandtabs()``
-* ``.isspace()``
-* ``.isidentifier()``
 * ``.find()``
-* ``.center()``
-* ``.ljust()``
-* ``.rjust()``
-* ``.split()``
-* ``.splitlines()``
-* ``.rsplit()``
-* ``.join()``
-* ``.lstrip()``
-* ``.rstrip()``
-* ``.strip()``
-* ``.capitalize()``
-* ``.isupper()``
-* ``.upper()``
-* ``.isnumeric()``
-* ``.isdigit()``
+* ``.index()``
+* ``.isalnum()``
+* ``.isalpha()``
 * ``.isdecimal()``
+* ``.isdigit()``
+* ``.isidentifier()``
 * ``.islower()``
-* ``.lower()``
-* ``.partition()``
+* ``.isnumeric()``
 * ``.isprintable()``
-* ``.zfill()``
-* ``.rpartition()``
-* ``.count()``
+* ``.isspace()``
 * ``.istitle()``
+* ``.isupper()``
+* ``.join()``
+* ``.ljust()``
+* ``.lower()``
+* ``.lstrip()``
+* ``.partition()``
 * ``.replace()``
 * ``.rfind()``
 * ``.rindex()``
-* ``.index()``
+* ``.rjust()``
+* ``.rpartition()``
+* ``.rsplit()``
+* ``.rstrip()``
+* ``.split()``
+* ``.splitlines()``
+* ``.startswith()``
+* ``.strip()``
 * ``.swapcase()``
 * ``.title()``
-* ``.isalpha()``
-* ``.isalnum()``
-* ``.endswith()``
+* ``.upper()``
+* ``.zfill()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
