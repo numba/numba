@@ -802,18 +802,69 @@ def unicode_startswith(a, b):
         return startswith_impl
 
 
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9342-L9354    # noqa: E501
+@register_jitable
+def _adjust_indices(length, start, end):
+    if end > length:
+        end = length
+    if end < 0:
+        end += length
+        if end < 0:
+            end = 0
+    if start < 0:
+        start += length
+        if start < 0:
+            start = 0
+
+    return start, end
+
+
 @overload_method(types.UnicodeType, 'endswith')
-def unicode_endswith(a, b):
-    if isinstance(b, types.UnicodeType):
-        def endswith_impl(a, b):
-            a_offset = len(a) - len(b)
-            if a_offset < 0:
-                return False
-            return _cmp_region(a, a_offset, b, 0, len(b)) == 0
+def unicode_endswith(s, substr, start=None, end=None):
+    if not (start is None or isinstance(start, (types.Omitted,
+                                                types.Integer,
+                                                types.NoneType))):
+        raise TypingError('The arg must be a Integer or None')
+
+    if not (end is None or isinstance(end, (types.Omitted,
+                                            types.Integer,
+                                            types.NoneType))):
+        raise TypingError('The arg must be a Integer or None')
+
+    if isinstance(substr, (types.Tuple, types.UniTuple)):
+        def endswith_impl(s, substr, start=None, end=None):
+            for item in substr:
+                if s.endswith(item, start, end) is True:
+                    return True
+
+            return False
         return endswith_impl
-    if isinstance(b, types.UnicodeCharSeq):
-        def endswith_impl(a, b):
-            return a.endswith(str(b))
+
+    if isinstance(substr, types.UnicodeType):
+        def endswith_impl(s, substr, start=None, end=None):
+            length = len(s)
+            sub_length = len(substr)
+            if start is None:
+                start = 0
+            if end is None:
+                end = length
+
+            start, end = _adjust_indices(length, start, end)
+            if end - start < sub_length:
+                return False
+
+            if sub_length == 0:
+                return True
+
+            s = s[start:end]
+            offset = len(s) - sub_length
+
+            return _cmp_region(s, offset, substr, 0, sub_length) == 0
+        return endswith_impl
+
+    if isinstance(substr, types.UnicodeCharSeq):
+        def endswith_impl(s, substr, start=None, end=None):
+            return s.endswith(str(substr), start, end)
         return endswith_impl
 
 
