@@ -264,6 +264,7 @@ The following functions, attributes and methods are currently supported:
 * ``.lstrip()``
 * ``.rstrip()``
 * ``.strip()``
+* ``.capitalize()``
 * ``.isupper()``
 * ``.upper()``
 * ``.isnumeric()``

@@ -1845,6 +1845,23 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(*args), cfunc(*args),
                              msg='failed on {}'.format(args))
 
+    def test_capitalize(self):
+        def pyfunc(x):
+            return x.capitalize()
+
+        cfunc = njit(pyfunc)
+        # Samples taken from CPython testing:
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L800-L815    # noqa: E501
+        cpython = ['\U0001044F', '\U0001044F\U0001044F', '\U00010427\U0001044F',
+                   '\U0001044F\U00010427', 'X\U00010427x\U0001044F', 'h\u0130',
+                   '\u1fd2\u0130', 'ﬁnnish', 'A\u0345\u03a3']
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Lib/test/test_unicode.py#L926    # noqa: E501
+        cpython_extras = ['\U00010000\U00100000']
+
+        msg = 'Results of "{}".capitalize() must be equal'
+        for s in UNICODE_EXAMPLES + [''] + cpython + cpython_extras:
+            self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
+
     def test_isupper(self):
         def pyfunc(x):
             return x.isupper()
