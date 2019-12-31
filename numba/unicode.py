@@ -2068,6 +2068,7 @@ def unicode_casefold(data):
     """Implements str.casefold()"""
     return _do_casefold
 
+
 if sys.version_info[:2] >= (3, 7):
     @overload_method(types.UnicodeType, 'isascii')
     def unicode_isascii(data):
@@ -2076,6 +2077,7 @@ if sys.version_info[:2] >= (3, 7):
         def impl(data):
             return data._is_ascii
         return impl
+
 
 @overload_method(types.UnicodeType, 'istitle')
 def unicode_istitle(data):
@@ -2113,6 +2115,7 @@ def unicode_istitle(data):
 
         return cased
     return impl
+
 
 @overload_method(types.UnicodeType, 'islower')
 def unicode_islower(data):
