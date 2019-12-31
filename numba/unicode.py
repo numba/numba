@@ -678,6 +678,42 @@ def unicode_index(s, sub, start=None, end=None):
     return index_impl
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12922-L12976    # noqa: E501
+@overload_method(types.UnicodeType, 'partition')
+def unicode_partition(data, sep):
+    """Implements str.partition()"""
+    thety = sep
+    # if the type is omitted, the concrete type is the value
+    if isinstance(sep, types.Omitted):
+        thety = sep.value
+    # if the type is optional, the concrete type is the captured type
+    elif isinstance(sep, types.Optional):
+        thety = sep.type
+
+    accepted = (types.UnicodeType, types.UnicodeCharSeq)
+    if thety is not None and not isinstance(thety, accepted):
+        msg = '"{}" must be {}, not {}'.format('sep', accepted, sep)
+        raise TypingError(msg)
+
+    def impl(data, sep):
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/partition.h#L7-L60    # noqa: E501
+        empty_str = _empty_string(data._kind, 0, data._is_ascii)
+        sep_length = len(sep)
+        if data._kind < sep._kind or len(data) < sep_length:
+            return data, empty_str, empty_str
+
+        if sep_length == 0:
+            raise ValueError('empty separator')
+
+        pos = data.find(sep)
+        if pos < 0:
+            return data, empty_str, empty_str
+
+        return data[0:pos], sep, data[pos + sep_length:len(data)]
+
+    return impl
+
+
 @overload_method(types.UnicodeType, 'count')
 def unicode_count(src, sub, start=None, end=None):
 

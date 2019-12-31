@@ -83,6 +83,10 @@ def ge_usecase(x, y):
     return x >= y
 
 
+def partition_usecase(s, sep):
+    return s.partition(sep)
+
+
 def find_usecase(x, y):
     return x.find(y)
 
@@ -517,6 +521,44 @@ class TestUnicode(BaseTest):
                 self.assertEqual(pyfunc(substr, a),
                                  cfunc(substr, a),
                                  "'%s' in '%s'?" % (substr, a))
+
+    def test_partition_exception_invalid_sep(self):
+        self.disable_leak_check()
+
+        pyfunc = partition_usecase
+        cfunc = njit(pyfunc)
+
+        # Handle empty separator exception
+        for func in [pyfunc, cfunc]:
+            with self.assertRaises(ValueError) as raises:
+                func('a', '')
+            self.assertIn('empty separator', str(raises.exception))
+
+        accepted_types = (types.UnicodeType, types.UnicodeCharSeq)
+        with self.assertRaises(TypingError) as raises:
+            cfunc('a', None)
+        msg = '"sep" must be {}, not none'.format(accepted_types)
+        self.assertIn(msg, str(raises.exception))
+
+    def test_partition(self):
+        pyfunc = partition_usecase
+        cfunc = njit(pyfunc)
+
+        CASES = [
+            ('', '⚡'),
+            ('abcabc', '⚡'),
+            ('🐍⚡', '⚡'),
+            ('🐍⚡🐍', '⚡'),
+            ('abababa', 'a'),
+            ('abababa', 'b'),
+            ('abababa', 'c'),
+            ('abababa', 'ab'),
+            ('abababa', 'aba'),
+        ]
+        msg = 'Results of "{}".partition("{}") must be equal'
+        for s, sep in CASES:
+            self.assertEqual(pyfunc(s, sep), cfunc(s, sep),
+                             msg=msg.format(s, sep))
 
     def test_find(self, flags=no_pyobj_flags):
         pyfunc = find_usecase
