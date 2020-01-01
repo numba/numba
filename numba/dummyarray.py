@@ -69,7 +69,7 @@ class Dim(object):
             )
             return ret
         else:
-            sliced = self[item:item + 1]
+            sliced = self[item:item + 1] if item != -1 else self[-1:]
             if sliced.size != 1:
                 raise IndexError
             return Dim(
@@ -213,17 +213,6 @@ class Array(object):
         ndim = len(self.dims)
         if nitem > ndim:
             raise IndexError("%d extra indices given" % (nitem - ndim,))
-
-        for axis, idx in enumerate(item):
-            if np.isscalar(idx):
-                old_idx = idx
-                if idx < 0:
-                    idx += self.shape[axis]
-                    item[axis] = idx
-                if not (0 <= idx < self.shape[axis]):
-                    msg = 'Index %s is out of bounds for axis %s with '\
-                          'size %s' % (old_idx, axis, self.shape[axis])
-                    raise IndexError(msg)
 
         # Add empty slices for missing indices
         while len(item) < ndim:
