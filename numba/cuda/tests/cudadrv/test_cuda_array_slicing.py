@@ -12,25 +12,49 @@ class CudaArrayIndexing(SerialMixin, unittest.TestCase):
     def test_index_1d(self):
         arr = np.arange(10)
         darr = cuda.to_device(arr)
-        for i in range(arr.size):
+        for i in range(-10, 10):
             self.assertEqual(arr[i], darr[i])
+        with self.assertRaises(IndexError):
+            a = darr[-11]
+        with self.assertRaises(IndexError):
+            a = darr[10]
 
     def test_index_2d(self):
         arr = np.arange(3 * 4).reshape(3, 4)
         darr = cuda.to_device(arr)
 
-        for i in range(arr.shape[0]):
-            for j in range(arr.shape[1]):
+        for i in range(-3, 3):
+            for j in range(-4, 4):
                 self.assertEqual(arr[i, j], darr[i, j])
+        with self.assertRaises(IndexError):
+            a = darr[-4, 0]
+        with self.assertRaises(IndexError):
+            a = darr[3, 0]
+        with self.assertRaises(IndexError):
+            a = darr[0, -5]
+        with self.assertRaises(IndexError):
+            a = darr[0, 4]
 
     def test_index_3d(self):
         arr = np.arange(3 * 4 * 5).reshape(3, 4, 5)
         darr = cuda.to_device(arr)
 
-        for i in range(arr.shape[0]):
-            for j in range(arr.shape[1]):
-                for k in range(arr.shape[2]):
+        for i in range(-3, 3):
+            for j in range(-4, 4):
+                for k in range(-5, 5):
                     self.assertEqual(arr[i, j, k], darr[i, j, k])
+        with self.assertRaises(IndexError):
+            a = darr[-4, 0, 0]
+        with self.assertRaises(IndexError):
+            a = darr[3, 0, 0]
+        with self.assertRaises(IndexError):
+            a = darr[0, -5, 0]
+        with self.assertRaises(IndexError):
+            a = darr[0, 4, 0]
+        with self.assertRaises(IndexError):
+            a = darr[0, 0, -6]
+        with self.assertRaises(IndexError):
+            a = darr[0, 0, 5]
 
 
 class CudaArrayStridedSlice(SerialMixin, unittest.TestCase):
