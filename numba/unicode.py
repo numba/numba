@@ -2013,124 +2013,6 @@ def case_operation(ascii_func, unicode_func):
     return impl
 
 
-@overload_method(types.UnicodeType, 'upper')
-def unicode_upper(a):
-    """
-    Implements .upper()
-    """
-    def impl(a):
-        # main structure is a translation of:
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13308-L13316    # noqa: E501
-
-        # ASCII fast path
-        l = len(a)
-        if a._is_ascii:
-            # This is an approximate translation of:
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L300    # noqa: E501
-            ret = _empty_string(a._kind, l, a._is_ascii)
-            for idx in range(l):
-                code_point = _get_code_point(a, idx)
-                _set_code_point(ret, idx, _Py_TOUPPER(code_point))
-            return ret
-        else:
-            # This part in an amalgamation of two algorithms:
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9864-L9908    # noqa: E501
-            # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9787-L9805    # noqa: E501
-            #
-            # The alg walks the string and writes the upper version of the code
-            # point into a 4byte kind unicode string and at the same time
-            # tracks the maximum width "upper" character encountered, following
-            # this the 4byte kind string is reinterpreted as needed into the
-            # maximum width kind string
-            tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * l, a._is_ascii)
-            mapped = np.array((3,), dtype=_Py_UCS4)
-            maxchar = 0
-            k = 0
-            for idx in range(l):
-                mapped[:] = 0
-                code_point = _get_code_point(a, idx)
-                n_res = _PyUnicode_ToUpperFull(_Py_UCS4(code_point), mapped)
-                for j in range(n_res):
-                    maxchar = max(maxchar, mapped[j])
-                    _set_code_point(tmp, k, mapped[j])
-                    k += 1
-            newlength = k
-            newkind = _codepoint_to_kind(maxchar)
-            ret = _empty_string(newkind, newlength,
-                                _codepoint_is_ascii(maxchar))
-            for i in range(newlength):
-                _set_code_point(ret, i, _get_code_point(tmp, i))
-            return ret
-    return impl
-
-
-@overload_method(types.UnicodeType, 'lower')
-def unicode_lower(data):
-    """Implements .lower()"""
-    def impl(data):
-        # main structure is a translation of:
-        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L12380-L12388    # noqa: E501
-
-        # ASCII fast path
-        length = len(data)
-        if data._is_ascii:
-            # This is an approximate translation of:
-            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L247-L255    # noqa: E501
-            res = _empty_string(data._kind, length, data._is_ascii)
-            for idx in range(length):
-                code_point = _get_code_point(data, idx)
-                _set_code_point(res, idx, _Py_TOLOWER(code_point))
-            return res
-        else:
-            # This is an approximate translation of:
-            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
-            tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length,
-                                data._is_ascii)
-            # maxchar is inside of a list to be pass as argument by reference
-            maxchars = [0]
-            newlength = _do_upper_or_lower(data, length, tmp, maxchars,
-                                           lower=True)
-            maxchar = maxchars[0]
-            newkind = _codepoint_to_kind(maxchar)
-            res = _empty_string(newkind, newlength,
-                                _codepoint_is_ascii(maxchar))
-            for i in range(newlength):
-                _set_code_point(res, i, _get_code_point(tmp, i))
-            return res
-
-    return impl
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9819-L9834    # noqa: E501
-@register_jitable
-def _unicode_casefold(data, length, res, maxchars):
-    k = 0
-    mapped = np.zeros(3, dtype=_Py_UCS4)
-    for idx in range(length):
-        mapped.fill(0)
-        code_point = _get_code_point(data, idx)
-        n_res = _PyUnicode_ToFoldedFull(code_point, mapped)
-        for m in mapped[:n_res]:
-            maxchar = maxchars[0]
-            maxchars[0] = max(maxchar, m)
-            _set_code_point(res, k, m)
-            k += 1
-
-    return k
-
-
-@register_jitable
-def _ascii_casefold(data, res):
-    for idx in range(len(data)):
-        code_point = _get_code_point(data, idx)
-        _set_code_point(res, idx, _Py_TOLOWER(code_point))
-
-
-@overload_method(types.UnicodeType, 'casefold')
-def unicode_casefold(data):
-    """Implements str.casefold()"""
-    return case_operation(_ascii_casefold, _unicode_casefold)
-
-
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883    # noqa: E501
 @register_jitable
 def _handle_capital_sigma(data, length, idx):
@@ -2163,6 +2045,85 @@ def _lower_ucs4(code_point, data, length, idx, mapped):
         mapped[0] = _handle_capital_sigma(data, length, idx)
         return 1
     return _PyUnicode_ToLowerFull(code_point, mapped)
+
+
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9946-L9965    # noqa: E501
+def _gen_unicode_upper_or_lower(lower):
+    def _do_upper_or_lower(data, length, res, maxchars):
+        k = 0
+        for idx in range(length):
+            mapped = np.zeros(3, dtype=_Py_UCS4)
+            code_point = _get_code_point(data, idx)
+            if lower:
+                n_res = _lower_ucs4(code_point, data, length, idx, mapped)
+            else:
+                # might be needed if call _do_upper_or_lower in unicode_upper
+                n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+            for m in mapped[:n_res]:
+                maxchars[0] = max(maxchars[0], m)
+                _set_code_point(res, k, m)
+                k += 1
+        return k
+    return _do_upper_or_lower
+
+
+_unicode_upper = register_jitable(_gen_unicode_upper_or_lower(False))
+_unicode_lower = register_jitable(_gen_unicode_upper_or_lower(True))
+
+
+def _gen_ascii_upper_or_lower(func):
+    def _ascii_upper_or_lower(data, res):
+        for idx in range(len(data)):
+            code_point = _get_code_point(data, idx)
+            _set_code_point(res, idx, func(code_point))
+    return _ascii_upper_or_lower
+
+
+_ascii_upper = register_jitable(_gen_ascii_upper_or_lower(_Py_TOUPPER))
+_ascii_lower = register_jitable(_gen_ascii_upper_or_lower(_Py_TOLOWER))
+
+
+@overload_method(types.UnicodeType, 'lower')
+def unicode_lower(data):
+    """Implements .lower()"""
+    return case_operation(_ascii_lower, _unicode_lower)
+
+
+@overload_method(types.UnicodeType, 'upper')
+def unicode_upper(data):
+    """Implements .upper()"""
+    return case_operation(_ascii_upper, _unicode_upper)
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9819-L9834    # noqa: E501
+@register_jitable
+def _unicode_casefold(data, length, res, maxchars):
+    k = 0
+    mapped = np.zeros(3, dtype=_Py_UCS4)
+    for idx in range(length):
+        mapped.fill(0)
+        code_point = _get_code_point(data, idx)
+        n_res = _PyUnicode_ToFoldedFull(code_point, mapped)
+        for m in mapped[:n_res]:
+            maxchar = maxchars[0]
+            maxchars[0] = max(maxchar, m)
+            _set_code_point(res, k, m)
+            k += 1
+
+    return k
+
+
+@register_jitable
+def _ascii_casefold(data, res):
+    for idx in range(len(data)):
+        code_point = _get_code_point(data, idx)
+        _set_code_point(res, idx, _Py_TOLOWER(code_point))
+
+
+@overload_method(types.UnicodeType, 'casefold')
+def unicode_casefold(data):
+    """Implements str.casefold()"""
+    return case_operation(_ascii_casefold, _unicode_casefold)
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9737-L9759    # noqa: E501
@@ -2302,24 +2263,9 @@ def _unicode_swapcase(data, length, res, maxchars):
 def unicode_swapcase(data):
     return case_operation(_ascii_swapcase, _unicode_swapcase)
 
-
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9946-L9965    # noqa: E501
-@register_jitable
-def _do_upper_or_lower(data, length, res, maxchars, lower):
-    k = 0
-    for idx in range(length):
-        mapped = np.zeros(3, dtype=_Py_UCS4)
-        code_point = _get_code_point(data, idx)
-        if lower:
-            n_res = _lower_ucs4(code_point, data, length, idx, mapped)
-        else:
-            # might be needed if call _do_upper_or_lower in unicode_upper
-            n_res = _PyUnicode_ToUpperFull(code_point, mapped)
-        for m in mapped[:n_res]:
-            maxchars[0] = max(maxchars[0], m)
-            _set_code_point(res, k, m)
-            k += 1
-    return k
+# ------------------------------------------------------------------------------
+# iteration
+# ------------------------------------------------------------------------------
 
 
 @lower_builtin('getiter', types.UnicodeType)
