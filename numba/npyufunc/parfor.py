@@ -1179,9 +1179,7 @@ def _create_gufunc_for_parfor_body(
 
     if target=='spirv':
         for eachdim in range(parfor_dim):
-            for indent in range(eachdim + 1):
-                gufunc_txt += "    "
-            gufunc_txt += legal_loop_indices[eachdim] + " = " + "oneapi.get_global_id(" + str(eachdim) + ")\n"
+            gufunc_txt += "    " + legal_loop_indices[eachdim] + " = " + "oneapi.get_global_id(" + str(eachdim) + ")\n"
     else:
         # For each dimension of the parfor, create a for loop in the generated gufunc function.
         # Iterate across the proper values extracted from the schedule.
