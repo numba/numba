@@ -1763,63 +1763,50 @@ overload_method(types.UnicodeType, 'isalnum')(gen_isAlX(_Py_ISALNUM,
                                                         _unicode_is_alnum))
 
 
+@register_jitable
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9737-L9759    # noqa: E501
+def _unicode_capitalize(data, length, res, maxchars):
+    k = 0
+    maxchar = 0
+    mapped = np.zeros(3, dtype=_Py_UCS4)
+    code_point = _get_code_point(data, 0)
+
+    # https://github.com/python/cpython/commit/b015fc86f7b1f35283804bfee788cce0a5495df7/Objects/unicodeobject.c#diff-220e5da0d1c8abf508b25c02da6ca16c    # noqa: E501
+    if _py38_or_later:
+        n_res = _PyUnicode_ToTitleFull(code_point, mapped)
+    else:
+        n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+
+    for m in mapped[:n_res]:
+        maxchar = max(maxchar, m)
+        _set_code_point(res, k, m)
+        k += 1
+    for idx in range(1, length):
+        mapped.fill(0)
+        code_point = _get_code_point(data, idx)
+        n_res = _lower_ucs4(code_point, data, length, idx, mapped)
+        for m in mapped[:n_res]:
+            maxchar = max(maxchar, m)
+            _set_code_point(res, k, m)
+            k += 1
+    maxchars[0] = maxchar
+    return k
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L361-L382    # noqa: E501
+@register_jitable
+def _ascii_capitalize(data, res):
+    code_point = _get_code_point(data, 0)
+    _set_code_point(res, 0, _Py_TOUPPER(code_point))
+    for idx in range(1, len(data)):
+        code_point = _get_code_point(data, idx)
+        _set_code_point(res, idx, _Py_TOLOWER(code_point))
+
+
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10765-L10774    # noqa: E501
 @overload_method(types.UnicodeType, 'capitalize')
 def unicode_capitalize(data):
-    """Implements str.capitalize()"""
-    def impl(data):
-        length = len(data)
-        if length == 0:
-            return _empty_string(data._kind, length, data._is_ascii)
-
-        if data._is_ascii:
-            # https://github.com/python/cpython/blob/593bb30e82eded7f2ec02f7d1aa49742e6962113/Objects/bytes_methods.c#L361-L368    # noqa: E501
-            # mixed with:
-            # https://github.com/python/cpython/blob/593bb30e82eded7f2ec02f7d1aa49742e6962113/Objects/bytes_methods.c#L299-L307    # noqa: E501
-            res = _empty_string(data._kind, length, 1)
-            code_point = _get_code_point(data, 0)
-            _set_code_point(res, 0, _Py_TOUPPER(code_point))
-            for idx in range(1, length):
-                code_point = _get_code_point(data, idx)
-                _set_code_point(res, idx, _Py_TOLOWER(code_point))
-
-            return res
-
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9863-L9908    # noqa: E501
-        # mixed with:
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9737-L9759    # noqa: E501
-        k = 0
-        maxchar = 0
-        mapped = np.zeros(3, dtype=_Py_UCS4)
-        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length)
-        code_point = _get_code_point(data, 0)
-
-        # https://github.com/python/cpython/commit/b015fc86f7b1f35283804bfee788cce0a5495df7/Objects/unicodeobject.c#diff-220e5da0d1c8abf508b25c02da6ca16c    # noqa: E501
-        if _py38_or_later:
-            n_res = _PyUnicode_ToTitleFull(code_point, mapped)
-        else:
-            n_res = _PyUnicode_ToUpperFull(code_point, mapped)
-
-        for m in mapped[:n_res]:
-            maxchar = max(maxchar, m)
-            _set_code_point(tmp, k, m)
-            k += 1
-        for idx in range(1, length):
-            mapped.fill(0)
-            code_point = _get_code_point(data, idx)
-            n_res = _lower_ucs4(code_point, data, length, idx, mapped)
-            for m in mapped[:n_res]:
-                maxchar = max(maxchar, m)
-                _set_code_point(tmp, k, m)
-                k += 1
-        newkind = _codepoint_to_kind(maxchar)
-        res = _empty_string(newkind, k)
-        for i in range(k):
-            _set_code_point(res, i, _get_code_point(tmp, i))
-
-        return res
-
-    return impl
+    return case_operation(_ascii_capitalize, _unicode_capitalize)
 
 
 def _is_upper(is_lower, is_upper, is_title):
