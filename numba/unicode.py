@@ -2001,6 +2001,7 @@ overload_method(types.UnicodeType, 'isdecimal')(
 overload_method(types.UnicodeType, 'isprintable')(
     gen_isX(_PyUnicode_IsPrintable, False))
 
+
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9863-L9908    # noqa: E501
 def case_operation(ascii_func, unicode_func):
     """Generate common case operation performer."""
@@ -2174,11 +2175,11 @@ def _lower_ucs4(code_point, data, length, idx, mapped):
 
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9996-L10021    # noqa: E501
 @register_jitable
-def _do_title(data, length, res, maxchars):
+def _unicode_title(data, length, res, maxchars):
     """This is a translation of the function that titles a unicode string."""
     k = 0
     previous_cased = False
-    mapped = np.zeros(3, dtype=_Py_UCS4)
+    mapped = np.empty(3, dtype=_Py_UCS4)
     for idx in range(length):
         mapped.fill(0)
         code_point = _get_code_point(data, idx)
@@ -2195,25 +2196,32 @@ def _do_title(data, length, res, maxchars):
     return k
 
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L332-L352    # noqa: E501
+@register_jitable
+def _ascii_title(data, res):
+    """ Does .title() on an ASCII string """
+    previous_is_cased = False
+    for idx in range(len(data)):
+        code_point = _get_code_point(data, idx)
+        if _Py_ISLOWER(code_point):
+            if not previous_is_cased:
+                code_point = _Py_TOUPPER(code_point)
+            previous_is_cased = True
+        elif _Py_ISUPPER(code_point):
+            if previous_is_cased:
+                code_point = _Py_TOLOWER(code_point)
+            previous_is_cased = True
+        else:
+            previous_is_cased = False
+        _set_code_point(res, idx, code_point)
+
+
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
 @overload_method(types.UnicodeType, 'title')
 def unicode_title(data):
     """Implements str.title()"""
     # https://docs.python.org/3/library/stdtypes.html#str.title
-    def impl(data):
-        length = len(data)
-        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
-        # maxchar should be inside of a list to be pass as argument by reference
-        maxchar = 0
-        maxchars = [maxchar]
-        newlength = _do_title(data, length, tmp, maxchars)
-        maxchar, = maxchars
-        newkind = _codepoint_to_kind(maxchar)
-        res = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
-        for i in range(newlength):
-            _set_code_point(res, i, _get_code_point(tmp, i))
-        return res
-    return impl
+    return case_operation(_ascii_title, _unicode_title)
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13140-L13147    # noqa: E501
