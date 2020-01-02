@@ -1994,18 +1994,12 @@ overload_method(types.UnicodeType, 'isnumeric')(gen_isX(_PyUnicode_IsNumeric))
 overload_method(types.UnicodeType, 'isdigit')(gen_isX(_PyUnicode_IsDigit))
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12017-L12045    # noqa: E501
-overload_method(
-    types.UnicodeType,
-    'isdecimal')(
-        gen_isX(_PyUnicode_IsDecimalDigit))
+overload_method(types.UnicodeType, 'isdecimal')(
+    gen_isX(_PyUnicode_IsDecimalDigit))
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12188-L12213    # noqa: E501
-overload_method(
-    types.UnicodeType,
-    'isprintable')(
-        gen_isX(
-            _PyUnicode_IsPrintable,
-            False))
+overload_method(types.UnicodeType, 'isprintable')(
+    gen_isX(_PyUnicode_IsPrintable, False))
 
 
 def generate_operation_func(ascii_func, unicode_nres_func):
