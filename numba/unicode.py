@@ -1763,52 +1763,6 @@ overload_method(types.UnicodeType, 'isalnum')(gen_isAlX(_Py_ISALNUM,
                                                         _unicode_is_alnum))
 
 
-@register_jitable
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9737-L9759    # noqa: E501
-def _unicode_capitalize(data, length, res, maxchars):
-    k = 0
-    maxchar = 0
-    mapped = np.zeros(3, dtype=_Py_UCS4)
-    code_point = _get_code_point(data, 0)
-
-    # https://github.com/python/cpython/commit/b015fc86f7b1f35283804bfee788cce0a5495df7/Objects/unicodeobject.c#diff-220e5da0d1c8abf508b25c02da6ca16c    # noqa: E501
-    if _py38_or_later:
-        n_res = _PyUnicode_ToTitleFull(code_point, mapped)
-    else:
-        n_res = _PyUnicode_ToUpperFull(code_point, mapped)
-
-    for m in mapped[:n_res]:
-        maxchar = max(maxchar, m)
-        _set_code_point(res, k, m)
-        k += 1
-    for idx in range(1, length):
-        mapped.fill(0)
-        code_point = _get_code_point(data, idx)
-        n_res = _lower_ucs4(code_point, data, length, idx, mapped)
-        for m in mapped[:n_res]:
-            maxchar = max(maxchar, m)
-            _set_code_point(res, k, m)
-            k += 1
-    maxchars[0] = maxchar
-    return k
-
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L361-L382    # noqa: E501
-@register_jitable
-def _ascii_capitalize(data, res):
-    code_point = _get_code_point(data, 0)
-    _set_code_point(res, 0, _Py_TOUPPER(code_point))
-    for idx in range(1, len(data)):
-        code_point = _get_code_point(data, idx)
-        _set_code_point(res, idx, _Py_TOLOWER(code_point))
-
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10765-L10774    # noqa: E501
-@overload_method(types.UnicodeType, 'capitalize')
-def unicode_capitalize(data):
-    return case_operation(_ascii_capitalize, _unicode_capitalize)
-
-
 def _is_upper(is_lower, is_upper, is_title):
     # impl is an approximate translation of:
     # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11794-L11827    # noqa: E501
@@ -2051,6 +2005,137 @@ def unicode_casefold(data):
     return case_operation(_ascii_casefold, _unicode_casefold)
 
 
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883    # noqa: E501
+@register_jitable
+def _handle_capital_sigma(data, length, idx):
+    """This is a translation of the function that handles the capital sigma."""
+    c = 0
+    j = idx - 1
+    while j >= 0:
+        c = _get_code_point(data, j)
+        if not _PyUnicode_IsCaseIgnorable(c):
+            break
+        j -= 1
+    final_sigma = (j >= 0 and _PyUnicode_IsCased(c))
+    if final_sigma:
+        j = idx + 1
+        while j < length:
+            c = _get_code_point(data, j)
+            if not _PyUnicode_IsCaseIgnorable(c):
+                break
+            j += 1
+        final_sigma = (j == length or (not _PyUnicode_IsCased(c)))
+
+    return 0x3c2 if final_sigma else 0x3c3
+
+
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895    # noqa: E501
+@register_jitable
+def _lower_ucs4(code_point, data, length, idx, mapped):
+    """This is a translation of the function that lowers a character."""
+    if code_point == 0x3A3:
+        mapped[0] = _handle_capital_sigma(data, length, idx)
+        return 1
+    return _PyUnicode_ToLowerFull(code_point, mapped)
+
+
+@register_jitable
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9737-L9759    # noqa: E501
+def _unicode_capitalize(data, length, res, maxchars):
+    k = 0
+    maxchar = 0
+    mapped = np.zeros(3, dtype=_Py_UCS4)
+    code_point = _get_code_point(data, 0)
+
+    # https://github.com/python/cpython/commit/b015fc86f7b1f35283804bfee788cce0a5495df7/Objects/unicodeobject.c#diff-220e5da0d1c8abf508b25c02da6ca16c    # noqa: E501
+    if _py38_or_later:
+        n_res = _PyUnicode_ToTitleFull(code_point, mapped)
+    else:
+        n_res = _PyUnicode_ToUpperFull(code_point, mapped)
+
+    for m in mapped[:n_res]:
+        maxchar = max(maxchar, m)
+        _set_code_point(res, k, m)
+        k += 1
+    for idx in range(1, length):
+        mapped.fill(0)
+        code_point = _get_code_point(data, idx)
+        n_res = _lower_ucs4(code_point, data, length, idx, mapped)
+        for m in mapped[:n_res]:
+            maxchar = max(maxchar, m)
+            _set_code_point(res, k, m)
+            k += 1
+    maxchars[0] = maxchar
+    return k
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L361-L382    # noqa: E501
+@register_jitable
+def _ascii_capitalize(data, res):
+    code_point = _get_code_point(data, 0)
+    _set_code_point(res, 0, _Py_TOUPPER(code_point))
+    for idx in range(1, len(data)):
+        code_point = _get_code_point(data, idx)
+        _set_code_point(res, idx, _Py_TOLOWER(code_point))
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10765-L10774    # noqa: E501
+@overload_method(types.UnicodeType, 'capitalize')
+def unicode_capitalize(data):
+    return case_operation(_ascii_capitalize, _unicode_capitalize)
+
+
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9996-L10021    # noqa: E501
+@register_jitable
+def _unicode_title(data, length, res, maxchars):
+    """This is a translation of the function that titles a unicode string."""
+    k = 0
+    previous_cased = False
+    mapped = np.empty(3, dtype=_Py_UCS4)
+    for idx in range(length):
+        mapped.fill(0)
+        code_point = _get_code_point(data, idx)
+        if previous_cased:
+            n_res = _lower_ucs4(code_point, data, length, idx, mapped)
+        else:
+            n_res = _PyUnicode_ToTitleFull(_Py_UCS4(code_point), mapped)
+        for m in mapped[:n_res]:
+            maxchar, = maxchars
+            maxchars[0] = max(maxchar, m)
+            _set_code_point(res, k, m)
+            k += 1
+        previous_cased = _PyUnicode_IsCased(_Py_UCS4(code_point))
+    return k
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L332-L352    # noqa: E501
+@register_jitable
+def _ascii_title(data, res):
+    """ Does .title() on an ASCII string """
+    previous_is_cased = False
+    for idx in range(len(data)):
+        code_point = _get_code_point(data, idx)
+        if _Py_ISLOWER(code_point):
+            if not previous_is_cased:
+                code_point = _Py_TOUPPER(code_point)
+            previous_is_cased = True
+        elif _Py_ISUPPER(code_point):
+            if previous_is_cased:
+                code_point = _Py_TOLOWER(code_point)
+            previous_is_cased = True
+        else:
+            previous_is_cased = False
+        _set_code_point(res, idx, code_point)
+
+
+# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
+@overload_method(types.UnicodeType, 'title')
+def unicode_title(data):
+    """Implements str.title()"""
+    # https://docs.python.org/3/library/stdtypes.html#str.title
+    return case_operation(_ascii_title, _unicode_title)
+
+
 if sys.version_info[:2] >= (3, 7):
     @overload_method(types.UnicodeType, 'isascii')
     def unicode_isascii(data):
@@ -2124,91 +2209,6 @@ def unicode_islower(data):
                 cased = True
         return cased
     return impl
-
-
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9856-L9883    # noqa: E501
-@register_jitable
-def _handle_capital_sigma(data, length, idx):
-    """This is a translation of the function that handles the capital sigma."""
-    c = 0
-    j = idx - 1
-    while j >= 0:
-        c = _get_code_point(data, j)
-        if not _PyUnicode_IsCaseIgnorable(c):
-            break
-        j -= 1
-    final_sigma = (j >= 0 and _PyUnicode_IsCased(c))
-    if final_sigma:
-        j = idx + 1
-        while j < length:
-            c = _get_code_point(data, j)
-            if not _PyUnicode_IsCaseIgnorable(c):
-                break
-            j += 1
-        final_sigma = (j == length or (not _PyUnicode_IsCased(c)))
-
-    return 0x3c2 if final_sigma else 0x3c3
-
-
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9885-L9895    # noqa: E501
-@register_jitable
-def _lower_ucs4(code_point, data, length, idx, mapped):
-    """This is a translation of the function that lowers a character."""
-    if code_point == 0x3A3:
-        mapped[0] = _handle_capital_sigma(data, length, idx)
-        return 1
-    return _PyUnicode_ToLowerFull(code_point, mapped)
-
-
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9996-L10021    # noqa: E501
-@register_jitable
-def _unicode_title(data, length, res, maxchars):
-    """This is a translation of the function that titles a unicode string."""
-    k = 0
-    previous_cased = False
-    mapped = np.empty(3, dtype=_Py_UCS4)
-    for idx in range(length):
-        mapped.fill(0)
-        code_point = _get_code_point(data, idx)
-        if previous_cased:
-            n_res = _lower_ucs4(code_point, data, length, idx, mapped)
-        else:
-            n_res = _PyUnicode_ToTitleFull(_Py_UCS4(code_point), mapped)
-        for m in mapped[:n_res]:
-            maxchar, = maxchars
-            maxchars[0] = max(maxchar, m)
-            _set_code_point(res, k, m)
-            k += 1
-        previous_cased = _PyUnicode_IsCased(_Py_UCS4(code_point))
-    return k
-
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/bytes_methods.c#L332-L352    # noqa: E501
-@register_jitable
-def _ascii_title(data, res):
-    """ Does .title() on an ASCII string """
-    previous_is_cased = False
-    for idx in range(len(data)):
-        code_point = _get_code_point(data, idx)
-        if _Py_ISLOWER(code_point):
-            if not previous_is_cased:
-                code_point = _Py_TOUPPER(code_point)
-            previous_is_cased = True
-        elif _Py_ISUPPER(code_point):
-            if previous_is_cased:
-                code_point = _Py_TOLOWER(code_point)
-            previous_is_cased = True
-        else:
-            previous_is_cased = False
-        _set_code_point(res, idx, code_point)
-
-
-# https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
-@overload_method(types.UnicodeType, 'title')
-def unicode_title(data):
-    """Implements str.title()"""
-    # https://docs.python.org/3/library/stdtypes.html#str.title
-    return case_operation(_ascii_title, _unicode_title)
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L13140-L13147    # noqa: E501
