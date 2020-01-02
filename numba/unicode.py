@@ -2001,8 +2001,8 @@ overload_method(types.UnicodeType, 'isdecimal')(
 overload_method(types.UnicodeType, 'isprintable')(
     gen_isX(_PyUnicode_IsPrintable, False))
 
-
-def generate_operation_func(ascii_func, unicode_nres_func):
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9863-L9908    # noqa: E501
+def case_operation(ascii_func, unicode_func):
     """Generate common case operation performer."""
     def impl(data):
         length = len(data)
@@ -2012,14 +2012,13 @@ def generate_operation_func(ascii_func, unicode_nres_func):
         if data._is_ascii:
             res = _empty_string(data._kind, length, 1)
             ascii_func(data, res)
-
             return res
 
         # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9863-L9908    # noqa: E501
         tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
         # maxchar should be inside of a list to be pass as argument by reference
         maxchars = [0]
-        newlength = unicode_nres_func(data, length, tmp, maxchars)
+        newlength = unicode_func(data, length, tmp, maxchars)
         maxchar = maxchars[0]
         newkind = _codepoint_to_kind(maxchar)
         res = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
@@ -2030,9 +2029,9 @@ def generate_operation_func(ascii_func, unicode_nres_func):
 
     return impl
 
-
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9819-L9834    # noqa: E501
 @register_jitable
-def _unicode_casefold_doer(data, length, res, maxchars):
+def _unicode_casefold(data, length, res, maxchars):
     k = 0
     mapped = np.zeros(3, dtype=_Py_UCS4)
     for idx in range(length):
@@ -2049,14 +2048,10 @@ def _unicode_casefold_doer(data, length, res, maxchars):
 
 
 @register_jitable
-def _ascii_casefold_doer(data, res):
+def _ascii_casefold(data, res):
     for idx in range(len(data)):
         code_point = _get_code_point(data, idx)
         _set_code_point(res, idx, _Py_TOLOWER(code_point))
-
-
-_do_casefold = register_jitable(generate_operation_func(_ascii_casefold_doer,
-                                                        _unicode_casefold_doer))
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10782-L10791    # noqa: E501
@@ -2065,7 +2060,7 @@ _do_casefold = register_jitable(generate_operation_func(_ascii_casefold_doer,
 @overload_method(types.UnicodeType, 'casefold')
 def unicode_casefold(data):
     """Implements str.casefold()"""
-    return _do_casefold
+    return case_operation(_ascii_casefold, _unicode_casefold)
 
 
 if sys.version_info[:2] >= (3, 7):
