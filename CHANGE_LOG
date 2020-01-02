@@ -4,8 +4,8 @@ Version 0.48.0dev
 In development
 
 
-Version 0.47.0  (Dec 20, 2019)
-------------------------------
+Version 0.47.0  (Jan 2, 2020)
+-----------------------------
 
 This release expands the capability of Numba in a number of important areas and
 is also significant as it is the last major point release with support for
@@ -182,6 +182,8 @@ Fixes:
 * PR #4991: Continuation of #4588 (Let dead code removal handle removing more of
   the unneeded code after prange conversion to parfor)
 * PR #4994: Remove xfail for test which has since had underlying issue fixed.
+* PR #5018: Fix #5011.
+* PR #5019: skip pycc test on Python 3.8 + macOS because of distutils issue
 
 CUDA Enhancements/Fixes:
 
