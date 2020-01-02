@@ -52,7 +52,7 @@ requirements:
     # avoid confusion from openblas bugs
     - libopenblas !=0.3.6      # [x86_64]
     # CUDA 8.0 or later is required for CUDA support
-    - cudatoolkit >= 8.0
+    - cudatoolkit >=8.0
 test:
   requires:
     - jinja2
