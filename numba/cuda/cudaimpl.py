@@ -641,7 +641,12 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         # Create global variable in the requested address-space
         gvmem = lmod.add_global_variable(laryty, symbol_name, addrspace)
         # Specify alignment to avoid misalignment bug
-        gvmem.align = context.get_abi_sizeof(lldtype)
+        align = context.get_abi_sizeof(lldtype)
+        # Alignment is required to be a power of 2 for shared memory. If it is
+        # not a power of 2 (e.g. for a Record array) then round up accordingly.
+        if (align & (align - 1)) != 0:
+            align = 2 ** math.ceil(math.log2(align))
+        gvmem.align = align
 
         if elemcount <= 0:
             if can_dynsized:    # dynamic shared memory
@@ -657,7 +662,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 
             gvmem.initializer = lc.Constant.undef(laryty)
 
-        if dtype not in types.number_domain:
+        other_supported_type = isinstance(dtype, (types.Record, types.Boolean))
+        if dtype not in types.number_domain and not other_supported_type:
             raise TypeError("unsupported type: %s" % dtype)
 
         # Convert to generic address-space
