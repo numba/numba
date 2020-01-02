@@ -27,7 +27,7 @@ class Test(SerialMixin, unittest.TestCase):
     def test_transpose_view(self):
         # Because the strides of transposes of views differ to those in Numpy
         # (see issue #4974), we test the shape and strides of a transpose.
-        a = np.arange(120).reshape((10, 12))
+        a = np.arange(120, dtype=np.int64).reshape((10, 12))
         a_view_t = a[::2, ::2].T
 
         d_a = cuda.to_device(a)
