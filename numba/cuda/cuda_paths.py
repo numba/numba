@@ -14,13 +14,13 @@ _env_path_tuple = namedtuple('_env_path_tuple', ['by', 'info'])
 def _find_valid_path(options):
     """Find valid path from *options*, which is a list of 2-tuple of
     (name, path).  Return first pair where *path* is not None.
-    If no valid path is found, return ('<unavailable>', None)
+    If no valid path is found, return ('<unknown>', None)
     """
     for by, data in options:
         if data is not None:
             return by, data
     else:
-        return '<unavailable>', None
+        return '<unknown>', None
 
 
 def _get_libdevice_path_decision():
@@ -30,6 +30,7 @@ def _get_libdevice_path_decision():
         ('Conda environment', get_conda_ctk()),
         ('CUDA_HOME', get_cuda_home('nvvm', 'libdevice')),
         ('System', get_system_ctk('nvvm', 'libdevice')),
+        ('Debian package', '/usr/lib/nvidia-cuda-toolkit/libdevice'),
     ]
     by, libdir = _find_valid_path(options)
     return by, libdir

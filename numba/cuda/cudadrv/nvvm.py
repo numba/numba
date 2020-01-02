@@ -108,7 +108,7 @@ class NVVM(object):
             if cls.__INSTANCE is None:
                 cls.__INSTANCE = inst = object.__new__(cls)
                 try:
-                    inst.driver = open_cudalib('nvvm', ccc=True)
+                    inst.driver = open_cudalib('nvvm')
                 except OSError as e:
                     cls.__INSTANCE = None
                     errmsg = ("libNVVM cannot be found. Do `conda install "
