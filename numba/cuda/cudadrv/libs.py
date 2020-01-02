@@ -13,7 +13,6 @@ from __future__ import print_function
 import os
 import sys
 import ctypes
-import platform
 
 from numba.findlib import find_lib
 from numba.cuda.cuda_paths import get_cuda_paths
@@ -55,10 +54,7 @@ def get_cudalib(lib, platform=None):
 
 def open_cudalib(lib):
     path = get_cudalib(lib)
-    try:
-        return ctypes.CDLL(path)
-    except:
-        raise OSError('library %s not found' % lib)
+    return ctypes.CDLL(path)
 
 
 def _get_source_variable(lib):
