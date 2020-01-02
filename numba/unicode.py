@@ -1369,30 +1369,9 @@ def unicode_zfill(string, width):
     return zfill_impl
 
 
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12126-L12161    # noqa: E501
-@overload_method(types.UnicodeType, 'isidentifier')
-def unicode_isidentifier(data):
-    """Implements UnicodeType.isidentifier()"""
-
-    def impl(data):
-        length = len(data)
-        if length == 0:
-            return False
-
-        first_cp = _get_code_point(data, 0)
-        if not _PyUnicode_IsXidStart(first_cp) and first_cp != 0x5F:
-            return False
-
-        for i in range(1, length):
-            code_point = _get_code_point(data, i)
-            if not _PyUnicode_IsXidContinue(code_point):
-                return False
-
-        return True
-
-    return impl
-
-
+# ------------------------------------------------------------------------------
+# Strip functions
+# ------------------------------------------------------------------------------
 @register_jitable
 def unicode_strip_left_bound(string, chars):
     chars = ' ' if chars is None else chars
@@ -1481,7 +1460,9 @@ def unicode_strip(string, chars=None):
     return strip_impl
 
 
-# String creation
+# ------------------------------------------------------------------------------
+# Slice functions
+# ------------------------------------------------------------------------------
 
 @register_jitable
 def normalize_str_idx(idx, length, is_start=True):
@@ -1648,6 +1629,11 @@ def unicode_getitem(s, idx):
             return getitem_slice
 
 
+# ------------------------------------------------------------------------------
+# String operations
+# ------------------------------------------------------------------------------
+
+
 @overload(operator.add)
 @overload(operator.iadd)
 def unicode_concat(a, b):
@@ -1715,6 +1701,55 @@ def unicode_not(a):
         def impl(a):
             return len(a) == 0
         return impl
+
+
+@overload_method(types.UnicodeType, 'replace')
+def unicode_replace(s, old_str, new_str, count=-1):
+    thety = count
+    if isinstance(count, types.Omitted):
+        thety = count.value
+    elif isinstance(count, types.Optional):
+        thety = count.type
+
+    if not isinstance(thety, (int, types.Integer)):
+        raise TypingError('Unsupported parameters. The parametrs '
+                          'must be Integer. Given count: {}'.format(count))
+
+    if not isinstance(old_str, (types.UnicodeType, types.NoneType)):
+        raise TypingError('The object must be a UnicodeType.'
+                          ' Given: {}'.format(old_str))
+
+    if not isinstance(new_str, types.UnicodeType):
+        raise TypingError('The object must be a UnicodeType.'
+                          ' Given: {}'.format(new_str))
+
+    def impl(s, old_str, new_str, count=-1):
+        if count == 0:
+            return s
+        if old_str == '':
+            schars = list(s)
+            if count == -1:
+                return new_str + new_str.join(schars) + new_str
+            split_result = [new_str]
+            min_count = min(len(schars), count)
+            for i in range(min_count):
+                split_result.append(schars[i])
+                if i + 1 != min_count:
+                    split_result.append(new_str)
+                else:
+                    split_result.append(''.join(schars[(i + 1):]))
+            if count > len(schars):
+                split_result.append(new_str)
+            return ''.join(split_result)
+        schars = s.split(old_str, count)
+        result = new_str.join(schars)
+        return result
+
+    return impl
+
+# ------------------------------------------------------------------------------
+# String `is*()` methods
+# ------------------------------------------------------------------------------
 
 
 # generates isalpha/isalnum
@@ -1793,51 +1828,6 @@ _unicode_is_upper = register_jitable(_is_upper(_PyUnicode_IsLowercase,
                                                _PyUnicode_IsTitlecase))
 
 
-@overload_method(types.UnicodeType, 'replace')
-def unicode_replace(s, old_str, new_str, count=-1):
-    thety = count
-    if isinstance(count, types.Omitted):
-        thety = count.value
-    elif isinstance(count, types.Optional):
-        thety = count.type
-
-    if not isinstance(thety, (int, types.Integer)):
-        raise TypingError('Unsupported parameters. The parametrs '
-                          'must be Integer. Given count: {}'.format(count))
-
-    if not isinstance(old_str, (types.UnicodeType, types.NoneType)):
-        raise TypingError('The object must be a UnicodeType.'
-                          ' Given: {}'.format(old_str))
-
-    if not isinstance(new_str, types.UnicodeType):
-        raise TypingError('The object must be a UnicodeType.'
-                          ' Given: {}'.format(new_str))
-
-    def impl(s, old_str, new_str, count=-1):
-        if count == 0:
-            return s
-        if old_str == '':
-            schars = list(s)
-            if count == -1:
-                return new_str + new_str.join(schars) + new_str
-            split_result = [new_str]
-            min_count = min(len(schars), count)
-            for i in range(min_count):
-                split_result.append(schars[i])
-                if i + 1 != min_count:
-                    split_result.append(new_str)
-                else:
-                    split_result.append(''.join(schars[(i + 1):]))
-            if count > len(schars):
-                split_result.append(new_str)
-            return ''.join(split_result)
-        schars = s.split(old_str, count)
-        result = new_str.join(schars)
-        return result
-
-    return impl
-
-
 @overload_method(types.UnicodeType, 'isupper')
 def unicode_isupper(a):
     """
@@ -1848,6 +1838,178 @@ def unicode_isupper(a):
             return _ascii_is_upper(a)
         else:
             return _unicode_is_upper(a)
+    return impl
+
+
+if sys.version_info[:2] >= (3, 7):
+    @overload_method(types.UnicodeType, 'isascii')
+    def unicode_isascii(data):
+        """Implements UnicodeType.isascii()"""
+
+        def impl(data):
+            return data._is_ascii
+        return impl
+
+
+@overload_method(types.UnicodeType, 'istitle')
+def unicode_istitle(data):
+    """
+    Implements UnicodeType.istitle()
+    The algorithm is an approximate translation from CPython:
+    https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11829-L11885 # noqa: E501
+    """
+
+    def impl(data):
+        length = len(data)
+        if length == 1:
+            char = _get_code_point(data, 0)
+            return _PyUnicode_IsUppercase(char) or _PyUnicode_IsTitlecase(char)
+
+        if length == 0:
+            return False
+
+        cased = False
+        previous_is_cased = False
+        for idx in range(length):
+            char = _get_code_point(data, idx)
+            if _PyUnicode_IsUppercase(char) or _PyUnicode_IsTitlecase(char):
+                if previous_is_cased:
+                    return False
+                previous_is_cased = True
+                cased = True
+            elif _PyUnicode_IsLowercase(char):
+                if not previous_is_cased:
+                    return False
+                previous_is_cased = True
+                cased = True
+            else:
+                previous_is_cased = False
+
+        return cased
+    return impl
+
+
+@overload_method(types.UnicodeType, 'islower')
+def unicode_islower(data):
+    """
+    impl is an approximate translation of:
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L11900-L11933    # noqa: E501
+    mixed with:
+    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L131-L156    # noqa: E501
+    """
+
+    def impl(data):
+        length = len(data)
+        if length == 1:
+            return _PyUnicode_IsLowercase(_get_code_point(data, 0))
+        if length == 0:
+            return False
+
+        cased = False
+        for idx in range(length):
+            cp = _get_code_point(data, idx)
+            if _PyUnicode_IsUppercase(cp) or _PyUnicode_IsTitlecase(cp):
+                return False
+            elif not cased and _PyUnicode_IsLowercase(cp):
+                cased = True
+        return cased
+    return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12126-L12161    # noqa: E501
+@overload_method(types.UnicodeType, 'isidentifier')
+def unicode_isidentifier(data):
+    """Implements UnicodeType.isidentifier()"""
+
+    def impl(data):
+        length = len(data)
+        if length == 0:
+            return False
+
+        first_cp = _get_code_point(data, 0)
+        if not _PyUnicode_IsXidStart(first_cp) and first_cp != 0x5F:
+            return False
+
+        for i in range(1, length):
+            code_point = _get_code_point(data, i)
+            if not _PyUnicode_IsXidContinue(code_point):
+                return False
+
+        return True
+
+    return impl
+
+
+# generator for simple unicode "isX" methods
+def gen_isX(_PyUnicode_IS_func, empty_is_false=True):
+    def unicode_isX(data):
+        def impl(data):
+            length = len(data)
+            if length == 1:
+                return _PyUnicode_IS_func(_get_code_point(data, 0))
+
+            if empty_is_false and length == 0:
+                return False
+
+            for i in range(length):
+                code_point = _get_code_point(data, i)
+                if not _PyUnicode_IS_func(code_point):
+                    return False
+
+            return True
+
+        return impl
+    return unicode_isX
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11896-L11925    # noqa: E501
+overload_method(types.UnicodeType, 'isspace')(gen_isX(_PyUnicode_IsSpace))
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12096-L12124    # noqa: E501
+overload_method(types.UnicodeType, 'isnumeric')(gen_isX(_PyUnicode_IsNumeric))
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12056-L12085    # noqa: E501
+overload_method(types.UnicodeType, 'isdigit')(gen_isX(_PyUnicode_IsDigit))
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12017-L12045    # noqa: E501
+overload_method(types.UnicodeType, 'isdecimal')(
+    gen_isX(_PyUnicode_IsDecimalDigit))
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12188-L12213    # noqa: E501
+overload_method(types.UnicodeType, 'isprintable')(
+    gen_isX(_PyUnicode_IsPrintable, False))
+
+# ------------------------------------------------------------------------------
+# String methods that apply a transformation to the characters themselves
+# ------------------------------------------------------------------------------
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9863-L9908    # noqa: E501
+def case_operation(ascii_func, unicode_func):
+    """Generate common case operation performer."""
+    def impl(data):
+        length = len(data)
+        if length == 0:
+            return _empty_string(data._kind, length, data._is_ascii)
+
+        if data._is_ascii:
+            res = _empty_string(data._kind, length, 1)
+            ascii_func(data, res)
+            return res
+
+        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9863-L9908    # noqa: E501
+        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
+        # maxchar should be inside of a list to be pass as argument by reference
+        maxchars = [0]
+        newlength = unicode_func(data, length, tmp, maxchars)
+        maxchar = maxchars[0]
+        newkind = _codepoint_to_kind(maxchar)
+        res = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
+        for i in range(newlength):
+            _set_code_point(res, i, _get_code_point(tmp, i))
+
+        return res
+
     return impl
 
 
@@ -1901,73 +2063,40 @@ def unicode_upper(a):
             return ret
     return impl
 
-# generator for simple unicode "isX" methods
 
-
-def gen_isX(_PyUnicode_IS_func, empty_is_false=True):
-    def unicode_isX(data):
-        def impl(data):
-            length = len(data)
-            if length == 1:
-                return _PyUnicode_IS_func(_get_code_point(data, 0))
-
-            if empty_is_false and length == 0:
-                return False
-
-            for i in range(length):
-                code_point = _get_code_point(data, i)
-                if not _PyUnicode_IS_func(code_point):
-                    return False
-
-            return True
-
-        return impl
-    return unicode_isX
-
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11896-L11925    # noqa: E501
-overload_method(types.UnicodeType, 'isspace')(gen_isX(_PyUnicode_IsSpace))
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12096-L12124    # noqa: E501
-overload_method(types.UnicodeType, 'isnumeric')(gen_isX(_PyUnicode_IsNumeric))
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12056-L12085    # noqa: E501
-overload_method(types.UnicodeType, 'isdigit')(gen_isX(_PyUnicode_IsDigit))
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12017-L12045    # noqa: E501
-overload_method(types.UnicodeType, 'isdecimal')(
-    gen_isX(_PyUnicode_IsDecimalDigit))
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L12188-L12213    # noqa: E501
-overload_method(types.UnicodeType, 'isprintable')(
-    gen_isX(_PyUnicode_IsPrintable, False))
-
-
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9863-L9908    # noqa: E501
-def case_operation(ascii_func, unicode_func):
-    """Generate common case operation performer."""
+@overload_method(types.UnicodeType, 'lower')
+def unicode_lower(data):
+    """Implements .lower()"""
     def impl(data):
+        # main structure is a translation of:
+        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L12380-L12388    # noqa: E501
+
+        # ASCII fast path
         length = len(data)
-        if length == 0:
-            return _empty_string(data._kind, length, data._is_ascii)
-
         if data._is_ascii:
-            res = _empty_string(data._kind, length, 1)
-            ascii_func(data, res)
+            # This is an approximate translation of:
+            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L247-L255    # noqa: E501
+            res = _empty_string(data._kind, length, data._is_ascii)
+            for idx in range(length):
+                code_point = _get_code_point(data, idx)
+                _set_code_point(res, idx, _Py_TOLOWER(code_point))
             return res
-
-        # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9863-L9908    # noqa: E501
-        tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length, data._is_ascii)
-        # maxchar should be inside of a list to be pass as argument by reference
-        maxchars = [0]
-        newlength = unicode_func(data, length, tmp, maxchars)
-        maxchar = maxchars[0]
-        newkind = _codepoint_to_kind(maxchar)
-        res = _empty_string(newkind, newlength, _codepoint_is_ascii(maxchar))
-        for i in range(newlength):
-            _set_code_point(res, i, _get_code_point(tmp, i))
-
-        return res
+        else:
+            # This is an approximate translation of:
+            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
+            tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length,
+                                data._is_ascii)
+            # maxchar is inside of a list to be pass as argument by reference
+            maxchars = [0]
+            newlength = _do_upper_or_lower(data, length, tmp, maxchars,
+                                           lower=True)
+            maxchar = maxchars[0]
+            newkind = _codepoint_to_kind(maxchar)
+            res = _empty_string(newkind, newlength,
+                                _codepoint_is_ascii(maxchar))
+            for i in range(newlength):
+                _set_code_point(res, i, _get_code_point(tmp, i))
+            return res
 
     return impl
 
@@ -1996,9 +2125,6 @@ def _ascii_casefold(data, res):
         _set_code_point(res, idx, _Py_TOLOWER(code_point))
 
 
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L10782-L10791    # noqa: E501
-# mixed with
-# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9819-L9834    # noqa: E501
 @overload_method(types.UnicodeType, 'casefold')
 def unicode_casefold(data):
     """Implements str.casefold()"""
@@ -2039,8 +2165,8 @@ def _lower_ucs4(code_point, data, length, idx, mapped):
     return _PyUnicode_ToLowerFull(code_point, mapped)
 
 
-@register_jitable
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L9737-L9759    # noqa: E501
+@register_jitable
 def _unicode_capitalize(data, length, res, maxchars):
     k = 0
     maxchar = 0
@@ -2177,81 +2303,6 @@ def unicode_swapcase(data):
     return case_operation(_ascii_swapcase, _unicode_swapcase)
 
 
-if sys.version_info[:2] >= (3, 7):
-    @overload_method(types.UnicodeType, 'isascii')
-    def unicode_isascii(data):
-        """Implements UnicodeType.isascii()"""
-
-        def impl(data):
-            return data._is_ascii
-        return impl
-
-
-@overload_method(types.UnicodeType, 'istitle')
-def unicode_istitle(data):
-    """
-    Implements UnicodeType.istitle()
-    The algorithm is an approximate translation from CPython:
-    https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11829-L11885 # noqa: E501
-    """
-
-    def impl(data):
-        length = len(data)
-        if length == 1:
-            char = _get_code_point(data, 0)
-            return _PyUnicode_IsUppercase(char) or _PyUnicode_IsTitlecase(char)
-
-        if length == 0:
-            return False
-
-        cased = False
-        previous_is_cased = False
-        for idx in range(length):
-            char = _get_code_point(data, idx)
-            if _PyUnicode_IsUppercase(char) or _PyUnicode_IsTitlecase(char):
-                if previous_is_cased:
-                    return False
-                previous_is_cased = True
-                cased = True
-            elif _PyUnicode_IsLowercase(char):
-                if not previous_is_cased:
-                    return False
-                previous_is_cased = True
-                cased = True
-            else:
-                previous_is_cased = False
-
-        return cased
-    return impl
-
-
-@overload_method(types.UnicodeType, 'islower')
-def unicode_islower(data):
-    """
-    impl is an approximate translation of:
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L11900-L11933    # noqa: E501
-    mixed with:
-    https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L131-L156    # noqa: E501
-    """
-
-    def impl(data):
-        length = len(data)
-        if length == 1:
-            return _PyUnicode_IsLowercase(_get_code_point(data, 0))
-        if length == 0:
-            return False
-
-        cased = False
-        for idx in range(length):
-            cp = _get_code_point(data, idx)
-            if _PyUnicode_IsUppercase(cp) or _PyUnicode_IsTitlecase(cp):
-                return False
-            elif not cased and _PyUnicode_IsLowercase(cp):
-                cased = True
-        return cased
-    return impl
-
-
 # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L9946-L9965    # noqa: E501
 @register_jitable
 def _do_upper_or_lower(data, length, res, maxchars, lower):
@@ -2269,43 +2320,6 @@ def _do_upper_or_lower(data, length, res, maxchars, lower):
             _set_code_point(res, k, m)
             k += 1
     return k
-
-
-@overload_method(types.UnicodeType, 'lower')
-def unicode_lower(data):
-    """Implements .lower()"""
-    def impl(data):
-        # main structure is a translation of:
-        # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L12380-L12388    # noqa: E501
-
-        # ASCII fast path
-        length = len(data)
-        if data._is_ascii:
-            # This is an approximate translation of:
-            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/bytes_methods.c#L247-L255    # noqa: E501
-            res = _empty_string(data._kind, length, data._is_ascii)
-            for idx in range(length):
-                code_point = _get_code_point(data, idx)
-                _set_code_point(res, idx, _Py_TOLOWER(code_point))
-            return res
-        else:
-            # This is an approximate translation of:
-            # https://github.com/python/cpython/blob/201c8f79450628241574fba940e08107178dc3a5/Objects/unicodeobject.c#L10023-L10069    # noqa: E501
-            tmp = _empty_string(PY_UNICODE_4BYTE_KIND, 3 * length,
-                                data._is_ascii)
-            # maxchar is inside of a list to be pass as argument by reference
-            maxchars = [0]
-            newlength = _do_upper_or_lower(data, length, tmp, maxchars,
-                                           lower=True)
-            maxchar = maxchars[0]
-            newkind = _codepoint_to_kind(maxchar)
-            res = _empty_string(newkind, newlength,
-                                _codepoint_is_ascii(maxchar))
-            for i in range(newlength):
-                _set_code_point(res, i, _get_code_point(tmp, i))
-            return res
-
-    return impl
 
 
 @lower_builtin('getiter', types.UnicodeType)
