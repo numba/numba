@@ -64,7 +64,7 @@ data_type.define(intp)
 @njit
 def pushpop(size):
     """
-    Creates a list of decending numbers from size-1 to 0.
+    Creates a list of descending numbers from size-1 to 0.
     """
     stack = Stack()
 

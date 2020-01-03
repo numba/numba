@@ -125,7 +125,7 @@ class List(object):
                                                      i.stop,
                                                      i.step)
             self.tc.assertEqual(status, LIST_OK)
-        # must be an intger, deferr to pop
+        # must be an integer, defer to pop
         else:
             self.list_pop(i)
 
@@ -383,7 +383,7 @@ class TestListImpl(TestCase):
         self.assertEqual(len(l), 8)
 
         # delete every second item
-        # no slice default normalization here, be explict about start anb stop
+        # no slice default normalization here, be explicit about start anb stop
         del l[0:8:2]
         self.assertEqual(len(l), 4)
         self.assertEqual(list(l), values[1:8:2])

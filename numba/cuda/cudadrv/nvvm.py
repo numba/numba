@@ -23,7 +23,7 @@ ADDRSPACE_SHARED = 3
 ADDRSPACE_CONSTANT = 4
 ADDRSPACE_LOCAL = 5
 
-# Opaque handle for comilation unit
+# Opaque handle for compilation unit
 nvvm_program = c_void_p
 
 # Result code
@@ -164,7 +164,7 @@ class CompilationUnit(object):
         self.driver.check_error(err, 'Failed to add module')
 
     def compile(self, **options):
-        """Perform Compliation
+        """Perform Compilation
 
         The valid compiler options are
 

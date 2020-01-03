@@ -654,7 +654,7 @@ class StencilFunc(object):
 
         stencil_stub_last_label = max(stencil_ir.blocks.keys()) + 1
 
-        # Shift lables in the kernel copy so they are guaranteed unique
+        # Shift labels in the kernel copy so they are guaranteed unique
         # and don't conflict with any labels in the stencil_ir.
         kernel_copy.blocks = ir_utils.add_offset_to_labels(
                                 kernel_copy.blocks, stencil_stub_last_label)

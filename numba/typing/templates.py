@@ -695,7 +695,7 @@ class AttributeTemplate(object):
     @classmethod
     def do_class_init(cls):
         """
-        Class-wide initialization.  Can be overriden by subclasses to
+        Class-wide initialization.  Can be overridden by subclasses to
         register permanent typing or target hooks.
         """
 

@@ -42,7 +42,7 @@ def inspect_function(function, target=None):
         - "numba_type": str or None
             The numba type object of the function if supported.
         - "explained": str
-            A textual descrption of the support.
+            A textual description of the support.
         - "source_infos": dict
             A dictionary containing the source location of each definition.
     """

@@ -243,7 +243,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         def setup(start=10, stop=20):
             # initialize regular list
             rl_ = list(range(start, stop))
-            # intialize typed list
+            # initialize typed list
             tl_ = List.empty_list(int32)
             # populate typed list
             for i in range(start, stop):
@@ -380,7 +380,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         def setup(start=10, stop=20):
             # initialize regular list
             rl_ = list(range(start, stop))
-            # intialize typed list
+            # initialize typed list
             tl_ = List.empty_list(int32)
             # populate typed list
             for i in range(start, stop):
