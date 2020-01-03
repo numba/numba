@@ -188,6 +188,7 @@ def check_array_compatibility(ary1, ary2):
 
 
 def to_device(ary, stream=0, copy=True, to=None):
+    ary = np.array(ary, copy=False, subok=True)
     sentry_contiguous(ary)
     if to is None:
         buffer_dtype = np.int64 if ary.dtype.char in 'Mm' else ary.dtype
