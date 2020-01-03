@@ -261,6 +261,9 @@ class ForAll(object):
         self.sharedmem = sharedmem
 
     def __call__(self, *args):
+        if self.ntasks == 0:
+            return
+
         if isinstance(self.kernel, AutoJitCUDAKernel):
             kernel = self.kernel.specialize(*args)
         else:

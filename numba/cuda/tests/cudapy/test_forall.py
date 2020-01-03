@@ -34,6 +34,19 @@ class TestForAll(SerialMixin, unittest.TestCase):
         bar.forall(y.size)(a, x, y)
         np.testing.assert_array_almost_equal(y, a * x + oldy, decimal=3)
 
+    def test_forall_no_work(self):
+        # Ensure that forall doesn't launch a kernel with no blocks when called
+        # with 0 elements. See Issue #5017.
+
+        @cuda.jit
+        def foo(x):
+            i = cuda.grid(1)
+            if i < x.size:
+                x[i] += 1
+
+        arr = np.arange(11)
+        foo.forall(0)(arr)
+
 
 if __name__ == '__main__':
     unittest.main()
