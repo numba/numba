@@ -441,9 +441,9 @@ class DefaultPassBuilder(object):
 
         # pre typing
         if not state.flags.no_rewrites:
-            pm.add_pass(GenericRewrites, "nopython rewrites")
             pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
             pm.add_pass(DeadBranchPrune, "dead branch pruning")
+            pm.add_pass(GenericRewrites, "nopython rewrites")
 
         pm.add_pass(InlineClosureLikes,
                     "inline calls to locally defined closures")
