@@ -18,6 +18,7 @@ try:
 except ImportError:
     pygments = None
 
+
 @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
 class TestAnnotation(unittest.TestCase):
 
