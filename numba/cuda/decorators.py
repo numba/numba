@@ -39,7 +39,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     :param debug: If True, check for exceptions thrown when executing the
        kernel. Since this degrades performance, this should only be used for
        debugging purposes.  Defaults to False.  (The default value can be
-       overriden by setting environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
+       overridden by setting environment variable ``NUMBA_CUDA_DEBUGINFO=1``.)
     :param fastmath: If true, enables flush-to-zero and fused-multiply-add,
        disables precise division and square root. This parameter has no effect
        on device function, whose fastmath setting depends on the kernel function
@@ -51,6 +51,9 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
 
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
+
+    if 'boundscheck' in kws:
+        raise NotImplementedError("bounds checking is not supported for CUDA")
 
     fastmath = kws.get('fastmath', False)
     if argtypes is None and not sigutils.is_signature(func_or_sig):
@@ -126,4 +129,3 @@ def convert_types(restype, argtypes):
         argtypes, restype = sigutils.normalize_signature(restype)
 
     return restype, argtypes
-

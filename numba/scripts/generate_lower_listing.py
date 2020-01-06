@@ -64,7 +64,8 @@ def format_signature(sig):
     return '`({0})`'.format(', '.join(out))
 
 
-github_url = 'https://github.com/numba/numba/blob/{commit}/{path}#L{firstline}-L{lastline}'
+github_url = ('https://github.com/numba/numba/blob/'
+              '{commit}/{path}#L{firstline}-L{lastline}')
 
 description = """
 This lists all lowering definition registered to the CPU target.

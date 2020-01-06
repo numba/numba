@@ -152,7 +152,8 @@ class TestLowering(MemoryLeakMixin, TestCase):
                 # Force the static_getitem to have a literal type as
                 # index to replicate the problem.
                 for inst, sig in state.calltypes.items():
-                    if isinstance(inst, ir.Expr) and inst.op == 'static_getitem':
+                    if (isinstance(inst, ir.Expr) and
+                            inst.op == 'static_getitem'):
                         [obj, idx] = sig.args
                         new_sig = sig.replace(args=(obj,
                                                     types.literal(inst.index)))
@@ -163,7 +164,8 @@ class TestLowering(MemoryLeakMixin, TestCase):
         class CustomPipeline(CompilerBase):
             def define_pipelines(self):
                 pm = DefaultPassBuilder.define_nopython_pipeline(self.state)
-                pm.add_pass_after(ForceStaticGetitemLiteral, NopythonTypeInference)
+                pm.add_pass_after(ForceStaticGetitemLiteral,
+                                  NopythonTypeInference)
                 pm.finalize()
                 return [pm]
 

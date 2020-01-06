@@ -30,7 +30,7 @@ class TestCase(unittest.TestCase):
         """
         lines = self.get_testsuite_listing(args)
         last_line = lines[-1]
-        self.assertTrue(last_line.endswith('tests found'))
+        self.assertTrue('tests found' in last_line)
         number = int(last_line.split(' ')[0])
         # There may be some "skipped" messages at the beginning,
         # so do an approximate check.
@@ -103,6 +103,22 @@ class TestCase(unittest.TestCase):
             included = get_count(['--tags=%s' % tag, 'numba.tests'])
             excluded = get_count(['--exclude-tags=%s' % tag, 'numba.tests'])
             self.assertEqual(total, included + excluded)
+
+    def test_check_slice(self):
+        tmp = self.get_testsuite_listing(['-j','0,5,1'])
+        l = [x for x in tmp if x.startswith('numba.')]
+        self.assertEqual(len(l), 5)
+
+    def test_check_slicing_equivalent(self):
+        def filter_test(xs):
+            return [x for x in xs if x.startswith('numba.')]
+        full = filter_test(self.get_testsuite_listing([]))
+        sliced = []
+        for i in range(3):
+            subset = self.get_testsuite_listing(['-j', '{},None,3'.format(i)])
+            sliced.extend(filter_test(subset))
+        # The tests must be equivalent
+        self.assertEqual(sorted(full), sorted(sliced))
 
 
 if __name__ == '__main__':

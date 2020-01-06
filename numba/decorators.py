@@ -21,31 +21,18 @@ _logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Decorators
 
-def autojit(*args, **kws):
-    """Deprecated.
-
-    Use jit instead.  Calls to jit internally.
-    """
-    url = ("http://numba.pydata.org/numba-doc/latest/reference/"
-            "deprecation.html#deprecation-of-numba-autojit")
-    msg = ("autojit is deprecated, use jit instead, which provides "
-           "the same functionality. For more information visit %s" % url)
-    warnings.warn(NumbaDeprecationWarning(msg))
-    return jit(*args, **kws)
-
-
 _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
 
 def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
-        pipeline_class=None, **options):
+        pipeline_class=None, boundscheck=False, **options):
     """
     This decorator is used to compile a Python function into native code.
 
     Args
     -----
-    signature:
+    signature_or_function:
         The (optional) signature or list of signatures to be compiled.
         If not passed, required signatures will be compiled when the
         decorated function is called, depending on the argument values.
@@ -99,6 +86,16 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
                 NOTE: This inlining is performed at the Numba IR level and is in
                 no way related to LLVM inlining.
 
+            boundscheck: bool
+                Set to True to enable bounds checking for array indices. Out
+                of bounds accesses will raise IndexError. The default is to
+                not do bounds checking. If bounds checking is disabled, out of
+                bounds accesses can produce garbage results or segfaults.
+                However, enabling bounds checking will slow down typical
+                functions, so it is recommended to only use this flag for
+                debugging. You can also set the NUMBA_BOUNDSCHECK environment
+                variable to 0 or 1 to globally override this flag.
+
     Returns
     --------
     A callable usable as a compiled function.  Actual compiling will be
@@ -148,6 +145,8 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
+
+    options['boundscheck'] = boundscheck
 
     # Handle signature
     if signature_or_function is None:

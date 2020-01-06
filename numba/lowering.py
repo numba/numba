@@ -9,7 +9,7 @@ from functools import partial
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from . import (_dynfunc, cgutils, config, funcdesc, generators, ir, types,
-               typing, utils)
+               typing, utils, ir_utils)
 from .errors import (LoweringError, new_error_context, TypingError,
                      LiteralTypingError)
 from .targets import removerefctpass
@@ -104,7 +104,7 @@ class BaseLower(object):
 
         # Specializes the target context as seen inside the Lowerer
         # This adds:
-        #  - environment: the python exceution environment
+        #  - environment: the python execution environment
         self.context = context.subtarget(environment=self.env,
                                          fndesc=self.fndesc)
 
@@ -159,10 +159,26 @@ class BaseLower(object):
         Called before lowering a block.
         """
 
+    def post_block(self, block):
+        """
+        Called after lowering a block.
+        """
+
     def return_exception(self, exc_class, exc_args=None, loc=None):
-        self.call_conv.return_user_exc(self.builder, exc_class, exc_args,
-                                       loc=loc,
-                                       func_name=self.func_ir.func_id.func_name)
+        """Propagate exception to the caller.
+        """
+        self.call_conv.return_user_exc(
+            self.builder, exc_class, exc_args,
+            loc=loc, func_name=self.func_ir.func_id.func_name,
+        )
+
+    def set_exception(self, exc_class, exc_args=None, loc=None):
+        """Set exception state in the current function.
+        """
+        self.call_conv.set_static_user_exc(
+            self.builder, exc_class, exc_args,
+            loc=loc, func_name=self.func_ir.func_id.func_name,
+        )
 
     def emit_environment_object(self):
         """Emit a pointer to hold the Environment object.
@@ -188,7 +204,19 @@ class BaseLower(object):
 
         if config.DUMP_LLVM:
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
-            print(self.module)
+            if config.HIGHLIGHT_DUMPS:
+                try:
+                    from pygments import highlight
+                    from pygments.lexers import LlvmLexer as lexer
+                    from pygments.formatters import Terminal256Formatter
+                    print(highlight(self.module.__repr__(), lexer(),
+                                    Terminal256Formatter(
+                                        style='solarized-light')))
+                except ImportError:
+                    msg = "Please install pygments to see highlighted dumps"
+                    raise ValueError(msg)
+            else:
+                print(self.module)
             print('=' * 80)
 
         # Special optimization to remove NRT on functions that do not need it.
@@ -258,6 +286,7 @@ class BaseLower(object):
             with new_error_context('lowering "{inst}" at {loc}', inst=inst,
                                    loc=self.loc, errcls_=defaulterrcls):
                 self.lower_inst(inst)
+        self.post_block(block)
 
     def create_cpython_wrapper(self, release_gil=False):
         """
@@ -293,6 +322,34 @@ lower_extensions = {}
 
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
+
+    def pre_block(self, block):
+        from numba.unsafe import eh
+
+        super(Lower, self).pre_block(block)
+
+        # Detect if we are in a TRY block by looking for a call to
+        # `eh.exception_check`.
+        for call in block.find_exprs(op='call'):
+            defn = ir_utils.guard(
+                ir_utils.get_definition, self.func_ir, call.func,
+            )
+            if defn is not None and isinstance(defn, ir.Global):
+                if defn.value is eh.exception_check:
+                    if isinstance(block.terminator, ir.Branch):
+                        targetblk = self.blkmap[block.terminator.truebr]
+                        # NOTE: This hacks in an attribute for call_conv to
+                        #       pick up. This hack is no longer needed when
+                        #       all old-style implementations are gone.
+                        self.builder._in_try_block = {'target': targetblk}
+                        break
+
+    def post_block(self, block):
+        # Clean-up
+        try:
+            del self.builder._in_try_block
+        except AttributeError:
+            pass
 
     def lower_inst(self, inst):
         # Set debug location for all subsequent LL instructions
@@ -340,7 +397,8 @@ class Lower(BaseLower):
             try:
                 impl = self.context.get_function('static_setitem', signature)
             except NotImplementedError:
-                return self.lower_setitem(inst.target, inst.index_var, inst.value, signature)
+                return self.lower_setitem(inst.target, inst.index_var,
+                                          inst.value, signature)
             else:
                 target = self.loadvar(inst.target.name)
                 value = self.loadvar(inst.value.name)
@@ -355,7 +413,8 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.SetItem):
             signature = self.fndesc.calltypes[inst]
             assert signature is not None
-            return self.lower_setitem(inst.target, inst.index, inst.value, signature)
+            return self.lower_setitem(inst.target, inst.index, inst.value,
+                                      signature)
 
         elif isinstance(inst, ir.StoreMap):
             signature = self.fndesc.calltypes[inst]
@@ -408,6 +467,9 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.StaticRaise):
             self.lower_static_raise(inst)
 
+        elif isinstance(inst, ir.StaticTryRaise):
+            self.lower_static_try_raise(inst)
+
         else:
             for _class, func in lower_extensions.items():
                 if isinstance(inst, _class):
@@ -451,6 +513,13 @@ class Lower(BaseLower):
             self.return_exception(None, loc=self.loc)
         else:
             self.return_exception(inst.exc_class, inst.exc_args, loc=self.loc)
+
+    def lower_static_try_raise(self, inst):
+        if inst.exc_class is None:
+            # Reraise
+            self.set_exception(None, loc=self.loc)
+        else:
+            self.set_exception(inst.exc_class, inst.exc_args, loc=self.loc)
 
     def lower_assign(self, ty, inst):
         value = inst.value
@@ -522,7 +591,8 @@ class Lower(BaseLower):
 
     def lower_binop(self, resty, expr, op):
         # if op in utils.OPERATORS_TO_BUILTINS:
-        # map operator.the_op => the corresponding types.Function() TODO: is this looks dodgy ...
+        # map operator.the_op => the corresponding types.Function()
+        # TODO: is this looks dodgy ...
         op = self.context.typing_context.resolve_value_type(op)
 
         lhs = expr.lhs
@@ -549,7 +619,8 @@ class Lower(BaseLower):
                 return None
             try:
                 if isinstance(op, types.Function):
-                    static_sig = op.get_call_type(self.context.typing_context, tys, {})
+                    static_sig = op.get_call_type(self.context.typing_context,
+                                                  tys, {})
                 else:
                     static_sig = typing.signature(signature.return_type, *tys)
             except TypingError:
@@ -710,7 +781,8 @@ class Lower(BaseLower):
             res = self._lower_call_ExternalFunction(fnty, expr, signature)
 
         elif isinstance(fnty, types.ExternalFunctionPointer):
-            res = self._lower_call_ExternalFunctionPointer(fnty, expr, signature)
+            res = self._lower_call_ExternalFunctionPointer(
+                fnty, expr, signature)
 
         elif isinstance(fnty, types.RecursiveCall):
             res = self._lower_call_RecursiveCall(fnty, expr, signature)
@@ -1038,7 +1110,8 @@ class Lower(BaseLower):
                 # Both get_function() and the returned implementation can
                 # raise NotImplementedError if the types aren't supported
                 impl = self.context.get_function("static_getitem", signature)
-                return impl(self.builder, (self.loadvar(expr.value.name), expr.index))
+                return impl(self.builder,
+                            (self.loadvar(expr.value.name), expr.index))
             except NotImplementedError:
                 if expr.index_var is None:
                     raise
@@ -1047,7 +1120,15 @@ class Lower(BaseLower):
                 signature = self.fndesc.calltypes[expr]
                 return self.lower_getitem(resty, expr, expr.value,
                                           expr.index_var, signature)
-
+        elif expr.op == "typed_getitem":
+            signature = typing.signature(
+                resty,
+                self.typeof(expr.value.name),
+                self.typeof(expr.index.name),
+            )
+            impl = self.context.get_function("typed_getitem", signature)
+            return impl(self.builder, (self.loadvar(expr.value.name),
+                        self.loadvar(expr.index.name)))
         elif expr.op == "getitem":
             signature = self.fndesc.calltypes[expr]
             return self.lower_getitem(resty, expr, expr.value, expr.index,
@@ -1065,7 +1146,8 @@ class Lower(BaseLower):
         elif expr.op == "build_list":
             itemvals = [self.loadvar(i.name) for i in expr.items]
             itemtys = [self.typeof(i.name) for i in expr.items]
-            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
+            castvals = [self.context.cast(self.builder, val, fromty,
+                                          resty.dtype)
                         for val, fromty in zip(itemvals, itemtys)]
             return self.context.build_list(self.builder, resty, castvals)
 
@@ -1074,7 +1156,8 @@ class Lower(BaseLower):
             items = expr.items[::-1]
             itemvals = [self.loadvar(i.name) for i in items]
             itemtys = [self.typeof(i.name) for i in items]
-            castvals = [self.context.cast(self.builder, val, fromty, resty.dtype)
+            castvals = [self.context.cast(self.builder, val, fromty,
+                                          resty.dtype)
                         for val, fromty in zip(itemvals, itemtys)]
             return self.context.build_set(self.builder, resty, castvals)
 
@@ -1148,9 +1231,11 @@ class Lower(BaseLower):
         # Store variable
         ptr = self.getvar(name)
         if value.type != ptr.type.pointee:
-            msg = ("Storing {value.type} to ptr of {ptr.type.pointee} ('{name}'). "
-                   "FE type {fetype}").format(value=value, ptr=ptr,
-                                              fetype=fetype, name=name)
+            msg = ("Storing {value.type} to ptr of {ptr.type.pointee} "
+                   "('{name}'). FE type {fetype}").format(value=value,
+                                                          ptr=ptr,
+                                                          fetype=fetype,
+                                                          name=name)
             raise AssertionError(msg)
 
         self.builder.store(value, ptr)

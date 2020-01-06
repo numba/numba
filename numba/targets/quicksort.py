@@ -27,7 +27,7 @@ SMALL_QUICKSORT = 15
 MAX_STACK = 100
 
 
-def make_quicksort_impl(wrap, lt=None, is_argsort=False):
+def make_quicksort_impl(wrap, lt=None, is_argsort=False, is_list=False):
 
     intp = types.intp
     zero = intp(0)
@@ -36,9 +36,14 @@ def make_quicksort_impl(wrap, lt=None, is_argsort=False):
     # or normal sorting.  Note the genericity may make basic sort()
     # slightly slower (~5%)
     if is_argsort:
-        @wrap
-        def make_res(A):
-            return np.arange(A.size)
+        if is_list:
+            @wrap
+            def make_res(A):
+                return [x for x in range(len(A))]
+        else:
+            @wrap
+            def make_res(A):
+                return np.arange(A.size)
 
         @wrap
         def GET(A, idx_or_val):

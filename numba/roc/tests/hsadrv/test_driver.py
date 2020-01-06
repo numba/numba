@@ -304,7 +304,7 @@ class TestMemory(_TestBase):
         self.assertNotEqual(sym.kernel_object, 0)
         self.assertGreater(sym.kernarg_segment_size, 0)
 
-        # attempt kernel excution
+        # attempt kernel execution
         import ctypes
         import numpy as np
 

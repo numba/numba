@@ -6,14 +6,17 @@ try:
     from . import _typeconv
 except ImportError as e:
     from ..errors import feedback_details as reportme
+    import sys
     url = "http://numba.pydata.org/numba-doc/latest/developer/contributing.html"
+    dashes = '-' * 80
     msg = ("Numba could not be imported.\nIf you are seeing this message and "
            "are undertaking Numba development work, you may need to re-run:\n\n"
            "python setup.py build_ext --inplace\n\n(Also, please check the "
            "development set up guide %s.)\n\nIf you are not working on Numba "
-           "development:\n%s\nThe original error was: '%s'") % \
-           (url, reportme, str(e))
-    raise ImportError(msg)
+           "development:\n%s\nThe original error was: '%s'\n" + dashes + "\nIf "
+           "possible please include the following in your error report:\n\n"
+           "sys.executable: %s\n")
+    raise ImportError(msg % (url, reportme, str(e), sys.executable))
 
 from . import castgraph, Conversion
 from .. import types

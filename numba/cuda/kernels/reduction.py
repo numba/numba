@@ -143,7 +143,7 @@ def _gpu_reduce_factory(fn, nbtype):
 
         Launch config:
 
-        Blocksize must be mutiple of warpsize and it is limited to 4 warps.
+        Blocksize must be multiple of warpsize and it is limited to 4 warps.
         """
         tid = cuda.threadIdx.x
 

@@ -217,7 +217,7 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     if (!self->fallbackdef && objectmode){
         self->fallbackdef = cfunc;
     }
-    /* Add interpeter fallback */
+    /* Add interpreter fallback */
     if (!self->interpdef && interpmode) {
         self->interpdef = cfunc;
     }
