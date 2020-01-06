@@ -3,7 +3,7 @@ trigger:
 
 variables:
   # Change the following along with adding new TEST_START_INDEX.
-  TEST_COUNT: 18
+  TEST_COUNT: 16
 
 jobs:
 # Mac and Linux use the same template with different matrixes
@@ -46,68 +46,58 @@ jobs:
         RUN_COVERAGE: yes
         RUN_FLAKE8: yes
         TEST_START_INDEX: 4
-      py36_np112_doc:
+      py36_np117_doc:
         PYTHON: '3.6'
-        NUMPY: '1.12'
+        NUMPY: '1.17'
         CONDA_ENV: travisci
         BUILD_DOC: yes
         TEST_START_INDEX: 5
-      py36_np113:
-        PYTHON: '3.6'
-        NUMPY: '1.13'
-        CONDA_ENV: travisci
-        TEST_START_INDEX: 6
-      py37_np114:
-        PYTHON: '3.7'
-        NUMPY: '1.14'
-        CONDA_ENV: travisci
-        TEST_START_INDEX: 7
       py37_np115:
         PYTHON: '3.7'
         NUMPY: '1.15'
         CONDA_ENV: travisci
-        TEST_START_INDEX: 8
+        TEST_START_INDEX: 6
       py37_np116_svml:
         PYTHON: '3.7'
         NUMPY: '1.16'
         CONDA_ENV: travisci
         TEST_SVML: yes
-        TEST_START_INDEX: 9
+        TEST_START_INDEX: 7
       py37_np116_vanilla:
         PYTHON: '3.7'
         NUMPY: '1.16'
         CONDA_ENV: travisci
         VANILLA_INSTALL: yes
-        TEST_START_INDEX: 10
+        TEST_START_INDEX: 8
       py36_np111_32bit:
         PYTHON: '3.6'
         NUMPY: '1.11'
         CONDA_ENV: travisci
         BITS32: yes
-        TEST_START_INDEX: 11
+        TEST_START_INDEX: 9
       py37_np115_32bit:
         PYTHON: '3.7'
         NUMPY: '1.15'
         CONDA_ENV: travisci
         BITS32: yes
-        TEST_START_INDEX: 12
+        TEST_START_INDEX: 10
       py37_np116_omp:
         PYTHON: '3.7'
         NUMPY: '1.16'
         CONDA_ENV: travisci
         TEST_THREADING: omp
-        TEST_START_INDEX: 13
+        TEST_START_INDEX: 11
       py37_np116_workqueue:
         PYTHON: '3.7'
         NUMPY: '1.16'
         CONDA_ENV: travisci
         TEST_THREADING: workqueue
-        TEST_START_INDEX: 14
+        TEST_START_INDEX: 12
       py38_np117:
         PYTHON: '3.8'
         NUMPY: '1.17'
         CONDA_ENV: travisci
-        TEST_START_INDEX: 15
+        TEST_START_INDEX: 13
 
 - template: buildscripts/azure/azure-windows.yml
   parameters:
