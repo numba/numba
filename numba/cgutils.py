@@ -10,7 +10,7 @@ import functools
 
 from llvmlite import ir
 
-from . import utils, config
+from . import utils, config, types
 
 
 bool_t = ir.IntType(1)
@@ -101,7 +101,8 @@ class _StructProxy(object):
         self._context = context
         self._datamodel = self._context.data_model_manager[self._fe_type]
         if not isinstance(self._datamodel, datamodel.StructModel):
-            raise TypeError("Not a structure model: {0}".format(self._datamodel))
+            raise TypeError(
+                "Not a structure model: {0}".format(self._datamodel))
         self._builder = builder
 
         self._be_type = self._get_be_type(self._datamodel)
@@ -656,16 +657,53 @@ def unpack_tuple(builder, tup, count=None):
     return vals
 
 
-def get_item_pointer(builder, aryty, ary, inds, wraparound=False):
+def get_item_pointer(context, builder, aryty, ary, inds, wraparound=False,
+                     boundscheck=False):
+    # Set boundscheck=True for any pointer access that should be
+    # boundschecked. do_boundscheck() will handle enabling or disabling the
+    # actual boundschecking based on the user config.
     shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
     strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
-    return get_item_pointer2(builder, data=ary.data, shape=shapes,
+    return get_item_pointer2(context, builder, data=ary.data, shape=shapes,
                              strides=strides, layout=aryty.layout, inds=inds,
-                             wraparound=wraparound)
+                             wraparound=wraparound, boundscheck=boundscheck)
 
 
-def get_item_pointer2(builder, data, shape, strides, layout, inds,
-                      wraparound=False):
+def do_boundscheck(context, builder, ind, dimlen, axis=None):
+    def _dbg():
+        # Remove this when we figure out how to include this information
+        # in the error message.
+        if axis is not None:
+            if isinstance(axis, int):
+                printf(builder, "debug: IndexError: index %d is out of bounds "
+                       "for axis {} with size %d\n".format(axis), ind, dimlen)
+            else:
+                printf(builder, "debug: IndexError: index %d is out of bounds "
+                       "for axis %d with size %d\n".format(axis), ind, axis,
+                       dimlen)
+        else:
+            printf(builder,
+                   "debug: IndexError: index %d is out of bounds for size %d\n",
+                   ind, dimlen)
+
+    msg = "index is out of bounds"
+    out_of_bounds_upper = builder.icmp_signed('>=', ind, dimlen)
+    with if_unlikely(builder, out_of_bounds_upper):
+        if config.FULL_TRACEBACKS:
+            _dbg()
+        context.call_conv.return_user_exc(builder, IndexError, (msg,))
+    out_of_bounds_lower = builder.icmp_signed('<', ind, ind.type(0))
+    with if_unlikely(builder, out_of_bounds_lower):
+        if config.FULL_TRACEBACKS:
+            _dbg()
+        context.call_conv.return_user_exc(builder, IndexError, (msg,))
+
+
+def get_item_pointer2(context, builder, data, shape, strides, layout, inds,
+                      wraparound=False, boundscheck=False):
+    # Set boundscheck=True for any pointer access that should be
+    # boundschecked. do_boundscheck() will handle enabling or disabling the
+    # actual boundschecking based on the user config.
     if wraparound:
         # Wraparound
         indices = []
@@ -676,6 +714,10 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
             indices.append(selected)
     else:
         indices = inds
+    if boundscheck:
+        for axis, (ind, dimlen) in enumerate(zip(indices, shape)):
+            do_boundscheck(context, builder, ind, dimlen, axis)
+
     if not indices:
         # Indexing with empty tuple
         return builder.gep(data, [int32_t(0)])
@@ -736,7 +778,7 @@ def is_scalar_zero(builder, value):
 
 def is_not_scalar_zero(builder, value):
     """
-    Return a predicate representin whether a *value* is not equal to zero.
+    Return a predicate representing whether a *value* is not equal to zero.
     (not exactly "not is_scalar_zero" because of nans)
     """
     return _scalar_pred_against_zero(
@@ -863,7 +905,7 @@ def memset(builder, ptr, size, value):
     ptr = builder.bitcast(ptr, voidptr_t)
     if isinstance(value, int):
         value = int8_t(value)
-    builder.call(fn, [ptr, value, size, int32_t(0), bool_t(0)])
+    builder.call(fn, [ptr, value, size, bool_t(0)])
 
 
 def global_constant(builder_or_module, name, value, linkage='internal'):
@@ -953,12 +995,10 @@ def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
 
     memcpy = builder.module.declare_intrinsic(func_name,
                                               [voidptr_t, voidptr_t, size_t])
-    align = ir.Constant(ir.IntType(32), align)
     is_volatile = false_bit
     builder.call(memcpy, [builder.bitcast(dst, voidptr_t),
                           builder.bitcast(src, voidptr_t),
                           builder.mul(count, itemsize),
-                          align,
                           is_volatile])
 
 
@@ -975,7 +1015,8 @@ def raw_memmove(builder, dst, src, count, itemsize, align=1):
     Emit a raw memmove() call for `count` items of size `itemsize`
     from `src` to `dest`.
     """
-    return _raw_memcpy(builder, 'llvm.memmove', dst, src, count, itemsize, align)
+    return _raw_memcpy(builder, 'llvm.memmove', dst, src, count,
+                       itemsize, align)
 
 
 def muladd_with_overflow(builder, a, b, c):
@@ -1060,8 +1101,8 @@ def snprintf_stackbuffer(builder, bufsz, format, *args):
 if utils.PY3:
     def normalize_ir_text(text):
         """
-        Normalize the given string to latin1 compatible encoding that is suitable
-        for use in LLVM IR.
+        Normalize the given string to latin1 compatible encoding that is
+        suitable for use in LLVM IR.
         """
         # Just re-encoding to latin1 is enough
         return text.encode('utf8').decode('latin1')
@@ -1094,3 +1135,12 @@ def hexdump(builder, ptr, nbytes):
         val = builder.load(offset)
         printf(builder, " %02x", val)
     printf(builder, "\n")
+
+
+def is_nonelike(ty):
+    """ returns if 'ty' is none """
+    return (
+        ty is None or
+        isinstance(ty, types.NoneType) or
+        isinstance(ty, types.Omitted)
+    )

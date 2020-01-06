@@ -9,7 +9,9 @@ import gc
 
 from numba import unittest_support as unittest
 from numba.errors import TypingError
+from numba import config
 from numba import njit
+from numba import types
 from numba import utils
 from numba.numpy_support import version as numpy_version
 from .support import MemoryLeakMixin, TestCase, tag
@@ -575,6 +577,16 @@ class ConstructorBaseTest(NrtRefCtTest):
             cfunc(2, -1)
         self.assertEqual(str(cm.exception), "negative dimensions not allowed")
 
+    def check_alloc_size(self, pyfunc):
+        """Checks that pyfunc will error, not segfaulting due to array size."""
+        cfunc = nrtjit(pyfunc)
+        with self.assertRaises(ValueError) as e:
+            cfunc()
+        self.assertIn(
+            "array is too big",
+            str(e.exception)
+        )
+
 
 class TestNdZeros(ConstructorBaseTest, TestCase):
 
@@ -617,12 +629,37 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
             return pyfunc((m, n))
         self.check_2d(func)
 
+    def test_2d_shape_dtypes(self):
+        # Test for issue #4575
+        pyfunc = self.pyfunc
+        def func1(m, n):
+            return pyfunc((np.int16(m), np.int32(n)))
+        self.check_2d(func1)
+        # Using a 64-bit value checks that 32 bit systems will downcast to intp
+        def func2(m, n):
+            return pyfunc((np.int64(m), np.int8(n)))
+        self.check_2d(func2)
+        # Make sure an error is thrown if we can't downcast safely
+        if config.IS_32BITS:
+            cfunc = nrtjit(lambda m, n: pyfunc((m, n)))
+            with self.assertRaises(ValueError):
+                cfunc(np.int64(1 << (32 - 1)), 1)
+
     @tag('important')
     def test_2d_dtype_kwarg(self):
         pyfunc = self.pyfunc
         def func(m, n):
             return pyfunc((m, n), dtype=np.complex64)
         self.check_2d(func)
+
+    def test_alloc_size(self):
+        pyfunc = self.pyfunc
+        width = types.intp.bitwidth
+        def gen_func(shape, dtype):
+            return lambda : pyfunc(shape, dtype)
+        # Under these values numba will segfault, but thats another issue
+        self.check_alloc_size(gen_func(1 << width - 2, np.intp))
+        self.check_alloc_size(gen_func((1 << width - 8, 64), np.intp))
 
 
 class TestNdOnes(TestNdZeros):
@@ -685,6 +722,29 @@ class TestNdFull(ConstructorBaseTest, TestCase):
         def func(m, n):
             return np.full((m, n), 1, dtype=np.int8)
         self.check_2d(func)
+
+    def test_2d_shape_dtypes(self):
+        # Test for issue #4575
+        def func1(m, n):
+            return np.full((np.int16(m), np.int32(n)), 4.5)
+        self.check_2d(func1)
+        # Using a 64-bit value checks that 32 bit systems will downcast to intp
+        def func2(m, n):
+            return np.full((np.int64(m), np.int8(n)), 4.5)
+        self.check_2d(func2)
+        # Make sure an error is thrown if we can't downcast safely
+        if config.IS_32BITS:
+            cfunc = nrtjit(lambda m, n: np.full((m, n), 4.5))
+            with self.assertRaises(ValueError):
+                cfunc(np.int64(1 << (32 - 1)), 1)
+
+    def test_alloc_size(self):
+        width = types.intp.bitwidth
+        def gen_func(shape, value):
+            return lambda : np.full(shape, value)
+        # Under these values numba will segfault, but thats another issue
+        self.check_alloc_size(gen_func(1 << width - 2, 1))
+        self.check_alloc_size(gen_func((1 << width - 8, 64), 1))
 
 
 class ConstructorLikeBaseTest(object):
@@ -1137,12 +1197,12 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                            'homogeneous sequence')):
             cfunc(np.array([1.]))
 
-        with check_raises(('type (int64, reflected list(int64)) does '
+        with check_raises(('type Tuple(int64, reflected list(int64)) does '
                           'not have a regular shape')):
             cfunc((np.int64(1), [np.int64(2)]))
 
         with check_raises(
-                "cannot convert (int64, Record(a[type=int32;offset=0],"
+                "cannot convert Tuple(int64, Record(a[type=int32;offset=0],"
                 "b[type=float32;offset=4];8;False)) to a homogeneous type",
             ):
             st = np.dtype([('a', 'i4'), ('b', 'f4')])

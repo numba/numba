@@ -8,7 +8,6 @@ jobs:
   pool: 
     vmImage: ${{ parameters.vmImage }}
   strategy:
-    maxParallel: 11
     matrix:
       ${{ insert }}: ${{ parameters.matrix }}
 

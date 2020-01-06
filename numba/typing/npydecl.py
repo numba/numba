@@ -285,6 +285,9 @@ _math_operations = [ "add", "subtract", "multiply",
                      "sqrt", "square", "reciprocal",
                      "divide", "mod", "abs", "fabs" ]
 
+if numpy_version >= (1, 15):
+    _math_operations += ["gcd", "lcm"]
+
 _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
                              "arccos", "arctan", "arctan2",
                              "hypot", "sinh", "cosh", "tanh",
@@ -631,28 +634,6 @@ class NdIdentity(AbstractTemplate):
 
 def _infer_dtype_from_inputs(inputs):
     return dtype
-
-
-@infer_global(np.arange)
-class NdArange(AbstractTemplate):
-
-    def generic(self, args, kws):
-        assert not kws
-        if len(args) >= 4:
-            dtype = _parse_dtype(args[3])
-            bounds = args[:3]
-        else:
-            bounds = args
-            if any(isinstance(arg, types.Complex) for arg in bounds):
-                dtype = types.complex128
-            elif any(isinstance(arg, types.Float) for arg in bounds):
-                dtype = types.float64
-            else:
-                dtype = max(bounds)
-        if not all(isinstance(arg, types.Number) for arg in bounds):
-            return
-        return_type = types.Array(ndim=1, dtype=dtype, layout='C')
-        return signature(return_type, *args)
 
 
 @infer_global(np.linspace)

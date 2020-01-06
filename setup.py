@@ -308,7 +308,7 @@ packages = find_packages("numba", "numba")
 
 build_requires = ['numpy', 'cffi>=1.0.0']
 
-install_requires = ['llvmlite>=0.30.0dev0', 'numpy', 'cffi>=1.0.0']
+install_requires = ['llvmlite>=0.31.0dev0', 'numpy', 'setuptools', 'cffi>=1.0.0']
 install_requires.extend(['enum34; python_version < "3.4"'])
 install_requires.extend(['singledispatch; python_version < "3.4"'])
 install_requires.extend(['funcsigs; python_version < "3.3"'])

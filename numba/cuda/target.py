@@ -60,6 +60,11 @@ class CUDATargetContext(BaseContext):
     strict_alignment = True
     DIBuilder = debuginfo.NvvmDIBuilder
 
+    @property
+    def enable_boundscheck(self):
+        # Unconditionally disabled
+        return False
+
     # Overrides
     def create_module(self, name):
         return self._internal_codegen._create_empty_module(name)

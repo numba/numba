@@ -1192,7 +1192,7 @@ class IpcHandle(object):
 
     def open_array(self, context, shape, dtype, strides=None):
         """
-        Simliar to `.open()` but returns an device array.
+        Similar to `.open()` but returns an device array.
         """
         from . import devicearray
 

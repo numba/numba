@@ -144,16 +144,31 @@ class _EnvReloader(object):
         # just bold fonts in use.
         COLOR_SCHEME = _readenv("NUMBA_COLOR_SCHEME", str, "no_color")
 
+        # Whether to globally enable bounds checking. The default None means
+        # to use the value of the flag to @njit. 0 or 1 overrides the flag
+        # globally.
+        BOUNDSCHECK = _readenv("NUMBA_BOUNDSCHECK", int, None)
+
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 
         # DEBUG print IR after pass names
         DEBUG_PRINT_AFTER = _readenv("NUMBA_DEBUG_PRINT_AFTER", str, "none")
 
+        # DEBUG print IR before pass names
+        DEBUG_PRINT_BEFORE = _readenv("NUMBA_DEBUG_PRINT_BEFORE", str, "none")
+
+        # DEBUG print IR before and after pass names
+        DEBUG_PRINT_WRAP = _readenv("NUMBA_DEBUG_PRINT_WRAP", str, "none")
+
+        # Highlighting in intermediate dumps
+        HIGHLIGHT_DUMPS = _readenv("NUMBA_HIGHLIGHT_DUMPS", int, 0)
+
         # JIT Debug flag to trigger IR instruction print
         DEBUG_JIT = _readenv("NUMBA_DEBUG_JIT", int, 0)
 
-        # Enable debugging of front-end operation (up to and including IR generation)
+        # Enable debugging of front-end operation
+        # (up to and including IR generation)
         DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
 
         # How many recently deserialized functions to retain regardless
@@ -205,7 +220,7 @@ class _EnvReloader(object):
         # print stats about parallel for-loops
         DEBUG_ARRAY_OPT_STATS = _readenv("NUMBA_DEBUG_ARRAY_OPT_STATS", int, 0)
 
-        # prints user friendly information about parllel
+        # prints user friendly information about parallel
         PARALLEL_DIAGNOSTICS = _readenv("NUMBA_PARALLEL_DIAGNOSTICS", int, 0)
 
         # print debug info of inline closure pass
@@ -243,9 +258,9 @@ class _EnvReloader(object):
 
         HTML = _readenv("NUMBA_DUMP_HTML", fmt_html_path, None)
 
-        # Allow interpreter fallback so that Numba @jit decorator will never fail
-        # Use for migrating from old numba (<0.12) which supported closure, and other
-        # yet-to-be-supported features.
+        # Allow interpreter fallback so that Numba @jit decorator will never
+        # fail. Use for migrating from old numba (<0.12) which supported
+        # closure, and other yet-to-be-supported features.
         COMPATIBILITY_MODE = _readenv("NUMBA_COMPATIBILITY_MODE", int, 0)
 
         # x86-64 specific
@@ -257,7 +272,7 @@ class _EnvReloader(object):
                 # There are various performance issues with AVX and LLVM
                 # on some CPUs (list at
                 # http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
-                # For now we'd rather disable it, since it can pessimize the code.
+                # For now we'd rather disable it, since it can pessimize code
                 cpu_name = ll.get_host_cpu_name()
                 return cpu_name not in ('corei7-avx', 'core-avx-i',
                                         'sandybridge', 'ivybridge')
@@ -319,7 +334,7 @@ class _EnvReloader(object):
         # Indicates if a profiler detected. Only VTune can be detected for now
         RUNNING_UNDER_PROFILER = 'VS_PROFILER' in os.environ
 
-        # Enables jit events in LLVM in order to support profiling of dynamic code
+        # Enables jit events in LLVM to support profiling of dynamic code
         ENABLE_PROFILING = _readenv(
             "NUMBA_ENABLE_PROFILING", int, int(RUNNING_UNDER_PROFILER))
 
