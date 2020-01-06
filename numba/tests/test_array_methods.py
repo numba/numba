@@ -1024,7 +1024,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
         #               np.uint64, np.complex64, np.complex128, np.bool_]
         # a reduced list to save test execution time
-        all_dtypes = [np.float32, np.int32, np.uint32, np.complex64, np.bool_]
+        all_dtypes = [np.float32, np.int32, np.uint32, np.complex64, np.bool_, np.datetime64]
+        #all_dtypes = [np.datetime64]
         all_test_arrays = [np.ones((7, 6, 5, 4, 3), arr_dtype) for arr_dtype
                            in all_dtypes]
 
