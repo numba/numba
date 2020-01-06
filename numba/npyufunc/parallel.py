@@ -538,7 +538,6 @@ def ol_set_num_threads(n):
         _set_num_threads(n)
     return impl
 
-
 def get_num_threads():
     """
     Get the number of threads used for parallel execution.
@@ -562,14 +561,21 @@ def get_num_threads():
 
     """
     _launch_threads()
-    return _get_num_threads()
-
+    num_threads = _get_num_threads()
+    if num_threads == 0:
+        raise RuntimeError("Invalid number of threads. "
+                           "This likely indicates a bug in numba.")
+    return num_threads
 
 @overload(get_num_threads)
 def ol_get_num_threads():
     _launch_threads()
     def impl():
-        return _get_num_threads()
+        num_threads = _get_num_threads()
+        if num_threads == 0:
+            raise RuntimeError("Invalid number of threads. "
+                               "This likely indicates a bug in numba.")
+        return num_threads
     return impl
 
 def _get_thread_id():

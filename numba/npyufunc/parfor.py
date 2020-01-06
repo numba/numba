@@ -1343,6 +1343,14 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     num_threads = builder.call(get_num_threads, [])
 
+    with cgutils.if_unlikely(builder, builder.icmp_signed('==', num_threads,
+                                                  num_threads.type(0))):
+        context.call_conv.return_user_exc(builder, RuntimeError,
+                                                  ("Invalid number of threads. "
+                                                   "This likely indicates a bug in numba.",))
+
+    cgutils.printf(builder, "num_threads: %d\n", num_threads)
+
     builder.call(
         do_scheduling, [
             context.get_constant(
