@@ -3,7 +3,7 @@ trigger:
 
 variables:
   # Change the following along with adding new TEST_START_INDEX.
-  TEST_COUNT: 20
+  TEST_COUNT: 18
 
 jobs:
 # Mac and Linux use the same template with different matrixes
