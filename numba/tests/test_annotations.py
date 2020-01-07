@@ -52,6 +52,8 @@ class TestAnnotation(unittest.TestCase):
 
         def foo(x):
             h = 0.
+            for i in range(x): # py 38 needs two loops for one to lift?!
+                h = h + i
             for k in range(x):
                 h = h + k
             if x:
