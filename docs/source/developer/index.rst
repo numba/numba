@@ -23,4 +23,5 @@ Developer Manual
    hashing.rst
    caching.rst
    literal.rst
+   debugging.rst
    roadmap.rst
