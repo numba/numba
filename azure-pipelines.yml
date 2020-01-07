@@ -75,9 +75,9 @@ jobs:
         CONDA_ENV: travisci
         BITS32: yes
         TEST_START_INDEX: 9
-      py37_np117_32bit:
+      py37_np115_32bit:
         PYTHON: '3.7'
-        NUMPY: '1.17'
+        NUMPY: '1.15'
         CONDA_ENV: travisci
         BITS32: yes
         TEST_START_INDEX: 10
