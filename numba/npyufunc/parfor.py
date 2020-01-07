@@ -115,7 +115,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             redarrvar_typ = redtyp_to_redarraytype(redvar_typ)
             reddtype = redarrvar_typ.dtype
             if config.DEBUG_ARRAY_OPT:
-                print("redvar_typ", redvar_typ, redarrvar_typ, reddtype, types.DType(reddtype))
+                print("redvar_typ", redvar, redvar_typ, redarrvar_typ, reddtype, types.DType(reddtype))
 
             # If this is reduction over an array,
             # the reduction array has just one added per-worker dimension.
@@ -397,6 +397,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                             # Add calltype back in for the expr with updated signature.
                             lowerer.fndesc.calltypes[rhs] = ct
                     lowerer.lower_inst(inst)
+                    lowerer.lower_inst(ir.Del(inst.target.name, loc=loc))
                     if isinstance(inst, ir.Assign) and name == inst.target.name:
                         break
 
@@ -420,6 +421,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                         print("res_print2", res_print)
                         lowerer.lower_inst(res_print)
 
+                lowerer.lower_inst(ir.Del(oneelem.name, loc=loc))
+                lowerer.lower_inst(ir.Del(init_var.name, loc=loc))
 
         # Cleanup reduction variable
         for v in redarrs.values():
