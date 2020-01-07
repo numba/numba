@@ -397,7 +397,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                             # Add calltype back in for the expr with updated signature.
                             lowerer.fndesc.calltypes[rhs] = ct
                     lowerer.lower_inst(inst)
-                    lowerer.lower_inst(ir.Del(inst.target.name, loc=loc))
+
                     if isinstance(inst, ir.Assign) and name == inst.target.name:
                         break
 
@@ -423,6 +423,12 @@ def _lower_parfor_parallel(lowerer, parfor):
 
                 lowerer.lower_inst(ir.Del(oneelem.name, loc=loc))
                 lowerer.lower_inst(ir.Del(init_var.name, loc=loc))
+
+        for i in range(nredvars):
+            name = parfor_redvars[i]
+            for inst in parfor_reddict[name][1][:-1]:
+                if isinstance(typemap[inst.target.name], types.npytypes.Array):
+                    lowerer.lower_inst(ir.Del(inst.target.name, loc=loc))
 
         # Cleanup reduction variable
         for v in redarrs.values():
