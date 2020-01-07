@@ -138,7 +138,7 @@ class _EnvReloader(object):
             "NUMBA_FULL_TRACEBACKS", int, DEVELOPER_MODE)
 
         # Show help text when an error occurs
-        SHOW_HELP = _readenv("NUMBA_SHOW_HELP", int, not DEVELOPER_MODE)
+        SHOW_HELP = _readenv("NUMBA_SHOW_HELP", int, 0)
 
         # The color scheme to use for error messages, default is no color
         # just bold fonts in use.
