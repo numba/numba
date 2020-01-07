@@ -57,9 +57,7 @@ fi
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
-    if [ $PYTHON \< "3.8" ]; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi scipy jinja2 ipython pygments
-    fi
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi scipy jinja2 ipython pygments
 fi
 
 # Install the compiler toolchain
