@@ -48,6 +48,11 @@ static pid_t parent_pid = 0; // 0 is not set, users can't own this anyway
 #define THREAD_LOCAL(ty) __thread ty
 #endif
 
+// This is the number of threads that is default, it is set on initialisation of
+// the threading backend via the launch_threads() call
+static int _INIT_NUM_THREADS = -1;
+
+// This is the per-thread thread mask, each thread can carry its own mask.
 static THREAD_LOCAL(int) _TLS_num_threads = 0;
 
 static void
@@ -59,6 +64,13 @@ set_num_threads(int count)
 static int
 get_num_threads(void)
 {
+    if (_TLS_num_threads == 0)
+    {
+        // This is a thread that did not call launch_threads() but is still a
+        // "main" thread, probably from e.g. threading.Thread() use, it still
+        // has a TLS slot which is 0 from the lack of launch_threads() call
+        _TLS_num_threads = _INIT_NUM_THREADS;
+    }
     return _TLS_num_threads;
 }
 
@@ -212,6 +224,7 @@ static void launch_threads(int count)
         return;
     omp_set_num_threads(count);
     omp_set_nested(0x1); // enable nesting, control depth with OMP env var
+    _INIT_NUM_THREADS = count;
 }
 
 static void synchronize(void)

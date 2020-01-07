@@ -464,6 +464,7 @@ def _launch_threads():
             _is_initialized = True
 
 
+
 def _load_num_threads_funcs(lib):
 
     ll.add_symbol('get_num_threads', lib.get_num_threads)
@@ -563,8 +564,9 @@ def get_num_threads():
     _launch_threads()
     num_threads = _get_num_threads()
     if num_threads == 0:
+        print("Broken: ", _get_thread_id())
         raise RuntimeError("Invalid number of threads. "
-                           "This likely indicates a bug in numba.")
+                           "This likely indicates a bug in numba.", _get_thread_id())
     return num_threads
 
 @overload(get_num_threads)
@@ -573,6 +575,7 @@ def ol_get_num_threads():
     def impl():
         num_threads = _get_num_threads()
         if num_threads == 0:
+            print("Broken: ", _get_thread_id())
             raise RuntimeError("Invalid number of threads. "
                                "This likely indicates a bug in numba.")
         return num_threads
