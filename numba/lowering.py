@@ -1277,6 +1277,8 @@ class Lower(BaseLower):
         if not self.context.enable_nrt:
             return
 
+        if isinstance(typ, types.npytypes.Array):
+            print("incref:", typ, type(typ), val, type(val))
         self.context.nrt.incref(self.builder, typ, val)
 
     def decref(self, typ, val):

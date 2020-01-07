@@ -101,6 +101,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
     redarrs = {}
+    redtoset_dels = []
     if nredvars > 0:
         # reduction arrays outer dimension equal to thread count
         thread_count = get_thread_count()
@@ -204,6 +205,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                     full_call = ir.Expr.call(full_func, [redshape_var, init_val_var], {}, loc=loc)
                     lowerer.fndesc.calltypes[full_call] = full_sig
                     redtoset = ir.Var(scope, mk_unique_var("redtoset"), loc)
+                    redtoset_dels.append(redtoset)
                     redtoset_assign = ir.Assign(full_call, redtoset, loc)
                     typemap[redtoset.name] = redvar_typ
                     lowerer.lower_inst(redtoset_assign)
@@ -421,6 +423,8 @@ def _lower_parfor_parallel(lowerer, parfor):
 
         # Cleanup reduction variable
         for v in redarrs.values():
+            lowerer.lower_inst(ir.Del(v.name, loc=loc))
+        for v in redtoset_dels:
             lowerer.lower_inst(ir.Del(v.name, loc=loc))
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
@@ -1538,5 +1542,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         arg, rv_arg = v
         only_elem_ptr = builder.gep(rv_arg, [context.get_constant(types.intp, 0)])
         builder.store(builder.load(only_elem_ptr), lowerer.getvar(k))
+
+#    for v in redarrdict.values():
+#        lowerer.lower_inst(ir.Del(v.name, loc=loc))
 
     context.active_code_library.add_linking_library(cres.library)
