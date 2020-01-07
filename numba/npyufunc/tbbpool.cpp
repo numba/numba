@@ -45,18 +45,18 @@ static int tsi_count = 0;
 #define THREAD_LOCAL(ty) __thread ty
 #endif
 
-static THREAD_LOCAL(int) num_threads = 0;
+static THREAD_LOCAL(int) _TLS_num_threads = 0;
 
 static void
 set_num_threads(int count)
 {
-    num_threads = count;
+    _TLS_num_threads = count;
 }
 
 static int
 get_num_threads(void)
 {
-    return num_threads;
+    return _TLS_num_threads;
 }
 
 static int

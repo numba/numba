@@ -259,18 +259,18 @@ void debug_marker() {};
 #define THREAD_LOCAL(ty) __thread ty
 #endif
 
-static THREAD_LOCAL(int) num_threads = 0;
+static THREAD_LOCAL(int) _TLS_num_threads = 0;
 
 static void
 set_num_threads(int count)
 {
-    num_threads = count;
+    _TLS_num_threads = count;
 }
 
 static int
 get_num_threads(void)
 {
-    return num_threads;
+    return _TLS_num_threads;
 }
 
 
@@ -283,7 +283,7 @@ get_num_threads(void)
 // synchronize the TLS num_threads slot to value args[0]
 static void sync_tls(void *args, void *dims, void *steps, void *data) {
     int nthreads = *((int *)(args));
-    num_threads = nthreads;
+    _TLS_num_threads = nthreads;
 };
 
 
