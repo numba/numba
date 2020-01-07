@@ -104,7 +104,7 @@ class BaseLower(object):
 
         # Specializes the target context as seen inside the Lowerer
         # This adds:
-        #  - environment: the python exceution environment
+        #  - environment: the python execution environment
         self.context = context.subtarget(environment=self.env,
                                          fndesc=self.fndesc)
 

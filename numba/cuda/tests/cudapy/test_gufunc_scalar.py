@@ -16,7 +16,7 @@ class TestGUFuncScalar(SerialMixin, TestCase):
     def test_gufunc_scalar_output(self):
         #    function type:
         #        - has no void return type
-        #        - array argument is one dimenion fewer than the source array
+        #        - array argument is one dimension fewer than the source array
         #        - scalar output is passed as a 1-element array.
         #
         #    signature: (n)->()

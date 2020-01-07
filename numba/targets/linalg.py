@@ -1798,7 +1798,7 @@ def pinv_impl(a, rcond=1.e-15):
         # gain a few % performance increase:
         # * A is destroyed by the SVD algorithm from LAPACK so a copy is
         #   required, this memory is exactly the right size in which to return
-        #   the pseudo-inverse and so can be resued for this purpose.
+        #   the pseudo-inverse and so can be reused for this purpose.
         # * The pseudo-inverse of S can be applied to either V or U^H, this
         #   then leaves a GEMM operation to compute the inverse via either:
         #   A^+ = (V*(S^+))*U^H

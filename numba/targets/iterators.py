@@ -61,7 +61,7 @@ def iternext_enumerate(context, builder, sig, args, result):
 
     with builder.if_then(is_valid):
         srcval = srcres.yielded_value()
-        # As a iternext_impl function, this will incref the yieled value.
+        # As a iternext_impl function, this will incref the yielded value.
         # We need to release the new reference from call_iternext.
         if context.enable_nrt:
             context.nrt.decref(builder, enumty.yield_type[1], srcval)
@@ -87,7 +87,7 @@ def make_zip_object(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 @lower_builtin('iternext', types.ZipType)
-@iternext_impl(RefType.BORROWED)
+@iternext_impl(RefType.NEW)
 def iternext_zip(context, builder, sig, args, result):
     [zip_type] = sig.args
     [zipobj] = args

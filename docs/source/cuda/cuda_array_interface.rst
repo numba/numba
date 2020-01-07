@@ -4,7 +4,7 @@
 CUDA Array Interface (Version 2)
 ================================
 
-The *cuda array inteface* is created for interoperability between different
+The *cuda array interface* is created for interoperability between different
 implementation of GPU array-like objects in various projects.  The idea is
 borrowed from the `numpy array interface`_.
 

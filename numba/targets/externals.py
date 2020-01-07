@@ -183,7 +183,7 @@ def set_fnclex(context, c_helpers):
 
 def compile_fnclex(context):
     """
-    Compile a function that calls fnclex to workround
+    Compile a function that calls fnclex to workaround
     https://support.microsoft.com/en-us/kb/982107
     """
     codegen = context.codegen()

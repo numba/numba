@@ -207,22 +207,19 @@ def _PyUnicode_IsXidContinue(ch):
 
 @register_jitable
 def _PyUnicode_ToDecimalDigit(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    if ctype.flags & _PyUnicode_TyperecordMasks.DECIMAL_MASK:
+        return ctype.decimal
+    return -1
 
 
-@register_jitable
-def _PyUnicode_IsDecimalDigit(ch):
-    raise NotImplementedError
-
-
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L123-L1128  # noqa: E501
 @register_jitable
 def _PyUnicode_ToDigit(ch):
-    raise NotImplementedError
-
-
-@register_jitable
-def _PyUnicode_IsDigit(ch):
-    raise NotImplementedError
+    ctype = _PyUnicode_gettyperecord(ch)
+    if ctype.flags & _PyUnicode_TyperecordMasks.DIGIT_MASK:
+        return ctype.digit
+    return -1
 
 
 # From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L140-L145    # noqa: E501
@@ -251,6 +248,12 @@ def _PyUnicode_IsLowercase(ch):
 def _PyUnicode_IsUppercase(ch):
     ctype = _PyUnicode_gettyperecord(ch)
     return ctype.flags & _PyUnicode_TyperecordMasks.UPPER_MASK != 0
+
+
+@register_jitable
+def _PyUnicode_IsLineBreak(ch):
+    ctype = _PyUnicode_gettyperecord(ch)
+    return ctype.flags & _PyUnicode_TyperecordMasks.LINEBREAK_MASK != 0
 
 
 @register_jitable
@@ -306,10 +309,18 @@ def _PyUnicode_ToUpperFull(ch, res):
     return 1
 
 
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L259-L272    # noqa: E501
 @register_jitable
 def _PyUnicode_ToFoldedFull(ch, res):
-    raise NotImplementedError
-
+    ctype = _PyUnicode_gettyperecord(ch)
+    extended_case_mask = _PyUnicode_TyperecordMasks.EXTENDED_CASE_MASK
+    if ctype.flags & extended_case_mask and (ctype.lower >> 20) & 7:
+        index = (ctype.lower & 0xFFFF) + (ctype.lower >> 24)
+        n = (ctype.lower >> 20) & 7
+        for i in range(n):
+            res[i] = _PyUnicode_ExtendedCase(index + i)
+        return n
+    return _PyUnicode_ToLowerFull(ch, res)
 
 # From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L274-L279    # noqa: E501
 @register_jitable
@@ -323,6 +334,22 @@ def _PyUnicode_IsCased(ch):
 def _PyUnicode_IsCaseIgnorable(ch):
     ctype = _PyUnicode_gettyperecord(ch)
     return ctype.flags & _PyUnicode_TyperecordMasks.CASE_IGNORABLE_MASK != 0
+
+
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L123-L135    # noqa: E501
+@register_jitable
+def _PyUnicode_IsDigit(ch):
+    if _PyUnicode_ToDigit(ch) < 0:
+        return 0
+    return 1
+
+
+# From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L106-L118    # noqa: E501
+@register_jitable
+def _PyUnicode_IsDecimalDigit(ch):
+    if _PyUnicode_ToDecimalDigit(ch) < 0:
+        return 0
+    return 1
 
 
 # From: https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodectype.c#L291-L296    # noqa: E501
@@ -575,6 +602,40 @@ _Py_ctype_toupper = np.array([
 ], dtype=np.uint8)
 
 
+class _PY_CTF_LB(IntEnum):
+    LINE_BREAK = 0x01
+    LINE_FEED = 0x02
+    CARRIAGE_RETURN = 0x04
+
+
+_Py_ctype_islinebreak = np.array([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    _PY_CTF_LB.LINE_BREAK | _PY_CTF_LB.LINE_FEED,  # 0xa '\n'
+    _PY_CTF_LB.LINE_BREAK,  # 0xb '\v'
+    _PY_CTF_LB.LINE_BREAK,  # 0xc '\f'
+    _PY_CTF_LB.LINE_BREAK | _PY_CTF_LB.CARRIAGE_RETURN,  # 0xd '\r'
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    _PY_CTF_LB.LINE_BREAK,  # 0x1c '\x1c'
+    _PY_CTF_LB.LINE_BREAK,  # 0x1d '\x1d'
+    _PY_CTF_LB.LINE_BREAK,  # 0x1e '\x1e'
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    _PY_CTF_LB.LINE_BREAK,  # 0x85 '\x85'
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0,
+], dtype=np.intc)
+
+
 # Translation of:
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Include/pymacro.h#L25    # noqa: E501
 @register_jitable
@@ -676,6 +737,25 @@ def _Py_ISSPACE(ch):
     Equivalent to the CPython macro `Py_ISSPACE()`
     """
     return _Py_ctype_table[_Py_CHARMASK(ch)] & _PY_CTF.SPACE
+
+
+@register_jitable
+def _Py_ISLINEBREAK(ch):
+    """Check if character is ASCII line break"""
+    return _Py_ctype_islinebreak[_Py_CHARMASK(ch)] & _PY_CTF_LB.LINE_BREAK
+
+
+@register_jitable
+def _Py_ISLINEFEED(ch):
+    """Check if character is line feed `\n`"""
+    return _Py_ctype_islinebreak[_Py_CHARMASK(ch)] & _PY_CTF_LB.LINE_FEED
+
+
+@register_jitable
+def _Py_ISCARRIAGERETURN(ch):
+    """Check if character is carriage return `\r`"""
+    return _Py_ctype_islinebreak[_Py_CHARMASK(ch)] & _PY_CTF_LB.CARRIAGE_RETURN
+
 
 # End code related to/from CPython's pyctype
 # ------------------------------------------------------------------------------

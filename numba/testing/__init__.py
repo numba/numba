@@ -36,7 +36,7 @@ def load_testsuite(loader, dir):
 
 
 def allow_interpreter_mode(fn):
-    """Temporarily re-enable intepreter mode
+    """Temporarily re-enable interpreter mode
     """
     @functools.wraps(fn)
     def _core(*args, **kws):

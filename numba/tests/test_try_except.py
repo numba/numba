@@ -768,9 +768,8 @@ class TestTryExceptOtherControlFlow(TestCase):
 @skip_tryexcept_unsupported
 @skip_parfors_unsupported
 class TestTryExceptParfors(TestCase):
-    @unittest.expectedFailure
+
     def test_try_in_prange_reduction(self):
-        # Related issue https://github.com/numba/numba/issues/4922
         # The try-except is transformed basically into chains of if-else
         def udt(n):
             c = 0
@@ -787,7 +786,6 @@ class TestTryExceptParfors(TestCase):
         self.assertEqual(njit(parallel=True)(udt)(*args), expect)
 
     def test_try_outside_prange_reduction(self):
-        # Related issue https://github.com/numba/numba/issues/4922
         # The try-except is transformed basically into chains of if-else
         def udt(n):
             c = 0

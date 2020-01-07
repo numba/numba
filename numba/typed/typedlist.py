@@ -13,6 +13,7 @@ from numba.six import MutableSequence
 from numba.types import ListType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
 from numba import listobject
+from numba.dispatcher import Dispatcher
 from numba import config
 from numba import njit, types, cgutils, errors, typeof
 from numba.extending import (
@@ -139,6 +140,11 @@ def _ge(t, o):
 @njit
 def _index(l, item, start, end):
     return l.index(item, start, end)
+
+
+@njit
+def _sort(l, key, reverse):
+    return l.sort(key, reverse)
 
 
 def _from_meminfo_ptr(ptr, listtype):
@@ -309,6 +315,16 @@ class List(MutableSequence):
 
     def index(self, item, start=None, stop=None):
         return _index(self, item, start, stop)
+
+    def sort(self, key=None, reverse=False):
+        """Sort the list inplace.
+
+        See also ``list.sort()``
+        """
+        # If key is not already a dispatcher object, make it so
+        if callable(key) and not isinstance(key, Dispatcher):
+            key = njit(key)
+        return _sort(self, key, reverse)
 
     def __str__(self):
         buf = []

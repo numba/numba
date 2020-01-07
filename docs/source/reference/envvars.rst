@@ -71,8 +71,7 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_SHOW_HELP
 
-    If not set or set to zero, show user level help information.
-    Defaults to the negation of the value set by `NUMBA_DEVELOPER_MODE`.
+    If set to non-zero, show resources for getting help. Default is zero.
 
 .. envvar:: NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING
 

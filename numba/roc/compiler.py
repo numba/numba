@@ -329,7 +329,7 @@ class HSAKernel(HSAKernelBase):
         # Insert kernel arguments
         base = 0
         for av in expanded_values:
-            # Adjust for alignemnt
+            # Adjust for alignment
             align = ctypes.sizeof(av)
             pad = _calc_padding_for_alignment(align, base)
             base += pad
