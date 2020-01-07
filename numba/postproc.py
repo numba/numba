@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from . import analysis, ir, transforms, utils, ir_utils
+from . import analysis, ir, transforms, utils
 
 
 class YieldPoint(object):
@@ -93,7 +93,6 @@ class PostProcessor(object):
             self._compute_generator_info()
         else:
             self.func_ir.generator_info = None
-        ir_utils.dprint_func_ir(self.func_ir, "after PostProcessor")
 
     def _populate_generator_info(self):
         """
