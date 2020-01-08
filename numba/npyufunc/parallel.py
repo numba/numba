@@ -276,6 +276,7 @@ _windows = sys.platform.startswith('win32')
 class _nop(object):
     """A no-op contextmanager
     """
+
     def __enter__(self):
         pass
 
@@ -456,13 +457,12 @@ def _launch_threads():
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
 
-            _load_num_threads_funcs(lib) # load late
+            _load_num_threads_funcs(lib)  # load late
 
             # set library name so it can be queried
             global _threading_layer
             _threading_layer = libname
             _is_initialized = True
-
 
 
 def _load_num_threads_funcs(lib):
@@ -534,10 +534,12 @@ def set_num_threads(n):
 @overload(set_num_threads)
 def ol_set_num_threads(n):
     _launch_threads()
+
     def impl(n):
         snt_check(n)
         _set_num_threads(n)
     return impl
+
 
 def get_num_threads():
     """
@@ -566,12 +568,15 @@ def get_num_threads():
     if num_threads == 0:
         print("Broken: ", _get_thread_id())
         raise RuntimeError("Invalid number of threads. "
-                           "This likely indicates a bug in numba.", _get_thread_id())
+                           "This likely indicates a bug in numba.",
+                           _get_thread_id())
     return num_threads
+
 
 @overload(get_num_threads)
 def ol_get_num_threads():
     _launch_threads()
+
     def impl():
         num_threads = _get_num_threads()
         if num_threads == 0:
@@ -581,6 +586,7 @@ def ol_get_num_threads():
         return num_threads
     return impl
 
+
 def _get_thread_id():
     """
     docs
@@ -588,12 +594,15 @@ def _get_thread_id():
     _launch_threads()
     return _get_thread_id()
 
+
 @overload(_get_thread_id)
 def ol_get_thread_id():
     _launch_threads()
+
     def impl():
         return _get_thread_id()
     return impl
+
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ
 _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))

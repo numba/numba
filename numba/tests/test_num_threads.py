@@ -14,6 +14,7 @@ from numba import unittest_support as unittest
 from .support import TestCase, skip_parfors_unsupported, tag
 from .test_parallel_backend import TestInSubprocess
 
+
 class TestNumThreads(TestCase):
     _numba_parallel_test_ = False
 
@@ -125,7 +126,6 @@ class TestNumThreads(TestCase):
         def test_gufunc(x):
             x[:] = get_num_threads()
 
-
         out = test_func()
         np.testing.assert_equal(out, 2)
 
@@ -223,7 +223,6 @@ class TestNumThreads(TestCase):
             out = test_func()
             self.assertEqual(out, (mask, mask))
 
-
             @guvectorize(['void(int64[:], int64[:])'],
                          '(n), (m)',
                          nopython=True,
@@ -252,7 +251,7 @@ class TestNumThreads(TestCase):
         mask = config.NUMBA_NUM_THREADS - 1
 
         N = config.NUMBA_NUM_THREADS
-        M = 2*config.NUMBA_NUM_THREADS
+        M = 2 * config.NUMBA_NUM_THREADS
 
         @njit(parallel=True)
         def child_func(buf, fid):
@@ -270,7 +269,8 @@ class TestNumThreads(TestCase):
                         set_num_threads(nthreads)
                         for i in prange(M):
                             local_mask = 1 + i % mask
-                            set_num_threads(local_mask)  # set threads in parent function
+                            # set threads in parent function
+                            set_num_threads(local_mask)
                             if local_mask < N:
                                 child_func(buf, local_mask)
                             acc += get_num_threads()
@@ -284,7 +284,8 @@ class TestNumThreads(TestCase):
                 def test_func(nthreads, py_func=False):
                     def _test_func(acc, buf, local_mask):
                         set_num_threads(nthreads)
-                        set_num_threads(local_mask[0])  # set threads in parent function
+                        # set threads in parent function
+                        set_num_threads(local_mask[0])
                         if local_mask[0] < N:
                             child_func(buf, local_mask[0])
                         acc[0] += get_num_threads()
@@ -292,13 +293,14 @@ class TestNumThreads(TestCase):
                     buf = np.zeros((M, N), dtype=np.int64)
                     acc = np.array([0])
                     local_mask = (1 + np.arange(M) % mask).reshape((M, 1))
+                    sig = ['void(int64[:], int64[:, :], int64[:])']
                     if not py_func:
-                        _test_func = guvectorize(['void(int64[:], int64[:, :], int64[:])'],
-                                                 '(k), (n, m), (p)', nopython=True,
+                        _test_func = guvectorize(sig, '(k), (n, m), (p)',
+                                                 nopython=True,
                                                  target='parallel')(_test_func)
                     else:
-                        _test_func = guvectorize(['void(int64[:], int64[:, :], int64[:])'],
-                                                 '(k), (n, m), (p)', forceobj=True)(_test_func)
+                        _test_func = guvectorize(sig, '(k), (n, m), (p)',
+                                                 forceobj=True)(_test_func)
                     _test_func(acc, buf, local_mask)
                     return acc, buf
 
@@ -331,7 +333,7 @@ class TestNumThreads(TestCase):
         # check that get_num_threads is ok in nesting
 
         N = config.NUMBA_NUM_THREADS + 1
-        M = 4*config.NUMBA_NUM_THREADS + 1
+        M = 4 * config.NUMBA_NUM_THREADS + 1
 
         def get_impl(child_type, test_type):
 
@@ -340,7 +342,8 @@ class TestNumThreads(TestCase):
             elif child_type == 'njit':
                 child_dec = njit(parallel=False)
             elif child_type == 'none':
-                def child_dec(x): return x
+                def child_dec(x):
+                    return x
 
             @child_dec
             def child(buf, fid):
@@ -349,14 +352,14 @@ class TestNumThreads(TestCase):
                 for i in prange(N):
                     buf[fid, i] = get_num_threads()
 
-
             if test_type in ['parallel', 'njit', 'none']:
                 if test_type == 'parallel':
                     test_dec = njit(parallel=True)
                 elif test_type == 'njit':
                     test_dec = njit(parallel=False)
                 elif test_type == 'none':
-                    def test_dec(x): return x
+                    def test_dec(x):
+                        return x
 
                 @test_dec
                 def test_func(nthreads):
@@ -364,9 +367,9 @@ class TestNumThreads(TestCase):
                     set_num_threads(nthreads)
                     for i in prange(M):
                         local_mask = 1 + i % mask
-                        # when the threads exit the child functions they should have
-                        # a TLS slot value of the local mask as it was set in
-                        # child
+                        # when the threads exit the child functions they should
+                        # have a TLS slot value of the local mask as it was set
+                        # in child
                         if local_mask < config.NUMBA_NUM_THREADS:
                             child(buf, local_mask)
                             assert get_num_threads() == local_mask
@@ -384,9 +387,9 @@ class TestNumThreads(TestCase):
                     @test_dec
                     def _test_func(buf, local_mask):
                         set_num_threads(nthreads)
-                        # when the threads exit the child functions they should have
-                        # a TLS slot value of the local mask as it was set in
-                        # child
+                        # when the threads exit the child functions they should
+                        # have a TLS slot value of the local mask as it was set
+                        # in child
                         if local_mask[0] < config.NUMBA_NUM_THREADS:
                             child(buf, local_mask[0])
                             assert get_num_threads() == local_mask[0]
@@ -401,12 +404,14 @@ class TestNumThreads(TestCase):
         mask = config.NUMBA_NUM_THREADS - 1
 
         res_arrays = {}
-        for test_type in ['parallel', 'njit', 'none', 'guvectorize', 'guvectorize-obj']:
+        for test_type in ['parallel', 'njit', 'none',
+                          'guvectorize', 'guvectorize-obj']:
             for child_type in ['parallel', 'njit', 'none']:
                 if child_type == 'none' and test_type != 'none':
                     continue
                 set_num_threads(mask)
-                res_arrays[test_type, child_type] = get_impl(child_type, test_type)(mask)
+                res_arrays[test_type, child_type] = get_impl(
+                    child_type, test_type)(mask)
 
         py_arr = res_arrays['none', 'none']
         for arr in res_arrays.values():
@@ -414,7 +419,8 @@ class TestNumThreads(TestCase):
 
         # check the maths reconciles
         math_arr = np.zeros((M, N))
-        for i in range(1, config.NUMBA_NUM_THREADS):  # there's branches on modulo mask but only NUMBA_NUM_THREADS funcs
+        # there's branches on modulo mask but only NUMBA_NUM_THREADS funcs
+        for i in range(1, config.NUMBA_NUM_THREADS):
             math_arr[i, :] = i
 
         np.testing.assert_equal(math_arr, py_arr)
@@ -480,7 +486,6 @@ class TestNumThreads(TestCase):
         self.assertEqual(expected_acc, got_acc)
         np.testing.assert_equal(expected_thread_count, got_tc)
 
-
     def tearDown(self):
         set_num_threads(config.NUMBA_NUM_THREADS)
 
@@ -529,6 +534,7 @@ class TestNumThreadsBackends(TestInSubprocess, TestCase):
                     if not name.startswith('_test_'):
                         continue
                     cls._inject(name, backend, backend_guard, num_threads)
+
 
 TestNumThreadsBackends.generate()
 

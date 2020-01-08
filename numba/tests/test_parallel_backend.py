@@ -367,6 +367,7 @@ class TestInSubprocess(object):
         cmdline = [sys.executable, "-m", "numba.runtests", test]
         return self.run_cmd(cmdline, env_copy)
 
+
 class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
     """
     This is quite contrived, for each test in the TestParallelBackend tests it
