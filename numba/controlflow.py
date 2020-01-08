@@ -27,7 +27,9 @@ class CFBlock(object):
         self.terminating = False
 
     def __repr__(self):
-        args = self.offset, sorted(self.outgoing_jumps), sorted(self.incoming_jumps)
+        args = (self.offset,
+                sorted(self.outgoing_jumps),
+                sorted(self.incoming_jumps))
         return "block(offset:%d, outgoing: %s, incoming: %s)" % args
 
     def __iter__(self):
@@ -80,8 +82,12 @@ class CFGraph(object):
         If such an edge already exists, it is replaced (duplicate edges
         are not possible).
         """
-        assert src in self._nodes
-        assert dest in self._nodes
+        if src not in self._nodes:
+            raise ValueError("Cannot add edge as src node %s not in nodes %s" %
+                             (src, self._nodes))
+        if dest not in self._nodes:
+            raise ValueError("Cannot add edge as dest node %s not in nodes %s" %
+                             (dest, self._nodes))
         self._add_edge(src, dest, data)
 
     def successors(self, src):
@@ -131,7 +137,7 @@ class CFGraph(object):
         Return a dictionary of {node -> set(nodes)} mapping each node to
         the nodes dominating it.
 
-        A node D dominates a node N when any path leading to N must go through D.
+        A node D dominates a node N when any path leading to N must go through D
         """
         return self._doms
 
@@ -215,7 +221,7 @@ class CFGraph(object):
         Return the list of Loop objects the *node* belongs to,
         from innermost to outermost.
         """
-        return [self._loops[x] for x in self._in_loops[node]]
+        return [self._loops[x] for x in self._in_loops.get(node, ())]
 
     def dead_nodes(self):
         """
@@ -371,8 +377,9 @@ class CFGraph(object):
     def _find_immediate_dominators(self):
         # The algorithm implemented computes the immediate dominator
         # for each node in the CFG which is equivalent to build a dominator tree
-        # Based on the implementation from NetworkX library - nx.immediate_dominators
-        # https://github.com/networkx/networkx/blob/858e7cb183541a78969fed0cbcd02346f5866c02/networkx/algorithms/dominance.py
+        # Based on the implementation from NetworkX
+        # library - nx.immediate_dominators
+        # https://github.com/networkx/networkx/blob/858e7cb183541a78969fed0cbcd02346f5866c02/networkx/algorithms/dominance.py    # noqa: E501
         # References:
         #   Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy
         #   A Simple, Fast Dominance Algorithm
@@ -398,7 +405,9 @@ class CFGraph(object):
         while changed:
             changed = False
             for u in order:
-                new_idom = functools.reduce(intersect, (v for v in preds_table[u] if v in idom))
+                new_idom = functools.reduce(intersect,
+                                            (v for v in preds_table[u]
+                                             if v in idom))
                 if u not in idom or idom[u] != new_idom:
                     idom[u] = new_idom
                     changed = True
@@ -592,6 +601,23 @@ class CFGraph(object):
         import pprint
         pprint.pprint(adj_lists, stream=file)
 
+    def __eq__(self, other):
+        if not isinstance(other, CFGraph):
+            raise NotImplementedError
+
+        # A few derived items are checked to makes sure process() has been
+        # invoked equally.
+        for x in ['_nodes', '_edge_data', '_entry_point', '_preds', '_succs',
+                  '_doms', '_back_edges']:
+            this = getattr(self, x, None)
+            that = getattr(other, x, None)
+            if this != that:
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 
 class ControlFlowAnalysis(object):
     """
@@ -656,12 +682,17 @@ class ControlFlowAnalysis(object):
             fn = getattr(self, fname, None)
             if fn is not None:
                 fn(inst)
-            else:
+            elif inst.is_jump:
                 # this catches e.g. try... except
-                if inst.is_jump:
-                    l = Loc(self.bytecode.func_id.filename, inst.lineno)
+                l = Loc(self.bytecode.func_id.filename, inst.lineno)
+                if inst.opname in {"SETUP_EXCEPT", "SETUP_FINALLY"}:
+                    msg = "'try' block not supported until python3.7 or later"
+                else:
                     msg = "Use of unsupported opcode (%s) found" % inst.opname
-                    raise UnsupportedError(msg, loc=l)
+                raise UnsupportedError(msg, loc=l)
+            else:
+                # Non-jump instructions are ignored
+                pass  # intentionally
 
         # Close all blocks
         for cur, nxt in zip(self.blockseq, self.blockseq[1:]):
@@ -702,9 +733,8 @@ class ControlFlowAnalysis(object):
         inloopblocks = set()
 
         for b in self.blocks.keys():
-            for s, e in self._loops:
-                if s <= b < e:
-                    inloopblocks.add(b)
+            if self.graph.in_loops(b):
+                inloopblocks.add(b)
 
         self.backbone = backbone - inloopblocks
 

@@ -73,7 +73,13 @@ event = Event
 
 
 def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
-        inline=False, restype=None, fastmath=False, link=None):
+        inline=False, restype=None, fastmath=False, link=None,
+        boundscheck=None,
+        ):
+    # Here for API compatibility
+    if boundscheck is not None:
+        raise NotImplementedError("bounds checking is not supported for CUDA")
+
     if link is not None:
         raise NotImplementedError('Cannot link PTX in the simulator')
     # Check for first argument specifying types - in that case the

@@ -311,6 +311,7 @@ class EnumModel(ProxyModel):
 @register_default(types.NamedTupleClass)
 @register_default(types.DType)
 @register_default(types.RecursiveCall)
+@register_default(types.MakeFunctionLiteral)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
@@ -418,6 +419,7 @@ class ExternalFuncPointerModel(PrimitiveModel):
 
 @register_default(types.UniTuple)
 @register_default(types.NamedUniTuple)
+@register_default(types.StarArgUniTuple)
 class UniTupleModel(DataModel):
     def __init__(self, dmm, fe_type):
         super(UniTupleModel, self).__init__(dmm, fe_type)
@@ -719,10 +721,23 @@ class ComplexModel(StructModel):
 
 @register_default(types.Tuple)
 @register_default(types.NamedTuple)
+@register_default(types.StarArgTuple)
 class TupleModel(StructModel):
     def __init__(self, dmm, fe_type):
         members = [('f' + str(i), t) for i, t in enumerate(fe_type)]
         super(TupleModel, self).__init__(dmm, fe_type, members)
+
+
+@register_default(types.UnionType)
+class UnionModel(StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('tag', types.uintp),
+            # XXX: it should really be a MemInfoPointer(types.voidptr)
+            ('payload', types.Tuple.from_types(fe_type.types)),
+        ]
+        super(UnionModel, self).__init__(dmm, fe_type, members)
+
 
 
 @register_default(types.Pair)

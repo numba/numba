@@ -135,7 +135,8 @@ def check_access_is_preventable():
             f.write('check2')
     except (OSError, IOError) as e:
         # Check that the cause of the exception is due to access/permission
-        # as per https://github.com/conda/conda/blob/4.5.0/conda/gateways/disk/permissions.py#L35-L37
+        # as per
+        # https://github.com/conda/conda/blob/4.5.0/conda/gateways/disk/permissions.py#L35-L37  # noqa: E501
         eno = getattr(e, 'errno', None)
         if eno in (errno.EACCES, errno.EPERM):
             # errno reports access/perm fail so access prevention via
@@ -265,7 +266,8 @@ class TestDispatcher(BaseTest):
         # as the actual argument types.
         self.assertRegexpMatches(
             str(cm.exception),
-            r"Ambiguous overloading for <function add [^>]*> \(float64, float64\):\n"
+            r"Ambiguous overloading for <function add [^>]*> "
+            r"\(float64, float64\):\n"
             r"\(float32, float64\) -> float64\n"
             r"\(float64, float32\) -> float64"
         )
@@ -273,7 +275,8 @@ class TestDispatcher(BaseTest):
         self.assertNotIn("int64", str(cm.exception))
 
     def test_signature_mismatch(self):
-        tmpl = "Signature mismatch: %d argument types given, but function takes 2 arguments"
+        tmpl = ("Signature mismatch: %d argument types given, but function "
+                "takes 2 arguments")
         with self.assertRaises(TypeError) as cm:
             jit("()")(add)
         self.assertIn(tmpl % 0, str(cm.exception))
@@ -397,7 +400,8 @@ class TestDispatcher(BaseTest):
 
         self.assertIs(foo, foo_rebuilt)
 
-        # do we get the same object even if we delete all the explict references?
+        # do we get the same object even if we delete all the explicit
+        # references?
         id_orig = id(foo_rebuilt)
         del foo
         del foo_rebuilt
@@ -697,12 +701,14 @@ class TestGeneratedDispatcher(TestCase):
         # Mismatching # of arguments
         with self.assertRaises(TypeError) as raises:
             f(1j)
-        self.assertIn("should be compatible with signature '(x, y=5)', but has signature '(x)'",
+        self.assertIn("should be compatible with signature '(x, y=5)', "
+                      "but has signature '(x)'",
                       str(raises.exception))
         # Mismatching defaults
         with self.assertRaises(TypeError) as raises:
             f(1)
-        self.assertIn("should be compatible with signature '(x, y=5)', but has signature '(x, y=6)'",
+        self.assertIn("should be compatible with signature '(x, y=5)', "
+                      "but has signature '(x, y=6)'",
                       str(raises.exception))
 
 
@@ -793,7 +799,9 @@ class TestDispatcherMethods(TestCase):
             wrapper = "{}{}".format(len(wrapper), wrapper)
         module_name = __name__.split('.', 1)[0]
         module_len = len(module_name)
-        prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper, module_len, module_name)
+        prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper,
+                                                         module_len,
+                                                         module_name)
         self.assertRegexpMatches(str(cfg), prefix)
         # .display() requires an optional dependency on `graphviz`.
         # just test for the attribute without running it.
@@ -1043,7 +1051,8 @@ class BaseCacheUsecasesTest(BaseCacheTest):
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = popen.communicate()
         if popen.returncode != 0:
-            raise AssertionError("process failed with code %s: stderr follows\n%s\n"
+            raise AssertionError("process failed with code %s: "
+                                 "stderr follows\n%s\n"
                                  % (popen.returncode, err.decode()))
 
     def check_module(self, mod):
@@ -1312,7 +1321,8 @@ class TestCache(BaseCacheUsecasesTest):
             self.assertIsNone(locator)
 
             sys.frozen = True
-            # returns a cache locator object, only works when executable is frozen
+            # returns a cache locator object, only works when the executable
+            # is frozen
             locator = _UserWideCacheLocator.from_function(function, source)
             self.assertIsInstance(locator, _UserWideCacheLocator)
 
@@ -1328,7 +1338,7 @@ class TestCache(BaseCacheUsecasesTest):
         mod = self.import_module()
         f = mod.add_usecase
         # Remove this function's cache files at the end, to avoid accumulation
-        # accross test calls.
+        # across test calls.
         self.addCleanup(shutil.rmtree, f.stats.cache_path, ignore_errors=True)
 
         self.assertPreciseEqual(f(2, 3), 6)
