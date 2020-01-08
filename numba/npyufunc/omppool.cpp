@@ -33,10 +33,11 @@ Threading layer on top of OpenMP.
 #elif defined(__clang__)
 #define _OMP_VENDOR "Intel"
 #elif defined(__GNUC__) // NOTE: clang also defines this, but it's checked above
+#define _NOT_FORKSAFE 1 // GNU OpenMP Not forksafe
 #define _OMP_VENDOR "GNU"
 #endif
 
-#if defined(__GNUC__)
+#if defined(_NOT_FORKSAFE)
 static pid_t parent_pid = 0; // 0 is not set, users can't own this anyway
 #endif
 
@@ -102,7 +103,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         printed = true;
     }
 
-#if defined(__GNUC__)
+#if defined(_NOT_FORKSAFE)
     // Handle GNU OpenMP not being forksafe...
     // This checks if the pid set by the process that initialized this library
     // matches the parent of this pid. If they do match this is a fork() from
@@ -209,7 +210,7 @@ static void launch_threads(int count)
 {
     // this must be called in a fork+thread safe region from Python
     static bool initialized = false;
-#ifdef __GNUC__
+#ifdef _NOT_FORKSAFE
     parent_pid = getpid(); // record the parent PID for use later
     if(_DEBUG_FORK)
     {
