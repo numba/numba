@@ -7,14 +7,15 @@ import numba.unittest_support as unittest
 from numba.cuda.testing import SerialMixin
 
 
+@cuda.jit
+def foo(x):
+    i = cuda.grid(1)
+    if i < x.size:
+        x[i] += 1
+
+
 class TestForAll(SerialMixin, unittest.TestCase):
     def test_forall_1(self):
-        @cuda.jit
-        def foo(x):
-            i = cuda.grid(1)
-            if i < x.size:
-                x[i] += 1
-
         arr = np.arange(11)
         orig = arr.copy()
         foo.forall(arr.size)(arr)
@@ -37,15 +38,16 @@ class TestForAll(SerialMixin, unittest.TestCase):
     def test_forall_no_work(self):
         # Ensure that forall doesn't launch a kernel with no blocks when called
         # with 0 elements. See Issue #5017.
-
-        @cuda.jit
-        def foo(x):
-            i = cuda.grid(1)
-            if i < x.size:
-                x[i] += 1
-
         arr = np.arange(11)
         foo.forall(0)(arr)
+
+    def test_forall_negative_work(self):
+        # Ensure that forall doesn't allow the creation of a forall with a
+        # negative element count.
+        with self.assertRaises(ValueError) as raises:
+            foo.forall(-1)
+        self.assertIn("Can't create ForAll with negative task count",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':
