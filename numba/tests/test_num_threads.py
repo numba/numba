@@ -433,6 +433,16 @@ class TestNumThreads(TestCase):
         if threading_layer() == 'workqueue':
             self.skipTest("workqueue is not threadsafe")
 
+        def check_mask(expected, result):
+            # There's no guarantee that TBB will use a full mask worth of
+            # threads if it deems it inefficient to do so
+            if threading_layer() == 'tbb':
+                self.assertTrue(np.all(result <= expected))
+            elif threading_layer() == 'omp':
+                np.testing.assert_equal(expected, result)
+            else:
+                assert 0, 'unreachable'
+
         # check that the right number of threads are present in nesting
         # this relies on there being a load of cores present
         BIG = 1000000
@@ -464,7 +474,7 @@ class TestNumThreads(TestCase):
 
         got_acc, got_tc = test_func_jit(NT)
         self.assertEqual(expected_acc, got_acc)
-        np.testing.assert_equal(expected_thread_count, got_tc)
+        check_mask(expected_thread_count, got_tc)
 
         def test_guvectorize(nthreads):
             @guvectorize(['int64[:], int64[:]'],
@@ -484,7 +494,7 @@ class TestNumThreads(TestCase):
 
         got_acc, got_tc = test_guvectorize(NT)
         self.assertEqual(expected_acc, got_acc)
-        np.testing.assert_equal(expected_thread_count, got_tc)
+        check_mask(expected_thread_count, got_tc)
 
     def tearDown(self):
         set_num_threads(config.NUMBA_NUM_THREADS)
