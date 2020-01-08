@@ -54,11 +54,10 @@ jobs:
         buildscripts\\incremental\\build.cmd
       displayName: 'Build'
 
-      # not working on windows?
-    #- script: |
-    #    call activate %CONDA_ENV%
-    #    numba.exe -s
-    #  displayName: 'Display numba system information'
+    - script: |
+        call activate %CONDA_ENV%
+        python -m numba -s
+      displayName: 'Display numba system information'
 
     - script: |
         call activate %CONDA_ENV%
