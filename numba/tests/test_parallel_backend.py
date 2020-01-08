@@ -858,5 +858,25 @@ class TestInitSafetyIssues(TestCase):
             print("ERR:", err)
 
 
+@parfors_skip_unsupported
+@skip_no_omp
+class TestOpenMPVendors(TestCase):
+
+    def test_vendors(self):
+        """
+        Checks the OpenMP vendor strings are correct
+        """
+        expected = dict()
+        expected['win32'] = "MS"
+        expected['darwin'] = "Intel"
+        expected['linux'] = "GNU"
+
+        # only check OS that are supported, custom toolchains may well work as
+        # may other OS
+        for k in expected.keys():
+            if sys.platform.startswith(k):
+                self.assertEqual(expected[k], omppool.openmp_vendor)
+
+
 if __name__ == '__main__':
     unittest.main()

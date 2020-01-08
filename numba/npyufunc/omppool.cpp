@@ -30,10 +30,10 @@ Threading layer on top of OpenMP.
 // OpenMP vendor strings
 #if defined(_MSC_VER)
 #define _OMP_VENDOR "MS"
-#elif defined(__GNUC__)
-#define _OMP_VENDOR "GNU"
 #elif defined(__clang__)
 #define _OMP_VENDOR "Intel"
+#elif defined(__GNUC__) // NOTE: clang also defines this, but it's checked above
+#define _OMP_VENDOR "GNU"
 #endif
 
 #if defined(__GNUC__)
