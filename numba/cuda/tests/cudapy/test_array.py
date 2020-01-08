@@ -161,7 +161,7 @@ class TestCudaArray(SerialMixin, unittest.TestCase):
         self.assertTrue(d_like.is_c_contiguous())
         self.assertFalse(d_like.is_f_contiguous())
 
-    @skip_unless_cudasim('Numba and numpy stride semantics differ for transpose')
+    @skip_unless_cudasim('Numba and NumPy stride semantics differ for transpose')
     def test_device_array_like_2d_view_transpose_simulator(self):
         shape = (10, 12)
         view = np.zeros(shape)[::2, ::2].T

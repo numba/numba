@@ -227,7 +227,7 @@ def device_array_like(ary, stream=0):
                                         order='F'))
 
     # Otherwise, we need to compute new strides using an algorithm adapted from
-    # Numpy's v1.17.4's PyArray_NewLikeArrayWithShape in
+    # NumPy's v1.17.4's PyArray_NewLikeArrayWithShape in
     # core/src/multiarray/ctors.c. We permute the strides in ascending order
     # then compute the stride for the dimensions with the same permutation.
 
@@ -284,5 +284,4 @@ def require_cuda_ndarray(obj):
     "Raises ValueError is is_cuda_ndarray(obj) evaluates False"
     if not is_cuda_ndarray(obj):
         raise ValueError('require an cuda ndarray object')
-
 
