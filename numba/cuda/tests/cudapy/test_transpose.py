@@ -25,12 +25,13 @@ class Test(SerialMixin, unittest.TestCase):
                 dy = cuda.cudadrv.devicearray.from_array_like(y)
                 transpose(dx, dy)
                 dy.copy_to_host(y)
-                self.assertTrue(np.all(x.transpose() == y))
+                np.testing.assert_array_equal(x.transpose(), y)
+
+    small_variants = ((2, 3), (16, 16), (16, 17), (17, 16), (14, 15), (15, 14),
+                      (14, 14))
 
     def test_transpose_record(self):
-        variants = ((2, 3), (16, 16), (16, 17), (17, 16), (14, 15), (15, 14),
-                    (14, 14))
-        for rows, cols in variants:
+        for rows, cols in self.small_variants:
             with self.subTest(rows=rows, cols=cols):
                 arr = np.recarray((rows, cols), dtype=recordwith2darray)
                 for x in range(rows):
@@ -44,12 +45,10 @@ class Test(SerialMixin, unittest.TestCase):
                 d_transposed = cuda.device_array_like(transposed)
                 transpose(d_arr, d_transposed)
                 host_transposed = d_transposed.copy_to_host()
-                self.assertTrue(np.all(transposed == host_transposed))
+                np.testing.assert_array_equal(transposed, host_transposed)
 
     def test_transpose_bool(self):
-        variants = ((2, 3), (16, 16), (16, 17), (17, 16), (14, 15), (15, 14),
-                    (14, 14))
-        for rows, cols in variants:
+        for rows, cols in self.small_variants:
             with self.subTest(rows=rows, cols=cols):
                 arr = np.random.randint(2, size=(rows, cols), dtype=np.bool_)
                 transposed = arr.T
@@ -59,7 +58,7 @@ class Test(SerialMixin, unittest.TestCase):
                 transpose(d_arr, d_transposed)
 
                 host_transposed = d_transposed.copy_to_host()
-                self.assertTrue(np.all(transposed == host_transposed))
+                np.testing.assert_array_equal(transposed, host_transposed)
 
 
 if __name__ == '__main__':

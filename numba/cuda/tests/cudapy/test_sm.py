@@ -109,7 +109,7 @@ class TestSharedMemory(SerialMixin, unittest.TestCase):
         d_result = cuda.device_array_like(arr)
         use_sm_chunk_copy[nblocks, nthreads](arr, d_result)
         host_result = d_result.copy_to_host()
-        self.assertTrue(np.all(arr == host_result))
+        np.testing.assert_array_equal(arr, host_result)
 
     def test_shared_recarray(self):
         arr = np.recarray(128, dtype=recordwith2darray)

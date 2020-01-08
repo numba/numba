@@ -645,7 +645,7 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         # Alignment is required to be a power of 2 for shared memory. If it is
         # not a power of 2 (e.g. for a Record array) then round up accordingly.
         if (align & (align - 1)) != 0:
-            align = 2 ** math.ceil(math.log2(align))
+            align = 1 << (align - 1 ).bit_length()
         gvmem.align = align
 
         if elemcount <= 0:
