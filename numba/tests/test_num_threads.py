@@ -23,6 +23,16 @@ class TestNumThreads(TestCase):
         # the threads are launched.
         set_num_threads(config.NUMBA_NUM_THREADS)
 
+    def check_mask(self, expected, result):
+        # There's no guarantee that TBB will use a full mask worth of
+        # threads if it deems it inefficient to do so
+        if threading_layer() == 'tbb':
+            self.assertTrue(np.all(result <= expected))
+        elif threading_layer() in ('omp', 'workqueue'):
+            np.testing.assert_equal(expected, result)
+        else:
+            assert 0, 'unreachable'
+
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
     def _test_set_num_threads_basic(self):
@@ -186,7 +196,7 @@ class TestNumThreads(TestCase):
                 return len(np.unique(buf)), get_num_threads()
 
             out = test_func()
-            self.assertEqual(out, (mask, mask))
+            self.check_mask((mask, mask), out)
 
             @guvectorize(['void(int64[:], int64[:])'],
                          '(n), (m)',
@@ -200,8 +210,8 @@ class TestNumThreads(TestCase):
             x = np.full((5000000,), -1, dtype=np.int64).reshape((100, 50000))
             out = np.zeros((1,), dtype=np.int64)
             test_gufunc(x, out)
-            np.testing.assert_equal(out, np.array([mask]))
-            self.assertEqual(len(np.unique(x)), mask)
+            self.check_mask(mask, out)
+            self.check_mask(mask, len(np.unique(x)))
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
@@ -221,7 +231,7 @@ class TestNumThreads(TestCase):
                 return len(np.unique(buf)), get_num_threads()
 
             out = test_func()
-            self.assertEqual(out, (mask, mask))
+            self.check_mask((mask, mask), out)
 
             @guvectorize(['void(int64[:], int64[:])'],
                          '(n), (m)',
@@ -236,8 +246,8 @@ class TestNumThreads(TestCase):
             x = np.full((5000000,), -1, dtype=np.int64).reshape((100, 50000))
             out = np.zeros((1,), dtype=np.int64)
             test_gufunc(x, out)
-            np.testing.assert_equal(out, np.array([mask]))
-            self.assertEqual(len(np.unique(x)), mask)
+            self.check_mask(mask, out)
+            self.check_mask(mask, len(np.unique(x)))
 
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
@@ -438,16 +448,6 @@ class TestNumThreads(TestCase):
         if threading_layer() == 'workqueue':
             self.skipTest("workqueue is not threadsafe")
 
-        def check_mask(expected, result):
-            # There's no guarantee that TBB will use a full mask worth of
-            # threads if it deems it inefficient to do so
-            if threading_layer() == 'tbb':
-                self.assertTrue(np.all(result <= expected))
-            elif threading_layer() == 'omp':
-                np.testing.assert_equal(expected, result)
-            else:
-                assert 0, 'unreachable'
-
         # check that the right number of threads are present in nesting
         # this relies on there being a load of cores present
         BIG = 1000000
@@ -479,7 +479,7 @@ class TestNumThreads(TestCase):
 
         got_acc, got_tc = test_func_jit(NT)
         self.assertEqual(expected_acc, got_acc)
-        check_mask(expected_thread_count, got_tc)
+        self.check_mask(expected_thread_count, got_tc)
 
         def test_guvectorize(nthreads):
             @guvectorize(['int64[:], int64[:]'],
@@ -499,7 +499,7 @@ class TestNumThreads(TestCase):
 
         got_acc, got_tc = test_guvectorize(NT)
         self.assertEqual(expected_acc, got_acc)
-        check_mask(expected_thread_count, got_tc)
+        self.check_mask(expected_thread_count, got_tc)
 
     def tearDown(self):
         set_num_threads(config.NUMBA_NUM_THREADS)
