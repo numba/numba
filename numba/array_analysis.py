@@ -291,7 +291,7 @@ class EquivSet(object):
         """Insert a set of equivalent objects by modifying self. This
         method can be overloaded to transform object type before insertion.
         """
-        self._insert(objs)
+        return self._insert(objs)
 
     def intersect(self, equiv_set):
         """ Return the intersection of self and the given equiv_set,
@@ -375,6 +375,9 @@ class ShapeEquivSet(EquivSet):
         """
         if isinstance(obj, ir.Var) or isinstance(obj, str):
             name = obj if isinstance(obj, str) else obj.name
+            if name not in self.typemap:
+                return (name,)
+
             typ = self.typemap[name]
             if (isinstance(typ, types.BaseTuple) or
                     isinstance(typ, types.ArrayCompatible)):
@@ -524,9 +527,14 @@ class ShapeEquivSet(EquivSet):
                 self.ind_to_const[self.next_ind] = const
                 self.next_ind += 1
 
+        some_change = False
+
         for i in range(ndim):
             names = [obj_name[i] for obj_name in obj_names]
-            super(ShapeEquivSet, self).insert_equiv(*names)
+            ie_res = super(ShapeEquivSet, self).insert_equiv(*names)
+            some_change = some_change or ie_res
+
+        return some_change
 
     def has_shape(self, name):
         """Return true if the shape of the given variable is available.
@@ -612,28 +620,30 @@ class ShapeEquivSet(EquivSet):
             name = name.name
         if name in self.defs:
             self.defs[name] += 1
-            # NOTE: variable being redefined, must invalidate previous
-            # equivalences. Believe it is a rare case, and only happens to
-            # scalar accumuators.
-            if name in self.obj_to_ind:
-                redefined.add(name) # remove this var from all equiv sets
-                i = self.obj_to_ind[name]
-                del self.obj_to_ind[name]
-                self.ind_to_obj[i].remove(name)
-                if self.ind_to_obj[i] == []:
-                    del self.ind_to_obj[i]
-                assert(i in self.ind_to_var)
-                names = [x.name for x in self.ind_to_var[i]]
-                if name in names:
-                    j = names.index(name)
-                    del self.ind_to_var[i][j]
-                    if self.ind_to_var[i] == []:
-                        del self.ind_to_var[i]
-                        # no more size variables, remove equivalence too
-                        if i in self.ind_to_obj:
-                            for obj in self.ind_to_obj[i]:
-                                del self.obj_to_ind[obj]
-                            del self.ind_to_obj[i]
+            name_res = list(self._get_names(name))
+            for one_name in name_res:
+                # NOTE: variable being redefined, must invalidate previous
+                # equivalences. Believe it is a rare case, and only happens to
+                # scalar accumuators.
+                if one_name in self.obj_to_ind:
+                    redefined.add(one_name) # remove this var from all equiv sets
+                    i = self.obj_to_ind[one_name]
+                    del self.obj_to_ind[one_name]
+                    self.ind_to_obj[i].remove(one_name)
+                    if self.ind_to_obj[i] == []:
+                        del self.ind_to_obj[i]
+                    assert(i in self.ind_to_var)
+                    names = [x.name for x in self.ind_to_var[i]]
+                    if name in names:
+                        j = names.index(name)
+                        del self.ind_to_var[i][j]
+                        if self.ind_to_var[i] == []:
+                            del self.ind_to_var[i]
+                            # no more size variables, remove equivalence too
+                            if i in self.ind_to_obj:
+                                for obj in self.ind_to_obj[i]:
+                                    del self.obj_to_ind[obj]
+                                del self.ind_to_obj[i]
         else:
             self.defs[name] = 1
 
@@ -835,7 +845,7 @@ class SymbolicEquivSet(ShapeEquivSet):
 
     def _insert(self, objs):
         """Overload _insert method to handle ind changes between relative
-        objects.
+        objects.  Returns True if some change is made, false otherwise.
         """
         indset = set()
         uniqs = set()
@@ -847,7 +857,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                 uniqs.add(obj)
                 indset.add(ind)
         if len(uniqs) <= 1:
-            return
+            return False
         uniqs = list(uniqs)
         super(SymbolicEquivSet, self)._insert(uniqs)
         objs = self.ind_to_obj[self._get_ind(uniqs[0])]
@@ -875,6 +885,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                     get_or_set(offset_dict, offset).append(name)
         for names in offset_dict.values():
             self._insert(names)
+        return True
 
     def set_shape_setitem(self, obj, shape):
         """remember shapes of SetItem IR nodes.
@@ -1015,11 +1026,17 @@ class ArrayAnalysis(object):
             # Go through each incoming edge, process prepended instructions and
             # calculate beginning equiv_set of current block as an intersection
             # of incoming ones.
+            if config.DEBUG_ARRAY_OPT >= 2:
+                print("preds:", preds)
             for (p, q) in preds:
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("p, q:", p, q)
                 if p in pruned:
                     continue
                 if p in self.equiv_sets:
                     from_set = self.equiv_sets[p].clone()
+                    if config.DEBUG_ARRAY_OPT >= 2:
+                        print("p in equiv_sets", from_set)
                     if (p, label) in self.prepends:
                         instrs = self.prepends[(p, label)]
                         for inst in instrs:
@@ -1052,7 +1069,8 @@ class ArrayAnalysis(object):
                     self.calltypes[inst] = orig_calltype
                 pre, post = self._analyze_inst(label, scope, equiv_set, inst, redefined)
                 # Remove anything multiply defined in this block from every block equivs.
-                self.remove_redefineds(redefined)
+                if len(redefined) > 0:
+                    self.remove_redefineds(redefined)
                 for instr in pre:
                     new_body.append(instr)
                 new_body.append(inst)
@@ -1143,9 +1161,11 @@ class ArrayAnalysis(object):
                     (shape, post) = self._gen_shape_call(equiv_set, lhs,
                                                          len(typ), shape)
 
+            needs_define = True
             if shape != None:
-                equiv_set.insert_equiv(lhs, shape)
-            equiv_set.define(lhs, redefined, self.func_ir, typ)
+                needs_define = equiv_set.insert_equiv(lhs, shape)
+            if needs_define:
+                equiv_set.define(lhs, redefined, self.func_ir, typ)
         elif isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
             index = inst.index if isinstance(inst, ir.SetItem) else inst.index_var
             result = guard(self._index_to_shape,
