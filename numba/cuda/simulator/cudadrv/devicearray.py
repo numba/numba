@@ -222,11 +222,14 @@ def device_array_like(ary, stream=0):
     # sufficient to create a contiguous array.
     if ary.is_c_contiguous() or ary.ndim <= 1:
         return FakeCUDAArray(np.ndarray(shape=ary.shape, dtype=ary.dtype))
+    elif ary.is_f_contiguous():
+        return FakeCUDAArray(np.ndarray(shape=ary.shape, dtype=ary.dtype,
+                                        order='F'))
 
     # Otherwise, we need to compute new strides using an algorithm adapted from
-    # Numpy's PyArray_NewLikeArrayWithShape in core/src/multiarray/ctors.c. We
-    # permute the strides in ascending order then compute the stride for the
-    # dimensions with the same permutation.
+    # Numpy's v1.17.4's PyArray_NewLikeArrayWithShape in
+    # core/src/multiarray/ctors.c. We permute the strides in ascending order
+    # then compute the stride for the dimensions with the same permutation.
 
     # Stride permuation. E.g. a stride array (4, -2, 12) becomes
     # [(1, -2), (0, 4), (2, 12)]
