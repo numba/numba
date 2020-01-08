@@ -237,7 +237,7 @@ def device_array_like(ary, stream=0):
         return device_array(shape=ary.shape, dtype=ary.dtype, stream=stream)
 
     # Otherwise, we need to compute new strides using an algorithm adapted from
-    # Numpy's PyArray_NewLikeArrayWithShape in core/src/multiarray/ctors.c. We
+    # NumPy's PyArray_NewLikeArrayWithShape in core/src/multiarray/ctors.c. We
     # permute the strides in ascending order then compute the stride for the
     # dimensions with the same permutation.
 

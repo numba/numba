@@ -115,7 +115,7 @@ class TestCudaArray(SerialMixin, unittest.TestCase):
         self.assertEqual(d_view.shape, d_like.shape)
         self.assertEqual(d_view.dtype, d_like.dtype)
 
-        # Use Numpy as a reference for the expected strides
+        # Use NumPy as a reference for the expected strides
         like = np.zeros_like(view)
         self.assertEqual(d_like.strides, like.strides)
         self.assertEqual(d_like.flags['C_CONTIGUOUS'], like.flags['C_CONTIGUOUS'])
@@ -145,14 +145,14 @@ class TestCudaArray(SerialMixin, unittest.TestCase):
         d_view = cuda.device_array(shape, order='F')[::2, ::2]
         self._test_device_array_like_view(view, d_view)
 
-    @skip_on_cudasim('Numba and numpy stride semantics differ for transpose')
+    @skip_on_cudasim('Numba and NumPy stride semantics differ for transpose')
     def test_device_array_like_2d_view_transpose_device(self):
         shape = (10, 12)
         view = np.zeros(shape)[::2, ::2].T
         d_view = cuda.device_array(shape)[::2, ::2].T
         # This is a special case (see issue #4974) because creating the
         # transpose creates a new contiguous allocation with different strides.
-        # In this case, rather than comparing against numpy, we can only compare
+        # In this case, rather than comparing against NumPy, we can only compare
         # against expected values.
         d_like = cuda.device_array_like(d_view)
         self.assertEqual(d_view.shape, d_like.shape)
@@ -167,7 +167,7 @@ class TestCudaArray(SerialMixin, unittest.TestCase):
         view = np.zeros(shape)[::2, ::2].T
         d_view = cuda.device_array(shape)[::2, ::2].T
         # On the simulator, the transpose has different strides to on a CUDA
-        # device (See issue #4974). Here we can compare strides against numpy as
+        # device (See issue #4974). Here we can compare strides against NumPy as
         # a reference.
         like = np.zeros_like(view)
         d_like = cuda.device_array_like(d_view)

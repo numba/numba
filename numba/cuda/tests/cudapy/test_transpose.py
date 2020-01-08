@@ -25,7 +25,7 @@ class Test(SerialMixin, unittest.TestCase):
         self.assertTrue(np.all(x.transpose() == y))
 
     def test_transpose_view(self):
-        # Because the strides of transposes of views differ to those in Numpy
+        # Because the strides of transposes of views differ to those in NumPy
         # (see issue #4974), we test the shape and strides of a transpose.
         a = np.arange(120, dtype=np.int64).reshape((10, 12))
         a_view_t = a[::2, ::2].T
