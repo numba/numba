@@ -30,7 +30,7 @@ def _get_libdevice_path_decision():
         ('Conda environment', get_conda_ctk()),
         ('CUDA_HOME', get_cuda_home('nvvm', 'libdevice')),
         ('System', get_system_ctk('nvvm', 'libdevice')),
-        ('Debian package', '/usr/lib/nvidia-cuda-toolkit/libdevice'),
+        ('Debian package', get_debian_pkg_libdevice()),
     ]
     by, libdir = _find_valid_path(options)
     return by, libdir
@@ -168,3 +168,14 @@ def get_cuda_paths():
         # Cache result
         get_cuda_paths._cached_result = d
         return d
+
+
+def get_debian_pkg_libdevice():
+    """
+    Return the Debian NVIDIA Maintainers-packaged libdevice location, if it
+    exists.
+    """
+    pkg_libdevice_location = '/usr/lib/nvidia-cuda-toolkit/libdevice'
+    if not os.path.exists(pkg_libdevice_location):
+        return None
+    return pkg_libdevice_location
