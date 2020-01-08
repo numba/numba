@@ -311,16 +311,21 @@ class TestNumThreads(TestCase):
 
             got_acc, got_arr = test_func(mask)
             exp_acc, exp_arr = test_func(mask, py_func=True)
-            self.assertEqual(exp_acc, got_acc, test_type)
-            np.testing.assert_equal(exp_arr, got_arr)
+            try:
+                self.assertEqual(exp_acc, got_acc, test_type)
+                np.testing.assert_equal(exp_arr, got_arr)
 
-            # check the maths reconciles
-            math_acc = np.sum(1 + np.arange(M) % mask)
-            self.assertEqual(math_acc, got_acc)
-            math_arr = np.zeros((M, N))
-            for i in range(1, N):  # there's branches on 1, ..., num_threads - 1
-                math_arr[i, :] = i
-            np.testing.assert_equal(math_arr, got_arr)
+                # check the maths reconciles
+                math_acc = np.sum(1 + np.arange(M) % mask)
+                self.assertEqual(math_acc, got_acc)
+                math_arr = np.zeros((M, N))
+                for i in range(1, N):
+                    # there's branches on 1, ..., num_threads - 1
+                    math_arr[i, :] = i
+                np.testing.assert_equal(math_arr, got_arr)
+            except Exception as e:
+                msg = "TYPE: %s, error: %s" % (test_type, e.args[0])
+                raise type(e)(msg, *e.args[1:])
 
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
