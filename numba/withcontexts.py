@@ -24,7 +24,7 @@ class WithContext(object):
         func_ir : FunctionIR
         blocks : dict[ir.Block]
         blk_start, blk_end : int
-            labels of the starting and ending block of the context-maanger.
+            labels of the starting and ending block of the context-manager.
         body_block: sequence[int]
             A sequence of int's representing labels of the with-body
         dispatcher_factory : callable
@@ -41,7 +41,7 @@ def typeof_contextmanager(val, c):
 def _get_var_parent(name):
     """Get parent of the variable given its name
     """
-    # If not a temprary variable
+    # If not a temporary variable
     if not name.startswith('$'):
         # Return the base component of the name
         return name.split('.', )[0]

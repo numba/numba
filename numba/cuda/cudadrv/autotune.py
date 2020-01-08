@@ -1,14 +1,17 @@
 """
 - Parse jit compile info
-- Compute warp occupany histogram
+- Compute warp occupancy histogram
 """
 from __future__ import division, absolute_import, print_function
 import math
 import re
 
+SMEM0K = 0
+SMEM8K = 8 * 2 ** 10
 SMEM16K = 16 * 2 ** 10
 SMEM48K = 48 * 2 ** 10
 SMEM64K = 64 * 2 ** 10
+SMEM80K = 80 * 2 ** 10
 SMEM96K = 96 * 2 ** 10
 SMEM112K = 112 * 2 ** 10
 
@@ -117,7 +120,7 @@ class AutoTuner(object):
 #------------------------------------------------------------------------------
 # warp occupancy calculator
 
-# Reference: NVIDIA CUDA Toolkit v6.5 Programming Guide, Appendix G.
+# Reference: NVIDIA CUDA Toolkit v10.2.89 Programming Guide, Appendix H.
 # URL: http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#compute-capabilities
 
 LIMITS_CC_20 = {
@@ -211,6 +214,23 @@ LIMITS_CC_62.update({
     'warp_alloc_gran': 4,
 })
 
+LIMITS_CC_70 = LIMITS_CC_62.copy()
+LIMITS_CC_70.update({
+    'smem_per_sm': SMEM96K,
+    'smem_per_block': SMEM96K,
+    'default_smem_config': SMEM96K,
+})
+
+LIMITS_CC_75 = LIMITS_CC_70.copy()
+LIMITS_CC_75.update({
+    'warp_per_sm': 32,
+    'thread_per_sm': 1024,
+    'block_per_sm': 16,
+    'smem_per_sm': SMEM64K,
+    'smem_per_block': SMEM64K,
+    'default_smem_config': SMEM64K,
+})
+
 PHYSICAL_LIMITS = {
     (2, 0): LIMITS_CC_20,
     (2, 1): LIMITS_CC_21,
@@ -223,6 +243,8 @@ PHYSICAL_LIMITS = {
     (6, 0): LIMITS_CC_50,
     (6, 1): LIMITS_CC_61,
     (6, 2): LIMITS_CC_62,
+    (7, 0): LIMITS_CC_70,
+    (7, 5): LIMITS_CC_75,
 }
 
 

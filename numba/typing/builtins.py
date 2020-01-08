@@ -37,16 +37,18 @@ class PrintItem(AbstractTemplate):
 @infer_global(abs)
 class Abs(ConcreteTemplate):
     int_cases = [signature(ty, ty) for ty in sorted(types.signed_domain)]
+    uint_cases = [signature(ty, ty) for ty in sorted(types.unsigned_domain)]
     real_cases = [signature(ty, ty) for ty in sorted(types.real_domain)]
     complex_cases = [signature(ty.underlying_float, ty)
                      for ty in sorted(types.complex_domain)]
-    cases = int_cases + real_cases + complex_cases
+    cases = int_cases + uint_cases +  real_cases + complex_cases
 
 
 @infer_global(slice)
 class Slice(ConcreteTemplate):
     cases = [
-        signature(types.slice2_type),
+        signature(types.slice2_type, types.intp),
+        signature(types.slice2_type, types.none),
         signature(types.slice2_type, types.none, types.none),
         signature(types.slice2_type, types.none, types.intp),
         signature(types.slice2_type, types.intp, types.none),
@@ -54,7 +56,11 @@ class Slice(ConcreteTemplate):
         signature(types.slice3_type, types.intp, types.intp, types.intp),
         signature(types.slice3_type, types.none, types.intp, types.intp),
         signature(types.slice3_type, types.intp, types.none, types.intp),
+        signature(types.slice3_type, types.intp, types.intp, types.none),
+        signature(types.slice3_type, types.intp, types.none, types.none),
+        signature(types.slice3_type, types.none, types.intp, types.none),
         signature(types.slice3_type, types.none, types.none, types.intp),
+        signature(types.slice3_type, types.none, types.none, types.none),
     ]
 
 
@@ -725,6 +731,20 @@ class SliceAttribute(AttributeTemplate):
 
     def resolve_step(self, ty):
         return types.intp
+
+    @bound_function("slice.indices")
+    def resolve_indices(self, ty, args, kws):
+        assert not kws
+        if len(args) != 1:
+            raise TypeError(
+                "indices() takes exactly one argument (%d given)" % len(args)
+            )
+        typ, = args
+        if not isinstance(typ, types.Integer):
+            raise TypeError(
+                "'%s' object cannot be interpreted as an integer" % typ
+            )
+        return signature(types.UniTuple(types.intp, 3), types.intp)
 
 
 #-------------------------------------------------------------------------------

@@ -1,7 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-from collections import Iterable
-
+from ..six import Iterable
 from .abstract import (ConstSized, Container, Hashable, MutableSequence,
                        Sequence, Type, TypeRef)
 from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
@@ -203,7 +202,9 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
-        name = "tuple(%s x %d)" % (dtype, count)
+        name = "%s(%s x %d)" % (
+            self.__class__.__name__, dtype, count,
+        )
         super(UniTuple, self).__init__(name)
 
     @property
@@ -253,6 +254,16 @@ class _HeterogeneousTuple(BaseTuple):
             raise TypingError("Argument 'types' is not iterable")
 
 
+class UnionType(Type):
+    def __init__(self, types):
+        self.types = tuple(sorted(set(types), key=lambda x:x.name))
+        name = 'Union[{}]'.format(','.join(map(str, self.types)))
+        super(UnionType, self).__init__(name=name)
+
+    def get_type_tag(self, typ):
+        return self.types.index(typ)
+
+
 class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
     def __new__(cls, types):
@@ -266,7 +277,11 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
     def __init__(self, types):
         self.types = tuple(types)
         self.count = len(self.types)
-        name = "(%s)" % ', '.join(str(i) for i in self.types)
+        self.dtype = UnionType(types)
+        name = "%s(%s)" % (
+            self.__class__.__name__,
+            ', '.join(str(i) for i in self.types),
+        )
         super(Tuple, self).__init__(name)
 
     @property
@@ -288,6 +303,23 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
             if all(t is not None for t in unified):
                 return Tuple(unified)
+
+
+class StarArgTuple(Tuple):
+    """To distinguish from Tuple() used as argument to a `*args`.
+    """
+    def __new__(cls, types):
+        _HeterogeneousTuple.is_types_iterable(types)
+
+        if types and all(t == types[0] for t in types[1:]):
+            return StarArgUniTuple(dtype=types[0], count=len(types))
+        else:
+            return object.__new__(StarArgTuple)
+
+
+class StarArgUniTuple(UniTuple):
+    """To distinguish from UniTuple() used as argument to a `*args`.
+    """
 
 
 class BaseNamedTuple(BaseTuple):
@@ -504,7 +536,7 @@ class ListType(IterableType):
 
 
 class ListTypeIterableType(SimpleIterableType):
-    """List iteratable type
+    """List iterable type
     """
     def __init__(self, parent):
         assert isinstance(parent, ListType)
@@ -527,9 +559,9 @@ class ListTypeIteratorType(SimpleIteratorType):
 def _sentry_forbidden_types(key, value):
     # Forbids List and Set for now
     if isinstance(key, (Set, List)):
-        raise TypingError('{} as key is forbidded'.format(key))
+        raise TypingError('{} as key is forbidden'.format(key))
     if isinstance(value, (Set, List)):
-        raise TypingError('{} as value is forbidded'.format(value))
+        raise TypingError('{} as value is forbidden'.format(value))
 
 
 class DictType(IterableType):
@@ -586,7 +618,7 @@ class DictType(IterableType):
 
 
 class DictItemsIterableType(SimpleIterableType):
-    """Dictionary iteratable type for .items()
+    """Dictionary iterable type for .items()
     """
     def __init__(self, parent):
         assert isinstance(parent, DictType)
@@ -598,7 +630,7 @@ class DictItemsIterableType(SimpleIterableType):
 
 
 class DictKeysIterableType(SimpleIterableType):
-    """Dictionary iteratable type for .keys()
+    """Dictionary iterable type for .keys()
     """
     def __init__(self, parent):
         assert isinstance(parent, DictType)
@@ -610,7 +642,7 @@ class DictKeysIterableType(SimpleIterableType):
 
 
 class DictValuesIterableType(SimpleIterableType):
-    """Dictionary iteratable type for .values()
+    """Dictionary iterable type for .values()
     """
     def __init__(self, parent):
         assert isinstance(parent, DictType)

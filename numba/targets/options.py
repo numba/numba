@@ -44,15 +44,15 @@ class TargetOptions(object):
         if kws.pop('looplift', True):
             flags.set("enable_looplift")
 
-        if kws.pop('boundcheck', False):
-            flags.set("boundcheck")
+        if kws.pop('boundscheck', False):
+            flags.set("boundscheck")
 
         if kws.pop('_nrt', True):
             flags.set("nrt")
 
         if kws.pop('debug', config.DEBUGINFO_DEFAULT):
             flags.set("debuginfo")
-            flags.set("boundcheck")
+            flags.set("boundscheck")
 
         if kws.pop('nogil', False):
             flags.set("release_gil")
@@ -80,4 +80,3 @@ class TargetOptions(object):
         if kws:
             # Unread options?
             raise NameError("Unrecognized options: %s" % kws.keys())
-

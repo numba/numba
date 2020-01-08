@@ -182,7 +182,7 @@ void divide_work(const RangeActual &full_iteration_space,
         if(build.size() == dims.size()) {
             assignments[start_thread] = isfRangeToActual(build);
         } else {
-            // There are still more dimenions to add.
+            // There are still more dimensions to add.
             // Create a copy of the incoming build.
             std::vector<isf_range> new_build(build.begin()+0, build.begin()+index);
             // Add an entry to new_build for this thread to handle the entire current dimension.
@@ -311,7 +311,7 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
         std::sort(dims.begin(), dims.end(), dimlength_by_length_reverse());
         std::vector<RangeActual> assignments(num_sched, RangeActual((intp)1,(intp)0));
         std::vector<isf_range> build;
-        // Compute the division of work across dimensinos and threads.
+        // Compute the division of work across dimensions and threads.
         divide_work(full_space, assignments, build, 0, num_sched-1, dims, 0);
         return assignments;
     }

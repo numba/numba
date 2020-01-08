@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 
 from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import skip_on_cudasim
 from numba import cuda
 
 
@@ -60,6 +61,31 @@ class TestCudaArray(SerialMixin, unittest.TestCase):
     def test_auto_device_const(self):
         d, _ = cuda.devicearray.auto_device(2)
         self.assertTrue(np.all(d.copy_to_host() == np.array(2)))
+
+    @skip_on_cudasim('Kernel definitions not created in the simulator')
+    def test_issue_4628(self):
+        # CUDA Device arrays were reported as always being typed with 'A' order
+        # so launching the kernel with a host array and then a device array
+        # resulted in two definitions being compiled - one for 'C' order from
+        # the host array, and one for 'A' order from the device array. With the
+        # resolution of this issue, the order of the device array is also 'C',
+        # so after the kernel launches there should only be one definition of
+        # the function.
+        @cuda.jit
+        def func(A, out):
+            i = cuda.grid(1)
+            out[i] = A[i] * 2
+
+        n = 128
+        a = np.ones((n,))
+        d_a = cuda.to_device(a)
+        result = np.zeros((n,))
+
+        func[1, 128](a, result)
+        func[1, 128](d_a, result)
+
+        self.assertEqual(1, len(func.definitions))
+
 
 if __name__ == '__main__':
     unittest.main()

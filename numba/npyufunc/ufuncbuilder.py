@@ -24,6 +24,7 @@ class UFuncTargetOptions(TargetOptions):
     OPTIONS = {
         "nopython" : bool,
         "forceobj" : bool,
+        "boundscheck": bool,
         "fastmath" : FastMathOptions,
     }
 
@@ -229,7 +230,9 @@ class UFuncBuilder(_BaseUFuncBuilder):
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(target='npyufunc', cache=cache, **targetoptions)(py_func)
+        self.nb_func = jit(target='npyufunc',
+                           cache=cache,
+                           **targetoptions)(py_func)
         self._sigs = []
         self._cres = {}
 

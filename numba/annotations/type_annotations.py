@@ -230,7 +230,7 @@ class TypeAnnotation(object):
                         # was successfully compiled in nopython mode.
                         func_data['python_tags'][self.lifted_from[0]] = 'object_tag'
 
-            # We're done with this lifted loop, so decrement lfited loop counter.
+            # We're done with this lifted loop, so decrement lifted loop counter.
             # When lifted loop counter hits zero, that means we're ready to write
             # out annotations to html file.
             self.lifted_from[1]['num_lifted_loops'] -= 1

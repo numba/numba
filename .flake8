@@ -243,14 +243,12 @@ exclude =
     numba/tests/test_slices.py
     numba/tests/test_mandelbrot.py
     numba/tests/compile_with_pycc.py
-    numba/tests/test_ir.py
     numba/tests/test_deprecations.py
     numba/tests/test_looplifting.py
     numba/tests/test_storeslice.py
     numba/tests/recursion_usecases.py
     numba/tests/dummy_module.py
     numba/tests/test_operators.py
-    numba/tests/test_exceptions.py
     numba/tests/test_comprehension.py
     numba/tests/ctypes_usecases.py
     numba/tests/test_locals.py
@@ -325,7 +323,6 @@ exclude =
     numba/tests/test_sets.py
     numba/tests/test_dyn_array.py
     numba/tests/test_objects.py
-    numba/tests/test_types.py
     numba/tests/test_random.py
     numba/tests/test_nan.py
     numba/tests/pycc_distutils_usecase/source_module.py

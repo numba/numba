@@ -862,7 +862,7 @@ class Queue(object):
 
         # synchronous if no signal was provided
         if signal is None:
-            _logger.info('wait for sychronous kernel to complete')
+            _logger.info('wait for synchronous kernel to complete')
             timeout = 10
             if not s.wait_until_ne_one(timeout=timeout):
                 msg = "Kernel timed out after {timeout} second"

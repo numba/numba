@@ -536,7 +536,7 @@ def _atomic_dispatcher(dispatch_fn):
                             (aryty.ndim, len(indty)))
 
         lary = context.make_array(aryty)(context, builder, ary)
-        ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
+        ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
         # dispatcher to implementation base on dtype
         return dispatch_fn(context, builder, dtype, ptr, val)
     return imp
@@ -607,7 +607,7 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
 
     lary = context.make_array(aryty)(context, builder, ary)
     zero = context.get_constant(types.intp, 0)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, (zero,))
+    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, (zero,))
     if aryty.dtype == types.int32:
         lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_cas_int32(lmod),
@@ -641,7 +641,10 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         # Create global variable in the requested address-space
         gvmem = lmod.add_global_variable(laryty, symbol_name, addrspace)
         # Specify alignment to avoid misalignment bug
-        gvmem.align = context.get_abi_sizeof(lldtype)
+        align = context.get_abi_sizeof(lldtype)
+        # Alignment is required to be a power of 2 for shared memory. If it is
+        # not a power of 2 (e.g. for a Record array) then round up accordingly.
+        gvmem.align = 1 << (align - 1 ).bit_length()
 
         if elemcount <= 0:
             if can_dynsized:    # dynamic shared memory
@@ -657,7 +660,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 
             gvmem.initializer = lc.Constant.undef(laryty)
 
-        if dtype not in types.number_domain:
+        other_supported_type = isinstance(dtype, (types.Record, types.Boolean))
+        if dtype not in types.number_domain and not other_supported_type:
             raise TypeError("unsupported type: %s" % dtype)
 
         # Convert to generic address-space

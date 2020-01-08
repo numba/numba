@@ -308,7 +308,7 @@ packages = find_packages("numba", "numba")
 
 build_requires = ['numpy']
 
-install_requires = ['llvmlite>=0.30.0dev0', 'numpy']
+install_requires = ['llvmlite>=0.31.0dev0', 'numpy', 'setuptools']
 install_requires.extend(['enum34; python_version < "3.4"'])
 install_requires.extend(['singledispatch; python_version < "3.4"'])
 install_requires.extend(['funcsigs; python_version < "3.3"'])
@@ -329,6 +329,7 @@ metadata = dict(
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={
