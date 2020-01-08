@@ -53,6 +53,8 @@ requirements:
     - libopenblas !=0.3.6      # [x86_64]
     # CUDA 8.0 or later is required for CUDA support
     - cudatoolkit >=8.0
+    # scipy 1.0 or later
+    - scipy >=1.0
 test:
   requires:
     - jinja2
