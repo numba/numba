@@ -644,9 +644,7 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         align = context.get_abi_sizeof(lldtype)
         # Alignment is required to be a power of 2 for shared memory. If it is
         # not a power of 2 (e.g. for a Record array) then round up accordingly.
-        if (align & (align - 1)) != 0:
-            align = 1 << (align - 1 ).bit_length()
-        gvmem.align = align
+        gvmem.align = 1 << (align - 1 ).bit_length()
 
         if elemcount <= 0:
             if can_dynsized:    # dynamic shared memory
