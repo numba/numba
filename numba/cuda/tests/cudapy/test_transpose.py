@@ -35,7 +35,7 @@ class Test(SerialMixin, unittest.TestCase):
                 arr = np.recarray((rows, cols), dtype=recordwith2darray)
                 for x in range(rows):
                     for y in range(cols):
-                        arr[x, y].i = x**2 + y
+                        arr[x, y].i = x ** 2 + y
                         j = np.arange(3 * 2, dtype=np.float32)
                         arr[x, y].j = j.reshape(3, 2) * x + y
 
