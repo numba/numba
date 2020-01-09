@@ -63,8 +63,7 @@ class FunctionType(Type):
             atypes = tuple(map(numbatype, args))
             if len(atypes) == len(ptype.atypes):
                 for i, atype in enumerate(atypes):
-                    if atype != ptype.atypes[i]:
-                        # TODO: implement broadcasting rules
+                    if not (atype <= ptype.atypes[i]):
                         break
                 else:
                     return typing.signature(ptype.rtype, *ptype.atypes)
