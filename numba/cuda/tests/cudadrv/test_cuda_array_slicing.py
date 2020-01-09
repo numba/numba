@@ -24,7 +24,7 @@ class CudaArrayIndexing(SerialMixin, unittest.TestCase):
         arr = np.arange(3 * 4).reshape(3, 4)
         darr = cuda.to_device(arr)
         x, y = arr.shape
-        for i in range(-x, y):
+        for i in range(-x, x):
             for j in range(-y, y):
                 self.assertEqual(arr[i, j], darr[i, j])
         with self.assertRaises(IndexError):
