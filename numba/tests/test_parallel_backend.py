@@ -8,7 +8,6 @@ import threading
 import multiprocessing
 import random
 import os
-import signal
 import sys
 import subprocess
 
@@ -615,9 +614,8 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
                 print(out, err)
             e_msg = str(e)
             self.assertIn("failed with code", e_msg)
-            # raised a SIGABRT, this seems to exist everywhere
-            # https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/signal?view=vs-2019  # noqa: E501
-            self.assertIn(str(signal.SIGABRT.value), e_msg)
+            # raised a SIGABRT, but the value is platform specific so just check
+            # the error message
             self.assertIn("Terminating: Nested parallel kernel launch detected",
                           e_msg)
 
