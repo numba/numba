@@ -615,13 +615,9 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
                 print(out, err)
             e_msg = str(e)
             self.assertIn("failed with code", e_msg)
-            # raised a SIGTERM, on windows in practise this seems to
-            # materialise as a SIGQUIT
+            # raised a SIGABRT, this seems to exist everywhere
             # https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/signal?view=vs-2019  # noqa: E501
-            if _windows:
-                self.assertIn(str(signal.SIGQUIT.value), e_msg)
-            else:
-                self.assertIn(str(signal.SIGTERM.value), e_msg)
+            self.assertIn(str(signal.SIGABRT.value), e_msg)
             self.assertIn("Terminating: Nested parallel kernel launch detected",
                           e_msg)
 

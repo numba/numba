@@ -333,7 +333,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
                               "detected, the workqueue threading layer does "
                               "not supported nested parallelism. Try the TBB "
                               "threading layer.\n");
-        raise(SIGTERM);
+        raise(SIGABRT);
         return;
     }
 
