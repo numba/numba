@@ -60,6 +60,21 @@ class Test(SerialMixin, unittest.TestCase):
                 host_transposed = d_transposed.copy_to_host()
                 np.testing.assert_array_equal(transposed, host_transposed)
 
+    def test_transpose_view(self):
+        # Because the strides of transposes of views differ to those in NumPy
+        # (see issue #4974), we test the shape and strides of a transpose.
+        a = np.arange(120, dtype=np.int64).reshape((10, 12))
+        a_view_t = a[::2, ::2].T
+
+        d_a = cuda.to_device(a)
+        d_a_view_t = d_a[::2, ::2].T
+
+        self.assertEqual(d_a_view_t.shape, (6, 5))
+        self.assertEqual(d_a_view_t.strides, (40, 8))
+
+        h_a_view_t = d_a_view_t.copy_to_host()
+        np.testing.assert_array_equal(a_view_t, h_a_view_t)
+
 
 if __name__ == '__main__':
     unittest.main()
