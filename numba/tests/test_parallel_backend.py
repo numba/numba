@@ -615,9 +615,9 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
                 print(out, err)
             e_msg = str(e)
             self.assertIn("failed with code", e_msg)
-            # raised a SIGTERM, on windows in practise this seems to 
+            # raised a SIGTERM, on windows in practise this seems to
             # materialise as a SIGQUIT
-            # https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/signal?view=vs-2019
+            # https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/signal?view=vs-2019  # noqa: E501
             if _windows:
                 self.assertIn(str(signal.SIGQUIT.value), e_msg)
             else:
