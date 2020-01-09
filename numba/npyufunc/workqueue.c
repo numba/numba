@@ -21,12 +21,16 @@ race condition.
 #include <windows.h>
 #include <process.h>
 #include <malloc.h>
+#include <signal.h>
 #define NUMBA_WINTHREAD
 #else
 /* PThread */
 #include <pthread.h>
 #include <unistd.h>
 #include <alloca.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <signal.h>
 #define NUMBA_PTHREAD
 #endif
 
@@ -37,6 +41,16 @@ race condition.
 #include "gufunc_scheduler.h"
 
 #define _DEBUG 0
+
+/* workqueue is not threadsafe, so we use DSO globals to flag and update various
+ * states.
+ */
+/* This variable is the nesting level, it's incremented at the start of each
+ * parallel region and decremented at the end, if parallel regions are nested
+ * on entry the value == 1 and workqueue will abort (this in preference to just
+ * hanging or segfaulting).
+ */
+static int _nesting_level = 0;
 
 /* As the thread-pool isn't inherited by children,
    free the task-queue, too. */
@@ -312,6 +326,20 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     //     steps = <ir.Argument '.3' of type i64*>
     //     data = <ir.Argument '.4' of type i8*>
 
+    // check the nesting level, if it's already 1, abort, workqueue cannot
+    // handle nesting.
+    if (_nesting_level >= 1){
+        fprintf(stderr, "%s", "Terminating: Nested parallel kernel launch "
+                              "detected, the workqueue threading layer does "
+                              "not supported nested parallelism. Try the TBB "
+                              "threading layer.\n");
+        raise(SIGTERM);
+        return;
+    }
+
+    // increment the nest level
+    _nesting_level += 1;
+
     size_t * count_space = NULL;
     char ** array_arg_space = NULL;
     const size_t arg_len = (inner_ndim + 1);
@@ -431,6 +459,8 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     synchronize();
 
     queue_count = old_queue_count;
+    // decrement the nest level
+    _nesting_level -= 1;
 }
 
 static void
@@ -525,6 +555,7 @@ static void reset_after_fork(void)
     queues = NULL;
     NUM_THREADS = -1;
     _INIT_NUM_THREADS = -1;
+    _nesting_level = 0;
 }
 
 MOD_INIT(workqueue)
