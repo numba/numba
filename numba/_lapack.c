@@ -46,7 +46,7 @@ EMIT_GET_CBLAS_FUNC(dznrm2)
 /*
  * NOTE: On return value convention.
  * For LAPACK wrapper development the following conventions are followed:
- * Publically exposed wrapper functions must return:-
+ * Publicly exposed wrapper functions must return:-
  * STATUS_ERROR  : For an unrecoverable error e.g. caught by xerbla, this is so
  *                 a Py_FatalError can be raised.
  * STATUS_SUCCESS: For successful execution

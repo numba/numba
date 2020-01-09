@@ -9,7 +9,8 @@ from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
-from .support import TestCase, MemoryLeakMixin, unittest
+from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
+                      forbid_codegen)
 
 from numba.unsafe.refcount import get_refcount
 
@@ -242,7 +243,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         def setup(start=10, stop=20):
             # initialize regular list
             rl_ = list(range(start, stop))
-            # intialize typed list
+            # initialize typed list
             tl_ = List.empty_list(int32)
             # populate typed list
             for i in range(start, stop):
@@ -379,7 +380,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         def setup(start=10, stop=20):
             # initialize regular list
             rl_ = list(range(start, stop))
-            # intialize typed list
+            # initialize typed list
             tl_ = List.empty_list(int32)
             # populate typed list
             for i in range(start, stop):
@@ -445,6 +446,18 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             del rl[sa:so:se]
             del tl[sa:so:se]
             self.assertEqual(rl, list(tl))
+
+    def test_list_create_no_jit_using_empty_list(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                l = List.empty_list(types.int32)
+                self.assertEqual(type(l), list)
+
+    def test_list_create_no_jit_using_List(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                l = List()
+                self.assertEqual(type(l), list)
 
 
 class TestAllocation(MemoryLeakMixin, TestCase):
@@ -907,3 +920,104 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         c.append(e)
 
         self.assertNotEqual(a, c)
+
+
+class TestListSort(MemoryLeakMixin, TestCase):
+    def setUp(self):
+        super(TestListSort, self).setUp()
+        np.random.seed(0)
+
+    def make(self, ctor, data):
+        lst = ctor()
+        lst.extend(data)
+        return lst
+
+    def make_both(self, data):
+        return {
+            'py': self.make(list, data),
+            'nb': self.make(List, data),
+        }
+
+    def test_sort_no_args(self):
+        def udt(lst):
+            lst.sort()
+            return lst
+
+        for nelem in [13, 29, 127]:
+            my_lists = self.make_both(np.random.randint(0, nelem, nelem))
+            self.assertEqual(list(udt(my_lists['nb'])), udt(my_lists['py']))
+
+    def test_sort_all_args(self):
+        def udt(lst, key, reverse):
+            lst.sort(key=key, reverse=reverse)
+            return lst
+
+        possible_keys = [
+            lambda x: -x,           # negative
+            lambda x: 1 / (1 + x),  # make float
+            lambda x: (x, -x),      # tuple
+            lambda x: x,            # identity
+        ]
+        possible_reverse = [True, False]
+        for key, reverse in product(possible_keys, possible_reverse):
+            my_lists = self.make_both(np.random.randint(0, 100, 23))
+            msg = "case for key={} reverse={}".format(key, reverse)
+            self.assertEqual(
+                list(udt(my_lists['nb'], key=key, reverse=reverse)),
+                udt(my_lists['py'], key=key, reverse=reverse),
+                msg=msg,
+            )
+
+    def test_sort_dispatcher_key(self):
+        def udt(lst, key):
+            lst.sort(key=key)
+            return lst
+
+        my_lists = self.make_both(np.random.randint(0, 100, 31))
+        py_key = lambda x: x + 1
+        nb_key = njit(lambda x: x + 1)
+        # test typedlist with jitted function
+        self.assertEqual(
+            list(udt(my_lists['nb'], key=nb_key)),
+            udt(my_lists['py'], key=py_key),
+        )
+        # test typedlist with and without jitted function
+        self.assertEqual(
+            list(udt(my_lists['nb'], key=nb_key)),
+            list(udt(my_lists['nb'], key=py_key)),
+        )
+
+    def test_sort_in_jit_w_lambda_key(self):
+        @njit
+        def udt(lst):
+            lst.sort(key=lambda x: -x)
+            return lst
+
+        lst = self.make(List, np.random.randint(0, 100, 31))
+        self.assertEqual(udt(lst), udt.py_func(lst))
+
+    def test_sort_in_jit_w_global_key(self):
+        @njit
+        def keyfn(x):
+            return -x
+
+        @njit
+        def udt(lst):
+            lst.sort(key=keyfn)
+            return lst
+
+        lst = self.make(List, np.random.randint(0, 100, 31))
+        self.assertEqual(udt(lst), udt.py_func(lst))
+
+    def test_sort_on_arrays(self):
+        @njit
+        def foo(lst):
+            lst.sort(key=lambda arr: np.sum(arr))
+            return lst
+
+        arrays = [np.random.random(3) for _ in range(10)]
+        my_lists = self.make_both(arrays)
+        self.assertEqual(
+            list(foo(my_lists['nb'])),
+            foo.py_func(my_lists['py']),
+        )

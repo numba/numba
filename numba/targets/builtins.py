@@ -401,6 +401,22 @@ def lower_tuple(context, builder, sig, args):
     val, = args
     return impl_ret_untracked(context, builder, sig.return_type, val)
 
+@overload(bool)
+def bool_sequence(x):
+    valid_types = (
+        types.CharSeq,
+        types.UnicodeCharSeq,
+        types.DictType,
+        types.ListType,
+        types.UnicodeType,
+        types.Set,
+    )
+    
+    if isinstance(x, valid_types):
+        def bool_impl(x):
+            return len(x) > 0
+        return bool_impl
+
 # -----------------------------------------------------------------------------
 
 def get_type_max_value(typ):

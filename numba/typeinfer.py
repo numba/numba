@@ -505,7 +505,11 @@ class CallConstraint(object):
         try:
             sig = typeinfer.resolve_call(fnty, pos_args, kw_args)
         except ForceLiteralArg as e:
-            folded = e.fold_arguments(self.args, self.kws)
+            # Adjust for bound methods
+            folding_args = ((fnty.this,) + tuple(self.args)
+                            if isinstance(fnty, types.BoundFunction)
+                            else self.args)
+            folded = e.fold_arguments(folding_args, self.kws)
             requested = set()
             unsatisified = set()
             for idx in e.requested_args:

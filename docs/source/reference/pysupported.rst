@@ -248,35 +248,46 @@ The following functions, attributes and methods are currently supported:
 * ``*`` (repetition of strings)
 * ``in``, ``.contains()``
 * ``==``, ``<``, ``<=``, ``>``, ``>=`` (comparison)
-* ``.startswith()``
+* ``.capitalize()``
+* ``.casefold()``
+* ``.center()``
+* ``.count()``
+* ``.endswith()``
 * ``.endswith()``
 * ``.expandtabs()``
-* ``.isspace()``
-* ``.isidentifier()``
 * ``.find()``
-* ``.center()``
-* ``.ljust()``
-* ``.rjust()``
-* ``.split()``
-* ``.join()``
-* ``.lstrip()``
-* ``.rstrip()``
-* ``.strip()``
-* ``.isupper()``
-* ``.upper()``
+* ``.index()``
+* ``.isalnum()``
+* ``.isalpha()``
+* ``.isdecimal()``
+* ``.isdigit()``
+* ``.isidentifier()``
 * ``.islower()``
-* ``.lower()``
+* ``.isnumeric()``
 * ``.isprintable()``
-* ``.zfill()``
-* ``.rpartition()``
-* ``.count()``
+* ``.isspace()``
 * ``.istitle()``
+* ``.isupper()``
+* ``.join()``
+* ``.ljust()``
+* ``.lower()``
+* ``.lstrip()``
+* ``.partition()``
+* ``.replace()``
 * ``.rfind()``
 * ``.rindex()``
-* ``.index()``
+* ``.rjust()``
+* ``.rpartition()``
+* ``.rsplit()``
+* ``.rstrip()``
+* ``.split()``
+* ``.splitlines()``
+* ``.startswith()``
+* ``.strip()``
+* ``.swapcase()``
 * ``.title()``
-* ``.isalpha()``
-* ``.isalnum()``
+* ``.upper()``
+* ``.zfill()``
 
 Additional operations as well as support for Python 2 strings / Python 3 bytes
 will be added in a future version of Numba.  Python 2 Unicode objects will
@@ -288,7 +299,7 @@ likely never be supported.
     and ``find()``) and string creation (like ``.split()``).  Improving the
     string performance is an ongoing task, but the speed of CPython is
     unlikely to be surpassed for basic string operation in isolation.
-    Numba is most successfuly used for larger algorithms that happen to
+    Numba is most successfully used for larger algorithms that happen to
     involve strings, where basic string operations are not the bottleneck.
 
 

@@ -138,11 +138,16 @@ class _EnvReloader(object):
             "NUMBA_FULL_TRACEBACKS", int, DEVELOPER_MODE)
 
         # Show help text when an error occurs
-        SHOW_HELP = _readenv("NUMBA_SHOW_HELP", int, not DEVELOPER_MODE)
+        SHOW_HELP = _readenv("NUMBA_SHOW_HELP", int, 0)
 
         # The color scheme to use for error messages, default is no color
         # just bold fonts in use.
         COLOR_SCHEME = _readenv("NUMBA_COLOR_SCHEME", str, "no_color")
+
+        # Whether to globally enable bounds checking. The default None means
+        # to use the value of the flag to @njit. 0 or 1 overrides the flag
+        # globally.
+        BOUNDSCHECK = _readenv("NUMBA_BOUNDSCHECK", int, None)
 
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
@@ -213,7 +218,7 @@ class _EnvReloader(object):
         # print stats about parallel for-loops
         DEBUG_ARRAY_OPT_STATS = _readenv("NUMBA_DEBUG_ARRAY_OPT_STATS", int, 0)
 
-        # prints user friendly information about parllel
+        # prints user friendly information about parallel
         PARALLEL_DIAGNOSTICS = _readenv("NUMBA_PARALLEL_DIAGNOSTICS", int, 0)
 
         # print debug info of inline closure pass

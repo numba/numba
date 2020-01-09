@@ -1528,6 +1528,7 @@ class FunctionIR(object):
                 g.edge(str(src), str(dst))
         return g
 
+
 # A stub for undefined global reference
 class UndefinedType(EqualityCheckMixin):
 

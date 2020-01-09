@@ -13,6 +13,8 @@ from numba.six import MutableSequence
 from numba.types import ListType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
 from numba import listobject
+from numba.dispatcher import Dispatcher
+from numba import config
 from numba import njit, types, cgutils, errors, typeof
 from numba.extending import (
     overload_method,
@@ -140,6 +142,11 @@ def _index(l, item, start, end):
     return l.index(item, start, end)
 
 
+@njit
+def _sort(l, key, reverse):
+    return l.sort(key, reverse)
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -149,6 +156,13 @@ class List(MutableSequence):
 
     Implements the MutableSequence interface.
     """
+
+    def __new__(cls, lsttype=None, meminfo=None, allocated=None):
+        if config.DISABLE_JIT:
+            return list.__new__(list)
+        else:
+            return object.__new__(cls)
+
     @classmethod
     def empty_list(cls, item_type, allocated=0):
         """Create a new empty List.
@@ -160,7 +174,10 @@ class List(MutableSequence):
         allocated: int
             number of items to pre-allocate
         """
-        return cls(lsttype=ListType(item_type), allocated=allocated)
+        if config.DISABLE_JIT:
+            return list()
+        else:
+            return cls(lsttype=ListType(item_type), allocated=allocated)
 
     def __init__(self, **kwargs):
         """
@@ -298,6 +315,16 @@ class List(MutableSequence):
 
     def index(self, item, start=None, stop=None):
         return _index(self, item, start, stop)
+
+    def sort(self, key=None, reverse=False):
+        """Sort the list inplace.
+
+        See also ``list.sort()``
+        """
+        # If key is not already a dispatcher object, make it so
+        if callable(key) and not isinstance(key, Dispatcher):
+            key = njit(key)
+        return _sort(self, key, reverse)
 
     def __str__(self):
         buf = []

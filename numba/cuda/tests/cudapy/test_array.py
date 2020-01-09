@@ -183,6 +183,30 @@ class TestCudaArray(SerialMixin, unittest.TestCase):
         d_view = cuda.device_array(shape, order='F')[::2, ::2].T
         self._test_device_array_like_view(view, d_view)
 
+    @skip_on_cudasim('Kernel definitions not created in the simulator')
+    def test_issue_4628(self):
+        # CUDA Device arrays were reported as always being typed with 'A' order
+        # so launching the kernel with a host array and then a device array
+        # resulted in two definitions being compiled - one for 'C' order from
+        # the host array, and one for 'A' order from the device array. With the
+        # resolution of this issue, the order of the device array is also 'C',
+        # so after the kernel launches there should only be one definition of
+        # the function.
+        @cuda.jit
+        def func(A, out):
+            i = cuda.grid(1)
+            out[i] = A[i] * 2
+
+        n = 128
+        a = np.ones((n,))
+        d_a = cuda.to_device(a)
+        result = np.zeros((n,))
+
+        func[1, 128](a, result)
+        func[1, 128](d_a, result)
+
+        self.assertEqual(1, len(func.definitions))
+
 
 if __name__ == '__main__':
     unittest.main()

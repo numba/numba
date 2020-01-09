@@ -80,7 +80,7 @@ Glossary
       The process by which Numba determines the specialized types of all
       values within a function being compiled.  Type inference can fail
       if arguments or globals have Python types unknown to Numba, or if
-      functions are used that are not recognized by Numba.  Sucessful
+      functions are used that are not recognized by Numba.  Successful
       type inference is a prerequisite for compilation in
       :term:`nopython mode`.
 

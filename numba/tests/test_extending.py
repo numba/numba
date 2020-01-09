@@ -986,6 +986,57 @@ class TestHighLevelExtending(TestCase):
 
         self.assertEqual(test(), 0xdeadbeef)
 
+    def test_overload_method_stararg(self):
+        @overload_method(MyDummyType, "method_stararg")
+        def _ov_method_stararg(obj, val, val2, *args):
+            def get(obj, val, val2, *args):
+                return (val, val2, args)
+
+            return get
+
+        @njit
+        def foo(obj, *args):
+            # Test with expanding stararg
+            return obj.method_stararg(*args)
+
+        obj = MyDummy()
+        self.assertEqual(foo(obj, 1, 2), (1, 2, ()))
+        self.assertEqual(foo(obj, 1, 2, 3), (1, 2, (3,)))
+        self.assertEqual(foo(obj, 1, 2, 3, 4), (1, 2, (3, 4)))
+
+        @njit
+        def bar(obj):
+            # Test with explicit argument
+            return (
+                obj.method_stararg(1, 2),
+                obj.method_stararg(1, 2, 3),
+                obj.method_stararg(1, 2, 3, 4),
+            )
+
+        self.assertEqual(
+            bar(obj),
+            (
+                (1, 2, ()),
+                (1, 2, (3,)),
+                (1, 2, (3, 4))
+            ),
+        )
+
+        # Check cases that put tuple type into stararg
+        # NOTE: the expected result has an extra tuple because of stararg.
+        self.assertEqual(
+            foo(obj, 1, 2, (3,)),
+            (1, 2, ((3,),)),
+        )
+        self.assertEqual(
+            foo(obj, 1, 2, (3, 4)),
+            (1, 2, ((3, 4),)),
+        )
+        self.assertEqual(
+            foo(obj, 1, 2, (3, (4, 5))),
+            (1, 2, ((3, (4, 5)),)),
+        )
+
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
     hit = cfunc._cache_hits[cfunc.signatures[0]]

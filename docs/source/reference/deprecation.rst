@@ -92,7 +92,7 @@ above is::
     foo(typed_a)
 
 For more information about ``typed.List`` see :ref:`feature-typed-list`. Further
-usability enhancements for this feature are scheduled for the 0.47.0 release
+usability enhancements for this feature were made in the 0.47.0 release
 cycle.
 
 Schedule
@@ -100,8 +100,8 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Pending-deprecation warnings will be issued in version 0.44.0
-* Deprecation warnings and replacements will be issued in version 0.47.0
-* Support will be removed in version 0.48.0
+* Deprecation warnings and replacements will be issued in version 0.48.0
+* Support will be removed in version 0.49.0
 
 Recommendations
 ---------------
@@ -205,7 +205,7 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.47.0
+* Support will be removed in version 0.48.0
 
 Recommendations
 ---------------
@@ -221,30 +221,3 @@ benefit to having the ``@jit`` decorator present consider removing it! If there
 is benefit to having the ``@jit`` decorator present, then to be future proof
 supply the keyword argument ``forceobj=True`` to ensure the function is always
 compiled in :term:`object mode`.
-
-
-Deprecation of ``numba.autojit``
-================================
-The decorator ``numba.autojit`` was inherited from the time of ``NumbaPro`` and
-has not been recommended for use for some time.
-
-Reason for deprecation
-----------------------
-It is functionally no different to ``numba.jit`` and in fact just calls out to
-this function. It has not been in active use or recommended for use for a
-significant period of time.
-
-Schedule
---------
-This feature will be removed with respect to this schedule:
-
-* Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.47.0
-
-Recommendations
----------------
-Projects that need/rely on the deprecated behaviour should pin their dependency
-on Numba to a version prior to removal of this behaviour. The recommended method
-for accommodating the deprecation of ``numba.autojit`` is to simply replace it
-with the semantically and functionally equivalent ``numba.jit`` decorator.
-

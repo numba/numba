@@ -202,7 +202,9 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
-        name = "UniTuple(%s x %d)" % (dtype, count)
+        name = "%s(%s x %d)" % (
+            self.__class__.__name__, dtype, count,
+        )
         super(UniTuple, self).__init__(name)
 
     @property
@@ -276,7 +278,10 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
         self.types = tuple(types)
         self.count = len(self.types)
         self.dtype = UnionType(types)
-        name = "Tuple(%s)" % ', '.join(str(i) for i in self.types)
+        name = "%s(%s)" % (
+            self.__class__.__name__,
+            ', '.join(str(i) for i in self.types),
+        )
         super(Tuple, self).__init__(name)
 
     @property
@@ -298,6 +303,23 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
             if all(t is not None for t in unified):
                 return Tuple(unified)
+
+
+class StarArgTuple(Tuple):
+    """To distinguish from Tuple() used as argument to a `*args`.
+    """
+    def __new__(cls, types):
+        _HeterogeneousTuple.is_types_iterable(types)
+
+        if types and all(t == types[0] for t in types[1:]):
+            return StarArgUniTuple(dtype=types[0], count=len(types))
+        else:
+            return object.__new__(StarArgTuple)
+
+
+class StarArgUniTuple(UniTuple):
+    """To distinguish from UniTuple() used as argument to a `*args`.
+    """
 
 
 class BaseNamedTuple(BaseTuple):
