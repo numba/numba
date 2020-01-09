@@ -29,15 +29,7 @@ def typeof_CFunc(val, c):
     return numbatype(val._sig)
 
 
-# TODO: when enabled, some numba tests fail. What is the reason?
-# @typeof_impl.register(types.FunctionType)
-def typeof_function(val, c):
-    return FunctionType(val)
-
-
-# @typeof_impl.register(Dispatcher)
-def typeof_Dispatcher(val, c):
-    return numbatype(val.py_func)
+# TODO: typeof_impl for Dispatcher, types.FunctionType, ctypes.CFUNCTYPE
 
 
 @register_model(FunctionProtoType)
@@ -74,7 +66,6 @@ class FunctionModel(models.StructModel):
 
 @lower_constant(FunctionType)
 def lower_constant_function_type(context, builder, typ, pyval):
-    # TODO: implement wrapper address protocol
     if isinstance(pyval, CFunc):
         addr = pyval._wrapper_address
         sfunc = cgutils.create_struct_proxy(typ)(context, builder)
@@ -86,11 +77,8 @@ def lower_constant_function_type(context, builder, typ, pyval):
             ir.Constant(ir.IntType(64), id(pyval)), llty)
         return sfunc._getvalue()
 
-    if isinstance(pyval, types.FunctionType):
-        # TODO: is this used??
-        # TODO: make sure pyval matches with typ signature
-        cfunc = numba.cfunc(typ.signature())(pyval)
-        return lower_constant_function_type(context, builder, typ, cfunc)
+    # TODO: implement support for Dispatcher, WrapperAddressProtocol,
+    # and types.FunctionType, ctypes.CFUNCTYPE
 
     raise NotImplementedError(
         'lower_constant_struct_function_type({}, {}, {}, {})'
@@ -98,7 +86,8 @@ def lower_constant_function_type(context, builder, typ, pyval):
 
 
 def _get_wrapper_address(func, sig):
-    """Return the address of a compiled function that implements `func` algoritm.
+    """Return the address of a compiled function that implements `func`
+    algoritm.
 
     Warning: The compiled function must be compatible with the given
     signature `sig`. If it is not, then calling the compiled function
@@ -136,8 +125,12 @@ def _get_wrapper_address(func, sig):
         cfunc = numba.cfunc(sig)(func)
         addr = cfunc._wrapper_address
     elif isinstance(func, CFunc):
-        # TODO: check that func signature matches sif
-        addr = func._wrapper_address
+        func_sig = str(numbatype(func._sig))
+        if sig == func_sig:
+            addr = func._wrapper_address
+        else:
+            cfunc = numba.cfunc(sig)(func.pyfunc)
+            addr = cfunc._wrapper_address
     else:
         raise NotImplementedError(
             f'get wrapper address of {type(func)} instance with {sig!r}')
@@ -154,10 +147,10 @@ def _get_wrapper_address(func, sig):
 def unbox_function_type(typ, obj, c):
     sfunc = cgutils.create_struct_proxy(typ)(c.context, c.builder)
 
-    # Get obj wrapper address. The code below trusts that a function
+    # Get obj wrapper address. The code below trusts that the function
     # numba.function._get_wrapper_address exists and can be called
-    # with two arguments. However, a failure raised in the function
-    # will be catched and propagated to the caller.
+    # with two arguments. However, if an exception is raised in the
+    # function, then it will be catched and propagated to the caller.
     modname = c.context.insert_const_string(c.builder.module, 'numba.function')
     numba_mod = c.pyapi.import_module_noblock(modname)
     numba_func = c.pyapi.object_getattr_string(
@@ -197,7 +190,6 @@ def unbox_function_type(typ, obj, c):
 
 @box(FunctionType)
 def box_function_type(typ, val, c):
-    # print('BOX_function_type({}, {}, {})'.format(typ, val, type(val)))
     sfunc = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
 
     # TODO: reconsider the boxing model, see the limitations in the

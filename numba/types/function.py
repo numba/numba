@@ -4,6 +4,7 @@ __all__ = ['FunctionType', 'FunctionProtoType', 'numbatype',
 
 import inspect
 import types as pytypes
+
 # TODO: implement ctypes support
 # import ctypes
 
@@ -55,27 +56,28 @@ class FunctionType(Type):
             'cast_python_value({}, {})'.format(value, type(value)))
 
     def get_call_type(self, context, args, kws):
+        from numba.function import numbatype
         if isinstance(self.ftype, FunctionProtoType):
             from numba import typing
-            # TODO: match self.atypes with args
             ptype = self.ftype
-            return typing.signature(ptype.rtype, *ptype.atypes)
+            if len(args) == len(ptype.atypes):
+                for i, a in enumerate(args):
+                    if numbatype(a) != ptype.atypes[i]:
+                        break
+                else:
+                    return typing.signature(ptype.rtype, *ptype.atypes)
+                # TODO: implement overload support
+            raise ValueError(f'{self} argument types do not match with {args}')
         else:
-            from numba.function import numbatype
             call_template, pysig, args, kws = self.ftype.get_call_template(
                 args, kws)
             tmpl = call_template(self.ftype.typingctx)
             r = tmpl.apply(args, kws)
+            # reset template FunctionType to FunctionType
+            # TODO: find a less hacky way to do it.
             self.__init__(numbatype(r).ftype)
-            # self.ftype = fromobject(r).ftype
             return r
         raise NotImplementedError(self.ftype)
-
-    def __get_call_signatures(self):
-        # see explain_function_type in numba/typing/context.py
-        # will be used when FunctionType is derived from Callable
-        # return (), False
-        raise NotImplementedError('get_call_signature()')
 
 
 class FunctionProtoType(Type):
@@ -93,8 +95,8 @@ class FunctionProtoType(Type):
             atypes = ()
         self.atypes = atypes
 
-        # Note that numbatype must be able to reconstruct the function
-        # type from the name.
+        # Note that the numbatype function must be able to reconstruct
+        # the function type from the name:
         assert isinstance(rtype, Type), (rtype)
         lst = []
         for atype in self.atypes:
@@ -117,7 +119,7 @@ class NumbaTypeParseError(Exception):
 def numbatype(obj):
     """Return numba type from arbitrary object representing a type.
 
-    # todo: from ctypes
+    # todo: implement ctypes support
     """
     import numba
     from numba import types as nbtypes
@@ -163,8 +165,8 @@ def numbatype(obj):
             ftype = FunctionProtoType(rtype, atypes)
             return FunctionType(ftype)
         if obj.startswith('{') and obj.endswith('}'):
-            #return cls(*map(numbatype, _commasplit(obj[1:-1].strip())))
-            pass # numba does not have a type to represent struct
+            # return cls(*map(numbatype, _commasplit(obj[1:-1].strip())))
+            pass # TODO: numba does not have a type to represent struct
         raise ValueError('Failed to construct numba type from {!r}'.format(obj))
 
     if isinstance(obj, numba.typing.Signature):
