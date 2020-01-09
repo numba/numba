@@ -60,14 +60,17 @@ class FunctionType(Type):
         if isinstance(self.ftype, FunctionProtoType):
             from numba import typing
             ptype = self.ftype
-            if len(args) == len(ptype.atypes):
-                for i, a in enumerate(args):
-                    if numbatype(a) != ptype.atypes[i]:
+            atypes = tuple(map(numbatype, args))
+            if len(atypes) == len(ptype.atypes):
+                for i, atype in enumerate(atypes):
+                    if atype != ptype.atypes[i]:
+                        # TODO: implement broadcasting rules
                         break
                 else:
                     return typing.signature(ptype.rtype, *ptype.atypes)
                 # TODO: implement overload support
-            raise ValueError(f'{self} argument types do not match with {args}')
+            raise ValueError(
+                f'{self} argument types do not match with {atypes}')
         else:
             call_template, pysig, args, kws = self.ftype.get_call_template(
                 args, kws)
