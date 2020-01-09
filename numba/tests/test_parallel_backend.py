@@ -8,6 +8,7 @@ import threading
 import multiprocessing
 import random
 import os
+import signal
 import sys
 import subprocess
 
@@ -578,6 +579,45 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
         if self._DEBUG:
             print(out, err)
         self.assertIn("@tbb@", out)
+
+    def test_workqueue_aborts_on_nested_parallelism(self):
+        """
+        Tests workqueue raises sigabrt if a nested parallel call is performed
+        """
+        runme = """if 1:
+            from numba import njit, prange
+            import numpy as np
+
+            @njit(parallel=True)
+            def nested(x):
+                for i in prange(len(x)):
+                    x[i] += 1
+
+
+            @njit(parallel=True)
+            def main():
+                Z = np.zeros((5, 10))
+                for i in prange(Z.shape[0]):
+                    nested(Z[i])
+                return Z
+
+            main()
+        """
+        cmdline = [sys.executable, '-c', runme]
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = "workqueue"
+        env['NUMBA_NUM_THREADS'] = "4"
+
+        try:
+            out, err = self.run_cmd(cmdline, env=env)
+        except AssertionError as e:
+            if self._DEBUG:
+                print(out, err)
+            e_msg = str(e)
+            self.assertIn("failed with code", e_msg)
+            self.assertIn(str(signal.SIGTERM.value), e_msg)
+            self.assertIn("Terminating: Nested parallel kernel launch detected",
+                          e_msg)
 
 
 # 32bit or windows py27 (not that this runs on windows)
