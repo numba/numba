@@ -184,8 +184,10 @@ class TestFuncionType(TestCase):
         def foo(f):
             f(123)
             return f
-
-        self.assertEqual(njit(foo)(a), foo(a.pyfunc))
+        if decor.__name__ == 'cfunc_func':
+            self.assertEqual(njit(foo)(a).pyfunc, foo(a.pyfunc))
+        else:
+            self.assertEqual(njit(foo)(a), foo(a))
 
     def _test_in_seq_call(self, decor):
 
@@ -442,18 +444,21 @@ class TestFuncionType(TestCase):
         ]
         count = 0
         success = 0
-        for mth in test_methods:
-            for decor in all_func_kinds:
+        print()
+        for decor in all_func_kinds:
+            print(f'{decor.__name__:-^80}')
+            for mth in test_methods:
                 count += 1
                 try:
                     mth(decor)
                 except Exception as msg:
                     msgline = str(msg).splitlines(1)[0].strip()
-                    print(f'{mth.__name__}[{decor.__name__}] support failed:'
+                    print(f'{mth.__name__} failed:'
                           f' {msgline}')
                 else:
                     success += 1
-                    print(f'{mth.__name__}[{decor.__name__}] support works OK')
+                    print(f'{mth.__name__} works OK')
+        print(f'{"":-^80}')
         print(f'test_all success rate: {success}/{count}')
 
 
