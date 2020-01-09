@@ -301,15 +301,15 @@ class TestNumThreads(TestCase):
                         acc[0] += get_num_threads()
 
                     buf = np.zeros((M, N), dtype=np.int64)
-                    acc = np.array([0])
+                    acc = np.zeros((M, 1), dtype=np.int64)
                     local_mask = (1 + np.arange(M) % mask).reshape((M, 1))
                     sig = ['void(int64[:], int64[:, :], int64[:])']
+                    layout = '(p), (n, m), (p)'
                     if not py_func:
-                        _test_func = guvectorize(sig, '(k), (n, m), (p)',
-                                                 nopython=True,
+                        _test_func = guvectorize(sig, layout, nopython=True,
                                                  target='parallel')(_test_func)
                     else:
-                        _test_func = guvectorize(sig, '(k), (n, m), (p)',
+                        _test_func = guvectorize(sig, layout,
                                                  forceobj=True)(_test_func)
                     _test_func(acc, buf, local_mask)
                     return acc, buf
@@ -320,25 +320,23 @@ class TestNumThreads(TestCase):
             test_func = get_test(test_type)
             got_acc, got_arr = test_func(mask)
             exp_acc, exp_arr = test_func(mask, py_func=True)
-            print(test_type.center(80, '-'))
-            print(got_acc, '\n', got_arr)
-            print(exp_acc, '\n', exp_arr)
-            try:
-                self.assertEqual(exp_acc, got_acc, test_type)
-                np.testing.assert_equal(exp_arr, got_arr)
+            np.testing.assert_equal(exp_acc, got_acc)
+            np.testing.assert_equal(exp_arr, got_arr)
 
-                # check the maths reconciles
-                math_acc = np.sum(1 + np.arange(M) % mask)
-                self.assertEqual(math_acc, got_acc)
-                print(math_acc, '\n', got_acc)
-                math_arr = np.zeros((M, N))
-                for i in range(1, N):
-                    # there's branches on 1, ..., num_threads - 1
-                    math_arr[i, :] = i
-                np.testing.assert_equal(math_arr, got_arr)
-            except Exception as e:
-                msg = "TYPE: %s, error: %s" % (test_type, e.args[0])
-                raise type(e)(msg, *e.args[1:])
+            # check the maths reconciles, guvectorize does not reduce, njit does
+            math_acc_exp = 1 + np.arange(M) % mask
+            if test_type == 'guvectorize':
+                math_acc = math_acc_exp.reshape((M, 1))
+            else:
+                math_acc = np.sum(math_acc_exp)
+
+            np.testing.assert_equal(math_acc, got_acc)
+
+            math_arr = np.zeros((M, N))
+            for i in range(1, N):
+                # there's branches on 1, ..., num_threads - 1
+                math_arr[i, :] = i
+            np.testing.assert_equal(math_arr, got_arr)
 
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
