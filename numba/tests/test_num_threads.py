@@ -443,6 +443,8 @@ class TestNumThreads(TestCase):
 
     # this test can only run on OpenMP (providing OMP_MAX_ACTIVE_LEVELS is not
     # set or >= 2) and TBB backends
+    # This test needs at least 3 threads to run, N>=2 for the launch, M>=N+1 for
+    # the nested function
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 3, "Not enough CPU cores")
     def _test_nested_parallelism_3(self):
@@ -454,10 +456,10 @@ class TestNumThreads(TestCase):
         BIG = 1000000
 
         @njit(parallel=True)
-        def work(local_nt):
+        def work(local_nt):  # arg is value 3
             tid = np.zeros(BIG)
             acc = 0
-            set_num_threads(local_nt)
+            set_num_threads(local_nt)  # set to 3 threads
             for i in prange(BIG):
                 acc += 1
                 tid[i] = _get_thread_id()
@@ -465,11 +467,11 @@ class TestNumThreads(TestCase):
 
         @njit(parallel=True)
         def test_func_jit(nthreads):
-            set_num_threads(nthreads)
+            set_num_threads(nthreads) # set to 2 threads
             lens = np.zeros(nthreads)
             total = 0
             for i in prange(nthreads):
-                my_acc, tids = work(nthreads + 1)
+                my_acc, tids = work(nthreads + 1)  # call with value 3
                 lens[i] = len(tids)
                 total += my_acc
             return total, np.unique(lens)
@@ -484,21 +486,23 @@ class TestNumThreads(TestCase):
 
         def test_guvectorize(nthreads):
             @guvectorize(['int64[:], int64[:]'],
-                         '(n), (m)',
+                         '(n), (n)',
                          nopython=True,
                          target='parallel')
             def test_func_guvectorize(total, lens):
                 my_acc, tids = work(nthreads + 1)
-                lens[:] = len(tids)
-                total += my_acc
+                lens[0] = len(tids)
+                total[0] += my_acc
 
-            total = np.array([0])
+            total = np.zeros((nthreads, 1), dtype=np.int64)
             lens = np.zeros(nthreads, dtype=np.int64).reshape((nthreads, 1))
 
             test_func_guvectorize(total, lens)
-            return total, np.unique(lens)
+            # vectorize does not reduce, so total is summed
+            return total.sum(), np.unique(lens)
 
         got_acc, got_tc = test_guvectorize(NT)
+
         self.assertEqual(expected_acc, got_acc)
         self.check_mask(expected_thread_count, got_tc)
 
