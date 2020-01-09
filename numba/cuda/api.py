@@ -233,9 +233,9 @@ def device_array_like(ary, stream=0):
     """
     # Avoid attempting to recompute strides if the default strides will be
     # sufficient to create a contiguous array.
-    if ary.is_c_contiguous() or ary.ndim <= 1:
+    if ary.flags['C_CONTIGUOUS'] or ary.ndim <= 1:
         return device_array(shape=ary.shape, dtype=ary.dtype, stream=stream)
-    elif ary.is_f_contiguous():
+    elif ary.flags['F_CONTIGUOUS']:
         return device_array(shape=ary.shape, dtype=ary.dtype, order='F',
                             stream=stream)
 

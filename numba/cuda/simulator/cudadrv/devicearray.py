@@ -221,9 +221,9 @@ def device_array(*args, **kwargs):
 def device_array_like(ary, stream=0):
     # Avoid attempting to recompute strides if the default strides will be
     # sufficient to create a contiguous array.
-    if ary.is_c_contiguous() or ary.ndim <= 1:
+    if ary.flags['C_CONTIGUOUS'] or ary.ndim <= 1:
         return FakeCUDAArray(np.ndarray(shape=ary.shape, dtype=ary.dtype))
-    elif ary.is_f_contiguous():
+    elif ary.flags['F_CONTIGUOUS']:
         return FakeCUDAArray(np.ndarray(shape=ary.shape, dtype=ary.dtype,
                                         order='F'))
 
