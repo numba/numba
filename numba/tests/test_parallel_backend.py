@@ -16,7 +16,7 @@ import numpy as np
 from numba import config, utils
 
 from numba import unittest_support as unittest
-from numba import jit, vectorize, guvectorize
+from numba import jit, vectorize, guvectorize, set_num_threads
 
 from .support import temp_directory, override_config, TestCase, tag
 
@@ -110,6 +110,17 @@ class jit_runner(runnable):
         got = cfunc(a, b)
         np.testing.assert_allclose(expected, got)
 
+class mask_runner(object):
+    def __init__(self, runner, mask, **options):
+        self.runner = runner
+        self.mask = mask
+
+    def __call__(self):
+        if self.mask:
+            # Tests are all run in isolated subprocesses, so we
+            # don't have to worry about this affecting other tests
+            set_num_threads(self.mask)
+        self.runner()
 
 class linalg_runner(runnable):
 
@@ -243,6 +254,13 @@ class TestParallelBackendBase(TestCase):
         ]
         all_impls.extend(parfor_impls)
 
+    masks = [i for i in [1, 2, 4, 8, 16] if i <= config.NUMBA_NUM_THREADS]
+
+    mask_impls = []
+    for impl in all_impls:
+        for mask in masks:
+            mask_impls.append(mask_runner(impl, mask))
+
     parallelism = ['threading', 'random']
     if utils.PYVERSION > (3, 0):
         parallelism.append('multiprocessing_spawn')
@@ -263,6 +281,7 @@ class TestParallelBackendBase(TestCase):
             guvectorize_runner(nopython=True, target='parallel'),
         ],
         'concurrent_mix_use': all_impls,
+        'concurrent_mix_use_masks': mask_impls,
     }
 
     safe_backends = {'omp', 'tbb'}
