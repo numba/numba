@@ -613,8 +613,27 @@ class ShapeEquivSet(EquivSet):
         defined. Most variables in Numba IR are SSA, i.e., defined only once,
         but not all of them. When a variable is being re-defined, it must
         be removed from the equivalence relation and added to the redefined
-        set. Those variables redefined are removed from all the blocks'
-        equivalence sets later.
+        set but only if that redefinition is not known to have the same
+        equivalence classes. Those variables redefined are removed from all
+        the blocks' equivalence sets later.
+
+        Arrays passed to define() use their whole name but these do not
+        appear in the equivalence sets since they are stored there per
+        dimension. Calling _get_names() here converts array names to
+        dimensional names.
+
+        This function would previously invalidate if there were any multiple
+        definitions of a variable.  However, we realized that this behavior
+        is overly restrictive.  You need only invalidate on multiple
+        definitions if they are not known to be equivalent. So, the
+        equivalence insertion functions now return True if some change was
+        made (meaning the definition was not equivalent) and False
+        otherwise. If no change was made, then define() need not be
+        called. For no change to have been made, the variable must
+        already be present. If the new definition of the var has the
+        case where lhs and rhs are in the same equivalence class then
+        again, no change will be made and define() need not be called
+        or the variable invalidated.
         """
         if isinstance(name, ir.Var):
             name = name.name
@@ -1161,6 +1180,20 @@ class ArrayAnalysis(object):
                     (shape, post) = self._gen_shape_call(equiv_set, lhs,
                                                          len(typ), shape)
 
+            """ See the comment on the define() function.
+
+                We need only call define(), which will invalidate a variable
+                from being in the equivalence sets on multiple definitions,
+                if the variable was not previously defined or if the new
+                definition would be in a conflicting equivalence class to the
+                original equivalence class for the variable.
+
+                insert_equiv() returns True if either of these conditions are
+                True and then we call define() in those cases.  If insert_equiv()
+                returns False then no changes were made and all equivalence
+                classes are consistent upon a redefinition so no invalidation
+                is needed and we don't call define().
+            """
             needs_define = True
             if shape != None:
                 needs_define = equiv_set.insert_equiv(lhs, shape)
