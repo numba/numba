@@ -68,27 +68,16 @@ def wrap_index(typingctx, idx, size):
     where idx > size due to the way indices are calculated
     during slice/range analysis.
     """
-    if idx != size:
+    unified_ty = typingctx.unify_types(idx, size)
+    if not unified_ty:
         raise ValueError("Argument types for wrap_index must match")
 
     def codegen(context, builder, sig, args):
-        """
-        assert(len(args) == 2)
-        idx = args[0]
-        size = args[1]
-        rem = builder.srem(idx, size)
-        zero = llvmlite.ir.Constant(idx.type, 0)
-        is_negative = builder.icmp_signed('<', rem, zero)
-        wrapped_rem = builder.add(rem, size)
-        is_oversize = builder.icmp_signed('>=', wrapped_rem, size)
-        mod = builder.select(is_negative, wrapped_rem,
-                builder.select(is_oversize, rem, wrapped_rem))
-        return mod
-        """
-        idx = args[0]
-        size = args[1]
+        ll_unified_ty = context.get_data_type(unified_ty)
+        idx = builder.sext(args[0], ll_unified_ty)
+        size = builder.sext(args[1], ll_unified_ty)
         neg_size = builder.neg(size)
-        zero = llvmlite.ir.Constant(idx.type, 0)
+        zero = llvmlite.ir.Constant(ll_unified_ty, 0)
         idx_negative = builder.icmp_signed('<', idx, zero)
         pos_oversize = builder.icmp_signed('>=', idx, size)
         neg_oversize = builder.icmp_signed('<=', idx, neg_size)
@@ -97,7 +86,7 @@ def wrap_index(typingctx, idx, size):
         mod = builder.select(idx_negative, neg_res, pos_res)
         return mod
 
-    return signature(idx, idx, size), codegen
+    return signature(unified_ty, idx, size), codegen
 
 def wrap_index_literal(idx, size):
     if idx < 0:
