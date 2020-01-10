@@ -131,7 +131,7 @@ numba_new_thread(void *worker, void *arg)
 static int
 get_thread_id(void)
 {
-    return pthread_self();
+    return (int)pthread_self();
 }
 
 #endif

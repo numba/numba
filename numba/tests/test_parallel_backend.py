@@ -122,6 +122,19 @@ class mask_runner(object):
             set_num_threads(self.mask)
         self.runner()
 
+class mask_runner(object):
+    def __init__(self, runner, mask, **options):
+        self.runner = runner
+        self.mask = mask
+
+    def __call__(self):
+        if self.mask:
+            # Tests are all run in isolated subprocesses, so we
+            # don't have to worry about this affecting other tests
+            set_num_threads(self.mask)
+        self.runner()
+
+
 class linalg_runner(runnable):
 
     def __call__(self):
@@ -257,7 +270,8 @@ class TestParallelBackendBase(TestCase):
     if config.NUMBA_NUM_THREADS < 2:
         # Not enough cores
         masks = []
-    masks = [1, 2]
+    else:
+        masks = [1, 2]
 
     mask_impls = []
     for impl in all_impls:
