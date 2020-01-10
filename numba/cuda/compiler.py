@@ -16,7 +16,6 @@ from numba.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba import funcdesc, typing, utils, serialize
 from numba.compiler_lock import global_compiler_lock
 
-from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import normalize_kernel_dimensions
@@ -284,7 +283,7 @@ class ForAll(object):
         # Prefer user-specified config
         if tpb != 0:
             return tpb
-        # Else, ask the driver to give a good cofnig
+        # Else, ask the driver to give a good config
         else:
             ctx = get_context()
             kwargs = dict(
@@ -293,23 +292,8 @@ class ForAll(object):
                 memsize=self.sharedmem,
                 blocksizelimit=1024,
             )
-            try:
-                # Raises from the driver if the feature is unavailable
-                _, tpb = ctx.get_max_potential_block_size(**kwargs)
-            except AttributeError:
-                # Fallback to table-based approach.
-                tpb = self._fallback_autotune_best(kernel)
-                raise
+            _, tpb = ctx.get_max_potential_block_size(**kwargs)
             return tpb
-
-    def _fallback_autotune_best(self, kernel):
-        try:
-            tpb = kernel.autotune.best()
-        except ValueError:
-            warnings.warn('Could not autotune, using default tpb of 128')
-            tpb = 128
-
-        return tpb
 
 
 class CUDAKernelBase(object):
@@ -718,34 +702,6 @@ class CUDAKernel(CUDAKernelBase):
 
         else:
             raise NotImplementedError(ty, val)
-
-    @property
-    def autotune(self):
-        """Return the autotuner object associated with this kernel."""
-        warnings.warn(_deprec_warn_msg.format('autotune'), DeprecationWarning)
-        has_autotune = hasattr(self, '_autotune')
-        if has_autotune and self._autotune.dynsmem == self.sharedmem:
-            return self._autotune
-        else:
-            # Get CUDA Function
-            cufunc = self._func.get()
-            at = AutoTuner(info=cufunc.attrs, cc=cufunc.device.compute_capability)
-            self._autotune = at
-            return self._autotune
-
-    @property
-    def occupancy(self):
-        """Occupancy is the ratio of the number of active warps per multiprocessor to the maximum
-        number of warps that can be active on the multiprocessor at once.
-        Calculate the theoretical occupancy of the kernel given the
-        current configuration."""
-        warnings.warn(_deprec_warn_msg.format('occupancy'), DeprecationWarning)
-        thread_per_block = reduce(operator.mul, self.blockdim, 1)
-        return self.autotune.closest(thread_per_block)
-
-
-_deprec_warn_msg = ("The .{} attribute is is deprecated and will be "
-                    "removed in a future release")
 
 
 class AutoJitCUDAKernel(CUDAKernelBase):
