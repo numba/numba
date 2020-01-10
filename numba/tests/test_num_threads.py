@@ -11,6 +11,7 @@ from numba import (njit, set_num_threads, get_num_threads, prange, config,
                    threading_layer, guvectorize)
 from numba.npyufunc.parallel import _get_thread_id
 from numba import unittest_support as unittest
+from numba.errors import TypingError
 from .support import TestCase, skip_parfors_unsupported, tag
 from .test_parallel_backend import TestInSubprocess
 
@@ -32,6 +33,19 @@ class TestNumThreads(TestCase):
             np.testing.assert_equal(expected, result)
         else:
             assert 0, 'unreachable'
+
+    @skip_parfors_unsupported
+    def test_set_num_threads_type(self):
+
+        @njit
+        def foo():
+            set_num_threads('wrong_type')
+
+        expected = "The number of threads specified must be an integer"
+        for fn, errty in ((foo, TypingError), (foo.py_func, TypeError)):
+            with self.assertRaises(errty) as raises:
+                fn()
+            self.assertIn(expected, str(raises.exception))
 
     @skip_parfors_unsupported
     @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")

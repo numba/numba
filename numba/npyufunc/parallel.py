@@ -26,7 +26,7 @@ import llvmlite.binding as ll
 
 from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
-from numba import types, config, utils
+from numba import types, config, utils, errors
 from numba.npyufunc.wrappers import _wrapper_info
 from numba.extending import overload
 
@@ -526,6 +526,8 @@ def set_num_threads(n):
 
     """
     _launch_threads()
+    if not isinstance(n, int):
+        raise TypeError("The number of threads specified must be an integer")
     snt_check(n)
     _set_num_threads(n)
 
@@ -533,6 +535,9 @@ def set_num_threads(n):
 @overload(set_num_threads)
 def ol_set_num_threads(n):
     _launch_threads()
+    if not isinstance(n, types.Integer):
+        msg = "The number of threads specified must be an integer"
+        raise errors.TypingError(msg)
 
     def impl(n):
         snt_check(n)
