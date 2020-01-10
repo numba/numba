@@ -720,6 +720,22 @@ class NumberAttribute(AttributeTemplate):
 
 
 @infer_getattr
+class NPTimedeltaAttribute(AttributeTemplate):
+    key = types.NPTimedelta
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
+
+
+@infer_getattr
+class NPDatetimeAttribute(AttributeTemplate):
+    key = types.NPDatetime
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
+
+
+@infer_getattr
 class SliceAttribute(AttributeTemplate):
     key = types.SliceType
 
