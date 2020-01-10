@@ -28,10 +28,6 @@ These are provided with reference to the IEEE 754 and C99 standards
 and are often implemented in Numba in a manner similar to equivalent
 CPython functions.
 
-In particular, math library issues are known to affect Python 2.7 builds
-on Windows, since Python 2.7 requires the use of an obsolete version of
-the Microsoft Visual Studio compiler.
-
 Linear algebra
 ''''''''''''''
 
