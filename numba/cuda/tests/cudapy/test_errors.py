@@ -41,6 +41,20 @@ class TestJitErrors(unittest.TestCase):
         self.assertIn("blockdim must be a sequence of integers, got [3.0]",
                       str(raises.exception))
 
+    def _test_unconfigured(self, kernfunc):
+        with self.assertRaises(ValueError) as raises:
+            kernfunc(0)
+        self.assertIn("launch configuration was not specified",
+                      str(raises.exception))
+
+    def test_unconfigured_cudakernel(self):
+        kernfunc = cuda.jit("void(int32)")(noop)
+        self._test_unconfigured(kernfunc)
+
+    def test_unconfigured_autojitcudakernel(self):
+        kernfunc = cuda.jit(noop)
+        self._test_unconfigured(kernfunc)
+
 
 if __name__ == '__main__':
     unittest.main()
