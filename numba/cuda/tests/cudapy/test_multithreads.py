@@ -23,7 +23,7 @@ def check_concurrent_compiling():
         x[0] += 1
 
     def use_foo(x):
-        foo(x)
+        foo[1, 1](x)
         return x
 
     arrays = [np.arange(10) for i in range(10)]

@@ -36,7 +36,7 @@ class TestCudaLocalMem(SerialMixin, unittest.TestCase):
         self.assertTrue('.local' in jculocal.ptx)
         A = np.arange(1000, dtype='int32')
         B = np.zeros_like(A)
-        jculocal(A, B)
+        jculocal[1, 1](A, B)
         self.assertTrue(np.all(A == B))
 
     def test_local_array_1_tuple(self):
@@ -47,7 +47,7 @@ class TestCudaLocalMem(SerialMixin, unittest.TestCase):
         # may reduce it to registers.
         A = np.arange(5, dtype='int32')
         B = np.zeros_like(A)
-        jculocal(A, B)
+        jculocal[1, 1](A, B)
         self.assertTrue(np.all(A == B))
 
     def test_local_array_complex(self):
@@ -57,7 +57,7 @@ class TestCudaLocalMem(SerialMixin, unittest.TestCase):
         # self.assertTrue('.local' in jculocalcomplex.ptx)
         A = (np.arange(100, dtype='complex128') - 1) / 2j
         B = np.zeros_like(A)
-        jculocalcomplex(A, B)
+        jculocalcomplex[1, 1](A, B)
         self.assertTrue(np.all(A == B))
 
 

@@ -82,7 +82,7 @@ class TestLinker(SerialMixin, unittest.TestCase):
         A = np.array([123])
         B = np.array([321])
 
-        foo(A, B)
+        foo[1, 1](A, B)
 
         self.assertTrue(A[0] == 123 + 2 * 321)
 

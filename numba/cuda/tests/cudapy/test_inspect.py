@@ -39,8 +39,8 @@ class TestInspect(SerialMixin, unittest.TestCase):
         def foo(x, y):
             pass
 
-        foo(1, 1)
-        foo(1.2, 2.4)
+        foo[1, 1](1, 1)
+        foo[1, 1](1.2, 2.4)
 
         file = StringIO()
         foo.inspect_types(file=file)

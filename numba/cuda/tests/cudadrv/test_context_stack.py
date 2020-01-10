@@ -118,7 +118,7 @@ class Test3rdPartyContext(SerialMixin, unittest.TestCase):
                     a[i] = i
 
             a = cuda.device_array(10)
-            foo(a)
+            foo[1, 1](a)
             self.assertEqual(list(a.copy_to_host()), list(range(10)))
 
         self.test_attached_primary(do)

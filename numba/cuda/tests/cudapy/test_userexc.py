@@ -23,14 +23,14 @@ class TestUserExc(SerialMixin, unittest.TestCase):
             elif x == 2:
                 raise MyError("foo")
 
-        test_exc(0)    # no raise
+        test_exc[1, 1](0)    # no raise
         with self.assertRaises(MyError) as cm:
-            test_exc(1)
+            test_exc[1, 1](1)
         if not config.ENABLE_CUDASIM:
             self.assertRegexpMatches(str(cm.exception), regex_pattern)
         self.assertIn("tid=[0, 0, 0] ctaid=[0, 0, 0]", str(cm.exception))
         with self.assertRaises(MyError) as cm:
-            test_exc(2)
+            test_exc[1, 1](2)
         if not config.ENABLE_CUDASIM:
             self.assertRegexpMatches(str(cm.exception), regex_pattern)
             self.assertRegexpMatches(str(cm.exception), regex_pattern)

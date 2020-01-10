@@ -21,7 +21,7 @@ class TestSharedMemoryIssue(SerialMixin, unittest.TestCase):
             outer_arr = cuda.shared.array(1, dtype=int32)
             inner()
 
-        outer()
+        outer[1, 1]()
 
     def _check_shared_array_size(self, shape, expected):
         @cuda.jit
@@ -30,7 +30,7 @@ class TestSharedMemoryIssue(SerialMixin, unittest.TestCase):
             a[0] = arr.size
 
         result = np.zeros(1, dtype=np.int32)
-        s(result)
+        s[1, 1](result)
         self.assertEqual(result[0], expected)
 
     def test_issue_1051_shared_size_broken_1d(self):
