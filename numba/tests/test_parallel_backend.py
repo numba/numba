@@ -110,6 +110,7 @@ class jit_runner(runnable):
         got = cfunc(a, b)
         np.testing.assert_allclose(expected, got)
 
+
 class mask_runner(object):
     def __init__(self, runner, mask, **options):
         self.runner = runner
@@ -121,6 +122,7 @@ class mask_runner(object):
             # don't have to worry about this affecting other tests
             set_num_threads(self.mask)
         self.runner()
+
 
 class linalg_runner(runnable):
 
