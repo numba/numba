@@ -254,7 +254,10 @@ class TestParallelBackendBase(TestCase):
         ]
         all_impls.extend(parfor_impls)
 
-    masks = [i for i in [1, 2, 4, 8, 16] if i <= config.NUMBA_NUM_THREADS]
+    if config.NUMBA_NUM_THREADS < 2:
+        # Not enough cores
+        masks = []
+    masks = [1, 2]
 
     mask_impls = []
     for impl in all_impls:
