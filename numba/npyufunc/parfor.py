@@ -1348,7 +1348,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         cgutils.printf(builder, "num_threads: %d\n", num_threads)
         context.call_conv.return_user_exc(builder, RuntimeError,
                                                   ("Invalid number of threads. "
-                                                   "This likely indicates a bug in numba.",))
+                                                   "This likely indicates a bug in Numba.",))
 
     builder.call(
         do_scheduling, [

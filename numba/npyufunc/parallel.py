@@ -484,23 +484,22 @@ def _load_num_threads_funcs(lib):
 
 # Some helpers to make set_num_threads jittable
 
-
-def snt_check(n):
+def gen_snt_check():
     from numba.config import NUMBA_NUM_THREADS
     msg = "The number of threads must be between 1 and %s" % NUMBA_NUM_THREADS
-    if n > NUMBA_NUM_THREADS or n < 1:
-        raise ValueError(msg)
+
+    def snt_check(n):
+        if n > NUMBA_NUM_THREADS or n < 1:
+            raise ValueError(msg)
+    return snt_check
+
+
+snt_check = gen_snt_check()
 
 
 @overload(snt_check)
 def ol_snt_check(n):
-    from numba.config import NUMBA_NUM_THREADS
-    msg = "The number of threads must be between 1 and %s" % NUMBA_NUM_THREADS
-
-    def impl(n):
-        if n > NUMBA_NUM_THREADS or n < 1:
-            raise ValueError(msg)
-    return impl
+    return snt_check
 
 
 def set_num_threads(n):
@@ -567,7 +566,7 @@ def get_num_threads():
     num_threads = _get_num_threads()
     if num_threads <= 0:
         raise RuntimeError("Invalid number of threads. "
-                           "This likely indicates a bug in numba. "
+                           "This likely indicates a bug in Numba. "
                            "(thread_id=%s, num_threads=%s)" %
                            (_get_thread_id(), num_threads))
     return num_threads
@@ -583,7 +582,7 @@ def ol_get_num_threads():
             print("Broken thread_id: ", _get_thread_id())
             print("num_threads: ", num_threads)
             raise RuntimeError("Invalid number of threads. "
-                               "This likely indicates a bug in numba.")
+                               "This likely indicates a bug in Numba.")
         return num_threads
     return impl
 
