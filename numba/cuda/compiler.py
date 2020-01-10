@@ -519,9 +519,10 @@ class CUDAKernel(CUDAKernelBase):
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
+        griddim, blockdim = normalize_kernel_dimensions(self.griddim, self.blockdim)
         self._kernel_call(args=args,
-                          griddim=self.griddim,
-                          blockdim=self.blockdim,
+                          griddim=griddim,
+                          blockdim=blockdim,
                           stream=self.stream,
                           sharedmem=self.sharedmem)
 
