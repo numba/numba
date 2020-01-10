@@ -43,6 +43,10 @@ Dependencies
 * llvmlite 0.31.*
 * NumPy >=1.15 (can build with 1.11 for ABI compatibility)
 
+Optionally:
+
+* Scipy >=1.0.0 (for ``numpy.linalg`` support)
+
 
 Installing
 ==========
