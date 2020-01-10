@@ -526,7 +526,7 @@ def set_num_threads(n):
 
     """
     _launch_threads()
-    if not isinstance(n, int):
+    if not isinstance(n, (int, np.integer)):
         raise TypeError("The number of threads specified must be an integer")
     snt_check(n)
     _set_num_threads(n)
