@@ -259,7 +259,8 @@ class TestParallelBackendBase(TestCase):
     if config.NUMBA_NUM_THREADS < 2:
         # Not enough cores
         masks = []
-    masks = [1, 2]
+    else:
+        masks = [1, 2]
 
     mask_impls = []
     for impl in all_impls:
