@@ -1,5 +1,6 @@
 from __future__ import absolute_import, print_function
 import llvmlite.binding as ll
+import os
 
 
 def init_jit():
@@ -9,7 +10,8 @@ def init_jit():
 def initialize_all():
     from numba.targets.registry import dispatcher_registry
     dispatcher_registry.ondemand['ocl'] = init_jit
-    ll.load_library_permanently('../oneapidriver/libnumbaoneapiglue_so.so')
+    dir_path = os.path.dirname(os.path.realpath(__file__)) + "/oneapidriver/libnumbaoneapiglue_so.so"
+    ll.load_library_permanently(dir_path)
     ll.load_library_permanently('libOpenCL.so')
 
 def _initialize_ufunc():
