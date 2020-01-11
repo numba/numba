@@ -194,6 +194,61 @@ The current number of threads used by numba can be accessed with
 :func:`numba.get_num_threads`. Both functions work inside of a jitted
 function.
 
+Example of Limiting the Number of Threads
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In this example, suppose the machine we are running on has 8 cores (so
+:obj:`numba.config.NUMBA_NUM_THREADS` would be ``8``). Suppose we want to run
+some code with ``@njit(parallel=True)``, but we also want to run our code
+concurrently in 4 different processes. With the default number of threads,
+each Python process would run 8 threads, for a total in 4*8 = 32 threads,
+which is oversubscription for our 8 cores. We should rather limit each process
+to 2 threads, so that the total will be 4*2 = 8, which matches our number of
+physical cores.
+
+There are two ways to do this. One is to set the :envvar:`NUMBA_NUM_THREADS`
+environment variable to ``2``.
+
+.. code:: bash
+
+   $ NUMBA_NUM_THREADS=2 python ourcode.py
+
+However, there are two downsides to this approach:
+
+1. :envvar:`NUMBA_NUM_THREADS` must be set before Numba is imported, and
+   ideally before Python is launched. As soon as Numba is imported the
+   environment variable is read and that number of threads is locked in as the
+   number of threads Numba launches.
+
+2. If we want to later increase the number of threads used by the process, we
+   cannot. :envvar:`NUMBA_NUM_THREADS` sets the *maximum* number of threads
+   that are launched for a process. Calling :func:`~.set_num_threads()` with a
+   value greater than :obj:`numba.config.NUMBA_NUM_THREADS` results in an
+   error.
+
+The advantage of this approach is that we can do it from outside of the
+process without changing the code.
+
+Another approach is to use the :func:`numba.set_num_threads` function in our code
+
+.. code:: python
+
+   from numba import njit, set_num_threads
+
+   @njit(parallel=True)
+   def func():
+       ...
+
+   set_num_threads(2)
+   func()
+
+If we call ``set_num_threads(2)`` before executing our parallel code, it has
+the same effect as calling the process with ``NUMBA_NUM_THREADS=2``, in that
+the parallel code will only execute on 2 threads. However, we can later call
+``set_num_threads(8)`` to increase the number of threads back to the default
+size. And we do not have to worry about setting it before Numba gets imported.
+It only needs to be called before the parallel function is run.
+
 API Reference
 ~~~~~~~~~~~~~
 
