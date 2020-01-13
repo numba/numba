@@ -15,7 +15,7 @@ import logging
 from contextlib import contextmanager
 
 from collections import defaultdict, deque
-from numba.utils import total_ordering
+from functools import total_ordering
 from numba import mviewbuf
 from numba import utils
 from numba import config
