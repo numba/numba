@@ -3,14 +3,14 @@ from __future__ import print_function, absolute_import
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 def noop(x):
     pass
 
 
-class TestJitErrors(unittest.TestCase):
+class TestJitErrors(SerialMixin, unittest.TestCase):
     """
     Test compile-time errors with @jit.
     """
