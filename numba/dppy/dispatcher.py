@@ -5,7 +5,7 @@ import numpy as np
 from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba import ocl
-from numba.oneapi import jit, autojit
+from numba.dppy import jit, autojit
 from .descriptor import OCLTargetDesc
 from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
                                         GUFuncCallSteps)

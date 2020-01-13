@@ -1,14 +1,14 @@
 from __future__ import print_function, division, absolute_import
 from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
-from .target import OneAPITargetContext, OneAPITypingContext
+from .target import DPPyTargetContext, DPPyTypingContext
 
 
 class CPUTargetOptions(TargetOptions):
     OPTIONS = {}
 
 
-class OneAPITargetDesc(TargetDescriptor):
+class DPPyTargetDesc(TargetDescriptor):
     options = CPUTargetOptions
-    typingctx = OneAPITypingContext()
-    targetctx = OneAPITargetContext(typingctx)
+    typingctx = DPPyTypingContext()
+    targetctx = DPPyTargetContext(typingctx)

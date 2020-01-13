@@ -4,7 +4,7 @@ from numba.typing.npydecl import register_number_classes
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, MacroTemplate,
                                     signature, Registry)
-from numba import oneapi
+from numba import dppy
 
 registry = Registry()
 intrinsic = registry.register
@@ -15,62 +15,62 @@ register_number_classes(intrinsic_global)
 
 @intrinsic
 class Ocl_get_global_id(ConcreteTemplate):
-    key = oneapi.get_global_id
+    key = dppy.get_global_id
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Ocl_get_local_id(ConcreteTemplate):
-    key = oneapi.get_local_id
+    key = dppy.get_local_id
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Ocl_get_group_id(ConcreteTemplate):
-    key = oneapi.get_group_id
+    key = dppy.get_group_id
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Ocl_get_num_groups(ConcreteTemplate):
-    key = oneapi.get_num_groups
+    key = dppy.get_num_groups
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Ocl_get_work_dim(ConcreteTemplate):
-    key = oneapi.get_work_dim
+    key = dppy.get_work_dim
     cases = [signature(types.uint32)]
 
 
 @intrinsic
 class Ocl_get_global_size(ConcreteTemplate):
-    key = oneapi.get_global_size
+    key = dppy.get_global_size
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Ocl_get_local_size(ConcreteTemplate):
-    key = oneapi.get_local_size
+    key = dppy.get_local_size
     cases = [signature(types.intp, types.uint32)]
 
 
 @intrinsic
 class Ocl_barrier(ConcreteTemplate):
-    key = oneapi.barrier
+    key = dppy.barrier
     cases = [signature(types.void, types.uint32),
              signature(types.void)]
 
 
 @intrinsic
 class Ocl_mem_fence(ConcreteTemplate):
-    key = oneapi.mem_fence
+    key = dppy.mem_fence
     cases = [signature(types.void, types.uint32)]
 
 
 @intrinsic
 class Ocl_sub_group_barrier(ConcreteTemplate):
-    key = oneapi.sub_group_barrier
+    key = dppy.sub_group_barrier
     cases = [signature(types.void)]
 
 # ocl.shared submodule -------------------------------------------------------
@@ -90,7 +90,7 @@ class Ocl_sub_group_barrier(ConcreteTemplate):
 
 @intrinsic_attr
 class OclModuleTemplate(AttributeTemplate):
-    key = types.Module(oneapi)
+    key = types.Module(dppy)
 
     def resolve_get_global_id(self, mod):
         return types.Function(Ocl_get_global_id)
@@ -127,4 +127,4 @@ class OclModuleTemplate(AttributeTemplate):
 
 # intrinsic
 
-intrinsic_global(oneapi, types.Module(oneapi))
+intrinsic_global(dppy, types.Module(dppy))

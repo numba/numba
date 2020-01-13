@@ -27,7 +27,7 @@ from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks,
                             ir_extension_usedefs, _use_defs_result)
 from ..typing import signature
-from numba import config, typeinfer, oneapi
+from numba import config, typeinfer, dppy
 from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
 from numba.parfor import print_wrapped, ensure_parallel_support
@@ -486,7 +486,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                 func_sig,
                 parfor.races,
                 typemap)
-            call_oneapi(
+            call_dppy(
                 lowerer,
                 func,
                 gu_signature,
@@ -1223,7 +1223,7 @@ def _create_gufunc_for_parfor_body(
 
     if target=='spirv':
         for eachdim in range(parfor_dim):
-            gufunc_txt += "    " + legal_loop_indices[eachdim] + " = " + "oneapi.get_global_id(" + str(eachdim) + ")\n"
+            gufunc_txt += "    " + legal_loop_indices[eachdim] + " = " + "dppy.get_global_id(" + str(eachdim) + ")\n"
     else:
         # For each dimension of the parfor, create a for loop in the generated gufunc function.
         # Iterate across the proper values extracted from the schedule.
@@ -1289,7 +1289,7 @@ def _create_gufunc_for_parfor_body(
     # Force gufunc outline into existence.
     globls = {"np": np, "numba": numba}
     if target=='spirv':
-        globls["oneapi"] = oneapi
+        globls["dppy"] = dppy
     locls = {}
     exec_(gufunc_txt, globls, locls)
     gufunc_func = locls[gufunc_name]
@@ -1470,8 +1470,8 @@ def _create_gufunc_for_parfor_body(
         sys.stdout.flush()
 
     if target=='spirv':
-        kernel_func = numba.oneapi.compiler.compile_kernel_parfor(
-            numba.oneapi.oneapidriver.driver.runtime.get_gpu_device(),
+        kernel_func = numba.dppy.compiler.compile_kernel_parfor(
+            numba.dppy.dppydriver.driver.runtime.get_gpu_device(),
             gufunc_ir,
             gufunc_param_types)
     else:
@@ -1866,10 +1866,10 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     context.active_code_library.add_linking_library(cres.library)
 
-# Keep all the oneapi kernels and programs created alive indefinitely.
+# Keep all the dppy kernels and programs created alive indefinitely.
 keep_alive_kernels = []
 
-def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, expr_arg_types,
+def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, expr_arg_types,
                 loop_ranges, redvars, reddict, redarrdict, init_block, index_var_typ, races):
     '''
     Adds the call to the gufunc function from the main function.
@@ -1899,7 +1899,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
     sizeof_void_ptr = context.get_abi_sizeof(intp_t)
 
     if config.DEBUG_ARRAY_OPT:
-        print("call_oneapi")
+        print("call_dppy")
         print("args = ", expr_args)
         print("outer_sig = ", outer_sig.args, outer_sig.return_type,
               outer_sig.recvr, outer_sig.pysig)
@@ -1928,41 +1928,41 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
 
     # Create functions that we need to call ---------------------------------
 
-    create_oneapi_kernel_arg_fnty = lc.Type.function(
+    create_dppy_kernel_arg_fnty = lc.Type.function(
         intp_t, [void_ptr_ptr_t, intp_t, void_ptr_ptr_t])
-    create_oneapi_kernel_arg = builder.module.get_or_insert_function(create_oneapi_kernel_arg_fnty,
-                                                          name="create_numba_oneapi_kernel_arg")
+    create_dppy_kernel_arg = builder.module.get_or_insert_function(create_dppy_kernel_arg_fnty,
+                                                          name="create_numba_dppy_kernel_arg")
 
-    create_oneapi_kernel_arg_from_buffer_fnty = lc.Type.function(
+    create_dppy_kernel_arg_from_buffer_fnty = lc.Type.function(
         intp_t, [void_ptr_ptr_t, void_ptr_ptr_t])
-    create_oneapi_kernel_arg_from_buffer = builder.module.get_or_insert_function(
-                                               create_oneapi_kernel_arg_from_buffer_fnty,
-                                               name="create_numba_oneapi_kernel_arg_from_buffer")
+    create_dppy_kernel_arg_from_buffer = builder.module.get_or_insert_function(
+                                               create_dppy_kernel_arg_from_buffer_fnty,
+                                               name="create_numba_dppy_kernel_arg_from_buffer")
 
-    create_oneapi_rw_mem_buffer_fnty = lc.Type.function(
+    create_dppy_rw_mem_buffer_fnty = lc.Type.function(
         intp_t, [void_ptr_t, intp_t, void_ptr_ptr_t])
-    create_oneapi_rw_mem_buffer = builder.module.get_or_insert_function(
-                                      create_oneapi_rw_mem_buffer_fnty,
-                                      name="create_numba_oneapi_rw_mem_buffer")
+    create_dppy_rw_mem_buffer = builder.module.get_or_insert_function(
+                                      create_dppy_rw_mem_buffer_fnty,
+                                      name="create_numba_dppy_rw_mem_buffer")
 
     write_mem_buffer_to_device_fnty = lc.Type.function(
         intp_t, [void_ptr_t, void_ptr_t, intp_t, intp_t, intp_t, void_ptr_t])
     write_mem_buffer_to_device = builder.module.get_or_insert_function(
                                       write_mem_buffer_to_device_fnty,
-                                      name="write_numba_oneapi_mem_buffer_to_device")
+                                      name="write_numba_dppy_mem_buffer_to_device")
 
     read_mem_buffer_from_device_fnty = lc.Type.function(
         intp_t, [void_ptr_t, void_ptr_t, intp_t, intp_t, intp_t, void_ptr_t])
     read_mem_buffer_from_device = builder.module.get_or_insert_function(
                                     read_mem_buffer_from_device_fnty,
-                                    name="read_numba_oneapi_mem_buffer_from_device")
+                                    name="read_numba_dppy_mem_buffer_from_device")
 
     enqueue_kernel_fnty = lc.Type.function(
         intp_t, [void_ptr_t, void_ptr_t, intp_t, void_ptr_ptr_t,
                  intp_t, intp_ptr_t, intp_ptr_t])
     enqueue_kernel = builder.module.get_or_insert_function(
                                   enqueue_kernel_fnty,
-                                  name="set_args_and_enqueue_numba_oneapi_kernel_auto_blocking")
+                                  name="set_args_and_enqueue_numba_dppy_kernel_auto_blocking")
 
     kernel_arg_array = cgutils.alloca_once(
         builder, void_ptr_t, size=context.get_constant(
@@ -1985,11 +1985,11 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
     builder.store(builder.inttoptr(context.get_constant(types.uintp, 0), void_ptr_t), null_ptr)
     #builder.store(cgutils.get_null_value(byte_ptr_t), null_ptr)
 
-    gpu_device_env = numba.oneapi.oneapidriver.driver.runtime.get_gpu_device().get_env_ptr()
-    gpu_device_int = int(numba.oneapi.oneapidriver.driver.ffi.cast("uintptr_t", gpu_device_env))
+    gpu_device_env = numba.dppy.dppydriver.driver.runtime.get_gpu_device().get_env_ptr()
+    gpu_device_int = int(numba.dppy.dppydriver.driver.ffi.cast("uintptr_t", gpu_device_env))
     #print("gpu_device_env", gpu_device_env, type(gpu_device_env), gpu_device_int)
     kernel_t_obj = cres.kernel._kernel_t_obj[0]
-    kernel_int = int(numba.oneapi.oneapidriver.driver.ffi.cast("uintptr_t", kernel_t_obj))
+    kernel_int = int(numba.dppy.dppydriver.driver.ffi.cast("uintptr_t", kernel_t_obj))
     #print("kernel_t_obj", kernel_t_obj, type(kernel_t_obj), kernel_int)
     keep_alive_kernels.append(cres)
 
@@ -2012,7 +2012,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
 
             builder.call(
-                create_oneapi_kernel_arg, [null_ptr,
+                create_dppy_kernel_arg, [null_ptr,
                                            context.get_constant(types.uintp, sizeof_void_ptr),
                                            kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
@@ -2026,7 +2026,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             # Handle parent
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
             builder.call(
-                create_oneapi_kernel_arg, [null_ptr,
+                create_dppy_kernel_arg, [null_ptr,
                                            context.get_constant(types.uintp, sizeof_void_ptr),
                                            kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
@@ -2041,7 +2041,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
             array_size_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 2)])
             builder.call(
-                create_oneapi_kernel_arg, [builder.bitcast(array_size_member, void_ptr_ptr_t),
+                create_dppy_kernel_arg, [builder.bitcast(array_size_member, void_ptr_ptr_t),
                                            context.get_constant(types.uintp, sizeof_intp),
                                            kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
@@ -2051,7 +2051,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
             item_size_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 3)])
             builder.call(
-                create_oneapi_kernel_arg, [builder.bitcast(item_size_member, void_ptr_ptr_t),
+                create_dppy_kernel_arg, [builder.bitcast(item_size_member, void_ptr_ptr_t),
                                            context.get_constant(types.uintp, sizeof_intp),
                                            kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
@@ -2067,7 +2067,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             buffer_ptr = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name=buffer_name)
             # env, buffer_size, buffer_ptr
             builder.call(
-                create_oneapi_rw_mem_buffer, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
+                create_dppy_rw_mem_buffer, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
                                               builder.load(total_size),
                                               buffer_ptr])
 
@@ -2082,7 +2082,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             else:
                 read_bufs_after_enqueue.append((buffer_ptr, total_size, data_member))
 
-            builder.call(create_oneapi_kernel_arg_from_buffer, [buffer_ptr, kernel_arg])
+            builder.call(create_dppy_kernel_arg_from_buffer, [buffer_ptr, kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
             cur_arg += 1
             builder.store(builder.load(kernel_arg), dst)
@@ -2092,7 +2092,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
                 kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
                 shape_entry = builder.gep(shape_member, [context.get_constant(types.int32, 0), context.get_constant(types.int32, this_dim)])
                 builder.call(
-                    create_oneapi_kernel_arg, [builder.bitcast(shape_entry, void_ptr_ptr_t),
+                    create_dppy_kernel_arg, [builder.bitcast(shape_entry, void_ptr_ptr_t),
                                                context.get_constant(types.uintp, sizeof_intp),
                                                kernel_arg])
                 dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
@@ -2104,7 +2104,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
                 kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
                 stride_entry = builder.gep(stride_member, [context.get_constant(types.int32, 0), context.get_constant(types.int32, this_dim)])
                 builder.call(
-                    create_oneapi_kernel_arg, [builder.bitcast(stride_entry, void_ptr_ptr_t),
+                    create_dppy_kernel_arg, [builder.bitcast(stride_entry, void_ptr_ptr_t),
                                                context.get_constant(types.uintp, sizeof_intp),
                                                kernel_arg])
                 dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
@@ -2114,7 +2114,7 @@ def call_oneapi(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, e
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
             # Handle non-arrays
             builder.call(
-                create_oneapi_kernel_arg, [builder.bitcast(llvm_arg, void_ptr_ptr_t),
+                create_dppy_kernel_arg, [builder.bitcast(llvm_arg, void_ptr_ptr_t),
                                            context.get_constant(types.uintp, context.get_abi_sizeof(val_type)),
                                            kernel_arg])
             dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])

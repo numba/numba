@@ -11,10 +11,10 @@ from numba.targets.imputils import Registry
 from numba import cgutils
 from numba import types
 from numba.itanium_mangler import mangle_c, mangle, mangle_type
-from numba.oneapi import target
+from numba.dppy import target
 from . import stubs
-from numba.oneapi import enums
-from numba.oneapi.codegen import SPIR_DATA_LAYOUT
+from numba.dppy import enums
+from numba.dppy.codegen import SPIR_DATA_LAYOUT
 
 registry = Registry()
 lower = registry.lower

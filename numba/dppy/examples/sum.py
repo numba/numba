@@ -3,13 +3,13 @@ from __future__ import print_function
 from timeit import default_timer as time
 
 import numpy as np
-from numba import oneapi
-from numba.oneapi.oneapidriver import driver as oneapidrv
+from numba import dppy
+from numba.dppy.dppy_driver import driver as ocldrv
 
 
-@oneapi.jit
+@dppy.jit
 def data_parallel_sum(a, b, c):
-    i = oneapi.get_global_id(0)
+    i = dppy.get_global_id(0)
     c[i] = a[i] + b[i]
 
 global_size = 50, 1
@@ -25,18 +25,18 @@ c = np.ones_like(a)
 # Select a device for executing the kernel
 device_env = None
 
-if oneapidrv.runtime.get_gpu_device() is not None:
-    device_env = oneapidrv.runtime.get_gpu_device()
-elif oneapidrv.runtime.get_cpu_device() is not None:
-    device_env = oneapidrv.runtime.get_cpu_device()
+if ocldrv.runtime.get_gpu_device() is not None:
+    device_env = ocldrv.runtime.get_gpu_device()
+elif ocldrv.runtime.get_cpu_device() is not None:
+    device_env = ocldrv.runtime.get_cpu_device()
 else:
-    e = oneapidrv.DeviceNotFoundError("No OpenCL devices found on the system")
+    e = ocldrv.DeviceNotFoundError("No OpenCL devices found on the system")
     raise e
 
 # Copy the data to the device
 dA = device_env.copy_array_to_device(a)
 dB = device_env.copy_array_to_device(b)
-dC = oneapidrv.DeviceArray(device_env.get_env_ptr(), c)
+dC = ocldrv.DeviceArray(device_env.get_env_ptr(), c)
 
 print("before : ", dC._ndarray)
 data_parallel_sum[device_env,global_size,local_size](dA, dB, dC)

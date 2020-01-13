@@ -95,9 +95,9 @@ def sub_group_barrier():
 
 class Stub(object):
     """A stub object to represent special objects which is meaningless
-    outside the context of OneAPI compilation context.
+    outside the context of DPPy compilation context.
     """
-    _description_ = '<oneapi special value>'
+    _description_ = '<dppy special value>'
     __slots__ = ()  # don't allocate __dict__
 
     def __new__(cls):

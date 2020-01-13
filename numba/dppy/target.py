@@ -21,7 +21,7 @@ CC_SPIR_FUNC = "spir_func"
 # Typing
 
 
-class OneAPITypingContext(typing.BaseContext):
+class DPPyTypingContext(typing.BaseContext):
     def load_additional_registries(self):
         # Declarations for OpenCL API functions and OpenCL Math functions
         from .ocl import ocldecl, mathdecl
@@ -65,13 +65,13 @@ def _init_data_model_manager():
 spirv_data_model_manager = _init_data_model_manager()
 
 
-class OneAPITargetContext(BaseContext):
+class DPPyTargetContext(BaseContext):
     implement_powi_as_math_call = True
     generic_addrspace = SPIR_GENERIC_ADDRSPACE
-    context_name = "oneapi.jit"
+    context_name = "dppy.jit"
 
     def init(self):
-        self._internal_codegen = codegen.JITSPIRVCodegen("numba.oneapi.jit")
+        self._internal_codegen = codegen.JITSPIRVCodegen("numba.dppy.jit")
         self._target_data = (ll.create_target_data(codegen
                                 .SPIR_DATA_LAYOUT[utils.MACHINE_BITS]))
         # Override data model manager to SPIR model
@@ -85,7 +85,7 @@ class OneAPITargetContext(BaseContext):
 
     @cached_property
     def call_conv(self):
-        return OneAPICallConv(self)
+        return DPPyCallConv(self)
 
     def codegen(self):
         return self._internal_codegen
@@ -101,7 +101,7 @@ class OneAPITargetContext(BaseContext):
 
         qualified = name + '.' + '.'.join(str(a) for a in argtypes)
         mangled = VALID_CHARS.sub(repl, qualified)
-        return 'oneapi_py_devfn_' + mangled
+        return 'dppy_py_devfn_' + mangled
 
     def prepare_ocl_kernel(self, func, argtypes):
         module = func.module
@@ -138,8 +138,8 @@ class OneAPITargetContext(BaseContext):
             llargtys = changed = ()
         wrapperfnty = lc.Type.function(lc.Type.void(), llargtys)
 
-        wrapper_module = self.create_module("oneapi.kernel.wrapper")
-        wrappername = 'oneapiPy_{name}'.format(name=func.name)
+        wrapper_module = self.create_module("dppy.kernel.wrapper")
+        wrappername = 'dppyPy_{name}'.format(name=func.name)
 
         argtys = list(arginfo.argument_types)
         fnty = lc.Type.function(lc.Type.int(),
@@ -169,7 +169,7 @@ class OneAPITargetContext(BaseContext):
                                                  argtypes, callargs)
         builder.ret_void()
 
-        set_oneapi_kernel(wrapper)
+        set_dppy_kernel(wrapper)
 
         # Link
         module.link_in(ll.parse_assembly(str(wrapper_module)))
@@ -181,9 +181,9 @@ class OneAPITargetContext(BaseContext):
         return wrapper
 
     def declare_function(self, module, fndesc):
-        ret = super(OneAPITargetContext, self).declare_function(module, fndesc)
+        ret = super(DPPyTargetContext, self).declare_function(module, fndesc)
         # XXX: Refactor fndesc instead of this special case
-        if fndesc.llvm_func_name.startswith('oneapi_py_devfn'):
+        if fndesc.llvm_func_name.startswith('dppy_py_devfn'):
             ret.calling_convention = CC_SPIR_FUNC
         return ret
 
@@ -204,7 +204,7 @@ class OneAPITargetContext(BaseContext):
         return builder.addrspacecast(src, ptras)
 
 
-def set_oneapi_kernel(fn):
+def set_dppy_kernel(fn):
     """
     Ensure `fn` is usable as a SPIR kernel.
     - Fix calling convention
@@ -231,11 +231,11 @@ def set_oneapi_kernel(fn):
     make_constant = lambda x: lc.Constant.int(lc.Type.int(), x)
     spir_version_constant = [make_constant(x) for x in SPIR_VERSION]
 
-    spir_version = mod.get_or_insert_named_metadata("oneapi.spir.version")
+    spir_version = mod.get_or_insert_named_metadata("dppy.spir.version")
     if not spir_version.operands:
         spir_version.add(lc.MetaData.get(mod, spir_version_constant))
 
-    ocl_version = mod.get_or_insert_named_metadata("oneapi.ocl.version")
+    ocl_version = mod.get_or_insert_named_metadata("dppy.ocl.version")
     if not ocl_version.operands:
         ocl_version.add(lc.MetaData.get(mod, spir_version_constant))
 
@@ -313,7 +313,7 @@ def gen_arg_base_type(fn):
     return lc.MetaData.get(mod, [name] + consts)
 
 
-class OneAPICallConv(MinimalCallConv):
+class DPPyCallConv(MinimalCallConv):
     def call_function(self, builder, callee, resty, argtys, args, env=None):
         """
         Call the Numba-compiled *callee*.

@@ -10,7 +10,8 @@ def init_jit():
 def initialize_all():
     from numba.targets.registry import dispatcher_registry
     dispatcher_registry.ondemand['ocl'] = init_jit
-    dir_path = os.path.dirname(os.path.realpath(__file__)) + "/oneapidriver/libnumbaoneapiglue_so.so"
+    dir_path = (os.path.dirname(os.path.realpath(__file__)) +
+                               "/dppy_driver/libdpglue_so.so")
     ll.load_library_permanently(dir_path)
     ll.load_library_permanently('libOpenCL.so')
 
