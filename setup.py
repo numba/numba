@@ -313,7 +313,7 @@ install_requires.extend(['enum34; python_version < "3.4"'])
 install_requires.extend(['singledispatch; python_version < "3.4"'])
 install_requires.extend(['funcsigs; python_version < "3.3"'])
 
-modules_with_cffi=['./numba/oneapi/oneapidriver/driverapi.py:ffibuilder']
+modules_with_cffi=['./numba/dppy/dppy_driver/driverapi.py:ffibuilder']
 
 metadata = dict(
     name='numba',

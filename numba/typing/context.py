@@ -357,7 +357,7 @@ class BaseContext(object):
         try:
             return typeof(val, Purpose.argument)
         except ValueError:
-            if(type(val) == numba.oneapi.oneapidriver.driver.DeviceArray):
+            if(type(val) == numba.dppy.dppy_driver.driver.DeviceArray):
                 return typeof(val._ndarray, Purpose.argument)
             # DRD : Hmmm... is the assumption that this error is encountered
             # when someone is using cuda, and already has done an import

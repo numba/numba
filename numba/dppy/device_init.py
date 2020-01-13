@@ -14,12 +14,12 @@ from .ocl.stubs import (
 #    shared,
     sub_group_barrier,
 )
-#from .oneapidriver.error import OneAPISupportError
+
 from . import initialize
 from .errors import KernelRuntimeError
 
 from .decorators import jit, autojit
-from .oneapidriver.driver import runtime
+from .dppy_driver.driver import runtime
 
 
 def is_available():

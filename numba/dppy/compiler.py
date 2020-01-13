@@ -4,14 +4,14 @@ from collections import namedtuple
 
 from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler, ir
-from .oneapidriver import driver
+from .dppy_driver import driver
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
-from numba.oneapi.oneapidriver import spirv_generator
+from numba.dppy.dppy_driver import spirv_generator
 from types import FunctionType
 import os
 
-DEBUG=os.environ.get('NUMBA_ONEAPI_DEBUG', None)
+DEBUG=os.environ.get('NUMBA_DPPY_DEBUG', None)
 
 def _raise_no_device_found_error():
     error_message = ("No OpenCL device specified. "
@@ -19,12 +19,12 @@ def _raise_no_device_found_error():
     raise ValueError(error_message)
 
 
-def compile_with_oneapi(pyfunc, return_type, args, debug):
+def compile_with_dppy(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the OpenCL backend.
-    from .descriptor import OneAPITargetDesc
+    from .descriptor import DPPyTargetDesc
 
-    typingctx = OneAPITargetDesc.typingctx
-    targetctx = OneAPITargetDesc.targetctx
+    typingctx = DPPyTargetDesc.typingctx
+    targetctx = DPPyTargetDesc.targetctx
     # TODO handle debug flag
     flags = compiler.Flags()
     # Do not compile (generate native code), just lower (to LLVM)
@@ -62,23 +62,23 @@ def compile_with_oneapi(pyfunc, return_type, args, debug):
 def compile_kernel(device, pyfunc, args, debug=False):
     if DEBUG:
         print("compile_kernel", args)
-    cres = compile_with_oneapi(pyfunc, types.void, args, debug=debug)
+    cres = compile_with_dppy(pyfunc, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
-    oclkern = OneAPIKernel(device_env=device,
-                           llvm_module=kernel.module,
-                           name=kernel.name,
-                           argtypes=cres.signature.args)
+    oclkern = DPPyKernel(device_env=device,
+                         llvm_module=kernel.module,
+                         name=kernel.name,
+                         argtypes=cres.signature.args)
     return oclkern
 
 
 def compile_kernel_parfor(device, func_ir, args, debug=False):
     if DEBUG:
         print("compile_kernel_parfor", args)
-    cres = compile_with_oneapi(func_ir, types.void, args, debug=debug)
+    cres = compile_with_dppy(func_ir, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
-    oclkern = OneAPIKernel(device_env=device,
+    oclkern = Kernel(device_env=device,
                            llvm_module=kernel.module,
                            name=kernel.name,
                            argtypes=cres.signature.args)
@@ -97,7 +97,7 @@ def _ensure_size_or_append(val, size):
         val.append(1)
 
 
-class OneAPIKernelBase(object):
+class DPPyKernelBase(object):
     """Define interface for configurable kernels
     """
 
@@ -183,13 +183,13 @@ class OneAPIKernelBase(object):
 #        return context, device, program, kernel
 
 
-class OneAPIKernel(OneAPIKernelBase):
+class DPPyKernel(DPPyKernelBase):
     """
     A OCL kernel object
     """
 
     def __init__(self, device_env, llvm_module, name, argtypes):
-        super(OneAPIKernel, self).__init__()
+        super(DPPyKernel, self).__init__()
         self._llvm_module = llvm_module
         self.assembly = self.binary = llvm_module.__str__()
         self.entry_name = name
@@ -200,7 +200,7 @@ class OneAPIKernel(OneAPIKernelBase):
         #                                 binary=self.binary)
         # First-time compilation using SPIRV-Tools
         self.spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
-        #print("OneAPIKernel:", self.spirv_bc, type(self.spirv_bc))
+        #print("DPPyKernel:", self.spirv_bc, type(self.spirv_bc))
         # create a program
         self.program = driver.Program(device_env, self.spirv_bc)
         #  create a kernel
@@ -336,16 +336,16 @@ class OneAPIKernel(OneAPIKernelBase):
             raise NotImplementedError(ty, val)
 
 
-class AutoJitOneAPIKernel(OneAPIKernelBase):
+class AutoJitDPPyKernel(DPPyKernelBase):
     def __init__(self, func):
 
-        super(AutoJitOneAPIKernel, self).__init__()
+        super(AutoJitDPPyKernel, self).__init__()
         self.py_func = func
         self.definitions = {}
 
-        from .descriptor import OneAPITargetDesc
+        from .descriptor import DPPyTargetDesc
 
-        self.typingctx = OneAPITargetDesc.typingctx
+        self.typingctx = DPPyTargetDesc.typingctx
 
     def __call__(self, *args):
         if self.device_env is None:

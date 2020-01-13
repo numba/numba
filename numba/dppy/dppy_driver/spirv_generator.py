@@ -35,7 +35,7 @@ if spirv_tools_home is None:
 
 if spirv_tools_home is not None:
     try:
-        oneapi_glue_home = os.path.abspath(spirv_tools_home)
+        os.path.abspath(spirv_tools_home)
     except ValueError:
         _raise_bad_env_path(BAD_spirv_tools_home_PATH_ERRMSG, spirv_tools_home)
 
@@ -48,7 +48,7 @@ if llvm_home is None:
     
 if llvm_home is not None:
     try:
-        oneapi_glue_home = os.path.abspath(llvm_home)
+        os.path.abspath(llvm_home)
     except ValueError:
         _raise_bad_env_path(BAD_LLVM_HOME_PATH_ERRMSG, llvm_home)
 
