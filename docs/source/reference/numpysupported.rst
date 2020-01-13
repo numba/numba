@@ -279,7 +279,7 @@ floating-point and complex numbers:
 * :func:`numpy.linalg.svd` (only the 2 first arguments).
 
 .. note::
-   The implementation of these functions needs Scipy to be installed.
+   The implementation of these functions needs SciPy to be installed.
 
 Reductions
 ----------
@@ -330,7 +330,7 @@ The following top-level functions are supported:
 * :func:`numpy.concatenate`
 * :func:`numpy.convolve` (only the 2 first arguments)
 * :func:`numpy.copy` (only the first argument)
-* :func:`numpy.corrcoef` (only the 3 first arguments)
+* :func:`numpy.corrcoef` (only the 3 first arguments, requires SciPy)
 * :func:`numpy.correlate` (only the 2 first arguments)
 * :func:`numpy.count_nonzero` (axis only supports scalar values)
 * :func:`numpy.cov` (only the 5 first arguments)
