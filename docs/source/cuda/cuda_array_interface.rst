@@ -4,7 +4,7 @@
 CUDA Array Interface (Version 2)
 ================================
 
-The *cuda array inteface* is created for interoperability between different
+The *cuda array interface* is created for interoperability between different
 implementation of GPU array-like objects in various projects.  The idea is
 borrowed from the `numpy array interface`_.
 
@@ -20,8 +20,8 @@ Python Interface Specification
 
 .. note:: Experimental feature.  Specification may change.
 
-The ``__cuda_array_interface__`` attribute returns a dictionary that must
-contain the following entries:
+The ``__cuda_array_interface__`` attribute returns a dictionary (``dict``)
+that must contain the following entries:
 
 - **shape**: ``(integer, ...)``
 

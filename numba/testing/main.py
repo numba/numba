@@ -5,6 +5,7 @@ import numba.unittest_support as unittest
 import collections
 import contextlib
 import cProfile
+import inspect
 import gc
 import multiprocessing
 import os
@@ -55,17 +56,38 @@ def make_tag_decorator(known_tags):
     return tag
 
 
+def test_mtime(x):
+    return str(os.path.getmtime(inspect.getfile(x.__class__))) + str(x)
+
+
+def parse_slice(useslice):
+    """Parses the argument string "useslice" as the arguments to the `slice()`
+    constructor and returns a slice object that's been instantiated with those
+    arguments. i.e. input useslice="1,20,2" leads to output `slice(1, 20, 2)`.
+    """
+    try:
+        l = {}
+        exec("sl = slice(%s)" % useslice, l)
+        return l['sl']
+    except Exception:
+        msg = ("Expected arguments consumable by 'slice' to follow "
+                "option `-j`, found '%s'" % useslice)
+        raise ValueError(msg)
+
+
 class TestLister(object):
     """Simply list available tests rather than running them."""
-    def __init__(self):
-        pass
+    def __init__(self, useslice):
+        self.useslice = parse_slice(useslice)
 
     def run(self, test):
         result = runner.TextTestResult(sys.stderr, descriptions=True, verbosity=1)
         self._test_list = _flatten_suite(test)
-        for t in self._test_list:
+        masked_list = self._test_list[self.useslice]
+        self._test_list.sort(key=test_mtime)
+        for t in masked_list:
             print(t.id())
-        print('%d tests found' % len(self._test_list))
+        print('%d tests found. %s selected' % (len(self._test_list), len(masked_list)))
         return result
 
 
@@ -89,6 +111,18 @@ class SerialSuite(unittest.TestSuite):
             super(SerialSuite, self).addTest(test)
 
 
+class BasicTestRunner(runner.TextTestRunner):
+    def __init__(self, useslice, **kwargs):
+        runner.TextTestRunner.__init__(self, **kwargs)
+        self.useslice = parse_slice(useslice)
+
+    def run(self, test):
+        run = _flatten_suite(test)[self.useslice]
+        run.sort(key=test_mtime)
+        wrapped = unittest.TestSuite(run)
+        return super(BasicTestRunner, self).run(wrapped)
+
+
 # "unittest.main" is really the TestProgram class!
 # (defined in a module named itself "unittest.main"...)
 
@@ -106,6 +140,7 @@ class NumbaTestProgram(unittest.main):
     refleak = False
     profile = False
     multiprocess = False
+    useslice = None
     list = False
     tags = None
     exclude_tags = None
@@ -155,6 +190,13 @@ class NumbaTestProgram(unittest.main):
         parser.add_argument('--profile', dest='profile',
                             action='store_true',
                             help='Profile the test run')
+        parser.add_argument('-j', '--slice', dest='useslice', nargs='?',
+                            type=str, const="None",
+                            help='Slice the test sequence')
+        parser.add_argument('-g', '--gitdiff', dest='gitdiff',
+                            action='store_true',
+                            help=('Run tests from changes made against'
+                                  'origin/master as identified by `git diff`'))
         return parser
 
     def _handle_tags(self, argv, tagstr):
@@ -227,6 +269,19 @@ class NumbaTestProgram(unittest.main):
                 self.multiprocess = nprocs
                 argv.remove('-m')
 
+            if '-j' in argv:
+                # We want '-s' to work on all versions, emulate this option.
+                dashs_posn = argv.index('-j')
+                j_option = argv[dashs_posn + 1]
+                self.useslice = j_option
+                argv.remove(j_option)
+                argv.remove('-j')
+
+            self.gitdiff = False
+            if '-g' in argv:
+                self.gitdiff = True
+                argv.remove('-g')
+
             # handle tags
             self._handle_tags(argv, '--tags')
             self._handle_tags(argv, '--exclude-tags')
@@ -251,6 +306,9 @@ class NumbaTestProgram(unittest.main):
             self.test = _choose_random_tests(self.test, self.random_select,
                                              self.random_seed)
 
+        if self.gitdiff:
+            self.test = _choose_gitdiff_tests(self.test)
+
         if self.verbosity <= 0:
             # We aren't interested in informational messages / warnings when
             # running with '-q'.
@@ -272,18 +330,22 @@ class NumbaTestProgram(unittest.main):
                               "of Python, only memory leaks will be detected")
 
         elif self.list:
-            self.testRunner = TestLister()
+            self.testRunner = TestLister(self.useslice)
 
         elif self.testRunner is None:
-            self.testRunner = unittest.TextTestRunner
+            self.testRunner = BasicTestRunner(self.useslice,
+                                              verbosity=self.verbosity,
+                                              failfast=self.failfast,
+                                              buffer=self.buffer)
 
         if self.multiprocess and not self.nomultiproc:
             if self.multiprocess < 1:
                 msg = ("Value specified for the number of processes to use in "
                     "running the suite must be > 0")
                 raise ValueError(msg)
-            self.testRunner = ParallelTestRunner(self.testRunner,
+            self.testRunner = ParallelTestRunner(runner.TextTestRunner,
                                                  self.multiprocess,
+                                                 self.useslice,
                                                  verbosity=self.verbosity,
                                                  failfast=self.failfast,
                                                  buffer=self.buffer)
@@ -319,6 +381,27 @@ def _flatten_suite(test):
     else:
         return [test]
 
+def _choose_gitdiff_tests(tests):
+    try:
+        from git import Repo
+    except ImportError:
+        raise ValueError("gitpython needed for git functionality")
+    repo = Repo('.')
+    path = os.path.join('numba', 'tests')
+    target = 'origin/master..HEAD'
+    gdiff_paths = repo.git.diff(target, path, name_only=True).split()
+    # normalise the paths as they are unix style from repo.git.diff
+    gdiff_paths = [os.path.normpath(x) for x in gdiff_paths]
+    selected = []
+    if PYVERSION > (2, 7): # inspect output changes in py3
+        gdiff_paths = [os.path.join(repo.working_dir, x) for x in gdiff_paths]
+    for test in _flatten_suite(tests):
+        assert isinstance(test, unittest.TestCase)
+        fname = inspect.getsourcefile(test.__class__)
+        if fname in gdiff_paths:
+            selected.append(test)
+    print("Git diff identified %s tests" % len(selected))
+    return unittest.TestSuite(selected)
 
 def _choose_tagged_tests(tests, tags, mode='include'):
     """
@@ -586,12 +669,14 @@ class _MinimalRunner(object):
                 del test.__dict__[name]
 
 
-def _split_nonparallel_tests(test):
+def _split_nonparallel_tests(test, sliced=slice(None)):
     """
     Split test suite into parallel and serial tests.
     """
     ptests = []
     stests = []
+
+    flat = _flatten_suite(test)[sliced]
 
     def is_parallelizable_test_case(test):
         # Guard for the fake test case created by unittest when test
@@ -603,18 +688,12 @@ def _split_nonparallel_tests(test):
         # Was parallel execution explicitly disabled?
         return getattr(test, "_numba_parallel_test_", True)
 
-    if isinstance(test, unittest.TestSuite):
-        # It's a sub-suite, recurse
-        for t in test:
-            p, s = _split_nonparallel_tests(t)
-            ptests.extend(p)
-            stests.extend(s)
-    elif is_parallelizable_test_case(test):
-        # Test case is suitable for parallel execution (default)
-        ptests = [test]
-    else:
-        # Test case explicitly disallows parallel execution
-        stests = _flatten_suite(test)
+    for t in flat:
+        if is_parallelizable_test_case(t):
+            ptests.append(t)
+        else:
+            stests.append(t)
+
     return ptests, stests
 
 # A test can't run longer than 10 minutes
@@ -629,10 +708,11 @@ class ParallelTestRunner(runner.TextTestRunner):
     resultclass = ParallelTestResult
     timeout = _TIMEOUT
 
-    def __init__(self, runner_cls, nprocs, **kwargs):
+    def __init__(self, runner_cls, nprocs, useslice, **kwargs):
         runner.TextTestRunner.__init__(self, **kwargs)
         self.runner_cls = runner_cls
         self.nprocs = nprocs
+        self.useslice = parse_slice(useslice)
         self.runner_args = kwargs
 
     def _run_inner(self, result):
@@ -641,7 +721,7 @@ class ParallelTestRunner(runner.TextTestRunner):
         child_runner = _MinimalRunner(self.runner_cls, self.runner_args)
 
         # Split the tests and recycle the worker process to tame memory usage.
-        chunk_size = 500
+        chunk_size = 100
         splitted_tests = [self._ptests[i:i + chunk_size]
                           for i in range(0, len(self._ptests), chunk_size)]
 
@@ -671,6 +751,7 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
         remaining_ids = set(t.id() for t in tests)
+        tests.sort(key=test_mtime)
         it = pool.imap_unordered(child_runner, tests)
         while True:
             try:
@@ -692,7 +773,11 @@ class ParallelTestRunner(runner.TextTestRunner):
                     return
 
     def run(self, test):
-        self._ptests, self._stests = _split_nonparallel_tests(test)
+        self._ptests, self._stests = _split_nonparallel_tests(test,
+                                                              sliced=
+                                                              self.useslice)
+        print("Parallel: %s. Serial: %s" % (len(self._ptests),
+                                            len(self._stests)))
         # This will call self._run_inner() on the created result object,
         # and print out the detailed test results at the end.
         return super(ParallelTestRunner, self).run(self._run_inner)

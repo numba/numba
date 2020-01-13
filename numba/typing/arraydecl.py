@@ -312,19 +312,22 @@ class ArrayAttribute(AttributeTemplate):
                 assert ary.ndim == 1
                 return signature(ary, *args)
 
+            if isinstance(shape, types.NoneType):
+                return signature(self.resolve_T(ary))
+
             shape = normalize_shape(shape)
             if shape is None:
                 return
 
             assert ary.ndim == shape.count
-            return signature(self.resolve_T(ary), shape)
+            return signature(self.resolve_T(ary).copy(layout="A"), shape)
 
         else:
             if any(not sentry_shape_scalar(a) for a in args):
                 raise TypeError("transpose({0}) is not supported".format(
                     ', '.join(args)))
             assert ary.ndim == len(args)
-            return signature(self.resolve_T(ary), *args)
+            return signature(self.resolve_T(ary).copy(layout="A"), *args)
 
     @bound_function("array.copy")
     def resolve_copy(self, ary, args, kws):

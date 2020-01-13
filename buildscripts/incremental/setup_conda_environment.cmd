@@ -23,7 +23,7 @@ conda list
 @rem Clean up any left-over from a previous build
 conda remove --all -q -y -n %CONDA_ENV%
 @rem Scipy, CFFI, jinja2 and IPython are optional dependencies, but exercised in the test suite
-conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython
+conda create -n %CONDA_ENV% -q -y python=%PYTHON% numpy=%NUMPY% cffi pip scipy jinja2 ipython gitpython
 
 call activate %CONDA_ENV%
 @rem Install latest llvmlite build

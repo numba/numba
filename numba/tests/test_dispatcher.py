@@ -400,7 +400,7 @@ class TestDispatcher(BaseTest):
 
         self.assertIs(foo, foo_rebuilt)
 
-        # do we get the same object even if we delete all the explict
+        # do we get the same object even if we delete all the explicit
         # references?
         id_orig = id(foo_rebuilt)
         del foo
@@ -1338,7 +1338,7 @@ class TestCache(BaseCacheUsecasesTest):
         mod = self.import_module()
         f = mod.add_usecase
         # Remove this function's cache files at the end, to avoid accumulation
-        # accross test calls.
+        # across test calls.
         self.addCleanup(shutil.rmtree, f.stats.cache_path, ignore_errors=True)
 
         self.assertPreciseEqual(f(2, 3), 6)

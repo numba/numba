@@ -194,7 +194,6 @@ class CUDAUFuncMechanism(UFuncMechanism):
     Provide OpenCL specialization
     """
     DEFAULT_STREAM = 0
-    ARRAY_ORDER = 'A'
 
     def launch(self, func, count, stream, args):
         func.forall(count, stream=stream)(*args)

@@ -16,6 +16,17 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        impl_ret_borrowed, impl_ret_untracked,
                        numba_typeref_ctor)
 from .. import typing, types, cgutils, utils
+from ..extending import overload, intrinsic
+from numba.typeconv import Conversion
+from numba.errors import TypingError
+
+
+@overload(operator.truth)
+def ol_truth(val):
+    if isinstance(val, types.Boolean):
+        def impl(val):
+            return val
+        return impl
 
 
 @lower_builtin(operator.is_not, types.Any, types.Any)
@@ -72,6 +83,23 @@ def const_ne_impl(context, builder, sig, args):
     res = ir.Constant(ir.IntType(1), val)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
+def gen_non_eq(val):
+    def none_equality(a, b):
+        a_none = isinstance(a, types.NoneType)
+        b_none = isinstance(b, types.NoneType)
+        if a_none and b_none:
+            def impl(a, b):
+                return val
+            return impl
+        elif a_none ^ b_none:
+            def impl(a, b):
+                return not val
+            return impl
+    return none_equality
+
+overload(operator.eq)(gen_non_eq(True))
+overload(operator.ne)(gen_non_eq(False))
 
 #-------------------------------------------------------------------------------
 
@@ -294,6 +322,14 @@ def constant_function_pointer(context, builder, ty, pyval):
     return builder.bitcast(ptrval, ptrty)
 
 
+@lower_constant(types.Optional)
+def constant_optional(context, builder, ty, pyval):
+    if pyval is None:
+        return context.make_optional_none(builder, ty.type)
+    else:
+        return context.make_optional_value(builder, ty.type, pyval)
+
+
 # -----------------------------------------------------------------------------
 
 @lower_builtin(type, types.Any)
@@ -364,6 +400,22 @@ def lower_empty_tuple(context, builder, sig, args):
 def lower_tuple(context, builder, sig, args):
     val, = args
     return impl_ret_untracked(context, builder, sig.return_type, val)
+
+@overload(bool)
+def bool_sequence(x):
+    valid_types = (
+        types.CharSeq,
+        types.UnicodeCharSeq,
+        types.DictType,
+        types.ListType,
+        types.UnicodeType,
+        types.Set,
+    )
+    
+    if isinstance(x, valid_types):
+        def bool_impl(x):
+            return len(x) > 0
+        return bool_impl
 
 # -----------------------------------------------------------------------------
 
@@ -525,3 +577,29 @@ def redirect_type_ctor(context, builder, sig, args):
             context.make_tuple(builder, sig.args[1], args))
 
     return context.compile_internal(builder, call_ctor, sig, args)
+
+# ------------------------------------------------------------------------------
+# map, filter, reduce
+
+
+@overload(map)
+def ol_map(func, iterable, *args):
+    def impl(func, iterable, *args):
+        for x in zip(iterable, *args):
+            yield func(*x)
+    return impl
+
+
+@overload(filter)
+def ol_filter(func, iterable):
+    if (func is None) or isinstance(func, types.NoneType):
+        def impl(func, iterable):
+            for x in iterable:
+                if x:
+                    yield x
+    else:
+        def impl(func, iterable):
+            for x in iterable:
+                if func(x):
+                    yield x
+    return impl

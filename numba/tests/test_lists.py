@@ -832,7 +832,7 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
             cfunc(lst)
         if utils.IS_PY3:
             msg = ("can't unbox heterogeneous list: "
-                   "tuple({0} x 1) != tuple({0} x 2)")
+                   "UniTuple({0} x 1) != UniTuple({0} x 2)")
             self.assertEqual(str(raises.exception), msg.format(types.intp))
         else:
             self.assertEqual(
