@@ -97,7 +97,7 @@ def _get_wrapper_address(func, sig):
     func : object
       Specify a function object that can be numba.cfunc decorated or
       an object that implements wrapper address protocol (see note below).
-    sig : str
+    sig : Signature
       Specify function signature.
 
     Returns
@@ -124,11 +124,10 @@ def _get_wrapper_address(func, sig):
         cfunc = numba.cfunc(sig)(func)
         addr = cfunc._wrapper_address
     elif isinstance(func, CFunc):
-        func_sig = str(numbatype(func._sig))
-        if sig == func_sig:
+        if sig == func._sig:
             addr = func._wrapper_address
         else:
-            cfunc = numba.cfunc(sig)(func.pyfunc)
+            cfunc = numba.cfunc(sig)(func._pyfunc)
             addr = cfunc._wrapper_address
     else:
         raise NotImplementedError(
@@ -156,11 +155,8 @@ def unbox_function_type(typ, obj, c):
         numba_mod, '_get_wrapper_address')
     c.pyapi.decref(numba_mod)
 
-    ctyp = c.context.insert_const_string(c.builder.module, typ.name)
-    styp = c.pyapi.string_from_string(ctyp)
-    addr = c.pyapi.call_function_objargs(numba_func, (obj, styp))
-    c.pyapi.decref(numba_func)
-    c.pyapi.decref(styp)
+    sig_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.signature()))
+    addr = c.pyapi.call_function_objargs(numba_func, (obj, sig_obj))
 
     with c.builder.if_else(cgutils.is_null(c.builder, addr),
                            likely=False) as (then, orelse):

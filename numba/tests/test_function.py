@@ -1,5 +1,5 @@
 import types as pytypes
-from numba import njit, function, cfunc, types
+from numba import njit, function, cfunc, types, int64, int32
 import ctypes
 
 from .support import TestCase
@@ -15,38 +15,38 @@ def dump(foo):  # FOR DEBUGGING, TO BE REMOVED
 
 
 # Decorators for tranforming a Python function to different kinds of functions:
-def pure_func(func, sig='int64(int64)'):
+def pure_func(func, sig=int64(int64)):
     assert isinstance(func, pytypes.FunctionType), repr(func)
     func.pyfunc = func
     return func
 
 
-def cfunc_func(func, sig='int64(int64)'):
+def cfunc_func(func, sig=int64(int64)):
     assert isinstance(func, pytypes.FunctionType), repr(func)
     f = cfunc(sig)(func)
     f.pyfunc = func
     return f
 
 
-def njit_func(func, sig='int64(int64)'):
+def njit_func(func, sig=int64(int64)):
     assert isinstance(func, pytypes.FunctionType), repr(func)
     f = njit(func)
     f.pyfunc = func
     return f
 
 
-def njit2_func(func, sig='int64(int64)'):
+def njit2_func(func, sig=int64(int64)):
     assert isinstance(func, pytypes.FunctionType), repr(func)
     f = njit(sig)(func)
     f.pyfunc = func
     return f
 
 
-def ctypes_func(func, sig='int64(int64)'):
+def ctypes_func(func, sig=int64(int64)):
     assert isinstance(func, pytypes.FunctionType), repr(func)
     cfunc = cfunc_func(func, sig)
     addr = cfunc._wrapper_address
-    if sig == 'int64(int64)':
+    if sig == int64(int64):
         f = ctypes.CFUNCTYPE(ctypes.c_int64)(addr)
         f.pyfunc = func
         return f
@@ -73,7 +73,7 @@ class WAP(types.WrapperAddressProtocol):
         return self.pyfunc(*args, **kwargs)
 
 
-def wap_func(func, sig='int64(int64)'):
+def wap_func(func, sig=int64(int64)):
     return WAP(func, sig)
 
 
@@ -601,7 +601,7 @@ class TestFuncionTypeExtensions(TestCase):
                 self.fname = fname
 
             def __wrapper_address__(self, sig):
-                if (self.fname, sig) == ('time', 'int32()'):
+                if (self.fname, sig) == ('time', int32()):
                     assert self.libc.time.restype == ctypes.c_int, (
                         self.libc.time.restype, ctypes.c_int)
                     assert ctypes.sizeof(ctypes.c_int) == 4, (
@@ -615,7 +615,7 @@ class TestFuncionTypeExtensions(TestCase):
 
             def signature(self):
                 if self.fname == 'time':
-                    return 'int32()'
+                    return int32()
                 raise NotImplementedError(f'signature of `{self.fname}`')
 
         wap = LibC('time')
