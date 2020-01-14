@@ -12,7 +12,7 @@
 // around this situation, add a stack to store all the objects that should be
 // released prior to returning. The stack gets populated as a function executes
 // and on encountering an error, all objects on the stack get properly released
-// prior to returning. (Look at enqueue_dp_glue_kernel_from_source for a
+// prior to returning. (Look at enqueue_dp_kernel_from_source for a
 // ghastly example where we really need proper resource management.)
 
 // FIXME : memory allocated in a function should be released in the error
@@ -70,11 +70,11 @@
     case 0:                                                                    \
         break;                                                                 \
     case -1:                                                                   \
-        fprintf(stderr, "Dp_glue Error: %d (%s) on Line %d in %s\n",           \
+        fprintf(stderr, "DP_Glue Error: %d (%s) on Line %d in %s\n",           \
                 retval, M, __LINE__, __FILE__);                                \
         goto error;                                                            \
     default:                                                                   \
-        fprintf(stderr, "Dp_glue Error: %d (%s) on Line %d in %s\n",           \
+        fprintf(stderr, "DP_Glue Error: %d (%s) on Line %d in %s\n",           \
                 retval, M, __LINE__, __FILE__);                                \
         goto error;                                                            \
     }                                                                          \
@@ -229,7 +229,7 @@ error:
  * devices available to this runtime.
  *
  */
-static int dump_dp_glue_runtime_info (void *obj)
+static int dump_dp_runtime_info (void *obj)
 {
     size_t i;
     runtime_t rt;
@@ -256,7 +256,7 @@ static int dump_dp_glue_runtime_info (void *obj)
 /*!
  *
  */
-static int dump_dp_glue_kernel_info (void *obj)
+static int dump_dp_kernel_info (void *obj)
 {
     cl_int err;
     char *value;
@@ -337,10 +337,10 @@ error:
 /*!
  *
  */
-static int create_dp_glue_env_t (cl_platform_id* platforms,
-                                 size_t nplatforms,
-                                 cl_device_type device_ty,
-                                 env_t *env_t_ptr)
+static int create_dp_env_t (cl_platform_id* platforms,
+                            size_t nplatforms,
+                            cl_device_type device_ty,
+                            env_t *env_t_ptr)
 {
     cl_int err;
     int err1;
@@ -351,7 +351,7 @@ static int create_dp_glue_env_t (cl_platform_id* platforms,
     device = NULL;
 
     // Allocate the env_t object
-    env = (env_t)malloc(sizeof(struct dp_glue_env));
+    env = (env_t)malloc(sizeof(struct dp_env));
     CHECK_MALLOC_ERROR(env_t, env);
     env->id_ = ENV_ID;
 
@@ -389,7 +389,7 @@ error:
 }
 
 
-static int destroy_dp_glue_env_t (env_t *env_t_ptr)
+static int destroy_dp_env_t (env_t *env_t_ptr)
 {
     cl_int err;
 #if DEBUG
@@ -444,8 +444,8 @@ static int init_runtime_t_obj (runtime_t rt)
     // pointer arithmetic on void*.
     platforms = (cl_platform_id*)rt->platform_ids;
     // Get the first cpu device on this platform
-    ret = create_dp_glue_env_t(platforms, rt->num_platforms,
-                               CL_DEVICE_TYPE_CPU, &rt->first_cpu_env);
+    ret = create_dp_env_t(platforms, rt->num_platforms,
+                          CL_DEVICE_TYPE_CPU, &rt->first_cpu_env);
     rt->has_cpu = !ret;
 
 #if DEBUG
@@ -456,8 +456,8 @@ static int init_runtime_t_obj (runtime_t rt)
 #endif
 
     // Get the first gpu device on this platform
-    ret = create_dp_glue_env_t(platforms, rt->num_platforms,
-                               CL_DEVICE_TYPE_GPU, &rt->first_gpu_env);
+    ret = create_dp_env_t(platforms, rt->num_platforms,
+                          CL_DEVICE_TYPE_GPU, &rt->first_gpu_env);
     rt->has_gpu = !ret;
 
 #if DEBUG
@@ -482,17 +482,17 @@ error:
 
 
 /*!
- * @brief Initializes a new dp_glue_runtime_t object
+ * @brief Initializes a new dp_runtime_t object
  *
  */
-int create_dp_glue_runtime (runtime_t *rt)
+int create_dp_runtime (runtime_t *rt)
 {
     int err;
     runtime_t rtobj;
 
     rtobj = NULL;
-    // Allocate a new struct dp_glue_runtime object
-    rtobj = (runtime_t)malloc(sizeof(struct dp_glue_runtime));
+    // Allocate a new struct dp_runtime object
+    rtobj = (runtime_t)malloc(sizeof(struct dp_runtime));
     CHECK_MALLOC_ERROR(runtime_t, rt);
 
     rtobj->id_ = RUNTIME_ID;
@@ -500,11 +500,11 @@ int create_dp_glue_runtime (runtime_t *rt)
     rtobj->platform_ids  = NULL;
     err = init_runtime_t_obj(rtobj);
     CHECK_DPGLUE_ERROR(err, "Could not initialize runtime object.");
-    rtobj->dump_fn = dump_dp_glue_runtime_info;
+    rtobj->dump_fn = dump_dp_runtime_info;
 
     *rt = rtobj;
 #if DEBUG
-    printf("DEBUG: Created an new dp_glue_runtime object\n");
+    printf("DEBUG: Created an new dp_runtime object\n");
 #endif
     return DP_GLUE_SUCCESS;
 
@@ -520,7 +520,7 @@ error:
  * @brief Free the runtime and all its resources.
  *
  */
-int destroy_dp_glue_runtime (runtime_t *rt)
+int destroy_dp_runtime (runtime_t *rt)
 {
     int err;
 #if DEBUG
@@ -528,14 +528,14 @@ int destroy_dp_glue_runtime (runtime_t *rt)
 #endif
 
 #if DEBUG
-    printf("DEBUG: Going to destroy the dp_glue_runtime object\n");
+    printf("DEBUG: Going to destroy the dp_runtime object\n");
 #endif
     // free the first_cpu_device
-    err = destroy_dp_glue_env_t(&(*rt)->first_cpu_env);
+    err = destroy_dp_env_t(&(*rt)->first_cpu_env);
     CHECK_DPGLUE_ERROR(err, "Could not destroy first_cpu_device.");
 
     // free the first_gpu_device
-    err = destroy_dp_glue_env_t(&(*rt)->first_gpu_env);
+    err = destroy_dp_env_t(&(*rt)->first_gpu_env);
     CHECK_DPGLUE_ERROR(err, "Could not destroy first_gpu_device.");
 
     // free the platforms
@@ -544,7 +544,7 @@ int destroy_dp_glue_runtime (runtime_t *rt)
     free(*rt);
 
 #if DEBUG
-    printf("DEBUG: Destroyed the new dp_glue_runtime object\n");
+    printf("DEBUG: Destroyed the new dp_runtime object\n");
 #endif
     return DP_GLUE_SUCCESS;
 
@@ -556,7 +556,7 @@ error:
 /*!
  *
  */
-int retain_dp_glue_context (env_t env_t_ptr)
+int retain_dp_context (env_t env_t_ptr)
 {
     cl_int err;
     cl_context context;
@@ -576,7 +576,7 @@ error:
 /*!
  *
  */
-int release_dp_glue_context (env_t env_t_ptr)
+int release_dp_context (env_t env_t_ptr)
 {
     cl_int err;
     cl_context context;
@@ -593,9 +593,9 @@ error:
 }
 
 
-int create_dp_glue_rw_mem_buffer (env_t env_t_ptr,
-                                  size_t buffsize,
-                                  buffer_t *buffer_t_ptr)
+int create_dp_rw_mem_buffer (env_t env_t_ptr,
+                             size_t buffsize,
+                             buffer_t *buffer_t_ptr)
 {
     cl_int err;
     buffer_t buff;
@@ -610,8 +610,8 @@ int create_dp_glue_rw_mem_buffer (env_t env_t_ptr,
     err = clRetainContext(context);
     CHECK_OPEN_CL_ERROR(err, "Failed to retain context.");
 
-    // Allocate a dp_glue_buffer object
-    buff = (buffer_t)malloc(sizeof(struct dp_glue_buffer));
+    // Allocate a dp_buffer object
+    buff = (buffer_t)malloc(sizeof(struct dp_buffer));
     CHECK_MALLOC_ERROR(buffer_t, buffer_t_ptr);
 
     buff->id_ = BUFFER_ID;
@@ -641,7 +641,7 @@ error:
 }
 
 
-int destroy_dp_glue_rw_mem_buffer (buffer_t *buff)
+int destroy_dp_rw_mem_buffer (buffer_t *buff)
 {
     cl_int err;
 #if DEBUG
@@ -662,12 +662,12 @@ error:
 }
 
 
-int write_dp_glue_mem_buffer_to_device (env_t env_t_ptr,
-                                        buffer_t buffer_t_ptr,
-                                        bool blocking,
-                                        size_t offset,
-                                        size_t buffersize,
-                                        const void *data_ptr)
+int write_dp_mem_buffer_to_device (env_t env_t_ptr,
+                                   buffer_t buffer_t_ptr,
+                                   bool blocking,
+                                   size_t offset,
+                                   size_t buffersize,
+                                   const void *data_ptr)
 {
     cl_int err;
     cl_command_queue queue;
@@ -710,12 +710,12 @@ error:
 }
 
 
-int read_dp_glue_mem_buffer_from_device (env_t env_t_ptr,
-                                         buffer_t buffer_t_ptr,
-                                         bool blocking,
-                                         size_t offset,
-                                         size_t buffersize,
-                                         void *data_ptr)
+int read_dp_mem_buffer_from_device (env_t env_t_ptr,
+                                    buffer_t buffer_t_ptr,
+                                    bool blocking,
+                                    size_t offset,
+                                    size_t buffersize,
+                                    void *data_ptr)
 {
     cl_int err;
     cl_command_queue queue;
@@ -755,10 +755,10 @@ error:
 }
 
 
-int create_dp_glue_program_from_spirv (env_t env_t_ptr,
-                                       const void *il,
-                                       size_t length,
-                                       program_t *program_t_ptr)
+int create_dp_program_from_spirv (env_t env_t_ptr,
+                                  const void *il,
+                                  size_t length,
+                                  program_t *program_t_ptr)
 {
     cl_int err;
     cl_context context;
@@ -777,7 +777,7 @@ int create_dp_glue_program_from_spirv (env_t env_t_ptr,
     fclose(write_file);
 #endif
 
-    prog = (program_t)malloc(sizeof(struct dp_glue_program));
+    prog = (program_t)malloc(sizeof(struct dp_program));
     CHECK_MALLOC_ERROR(program_t, program_t_ptr);
 
     prog->id_ = PROGRAM_ID;
@@ -808,11 +808,11 @@ error:
 }
 
 
-int create_dp_glue_program_from_source (env_t env_t_ptr,
-                                        unsigned int count,
-                                        const char **strings,
-                                        const size_t *lengths,
-                                        program_t *program_t_ptr)
+int create_dp_program_from_source (env_t env_t_ptr,
+                                   unsigned int count,
+                                   const char **strings,
+                                   const size_t *lengths,
+                                   program_t *program_t_ptr)
 {
     cl_int err;
     cl_context context;
@@ -821,7 +821,7 @@ int create_dp_glue_program_from_source (env_t env_t_ptr,
     check_env_id(env_t_ptr);
 #endif
     prog = NULL;
-    prog = (program_t)malloc(sizeof(struct dp_glue_program));
+    prog = (program_t)malloc(sizeof(struct dp_program));
     CHECK_MALLOC_ERROR(program_t, program_t_ptr);
 
     prog->id_ = PROGRAM_ID;
@@ -853,7 +853,7 @@ error:
 }
 
 
-int destroy_dp_glue_program (program_t *program_ptr)
+int destroy_dp_program (program_t *program_ptr)
 {
     cl_int err;
 #if DEBUG
@@ -874,7 +874,7 @@ error:
 }
 
 
-int build_dp_glue_program (env_t env_t_ptr, program_t program_t_ptr)
+int build_dp_program (env_t env_t_ptr, program_t program_t_ptr)
 {
     cl_int err;
     cl_device_id device;
@@ -905,10 +905,10 @@ error:
 /*!
  *
  */
-int create_dp_glue_kernel (env_t env_t_ptr,
-                           program_t program_t_ptr,
-                           const char *kernel_name,
-                           kernel_t *kernel_ptr)
+int create_dp_kernel (env_t env_t_ptr,
+                      program_t program_t_ptr,
+                      const char *kernel_name,
+                      kernel_t *kernel_ptr)
 {
     cl_int err;
     cl_context context;
@@ -917,7 +917,7 @@ int create_dp_glue_kernel (env_t env_t_ptr,
     check_env_id(env_t_ptr);
 #endif
     ker = NULL;
-    ker = (kernel_t)malloc(sizeof(struct dp_glue_kernel));
+    ker = (kernel_t)malloc(sizeof(struct dp_kernel));
     CHECK_MALLOC_ERROR(kernel_t, kernel_ptr);
 
     ker->id_ = KERNEL_ID;
@@ -933,7 +933,7 @@ int create_dp_glue_kernel (env_t env_t_ptr,
 #if DEBUG
     printf("DEBUG: CL kernel created\n");
 #endif
-    ker->dump_fn = dump_dp_glue_kernel_info;
+    ker->dump_fn = dump_dp_kernel_info;
     *kernel_ptr = ker;
     return DP_GLUE_SUCCESS;
 
@@ -945,7 +945,7 @@ error:
 }
 
 
-int destroy_dp_glue_kernel (kernel_t *kernel_ptr)
+int destroy_dp_kernel (kernel_t *kernel_ptr)
 {
     cl_int err;
 #if DEBUG
@@ -969,14 +969,14 @@ error:
 /*!
  *
  */
-int create_dp_glue_kernel_arg (const void *arg_value,
-                               size_t arg_size,
-                               kernel_arg_t *kernel_arg_t_ptr)
+int create_dp_kernel_arg (const void *arg_value,
+                          size_t arg_size,
+                          kernel_arg_t *kernel_arg_t_ptr)
 {
     kernel_arg_t kernel_arg;
 
     kernel_arg = NULL;
-    kernel_arg = (kernel_arg_t)malloc(sizeof(struct dp_glue_kernel_arg));
+    kernel_arg = (kernel_arg_t)malloc(sizeof(struct dp_kernel_arg));
     CHECK_MALLOC_ERROR(kernel_arg_t, kernel_arg);
 
     kernel_arg->id_ = KERNELARG_ID;
@@ -1001,19 +1001,19 @@ malloc_error:
 /*!
  *
  */
-int create_dp_glue_kernel_arg_from_buffer (buffer_t *buffer_t_ptr,
-                                           kernel_arg_t *kernel_arg_t_ptr)
+int create_dp_kernel_arg_from_buffer (buffer_t *buffer_t_ptr,
+                                      kernel_arg_t *kernel_arg_t_ptr)
 {
     check_buffer_id(*buffer_t_ptr);
-    return create_dp_glue_kernel_arg(&((*buffer_t_ptr)->buffer_ptr),
-                                     (*buffer_t_ptr)->sizeof_buffer_ptr,
-                                     kernel_arg_t_ptr);
+    return create_dp_kernel_arg(&((*buffer_t_ptr)->buffer_ptr),
+                                (*buffer_t_ptr)->sizeof_buffer_ptr,
+                                kernel_arg_t_ptr);
 }
 
 /*!
  *
  */
-int destroy_dp_glue_kernel_arg (kernel_arg_t *kernel_arg_t_ptr)
+int destroy_dp_kernel_arg (kernel_arg_t *kernel_arg_t_ptr)
 {
     free(*kernel_arg_t_ptr);
 
@@ -1028,14 +1028,14 @@ int destroy_dp_glue_kernel_arg (kernel_arg_t *kernel_arg_t_ptr)
 /*!
  *
  */
-int set_args_and_enqueue_dp_glue_kernel (env_t env_t_ptr,
-                                         kernel_t kernel_t_ptr,
-                                         size_t nargs,
-                                         const kernel_arg_t *array_of_args,
-                                         unsigned int work_dim,
-                                         const size_t *global_work_offset,
-                                         const size_t *global_work_size,
-                                         const size_t *local_work_size)
+int set_args_and_enqueue_dp_kernel (env_t env_t_ptr,
+                                    kernel_t kernel_t_ptr,
+                                    size_t nargs,
+                                    const kernel_arg_t *array_of_args,
+                                    unsigned int work_dim,
+                                    const size_t *global_work_offset,
+                                    const size_t *global_work_size,
+                                    const size_t *local_work_size)
 {
     size_t i;
     cl_int err;
@@ -1091,13 +1091,13 @@ error:
 /*!
  *
  */
-int set_args_and_enqueue_dp_glue_kernel_auto_blocking (env_t env_t_ptr,
-                                                       kernel_t kernel_t_ptr,
-                                                       size_t nargs,
-                                                       const kernel_arg_t *args,
-                                                       unsigned int num_dims,
-                                                       size_t *dim_starts,
-                                                       size_t *dim_stops)
+int set_args_and_enqueue_dp_kernel_auto_blocking (env_t env_t_ptr,
+                                                  kernel_t kernel_t_ptr,
+                                                  size_t nargs,
+                                                  const kernel_arg_t *args,
+                                                  unsigned int num_dims,
+                                                  size_t *dim_starts,
+                                                  size_t *dim_stops)
 {
     size_t *global_work_size;
 //    size_t *local_work_size;
@@ -1114,14 +1114,14 @@ int set_args_and_enqueue_dp_glue_kernel_auto_blocking (env_t env_t_ptr,
         global_work_size[i] = dim_stops[i] - dim_starts[i] + 1;
     }
 
-    err = set_args_and_enqueue_dp_glue_kernel(env_t_ptr,
-                                              kernel_t_ptr,
-                                              nargs,
-                                              args,
-                                              num_dims,
-                                              NULL,
-                                              global_work_size,
-                                              NULL);
+    err = set_args_and_enqueue_dp_kernel(env_t_ptr,
+                                         kernel_t_ptr,
+                                         nargs,
+                                         args,
+                                         num_dims,
+                                         NULL,
+                                         global_work_size,
+                                         NULL);
     free(global_work_size);
 //    free(local_work_size);
     return err;
