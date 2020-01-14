@@ -79,7 +79,6 @@ def wap_func(func, sig='int64(int64)'):
 
 all_func_kinds = [pure_func, cfunc_func, njit_func,
                   njit2_func, ctypes_func, wap_func]
-supported_func_kinds = [cfunc_func]
 
 
 class TestFuncionType(TestCase):
@@ -152,20 +151,24 @@ class TestFuncionType(TestCase):
         self.assertEqual(foo(a, b),
                          a_(2) + a_(a_(2)) + b_(a_(2) + a_(a_(2))))
 
-    def _test_in(self, decor):
+    def test_in(self):
 
-        @decor
         def a(i):
             return i + 1
 
         def foo(f):
             return 0
 
-        self.assertEqual(njit(foo)(a), foo(a.pyfunc))
+        for decor in all_func_kinds:
+            if decor in [pure_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                self.assertEqual(njit(foo)(a_), foo(a))
 
-    def _test_in_call(self, decor):
+    def test_in_call(self):
 
-        @decor
         def a(i):
             return i + 1
 
@@ -173,29 +176,40 @@ class TestFuncionType(TestCase):
             r = f(123)
             return r
 
-        self.assertEqual(njit(foo)(a), foo(a.pyfunc))
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                self.assertEqual(njit(foo)(a_), foo(a))
 
-    def _test_in_call_out(self, decor):
+    def test_in_call_out(self):
 
-        @decor
         def a(i):
             return i + 1
 
         def foo(f):
             f(123)
             return f
-        if decor.__name__ == 'cfunc_func':
-            self.assertEqual(njit(foo)(a).pyfunc, foo(a.pyfunc))
-        else:
-            self.assertEqual(njit(foo)(a), foo(a))
 
-    def _test_in_seq_call(self, decor):
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, njit_func, njit2_func,
+                         wap_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                if decor is cfunc_func:
+                    self.assertEqual(njit(foo)(a_).pyfunc, foo(a))
+                else:
+                    self.assertEqual(njit(foo)(a_), foo(a))
 
-        @decor
+    def test_in_seq_call(self):
+
         def a(i):
             return i + 1
 
-        @decor
         def b(i):
             return i + 2
 
@@ -205,66 +219,101 @@ class TestFuncionType(TestCase):
                 r = r + f_(r)
             return r
 
-        self.assertEqual(njit(foo)(a, b), foo(a.pyfunc, b.pyfunc))
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, njit_func, njit2_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                b_ = decor(b)
+                self.assertEqual(njit(foo)(a_, b_), foo(a, b))
 
-    def _test_in_ns_seq_call(self, decor):
+    def test_in_ns_seq_call(self):
 
-        @decor
         def a(i):
             return i + 1
 
-        @decor
         def b(i):
             return i + 2
 
-        def w(op, a_, b_):
+        def mkfoo(b_):
             def foo(f):
                 r = 0
                 for f_ in (f, b_):
                     r = r + f_(r)
                 return r
-            return op(foo)(a_)
+            return foo
 
-        self.assertEqual(w(njit, a, b), w(lambda f:f, a.pyfunc, b.pyfunc))
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, njit_func, njit2_func,
+                         wap_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                b_ = decor(b)
+                self.assertEqual(njit(mkfoo(b_))(a_), mkfoo(b)(a))
 
-    def _test_ns_call(self, decor):
+    def test_ns_call(self):
 
-        @decor
         def a(i):
             return i + 1
 
-        def foo():
-            r = a(123)
-            return r
+        def mkfoo(a_):
+            def foo():
+                r = a_(123)
+                return r
+            return foo
 
-        self.assertEqual(njit(foo)(), a.pyfunc(123))
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, wap_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                self.assertEqual(njit(mkfoo(a_))(), mkfoo(a)())
 
-    def _test_ns_out(self, decor):
+    def test_ns_out(self):
 
-        @decor
         def a(i):
             return i + 1
 
-        def foo():
-            return a
+        def mkfoo(a_):
+            def foo():
+                return a_
+            return foo
 
-        self.assertEqual(njit(foo)(), a)
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, njit_func, njit2_func,
+                         wap_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                self.assertEqual(njit(mkfoo(a_))().pyfunc, mkfoo(a)())
 
-    def _test_ns_call_out(self, decor):
+    def test_ns_call_out(self):
 
-        @decor
         def a(i):
             return i + 1
 
-        def foo():
-            a(123)
-            return a
+        def mkfoo(a_):
+            def foo():
+                a_(123)
+                return a_
+            return foo
 
-        self.assertEqual(njit(foo)(), a)
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, njit_func, njit2_func,
+                         wap_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                self.assertEqual(njit(mkfoo(a_))().pyfunc, mkfoo(a)())
 
-    def _test_in_overload(self, decor):
+    def test_in_overload(self):
 
-        @decor
         def a(i):
             return i + 1
 
@@ -273,193 +322,194 @@ class TestFuncionType(TestCase):
             r2 = f(123.45)
             return (r1, r2)
 
-        self.assertEqual(njit(foo)(a), foo(a.pyfunc))
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, njit2_func, wap_func,
+                         cfunc_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                self.assertEqual(njit(foo)(a_), foo(a))
 
-    def _test_ns_overload(self, decor):
+    def test_ns_overload(self):
 
-        @decor
         def a(i):
             return i + 1
 
-        def w(op, a):
+        def mkfoo(a_):
             def foo():
-                r1 = a(123)
-                r2 = a(123.45)
+                r1 = a_(123)
+                r2 = a_(123.45)
                 return (r1, r2)
-            return op(foo)()
+            return foo
 
-        self.assertEqual(w(njit, a), w(lambda f:f, a.pyfunc))
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, njit2_func, wap_func,
+                         cfunc_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                self.assertEqual(njit(mkfoo(a_))(), mkfoo(a)())
 
-    def _test_in_choose(self, decor):
+    def test_in_choose(self):
 
-        @decor
         def a(i):
             return i + 1
 
-        @decor
         def b(i):
             return i + 2
 
-        def w(op, a, b, choose_left):
-            def foo(a, b, choose_left):
-                if choose_left:
-                    r = a(1)
-                else:
-                    r = b(2)
-                return r
-            return op(foo)(a, b, choose_left)
+        def foo(a, b, choose_left):
+            if choose_left:
+                r = a(1)
+            else:
+                r = b(2)
+            return r
 
-        self.assertEqual(w(njit, a, b, True),
-                         w(lambda f:f, a.pyfunc, b.pyfunc, True))
-        self.assertEqual(w(njit, a, b, False),
-                         w(lambda f:f, a.pyfunc, b.pyfunc, False))
-        self.assertNotEqual(w(njit, a, b, True),
-                            w(lambda f:f, a.pyfunc, b.pyfunc, False))
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                b_ = decor(b)
+                self.assertEqual(njit(foo)(a_, b_, True), foo(a, b, True))
+                self.assertEqual(njit(foo)(a_, b_, False), foo(a, b, False))
+                self.assertNotEqual(njit(foo)(a_, b_, True), foo(a, b, False))
 
-    def _test_ns_choose(self, decor):
+    def test_ns_choose(self):
 
-        @decor
         def a(i):
             return i + 1
 
-        @decor
         def b(i):
             return i + 2
 
-        def w(op, a, b, choose_left):
+        def mkfoo(a_, b_):
             def foo(choose_left):
                 if choose_left:
-                    r = a(1)
+                    r = a_(1)
                 else:
-                    r = b(2)
+                    r = b_(2)
                 return r
-            return op(foo)(choose_left)
+            return foo
 
-        self.assertEqual(w(njit, a, b, True),
-                         w(lambda f:f, a.pyfunc, b.pyfunc, True))
-        self.assertEqual(w(njit, a, b, False),
-                         w(lambda f:f, a.pyfunc, b.pyfunc, False))
-        self.assertNotEqual(w(njit, a, b, True),
-                            w(lambda f:f, a.pyfunc, b.pyfunc, False))
-
-    def _test_in_choose_out(self, decor):
-
-        @decor
-        def a(i):
-            return i + 1
-
-        @decor
-        def b(i):
-            return i + 2
-
-        def w(op, a, b, choose_left):
-            def foo(a, b, choose_left):
-                if choose_left:
-                    return a
-                else:
-                    return b
-            return op(foo)(a, b, choose_left)
-
-        self.assertEqual(w(njit, a, b, True), w(lambda f:f, a, b, True))
-        self.assertEqual(w(njit, a, b, False), w(lambda f:f, a, b, False))
-        self.assertNotEqual(w(njit, a, b, True), w(lambda f:f, a, b, False))
-
-    def _test_in_choose_func(self, decor):
-
-        @decor
-        def a(i):
-            return i + 1
-
-        @decor
-        def b(i):
-            return i + 2
-
-        def w(op, a, b, choose_left):
-            def foo(a, b, choose_left):
-                if choose_left:
-                    f = a
-                else:
-                    f = b
-                return f(1)
-            return op(foo)(a, b, choose_left)
-
-        self.assertEqual(w(njit, a, b, True),
-                         w(lambda f:f, a.pyfunc, b.pyfunc, True))
-        self.assertEqual(w(njit, a, b, False),
-                         w(lambda f:f, a.pyfunc, b.pyfunc, False))
-        self.assertNotEqual(w(njit, a, b, True),
-                            w(lambda f:f, a.pyfunc, b.pyfunc, False))
-
-    def _test_in_pick_func_call(self, decor):
-
-        @decor
-        def a(i):
-            return i + 1
-
-        @decor
-        def b(i):
-            return i + 2
-
-        def w(op, a, b, index):
-            def foo(funcs, i):
-                r = funcs[i](123)
-                return r
-            return op(foo)((a, b), index)
-
-        self.assertEqual(w(njit, a, b, 0), w(lambda f:f, a.pyfunc, b.pyfunc, 0))
-        self.assertEqual(w(njit, a, b, 1), w(lambda f:f, a.pyfunc, b.pyfunc, 1))
-        self.assertNotEqual(w(njit, a, b, 0),
-                            w(lambda f:f, a.pyfunc, b.pyfunc, 1))
-
-    def _test_in_iter_func_call(self, decor):
-
-        @decor
-        def a(i):
-            return i + 1
-
-        @decor
-        def b(i):
-            return i + 2
-
-        def w(op, a, b):
-            def foo(funcs, n):
-                r = 0
-                for i in range(n):
-                    f = funcs[i]
-                    r = r + f(r)
-                return r
-            return op(foo)((a, b), 2)
-
-        self.assertEqual(w(njit, a, b), w(lambda f:f, a.pyfunc, b.pyfunc))
-
-    def test_all(self):
-        test_methods = [
-            self._test_in, self._test_in_call, self._test_in_call_out,
-            self._test_ns_call, self._test_ns_out, self._test_ns_call_out,
-            self._test_in_seq_call, self._test_in_ns_seq_call,
-            self._test_in_overload, self._test_ns_overload,
-            self._test_in_choose, self._test_ns_choose,
-            self._test_in_choose_out, self._test_in_choose_func,
-            self._test_in_pick_func_call, self._test_in_iter_func_call
-        ]
-        count = 0
-        success = 0
-        print()
         for decor in all_func_kinds:
-            print(f'{decor.__name__:-^80}')
-            for mth in test_methods:
-                count += 1
-                try:
-                    mth(decor)
-                except Exception as msg:
-                    msgline = str(msg).splitlines(1)[0].strip()
-                    print(f'{mth.__name__} failed:'
-                          f' {msgline}')
-                else:
-                    success += 1
-                    print(f'{mth.__name__} works OK')
-        print(f'{"":-^80}')
-        print(f'test_all success rate: {success}/{count}')
+            if decor in [pure_func, ctypes_func, wap_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                b_ = decor(b)
+                self.assertEqual(njit(mkfoo(a_, b_))(True),
+                                 mkfoo(a, b)(True))
+                self.assertEqual(njit(mkfoo(a_, b_))(False),
+                                 mkfoo(a, b)(False))
+                self.assertNotEqual(njit(mkfoo(a_, b_))(True),
+                                    mkfoo(a, b)(False))
+
+    def test_in_choose_out(self):
+
+        def a(i):
+            return i + 1
+
+        def b(i):
+            return i + 2
+
+        def foo(a, b, choose_left):
+            if choose_left:
+                return a
+            else:
+                return b
+
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, wap_func, njit_func,
+                         njit2_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                b_ = decor(b)
+                self.assertEqual(njit(foo)(a_, b_, True).pyfunc,
+                                 foo(a, b, True))
+                self.assertEqual(njit(foo)(a_, b_, False).pyfunc,
+                                 foo(a, b, False))
+                self.assertNotEqual(njit(foo)(a_, b_, True).pyfunc,
+                                    foo(a, b, False))
+
+    def test_in_choose_func_value(self):
+
+        def a(i):
+            return i + 1
+
+        def b(i):
+            return i + 2
+
+        def foo(a, b, choose_left):
+            if choose_left:
+                f = a
+            else:
+                f = b
+            return f(1)
+
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, njit_func, njit2_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                b_ = decor(b)
+                self.assertEqual(njit(foo)(a_, b_, True), foo(a, b, True))
+                self.assertEqual(njit(foo)(a_, b_, False), foo(a, b, False))
+                self.assertNotEqual(njit(foo)(a_, b_, True), foo(a, b, False))
+
+    def test_in_pick_func_call(self):
+
+        def a(i):
+            return i + 1
+
+        def b(i):
+            return i + 2
+
+        def foo(funcs, i):
+            r = funcs[i](123)
+            return r
+
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, njit_func, njit2_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                b_ = decor(b)
+                self.assertEqual(njit(foo)((a_, b_), 0), foo((a, b), 0))
+                self.assertEqual(njit(foo)((a_, b_), 1), foo((a, b), 1))
+                self.assertNotEqual(njit(foo)((a_, b_), 0), foo((a, b), 1))
+
+    def test_in_iter_func_call(self):
+
+        def a(i):
+            return i + 1
+
+        def b(i):
+            return i + 2
+
+        def foo(funcs, n):
+            r = 0
+            for i in range(n):
+                f = funcs[i]
+                r = r + f(r)
+            return r
+
+        for decor in all_func_kinds:
+            if decor in [pure_func, ctypes_func, njit_func, njit2_func]:
+                # Skip not-yet-supported functions
+                continue
+            with self.subTest(decor=decor.__name__):
+                a_ = decor(a)
+                b_ = decor(b)
+                self.assertEqual(njit(foo)((a_, b_), 2), foo((a, b), 2))
 
 
 class TestFuncionTypeSupport(TestCase):

@@ -21,15 +21,7 @@ class FunctionType(Type):
     def __init__(self, ftype):
         if isinstance(ftype, tuple) and len(ftype) == 2:
             ftype = FunctionProtoType(ftype[0], ftype[1])
-        if isinstance(ftype, pytypes.FunctionType):
-            # Temporarily hold Python function until its signature can
-            # be determined.
-            # TODO: analyze the connection to the unboxing model,
-            # why does it just works? See also get_call_type method below.
-            import numba
-            self.ftype = numba.njit(ftype)
-            name = ftype.__name__ + '_TEMPLATE'
-        elif isinstance(ftype, FunctionProtoType):
+        if isinstance(ftype, FunctionProtoType):
             self.ftype = ftype
             name = ftype.name
         else:

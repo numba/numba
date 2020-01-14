@@ -14,7 +14,6 @@ from numba.targets.imputils import lower_constant
 from numba.ccallback import CFunc
 from numba import cgutils
 from llvmlite import ir
-# from numba.dispatcher import Dispatcher
 from numba.types import (
     FunctionType, FunctionProtoType, numbatype, WrapperAddressProtocol)
 
