@@ -85,26 +85,26 @@ class DeviceArray:
         if not isinstance(arr, ndarray):
             _raise_unsupported_type_error("DeviceArray constructor")
 
-        # create a dp_glue_buffer_t object
+        # create a dp_buffer_t object
         self._buffObj = _numba_dppy_bindings.ffi.new("buffer_t *")
         self._ndarray = arr
         self._buffSize = arr.itemsize * arr.size
         retval = (_numba_dppy_bindings
                   .lib
-                  .create_dp_glue_rw_mem_buffer(env_ptr,
-                                                     self._buffSize,
-                                                     self._buffObj))
+                  .create_dp_rw_mem_buffer(env_ptr,
+                                           self._buffSize,
+                                           self._buffObj))
         if retval == -1:
             print("Error Code  : ", retval)
-            _raise_driver_error("create_dp_glue_runtime", -1)
+            _raise_driver_error("create_dp_rw_mem_buffer", -1)
 
     def __del__(self):
         retval = (_numba_dppy_bindings
                   .lib
-                  .destroy_dp_glue_rw_mem_buffer(self._buffObj))
+                  .destroy_dp_rw_mem_buffer(self._buffObj))
         if retval == -1:
             print("Error Code  : ", retval)
-            _raise_driver_error("create_dp_glue_runtime", -1)
+            _raise_driver_error("destroy_dp_rw_mem_buffer", -1)
 
     def get_buffer_obj(self):
         return self._buffObj
@@ -129,7 +129,7 @@ class Program():
         self._prog_t_obj = _numba_dppy_bindings.ffi.new("program_t *")
         retval = (_numba_dppy_bindings
                   .lib
-                  .create_dp_glue_program_from_spirv(
+                  .create_dp_program_from_spirv(
                       device_env.get_env_ptr(),
                       spirv_module,
                       len(spirv_module),
@@ -137,25 +137,25 @@ class Program():
         if retval == -1:
             print("Error Code  : ", retval)
             _raise_driver_error(
-                "create_dp_glue_program_from_spirv", -1)
+                "create_dp_program_from_spirv", -1)
 
         retval = (_numba_dppy_bindings
                   .lib
-                  .build_dp_glue_program(
+                  .build_dp_program(
                       device_env.get_env_ptr(),
                       self._prog_t_obj[0]))
         if retval == -1:
             print("Error Code  : ", retval)
             _raise_driver_error(
-                "build_dp_glue_program", -1)
+                "build_dp_program", -1)
 
     def __del__(self):
         retval = (_numba_dppy_bindings
                   .lib
-                  .destroy_dp_glue_program(self._prog_t_obj))
+                  .destroy_dp_program(self._prog_t_obj))
         if retval == -1:
             print("Error Code  : ", retval)
-            _raise_driver_error("destroy_dp_glue_program", -1)
+            _raise_driver_error("destroy_dp_program", -1)
 
     def get_prog_t_obj(self):
         return self._prog_t_obj[0]
@@ -172,22 +172,22 @@ class Kernel():
         self._kernel_t_obj = _numba_dppy_bindings.ffi.new("kernel_t *")
         retval = (_numba_dppy_bindings
                   .lib
-                  .create_dp_glue_kernel(
+                  .create_dp_kernel(
                       device_env.get_env_ptr(),
                       prog_t_obj.get_prog_t_obj(),
                       kernel_name.encode(),
                       self._kernel_t_obj))
         if retval == -1:
             print("Error Code  : ", retval)
-            _raise_driver_error("create_dp_glue_kernel", -1)
+            _raise_driver_error("create_dp_kernel", -1)
 
     def __del__(self):
         retval = (_numba_dppy_bindings
                   .lib
-                  .destroy_dp_glue_kernel(self._kernel_t_obj))
+                  .destroy_dp_kernel(self._kernel_t_obj))
         if retval == -1:
             print("Error Code  : ", retval)
-            _raise_driver_error("destroy_dp_glue_kernel", -1)
+            _raise_driver_error("destroy_dp_kernel", -1)
 
     def get_kernel_t_obj(self):
         return self._kernel_t_obj[0]
@@ -208,35 +208,35 @@ class KernelArg():
             self.ptr_to_arg_p[0] = ffi.cast("void *", 0)
             retval = (_numba_dppy_bindings
                       .lib
-                      .create_dp_glue_kernel_arg(
+                      .create_dp_kernel_arg(
                           self.ptr_to_arg_p,
                           ffi.sizeof(self.ptr_to_arg_p),
                           self.kernel_arg_t))
             if(retval):
-                _raise_driver_error("create_dp_glue_kernel_arg", -1)
+                _raise_driver_error("create_dp_kernel_arg", -1)
         else:
             if isinstance(arg, DeviceArray):
                 self.ptr_to_arg_p = ffi.new("void **")
                 self.ptr_to_arg_p[0] = arg.get_buffer_obj()[0].buffer_ptr
                 retval = (_numba_dppy_bindings
                           .lib
-                          .create_dp_glue_kernel_arg(
+                          .create_dp_kernel_arg(
                               self.ptr_to_arg_p,
                               arg.get_buffer_obj()[0].sizeof_buffer_ptr,
                               self.kernel_arg_t))
                 if(retval):
-                    _raise_driver_error("create_dp_glue_kernel_arg", -1)
+                    _raise_driver_error("create_dp_kernel_arg", -1)
             elif isinstance(arg, int):
                 size_t_arg = ffi.new("size_t *") 
                 size_t_arg[0] = arg
                 retval = (_numba_dppy_bindings
                           .lib
-                          .create_dp_glue_kernel_arg(
+                          .create_dp_kernel_arg(
                               size_t_arg,
                               ffi.sizeof("size_t"),
                               self.kernel_arg_t))
                 if(retval):
-                    _raise_driver_error("create_dp_glue_kernel_arg", -1)
+                    _raise_driver_error("create_dp_kernel_arg", -1)
             else:
                 print(type(arg))
                 _raise_unsupported_kernel_arg_error("KernelArg init")
@@ -244,10 +244,10 @@ class KernelArg():
     def __del__(self):
         retval = (_numba_dppy_bindings
                   .lib
-                  .destroy_dp_glue_kernel_arg(self.kernel_arg_t))
+                  .destroy_dp_kernel_arg(self.kernel_arg_t))
         if retval == -1:
             print("Error Code  : ", retval)
-            _raise_driver_error("destroy_dp_glue_kernel_arg", -1)
+            _raise_driver_error("destroy_dp_kernel_arg", -1)
 
     def get_kernel_arg_obj(self):
         return self.kernel_arg_t[0]
@@ -270,24 +270,24 @@ class DeviceEnv():
         print('return first_cpu_conext.context after calling clRetainContext')
         retval = (_numba_dppy_bindings
                   .lib
-                  .retain_dp_glue_context(self._env_ptr.context))
+                  .retain_dp_context(self._env_ptr.context))
         if(retval == -1):
-            _raise_driver_error("retain_dp_glue_context", -1)
+            _raise_driver_error("retain_dp_context", -1)
 
         return (self._env_ptr.context)
 
     def release_context(self):
         retval = (_numba_dppy_bindings
                   .lib
-                  .release_dp_glue_context(self._env_ptr.context))
+                  .release_dp_context(self._env_ptr.context))
         if retval == -1:
-            _raise_driver_error("release_dp_glue_context", -1)
+            _raise_driver_error("release_dp_context", -1)
 
     def copy_array_to_device(self, array):
         if isinstance(array, DeviceArray):
             retval = (_numba_dppy_bindings
                       .lib
-                      .write_dp_glue_mem_buffer_to_device(
+                      .write_dp_mem_buffer_to_device(
                           self._env_ptr,
                           array.get_buffer_obj()[0],
                           True,
@@ -296,14 +296,14 @@ class DeviceEnv():
                           array.get_data_ptr()))
             if retval == -1:
                 print("Error Code  : ", retval)
-                _raise_driver_error("write_dp_glue_mem_buffer_to_device",
+                _raise_driver_error("write_dp_mem_buffer_to_device",
                                     -1)
             return array
         elif isinstance(array, ndarray):
             dArr = DeviceArray(self._env_ptr, array)
             retval = (_numba_dppy_bindings
                       .lib
-                      .write_dp_glue_mem_buffer_to_device(
+                      .write_dp_mem_buffer_to_device(
                           self._env_ptr,
                           dArr.get_buffer_obj()[0],
                           True,
@@ -312,7 +312,7 @@ class DeviceEnv():
                           dArr.get_data_ptr()))
             if retval == -1:
                 print("Error Code  : ", retval)
-                _raise_driver_error("write_dp_glue_mem_buffer_to_device",
+                _raise_driver_error("write_dp_mem_buffer_to_device",
                                     -1)
             return dArr
         else:
@@ -323,7 +323,7 @@ class DeviceEnv():
             _raise_unsupported_type_error("copy_array_to_device")
         retval = (_numba_dppy_bindings
                   .lib
-                  .read_dp_glue_mem_buffer_from_device(
+                  .read_dp_mem_buffer_from_device(
                       self._env_ptr,
                       array.get_buffer_obj()[0],
                       True,
@@ -332,7 +332,7 @@ class DeviceEnv():
                       array.get_data_ptr()))
         if retval == -1:
             print("Error Code  : ", retval)
-            _raise_driver_error("read_dp_glue_mem_buffer_from_device", -1)
+            _raise_driver_error("read_dp_mem_buffer_from_device", -1)
 
     def get_context_ptr(self):
         return self._env_ptr.context
@@ -353,8 +353,8 @@ class DeviceEnv():
 
 
 class _Runtime():
-    """Runtime is a singleton class that creates a dp_glue_runtime
-    object. The dp_glue_runtime (runtime) object on creation
+    """Runtime is a singleton class that creates a dp_runtime
+    object. The dp_runtime (runtime) object on creation
     instantiates a OpenCL context and a corresponding OpenCL command
     queue for the first available CPU on the system. Similarly, the
     runtime object also stores the context and command queue for the
@@ -373,10 +373,10 @@ class _Runtime():
             ffiobj = _numba_dppy_bindings.ffi.new("runtime_t *")
             retval = (_numba_dppy_bindings
                       .lib
-                      .create_dp_glue_runtime(ffiobj))
+                      .create_dp_runtime(ffiobj))
             if(retval):
                 print("Error Code  : ", retval)
-                _raise_driver_error("create_dp_glue_runtime", -1)
+                _raise_driver_error("create_dp_runtime", -1)
 
             cls._runtime = ffiobj
 
@@ -400,12 +400,12 @@ class _Runtime():
         pass
 
     def __del__(self):
-        print("Delete dp_glue_runtime object.")
+        print("Delete dp_runtime object.")
         retval = (_numba_dppy_bindings
                   .lib
-                  .destroy_dp_glue_runtime(_Runtime._runtime))
+                  .destroy_dp_runtime(_Runtime._runtime))
         if(retval):
-            _raise_driver_error("destroy_dp_glue_runtime", -1)
+            _raise_driver_error("destroy_dp_runtime", -1)
 
     def get_cpu_device(self):
         if(self._cpu_device is None):
@@ -443,7 +443,7 @@ def enqueue_kernel(device_env, kernel, kernelargs, global_work_size,
         l_work_size_array[i] = local_work_size[i]
     retval = (_numba_dppy_bindings
               .lib
-              .set_args_and_enqueue_dp_glue_kernel(
+              .set_args_and_enqueue_dp_kernel(
                   device_env.get_env_ptr(),
                   kernel.get_kernel_t_obj(),
                   len(kernelargs),
@@ -454,4 +454,4 @@ def enqueue_kernel(device_env, kernel, kernelargs, global_work_size,
                   l_work_size_array
                   ))
     if(retval):
-        _raise_driver_error("set_args_and_enqueue_dp_glue_kernel", -1)
+        _raise_driver_error("set_args_and_enqueue_dp_kernel", -1)
