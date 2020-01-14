@@ -22,5 +22,6 @@ Developer Manual
    environment.rst
    hashing.rst
    caching.rst
+   threading_implementation.rst
    literal.rst
    roadmap.rst

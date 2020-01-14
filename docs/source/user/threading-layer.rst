@@ -194,6 +194,8 @@ The current number of threads used by numba can be accessed with
 :func:`numba.get_num_threads`. Both functions work inside of a jitted
 function.
 
+.. _numba-threading-layer-thread-masking:
+
 Example of Limiting the Number of Threads
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
