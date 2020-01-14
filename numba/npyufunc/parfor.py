@@ -1931,38 +1931,38 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
     create_dppy_kernel_arg_fnty = lc.Type.function(
         intp_t, [void_ptr_ptr_t, intp_t, void_ptr_ptr_t])
     create_dppy_kernel_arg = builder.module.get_or_insert_function(create_dppy_kernel_arg_fnty,
-                                                          name="create_dp_glue_kernel_arg")
+                                                          name="create_dp_kernel_arg")
 
     create_dppy_kernel_arg_from_buffer_fnty = lc.Type.function(
         intp_t, [void_ptr_ptr_t, void_ptr_ptr_t])
     create_dppy_kernel_arg_from_buffer = builder.module.get_or_insert_function(
                                                create_dppy_kernel_arg_from_buffer_fnty,
-                                               name="create_dp_glue_kernel_arg_from_buffer")
+                                               name="create_dp_kernel_arg_from_buffer")
 
     create_dppy_rw_mem_buffer_fnty = lc.Type.function(
         intp_t, [void_ptr_t, intp_t, void_ptr_ptr_t])
     create_dppy_rw_mem_buffer = builder.module.get_or_insert_function(
                                       create_dppy_rw_mem_buffer_fnty,
-                                      name="create_dp_glue_rw_mem_buffer")
+                                      name="create_dp_rw_mem_buffer")
 
     write_mem_buffer_to_device_fnty = lc.Type.function(
         intp_t, [void_ptr_t, void_ptr_t, intp_t, intp_t, intp_t, void_ptr_t])
     write_mem_buffer_to_device = builder.module.get_or_insert_function(
                                       write_mem_buffer_to_device_fnty,
-                                      name="write_dp_glue_mem_buffer_to_device")
+                                      name="write_dp_mem_buffer_to_device")
 
     read_mem_buffer_from_device_fnty = lc.Type.function(
         intp_t, [void_ptr_t, void_ptr_t, intp_t, intp_t, intp_t, void_ptr_t])
     read_mem_buffer_from_device = builder.module.get_or_insert_function(
                                     read_mem_buffer_from_device_fnty,
-                                    name="read_dp_glue_mem_buffer_from_device")
+                                    name="read_dp_mem_buffer_from_device")
 
     enqueue_kernel_fnty = lc.Type.function(
         intp_t, [void_ptr_t, void_ptr_t, intp_t, void_ptr_ptr_t,
                  intp_t, intp_ptr_t, intp_ptr_t])
     enqueue_kernel = builder.module.get_or_insert_function(
                                   enqueue_kernel_fnty,
-                                  name="set_args_and_enqueue_dp_glue_kernel_auto_blocking")
+                                  name="set_args_and_enqueue_dp_kernel_auto_blocking")
 
     kernel_arg_array = cgutils.alloca_once(
         builder, void_ptr_t, size=context.get_constant(
