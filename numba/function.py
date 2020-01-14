@@ -15,17 +15,17 @@ from numba.ccallback import CFunc
 from numba import cgutils
 from llvmlite import ir
 from numba.types import (
-    FunctionType, FunctionProtoType, numbatype, WrapperAddressProtocol)
+    FunctionType, FunctionProtoType, WrapperAddressProtocol)
 
 
 @typeof_impl.register(WrapperAddressProtocol)
 def typeof_WrapperAddressProtocol(val, c):
-    return numbatype(val.signature())
+    return val.signature().as_type()
 
 
 @typeof_impl.register(CFunc)
 def typeof_CFunc(val, c):
-    return numbatype(val._sig)
+    return val._sig.as_type()
 
 
 # TODO: typeof_impl for Dispatcher, types.FunctionType, ctypes.CFUNCTYPE
@@ -109,12 +109,11 @@ def _get_wrapper_address(func, sig):
     Note: wrapper address protocol
     ------------------------------
 
-    A object implements the wrapper address protocol iff the object
+    An object implements the wrapper address protocol iff the object
     provides a callable attribute named __wrapper_address__ that takes
-    one string argument representing the signature, and returns an
-    integer representing the address or pointer value of a compiled
-    function with given signature.
-
+    Signature instance as the argument, and returns an integer
+    representing the address or pointer value of a compiled function
+    with given signature.
     """
     if hasattr(func, '__wrapper_address__'):
         # func can be any object that implements the

@@ -50,7 +50,6 @@ def ctypes_func(func, sig=int64(int64)):
         f = ctypes.CFUNCTYPE(ctypes.c_int64)(addr)
         f.pyfunc = func
         return f
-    # TODO: numbatype(sig) to ctypes converter, see RBC for an example
     raise NotImplementedError(
         f'ctypes decorator for {func} with signature {sig}')
 
@@ -510,65 +509,6 @@ class TestFuncionType(TestCase):
                 a_ = decor(a)
                 b_ = decor(b)
                 self.assertEqual(njit(foo)((a_, b_), 2), foo((a, b), 2))
-
-
-class TestFuncionTypeSupport(TestCase):
-
-    def test_numbatype(self):
-        worker = types.function.numbatype
-        cptr = types.CPointer
-
-        def foo(i: int) -> int:
-            pass
-
-        for target_type, type_sources in [
-                # primitive types
-                (types.boolean, ['bool', 'boolean', bool, types.boolean, 'b1']),
-                (types.none, ['void', types.none]),
-                (types.int8, ['int8', types.int8, 'i1']),
-                (types.int16, ['int16', types.int16, 'i2']),
-                (types.int32, ['int32', types.int32, 'i4']),
-                (types.int64, ['int64', int, types.int64, 'i8']),
-                (types.uint8, ['uint8', types.uint8, 'u1', 'byte']),
-                (types.uint16, ['uint16', types.uint16, 'u2']),
-                (types.uint32, ['uint32', types.uint32, 'u4']),
-                (types.uint64, ['uint64', types.uint64, 'u8']),
-                (types.float32, ['float32', 'float', types.float32, 'f4']),
-                (types.float64,
-                 ['float64', 'double', float, types.float64, 'f8']),
-                (types.complex64,
-                 ['complex64', 'complex', types.complex64, 'c8']),
-                (types.complex128,
-                 ['complex128', complex, types.complex128, 'c16']),
-                (types.unicode_type,
-                 ['str', str, types.unicode_type, 'unicode', 'string']),
-                (types.none, ['void', 'none', types.void, types.none]),
-                (types.voidptr, [types.voidptr, 'void*']),
-                (types.pyobject, [types.pyobject]),
-                (types.pyfunc_type, [types.pyfunc_type]),
-                (types.slice2_type, [types.slice2_type]),
-                (types.slice3_type, [types.slice3_type]),
-                (types.code_type, [types.code_type]),
-                (types.undefined, [types.undefined]),
-                (types.Any, [types.Any]),
-                (types.range_iter32_type, [types.range_iter32_type]),
-                (types.range_iter64_type, [types.range_iter64_type]),
-                (types.unsigned_range_iter64_type,
-                 [types.unsigned_range_iter64_type]),
-                (types.range_state32_type, [types.range_state32_type]),
-                (types.range_state64_type, [types.range_state64_type]),
-                (types.ellipsis, [types.ellipsis]),
-                # composite types
-                (cptr(types.int64), ['int64*', 'i8 *']),
-                (types.FunctionType((types.int64, (types.int64,))),
-                 ['int64(int64)', 'i8(i8)', 'int(i8)',
-                  types.int64(types.int64), foo]),
-        ]:
-            for source_type in type_sources:
-                self.assertEqual(
-                    target_type, worker(source_type),
-                    msg=(f'expected {target_type} ({type(target_type)})'
-                         f' from {source_type} ({type(source_type)})'))
 
 
 class TestFuncionTypeExtensions(TestCase):
