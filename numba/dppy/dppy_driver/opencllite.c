@@ -355,6 +355,12 @@ static int create_dp_env_t (cl_platform_id* platforms,
     CHECK_MALLOC_ERROR(env_t, env);
     env->id_ = ENV_ID;
 
+    env->context = NULL;
+    env->device = NULL;
+    env->queue = NULL;
+    env->max_work_item_dims = 0;
+    env->dump_fn = NULL;
+
     device = (cl_device_id*)malloc(sizeof(cl_device_id));
 
     err1 = get_first_device(platforms, nplatforms, device, device_ty);
@@ -385,6 +391,7 @@ malloc_error:
     return DP_GLUE_FAILURE;
 error:
     free(env);
+    *env_t_ptr = NULL;
     return DP_GLUE_FAILURE;
 }
 
@@ -531,12 +538,16 @@ int destroy_dp_runtime (runtime_t *rt)
     printf("DEBUG: Going to destroy the dp_runtime object\n");
 #endif
     // free the first_cpu_device
-    err = destroy_dp_env_t(&(*rt)->first_cpu_env);
-    CHECK_DPGLUE_ERROR(err, "Could not destroy first_cpu_device.");
+    if((*rt)->first_cpu_env) {
+        err = destroy_dp_env_t(&(*rt)->first_cpu_env);
+        CHECK_DPGLUE_ERROR(err, "Could not destroy first_cpu_device.");
+    }
 
     // free the first_gpu_device
-    err = destroy_dp_env_t(&(*rt)->first_gpu_env);
-    CHECK_DPGLUE_ERROR(err, "Could not destroy first_gpu_device.");
+    if((*rt)->first_gpu_env) {
+        err = destroy_dp_env_t(&(*rt)->first_gpu_env);
+        CHECK_DPGLUE_ERROR(err, "Could not destroy first_gpu_device.");
+    }
 
     // free the platforms
     free((cl_platform_id*)(*rt)->platform_ids);
@@ -1004,7 +1015,9 @@ malloc_error:
 int create_dp_kernel_arg_from_buffer (buffer_t *buffer_t_ptr,
                                       kernel_arg_t *kernel_arg_t_ptr)
 {
+#if DEBUG
     check_buffer_id(*buffer_t_ptr);
+#endif
     return create_dp_kernel_arg(&((*buffer_t_ptr)->buffer_ptr),
                                 (*buffer_t_ptr)->sizeof_buffer_ptr,
                                 kernel_arg_t_ptr);
