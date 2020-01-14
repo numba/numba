@@ -4,6 +4,7 @@ from __future__ import print_function, absolute_import, division
 import sys
 import os
 import re
+import multiprocessing
 
 import numpy as np
 
@@ -519,6 +520,29 @@ class TestNumThreads(TestCase):
 
         self.assertEqual(expected_acc, got_acc)
         self.check_mask(expected_thread_count, got_tc)
+
+    @skip_parfors_unsupported
+    @unittest.skipIf(config.NUMBA_NUM_THREADS < 2, "Not enough CPU cores")
+    @unittest.skipIf(not sys.platform.startswith('linux'), "Linux only")
+    def _test_threadmask_across_fork(self):
+        forkctx = multiprocessing.get_context('fork')
+        @njit
+        def foo():
+            return get_num_threads()
+
+        def wrap(queue):
+            queue.put(foo())
+
+        mask = 1
+        self.assertEqual(foo(), config.NUMBA_NUM_THREADS)
+        set_num_threads(mask)
+        self.assertEqual(foo(), mask)
+        shared_queue = forkctx.Queue()
+        # check TLS slot inheritance in fork
+        p = forkctx.Process(target=wrap, args=(shared_queue,))
+        p.start()
+        p.join()
+        self.assertEqual(shared_queue.get(), mask)
 
     def tearDown(self):
         set_num_threads(config.NUMBA_NUM_THREADS)
