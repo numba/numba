@@ -3,11 +3,6 @@ __all__ = ['FunctionType', 'FunctionProtoType', 'numbatype',
            'WrapperAddressProtocol']
 
 import inspect
-import types as pytypes
-
-# TODO: implement ctypes support
-# import ctypes
-
 from .abstract import Type
 
 
