@@ -78,10 +78,10 @@ def compile_kernel_parfor(device, func_ir, args, debug=False):
     cres = compile_with_dppy(func_ir, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
-    oclkern = Kernel(device_env=device,
-                           llvm_module=kernel.module,
-                           name=kernel.name,
-                           argtypes=cres.signature.args)
+    oclkern = DPPyKernel(device_env=device,
+                         llvm_module=kernel.module,
+                         name=kernel.name,
+                         argtypes=cres.signature.args)
     return oclkern
 
 def _ensure_list(val):
