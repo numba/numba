@@ -3744,7 +3744,7 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
       names are live at exit of the parfor but then using alias_map for the
       actual recursive dead code removal, we keep any writes to aliased arrays
       alive but also allow aliasing assignments (i.e., a = b) to be eliminated
-      so long as 'a' is not written to through the variable 'a' later on.
+      so long as 'b' is not written to through the variable 'a' later on.
       This makes assignment handling of remove_dead_block work properly since
       it allows distinguishing between live variables and their aliases.
     """
