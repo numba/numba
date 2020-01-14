@@ -2,6 +2,7 @@
 from __future__ import print_function
 from timeit import default_timer as time
 
+import sys
 import numpy as np
 from numba import dppy
 from numba.dppy.dppy_driver import driver as ocldrv
@@ -25,6 +26,7 @@ c = np.ones_like(a)
 # Select a device for executing the kernel
 device_env = None
 
+'''
 if ocldrv.runtime.get_gpu_device() is not None:
     device_env = ocldrv.runtime.get_gpu_device()
 elif ocldrv.runtime.get_cpu_device() is not None:
@@ -32,6 +34,18 @@ elif ocldrv.runtime.get_cpu_device() is not None:
 else:
     e = ocldrv.DeviceNotFoundError("No OpenCL devices found on the system")
     raise e
+    '''
+try:
+    device_env = ocldrv.runtime.get_gpu_device()
+    print("Selected GPU device")
+except:
+    try:
+        device_env = ocldrv.runtime.get_cpu_device()
+        print("Selected CPU device")
+    except:
+        print("No OpenCL devices found on the system")
+        raise SystemExit()
+
 
 # Copy the data to the device
 dA = device_env.copy_array_to_device(a)
