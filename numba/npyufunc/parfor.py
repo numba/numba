@@ -269,6 +269,8 @@ def _lower_parfor_parallel(lowerer, parfor):
     if config.DEBUG_ARRAY_OPT:
         print("_lower_parfor_parallel")
         parfor.dump()
+    if config.DEBUG_ARRAY_OPT:
+        sys.stdout.flush()
 
     loc = parfor.init_block.loc
     scope = parfor.init_block.scope
@@ -1075,6 +1077,7 @@ def _create_gufunc_for_parfor_body(
     typemap = lowerer.fndesc.typemap
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
         lowerer.func_ir, parfor, parfor_params, lowerer.fndesc.calltypes)
+    has_reduction = False if len(parfor_redvars) == 0 else True
     # Compute just the parfor inputs as a set difference.
     parfor_inputs = sorted(
         list(
@@ -1209,21 +1212,30 @@ def _create_gufunc_for_parfor_body(
     if len(parfor_redvars) > 0 and target=='spirv':
         assert(0)
 
-    # Add initialization of reduction variables
-    for arr, var in zip(parfor_redarrs, parfor_redvars):
-        # If reduction variable is a scalar then save current value to
-        # temp and accumulate on that temp to prevent false sharing.
-        if redtyp_is_scalar(typemap[var]):
-            gufunc_txt += "    " + param_dict[var] + \
-                 "=" + param_dict[arr] + "[0]\n"
-        else:
-            # The reduction variable is an array so np.copy it to a temp.
-            gufunc_txt += "    " + param_dict[var] + \
-                 "=np.copy(" + param_dict[arr] + ")\n"
+    if target=='spirv':
+        # Intentionally do nothing here for reduction initialization in gufunc.
+        pass
+    else:
+        # Add initialization of reduction variables
+        for arr, var in zip(parfor_redarrs, parfor_redvars):
+            # If reduction variable is a scalar then save current value to
+            # temp and accumulate on that temp to prevent false sharing.
+            if redtyp_is_scalar(typemap[var]):
+                gufunc_txt += "    " + param_dict[var] + \
+                     "=" + param_dict[arr] + "[0]\n"
+            else:
+                # The reduction variable is an array so np.copy it to a temp.
+                gufunc_txt += "    " + param_dict[var] + \
+                     "=np.copy(" + param_dict[arr] + ")\n"
 
     if target=='spirv':
         for eachdim in range(parfor_dim):
             gufunc_txt += "    " + legal_loop_indices[eachdim] + " = " + "dppy.get_global_id(" + str(eachdim) + ")\n"
+        if has_reduction:
+            assert(parfor_dim == 1)
+            gufunc_txt += "    gufunc_numItems = dppy.get_local_size(0)\n"
+            gufunc_txt += "    gufunc_tnum = dppy.get_local_id(0)\n"
+            gufunc_txt += "    gufunc_wgNum = dppy.get_local_size(0)\n"
     else:
         # For each dimension of the parfor, create a for loop in the generated gufunc function.
         # Iterate across the proper values extracted from the schedule.
@@ -1269,23 +1281,50 @@ def _create_gufunc_for_parfor_body(
             gufunc_txt += "    "
     gufunc_txt += sentinel_name + " = 0\n"
     
-    # Add assignments of reduction variables (for returning the value)
     redargstartdim = {}
-    for arr, var in zip(parfor_redarrs, parfor_redvars):
-        # After the gufunc loops, copy the accumulated temp value back to reduction array.
-        if redtyp_is_scalar(typemap[var]):
-            gufunc_txt += "    " + param_dict[arr] + \
-                "[0] = " + param_dict[var] + "\n"
-            redargstartdim[arr] = 1
-        else:
-            # After the gufunc loops, copy the accumulated temp array back to reduction array with ":"
-            gufunc_txt += "    " + param_dict[arr] + \
-                "[:] = " + param_dict[var] + "[:]\n"
-            redargstartdim[arr] = 0
+    if target=='spirv':
+        if has_reduction:
+            gufunc_txt += "    gufunc_red_offset = 1\n"
+            gufunc_txt += "    while gufunc_red_offset < numItems:\n"
+            gufunc_txt += "        mask = (2 * gufunc_red_offset) - 1\n"
+            gufunc_txt += "        dppy.local_mem_fence_barrier()\n"
+            gufunc_txt += "        if (tnum and mask) == 0:\n"
+            gufunc_txt += "            # red_result[tnum] = red_result[tnum] (reduction_operator) red_result[tnum+offset]\n"
+            gufunc_txt += "            pass\n"
+            gufunc_txt += "        gufunc_red_offset *= 2\n"
+            gufunc_txt += "    dppy.local_mem_fence_barrier()\n"
+            gufunc_txt += "    if tnum == 0:\n"
+            for arr, var in zip(parfor_redarrs, parfor_redvars):
+                # After the gufunc loops, copy the accumulated temp value back to reduction array.
+                if redtyp_is_scalar(typemap[var]):
+                    gufunc_txt += "        " + param_dict[arr] + \
+                        "[wgNum] = " + param_dict[var] + "\n"
+                    redargstartdim[arr] = 1
+                else:
+                    # After the gufunc loops, copy the accumulated temp array back to reduction array with ":"
+                    gufunc_txt += "        " + param_dict[arr] + \
+                        "[wgNum, :] = " + param_dict[var] + "[:]\n"
+                    redargstartdim[arr] = 0
+    else:
+        # Add assignments of reduction variables (for returning the value)
+        for arr, var in zip(parfor_redarrs, parfor_redvars):
+            # After the gufunc loops, copy the accumulated temp value back to reduction array.
+            if redtyp_is_scalar(typemap[var]):
+                gufunc_txt += "    " + param_dict[arr] + \
+                    "[0] = " + param_dict[var] + "\n"
+                redargstartdim[arr] = 1
+            else:
+                # After the gufunc loops, copy the accumulated temp array back to reduction array with ":"
+                gufunc_txt += "    " + param_dict[arr] + \
+                    "[:] = " + param_dict[var] + "[:]\n"
+                redargstartdim[arr] = 0
+
+    # gufunc returns nothing
     gufunc_txt += "    return None\n"
 
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
+        sys.stdout.flush()
     # Force gufunc outline into existence.
     globls = {"np": np, "numba": numba}
     if target=='spirv':
