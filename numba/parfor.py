@@ -3960,7 +3960,7 @@ def push_call_vars(blocks, saved_globals, saved_getattrs, typemap, nested=False)
             for k,v in rename_dict.items():
                 typemap[v] = typemap[k]
             # This is only to call replace_var_names which takes a dict.
-            temp_blocks = {0:block}
+            temp_blocks = {0: block}
             replace_var_names(temp_blocks, rename_dict)
 
     return
