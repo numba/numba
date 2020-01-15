@@ -172,7 +172,7 @@ The general pattern for using ``get_num_threads`` in code generation is
 
    num_threads = builder.call(get_num_threads, [])
 
-   with cgutils.if_unlikely(builder, builder.icmp_signed('==', num_threads,
+   with cgutils.if_unlikely(builder, builder.icmp_signed('<=', num_threads,
                                                  num_threads.type(0))):
        cgutils.printf(builder, "num_threads: %d\n", num_threads)
        context.call_conv.return_user_exc(builder, RuntimeError,
@@ -181,7 +181,8 @@ The general pattern for using ``get_num_threads`` in code generation is
 
    # Pass num_threads through to the appropriate backend function
 
-See the code in ``numba/npyufunc/parfor.py``. Here ``builder.module`` is the thread pool backend library, e.g., ``tbbpool``.
+See the code in ``numba/npyufunc/parfor.py``. Here ``builder.module`` is the
+thread pool backend library, e.g., ``tbbpool``.
 
 The guard against ``num_threads`` being <= 0 is not strictly necessary, but it
 can protect against accidentally incorrect behavior in case the thread masking
