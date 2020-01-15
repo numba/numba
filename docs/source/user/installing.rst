@@ -5,7 +5,7 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with 3.6 or later, and Numpy versions 1.15 or later.
+Numba is compatible with Python 3.6 or later, and Numpy versions 1.15 or later.
 
 Our supported platforms are:
 
@@ -289,5 +289,4 @@ further information.
                                   pci bus id: 1
 
 (output truncated due to length)
-
 
