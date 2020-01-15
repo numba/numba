@@ -594,7 +594,9 @@ def ol_get_num_threads():
 
 def _get_thread_id():
     """
-    docs
+    Returns a unique ID for each thread
+
+    This function is private and should only be used for testing purposes.
     """
     _launch_threads()
     return _get_thread_id()
