@@ -3957,7 +3957,7 @@ def push_call_vars(blocks, saved_globals, saved_getattrs, typemap, nested=False)
         # If there is anything to rename then apply the renaming here.
         if len(rename_dict) > 0:
             # Fix-up the typing for the renamed vars.
-            for k,v in rename_dict.items():
+            for k, v in rename_dict.items():
                 typemap[v] = typemap[k]
             # This is only to call replace_var_names which takes a dict.
             temp_blocks = {0: block}
