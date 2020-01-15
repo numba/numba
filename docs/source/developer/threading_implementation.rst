@@ -128,7 +128,7 @@ OS ``fork()`` calls
 
 The use of TLS was also in part driven by the Linux (the most popular
 platform for Numba use by far) having a ``fork(2, 3P)`` call that will do TLS
-propagation into child processes, see ``clone(2)``'s ``CLONE_SETTLS``.
+propagation into child processes, see ``clone(2)``\ 's ``CLONE_SETTLS``.
 
 Thread ID
 *********
@@ -139,7 +139,7 @@ which returns a unique ID for each thread. This can be accessed from Python by
 njitted function). The thread ID function is useful for testing that the
 thread masking behavior is correct, but it should not be used outside of the
 tests. For example, one can call ``set_num_threads(4)`` and then collect all
-unique ``_get_thread_id()``s in a parallel region to verify that only 4
+unique ``_get_thread_id()``\ 's in a parallel region to verify that only 4
 threads are run.
 
 Caveats
