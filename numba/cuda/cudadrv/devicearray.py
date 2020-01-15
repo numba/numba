@@ -354,8 +354,10 @@ class DeviceNDArrayBase(object):
         copy of the data.
         """
         dtype = np.dtype(dtype)
-        if dtype.itemsize != self.dtype.itemsize:
-            raise ValueError("new dtype itemsize doesn't match")
+        if self.shape[-1] * self.dtype.itemsize % dtype.itemsize != 0:
+            raise ValueError(
+                "new dtype's itemsize must evenly divide the last dimension"
+            )
         return DeviceNDArray(
             shape=self.shape,
             strides=self.strides,
