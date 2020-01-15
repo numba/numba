@@ -113,7 +113,7 @@ class Signature(object):
 
     def as_type(self):
         """
-        Convert signature to function type.
+        Convert this signature to a function type.
         """
         return types.FunctionType((self.return_type, self.args))
 

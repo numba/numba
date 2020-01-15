@@ -1,8 +1,6 @@
-"""Provides numba type FunctionType that makes functions as instances
-of a first-class function types.
+"""Provides Numba type, FunctionType, that makes functions as
+instances of a first-class function type.
 """
-# Author: Pearu Peterson
-# Created: December 2019
 
 import types
 import numba
@@ -15,7 +13,7 @@ from numba.ccallback import CFunc
 from numba import cgutils
 from llvmlite import ir
 from numba.types import (
-    FunctionType, FunctionProtoType, WrapperAddressProtocol)
+    FunctionType, FunctionPrototype, WrapperAddressProtocol)
 
 
 @typeof_impl.register(WrapperAddressProtocol)
@@ -31,14 +29,14 @@ def typeof_CFunc(val, c):
 # TODO: typeof_impl for Dispatcher, types.FunctionType, ctypes.CFUNCTYPE
 
 
-@register_model(FunctionProtoType)
+@register_model(FunctionPrototype)
 class FunctionProtoModel(models.PrimitiveModel):
     """FunctionProtoModel describes the signatures of first-class functions
     """
     def __init__(self, dmm, fe_type):
         if isinstance(fe_type, FunctionType):
             ftype = fe_type.ftype
-        elif isinstance(fe_type, FunctionProtoType):
+        elif isinstance(fe_type, FunctionPrototype):
             ftype = fe_type
         else:
             raise NotImplementedError((type(fe_type)))
@@ -85,35 +83,36 @@ def lower_constant_function_type(context, builder, typ, pyval):
 
 
 def _get_wrapper_address(func, sig):
-    """Return the address of a compiled function that implements `func`
-    algoritm.
+    """Return the address of a compiled function that implements `func`.
 
     Warning: The compiled function must be compatible with the given
-    signature `sig`. If it is not, then calling the compiled function
-    will likely crash the program with segfault.
+    signature `sig`. If it is not, then result of calling the compiled
+    function is undefined.
 
     Parameters
     ----------
     func : object
       Specify a function object that can be numba.cfunc decorated or
-      an object that implements wrapper address protocol (see note below).
+      an object that implements the wrapper address protocol (see note
+      below).
     sig : Signature
-      Specify function signature.
+      The function signature.
 
     Returns
     -------
     addr : int
-      Address (pointer value) of a compiled function.
-
+      An address in memory (pointer value) of the compiled function
+      corresponding to the specified signature.
 
     Note: wrapper address protocol
     ------------------------------
 
     An object implements the wrapper address protocol iff the object
     provides a callable attribute named __wrapper_address__ that takes
-    Signature instance as the argument, and returns an integer
+    a Signature instance as the argument, and returns an integer
     representing the address or pointer value of a compiled function
-    with given signature.
+    for the given signature.
+
     """
     if hasattr(func, '__wrapper_address__'):
         # func can be any object that implements the
@@ -136,7 +135,7 @@ def _get_wrapper_address(func, sig):
             f'wrapper address must be integer, got {type(addr)} instance')
     if addr <= 0:
         raise ValueError(f'wrapper address of {type(func)} instance must be'
-                         f' positive integer but got {addr}')
+                         f' a positive integer but got {addr}')
     return addr
 
 
@@ -144,10 +143,11 @@ def _get_wrapper_address(func, sig):
 def unbox_function_type(typ, obj, c):
     sfunc = cgutils.create_struct_proxy(typ)(c.context, c.builder)
 
-    # Get obj wrapper address. The code below trusts that the function
-    # numba.function._get_wrapper_address exists and can be called
-    # with two arguments. However, if an exception is raised in the
-    # function, then it will be catched and propagated to the caller.
+    # Get the obj wrapper address. The code below trusts that the
+    # function numba.function._get_wrapper_address exists and can be
+    # called with two arguments. However, if an exception is raised in
+    # the function, then it will be caught and propagated to the
+    # caller.
     modname = c.context.insert_const_string(c.builder.module, 'numba.function')
     numba_mod = c.pyapi.import_module_noblock(modname)
     numba_func = c.pyapi.object_getattr_string(
@@ -170,12 +170,8 @@ def unbox_function_type(typ, obj, c):
             sfunc.addr = c.pyapi.long_as_voidptr(addr)
             c.pyapi.decref(addr)
 
-            # TODO: the following does not work on 32-bit systems
             # TODO: is incref(obj) needed? where the corresponding
             # decref should be called?
-            # TODO: see
-            # https://github.com/numba/numba/blob/77cb53ba8966a38bfbd3413559e4f04b12812535/numba/targets/boxing.py#L505
-            # as an alternative way for boxing
             llty = c.context.get_value_type(nbtypes.voidptr)
             sfunc.pyaddr = c.builder.ptrtoint(obj, llty)
 
@@ -190,14 +186,11 @@ def box_function_type(typ, val, c):
     # unbox function above.
     pyaddr_ptr = cgutils.alloca_once(c.builder, c.pyapi.pyobj)
     raw_ptr = c.builder.inttoptr(sfunc.pyaddr, c.pyapi.pyobj)
-    with c.builder.if_else(cgutils.is_null(c.builder, raw_ptr),
-                           likely=False) as (then, orelse):
-        with then:
-            cstr = f"first-class function {typ} parent object not set"
-            c.pyapi.err_set_string("PyExc_MemoryError", cstr)
-            c.builder.ret(c.pyapi.get_null_object())
-        with orelse:
-            pass
+    with c.builder.if_then(cgutils.is_null(c.builder, raw_ptr),
+                           likely=False):
+        cstr = f"first-class function {typ} parent object not set"
+        c.pyapi.err_set_string("PyExc_MemoryError", cstr)
+        c.builder.ret(c.pyapi.get_null_object())
     c.builder.store(raw_ptr, pyaddr_ptr)
     cfunc = c.builder.load(pyaddr_ptr)
     c.pyapi.incref(cfunc)

@@ -467,11 +467,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyLong_AsLongLong")
         return self.builder.call(fn, [numobj])
 
-    def long_as_long(self, numobj):
-        fnty = Type.function(self.ulonglong, [self.pyobj])
-        fn = self._get_function(fnty, name="PyLong_AsLong")
-        return self.builder.call(fn, [numobj])
-
     def long_as_voidptr(self, numobj):
         """
         Convert the given Python integer to a void*.  This is recommended
@@ -536,11 +531,6 @@ class PythonAPI(object):
             return self.long_from_ulonglong(self.builder.zext(ival, self.ulonglong))
         else:
             raise OverflowError("integer too big (%d bits)" % (bits))
-
-    def long_from_voidptr(self, ival):
-        fnty = Type.function(self.pyobj, [self.voidptr])
-        fn = self._get_function(fnty, name="PyLong_FromVoidPtr")
-        return self.builder.call(fn, [ival])
 
     def _get_number_operator(self, name):
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
