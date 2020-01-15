@@ -21,8 +21,8 @@ skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
 # global typed-list for testing purposes
 global_typed_list = List.empty_list(int32)
-for i in (int32(1), int32(2), int32(3)):
-    global_typed_list.append(i)
+for i in (1, 2, 3):
+    global_typed_list.append(int32(i))
 
 
 def to_tl(l):
