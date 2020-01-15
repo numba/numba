@@ -355,7 +355,7 @@ class DeviceNDArrayBase(object):
         """
         dtype = np.dtype(dtype)
         if dtype.itemsize != self.dtype.itemsize:
-            raise TypeError("new dtype itemsize doesn't match")
+            raise ValueError("new dtype itemsize doesn't match")
         return DeviceNDArray(
             shape=self.shape,
             strides=self.strides,
