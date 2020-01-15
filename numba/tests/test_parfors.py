@@ -374,6 +374,19 @@ def countArrays(test_func, args, **kws):
     test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
     return _count_arrays_inner(test_ir.blocks, tp.state.typemap)
 
+def get_init_block_size(test_func, args, **kws):
+    test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
+    blocks = test_ir.blocks
+
+    ret_count = 0
+
+    for label, block in blocks.items():
+        for i, inst in enumerate(block.body):
+            if isinstance(inst, numba.parfor.Parfor):
+                ret_count += len(inst.init_block.body)
+
+    return ret_count
+
 def _count_arrays_inner(blocks, typemap):
     ret_count = 0
     arr_set = set()
@@ -3055,6 +3068,20 @@ class TestParforsMisc(TestParforsBase):
         finally:
             # recover global state
             numba.parfor.sequential_parfor_lowering = old_seq_flag
+
+    @skip_unsupported
+    def test_init_block_dce(self):
+        # issue4690
+        def test_impl():
+            res = 0
+            arr = [1,2,3,4,5]
+            numba.parfor.init_prange()
+            dummy = arr
+            for i in numba.prange(5):
+                res += arr[i]
+            return res + dummy[2]
+
+        self.assertTrue(get_init_block_size(test_impl, ()) == 0)
 
     @skip_unsupported
     def test_alias_analysis_for_parfor1(self):
