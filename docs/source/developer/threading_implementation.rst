@@ -1,4 +1,3 @@
-
 =========================================
 Notes on Numba's threading implementation
 =========================================
@@ -19,15 +18,29 @@ execute the parallel tasks.
 
 Thread masking
 --------------
+
+In order to simplify the design, it was decided that Numba should never launch
+new threads beyond the threads that are launched initially with
+``_launch_threads`` when the first parallel execution is run. Consequently,
+the programmatic setting of the number of threads can only be done by setting
+the number of threads to a number less than the total number that have already
+been launched. This is done by "masking" out unused threads, causing them to
+do no work. For example, on a 16 core machine, if the user were to call
+``set_num_threads(4)``, numba would always have 16 threads present, but 12 of
+them would sit idle for parallel computations. A further call to
+``set_num_threads(16)`` would cause those same threads to do work in later
+computations.
+
 :ref:`Thread masking <numba-threading-layer-thread-masking>` was added to make
 it possible for a user to programmatically alter the number of threads
 performing work in the threading layer. Thread masking proved challenging to
 implement as it required the development of a programming model that is suitable
 for users, easy to reason about, and could be implemented safely, with
-consistent behaviour across the various threading layers.
+consistent behavior across the various threading layers.
 
 Programming model
 ~~~~~~~~~~~~~~~~~
+
 The programming model chosen is similar to that found in OpenMP. The reasons for
 this choice were that it is familiar to a lot of users, restricted in scope and
 also simple. The number of threads in use is specified by calling
@@ -76,7 +89,7 @@ If the work contains a call to another parallel function (i.e. nested
 parallelism) it is necessary for the thread making the call to know what the
 "thread mask" of the main thread is so that it can propagate it into the
 ``parallel_for`` call it makes when executing the nested parallel function.
-The implementation of this behaviour is threading layer specific but the general
+The implementation of this behavior is threading layer specific but the general
 principle is for the "main thread" to always "send" the value of the thread mask
 from its TLS slot to all threads in the threading layer that are active in the
 parallel region. These active threads then update their TLS slots with this
@@ -99,11 +112,16 @@ Python threads independently invoking parallel functions
 The threading layer launch sequence is heavily guarded to ensure that the
 launch is both thread and process safe and run once per process. In a system
 with numerous Python ``threading`` module threads all using Numba, the first
-thread through the launch sequence will get its thread mask set
-appropriately, but no further threads can run the launch sequence. This means
-that other threads will need their initial thread mask set some other way,
-this is achieved when ``get_num_threads`` is called and no thread mask is
-present, in this case the thread mask will be set to the default.
+thread through the launch sequence will get its thread mask set appropriately,
+but no further threads can run the launch sequence. This means that other
+threads will need their initial thread mask set some other way. This is
+achieved when ``get_num_threads`` is called and no thread mask is present, in
+this case the thread mask will be set to the default. In the implementation,
+"no thread mask is present" is represented by the value -1 and the "default
+thread mask" (unset) is represented by the value 0. The implementation also
+immediately calls ``set_num_threads(NUMBA_NUM_THREADS)`` after doing this, so
+if either -1 or 0 is encountered as a result from ``get_num_threads()`` it
+indicates a bug in the above processes.
 
 OS ``fork()`` calls
 *******************
@@ -112,3 +130,67 @@ The use of TLS was also in part driven by the Linux (the most popular
 platform for Numba use by far) having a ``fork(2, 3P)`` call that will do TLS
 propagation into child processes, see ``clone(2)``'s ``CLONE_SETTLS``.
 
+Thread ID
+*********
+
+A private ``get_thread_id()`` function was added to each threading backend,
+which returns a unique ID for each thread. This can be accessed from Python by
+``numba.npyufunc.parallel._get_thread_id()`` (it can also be used inside of an
+njitted function). The thread ID function is useful for testing that the
+thread masking behavior is correct, but it should not be used outside of the
+tests. For example, one can call ``set_num_threads(4)`` and then collect all
+unique ``_get_thread_id()``s in a parallel region to verify that only 4
+threads are run.
+
+Caveats
+~~~~~~~
+
+Some caveats to be aware of when testing this:
+
+- The TBB backend may choose to schedule fewer than the given mask number of
+  threads. Thus a test such as the one described above may return fewer than 4
+  unique threads.
+
+- The workqueue backend is not threadsafe, so attempts to do nested
+  parallelism with it may result in deadlocks or other undefined behavior.
+
+- Certain backends may reuse the main thread for computation, but this
+  behavior shouldn't be relied on (for instance, for exceptions propagating).
+
+Use in Code Generation
+~~~~~~~~~~~~~~~~~~~~~~
+
+The general pattern for using ``get_num_threads`` in code generation is
+
+.. code:: python
+
+   import llvmlite.llvmpy.core as lc
+
+   get_num_threads = builder.module.get_or_insert_function(
+       lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+       name="get_num_threads")
+
+   num_threads = builder.call(get_num_threads, [])
+
+   with cgutils.if_unlikely(builder, builder.icmp_signed('==', num_threads,
+                                                 num_threads.type(0))):
+       cgutils.printf(builder, "num_threads: %d\n", num_threads)
+       context.call_conv.return_user_exc(builder, RuntimeError,
+                                                 ("Invalid number of threads. "
+                                                  "This likely indicates a bug in Numba.",))
+
+   # Pass num_threads through to the appropriate backend function
+
+See the code in ``numba/npyufunc/parfor.py``. Here ``builder.module`` is the thread pool backend library, e.g., ``tbbpool``.
+
+The guard against ``num_threads`` being <= 0 is not strictly necessary, but it
+can protect against accidentally incorrect behavior in case the thread masking
+logic contains a bug.
+
+The ``num_threads`` variable should be passed through to the appropriate
+backend function, such as ``do_scheduling`` or ``parallel_for``. If it's used
+in some way other than passing it through to the backend function, the above
+considerations should be taken into account to ensure the use of the
+``num_threads`` variable is safe. It would probably be better to keep such
+logic in the threading backends, rather than trying to do it in code
+generation.
