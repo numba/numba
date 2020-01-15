@@ -1343,7 +1343,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     num_threads = builder.call(get_num_threads, [])
 
-    with cgutils.if_unlikely(builder, builder.icmp_signed('==', num_threads,
+    with cgutils.if_unlikely(builder, builder.icmp_signed('<=', num_threads,
                                                   num_threads.type(0))):
         cgutils.printf(builder, "num_threads: %d\n", num_threads)
         context.call_conv.return_user_exc(builder, RuntimeError,
