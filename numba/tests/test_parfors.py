@@ -1545,6 +1545,19 @@ class TestParfors(TestParforsBase):
             return np.sum(n) + np.prod(n) + np.min(n) + np.max(n) + np.var(n)
         self.check(test_impl, np.array(7), check_scheduling=False)
 
+    @skip_unsupported
+    def test_array_analysis_optional_def(self):
+        def test_impl(x, half):
+            size = len(x)
+            parr = x[0:size]
+
+            if half:
+                parr = x[0:size//2]
+
+            return parr.sum()
+        x = np.ones(20)
+        self.check(test_impl, x, True, check_scheduling=False)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
