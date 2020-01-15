@@ -26,15 +26,6 @@ c = np.ones_like(a)
 # Select a device for executing the kernel
 device_env = None
 
-'''
-if ocldrv.runtime.get_gpu_device() is not None:
-    device_env = ocldrv.runtime.get_gpu_device()
-elif ocldrv.runtime.get_cpu_device() is not None:
-    device_env = ocldrv.runtime.get_cpu_device()
-else:
-    e = ocldrv.DeviceNotFoundError("No OpenCL devices found on the system")
-    raise e
-    '''
 try:
     device_env = ocldrv.runtime.get_gpu_device()
     print("Selected GPU device")
