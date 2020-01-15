@@ -354,12 +354,21 @@ class DeviceNDArrayBase(object):
         copy of the data.
         """
         dtype = np.dtype(dtype)
-        if self.shape[-1] * self.dtype.itemsize % dtype.itemsize != 0:
+
+        shape = list(shape)
+        shape[-1], rem = divmod(
+            dtype.itemsize,
+            shape[-1] * self.dtype.itemsize
+        )
+        shape = tuple(shape)
+
+        if rem != 0:
             raise ValueError(
                 "new dtype's itemsize must evenly divide the last dimension"
             )
+
         return DeviceNDArray(
-            shape=self.shape,
+            shape=shape,
             strides=self.strides,
             dtype=dtype,
             stream=self.stream,
