@@ -41,16 +41,16 @@ consistent behavior across the various threading layers.
 Programming model
 ~~~~~~~~~~~~~~~~~
 
-The programming model chosen is similar to that found in OpenMP. The reasons for
-this choice were that it is familiar to a lot of users, restricted in scope and
-also simple. The number of threads in use is specified by calling
+The programming model chosen is similar to that found in OpenMP. The reasons
+for this choice were that it is familiar to a lot of users, restricted in
+scope and also simple. The number of threads in use is specified by calling
 ``set_num_threads`` and the number of threads in use can be queried by calling
 ``get_num_threads``.These two functions are synonymous with their OpenMP
-counterparts. The execution semantic is also similar to OpenmP in that once a
-parallel region is launched altering the thread mask has no impact on the
-currently executing region but will have an impact on parallel regions executed
-subsequently.
-
+counterparts (with the above restriction that the mask must be <= the number
+of launched threads). The execution semantics are also similar to OpenmP in
+that once a parallel region is launched altering the thread mask, it has no
+impact on the currently executing region but will have an impact on parallel
+regions executed subsequently.
 
 The Implementation
 ~~~~~~~~~~~~~~~~~~
