@@ -420,6 +420,7 @@ class TestFunctionType(TestCase):
 class TestFunctionTypeExtensions(TestCase):
 
     def test_wrapper_address_protocol_libm(self):
+        import os
         import ctypes.util
         from numba.types import WrapperAddressProtocol
 
