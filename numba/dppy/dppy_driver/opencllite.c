@@ -359,6 +359,7 @@ static int create_dp_env_t (cl_platform_id* platforms,
     env->device = NULL;
     env->queue = NULL;
     env->max_work_item_dims = 0;
+    env->max_work_group_size = 0;
     env->dump_fn = NULL;
 
     device = (cl_device_id*)malloc(sizeof(cl_device_id));
@@ -370,6 +371,11 @@ static int create_dp_env_t (cl_platform_id* platforms,
     err = clGetDeviceInfo(*device, CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS,
             sizeof(env->max_work_item_dims), &env->max_work_item_dims, NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not get max work item dims");
+
+    // get the CL_DEVICE_MAX_WORK_GROUP_SIZE for this device
+    err = clGetDeviceInfo(*device, CL_DEVICE_MAX_WORK_GROUP_SIZE,
+            sizeof(env->max_work_group_size), &env->max_work_group_size, NULL);
+    CHECK_OPEN_CL_ERROR(err, "Could not get max work group size");
 
     // Create a context and associate it with device
     env->context = clCreateContext(NULL, 1, device, NULL, NULL, &err);
