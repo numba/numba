@@ -143,19 +143,20 @@ jit compiled function `composition` as arguments, that is, the
 `composition` is jit compiled independently from its argument function
 objects (that are collected in the input argument `funcs`).
 
-Currently, first-class function objects can be Numba `cfunc` decorated
-functions, `jit` decorated functions, and objects that implement
+Currently, first-class function objects can be Numba `cfunc` compiled
+functions, `jit` compiled functions, and objects that implement
 Wrapper Address Protocol (WAP) with the following restrictions:
 
-========================   =========   =======   ====================
-Context                    `cfunc`     `jit`     WAP objects
-========================   =========   =======   ====================
-Can be used as arguments   yes         yes       yes
-Namespace scoping          yes         yes       no
-Can be called              yes         yes       yes
-Can be used as items       yes         no        yes
-Automatic overload         no          yes       no
-Can be returned            yes         no        no
+========================   ==============   ============    ===========
+Context                    cfunc compiled   jit compiled    WAP objects
+========================   ==============   ============    ===========
+Can be used as arguments   yes              yes             yes
+Namespace scoping          yes              yes             no
+Can be called              yes              yes             yes
+Can be used as items       yes              no              yes
+Automatic overload         no               yes             no
+Can be returned            yes              no              no
+========================   ==============   ============    ===========
 
 Wrapper Address Protocol - WAP
 ++++++++++++++++++++++++++++++
