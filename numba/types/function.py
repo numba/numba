@@ -43,12 +43,22 @@ class FunctionType(Type):
 
     def get_call_type(self, context, args, kws):
         from numba import typing
+        from . import Array, Number
         ptype = self.ftype
         if len(args) == len(ptype.atypes):
             for i, atype in enumerate(args):
+                if isinstance(atype, Array):
+                    if not isinstance(ptype.atypes[i], Array):
+                        break
+                    if not (atype.dtype <= ptype.atypes[i].dtype):
+                        break
+                    continue
                 if isinstance(atype, Literal):
                     atype = atype.literal_type
-                if not (atype <= ptype.atypes[i]):
+                if not (isinstance(atype, Number)
+                        and isinstance(ptype.atypes[i], Number)
+                        and atype <= ptype.atypes[i]):
+                    # TODO: implement support for non-numeric types
                     break
             else:
                 return typing.signature(ptype.rtype, *ptype.atypes)

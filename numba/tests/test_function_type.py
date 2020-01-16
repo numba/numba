@@ -608,3 +608,29 @@ class TestMiscIssues(TestCase):
         b_ = b._pyfunc
         self.assertEqual(foo(a, b),
                          a_(2) + a_(a_(2)) + b_(a_(2) + a_(a_(2))))
+
+    def test_pr4967_array(self):
+        import numpy as np
+
+        @cfunc("intp(intp[:], float64[:])")
+        def foo1(x, y):
+            return x[0] + y[0]
+
+        @cfunc("intp(intp[:], float64[:])")
+        def foo2(x, y):
+            return x[0] - y[0]
+
+        def bar(fx, fy, i):
+            a = np.array([10], dtype=np.intp)
+            b = np.array([12], dtype=np.float64)
+            if i == 0:
+                f = fx
+            elif i == 1:
+                f = fy
+            else:
+                return
+            return f(a, b)
+
+        r = jit(nopython=True)(bar)(foo1, foo2, 0)
+        self.assertEqual(r, bar(foo1, foo2, 0))
+        self.assertNotEqual(r, bar(foo1, foo2, 1))
