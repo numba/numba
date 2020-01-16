@@ -62,63 +62,45 @@ _real_check_call = check_call
 def check_call(*args, **kwargs):
     return _real_check_call(*args, **kwargs)
 
-
 class CmdLine(object):
-    CMD_AS = (spirv_tools_home + "/bin/spirv-as "
-              # "--preserve-numeric-ids"
-              # "--target_env {vulkan1.0|spv1.0|spv1.1|spv1.2}"
-              "-o {fout} "
-              "{fin}")
-
-    CMD_DIS = (spirv_tools_home + "/bin/spirv-dis "
-               # "--no-indent"
-               # "--no-header"
-               # "--raw-id"
-               # "--offsets"
-               "-o {fout} "
-               "{fin}")
-
-    CMD_VAL = (spirv_tools_home + "/bin/spirv-val "
-               # "--target_env {vulkan1.0|spv1.0|spv1.1|spv1.2}"
-               "{fin}")
-
-    CMD_OPT = (spirv_tools_home + "/bin/spirv-opt "
-               # "--strip-debug"
-               # "--freeze-spec-const"
-               # "--eliminate-dead-const"
-               # "--fold-spec-const-op-composite"
-               # "--set-spec-const-default-value '<spec id>:<default value> ...'"
-               # "--unify-const"
-               # "--inline-entry-points-exhaustive"
-               # "--flatten-decorations"
-               # "--compact-ids"
-               "-o {fout} "
-               "{fin}")
-
-    # DRD : The opt step is needed for:
-    #     a) generate a bitcode file from the text IR file
-    #     b) hoist all allocas to the enty block of the module
-    CMD_LLVM_AS = (llvm_home + "/bin/opt -O3 -o {fout} {fin}")
-    CMD_GEN = (llvm_home + "/bin/llvm-spirv -o {fout} {fin} ")
-
-    def assemble(self, ipath, opath):
-        check_call(self.CMD_AS.format(fout=opath, fin=ipath), shell=True)
 
     def disassemble(self, ipath, opath):
-        check_call(self.CMD_DIS.format(fout=opath, fin=ipath), shell=True)
+        check_call([
+            spirv_tools_home + "/bin/spirv-dis",
+            # "--no-indent",
+            # "--no-header",
+            # "--raw-id",
+            # "--offsets",
+            "-o",
+            opath,
+            ipath])
 
     def validate(self, ipath):
-        check_call(self.CMD_VAL.format(fin=ipath), shell=True)
+        check_call([spirv_tools_home + "/bin/spirv-val",ipath])
 
     def optimize(self, ipath, opath):
-        check_call(self.CMD_OPT.format(fout=opath, fin=ipath), shell=True)
+        check_call([
+            spirv_tools_home + "/bin/spirv-opt",
+            # "--strip-debug",
+            # "--freeze-spec-const",
+            # "--eliminate-dead-const",
+            # "--fold-spec-const-op-composite",
+            # "--set-spec-const-default-value '<spec id>:<default value> ...'",
+            # "--unify-const",
+            # "--inline-entry-points-exhaustive",
+            # "--flatten-decorations",
+            # "--compact-ids",
+            "-o",
+            opath,
+            ipath])
 
     def generate(self, ipath, opath):
         # DRD : Temporary hack to get SPIR-V code generation to work.
-        check_call(self.CMD_LLVM_AS.format(fout=ipath + '.bc', fin=ipath),
-                   shell=True)
-        check_call(self.CMD_GEN.format(
-            fout=opath, fin=ipath + '.bc'), shell=True)
+        # The opt step is needed for:
+        #     a) generate a bitcode file from the text IR file
+        #     b) hoist all allocas to the enty block of the module
+        check_call([llvm_home+"/bin/opt","-O3","-o",ipath+'.bc',ipath])
+        check_call([llvm_home + "/bin/llvm-spirv","-o",opath,ipath+'.bc'])
         os.unlink(ipath + '.bc')
 
 
@@ -188,11 +170,10 @@ class Module(object):
             opt_path = self._track_temp_file("optimized-spirv")
             self._cmd.optimize(ipath=spirv_path, opath=opt_path)
 
-            # Disassemble optimized SPIR-V code
-            dis_path = self._track_temp_file("disassembled-spirv")
-            self._cmd.disassemble(ipath=opt_path, opath=dis_path)
-
             if config.DUMP_ASSEMBLY:
+                # Disassemble optimized SPIR-V code
+                dis_path = self._track_temp_file("disassembled-spirv")
+                self._cmd.disassemble(ipath=opt_path, opath=dis_path)
                 with open(dis_path, 'rb') as fin_opt:
                     print("ASSEMBLY".center(80, "-"))
                     print(fin_opt.read())
