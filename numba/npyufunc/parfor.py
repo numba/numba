@@ -1552,7 +1552,4 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         only_elem_ptr = builder.gep(rv_arg, [context.get_constant(types.intp, 0)])
         builder.store(builder.load(only_elem_ptr), lowerer.getvar(k))
 
-#    for v in redarrdict.values():
-#        lowerer.lower_inst(ir.Del(v.name, loc=loc))
-
     context.active_code_library.add_linking_library(cres.library)
