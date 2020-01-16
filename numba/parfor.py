@@ -3591,7 +3591,7 @@ def get_parfor_pattern_vars(parfor):
                     out.add(v.name)
     return out
 
-def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
+def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, func_ir, typemap):
     """ remove dead code inside parfor including get/sets
     """
 
@@ -3608,7 +3608,7 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
         parfor.loop_body[first_label].body,
         parfor.index_var, alias_map,
         first_block_saved_values,
-        lives
+        lives_n_aliases
         )
 
     # remove saved first block setitems if array potentially changed later
@@ -3635,13 +3635,13 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
         block = parfor.loop_body[l]
         saved_values = first_block_saved_values.copy()
         _update_parfor_get_setitems(block.body, parfor.index_var, alias_map,
-                                        saved_values, lives)
+                                        saved_values, lives_n_aliases)
 
 
     # after getitem replacement, remove extra setitems
     blocks = parfor.loop_body.copy()  # shallow copy is enough
     last_label = max(blocks.keys())
-    return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
+    return_label, tuple_var = _add_liveness_return_block(blocks, lives_n_aliases, typemap)
     # jump to return label
     jump = ir.Jump(return_label, ir.Loc("parfors_dummy", -1))
     blocks[last_label].body.append(jump)
@@ -3674,8 +3674,14 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
     typemap.pop(tuple_var.name)  # remove dummy tuple type
     blocks[last_label].body.pop()  # remove jump
 
-
-    # process parfor body recursively
+    """
+      Process parfor body recursively.
+      Note that this is the only place in this function that uses the
+      argument lives instead of lives_n_aliases.  The former does not
+      include the aliases of live variables but only the live variable
+      names themselves.  See a comment in this function for how that
+      is used. 
+    """
     remove_dead_parfor_recursive(
         parfor, lives, arg_aliases, alias_map, func_ir, typemap)
 
@@ -3731,6 +3737,17 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
     assert first_body_block > 0  # we are using 0 for init block here
     last_label = max(blocks.keys())
 
+    """
+      Previously, this statement used lives_n_aliases.  That had the effect of
+      keeping variables in the init_block alive if they aliased an array that
+      was later written to.  By using just lives to indicate which variables
+      names are live at exit of the parfor but then using alias_map for the
+      actual recursive dead code removal, we keep any writes to aliased arrays
+      alive but also allow aliasing assignments (i.e., a = b) to be eliminated
+      so long as 'b' is not written to through the variable 'a' later on.
+      This makes assignment handling of remove_dead_block work properly since
+      it allows distinguishing between live variables and their aliases.
+    """
     return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
 
     # branch back to first body label to simulate loop

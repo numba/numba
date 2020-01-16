@@ -25,9 +25,6 @@ Python 3. The only exception to this is that for hashing Unicode and bytes (for
 content longer than ``sys.hash_info.cutoff``) the only supported algorithm is
 ``siphash24`` (default in CPython 3). As a result Numba will match Python 3
 hash values for all supported types under the default conditions described.
-Python 2 hashing support is set up to follow Python 3 and similar defaults are
-hard coded for this purpose, including, perhaps most noticeably,
-``sys.hash_info.cutoff`` is set to zero.
 
 Unicode hash cache differences
 ------------------------------

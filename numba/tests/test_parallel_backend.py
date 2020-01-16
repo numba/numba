@@ -696,15 +696,16 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
            pattern for GNU OpenMP
         """
         body = """if 1:
+            mp = multiprocessing.get_context('fork')
             X = np.arange(1000000.)
             Y = np.arange(1000000.)
-            q = multiprocessing.Queue()
+            q = mp.Queue()
 
             # Start OpenMP runtime on parent via parallel function
             Z = busy_func(X, Y, q)
 
             # fork() underneath with no exec, will abort
-            proc = multiprocessing.Process(target = busy_func, args=(X, Y, q))
+            proc = mp.Process(target = busy_func, args=(X, Y, q))
             proc.start()
 
             err = q.get()

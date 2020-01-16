@@ -270,7 +270,7 @@ class CodeLibrary(object):
         # could fail.
         cleanup = self._codegen._add_module(self._final_module)
         if cleanup:
-            utils.finalize(self, cleanup)
+            weakref.finalize(self, cleanup)
         self._finalize_specific()
 
         self._finalized = True
