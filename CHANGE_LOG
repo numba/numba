@@ -9,7 +9,7 @@ Version 0.48.0 (Jan 16, 2020)
 
 This release is particularly small as it was present to catch anything that
 missed the 0.47.0 deadline (the deadline deliberately coincided with the end of
-support for Python 2.7). The next release will be considerable larger.
+support for Python 2.7). The next release will be considerably larger.
 
 The core changes in this release are dominated by the start of the clean up
 needed for the end of Python 2.7 support, improvements to the CUDA target and
