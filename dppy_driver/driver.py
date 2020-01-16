@@ -346,6 +346,11 @@ class DeviceEnv():
     def get_env_ptr(self):
         return self._env_ptr
 
+    def get_max_work_item_dims(self):
+        return self._env_ptr.max_work_item_dims
+
+    def get_max_work_group_size(self):
+        return self._env_ptr.max_work_group_size
 
 ##########################################################################
 # Runtime class
