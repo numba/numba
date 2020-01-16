@@ -463,62 +463,6 @@ class TestFunctionTypeExtensions(TestCase):
         self.assertEqual(myeval(mycos, 0.0), 1.0)
         self.assertEqual(myeval(mysin, float32(0.0)), 0.0)
 
-    def _test_wrapper_address_protocol_libc(self):
-        import os
-        import sys
-        import time
-        import ctypes.util
-        from numba.types import WrapperAddressProtocol
-
-        class LibC(WrapperAddressProtocol):
-
-            def __init__(self, fname):
-                libc = None
-                if os.name == 'nt':
-                    libc = ctypes.cdll.msvcrt
-                elif os.name == 'posix':
-                    libpath = ctypes.util.find_library('c')
-                    libc = ctypes.cdll.LoadLibrary(libpath)
-                if libc is None:
-                    raise NotImplementedError(
-                        f'loading libc on platform {sys.platform}')
-                self.libc = libc
-                self.fname = fname
-
-            def __wrapper_address__(self, sig):
-                if (self.fname, sig) == ('time', int32()):
-                    assert self.libc.time.restype == ctypes.c_int, (
-                        self.libc.time.restype, ctypes.c_int)
-                    assert ctypes.sizeof(ctypes.c_int) == 4, (
-                        ctypes.sizeof(ctypes.c_int), 4)
-                    addr = ctypes.cast(self.libc.time, ctypes.c_voidp).value
-                else:
-                    raise NotImplementedError(
-                        f'wrapper address of `{self.fname}`'
-                        f' with signature `{sig}`')
-                return addr
-
-            def signature(self):
-                if self.fname == 'time':
-                    return int32()
-                raise NotImplementedError(f'signature of `{self.fname}`')
-
-        wap = LibC('time')
-
-        @njit
-        def get_time(f):
-            return f()
-
-        t0 = time.time()
-        # libc.time returns int, so make sure t1 will be ahead of t0
-        # at least 1 second:
-        time.sleep(1.01)
-        t1 = get_time(wap)
-        t2 = time.time()
-
-        self.assertLess(t0, t1)
-        self.assertLess(t1, t2)
-
 
 class TestMiscIssues(TestCase):
 
