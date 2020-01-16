@@ -277,7 +277,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     # produce instructions for init_block
     if config.DEBUG_ARRAY_OPT:
-        print("init_block = ", parfor.init_block, " ", type(parfor.init_block))
+        print("init_block = ", parfor.init_block, type(parfor.init_block))
     for instr in parfor.init_block.body:
         if config.DEBUG_ARRAY_OPT:
             print("lower init_block instr = ", instr)
@@ -487,7 +487,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                 redargstartdim,
                 func_sig,
                 parfor.races,
-                typemap)
+                typemap,
+                use_sched=False)
             call_dppy(
                 lowerer,
                 func,
@@ -687,12 +688,17 @@ def _create_shape_signature(
         redargstartdim,
         func_sig,
         races,
-        typemap):
+        typemap,
+        use_sched=True):
     '''Create shape signature for GUFunc
     '''
     if config.DEBUG_ARRAY_OPT:
         print("_create_shape_signature", num_inputs, num_reductions, args, redargstartdim)
-        for i in args[1:]:
+        if use_sched:
+            arg_start_print = 1
+        else:
+            arg_start_print = 0
+        for i in args[arg_start_print:]:
             print("argument", i, type(i), get_shape_classes(i, typemap=typemap))
 
     num_inouts = len(args) - num_reductions
@@ -747,7 +753,7 @@ def _create_shape_signature(
 
 def _print_block(block):
     for i, inst in enumerate(block.body):
-        print("    ", i, " ", inst)
+        print("    ", i, inst)
 
 def _print_body(body_dict):
     '''Pretty-print a set of IR blocks.
@@ -1094,18 +1100,22 @@ def _create_gufunc_for_parfor_body(
     replace_var_with_array(races, loop_body, typemap, lowerer.fndesc.calltypes)
 
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("parfor_params = ", parfor_params, " ", type(parfor_params))
-        print("parfor_outputs = ", parfor_outputs, " ", type(parfor_outputs))
-        print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
-        print("parfor_redvars = ", parfor_redvars, " ", type(parfor_redvars))
+        print("parfor_params = ", parfor_params, type(parfor_params))
+        print("parfor_outputs = ", parfor_outputs, type(parfor_outputs))
+        print("parfor_inputs = ", parfor_inputs, type(parfor_inputs))
+        print("parfor_redvars = ", parfor_redvars, type(parfor_redvars))
+        print("parfor_reddict = ", parfor_reddict, type(parfor_reddict))
 
     # Reduction variables are represented as arrays, so they go under
     # different names.
     parfor_redarrs = []
+    parfor_local_redarrs = []
     parfor_red_arg_types = []
+    parfor_redvar_types = []
     for var in parfor_redvars:
         arr = var + "_arr"
         parfor_redarrs.append(arr)
+        parfor_redvar_types.append(typemap[var])
         redarraytype = redtyp_to_redarraytype(typemap[var])
         parfor_red_arg_types.append(redarraytype)
         redarrsig = redarraytype_to_sig(redarraytype)
@@ -1114,25 +1124,33 @@ def _create_gufunc_for_parfor_body(
         else:
             typemap[arr] = redarrsig
 
+        if target=='spirv':
+            local_arr = var + "_local_arr"
+            parfor_local_redarrs.append(local_arr)
+            if local_arr in typemap:
+                assert(typemap[local_arr] == redarrsig)
+            else:
+                typemap[local_arr] = redarrsig
+
     # Reorder all the params so that inputs go first then outputs.
-    parfor_params = parfor_inputs + parfor_outputs + parfor_redarrs
+    parfor_params = parfor_inputs + parfor_outputs
+    if target=='spirv':
+        # Pass in the initial value as a simple var.
+        parfor_params.extend(parfor_redvars)
+        parfor_params.extend(parfor_local_redarrs)
+    parfor_params.extend(parfor_redarrs)
 
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("parfor_params = ", parfor_params, " ", type(parfor_params))
-        print("loop_indices = ", loop_indices, " ", type(loop_indices))
-        print("loop_body = ", loop_body, " ", type(loop_body))
+        print("parfor_params = ", parfor_params, type(parfor_params))
+        print("loop_indices = ", loop_indices, type(loop_indices))
+        print("loop_body = ", loop_body, type(loop_body))
         _print_body(loop_body)
 
     # Some Var are not legal parameter names so create a dict of potentially illegal
     # param name to guaranteed legal name.
     param_dict = legalize_names_with_typemap(parfor_params + parfor_redvars, typemap)
     if config.DEBUG_ARRAY_OPT >= 1:
-        print(
-            "param_dict = ",
-            sorted(
-                param_dict.items()),
-            " ",
-            type(param_dict))
+        print("param_dict = ", sorted(param_dict.items()), type(param_dict))
 
     # Some loop_indices are not legal parameter names so create a dict of potentially illegal
     # loop index to guaranteed legal name.
@@ -1140,20 +1158,27 @@ def _create_gufunc_for_parfor_body(
     # Compute a new list of legal loop index names.
     legal_loop_indices = [ind_dict[v] for v in loop_indices]
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("ind_dict = ", sorted(ind_dict.items()), " ", type(ind_dict))
+        print("ind_dict = ", sorted(ind_dict.items()), type(ind_dict))
         print(
             "legal_loop_indices = ",
             legal_loop_indices,
-            " ",
             type(legal_loop_indices))
         for pd in parfor_params:
             print("pd = ", pd)
-            print("pd type = ", typemap[pd], " ", type(typemap[pd]))
+            print("pd type = ", typemap[pd], type(typemap[pd]))
 
     # Get the types of each parameter.
     param_types = [to_scalar_from_0d(typemap[v]) for v in parfor_params]
     # Calculate types of args passed to gufunc.
-    func_arg_types = [typemap[v] for v in (parfor_inputs + parfor_outputs)] + parfor_red_arg_types
+    func_arg_types = [typemap[v] for v in (parfor_inputs + parfor_outputs)]
+    if target=='spirv':
+        # the output reduction array has the same types as the local reduction reduction arrays
+        func_arg_types.extend(parfor_redvar_types)
+        func_arg_types.extend(parfor_red_arg_types)
+    func_arg_types.extend(parfor_red_arg_types)
+
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("func_arg_types = ", func_arg_types, type(func_arg_types))
 
     # Replace illegal parameter names in the loop body with legal ones.
     replace_var_names(loop_body, param_dict)
@@ -1182,7 +1207,6 @@ def _create_gufunc_for_parfor_body(
         print(
             "legal parfor_params = ",
             parfor_params,
-            " ",
             type(parfor_params))
 
 
@@ -1191,8 +1215,8 @@ def _create_gufunc_for_parfor_body(
     gufunc_name = "__numba_parfor_gufunc_%s" % (
         hex(hash(parfor)).replace("-", "_"))
     if config.DEBUG_ARRAY_OPT:
-        # print("sched_func_name ", type(sched_func_name), " ", sched_func_name)
-        print("gufunc_name ", type(gufunc_name), " ", gufunc_name)
+        # print("sched_func_name ", type(sched_func_name), sched_func_name)
+        print("gufunc_name ", type(gufunc_name), gufunc_name)
 
     gufunc_txt = ""
 
@@ -1208,12 +1232,10 @@ def _create_gufunc_for_parfor_body(
 #            gufunc_txt += ("    " + parfor_params_orig[pindex]
 #                + " = np.ascontiguousarray(" + parfor_params[pindex] + ")\n")
 
-    # spirv target doesn't handle reductions yet
-    if len(parfor_redvars) > 0 and target=='spirv':
-        assert(0)
-
     if target=='spirv':
         # Intentionally do nothing here for reduction initialization in gufunc.
+        # We don't have to do anything because we pass in the initial reduction
+        # var value as a param.
         pass
     else:
         # Add initialization of reduction variables
@@ -1285,25 +1307,25 @@ def _create_gufunc_for_parfor_body(
     if target=='spirv':
         if has_reduction:
             gufunc_txt += "    gufunc_red_offset = 1\n"
-            gufunc_txt += "    while gufunc_red_offset < numItems:\n"
+            gufunc_txt += "    while gufunc_red_offset < gufunc_numItems:\n"
             gufunc_txt += "        mask = (2 * gufunc_red_offset) - 1\n"
-            gufunc_txt += "        dppy.local_mem_fence_barrier()\n"
-            gufunc_txt += "        if (tnum and mask) == 0:\n"
-            gufunc_txt += "            # red_result[tnum] = red_result[tnum] (reduction_operator) red_result[tnum+offset]\n"
+            gufunc_txt += "        dppy.barrier(dppy.enums.CLK_LOCAL_MEM_FENCE)\n"
+            gufunc_txt += "        if (gufunc_tnum and mask) == 0:\n"
+            gufunc_txt += "            # red_result[gufunc_tnum] = red_result[gufunc_tnum] (reduction_operator) red_result[gufunc_tnum+offset]\n"
             gufunc_txt += "            pass\n"
             gufunc_txt += "        gufunc_red_offset *= 2\n"
-            gufunc_txt += "    dppy.local_mem_fence_barrier()\n"
-            gufunc_txt += "    if tnum == 0:\n"
+            gufunc_txt += "    dppy.barrier(dppy.enums.CLK_LOCAL_MEM_FENCE)\n"
+            gufunc_txt += "    if gufunc_tnum == 0:\n"
             for arr, var in zip(parfor_redarrs, parfor_redvars):
                 # After the gufunc loops, copy the accumulated temp value back to reduction array.
                 if redtyp_is_scalar(typemap[var]):
                     gufunc_txt += "        " + param_dict[arr] + \
-                        "[wgNum] = " + param_dict[var] + "\n"
+                        "[gufunc_wgNum] = " + param_dict[var] + "\n"
                     redargstartdim[arr] = 1
                 else:
                     # After the gufunc loops, copy the accumulated temp array back to reduction array with ":"
                     gufunc_txt += "        " + param_dict[arr] + \
-                        "[wgNum, :] = " + param_dict[var] + "[:]\n"
+                        "[gufunc_wgNum, :] = " + param_dict[var] + "[:]\n"
                     redargstartdim[arr] = 0
     else:
         # Add assignments of reduction variables (for returning the value)
@@ -1918,9 +1940,6 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
     sin, sout = gu_signature
     num_dim = len(loop_ranges)
 
-    # Don't handle reductions yet.
-    assert(len(redvars) == 0)
-
     # Commonly used LLVM types and constants
     byte_t = lc.Type.int(8)
     byte_ptr_t = lc.Type.pointer(byte_t)
@@ -2045,7 +2064,8 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
                   "llvm_arg:", llvm_arg, type(llvm_arg),
                   "arg_type:", arg_type, type(arg_type),
                   "gu_sig:", gu_sig,
-                  "val_type:", val_type, type(val_type))
+                  "val_type:", val_type, type(val_type),
+                  "index:", index)
         if isinstance(arg_type, types.npytypes.Array):
             # Handle meminfo
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
