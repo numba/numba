@@ -1,7 +1,130 @@
-Version 0.48.0dev
+Version 0.49.0dev
 -----------------
 
 In development
+
+
+Version 0.48.0 (Jan 16, 2020)
+-----------------------------
+
+This release is particularly small as it was present to catch anything that
+missed the 0.47.0 deadline (the deadline deliberately coincided with the end of
+support for Python 2.7). The next release will be considerable larger.
+
+The core changes in this release are dominated by the start of the clean up
+needed for the end of Python 2.7 support, improvements to the CUDA target and
+support for numerous additional unicode string methods.
+
+Enhancements from user contributed PRs (with thanks!):
+
+* Brian Wignall fixed more spelling typos in #4998.
+* Denis Smirnov added support for string methods ``capitalize`` (#4823),
+  ``casefold`` (#4824), ``swapcase`` (#4825), ``rsplit`` (#4834), ``partition``
+  (#4845) and ``splitlines`` (#4849).
+* Elena Totmenina extended support for string methods ``startswith`` (#4867) and
+  added ``endswith`` (#4868).
+* Eric Wieser made ``type_callable`` return the decorated function itself in
+  #4760
+* Ethan Pronovost added support for ``np.argwhere`` in #4617
+* Graham Markall contributed a large number of CUDA enhancements and fixes,
+  namely:
+
+  * #5068: Remove Python 3.4 backports from utils
+  * #4975: Make ``device_array_like`` create contiguous arrays (Fixes #4832)
+  * #5023: Don't launch ForAll kernels with 0 elements (Fixes #5017)
+  * #5016: Fix various issues in CUDA library search (Fixes #4979)
+  * #5014: Enable use of records and bools for shared memory, remove ddt, add
+    additional transpose tests
+  * #4964: Fix #4628: Add more appropriate typing for CUDA device arrays
+  * #5007: test_consuming_strides: Keep dev array alive
+  * #4997: State that CUDA Toolkit 8.0 required in docs
+
+* James Bourbeau added the Python 3.8 classifier to setup.py in #5027.
+* John Kirkham added a clarification to the ``__cuda_array_interface__``
+  documentation in #5049.
+* Leo Fang Fixed an indexing problem in ``dummyarray`` in #5012.
+* Marcel Bargull fixed a build and test issue for Python 3.8 in #5029.
+* Maria Rubtsov added support for string methods ``isdecimal`` (#4842),
+  ``isdigit`` (#4843), ``isnumeric`` (#4844) and ``replace`` (#4865).
+
+General Enhancements:
+
+* PR #4760: Make type_callable return the decorated function
+* PR #5010: merge string prs
+
+  This merge PR included the following:
+
+  * PR #4823: Implement str.capitalize() based on CPython
+  * PR #4824: Implement str.casefold() based on CPython
+  * PR #4825: Implement str.swapcase() based on CPython
+  * PR #4834: Implement str.rsplit() based on CPython
+  * PR #4842: Implement str.isdecimal
+  * PR #4843: Implement str.isdigit
+  * PR #4844: Implement str.isnumeric
+  * PR #4845: Implement str.partition() based on CPython
+  * PR #4849: Implement str.splitlines() based on CPython
+  * PR #4865: Implement str.replace
+  * PR #4867: Functionality extension str.startswith() based on CPython
+  * PR #4868: Add functionality for str.endswith()
+
+* PR #5039: Disable help messages.
+* PR #4617: Add coverage for ``np.argwhere``
+
+Fixes:
+
+* PR #4724: Only use lives (and not aliases) to create post parfor live set.
+* PR #4998: Fix more spelling typos
+* PR #5024: Propagate semantic constants ahead of static rewrites.
+* PR #5027: Add Python 3.8 classifier to setup.py
+* PR #5046: Update setup.py and buildscripts for dependency requirements
+* PR #5053: Convert from arrays to names in define() and don't invalidate for
+  multiple consistent defines.
+* PR #5058: Permit mixed int types in wrap_index
+* PR #5078: Catch the use of global typed-list in JITed functions
+
+CUDA Enhancements/Fixes:
+
+* PR #4964: Fix #4628: Add more appropriate typing for CUDA device arrays
+* PR #4975: Make ``device_array_like`` create contiguous arrays (Fixes #4832)
+* PR #4997: State that CUDA Toolkit 8.0 required in docs
+* PR #5007: test_consuming_strides: Keep dev array alive
+* PR #5012: Fix IndexError when accessing the "-1" element of dummyarray
+* PR #5014: Enable use of records and bools for shared memory, remove ddt, add
+  additional transpose tests
+* PR #5016: Fix various issues in CUDA library search (Fixes #4979)
+* PR #5023: Don't launch ForAll kernels with 0 elements (Fixes #5017)
+* PR #5068: Remove Python 3.4 backports from utils
+
+Documentation Updates:
+
+* PR #5049: Clarify what dictionary means
+* PR #5062: Update docs for updated version requirements
+* PR #5090: Update deprecation notices for 0.48.0
+
+CI updates:
+
+* PR #5029: Install optional dependencies for Python 3.8 tests
+* PR #5040: Drop Py2.7 and Py3.5 from public CI
+* PR #5048: Fix CI py38
+
+Authors:
+
+* Brian Wignall
+* Denis Smirnov
+* Elena Totmenina
+* Eric Wieser
+* Ethan Pronovost
+* Graham Markall
+* James Bourbeau
+* John Kirkham
+* Leo Fang
+* Marcel Bargull
+* Maria Rubtsov
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
 
 
 Version 0.47.0  (Jan 2, 2020)
