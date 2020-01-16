@@ -176,3 +176,6 @@ class CFunc(object):
 
     def __repr__(self):
         return "<Numba C callback %r>" % (self.__qualname__,)
+
+    def __call__(self, *args, **kwargs):
+        return self._pyfunc(*args, **kwargs)

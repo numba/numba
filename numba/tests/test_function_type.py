@@ -1,5 +1,5 @@
 import types as pytypes
-from numba import njit, function, cfunc, types, int64, int32, float64, float32
+from numba import jit, function, cfunc, types, int64, float64, float32
 import ctypes
 
 from .support import TestCase
@@ -28,7 +28,7 @@ def mk_cfunc_func(sig):
 
 def njit_func(func):
     assert isinstance(func, pytypes.FunctionType), repr(func)
-    f = njit(func)
+    f = jit(nopython=True)(func)
     f.pyfunc = func
     return f
 
@@ -36,7 +36,7 @@ def njit_func(func):
 def mk_njit_with_sig_func(sig):
     def njit_with_sig_func(func):
         assert isinstance(func, pytypes.FunctionType), repr(func)
-        f = njit(sig)(func)
+        f = jit(sig, nopython=True)(func)
         f.pyfunc = func
         return f
     return njit_with_sig_func
@@ -57,7 +57,9 @@ def mk_ctypes_func(sig):
 
 
 class WAP(types.WrapperAddressProtocol):
+    """An example implementation of wrapper address protocol.
 
+    """
     def __init__(self, func, sig):
         self.pyfunc = func
         self.cfunc = cfunc(sig)(func)
@@ -81,8 +83,14 @@ def mk_wap_func(sig):
 
 
 class TestFunctionType(TestCase):
+    """Test first-class functions in the context of a Numba jit compiled
+    function.
+
+    """
 
     def test_in(self):
+        """Function is passed in as an argument.
+        """
 
         def a(i):
             return i + 1
@@ -95,11 +103,15 @@ class TestFunctionType(TestCase):
         for decor in [mk_cfunc_func(sig), njit_func,
                       mk_njit_with_sig_func(sig), mk_ctypes_func(sig),
                       mk_wap_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                self.assertEqual(njit(foo)(a_), foo(a))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__, jit=jit_opts):
+                    a_ = decor(a)
+                    self.assertEqual(jit_(foo)(a_), foo(a))
 
     def test_in_call(self):
+        """Function is passed in as an argument and called.
+        """
 
         def a(i):
             return i + 1
@@ -111,11 +123,15 @@ class TestFunctionType(TestCase):
 
         for decor in [mk_cfunc_func(sig), njit_func,
                       mk_njit_with_sig_func(sig), mk_wap_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                self.assertEqual(njit(foo)(a_), foo(a))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__, jit=jit_opts):
+                    a_ = decor(a)
+                    self.assertEqual(jit_(foo)(a_), foo(a))
 
     def test_in_call_out(self):
+        """Function is passed in as an argument, called, and returned.
+        """
 
         def a(i):
             return i + 1
@@ -127,12 +143,17 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                self.assertEqual(njit(foo)(a_).pyfunc, foo(a))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    self.assertEqual(jit_(foo)(a_).pyfunc, foo(a))
 
     def test_in_seq_call(self):
+        """Functions are passed in as arguments, used as tuple items, and
+        called.
 
+        """
         def a(i):
             return i + 1
 
@@ -148,12 +169,18 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), mk_wap_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                b_ = decor(b)
-                self.assertEqual(njit(foo)(a_, b_), foo(a, b))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    b_ = decor(b)
+                    self.assertEqual(jit_(foo)(a_, b_), foo(a, b))
 
     def test_in_ns_seq_call(self):
+        """Functions are passed in as an argument and via namespace scoping
+        (mixed pathways), used as tuple items, and called.
+
+        """
 
         def a(i):
             return i + 1
@@ -172,12 +199,17 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                b_ = decor(b)
-                self.assertEqual(njit(mkfoo(b_))(a_), mkfoo(b)(a))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    b_ = decor(b)
+                    self.assertEqual(jit_(mkfoo(b_))(a_), mkfoo(b)(a))
 
     def test_ns_call(self):
+        """Function is passed in via namespace scoping and called.
+
+        """
 
         def a(i):
             return i + 1
@@ -191,12 +223,16 @@ class TestFunctionType(TestCase):
 
         for decor in [mk_cfunc_func(sig), njit_func,
                       mk_njit_with_sig_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                self.assertEqual(njit(mkfoo(a_))(), mkfoo(a)())
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    self.assertEqual(jit_(mkfoo(a_))(), mkfoo(a)())
 
     def test_ns_out(self):
+        """Function is passed in via namespace scoping and returned.
 
+        """
         def a(i):
             return i + 1
 
@@ -208,12 +244,17 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                self.assertEqual(njit(mkfoo(a_))().pyfunc, mkfoo(a)())
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    self.assertEqual(jit_(mkfoo(a_))().pyfunc, mkfoo(a)())
 
     def test_ns_call_out(self):
+        """Function is passed in via namespace scoping, called, and then
+        returned.
 
+        """
         def a(i):
             return i + 1
 
@@ -226,12 +267,17 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig)]:
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
             with self.subTest(decor=decor.__name__):
                 a_ = decor(a)
-                self.assertEqual(njit(mkfoo(a_))().pyfunc, mkfoo(a)())
+                self.assertEqual(jit_(mkfoo(a_))().pyfunc, mkfoo(a)())
 
     def test_in_overload(self):
+        """Function is passed in as an argument and called with different
+        argument types.
 
+        """
         def a(i):
             return i + 1
 
@@ -241,12 +287,17 @@ class TestFunctionType(TestCase):
             return (r1, r2)
 
         for decor in [njit_func]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                self.assertEqual(njit(foo)(a_), foo(a))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    self.assertEqual(jit_(foo)(a_), foo(a))
 
     def test_ns_overload(self):
+        """Function is passed in via namespace scoping and called with
+        different argument types.
 
+        """
         def a(i):
             return i + 1
 
@@ -258,12 +309,16 @@ class TestFunctionType(TestCase):
             return foo
 
         for decor in [njit_func]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                self.assertEqual(njit(mkfoo(a_))(), mkfoo(a)())
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    self.assertEqual(jit_(mkfoo(a_))(), mkfoo(a)())
 
     def test_in_choose(self):
+        """Functions are passed in as arguments and called conditionally.
 
+        """
         def a(i):
             return i + 1
 
@@ -281,15 +336,22 @@ class TestFunctionType(TestCase):
 
         for decor in [mk_cfunc_func(sig), njit_func,
                       mk_njit_with_sig_func(sig), mk_wap_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                b_ = decor(b)
-                self.assertEqual(njit(foo)(a_, b_, True), foo(a, b, True))
-                self.assertEqual(njit(foo)(a_, b_, False), foo(a, b, False))
-                self.assertNotEqual(njit(foo)(a_, b_, True), foo(a, b, False))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    b_ = decor(b)
+                    self.assertEqual(jit_(foo)(a_, b_, True), foo(a, b, True))
+                    self.assertEqual(jit_(foo)(a_, b_, False),
+                                     foo(a, b, False))
+                    self.assertNotEqual(jit_(foo)(a_, b_, True),
+                                        foo(a, b, False))
 
     def test_ns_choose(self):
+        """Functions are passed in via namespace scoping and called
+        conditionally.
 
+        """
         def a(i):
             return i + 1
 
@@ -309,18 +371,22 @@ class TestFunctionType(TestCase):
 
         for decor in [mk_cfunc_func(sig), njit_func,
                       mk_njit_with_sig_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                b_ = decor(b)
-                self.assertEqual(njit(mkfoo(a_, b_))(True),
-                                 mkfoo(a, b)(True))
-                self.assertEqual(njit(mkfoo(a_, b_))(False),
-                                 mkfoo(a, b)(False))
-                self.assertNotEqual(njit(mkfoo(a_, b_))(True),
-                                    mkfoo(a, b)(False))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    b_ = decor(b)
+                    self.assertEqual(jit_(mkfoo(a_, b_))(True),
+                                     mkfoo(a, b)(True))
+                    self.assertEqual(jit_(mkfoo(a_, b_))(False),
+                                     mkfoo(a, b)(False))
+                    self.assertNotEqual(jit_(mkfoo(a_, b_))(True),
+                                        mkfoo(a, b)(False))
 
     def test_in_choose_out(self):
+        """Functions are passed in as arguments and returned conditionally.
 
+        """
         def a(i):
             return i + 1
 
@@ -336,18 +402,23 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                b_ = decor(b)
-                self.assertEqual(njit(foo)(a_, b_, True).pyfunc,
-                                 foo(a, b, True))
-                self.assertEqual(njit(foo)(a_, b_, False).pyfunc,
-                                 foo(a, b, False))
-                self.assertNotEqual(njit(foo)(a_, b_, True).pyfunc,
-                                    foo(a, b, False))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    b_ = decor(b)
+                    self.assertEqual(jit_(foo)(a_, b_, True).pyfunc,
+                                     foo(a, b, True))
+                    self.assertEqual(jit_(foo)(a_, b_, False).pyfunc,
+                                     foo(a, b, False))
+                    self.assertNotEqual(jit_(foo)(a_, b_, True).pyfunc,
+                                        foo(a, b, False))
 
     def test_in_choose_func_value(self):
+        """Functions are passed in as arguments, selected conditionally and
+        called.
 
+        """
         def a(i):
             return i + 1
 
@@ -364,15 +435,22 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), mk_wap_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                b_ = decor(b)
-                self.assertEqual(njit(foo)(a_, b_, True), foo(a, b, True))
-                self.assertEqual(njit(foo)(a_, b_, False), foo(a, b, False))
-                self.assertNotEqual(njit(foo)(a_, b_, True), foo(a, b, False))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    b_ = decor(b)
+                    self.assertEqual(jit_(foo)(a_, b_, True), foo(a, b, True))
+                    self.assertEqual(jit_(foo)(a_, b_, False),
+                                     foo(a, b, False))
+                    self.assertNotEqual(jit_(foo)(a_, b_, True),
+                                        foo(a, b, False))
 
     def test_in_pick_func_call(self):
+        """Functions are passed in as items of tuple argument, retrieved via
+        indexing, and called.
 
+        """
         def a(i):
             return i + 1
 
@@ -386,15 +464,20 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), mk_wap_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                b_ = decor(b)
-                self.assertEqual(njit(foo)((a_, b_), 0), foo((a, b), 0))
-                self.assertEqual(njit(foo)((a_, b_), 1), foo((a, b), 1))
-                self.assertNotEqual(njit(foo)((a_, b_), 0), foo((a, b), 1))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    b_ = decor(b)
+                    self.assertEqual(jit_(foo)((a_, b_), 0), foo((a, b), 0))
+                    self.assertEqual(jit_(foo)((a_, b_), 1), foo((a, b), 1))
+                    self.assertNotEqual(jit_(foo)((a_, b_), 0), foo((a, b), 1))
 
     def test_in_iter_func_call(self):
+        """Functions are passed in as items of tuple argument, retrieved via
+        indexing, and called within a variable for-loop.
 
+        """
         def a(i):
             return i + 1
 
@@ -411,20 +494,28 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), mk_wap_func(sig)]:
-            with self.subTest(decor=decor.__name__):
-                a_ = decor(a)
-                b_ = decor(b)
-                self.assertEqual(njit(foo)((a_, b_), 2), foo((a, b), 2))
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                jit_ = jit(**jit_opts)
+                with self.subTest(decor=decor.__name__):
+                    a_ = decor(a)
+                    b_ = decor(b)
+                    self.assertEqual(jit_(foo)((a_, b_), 2), foo((a, b), 2))
 
 
 class TestFunctionTypeExtensions(TestCase):
+    """Test calling external library functions within Numba jit compiled
+    functions.
+
+    """
 
     def test_wrapper_address_protocol_libm(self):
+        """Call cos and sinf from standard math library.
+
+        """
         import os
         import ctypes.util
-        from numba.types import WrapperAddressProtocol
 
-        class LibM(WrapperAddressProtocol):
+        class LibM(types.WrapperAddressProtocol):
 
             def __init__(self, fname):
                 if os.name == 'nt':
@@ -456,15 +547,23 @@ class TestFunctionTypeExtensions(TestCase):
         mycos = LibM('cos')
         mysin = LibM('sinf')
 
-        @njit
         def myeval(f, x):
             return f(x)
 
-        self.assertEqual(myeval(mycos, 0.0), 1.0)
-        self.assertEqual(myeval(mysin, float32(0.0)), 0.0)
+        # Not testing forceobj=True as it requires implementing
+        # LibM.__call__ using ctypes which would be out-of-scope here.
+        for jit_opts in [dict(nopython=True)]:
+            jit_ = jit(**jit_opts)
+            with self.subTest(jit=jit_opts):
+                self.assertEqual(jit_(myeval)(mycos, 0.0), 1.0)
+                self.assertEqual(jit_(myeval)(mysin, float32(0.0)), 0.0)
 
 
 class TestMiscIssues(TestCase):
+    """Test issues of using first-class functions in the context of Numba
+    jit compiled functions.
+
+    """
 
     def test_issue_3405_using_cfunc(self):
 
@@ -484,8 +583,8 @@ class TestMiscIssues(TestCase):
             out = f()
             return out
 
-        self.assertEqual(njit(g)(True), 2)
-        self.assertEqual(njit(g)(False), 3)
+        self.assertEqual(jit(nopython=True)(g)(True), 2)
+        self.assertEqual(jit(nopython=True)(g)(False), 3)
 
     def test_pr4967_example(self):
 
@@ -497,7 +596,7 @@ class TestMiscIssues(TestCase):
         def b(i):
             return i + 2
 
-        @njit
+        @jit(nopython=True)
         def foo(f, g):
             i = f(2)
             seq = (f, g)

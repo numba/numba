@@ -67,7 +67,8 @@ def lower_constant_function_type(context, builder, typ, pyval):
         addr = pyval._wrapper_address
         sfunc = cgutils.create_struct_proxy(typ)(context, builder)
         llty = context.get_value_type(nbtypes.voidptr)
-        sfunc.addr = builder.inttoptr(ir.Constant(ir.IntType(64), addr), llty)
+        sfunc.addr = builder.inttoptr(ir.Constant(
+            ir.IntType(context.address_size), addr), llty)
         # TODO: is incref(pyval) needed? See also related comments in
         # unboxing below.
         sfunc.pyaddr = builder.inttoptr(
@@ -87,14 +88,18 @@ def _get_wrapper_address(func, sig):
 
     Warning: The compiled function must be compatible with the given
     signature `sig`. If it is not, then result of calling the compiled
-    function is undefined.
+    function is undefined. The compatibility is ensured when passing
+    in a first-class function to a Numba njit compiled function either
+    as an argument or via namespace scoping.
 
     Parameters
     ----------
     func : object
-      Specify a function object that can be numba.cfunc decorated or
-      an object that implements the wrapper address protocol (see note
-      below).
+      A function object that has been numba.cfunc decorated or an
+      object that implements the wrapper address protocol (see note
+      below).  numba.cfunc(sig) is applied to pure Python function
+      inputs and the source of numba.cfunc decorated functions in case
+      the signature of `func` and `sig` do not match.
     sig : Signature
       The function signature.
 

@@ -90,7 +90,7 @@ class WrapperAddressProtocol(ABC):
     """Base class for Wrapper Address Protocol.
 
     Objects that inherit from the WrapperAddressProtocol can be passed
-    as arguments to Numba njit compiled functions where it can be used
+    as arguments to Numba jit compiled functions where it can be used
     as first-class functions. As a minimum, the derived types must
     implement the two methods __wrapper_address__ and signature.
 
