@@ -72,7 +72,7 @@ def lower_constant_function_type(context, builder, typ, pyval):
         # TODO: is incref(pyval) needed? See also related comments in
         # unboxing below.
         sfunc.pyaddr = builder.inttoptr(
-            ir.Constant(ir.IntType(64), id(pyval)), llty)
+            ir.Constant(ir.IntType(context.address_size), id(pyval)), llty)
         return sfunc._getvalue()
 
     # TODO: implement support for Dispatcher, WrapperAddressProtocol,
