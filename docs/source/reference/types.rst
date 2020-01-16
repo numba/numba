@@ -137,14 +137,14 @@ argument::
     >>> composition((b, a, b, b, a), 0.5), b(a(b(b(a(0.5)))))
     (36.75390625, 36.75390625)
 
-Here `cfunc` decorated functions `a` and `b` are considered as
+Here, ``cfunc`` decorated functions ``a`` and ``b`` are considered as
 first-class function objects because these are passed in to the Numba
-jit compiled function `composition` as arguments, that is, the
-`composition` is jit compiled independently from its argument function
-objects (that are collected in the input argument `funcs`).
+jit compiled function ``composition`` as arguments, that is, the
+``composition`` is jit compiled independently from its argument function
+objects (that are collected in the input argument ``funcs``).
 
-Currently, first-class function objects can be Numba `cfunc` compiled
-functions, `jit` compiled functions, and objects that implement
+Currently, first-class function objects can be Numba ``cfunc`` compiled
+functions, ``jit`` compiled functions, and objects that implement
 Wrapper Address Protocol (WAP) with the following restrictions:
 
 ========================   ==============   ============    ===========
@@ -182,15 +182,14 @@ must define the following two methods:
 
 In addition, to make WAP objects callable from Numba jit compiled
 function in object mode, the WAP object must also implement the
-`__call__` method.
+``__call__`` method.
 
-As an example, let us call the standard math library function `cos`
-within a Numba jit compiled function. The memory address of `cos` can
+As an example, let us call the standard math library function ``cos``
+within a Numba jit compiled function. The memory address of ``cos`` can
 be established after loading the math library and using ctypes
 package::
 
-    >>> import numba
-    >>> import ctypes, ctypes.util
+    >>> import numba, ctypes, ctypes.util, math
     >>> libm = ctypes.cdll.LoadLibrary(ctypes.util.find_library('m'))
     >>> class LibM(numba.types.WrapperAddressProtocol):
     ...     def __wrapper_address__(self, sig):
@@ -205,7 +204,6 @@ package::
     ...
     >>> foo(LibM(), 0.0)
     1.0
-    >>> import math
     >>> foo(LibM(), 0.5), math.cos(0.5)
     (0.8775825618903728, 0.8775825618903728)
 
