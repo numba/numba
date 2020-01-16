@@ -2694,10 +2694,10 @@ def np_flatnonzero(a):
             return np.nonzero(np.ravel(arr))[0]
     else:
         def impl(a):
-            if a is None:
-                data = [x for x in range(0)]
-            else:
+            if a is not None and bool(a):
                 data = [0]
+            else:
+                data = [x for x in range(0)]
             return np.array(data, dtype=types.intp)
 
     return impl
