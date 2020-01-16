@@ -299,3 +299,7 @@ CL_QUEUED                                     = 0x3
 
 # cl_buffer_create_type
 CL_BUFFER_CREATE_TYPE_REGION                  = 0x1220
+
+# mem fence
+CLK_LOCAL_MEM_FENCE                           = 0x1
+CLK_GLOBAL_MEM_FENCE                          = 0x2
