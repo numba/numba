@@ -162,11 +162,11 @@ Wrapper Address Protocol - WAP
 ++++++++++++++++++++++++++++++
 
 Wrapper Address Protocol provides an API for making any Python object
-as first-class function for Numba jit compiled functions provided that
-the Python object represents a compiled function with the correspodnig
-memory address (function pointer value) available when passing the
-object to Numba jit compiled function. Such the so-called WAP objects
-must define the following two methods:
+as first-class function for Numba jit compiled functions. This assumes
+that the Python object represents a compiled function that can be
+called via its memory address (function pointer value) from Numba jit
+compiled functions. Such the so-called WAP objects must define the
+following two methods:
 
 .. method:: __wrapper_address__(self, sig: numba.typing.Signature) -> int
 
