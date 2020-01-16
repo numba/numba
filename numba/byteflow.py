@@ -194,15 +194,20 @@ class Flow(object):
             """An iterative dataflow algorithm to find the definition
             (the source) of each PHI node.
             """
+            blacklist = defaultdict(set)
+
             while True:
                 changing = False
                 for phi, defsites in sorted(list(phismap.items())):
                     for rhs, state in sorted(list(defsites)):
                         if rhs in phi_set:
-                            old = frozenset(defsites)
                             defsites |= phismap[rhs]
-                            defsites.discard((rhs, state))
-                            changing = old != defsites
+                            blacklist[id(defsites)].add((rhs, state))
+                        to_remove = blacklist[id(defsites)]
+                        if to_remove & defsites:
+                            defsites -= to_remove
+                            changing = True
+
                 _logger.debug("changing phismap: %s", _lazy_pformat(phismap))
                 if not changing:
                     break
