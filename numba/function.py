@@ -69,8 +69,6 @@ def lower_constant_function_type(context, builder, typ, pyval):
         llty = context.get_value_type(nbtypes.voidptr)
         sfunc.addr = builder.inttoptr(ir.Constant(
             ir.IntType(context.address_size), addr), llty)
-        # TODO: is incref(pyval) needed? See also related comments in
-        # unboxing below.
         sfunc.pyaddr = builder.inttoptr(
             ir.Constant(ir.IntType(context.address_size), id(pyval)), llty)
         return sfunc._getvalue()
@@ -175,8 +173,6 @@ def unbox_function_type(typ, obj, c):
             sfunc.addr = c.pyapi.long_as_voidptr(addr)
             c.pyapi.decref(addr)
 
-            # TODO: is incref(obj) needed? where the corresponding
-            # decref should be called?
             llty = c.context.get_value_type(nbtypes.voidptr)
             sfunc.pyaddr = c.builder.ptrtoint(obj, llty)
 
