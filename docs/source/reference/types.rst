@@ -100,6 +100,114 @@ the beginning or the end of the index specification::
    >>> numba.float32[::1, :, :]
    array(float32, 3d, F)
 
+Functions
+---------
+
+.. warning::
+   The feature of considering functions as first-class type objects is
+   under development.
+
+While functions are often considered as certain transformations of
+input arguments to output values then within Numba jit compiled
+functions, the functions can also be considered as objects, that is,
+functions can be passed around as arguments or return values, or used
+as items in sequences, in addition of being callable.
+
+For instance, consider an example where the Numba jit compiled
+function applies user-specified functions as a composition to an input
+argument::
+
+    >>> @numba.njit
+    ... def composition(funcs, x):
+    ...     r = x
+    ...     for f in funcs[::-1]:
+    ...         r = f(r)
+    ...     return r
+    ...
+    >>> @numba.cfunc("double(double)")
+    ... def a(x):
+    ...     return x + 1.0
+    ...
+    >>> @numba.cfunc("double(double)")
+    ... def b(x):
+    ...     return x * x
+    ...
+    >>> composition((a, b), 0.5), 0.5 ** 2 + 1
+    (1.25, 1.25)
+    >>> composition((b, a, b, b, a), 0.5), b(a(b(b(a(0.5)))))
+    (36.75390625, 36.75390625)
+
+Here `cfunc` decorated functions `a` and `b` are considered as
+first-class function objects because these are passed in to the Numba
+jit compiled function `composition` as arguments, that is, the
+`composition` is jit compiled independently from its argument function
+objects (that are collected in the input argument `funcs`).
+
+Currently, first-class function objects can be Numba `cfunc` decorated
+functions, `jit` decorated functions, and objects that implement
+Wrapper Address Protocol (WAP) with the following restrictions:
+
+========================   =========   =======   ====================
+Context                    `cfunc`     `jit`     WAP objects
+========================   =========   =======   ====================
+Can be used as arguments   yes         yes       yes
+Namespace scoping          yes         yes       no
+Can be called              yes         yes       yes
+Can be used as items       yes         no        yes
+Automatic overload         no          yes       no
+Can be returned            yes         no        no
+
+Wrapper Address Protocol - WAP
+++++++++++++++++++++++++++++++
+
+Wrapper Address Protocol provides an API for making any Python object
+as first-class function for Numba jit compiled functions provided that
+the Python object represents a compiled function with the correspodnig
+memory address (function pointer value) available when passing the
+object to Numba jit compiled function. Such the so-called WAP objects
+must define the following two methods:
+
+.. method:: __wrapper_address__(self, sig: numba.typing.Signature) -> int
+
+            Return the memory address of first-class function with
+            given signature. This method is used when Numba jit
+            compiled function tries to call the given WAP instance.
+
+.. method:: signature(self) -> numba.typing.Signature
+
+            Return the signature of the given first-class
+            function. This method is used when passing in the given
+            WAP instance to Numba jit compiled function.
+
+In addition, to make WAP objects callable from Numba jit compiled
+function in object mode, the WAP object must also implement the
+`__call__` method.
+
+As an example, let us call the standard math library function `cos`
+within a Numba jit compiled function. The memory address of `cos` can
+be established after loading the math library and using ctypes
+package::
+
+    >>> import numba
+    >>> import ctypes, ctypes.util
+    >>> libm = ctypes.cdll.LoadLibrary(ctypes.util.find_library('m'))
+    >>> class LibM(numba.types.WrapperAddressProtocol):
+    ...     def __wrapper_address__(self, sig):
+    ...         assert sig == numba.float64(numba.float64)
+    ...         return ctypes.cast(libm.cos, ctypes.c_voidp).value
+    ...     def signature(self):
+    ...         return numba.float64(numba.float64)
+    ...
+    >>> @numba.njit
+    ... def foo(f, x):
+    ...     return f(x)
+    ...
+    >>> foo(LibM(), 0.0)
+    1.0
+    >>> import math
+    >>> foo(LibM(), 0.5), math.cos(0.5)
+    (0.8775825618903728, 0.8775825618903728)
+
 Miscellaneous Types
 -------------------
 

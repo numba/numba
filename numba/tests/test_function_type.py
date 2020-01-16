@@ -634,3 +634,27 @@ class TestMiscIssues(TestCase):
         r = jit(nopython=True)(bar)(foo1, foo2, 0)
         self.assertEqual(r, bar(foo1, foo2, 0))
         self.assertNotEqual(r, bar(foo1, foo2, 1))
+
+    def test_reference_example(self):
+        import numba
+
+        @numba.njit
+        def composition(funcs, x):
+            r = x
+            for f in funcs[::-1]:
+                r = f(r)
+            return r
+
+        @numba.cfunc("double(double)")
+        def a(x):
+            return x + 1.0
+
+        @numba.cfunc("double(double)")
+        def b(x):
+            return x * x
+
+        r = composition((a, b, b, a), 0.5)
+        self.assertEqual(r, (0.5 + 1.0) ** 4 + 1.0)
+
+        r = composition((b, a, b, b, a), 0.5)
+        self.assertEqual(r, ((0.5 + 1.0) ** 4 + 1.0) ** 2)
