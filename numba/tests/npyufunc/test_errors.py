@@ -2,7 +2,6 @@ from __future__ import absolute_import, print_function, division
 
 import contextlib
 import sys
-import warnings
 
 import numpy as np
 
@@ -10,7 +9,7 @@ from numba import unittest_support as unittest
 from numba import vectorize, guvectorize
 from numba.numpy_support import version as np_version
 
-from ..support import TestCase
+from ..support import TestCase, CheckWarningsMixin
 
 
 def sqrt(val):
@@ -80,27 +79,12 @@ class TestExceptions(TestCase):
     def test_gufunc_raise_objmode(self):
         self.check_gufunc_raise(forceobj=True)
 
-
-class TestFloatingPointExceptions(TestCase):
+class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
     """
     Test floating-point exceptions inside ufuncs.
 
     Note the warnings emitted by Numpy reflect IEEE-754 semantics.
     """
-
-    @contextlib.contextmanager
-    def check_warnings(self, messages, category=RuntimeWarning):
-        with warnings.catch_warnings(record=True) as catch:
-            warnings.simplefilter("always")
-            yield
-        # Check warnings for 1/0 and 0/0
-        found = 0
-        for w in catch:
-            for m in messages:
-                if m in str(w.message):
-                    self.assertEqual(w.category, category)
-                    found += 1
-        self.assertEqual(found, len(messages))
 
     @skipIfFPStatusBug
     def check_truediv_real(self, dtype):

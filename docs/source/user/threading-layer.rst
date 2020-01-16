@@ -70,7 +70,7 @@ means!):
 * ``spawn`` ing processes from the ``multiprocessing`` module via ``spawn``
   (default on Windows, only available in Python 3.4+ on Unix)
 * ``fork`` ing processes from the ``multiprocessing`` module via ``fork``
-  (default on Unix and the only option available for Python 2 on Unix).
+  (default on Unix).
 * ``fork`` ing processes from the ``multiprocessing`` module through the use of
   a ``forkserver`` (only available in Python 3 on Unix). Essentially a new
   process is spawned and then forks are made from this new process on request.
@@ -165,5 +165,4 @@ system level libraries, some additional things to note:
   error message to ``STDERR``.
 * On OSX, the ``intel-openmp`` package is required to enable the OpenMP based
   threading layer.
-* For Windows users running Python 2.7, the ``tbb`` threading layer is not
-  available.
+

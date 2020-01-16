@@ -179,8 +179,9 @@ class PassManager(object):
         self.pipeline_name = pipeline_name
 
     def _validate_pass(self, pass_cls):
-        if (not (isinstance(pass_cls, str) or (inspect.isclass(pass_cls) and
-                 issubclass(pass_cls, CompilerPass)))):
+        if (not (isinstance(pass_cls, str) or
+                 (inspect.isclass(pass_cls) and
+                  issubclass(pass_cls, CompilerPass)))):
             msg = ("Pass must be referenced by name or be a subclass of a "
                    "CompilerPass. Have %s" % pass_cls)
             raise TypeError(msg)
@@ -218,17 +219,22 @@ class PassManager(object):
 
     def _debug_init(self):
         # determine after which passes IR dumps should take place
-        print_passes = []
-        if config.DEBUG_PRINT_AFTER != "none":
-            if config.DEBUG_PRINT_AFTER == "all":
-                print_passes = [x.name() for (x, _) in self.passes]
-            else:
-                # we don't validate whether the named passes exist in this
-                # pipeline the compiler may be used reentrantly and different
-                # pipelines may contain different passes
-                splitted = config.DEBUG_PRINT_AFTER.split(',')
-                print_passes = [x.strip() for x in splitted]
-        return print_passes
+        def parse(conf_item):
+            print_passes = []
+            if conf_item != "none":
+                if conf_item == "all":
+                    print_passes = [x.name() for (x, _) in self.passes]
+                else:
+                    # we don't validate whether the named passes exist in this
+                    # pipeline the compiler may be used reentrantly and
+                    # different pipelines may contain different passes
+                    splitted = conf_item.split(',')
+                    print_passes = [x.strip() for x in splitted]
+            return print_passes
+        ret = (parse(config.DEBUG_PRINT_AFTER),
+               parse(config.DEBUG_PRINT_BEFORE),
+               parse(config.DEBUG_PRINT_WRAP),)
+        return ret
 
     def finalize(self):
         """
@@ -236,7 +242,8 @@ class PassManager(object):
         without re-finalization.
         """
         self._analysis = self.dependency_analysis()
-        self._print_after = self._debug_init()
+        self._print_after, self._print_before, self._print_wrap = \
+            self._debug_init()
         self._finalized = True
 
     @property
@@ -272,6 +279,20 @@ class PassManager(object):
                 raise ValueError(msg % pss.name())
             return mangled
 
+        def debug_print(pass_name, print_condition, printable_condition):
+            if pass_name in print_condition:
+                fid = internal_state.func_id
+                args = (fid.modname, fid.func_qualname, self.pipeline_name,
+                        printable_condition, pass_name)
+                print(("%s.%s: %s: %s %s" % args).center(120, '-'))
+                if internal_state.func_ir is not None:
+                    internal_state.func_ir.dump()
+                else:
+                    print("func_ir is None")
+
+        # debug print before this pass?
+        debug_print(pss.name(), self._print_before + self._print_wrap, "BEFORE")
+
         # wire in the analysis info so it's accessible
         pss.analysis = self._analysis
 
@@ -286,9 +307,9 @@ class PassManager(object):
             # TODO: Add in self consistency enforcement for
             # `func_ir._definitions` etc
             if _pass_registry.get(pss.__class__).mutates_CFG:
-                if mutated: # block level changes, rebuild all
+                if mutated:  # block level changes, rebuild all
                     PostProcessor(internal_state.func_ir).run()
-                else: # CFG level changes rebuild CFG
+                else:  # CFG level changes rebuild CFG
                     internal_state.func_ir.blocks = transforms.canonicalize_cfg(
                         internal_state.func_ir.blocks)
 
@@ -298,9 +319,7 @@ class PassManager(object):
         self.exec_times["%s_%s" % (index, pss.name())] = pt
 
         # debug print after this pass?
-        if pss.name() in self._print_after:
-            print(("%s: %s" % (self.pipeline_name, pss.name())).center(80, '-'))
-            internal_state.func_ir.dump()
+        debug_print(pss.name(), self._print_after + self._print_wrap, "AFTER")
 
     def run(self, state):
         """

@@ -17,7 +17,7 @@ from . import config, errors, _runtests as runtests, types
 # Re-export typeof
 from .special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
-    literally
+    literally, literal_unroll
 )
 
 # Re-export error classes
@@ -27,8 +27,7 @@ from .errors import *
 from .types import *
 
 # Re-export decorators
-from .decorators import (autojit, cfunc, generated_jit, jit, njit, stencil,
-                         jit_module)
+from .decorators import (cfunc, generated_jit, jit, njit, stencil, jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
 from .npyufunc import vectorize, guvectorize, threading_layer
@@ -43,9 +42,6 @@ from .jitclass import jitclass
 import numba.withcontexts
 from numba.withcontexts import objmode_context as objmode
 
-# Initialize typed containers
-import numba.typed
-
 # Enable bytes/unicode array support (Python 3.x only)
 from .utils import IS_PY3
 if IS_PY3:
@@ -56,7 +52,6 @@ test = runtests.main
 
 
 __all__ = """
-    autojit
     cfunc
     from_dtype
     guvectorize
@@ -73,10 +68,11 @@ __all__ = """
     stencil
     vectorize
     objmode
+    literal_unroll
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 30, 0)
+_min_llvmlite_version = (0, 31, 0)
 _min_llvm_version = (7, 0, 0)
 
 def _ensure_llvm():
@@ -186,3 +182,15 @@ import llvmlite
 Is set to True if Intel SVML is in use.
 """
 config.USING_SVML = _try_enable_svml()
+
+
+# ---------------------- WARNING WARNING WARNING ----------------------------
+# The following imports occur below here (SVML init) because somewhere in their
+# import sequence they have a `@njit` wrapped function. This triggers too early
+# a bind to the underlying LLVM libraries which then irretrievably sets the LLVM
+# SVML state to "no SVML". See https://github.com/numba/numba/issues/4689 for
+# context.
+# ---------------------- WARNING WARNING WARNING ----------------------------
+
+# Initialize typed containers
+import numba.typed

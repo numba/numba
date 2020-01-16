@@ -6,7 +6,7 @@ typedef struct {
     PyObject_HEAD
     /* Borrowed reference */
     PyUFuncObject *ufunc;
-    /* Owned reference to ancilliary object */
+    /* Owned reference to ancillary object */
     PyObject *object;
 } PyUFuncCleaner;
 

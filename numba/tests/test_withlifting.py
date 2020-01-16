@@ -16,16 +16,7 @@ from numba.targets import cpu
 from numba.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof, objmode
 from numba.extending import overload
-from .support import MemoryLeak, TestCase, captured_stdout
-
-
-try:
-    import scipy
-except ImportError:
-    scipy = None
-
-_msg = "SciPy needed for test"
-skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
+from .support import MemoryLeak, TestCase, captured_stdout, skip_unless_scipy
 
 
 def get_func_ir(func):
@@ -606,7 +597,7 @@ class TestLiftObj(MemoryLeak, TestCase):
         self.assert_equal_return_and_stdout(foo, x)
 
     def test_case11_define_function_in_context(self):
-        # should this work? no, `make_function` opcode not supported
+        # should this work? no, global name 'bar' is not defined
         def foo(x):
             with objmode_context():
                 def bar(y):
@@ -615,10 +606,10 @@ class TestLiftObj(MemoryLeak, TestCase):
 
         x = np.array([1, 2, 3])
         cfoo = njit(foo)
-        with self.assertRaises(errors.TypingError) as raises:
+        with self.assertRaises(NameError) as raises:
             cfoo(x)
         self.assertIn(
-            'op code: make_function',
+            "global name 'bar' is not defined",
             str(raises.exception),
         )
 

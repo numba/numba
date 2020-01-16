@@ -26,8 +26,24 @@ def _is_x86(triple):
 
 
 def dump(header, body):
+    if config.HIGHLIGHT_DUMPS:
+        try:
+            import pygments
+        except ImportError:
+            msg = "Please install pygments to see highlighted dumps"
+            raise ValueError(msg)
+        else:
+            from pygments import highlight
+            from pygments.lexers import GasLexer as lexer
+            from pygments.formatters import Terminal256Formatter
+            def printer(arg):
+                print(highlight(arg, lexer(),
+                      Terminal256Formatter(style='solarized-light')))
+    else:
+        printer = print
+    print('=' * 80)
     print(header.center(80, '-'))
-    print(body)
+    printer(body)
     print('=' * 80)
 
 
@@ -254,7 +270,7 @@ class CodeLibrary(object):
         # could fail.
         cleanup = self._codegen._add_module(self._final_module)
         if cleanup:
-            utils.finalize(self, cleanup)
+            weakref.finalize(self, cleanup)
         self._finalize_specific()
 
         self._finalized = True
@@ -690,7 +706,7 @@ class BaseCPUCodegen(object):
         """
         # Check the locale bug at https://github.com/numba/numba/issues/1569
         # Note we can't cache the result as locale settings can change
-        # accross a process's lifetime.  Also, for this same reason,
+        # across a process's lifetime.  Also, for this same reason,
         # the check here is a mere heuristic (there may be a race condition
         # between now and actually compiling IR).
         ir = """

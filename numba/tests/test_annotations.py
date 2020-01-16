@@ -18,6 +18,7 @@ try:
 except ImportError:
     pygments = None
 
+
 @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
 class TestAnnotation(unittest.TestCase):
 
@@ -51,6 +52,8 @@ class TestAnnotation(unittest.TestCase):
 
         def foo(x):
             h = 0.
+            for i in range(x): # py 38 needs two loops for one to lift?!
+                h = h + i
             for k in range(x):
                 h = h + k
             if x:

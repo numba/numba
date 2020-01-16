@@ -592,7 +592,7 @@ class TestConversions(TestCase):
 
         with self.assertRaises(errors.TypingError) as raises:
             check(fromty, types.Tuple((types.float32,)), (4, 5))
-        msg = "No conversion from tuple(int32 x 2) to tuple(float32 x 1)"
+        msg = "No conversion from UniTuple(int32 x 2) to UniTuple(float32 x 1)"
         self.assertIn(msg, str(raises.exception))
 
 

@@ -62,7 +62,7 @@ presented with the argument types ``(int32, int32)``, because demoting either
 argument to ``int16`` is equally "fit".  Fortunately, numba can usually resolve
 such ambiguity by compiling a new version with the exact signature
 ``(int32, int32)``.  When compilation is disabled and there are multiple
-signatures with equal fit, an execption is raised.
+signatures with equal fit, an exception is raised.
 
 Type Inference
 ==============

@@ -8,7 +8,7 @@ from collections import namedtuple
 
 from numba import unittest_support as unittest
 from numba import (njit, typeof, types, typing, typeof, ir, utils, bytecode,
-    jitclass, prange)
+    jitclass, prange, postproc)
 from .support import TestCase, tag
 from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Compiler, Flags, PassManager
@@ -94,6 +94,8 @@ class ArrayAnalysisPass(FunctionPass):
                                              state.type_annotation.typemap,
                                              state.type_annotation.calltypes)
         state.array_analysis.run(state.func_ir.blocks)
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run()
         state.func_ir_copies.append(state.func_ir.copy())
         if state.test_idempotence and len(state.func_ir_copies) > 1:
             state.test_idempotence(state.func_ir_copies)
@@ -577,7 +579,7 @@ class TestArrayAnalysis(TestCase):
             E = B + C
             return E
         self._compile_and_test(test_7, (types.intp,),
-                               asserts=[self.without_assert('B', 'C')],
+                               asserts=[self.with_assert('B', 'C')],
                                idempotent=False)
 
         def test_8(m):
@@ -605,7 +607,8 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.without_equiv('B', 'C'),
                                        self.with_equiv('A', 'm'),
                                        self.with_equiv('B', 'D'),
-                                       self.with_equiv('F', 'D'),],)
+                                       self.with_equiv('F', 'D'),],
+                               idempotent=False)
 
     def test_numpy_calls(self):
         def test_zeros(n):
@@ -989,6 +992,21 @@ class TestArrayAnalysisParallelRequired(TestCase):
         a = slice(None)
         np.testing.assert_array_equal(
             njit(test_impl2, parallel=True)(A, a), test_impl2(A, a))
+
+    @skip_unsupported
+    def test_slice_dtype_issue_5056(self):
+        # see issue 5056
+
+        @njit(parallel=True)
+        def test_impl(data):
+            N = data.shape[0]
+            sums = np.zeros(N)
+            for i in prange(N):
+                sums[i] = np.sum(data[np.int32(0):np.int32(1)])
+            return sums
+
+        data = np.arange(10.)
+        np.testing.assert_array_equal(test_impl(data), test_impl.py_func(data))
 
 
 if __name__ == '__main__':
