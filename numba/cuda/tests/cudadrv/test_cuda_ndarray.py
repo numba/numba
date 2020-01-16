@@ -142,6 +142,28 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
                 'axis 2 is out of bounds for array of dimension 2',  # sim
             ])
 
+    def test_devicearray_view_ok(self):
+        original = np.array(np.arange(12), dtype="i2").reshape(3, 4)
+        array = cuda.to_device(original)
+        self.assertTrue(np.all(
+            array.view("i4").copy_to_host() == original.view("i4")
+        ))
+        self.assertTrue(np.all(
+            array.view("u4").copy_to_host() == original.view("i4")
+        ))
+        self.assertTrue(np.all(
+            array.view("i8").copy_to_host() == original.view("i8")
+        ))
+        self.assertTrue(np.all(
+            array.view("f8").copy_to_host() == original.view("f8")
+        ))
+
+    def test_devicearray_view_err(self):
+        original = np.array(np.arange(12), dtype="i2").reshape(4, 3)
+        array = cuda.to_device(original)
+        with self.assertRaises(ValueError) as e:
+            original.view("i4")
+
     def test_devicearray_transpose_ok(self):
         original = np.array(np.arange(12)).reshape(3, 4)
         array = np.transpose(cuda.to_device(original)).copy_to_host()
