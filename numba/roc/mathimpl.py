@@ -64,7 +64,7 @@ function_descriptors = {
 
 
 # some functions may be named differently by the underlying math
-# library as oposed to the Python name.
+# library as opposed to the Python name.
 _lib_counterpart = {
     'gamma': 'tgamma'
 }

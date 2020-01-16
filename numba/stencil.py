@@ -436,7 +436,7 @@ class StencilFunc(object):
         # 1) Construct a string containing a function definition for the stencil function
         #    that will execute the stencil kernel.  This function definition includes a
         #    unique stencil function name, the parameters to the stencil kernel, loop
-        #    nests across the dimenions of the input array.  Those loop nests use the
+        #    nests across the dimensions of the input array.  Those loop nests use the
         #    computed stencil kernel size so as not to try to compute elements where
         #    elements outside the bounds of the input array would be needed.
         # 2) The but of the loop nest in this new function is a special sentinel
@@ -654,7 +654,7 @@ class StencilFunc(object):
 
         stencil_stub_last_label = max(stencil_ir.blocks.keys()) + 1
 
-        # Shift lables in the kernel copy so they are guaranteed unique
+        # Shift labels in the kernel copy so they are guaranteed unique
         # and don't conflict with any labels in the stencil_ir.
         kernel_copy.blocks = ir_utils.add_offset_to_labels(
                                 kernel_copy.blocks, stencil_stub_last_label)

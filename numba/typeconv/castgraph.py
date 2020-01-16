@@ -1,9 +1,8 @@
 from __future__ import print_function, absolute_import
 
 from collections import defaultdict
+from functools import total_ordering
 import enum
-
-from numba.utils import total_ordering
 
 
 class Conversion(enum.IntEnum):

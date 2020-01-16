@@ -37,7 +37,7 @@ from numba.typedobjectutils import (_as_bytes,
                                     _container_get_data,
                                     _container_get_meminfo,
                                     )
-
+from numba.targets import listobj
 
 ll_list_type = cgutils.voidptr_t
 ll_listiter_type = cgutils.voidptr_t
@@ -50,6 +50,8 @@ ll_bytes = cgutils.voidptr_t
 _meminfo_listptr = types.MemInfoPointer(types.voidptr)
 
 INDEXTY = types.intp
+
+index_types = types.integer_domain
 
 
 @register_model(ListType)
@@ -241,15 +243,19 @@ def _imp_dtor(context, module):
     return fn
 
 
-def new_list(item):
+def new_list(item, allocated=0):
     """Construct a new list. (Not implemented in the interpreter yet)
 
     Parameters
     ----------
     item: TypeRef
         Item type of the new list.
+    allocated: int
+        number of items to pre-allocate
+
     """
-    raise NotImplementedError
+    # With JIT disabled, ignore all arguments and return a Python list.
+    return list()
 
 
 @intrinsic
@@ -294,7 +300,7 @@ def _make_list(typingctx, itemty, ptr):
 
 
 @intrinsic
-def _list_new(typingctx, itemty):
+def _list_new(typingctx, itemty, allocated):
     """Wrap numba_list_new.
 
     Allocate a new list object with zero capacity.
@@ -303,10 +309,12 @@ def _list_new(typingctx, itemty):
     ----------
     itemty: Type
         Type of the items
+    allocated: int
+        number of items to pre-allocate
 
     """
     resty = types.voidptr
-    sig = resty(itemty)
+    sig = resty(itemty, allocated)
 
     def codegen(context, builder, sig, args):
         fnty = ir.FunctionType(
@@ -320,7 +328,7 @@ def _list_new(typingctx, itemty):
         reflp = cgutils.alloca_once(builder, ll_list_type, zfill=True)
         status = builder.call(
             fn,
-            [reflp, ll_ssize_t(sz_item), ll_ssize_t(0)],
+            [reflp, ll_ssize_t(sz_item), args[1]],
         )
         _raise_if_error(
             context, builder, status,
@@ -333,17 +341,26 @@ def _list_new(typingctx, itemty):
 
 
 @overload(new_list)
-def impl_new_list(item):
-    """Creates a new list with *item* as the type
-    of the list item.
+def impl_new_list(item, allocated=0):
+    """Creates a new list.
+
+    Parameters
+    ----------
+    item: Numba type
+        type of the list item.
+    allocated: int
+        number of items to pre-allocate
+
     """
     if not isinstance(item, Type):
         raise TypeError("expecting *item* to be a numba Type")
 
     itemty = item
 
-    def imp(item):
-        lp = _list_new(itemty)
+    def imp(item, allocated=0):
+        if allocated < 0:
+            raise RuntimeError("expecting *allocated* to be >= 0")
+        lp = _list_new(itemty, allocated)
         _list_set_method_table(lp, itemty)
         l = _make_list(itemty, lp)
         return l
@@ -376,7 +393,44 @@ def _list_length(typingctx, l):
             ll_ssize_t,
             [ll_list_type],
         )
-        fn = builder.module.get_or_insert_function(fnty, name='numba_list_length')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_length')
+        [l] = args
+        [tl] = sig.args
+        lp = _container_get_data(context, builder, tl, l)
+        n = builder.call(fn, [lp])
+        return n
+
+    return sig, codegen
+
+
+@overload_method(types.ListType, "_allocated")
+def impl_allocated(l):
+    """list._allocated()
+    """
+    if isinstance(l, types.ListType):
+        def impl(l):
+            return _list_allocated(l)
+
+        return impl
+
+
+@intrinsic
+def _list_allocated(typingctx, l):
+    """Wrap numba_list_allocated
+
+    Returns the allocation of the list.
+    """
+    resty = types.intp
+    sig = resty(l)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_ssize_t,
+            [ll_list_type],
+        )
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_allocated')
         [l] = args
         [tl] = sig.args
         lp = _container_get_data(context, builder, tl, l)
@@ -400,7 +454,8 @@ def _list_append(typingctx, l, item):
         )
         [l, item] = args
         [tl, titem] = sig.args
-        fn = builder.module.get_or_insert_function(fnty, name='numba_list_append')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_append')
 
         dm_item = context.data_model_manager[titem]
 
@@ -460,7 +515,9 @@ def handle_index(l, index):
     """
     # convert negative indices to positive ones
     if index < 0:
-        index = len(l) + index
+        # len(l) has always type 'int64'
+        # while index can be an signed/unsigned integer
+        index = type(index)(len(l) + index)
     # check that the index is in range
     if not (0 <= index < len(l)):
         raise IndexError("list index out of range")
@@ -520,8 +577,8 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
         )
         [tl, tindex] = sig.args
         [l, index] = args
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_list_{}'.format(op))
+        fn = builder.module.get_or_insert_function(
+            fnty, name='numba_list_{}'.format(op))
 
         dm_item = context.data_model_manager[tl.item_type]
         ll_item = context.get_data_type(tl.item_type)
@@ -537,7 +594,8 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
             ],
         )
         # Load item if output is available
-        found = builder.icmp_signed('>=', status, status.type(int(ListStatus.LIST_OK)))
+        found = builder.icmp_signed('>=', status,
+                                    status.type(int(ListStatus.LIST_OK)))
 
         out = context.make_optional_none(builder, tl.item_type)
         pout = cgutils.alloca_once_value(builder, out)
@@ -562,7 +620,7 @@ def impl_getitem(l, index):
     indexty = INDEXTY
     itemty = l.item_type
 
-    if index in types.signed_domain:
+    if index in index_types:
         def integer_impl(l, index):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -584,7 +642,7 @@ def impl_getitem(l, index):
         return slice_impl
 
     else:
-        raise TypingError("list indices must be signed integers or slices")
+        raise TypingError("list indices must be integers or slices")
 
 
 @intrinsic
@@ -630,7 +688,7 @@ def impl_setitem(l, index, item):
     indexty = INDEXTY
     itemty = l.item_type
 
-    if index in types.signed_domain:
+    if index in index_types:
         def impl_integer(l, index, item):
             index = handle_index(l, index)
             castedindex = _cast(index, indexty)
@@ -650,7 +708,7 @@ def impl_setitem(l, index, item):
 
         def impl_slice(l, index, item):
             # special case "a[i:j] = a", need to copy first
-            if l == item:
+            if l is item:
                 item = item.copy()
             slice_range = handle_slice(l, index)
             # non-extended (simple) slices
@@ -684,7 +742,8 @@ def impl_setitem(l, index, item):
             # Extended slices
             else:
                 if len(slice_range) != len(item):
-                    raise ValueError("length mismatch for extended slice and sequence")
+                    raise ValueError("length mismatch for extended slice "
+                                     "and sequence")
                 # extended slice can only replace
                 for i, j in zip(slice_range, item):
                     l[i] = j
@@ -692,7 +751,7 @@ def impl_setitem(l, index, item):
         return impl_slice
 
     else:
-        raise TypingError("list indices must be signed integers or slices")
+        raise TypingError("list indices must be integers or slices")
 
 
 @overload_method(types.ListType, 'pop')
@@ -704,7 +763,7 @@ def impl_pop(l, index=-1):
 
     # FIXME: this type check works, but it isn't clear why and if it optimal
     if (isinstance(index, int)
-            or index in types.signed_domain
+            or index in index_types
             or isinstance(index, types.Omitted)):
         def impl(l, index=-1):
             if len(l) == 0:
@@ -719,7 +778,7 @@ def impl_pop(l, index=-1):
         return impl
 
     else:
-        raise TypingError("argument for pop must be a signed integer")
+        raise TypingError("argument for pop must be an integer")
 
 
 @intrinsic
@@ -736,8 +795,8 @@ def _list_delete_slice(typingctx, l, start, stop, step):
         )
         [l, start, stop, step] = args
         [tl, tstart, tstop, tstep] = sig.args
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_list_delete_slice')
+        fn = builder.module.get_or_insert_function(
+            fnty, name='numba_list_delete_slice')
 
         lp = _container_get_data(context, builder, tl, l)
         status = builder.call(
@@ -759,7 +818,7 @@ def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
         return
 
-    if index in types.signed_domain:
+    if index in index_types:
         def integer_impl(l, index):
             l.pop(index)
 
@@ -775,7 +834,7 @@ def impl_delitem(l, index):
         return slice_impl
 
     else:
-        raise TypingError("list indices must be signed integers or slices")
+        raise TypingError("list indices must be integers or slices")
 
 
 @overload(operator.contains)
@@ -847,9 +906,11 @@ def impl_extend(l, iterable):
             ty = iterable.dtype
         elif hasattr(iterable, "item_type"):  # lists
             ty = iterable.item_type
+        elif hasattr(iterable, "yield_type"):  # iterators and generators
+            ty = iterable.yield_type
         else:
             raise TypingError("unable to extend list, iterable is missing "
-                              "either *dtype* or *item_type*")
+                              "either *dtype*, *item_type* or *yield_type*.")
         l = l.refine(ty)
         # Create the signature that we wanted this impl to have
         sig = typing.signature(types.void, l, iterable)
@@ -861,7 +922,7 @@ def impl_insert(l, index, item):
     if not isinstance(l, types.ListType):
         return
 
-    if index in types.signed_domain:
+    if index in index_types:
         def impl(l, index, item):
             # If the index is larger than the size of the list or if the list is
             # empty, just append.
@@ -895,7 +956,7 @@ def impl_insert(l, index, item):
             sig = typing.signature(types.void, l, INDEXTY, itemty)
             return sig, impl
     else:
-        raise TypingError("list insert indices must be signed integers")
+        raise TypingError("list insert indices must be integers")
 
 
 @overload_method(types.ListType, 'remove')
@@ -947,9 +1008,13 @@ def impl_reverse(l):
 
 @overload_method(types.ListType, 'copy')
 def impl_copy(l):
+    itemty = l.item_type
     if isinstance(l, types.ListType):
         def impl(l):
-            return l[:]
+            newl = new_list(itemty, len(l))
+            for i in l:
+                newl.append(i)
+            return newl
 
         return impl
 
@@ -962,9 +1027,9 @@ def impl_index(l, item, start=None, end=None):
 
     def check_arg(arg, name):
         if not (arg is None
-                or arg in types.signed_domain
+                or arg in index_types
                 or isinstance(arg, (types.Omitted, types.NoneType))):
-            raise TypingError("{} argument for index must be a signed integer"
+            raise TypingError("{} argument for index must be an integer"
                               .format(name))
     check_arg(start, "start")
     check_arg(end, "end")
@@ -978,6 +1043,75 @@ def impl_index(l, item, start=None, end=None):
             raise ValueError("item not in list")
 
     return impl
+
+
+@overload_method(types.ListType, "sort")
+def ol_list_sort(lst, key=None, reverse=False):
+    # The following is mostly borrowed from listobj.ol_list_sort
+    from numba.typed import List
+
+    listobj._sort_check_key(key)
+    listobj._sort_check_reverse(reverse)
+
+    if cgutils.is_nonelike(key):
+        KEY = False
+        sort_f = listobj.sort_forwards
+        sort_b = listobj.sort_backwards
+    elif isinstance(key, types.Dispatcher):
+        KEY = True
+        sort_f = listobj.arg_sort_forwards
+        sort_b = listobj.arg_sort_backwards
+
+    def impl(lst, key=None, reverse=False):
+        if KEY is True:
+            # There's an unknown refct problem in reflected list.
+            # Using an explicit loop with typedlist somehow "fixed" it.
+            _lst = List()
+            for x in lst:
+                _lst.append(key(x))
+        else:
+            _lst = lst
+        if reverse is False or reverse == 0:
+            tmp = sort_f(_lst)
+        else:
+            tmp = sort_b(_lst)
+        if KEY is True:
+            # There's an unknown refct problem in reflected list.
+            # Using an explicit loop with typedlist somehow "fixed" it.
+            ordered = List()
+            for i in tmp:
+                ordered.append(lst[i])
+            lst[:] = ordered
+    return impl
+
+
+def _equals_helper(this, other, OP):
+    if not isinstance(this, types.ListType):
+        return
+    if not isinstance(other, types.ListType):
+        return lambda this, other: False
+
+    def impl(this, other):
+        def equals(this, other):
+            if len(this) != len(other):
+                return False
+            for i in range(len(this)):
+                if this[i] != other[i]:
+                    return False
+            else:
+                return True
+        return OP(equals(this, other))
+    return impl
+
+
+@overload(operator.eq)
+def impl_equals(this, other):
+    return _equals_helper(this, other, operator.truth)
+
+
+@overload(operator.ne)
+def impl_not_equals(this, other):
+    return _equals_helper(this, other, operator.not_)
 
 
 @register_jitable
@@ -1002,21 +1136,11 @@ def compare_helper(this, other, accepted):
     if not isinstance(this, types.ListType):
         return
     if not isinstance(other, types.ListType):
-        raise TypingError("list can only be compared to list")
+        return lambda this, other: False
 
     def impl(this, other):
         return compare(this, other) in accepted
     return impl
-
-
-@overload(operator.eq)
-def impl_equal(this, other):
-    return compare_helper(this, other, (0,))
-
-
-@overload(operator.ne)
-def impl_not_equal(this, other):
-    return compare_helper(this, other, (-1, 1))
 
 
 @overload(operator.lt)

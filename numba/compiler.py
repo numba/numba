@@ -19,7 +19,10 @@ from .untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, InlineClosureLikes,
                              GenericRewrites, WithLifting, InlineInlinables,
-                             FindLiterallyCalls)
+                             FindLiterallyCalls, MakeFunctionToJitFunction,
+                             CanonicalizeLoopExit, CanonicalizeLoopEntry,
+                             LiteralUnroll,
+                             )
 
 from .typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
@@ -47,7 +50,7 @@ class Flags(utils.ConfigOptions):
         'release_gil': False,
         'no_compile': False,
         'debuginfo': False,
-        'boundcheck': False,
+        'boundscheck': False,
         'forceinline': False,
         'no_cpython_wrapper': False,
         # Enable automatic parallel optimization, can be fine-tuned by taking
@@ -133,7 +136,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  lifted=lifted,
                  typing_error=None,
                  call_helper=None,
-                 metadata=None,  # Do not store, arbitrary and potentially large!
+                 metadata=None,  # Do not store, arbitrary & potentially large!
                  reload_init=reload_init,
                  )
         return cr
@@ -229,6 +232,10 @@ class _EarlyPipelineCompletion(Exception):
 
 
 class StateDict(dict):
+    """
+    A dictionary that has an overloaded getattr and setattr to permit getting
+    and setting key/values through the use of attributes.
+    """
 
     def __getattr__(self, attr):
         try:
@@ -247,8 +254,8 @@ def _make_subtarget(targetctx, flags):
     subtargetoptions = {}
     if flags.debuginfo:
         subtargetoptions['enable_debuginfo'] = True
-    if flags.boundcheck:
-        subtargetoptions['enable_boundcheck'] = True
+    if flags.boundscheck:
+        subtargetoptions['enable_boundscheck'] = True
     if flags.nrt:
         subtargetoptions['enable_nrt'] = True
     if flags.auto_parallel:
@@ -292,14 +299,16 @@ class CompilerBase(object):
         self.state.typemap = None
         self.state.calltypes = None
         self.state.type_annotation = None
-        self.state.metadata = {}  # holds arbitrary inter-pipeline stage meta data
+        # holds arbitrary inter-pipeline stage meta data
+        self.state.metadata = {}
         self.state.reload_init = []
         # hold this for e.g. with_lifting, null out on exit
         self.state.pipeline = self
 
         # parfor diagnostics info, add to metadata
         self.state.parfor_diagnostics = ParforDiagnostics()
-        self.state.metadata['parfor_diagnostics'] = self.state.parfor_diagnostics
+        self.state.metadata['parfor_diagnostics'] = \
+            self.state.parfor_diagnostics
 
         self.state.status = _CompileStatus(
             can_fallback=self.state.flags.enable_pyobject,
@@ -343,7 +352,10 @@ class CompilerBase(object):
         pms = self.define_pipelines()
         for pm in pms:
             pipeline_name = pm.pipeline_name
-            event("Pipeline: %s" % pipeline_name)
+            func_name = "%s.%s" % (self.state.func_id.modname,
+                                   self.state.func_id.func_qualname)
+
+            event("Pipeline: %s for %s" % (pipeline_name, func_name))
             self.state.metadata['pipeline_times'] = {pipeline_name:
                                                      pm.exec_times}
             is_final_pipeline = pm == pms[-1]
@@ -398,9 +410,13 @@ class Compiler(CompilerBase):
         if not self.state.flags.force_pyobject:
             pms.append(DefaultPassBuilder.define_nopython_pipeline(self.state))
         if self.state.status.can_fallback or self.state.flags.force_pyobject:
-            pms.append(DefaultPassBuilder.define_objectmode_pipeline(self.state))
+            pms.append(
+                DefaultPassBuilder.define_objectmode_pipeline(self.state)
+            )
         if self.state.status.can_giveup:
-            pms.append(DefaultPassBuilder.define_interpreted_pipeline(self.state))
+            pms.append(
+                DefaultPassBuilder.define_interpreted_pipeline(self.state)
+            )
         return pms
 
 
@@ -412,7 +428,6 @@ class DefaultPassBuilder(object):
       - objectmode
       - interpreted
     """
-
     @staticmethod
     def define_nopython_pipeline(state, name='nopython'):
         """Returns an nopython mode pipeline based PassManager
@@ -422,19 +437,21 @@ class DefaultPassBuilder(object):
             pm.add_pass(TranslateByteCode, "analyzing bytecode")
             pm.add_pass(FixupArgs, "fix up args")
         pm.add_pass(IRProcessing, "processing IR")
-
         pm.add_pass(WithLifting, "Handle with contexts")
 
         # pre typing
         if not state.flags.no_rewrites:
-            pm.add_pass(GenericRewrites, "nopython rewrites")
             pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
             pm.add_pass(DeadBranchPrune, "dead branch pruning")
+            pm.add_pass(GenericRewrites, "nopython rewrites")
+
         pm.add_pass(InlineClosureLikes,
                     "inline calls to locally defined closures")
-
+        # convert any remaining closures into functions
+        pm.add_pass(MakeFunctionToJitFunction,
+                    "convert make_function into JIT functions")
         # inline functions that have been determined as inlinable and rerun
-        # branch pruning this needs to be run after closures are inlined as
+        # branch pruning, this needs to be run after closures are inlined as
         # the IR repr of a closure masks call sites if an inlinable is called
         # inside a closure
         pm.add_pass(InlineInlinables, "inline inlinable functions")
@@ -442,6 +459,7 @@ class DefaultPassBuilder(object):
             pm.add_pass(DeadBranchPrune, "dead branch pruning")
 
         pm.add_pass(FindLiterallyCalls, "find literally calls")
+        pm.add_pass(LiteralUnroll, "handles literal_unroll")
 
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
@@ -476,8 +494,17 @@ class DefaultPassBuilder(object):
             pm.add_pass(FixupArgs, "fix up args")
         pm.add_pass(IRProcessing, "processing IR")
 
+        if utils.PYVERSION >= (3, 7):
+            # The following passes are needed to adjust for looplifting
+            pm.add_pass(CanonicalizeLoopEntry, "canonicalize loop entry")
+            pm.add_pass(CanonicalizeLoopExit, "canonicalize loop exit")
+
         pm.add_pass(ObjectModeFrontEnd, "object mode frontend")
-        pm.add_pass(InlineClosureLikes, "inline calls to locally defined closures")
+        pm.add_pass(InlineClosureLikes,
+                    "inline calls to locally defined closures")
+        # convert any remaining closures into functions
+        pm.add_pass(MakeFunctionToJitFunction,
+                    "convert make_function into JIT functions")
         pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
         pm.add_pass(ObjectModeBackEnd, "object mode backend")

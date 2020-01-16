@@ -21,7 +21,7 @@ functions get a fixed size through :term:`type inference` (usually,
 the size of a machine integer).  This means that arithmetic
 operations can wrapround or produce undefined results or overflow.
 
-Type inference can be overriden by an explicit type specification,
+Type inference can be overridden by an explicit type specification,
 if fine-grained control of integer width is desired.
 
 .. seealso::

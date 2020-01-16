@@ -162,7 +162,7 @@ class TestCFunc(TestCase):
             # stack variables, and could change in the future.
             self.assertPreciseEqual(res, 0.0)
         err = err.getvalue()
-        self.assertIn("ZeroDivisionError: (\'division by zero\',)", err)
+        self.assertIn("ZeroDivisionError:", err)
         if sys.version_info >= (3,):
             self.assertIn("Exception ignored", err)
         else:

@@ -116,12 +116,22 @@ class DeviceNDArrayBase(object):
 
     @property
     def __cuda_array_interface__(self):
+        if self.device_ctypes_pointer.value is not None:
+            ptr = self.device_ctypes_pointer.value
+        else:
+            ptr = 0
+
+        if array_core(self).flags['C_CONTIGUOUS']:
+            strides = None
+        else:
+            strides = tuple(self.strides)
+
         return {
             'shape': tuple(self.shape),
-            'strides': tuple(self.strides),
-            'data': (self.device_ctypes_pointer.value, False),
+            'strides': strides,
+            'data': (ptr, False),
             'typestr': self.dtype.str,
-            'version': 1,
+            'version': 2,
         }
 
     def bind(self, stream=0):
@@ -156,8 +166,30 @@ class DeviceNDArrayBase(object):
         Magic attribute expected by Numba to get the numba type that
         represents this object.
         """
+        # Typing considerations:
+        #
+        # 1. The preference is to use 'C' or 'F' layout since this enables
+        # hardcoding stride values into compiled kernels, which is more
+        # efficient than storing a passed-in value in a register.
+        #
+        # 2. If an array is both C- and F-contiguous, prefer 'C' layout as it's
+        # the more likely / common case.
+        #
+        # 3. If an array is broadcast then it must be typed as 'A' - using 'C'
+        # or 'F' does not apply for broadcast arrays, because the strides, some
+        # of which will be 0, will not match those hardcoded in for 'C' or 'F'
+        # layouts.
+
+        broadcast = 0 in self.strides
+        if self.flags['C_CONTIGUOUS'] and not broadcast:
+            layout = 'C'
+        elif self.flags['F_CONTIGUOUS'] and not broadcast:
+            layout = 'F'
+        else:
+            layout = 'A'
+
         dtype = numpy_support.from_dtype(self.dtype)
-        return types.Array(dtype, self.ndim, 'A')
+        return types.Array(dtype, self.ndim, layout)
 
     @property
     def device_ctypes_pointer(self):

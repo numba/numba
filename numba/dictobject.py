@@ -74,14 +74,15 @@ class Status(IntEnum):
 
 
 def new_dict(key, value):
-    """Construct a new dict. (Not implemented in the interpreter yet)
+    """Construct a new dict.
 
     Parameters
     ----------
     key, value : TypeRef
         Key type and value type of the new dict.
     """
-    raise NotImplementedError
+    # With JIT disabled, ignore all arguments and return a Python dict.
+    return dict()
 
 
 @register_model(DictType)
@@ -227,7 +228,8 @@ def _dict_new_minsize(typingctx, keyty, valty):
             ll_status,
             [ll_dict_type.as_pointer(), ll_ssize_t, ll_ssize_t],
         )
-        fn = builder.module.get_or_insert_function(fnty, name='numba_dict_new_minsize')
+        fn = builder.module.get_or_insert_function(
+            fnty, name='numba_dict_new_minsize')
         # Determine sizeof key and value types
         ll_key = context.get_data_type(keyty.instance_type)
         ll_val = context.get_data_type(valty.instance_type)
@@ -334,7 +336,8 @@ def _dict_insert(typingctx, d, key, hashval, val):
         )
         [d, key, hashval, val] = args
         [td, tkey, thashval, tval] = sig.args
-        fn = builder.module.get_or_insert_function(fnty, name='numba_dict_insert')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_dict_insert')
 
         dm_key = context.data_model_manager[tkey]
         dm_val = context.data_model_manager[tval]
@@ -377,7 +380,8 @@ def _dict_length(typingctx, d):
             ll_ssize_t,
             [ll_dict_type],
         )
-        fn = builder.module.get_or_insert_function(fnty, name='numba_dict_length')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_dict_length')
         [d] = args
         [td] = sig.args
         dp = _container_get_data(context, builder, td, d)
@@ -426,7 +430,8 @@ def _dict_lookup(typingctx, d, key, hashval):
         )
         [td, tkey, thashval] = sig.args
         [d, key, hashval] = args
-        fn = builder.module.get_or_insert_function(fnty, name='numba_dict_lookup')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_dict_lookup')
 
         dm_key = context.data_model_manager[tkey]
         dm_val = context.data_model_manager[td.value_type]
@@ -481,7 +486,8 @@ def _dict_popitem(typingctx, d):
         )
         [d] = args
         [td] = sig.args
-        fn = builder.module.get_or_insert_function(fnty, name='numba_dict_popitem')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_dict_popitem')
 
         dm_key = context.data_model_manager[td.key_type]
         dm_val = context.data_model_manager[td.value_type]
@@ -530,7 +536,8 @@ def _dict_delitem(typingctx, d, hk, ix):
         [d, hk, ix] = args
         [td, thk, tix] = sig.args
 
-        fn = builder.module.get_or_insert_function(fnty, name='numba_dict_delitem')
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_dict_delitem')
 
         dp = _container_get_data(context, builder, td, d)
         status = builder.call(fn, [dp, hk, ix])

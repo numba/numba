@@ -467,26 +467,6 @@ class Array(Buffer):
         return self.dtype.is_precise()
 
 
-class SmartArrayType(Array):
-
-    def __init__(self, dtype, ndim, layout, pyclass):
-        self.pyclass = pyclass
-        super(SmartArrayType, self).__init__(dtype, ndim, layout, name='numba_array')
-
-    @property
-    def as_array(self):
-        return Array(self.dtype, self.ndim, self.layout)
-
-    def copy(self, dtype=None, ndim=None, layout=None):
-        if dtype is None:
-            dtype = self.dtype
-        if ndim is None:
-            ndim = self.ndim
-        if layout is None:
-            layout = self.layout
-        return type(self)(dtype, ndim, layout, self.pyclass)
-
-
 class ArrayCTypes(Type):
     """
     This is the type for `np.ndarray.ctypes`.
@@ -539,7 +519,7 @@ class NestedArray(Array):
     """
     A NestedArray is an array nested within a structured type (which are "void"
     type in NumPy parlance). Unlike an Array, the shape, and not just the number
-    of dimenions is part of the type of a NestedArray.
+    of dimensions is part of the type of a NestedArray.
     """
 
     def __init__(self, dtype, shape):

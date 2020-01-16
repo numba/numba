@@ -37,7 +37,6 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
     if debug:
-        flags.set('boundcheck')
         flags.set('debuginfo')
     if inline:
         flags.set('forceinline')
@@ -255,6 +254,9 @@ class ExternFunction(object):
 
 class ForAll(object):
     def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
+        if ntasks < 0:
+            raise ValueError("Can't create ForAll with negative task count: %s"
+                             % ntasks)
         self.kernel = kernel
         self.ntasks = ntasks
         self.thread_per_block = tpb
@@ -262,6 +264,9 @@ class ForAll(object):
         self.sharedmem = sharedmem
 
     def __call__(self, *args):
+        if self.ntasks == 0:
+            return
+
         if isinstance(self.kernel, AutoJitCUDAKernel):
             kernel = self.kernel.specialize(*args)
         else:
@@ -661,13 +666,7 @@ class CUDAKernel(CUDAKernelBase):
                 retr=retr)
 
         if isinstance(ty, types.Array):
-            if isinstance(ty, types.SmartArrayType):
-                devary = val.get('gpu')
-                retr.append(lambda: val.mark_changed('gpu'))
-                outer_parent = ctypes.c_void_p(0)
-                kernelargs.append(outer_parent)
-            else:
-                devary = wrap_arg(val).to_device(retr, stream)
+            devary = wrap_arg(val).to_device(retr, stream)
 
             c_intp = ctypes.c_ssize_t
 

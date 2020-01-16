@@ -3,7 +3,7 @@
 The tests here should exercise everything within an `@njit` context.
 Importantly, the tests should not return a typed list from within such a
 context as this would require code from numba/typed/typedlist.py (this is
-tested seperately).  Tests in this file build on each other in the order of
+tested separately).  Tests in this file build on each other in the order of
 writing. For example, the first test, tests the creation, append and len of the
 list. These are the barebones to do anything useful with a list. The subsequent
 test for getitem assumes makes use of these three operations and therefore
@@ -17,7 +17,8 @@ from numba import int32, types
 from numba.errors import TypingError
 from numba import listobject
 from numba.utils import IS_PY3
-from .support import TestCase, MemoryLeakMixin, unittest
+from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
+                      forbid_codegen)
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
@@ -35,6 +36,59 @@ class TestCreateAppendLength(MemoryLeakMixin, TestCase):
 
         for i in (0, 1, 2, 100):
             self.assertEqual(foo(i), i)
+
+    def test_list_create_no_jit(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                l = listobject.new_list(int32)
+                self.assertEqual(type(l), list)
+
+
+class TestBool(MemoryLeakMixin, TestCase):
+    """Test list bool."""
+
+    def test_list_bool(self):
+        @njit
+        def foo(n):
+            l = listobject.new_list(int32)
+            for i in range(n):
+                l.append(i)
+            return bool(l)
+
+        for i in (0, 1, 2, 100):
+            self.assertEqual(foo(i), i > 0)
+
+
+class TestAllocation(MemoryLeakMixin, TestCase):
+
+    def test_list_allocation(self):
+        @njit
+        def foo_kwarg(n):
+            l = listobject.new_list(int32, allocated=n)
+            return l._allocated()
+
+        for i in range(16):
+            self.assertEqual(foo_kwarg(i), i)
+
+        @njit
+        def foo_posarg(n):
+            l = listobject.new_list(int32, n)
+            return l._allocated()
+        for i in range(16):
+            self.assertEqual(foo_posarg(i), i)
+
+    def test_list_allocation_negative(self):
+        @njit
+        def foo():
+            l = listobject.new_list(int32, -1)
+            return l._allocated()
+
+        with self.assertRaises(RuntimeError) as raises:
+            self.assertEqual(foo(), -1)
+        self.assertIn(
+            "expecting *allocated* to be >= 0",
+            str(raises.exception),
+        )
 
 
 class TestToFromMeminfo(MemoryLeakMixin, TestCase):
@@ -144,7 +198,7 @@ class TestGetitem(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 foo(i)
             self.assertIn(
-                "list indices must be signed integers or slices",
+                "list indices must be integers or slices",
                 str(raises.exception),
             )
 
@@ -487,7 +541,7 @@ class TestSetitem(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 foo(i)
             self.assertIn(
-                "list indices must be signed integers or slices",
+                "list indices must be integers or slices",
                 str(raises.exception),
             )
 
@@ -663,7 +717,7 @@ class TestPop(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as raises:
                 foo(i)
             self.assertIn(
-                "argument for pop must be a signed integer",
+                "argument for pop must be an integer",
                 str(raises.exception),
             )
 
@@ -957,7 +1011,7 @@ class TestInsert(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "list insert indices must be signed integers",
+            "list insert indices must be integers",
             str(raises.exception),
         )
 
@@ -1242,7 +1296,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "start argument for index must be a signed integer",
+            "start argument for index must be an integer",
             str(raises.exception),
         )
 
@@ -1257,7 +1311,7 @@ class TestIndex(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
-            "end argument for index must be a signed integer",
+            "end argument for index must be an integer",
             str(raises.exception),
         )
 

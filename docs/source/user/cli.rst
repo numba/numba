@@ -22,7 +22,7 @@ and arguments like ``--help`` or ``-s``, as explained below.
 
 Sometimes it can happen that you get a "command not found" error when you type
 ``numba``, because your ``PATH`` isn't configured properly. In that case you can
-use the equivalent commmand ``python -m numba``. If that still gives "command
+use the equivalent command ``python -m numba``. If that still gives "command
 not found", try to ``import numba`` as suggested here:
 :ref:`numba-source-install-check`.
 

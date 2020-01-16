@@ -69,7 +69,9 @@ class Dim(object):
             )
             return ret
         else:
-            sliced = self[item:item + 1]
+            sliced = self[item:item + 1] if item != -1 else self[-1:]
+            if sliced.size != 1:
+                raise IndexError
             return Dim(
                 start=sliced.start,
                 stop=sliced.stop,
@@ -195,7 +197,7 @@ class Array(object):
         lastidx = [s - 1 for s in self.shape]
         start = compute_index(firstidx, self.dims)
         stop = compute_index(lastidx, self.dims) + self.itemsize
-        stop = max(stop, start)   # ensure postive extent
+        stop = max(stop, start)   # ensure positive extent
         return Extent(start, stop)
 
     def __repr__(self):
@@ -348,8 +350,8 @@ class Array(object):
         if self.ndim <= 1:
             return self
 
-        elif (order == 'C' and self.is_c_contig or
-                          order == 'F' and self.is_f_contig):
+        elif (order in 'CA' and self.is_c_contig or
+                          order in 'FA' and self.is_f_contig):
             newshape = (self.size,)
             newstrides = (self.itemsize,)
             arr = self.from_desc(self.extent.begin, newshape, newstrides,
@@ -361,7 +363,7 @@ class Array(object):
 
 
 def iter_strides_f_contig(arr, shape=None):
-    """yields the f-contigous strides
+    """yields the f-contiguous strides
     """
     shape = arr.shape if shape is None else shape
     itemsize = arr.itemsize
@@ -373,7 +375,7 @@ def iter_strides_f_contig(arr, shape=None):
 
 
 def iter_strides_c_contig(arr, shape=None):
-    """yields the c-contigous strides
+    """yields the c-contiguous strides
     """
     shape = arr.shape if shape is None else shape
     itemsize = arr.itemsize

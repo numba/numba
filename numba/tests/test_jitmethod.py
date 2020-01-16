@@ -50,7 +50,7 @@ class TestDisabledJIT(unittest.TestCase):
     def test_decorated_function(self):
         with override_config('DISABLE_JIT', True):
             def method(x):
-                return x          
+                return x
             jitted = jit(method)
 
         self.assertEqual(jitted, method)

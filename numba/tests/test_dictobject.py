@@ -19,12 +19,33 @@ from numba.typed import Dict
 from numba.typedobjectutils import _sentry_safe_cast
 from numba.utils import IS_PY3
 from numba.errors import TypingError
-from .support import TestCase, MemoryLeakMixin, unittest
+from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
+                      forbid_codegen)
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
 
 class TestDictObject(MemoryLeakMixin, TestCase):
+    def test_dict_bool(self):
+        """
+        Exercise bool(dict)
+        """
+        @njit
+        def foo(n):
+            d = dictobject.new_dict(int32, float32)
+            for i in range(n):
+                d[i] = i + 1
+            return bool(d)
+
+        # Insert nothing
+        self.assertEqual(foo(n=0), False)
+        # Insert 1 entry
+        self.assertEqual(foo(n=1), True)
+        # Insert 2 entries
+        self.assertEqual(foo(n=2), True)
+        # Insert 100 entries
+        self.assertEqual(foo(n=100), True)
+
     def test_dict_create(self):
         """
         Exercise dictionary creation, insertion and len
@@ -430,7 +451,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             d = dictobject.new_dict(int32, float64)
-            d.setdefault(1, 1.2) # used because key is not in
+            d.setdefault(1, 1.2)  # used because key is not in
             a = d.get(1)
             d[1] = 2.3
             b = d.get(1)
@@ -821,7 +842,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             d = dictobject.new_dict(int32, float64)
             d[11] = 12.
             d[22] = 9.
-            k2 = d.keys() & {12,}
+            k2 = d.keys() & {12, }
             return k2
 
         print(foo())
@@ -1229,6 +1250,23 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         # Value is correctly updated
         self.assertPreciseEqual(d[1], np.arange(10, dtype=np.int64) + 100)
 
+    @skip_py2
+    def test_storage_model_mismatch(self):
+        # https://github.com/numba/numba/issues/4520
+        # check for storage model mismatch in refcount ops generation
+        dct = Dict()
+        ref = [
+            ("a", True, "a"),
+            ("b", False, "b"),
+            ("c", False, "c"),
+        ]
+        # populate
+        for x in ref:
+            dct[x] = x
+        # test
+        for i, x in enumerate(ref):
+            self.assertEqual(dct[x], x)
+
 
 class TestDictForbiddenTypes(TestCase):
     def assert_disallow(self, expect, callable):
@@ -1238,7 +1276,7 @@ class TestDictForbiddenTypes(TestCase):
         self.assertIn(expect, msg)
 
     def assert_disallow_key(self, ty):
-        msg = '{} as key is forbidded'.format(ty)
+        msg = '{} as key is forbidden'.format(ty)
         self.assert_disallow(msg, lambda: Dict.empty(ty, types.intp))
 
         @njit
@@ -1247,7 +1285,7 @@ class TestDictForbiddenTypes(TestCase):
         self.assert_disallow(msg, foo)
 
     def assert_disallow_value(self, ty):
-        msg = '{} as value is forbidded'.format(ty)
+        msg = '{} as value is forbidden'.format(ty)
         self.assert_disallow(msg, lambda: Dict.empty(types.intp, ty))
 
         @njit
@@ -1354,8 +1392,8 @@ class TestDictInferred(TestCase):
             d, dk2 = foo(k1, v1, k2)
         self.assertEqual(len(w), 1)
         # Make sure the warning is about unsafe cast
-        self.assertIn('unsafe cast from tuple(int32 x 2) to tuple(int8 x 2)',
-                      str(w[0]))
+        msg = 'unsafe cast from UniTuple(int32 x 2) to UniTuple(int8 x 2)'
+        self.assertIn(msg, str(w[0]))
 
         keys = list(d.keys())
         self.assertEqual(keys[0], (1, 2))
@@ -1548,3 +1586,25 @@ class TestDictWithJitclass(TestCase):
         d = foo(Bag(a=100))
         self.assertEqual(d[0].a, 100)
         self.assertEqual(d[1].a, 101)
+
+
+class TestNoJit(TestCase):
+    """Exercise dictionary creation with JIT disabled. """
+
+    def test_dict_create_no_jit_using_new_dict(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                d = dictobject.new_dict(int32, float32)
+                self.assertEqual(type(d), dict)
+
+    def test_dict_create_no_jit_using_Dict(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                d = Dict()
+                self.assertEqual(type(d), dict)
+
+    def test_dict_create_no_jit_using_empty(self):
+        with override_config('DISABLE_JIT', True):
+            with forbid_codegen():
+                d = Dict.empty(types.int32, types.float32)
+                self.assertEqual(type(d), dict)

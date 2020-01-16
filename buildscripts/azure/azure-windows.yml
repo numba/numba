@@ -4,19 +4,20 @@ parameters:
 
 jobs:
 - job: ${{ parameters.name }}
-  pool: 
+  pool:
     vmImage: ${{ parameters.vmImage }}
   strategy:
-    maxParallel: 11
     matrix:
-      py27_np15:
-        PYTHON: '2.7'
-        NUMPY: '1.15' 
+      py38_np117:
+        PYTHON: '3.8'
+        NUMPY: '1.17'
         CONDA_ENV: 'testenv'
-      py37_np15:
+        TEST_START_INDEX: 14
+      py37_np115:
         PYTHON: '3.7'
-        NUMPY: '1.15' 
+        NUMPY: '1.15'
         CONDA_ENV: 'testenv'
+        TEST_START_INDEX: 15
 
   steps:
     - task: CondaEnvironment@1
@@ -57,11 +58,23 @@ jobs:
       displayName: 'Remove TBB'
       condition: ne(variables['PYTHON'], '2.7')
 
+    # not working on windows?
+    #- script: |
+    #    call activate %CONDA_ENV%
+    #    numba.exe -s
+    #  displayName: 'Display numba system information'
+
     - script: |
         call activate %CONDA_ENV%
-        pushd bin
-        numba -s
-        popd
         python -m numba.tests.test_runtests
-        python runtests.py -m 2 -b -- numba.tests
-      displayName: 'Test'
+      displayName: 'Verify runtests'
+
+    - script: |
+        call activate %CONDA_ENV%
+        python -m numba.runtests -b -v -g -m 2 -- numba.tests
+      displayName: 'Test modified test files'
+
+    - script: |
+        call activate %CONDA_ENV%
+        python runtests.py -m 2 -b -j "%TEST_START_INDEX%,None,%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
+      displayName: 'Test slice of test files'

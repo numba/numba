@@ -275,15 +275,19 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             input_operand = input_tuple[0]
             input_type = input_tuple[1]
 
+            is_tuple = isinstance(input_operand, tuple)
+            lhs = input_operand[0] if is_tuple else input_operand
+            rhs = input_operand[1] if is_tuple else input_operand
+
             if input_type in skip_inputs:
                 continue
-            if positive_only and np.any(input_operand < 0):
+            if positive_only and np.any(lhs < 0):
                 continue
 
             # Some ufuncs don't allow all kinds of arguments, and implicit
             # conversion has become stricter in 1.10.
             if (numpy_support.strict_ufunc_typing and
-                input_operand.dtype.kind not in kinds):
+                lhs.dtype.kind not in kinds):
                 continue
 
             output_type = self._determine_output_type(
@@ -293,16 +297,16 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                                     flags=flags)
             cfunc = cr.entry_point
 
-            if isinstance(input_operand, np.ndarray):
-                result = np.zeros(input_operand.size,
+            if isinstance(lhs, np.ndarray):
+                result = np.zeros(lhs.size,
                                   dtype=output_type.dtype.name)
-                expected = np.zeros(input_operand.size,
+                expected = np.zeros(lhs.size,
                                     dtype=output_type.dtype.name)
             else:
                 result = np.zeros(1, dtype=output_type.dtype.name)
                 expected = np.zeros(1, dtype=output_type.dtype.name)
-            cfunc(input_operand, input_operand, result)
-            pyfunc(input_operand, input_operand, expected)
+            cfunc(lhs, rhs, result)
+            pyfunc(lhs, rhs, expected)
             np.testing.assert_array_almost_equal(expected, result)
 
     def unary_int_ufunc_test(self, name=None, flags=no_pyobj_flags):
@@ -370,13 +374,24 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         self.binary_ufunc_test(np.power, flags=flags,
                                positive_only=after_numpy_112)
 
+    def test_gcd_ufunc(self, flags=no_pyobj_flags):
+        if numpy_support.version >= (1, 15):
+            self.binary_ufunc_test(np.gcd, flags=flags, kinds="iu")
+
+    def test_lcm_ufunc(self, flags=no_pyobj_flags):
+        if numpy_support.version >= (1, 15):
+            self.binary_ufunc_test(np.lcm, flags=flags, kinds="iu")
+
     @tag('important')
     def test_remainder_ufunc(self, flags=no_pyobj_flags):
         self.binary_ufunc_test(np.remainder, flags=flags)
 
     @tag('important')
     def test_mod_ufunc(self, flags=no_pyobj_flags):
-        self.binary_ufunc_test(np.mod, flags=flags)
+        self.binary_ufunc_test(np.mod, flags=flags, kinds='ifcu',
+            additional_inputs = [
+                ((np.uint64(np.iinfo(np.uint64).max), np.uint64(16)), types.uint64)
+            ])
 
     @tag('important')
     def test_fmod_ufunc(self, flags=no_pyobj_flags):
@@ -1205,7 +1220,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
     @tag('important')
     def test_floor_divide_array_op(self):
         # Avoid floating-point zeros as x // 0.0 can have varying results
-        # depending on the algorithm (which changed accross Numpy versions)
+        # depending on the algorithm (which changed across Numpy versions)
         self.inputs = [
             (np.uint32(1), types.uint32),
             (np.int32(-2), types.int32),

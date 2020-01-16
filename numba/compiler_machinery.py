@@ -30,6 +30,8 @@ class SimpleTimer(object):
 
 @six.add_metaclass(ABCMeta)
 class CompilerPass(object):
+    """ The base class for all compiler passes.
+    """
 
     @abstractmethod
     def __init__(self, *args, **kwargs):
@@ -38,55 +40,88 @@ class CompilerPass(object):
 
     @classmethod
     def name(cls):
+        """
+        Returns the name of the pass
+        """
         return cls._name
 
     @property
     def pass_id(self):
+        """
+        The ID of the pass
+        """
         return self._pass_id
 
     @pass_id.setter
     def pass_id(self, val):
+        """
+        Sets the ID of the pass
+        """
         self._pass_id = val
 
     @property
     def analysis(self):
+        """
+        Analysis data for the pass
+        """
         return self._analysis
 
     @analysis.setter
     def analysis(self, val):
+        """
+        Set the analysis data for the pass
+        """
         self._analysis = val
 
-    def run_initialisation(self, *args, **kwargs):
+    def run_initialization(self, *args, **kwargs):
+        """
+        Runs the initialization sequence for the pass, will run before
+        `run_pass`.
+        """
         return False
 
     @abstractmethod
     def run_pass(self, *args, **kwargs):
+        """
+        Runs the pass itself. Must return True/False depending on whether
+        statement level modification took place.
+        """
         pass
 
-    def run_finaliser(self, *args, **kwargs):
+    def run_finalizer(self, *args, **kwargs):
         """
-        User defined finaliser
+        Runs the initialization sequence for the pass, will run before
+        `run_pass`.
         """
         return False
 
     def get_analysis_usage(self, AU):
-        """Override to set analysis usage
+        """ Override to set analysis usage
         """
         pass
 
     def get_analysis(self, pass_name):
+        """
+        Gets the analysis from a given pass
+        """
         return self._analysis[pass_name]
 
 
 class FunctionPass(CompilerPass):
+    """ Base class for function passes
+    """
     pass
 
 
 class AnalysisPass(CompilerPass):
+    """ Base class for analysis passes (no modification made to state)
+    """
     pass
 
 
 class LoweringPass(CompilerPass):
+    """ Base class for lowering passes
+    """
     pass
 
 
@@ -122,7 +157,7 @@ def debug_print(*args, **kwargs):
         print(*args, **kwargs)
 
 
-pass_timings = namedtuple('pass_timings', 'init run finalise')
+pass_timings = namedtuple('pass_timings', 'init run finalize')
 
 
 class PassManager(object):
@@ -144,8 +179,11 @@ class PassManager(object):
         self.pipeline_name = pipeline_name
 
     def _validate_pass(self, pass_cls):
-        if not (isinstance(pass_cls, str) or (inspect.isclass(pass_cls) and issubclass(pass_cls, CompilerPass))):
-            msg = "Pass must be referenced by name or be a subclass of a CompilerPass. Have %s" % pass_cls
+        if (not (isinstance(pass_cls, str) or
+                 (inspect.isclass(pass_cls) and
+                  issubclass(pass_cls, CompilerPass)))):
+            msg = ("Pass must be referenced by name or be a subclass of a "
+                   "CompilerPass. Have %s" % pass_cls)
             raise TypeError(msg)
         if isinstance(pass_cls, str):
             pass_cls = _pass_registry.find_by_name(pass_cls)
@@ -155,7 +193,7 @@ class PassManager(object):
 
     def add_pass(self, pss, description=""):
         """
-        Add a pass to the PassManager
+        Append a pass to the PassManager's compilation pipeline
         """
         self._validate_pass(pss)
         func_desc_tuple = (pss, description)
@@ -164,7 +202,8 @@ class PassManager(object):
 
     def add_pass_after(self, pass_cls, location):
         """
-        Add a pass to the PassManager after the pass "location"
+        Add a pass `pass_cls` to the PassManager's compilation pipeline after
+        the pass `location`.
         """
         assert self.passes
         self._validate_pass(pass_cls)
@@ -180,25 +219,31 @@ class PassManager(object):
 
     def _debug_init(self):
         # determine after which passes IR dumps should take place
-        print_passes = []
-        if config.DEBUG_PRINT_AFTER != "none":
-            if config.DEBUG_PRINT_AFTER == "all":
-                print_passes = [x.name() for (x, _) in self.passes]
-            else:
-                # we don't validate whether the named passes exist in this pipeline
-                # the compiler may be used reentrantly and different pipelines may
-                # contain different passes
-                splitted = config.DEBUG_PRINT_AFTER.split(',')
-                print_passes = [x.strip() for x in splitted]
-        return print_passes
+        def parse(conf_item):
+            print_passes = []
+            if conf_item != "none":
+                if conf_item == "all":
+                    print_passes = [x.name() for (x, _) in self.passes]
+                else:
+                    # we don't validate whether the named passes exist in this
+                    # pipeline the compiler may be used reentrantly and
+                    # different pipelines may contain different passes
+                    splitted = conf_item.split(',')
+                    print_passes = [x.strip() for x in splitted]
+            return print_passes
+        ret = (parse(config.DEBUG_PRINT_AFTER),
+               parse(config.DEBUG_PRINT_BEFORE),
+               parse(config.DEBUG_PRINT_WRAP),)
+        return ret
 
     def finalize(self):
         """
-        Finalize the PassManager, after which no more passes may be added and
-        analysis etc is completed.
+        Finalize the PassManager, after which no more passes may be added
+        without re-finalization.
         """
         self._analysis = self.dependency_analysis()
-        self._print_after = self._debug_init()
+        self._print_after, self._print_before, self._print_wrap = \
+            self._debug_init()
         self._finalized = True
 
     @property
@@ -234,37 +279,52 @@ class PassManager(object):
                 raise ValueError(msg % pss.name())
             return mangled
 
+        def debug_print(pass_name, print_condition, printable_condition):
+            if pass_name in print_condition:
+                fid = internal_state.func_id
+                args = (fid.modname, fid.func_qualname, self.pipeline_name,
+                        printable_condition, pass_name)
+                print(("%s.%s: %s: %s %s" % args).center(120, '-'))
+                if internal_state.func_ir is not None:
+                    internal_state.func_ir.dump()
+                else:
+                    print("func_ir is None")
+
+        # debug print before this pass?
+        debug_print(pss.name(), self._print_before + self._print_wrap, "BEFORE")
+
         # wire in the analysis info so it's accessible
         pss.analysis = self._analysis
 
         with SimpleTimer() as init_time:
-            mutated |= check(pss.run_initialisation, internal_state)
+            mutated |= check(pss.run_initialization, internal_state)
         with SimpleTimer() as pass_time:
             mutated |= check(pss.run_pass, internal_state)
-        with SimpleTimer() as finalise_time:
-            mutated |= check(pss.run_finaliser, internal_state)
+        with SimpleTimer() as finalize_time:
+            mutated |= check(pss.run_finalizer, internal_state)
 
         if self._ENFORCING:
             # TODO: Add in self consistency enforcement for
             # `func_ir._definitions` etc
             if _pass_registry.get(pss.__class__).mutates_CFG:
-                if mutated: # block level changes, rebuild all
+                if mutated:  # block level changes, rebuild all
                     PostProcessor(internal_state.func_ir).run()
-                else: # CFG level changes rebuild CFG
+                else:  # CFG level changes rebuild CFG
                     internal_state.func_ir.blocks = transforms.canonicalize_cfg(
                         internal_state.func_ir.blocks)
 
         # inject runtimes
         pt = pass_timings(init_time.elapsed, pass_time.elapsed,
-                          finalise_time.elapsed)
+                          finalize_time.elapsed)
         self.exec_times["%s_%s" % (index, pss.name())] = pt
 
         # debug print after this pass?
-        if pss.name() in self._print_after:
-            print(("%s: %s" % (self.pipeline_name, pss.name())).center(80, '-'))
-            internal_state.func_ir.dump()
+        debug_print(pss.name(), self._print_after + self._print_wrap, "AFTER")
 
     def run(self, state):
+        """
+        Run the defined pipelines on the state.
+        """
         from numba.compiler import _EarlyPipelineCompletion
         if not self.finalized:
             raise RuntimeError("Cannot run non-finalised pipeline")
@@ -374,4 +434,9 @@ class PassRegistry(object):
 _pass_registry = PassRegistry()
 del PassRegistry
 
+
+"""
+register_pass is used to register a compiler pass class for use with PassManager
+instances.
+"""
 register_pass = _pass_registry.register

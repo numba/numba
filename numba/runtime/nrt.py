@@ -1,11 +1,11 @@
 from __future__ import print_function, absolute_import, division
 
 from collections import namedtuple
+from weakref import finalize as _finalize
 
 from . import nrtdynmod
 from llvmlite import binding as ll
 
-from numba.utils import finalize as _finalize
 from numba.compiler_lock import global_compiler_lock
 from numba.typing.typeof import typeof_impl
 from numba import types

@@ -70,11 +70,10 @@ class TestCUDAFindLibs(SerialMixin, unittest.TestCase):
         # This is the testing part, the test will only run if there's a valid
         # path in which to look
         if looking_for is not None:
-            out, err = self.run_test_in_separate_process("NUMBAPRO_LIBDEVICE",
+            out, err = self.run_test_in_separate_process("NUMBA_CUDA_DRIVER",
                                                          looking_for)
             self.assertTrue(out is not None)
             self.assertTrue(err is not None)
-            self.assertIn("Missing libdevice file for", str(err))
 
 
 if __name__ == '__main__':

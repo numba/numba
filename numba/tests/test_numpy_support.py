@@ -208,7 +208,8 @@ class ValueTypingTestBase(object):
         """
         Test *func*() with np.timedelta64 values.
         """
-        self._base_check_datetime_values(func, np.timedelta64, types.NPTimedelta)
+        self._base_check_datetime_values(func, np.timedelta64,
+                                         types.NPTimedelta)
 
 
 class TestArrayScalars(ValueTypingTestBase, TestCase):

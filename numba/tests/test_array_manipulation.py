@@ -9,7 +9,7 @@ import numpy as np
 
 from numba.numpy_support import version as np_version
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types, from_dtype, errors, typeof
+from numba import jit, njit, types, from_dtype, errors, typeof
 from numba.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, CompilationCache, tag
 
@@ -37,7 +37,7 @@ def from_generic(pyfuncs_to_use):
     """
     def decorator(func):
         def result(*args, **kwargs):
-            return (func(pyfunc, *args, **kwargs) for pyfunc in pyfuncs_to_use)
+            return [func(pyfunc, *args, **kwargs) for pyfunc in pyfuncs_to_use]
         return result
     return decorator
 
@@ -76,8 +76,27 @@ def numpy_transpose_array(a):
 def numpy_transpose_array_axes_kwarg(arr, axes):
     return np.transpose(arr, axes=axes)
 
+
+def numpy_transpose_array_axes_kwarg_copy(arr, axes):
+    return np.transpose(arr, axes=axes).copy()
+
+
 def array_transpose_axes(arr, axes):
     return arr.transpose(axes)
+
+
+def array_transpose_axes_copy(arr, axes):
+    return arr.transpose(axes).copy()
+
+
+def transpose_issue_4708(m, n):
+    r1 = np.reshape(np.arange(m * n * 3), (m, 3, n))
+    r2 = np.reshape(np.arange(n * 3), (n, 3))
+    r_dif = (r1 - r2.T).T
+    r_dif = np.transpose(r_dif, (2, 0, 1))
+    z = r_dif + 1
+    return z
+
 
 def squeeze_array(a):
     return a.squeeze()
@@ -270,7 +289,9 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_array_transpose_axes(self):
         pyfuncs_to_use = [numpy_transpose_array_axes_kwarg,
-                          array_transpose_axes]
+                          numpy_transpose_array_axes_kwarg_copy,
+                          array_transpose_axes,
+                          array_transpose_axes_copy]
 
         def run(pyfunc, arr, axes):
             cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(axes)))
@@ -320,6 +341,18 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 neg_axes = tuple([x - ndim for x in axes])
                 check(arrs[i], axes)
                 check(arrs[i], neg_axes)
+
+        @from_generic([transpose_issue_4708])
+        def check_issue_4708(pyfunc, m, n):
+            expected = pyfunc(m, n)
+            got = njit(pyfunc)(m, n)
+            # values in arrays are equals,
+            # but stronger assertions not hold (layout and strides equality)
+            np.testing.assert_equal(got, expected)
+
+        check_issue_4708(3, 2)
+        check_issue_4708(2, 3)
+        check_issue_4708(5, 4)
 
         # Exceptions leak references
         self.disable_leak_check()

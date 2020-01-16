@@ -1,12 +1,8 @@
-try:
-    # Try to use setuptools so as to enable support of the special
-    # "Microsoft Visual C++ Compiler for Python 2.7" (http://aka.ms/vcpython27)
-    # for building under Windows.
-    # Note setuptools >= 6.0 is required for this.
-    from setuptools import setup, Extension
-except ImportError:
-    from distutils.core import setup, Extension
-
+# NOTE: for building under Windows.
+# Use setuptools so as to enable support of the special
+# "Microsoft Visual C++ Compiler for Python 2.7" (http://aka.ms/vcpython27)
+# Note setuptools >= 6.0 is required for this.
+from setuptools import setup, Extension, find_packages
 from distutils.command import build
 from distutils.spawn import spawn
 from distutils import sysconfig
@@ -15,6 +11,12 @@ import os
 import platform
 
 import versioneer
+
+min_python_version = "3.6"
+min_numpy_build_version = "1.11"
+min_numpy_run_version = "1.15"
+min_llvmlite_version = "0.31.0dev0"
+max_llvmlite_version = "0.32.0"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -98,7 +100,6 @@ def get_ext_modules():
     # Inject required options for extensions compiled against the Numpy
     # C API (include dirs, library dirs etc.)
     np_compile_args = np_misc.get_info('npymath')
-
 
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],
@@ -216,16 +217,23 @@ def get_ext_modules():
         print("Using Intel TBB from:", tbb_root)
         ext_npyufunc_tbb_workqueue = Extension(
             name='numba.npyufunc.tbbpool',
-            sources=['numba/npyufunc/tbbpool.cpp', 'numba/npyufunc/gufunc_scheduler.cpp'],
+            sources=[
+                'numba/npyufunc/tbbpool.cpp',
+                'numba/npyufunc/gufunc_scheduler.cpp',
+            ],
             depends=['numba/npyufunc/workqueue.h'],
             include_dirs=[os.path.join(tbb_root, 'include')],
             extra_compile_args=cpp11flags,
-            libraries   =['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
-            library_dirs=[os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),  # for Linux
-                        os.path.join(tbb_root, 'lib'),                       # for MacOS
-                        os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),   # for Windows
-                        ],
-            )
+            libraries=['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
+            library_dirs=[
+                # for Linux
+                os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),
+                # for MacOS
+                os.path.join(tbb_root, 'lib'),
+                # for Windows
+                os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),
+            ],
+        )
         ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
     else:
         print("TBB not found")
@@ -237,12 +245,16 @@ def get_ext_modules():
     elif have_openmp:
         print("Using OpenMP from:", have_openmp)
         # OpenMP backed work queue
-        ext_npyufunc_omppool = Extension( name='numba.npyufunc.omppool',
-                                    sources=['numba/npyufunc/omppool.cpp',
-                                            'numba/npyufunc/gufunc_scheduler.cpp'],
-                                    depends=['numba/npyufunc/workqueue.h'],
-                                    extra_compile_args=ompcompileflags + cpp11flags,
-                                    extra_link_args = omplinkflags)
+        ext_npyufunc_omppool = Extension(
+            name='numba.npyufunc.omppool',
+            sources=[
+                'numba/npyufunc/omppool.cpp',
+                'numba/npyufunc/gufunc_scheduler.cpp',
+            ],
+            depends=['numba/npyufunc/workqueue.h'],
+            extra_compile_args=ompcompileflags + cpp11flags,
+            extra_link_args=omplinkflags,
+        )
 
         ext_npyufunc_workqueue_impls.append(ext_npyufunc_omppool)
     else:
@@ -252,10 +264,10 @@ def get_ext_modules():
     # version is built. Users can select a backend via env vars.
     ext_npyufunc_workqueue = Extension(
         name='numba.npyufunc.workqueue',
-        sources=['numba/npyufunc/workqueue.c', 'numba/npyufunc/gufunc_scheduler.cpp'],
+        sources=['numba/npyufunc/workqueue.c',
+                 'numba/npyufunc/gufunc_scheduler.cpp'],
         depends=['numba/npyufunc/workqueue.h'])
     ext_npyufunc_workqueue_impls.append(ext_npyufunc_workqueue)
-
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
                              extra_link_args=install_name_tool_fixer,
@@ -288,47 +300,29 @@ def get_ext_modules():
     return ext_modules
 
 
-def find_packages(root_dir, root_name):
-    """
-    Recursively find packages in *root_dir*.
-    """
-    packages = []
-    def rec(path, pkg_name):
-        packages.append(pkg_name)
-        for fn in sorted(os.listdir(path)):
-            subpath = os.path.join(path, fn)
-            if os.path.exists(os.path.join(subpath, "__init__.py")):
-                subname = "%s.%s" % (pkg_name, fn)
-                rec(subpath, subname)
-    rec(root_dir, root_name)
-    return packages
+packages = find_packages(include=["numba", "numba.*"])
 
-
-packages = find_packages("numba", "numba")
-
-build_requires = ['numpy']
-
-install_requires = ['llvmlite>=0.29.0dev0', 'numpy']
-install_requires.extend(['enum34; python_version < "3.4"'])
-install_requires.extend(['singledispatch; python_version < "3.4"'])
-install_requires.extend(['funcsigs; python_version < "3.3"'])
+build_requires = [f'numpy >={min_numpy_build_version}']
+install_requires = [
+    f'llvmlite >={min_llvmlite_version},<{max_llvmlite_version}',
+    f'numpy >={min_numpy_run_version}',
+    'setuptools',
+]
 
 metadata = dict(
     name='numba',
     description="compiling Python code using LLVM",
     version=versioneer.get_version(),
-
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.4",
-        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={
@@ -352,9 +346,10 @@ metadata = dict(
     packages=packages,
     setup_requires=build_requires,
     install_requires=install_requires,
+    python_requires=f">={min_python_version}",
     license="BSD",
     cmdclass=cmdclass,
-    )
+)
 
 with open('README.rst') as f:
     metadata['long_description'] = f.read()

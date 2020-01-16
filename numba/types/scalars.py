@@ -5,6 +5,7 @@ import enum
 import numpy as np
 
 from .abstract import Dummy, Hashable, Literal, Number, Type
+from functools import total_ordering
 from .. import npdatetime, utils
 from ..typeconv import Conversion
 
@@ -27,7 +28,7 @@ def parse_integer_signed(name):
     return signed
 
 
-@utils.total_ordering
+@total_ordering
 class Integer(Number):
     def __init__(self, name, bitwidth=None, signed=None):
         super(Integer, self).__init__(name)
@@ -95,7 +96,7 @@ class IntegerLiteral(Literal, Integer):
 Literal.ctor_map[int] = IntegerLiteral
 
 
-@utils.total_ordering
+@total_ordering
 class Float(Number):
     def __init__(self, *args, **kws):
         super(Float, self).__init__(*args, **kws)
@@ -113,7 +114,7 @@ class Float(Number):
         return self.bitwidth < other.bitwidth
 
 
-@utils.total_ordering
+@total_ordering
 class Complex(Number):
     def __init__(self, name, underlying_float, **kwargs):
         super(Complex, self).__init__(name, **kwargs)
@@ -159,11 +160,11 @@ class _NPDatetimeBase(Type):
             return cls(value)
 
 
-@utils.total_ordering
+@total_ordering
 class NPTimedelta(_NPDatetimeBase):
     type_name = 'timedelta64'
 
-@utils.total_ordering
+@total_ordering
 class NPDatetime(_NPDatetimeBase):
     type_name = 'datetime64'
 
