@@ -345,7 +345,7 @@ def _launch_threads():
                     try:
                         # first check that the TBB version is new enough
                         if _IS_WINDOWS:
-                            libtbb_name = 'tbb.lib'
+                            libtbb_name = 'tbb'
                         elif _IS_OSX:
                             libtbb_name = 'libtbb.dylib'
                         elif _IS_LINUX:
