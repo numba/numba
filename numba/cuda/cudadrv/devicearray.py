@@ -382,7 +382,7 @@ class DeviceNDArrayBase(object):
             dtype=dtype,
             stream=self.stream,
             gpu_data=self.gpu_data,
-            )
+        )
 
     @property
     def nbytes(self):
