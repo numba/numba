@@ -166,7 +166,8 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         with self.assertRaises(ValueError) as e:
             array.view("i4")
         self.assertEqual(
-            "array must be C-contiguous when changing itemsize",
+            "To change to a dtype of a different size,"
+            " the array must be C-contiguous",
             str(e.exception))
 
     def test_devicearray_view_bad_itemsize(self):
@@ -175,7 +176,9 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         with self.assertRaises(ValueError) as e:
             array.view("i4")
         self.assertEqual(
-            "new dtype's itemsize must evenly divide the last dimension",
+            "When changing to a larger dtype,"
+            " its size must be a divisor of the total size in bytes"
+            " of the last axis of the array.",
             str(e.exception))
 
     def test_devicearray_transpose_ok(self):

@@ -357,7 +357,8 @@ class DeviceNDArrayBase(object):
 
         if self.dtype.itemsize != dtype.itemsize and not self.is_c_contiguous():
             raise ValueError(
-                "array must be C-contiguous when changing itemsize"
+                "To change to a dtype of a different size,"
+                " the array must be C-contiguous"
             )
 
         shape = list(self.shape)
@@ -369,7 +370,9 @@ class DeviceNDArrayBase(object):
 
         if rem != 0:
             raise ValueError(
-                "new dtype's itemsize must evenly divide the last dimension"
+                "When changing to a larger dtype,"
+                " its size must be a divisor of the total size in bytes"
+                " of the last axis of the array."
             )
 
         strides = list(self.strides)
