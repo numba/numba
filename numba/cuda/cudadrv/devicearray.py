@@ -355,6 +355,11 @@ class DeviceNDArrayBase(object):
         """
         dtype = np.dtype(dtype)
 
+        if self.dtype.itemsize != dtype.itemsize and not self.is_c_contiguous():
+            raise ValueError(
+                "array must be C-contiguous when changing itemsize"
+            )
+
         shape = list(self.shape)
         shape[-1], rem = divmod(
             dtype.itemsize,
