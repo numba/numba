@@ -4,7 +4,7 @@ from functools import reduce
 import operator
 import math
 
-from llvmlite.llvmpy.core import Type
+from llvmlite.llvmpy.core import Type, InlineAsm
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
@@ -627,18 +627,29 @@ def _get_target_data(context):
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                    can_dynsized=False):
     elemcount = reduce(operator.mul, shape)
+
+    # Check for valid shape for this type of allocation
+    dynamic_smem = elemcount <= 0 and can_dynsized
+    if elemcount <= 0 and not dynamic_smem:
+        raise ValueError("array length <= 0")
+
+    # Check that we support the requested dtype
+    other_supported_type = isinstance(dtype, (types.Record, types.Boolean))
+    if dtype not in types.number_domain and not other_supported_type:
+        raise TypeError("unsupported type: %s" % dtype)
+
     lldtype = context.get_data_type(dtype)
     laryty = Type.array(lldtype, elemcount)
 
     if addrspace == nvvm.ADDRSPACE_LOCAL:
-        # Special case local addrespace allocation to use alloca
+        # Special case local address space allocation to use alloca
         # NVVM is smart enough to only use local memory if no register is
         # available
         dataptr = cgutils.alloca_once(builder, laryty, name=symbol_name)
     else:
         lmod = builder.module
 
-        # Create global variable in the requested address-space
+        # Create global variable in the requested address space
         gvmem = lmod.add_global_variable(laryty, symbol_name, addrspace)
         # Specify alignment to avoid misalignment bug
         align = context.get_abi_sizeof(lldtype)
@@ -646,11 +657,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
         # not a power of 2 (e.g. for a Record array) then round up accordingly.
         gvmem.align = 1 << (align - 1 ).bit_length()
 
-        if elemcount <= 0:
-            if can_dynsized:    # dynamic shared memory
-                gvmem.linkage = lc.LINKAGE_EXTERNAL
-            else:
-                raise ValueError("array length <= 0")
+        if dynamic_smem:
+            gvmem.linkage = lc.LINKAGE_EXTERNAL
         else:
             ## Comment out the following line to workaround a NVVM bug
             ## which generates a invalid symbol name when the linkage
@@ -660,35 +668,44 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 
             gvmem.initializer = lc.Constant.undef(laryty)
 
-        other_supported_type = isinstance(dtype, (types.Record, types.Boolean))
-        if dtype not in types.number_domain and not other_supported_type:
-            raise TypeError("unsupported type: %s" % dtype)
-
         # Convert to generic address-space
         conv = nvvmutils.insert_addrspace_conv(lmod, Type.int(8), addrspace)
         addrspaceptr = gvmem.bitcast(Type.pointer(Type.int(8), addrspace))
         dataptr = builder.call(conv, [addrspaceptr])
 
-    return _make_array(context, builder, dataptr, dtype, shape)
-
-
-def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
-    ndim = len(shape)
-    # Create array object
-    aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
-    ary = context.make_array(aryty)(context, builder)
-
     targetdata = _get_target_data(context)
     lldtype = context.get_data_type(dtype)
     itemsize = lldtype.get_abi_size(targetdata)
+
     # Compute strides
     rstrides = [itemsize]
     for i, lastsize in enumerate(reversed(shape[1:])):
         rstrides.append(lastsize * rstrides[-1])
     strides = [s for s in reversed(rstrides)]
-
-    kshape = [context.get_constant(types.intp, s) for s in shape]
     kstrides = [context.get_constant(types.intp, s) for s in strides]
+
+    # Compute shape
+    if dynamic_smem:
+        # Compute the shape based on the dynamic shared memory configuration.
+        # Unfortunately NVVM does not provide an intrinsic for the
+        # %dynamic_smem_size register, so we must read it using inline
+        # assembly.
+        get_dynshared_size = InlineAsm.get(Type.function(Type.int(), []),
+                                           "mov.u32 $0, %dynamic_smem_size;",
+                                           '=r', side_effect=True)
+        dynsmem_size = builder.zext(builder.call(get_dynshared_size, []),
+                                    Type.int(width=64))
+        # Only 1-D dynamic shared memory is supported so the following is a
+        # sufficient construction of the shape
+        kitemsize = context.get_constant(types.intp, itemsize)
+        kshape = [builder.udiv(dynsmem_size, kitemsize)]
+    else:
+        kshape = [context.get_constant(types.intp, s) for s in shape]
+
+    # Create array object
+    ndim = len(shape)
+    aryty = types.Array(dtype=dtype, ndim=ndim, layout='C')
+    ary = context.make_array(aryty)(context, builder)
 
     context.populate_array(ary,
                            data=builder.bitcast(dataptr, ary.data.type),
