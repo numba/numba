@@ -145,18 +145,12 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
     def test_devicearray_view_ok(self):
         original = np.array(np.arange(12), dtype="i2").reshape(3, 4)
         array = cuda.to_device(original)
-        self.assertTrue(np.all(
-            array.view("i4").copy_to_host() == original.view("i4")
-        ))
-        self.assertTrue(np.all(
-            array.view("u4").copy_to_host() == original.view("i4")
-        ))
-        self.assertTrue(np.all(
-            array.view("i8").copy_to_host() == original.view("i8")
-        ))
-        self.assertTrue(np.all(
-            array.view("f8").copy_to_host() == original.view("f8")
-        ))
+        for dtype in ("i4", "u4", "i8", "f8"):
+            with self.subTest(dtype=dtype):
+                np.testing.assert_array_equal(
+                    array.view(dtype).copy_to_host(),
+                    original.view(dtype)
+                )
 
     def test_devicearray_view_ok_not_c_contig(self):
         original = np.array(np.arange(32), dtype="i2").reshape(4, 8)
