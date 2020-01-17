@@ -119,8 +119,7 @@ def unbox_index(typ, obj, c):
 def func1(x=None):
     raise NotImplementedError
 
-@type_callable(func1)
-def type_func1(context):
+def type_func1_(context):
     def typer(x=None):
         if x in (None, types.none):
             # 0-arg or 1-arg with None
@@ -130,6 +129,10 @@ def type_func1(context):
             return x
 
     return typer
+
+
+type_func1 = type_callable(func1)(type_func1_)
+
 
 @lower_builtin(func1)
 @lower_builtin(func1, types.none)
@@ -448,6 +451,10 @@ class TestLowLevelExtending(TestCase):
         pyfunc = call_func1_unary
         cr = compile_isolated(pyfunc, (types.float64,))
         self.assertPreciseEqual(cr.entry_point(18.0), 6.0)
+
+    def test_type_callable_keeps_function(self):
+        self.assertIs(type_func1, type_func1_)
+        self.assertIsNotNone(type_func1)
 
     def test_cast_mydummy(self):
         pyfunc = get_dummy
