@@ -10,6 +10,7 @@ from numba import errors
 from . import config, utils, transforms, six
 from .tracing import event
 from .postproc import PostProcessor
+from .ir_utils import check_for_aliasing
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -312,6 +313,9 @@ class PassManager(object):
                 else:  # CFG level changes rebuild CFG
                     internal_state.func_ir.blocks = transforms.canonicalize_cfg(
                         internal_state.func_ir.blocks)
+            alias_result = check_for_aliasing(internal_state.func_ir.blocks)
+            if len(alias_result) > 0:
+                print(pss.name(), "pass result has aliases in the IR.", alias_result)
 
         # inject runtimes
         pt = pass_timings(init_time.elapsed, pass_time.elapsed,

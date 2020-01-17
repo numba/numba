@@ -2076,6 +2076,98 @@ def resolve_func_from_module(func_ir, node):
     else:
         return None
 
+def alias_check_filter(value):
+    NoneType = type(None)
+
+    # Filter out types you see in the IR that can't alias or that
+    # we can safely ignore.
+    return not isinstance(value, (pytypes.MethodType,
+                                  pytypes.BuiltinFunctionType,
+                                  pytypes.ModuleType,
+                                  int,
+                                  float,
+                                  complex,
+                                  str,
+                                  bool,
+                                  NoneType,
+                                  ir.UndefinedType))
+
+def alias_walk(x):
+    """ Traverse nodes in the IR.  If it is some kind of collection type
+        then we iterate through it.  If it isn't a collection, then we
+        use dir() to get the elements of the class and filter out
+        builtins and properties with the goal of just having member
+        variables.  In all the above cases, we filter out objects we've
+        found that can't alias like int, float, str, bool and ignore
+        other common types that we encounter that are fine to alias.
+    """
+    if isinstance(x, collections.Mapping):
+        for key, value in numba.six.iteritems(x):
+            if alias_check_filter(value):
+                yield "iteritems", value
+    elif isinstance(x, (collections.Sequence, collections.Set)) and not isinstance(x, numba.six.string_types):
+        for index, value in enumerate(x):
+            if alias_check_filter(value):
+                yield "enumerate", value
+    elif isinstance(x, numba.parfor.Parfor):
+        # Special case parfors and only look at these relevant parts.
+        for value in ("loop_nests", "init_block", "loop_body", "loc", "index_var"):
+            the_attr = getattr(x, value)
+            yield value, the_attr
+    else:
+        # Regular objects.  For each attribute of the object...
+        for value in dir(x):
+            # Filter out builtins
+            if not value.startswith('__') and not isinstance(getattr(type(x), value, None), property):
+                the_attr = getattr(x, value)
+                if alias_check_filter(the_attr):
+                    yield value, the_attr
+
+def check_for_aliasing(blocks):
+    """ Scans a set of IR blocks for nodes in the IR that alias one another.
+        This can be a problem if a compiler pass changes one such node and
+        the other one changes when that would be incorrect.
+    """
+    if config.DEBUG >= 1:
+        print("Running check if any IR nodes alias.")
+
+    # Keeps track of unique object IDs and maps them back to their objects.
+    seen = {id(blocks) : blocks}
+    # Stack of objects we have seen but not processed their contents yet.
+    unprocessed = [blocks]
+
+    # Keeps track of how many times objects of a given type were found to alias.
+    alias_summary = collections.Counter()
+
+    # While still objects for which we haven't explored their contents...
+    while len(unprocessed) > 0:
+        # Pop last object from stack.
+        obj = unprocessed.pop()
+        if config.DEBUG >= 1:
+            print("Examining object:", obj, "type:", type(obj), "id:", id(obj))
+        # For each walkable part of the object.
+        for path, child in alias_walk(obj):
+            # Get unique ID for the child.
+            child_id = id(child)
+            if config.DEBUG >= 1:
+                print("child found:", path, child, "type:", type(child),
+                      "id:", child_id, "parent:", obj, type(obj))
+            # If that unique ID is already in set of objects seen then
+            # we have detected an alias.
+            if child_id in seen:
+                if config.DEBUG >= 1:
+                    print("Aliased object detected:", child, type(child), child_id)
+                alias_summary[type(child)] += 1
+            else:
+                # Ignore Loc and Scope which are fine to alias.
+                if not isinstance(child, (ir.Loc, ir.Scope)):
+                    # First time we've seen this object.
+                    seen[child_id] = child
+                    # Add to the stack to be processed later.
+                    unprocessed.append(child)
+    if config.DEBUG >= 1:
+        print("IR node aliasing summary:", alias_summary)
+    return alias_summary
 
 def check_and_legalize_ir(func_ir):
     """
