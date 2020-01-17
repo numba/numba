@@ -12,12 +12,11 @@ to steal works from other threads.
 from __future__ import print_function, absolute_import
 
 import os
-import platform
 import sys
 import warnings
 from threading import RLock as threadRLock
 import multiprocessing
-from ctypes import CFUNCTYPE, c_int
+from ctypes import CFUNCTYPE, c_int, CDLL
 
 import numpy as np
 
@@ -333,6 +332,10 @@ def _launch_threads():
             if _is_initialized:
                 return
 
+            _IS_OSX = sys.platform.startswith('darwin')
+            _IS_LINUX = sys.platform.startswith('linux')
+            _IS_WINDOWS = sys.platform.startswith('win32')
+
             def select_known_backend(backend):
                 """
                 Loads a specific threading layer backend based on string
@@ -340,8 +343,29 @@ def _launch_threads():
                 lib = None
                 if backend.startswith("tbb"):
                     try:
+                        # first check that the TBB version is new enough
+                        if _IS_WINDOWS:
+                            libtbb_name = 'tbb.lib'
+                        elif _IS_OSX:
+                            libtbb_name = 'libtbb.dylib'
+                        elif _IS_LINUX:
+                            libtbb_name = 'libtbb.so.2'
+                        else:
+                            raise ValueError("Unknown operating system")
+                        libtbb = CDLL(libtbb_name)
+                        version_func = libtbb.TBB_runtime_interface_version
+                        version_func.argtypes = []
+                        version_func.restype = c_int
+                        tbb_interface_version = version_func()
+                        if tbb_interface_version < 11005:
+                            msg = ("The TBB threading layer requires a version "
+                                   "of TBB greater than 2019 update 5, i.e. "
+                                   "TBB_INTERFACE_VERSION >= 11005, found "
+                                   "TBB_INTERFACE_VERSION = %s")
+                            raise RuntimeError(msg % tbb_interface_version)
+                        # now try and load the backend
                         from . import tbbpool as lib
-                    except ImportError:
+                    except (ImportError, OSError):
                         pass
                 elif backend.startswith("omp"):
                     # TODO: Check that if MKL is present that it is a version
@@ -374,8 +398,6 @@ def _launch_threads():
             namedbackends = ['tbb', 'omp', 'workqueue']
 
             lib = None
-            _IS_OSX = platform.system() == "Darwin"
-            _IS_LINUX = platform.system() == "Linux"
             err_helpers = dict()
             err_helpers['TBB'] = ("Intel TBB is required, try:\n"
                                   "$ conda/pip install tbb")
