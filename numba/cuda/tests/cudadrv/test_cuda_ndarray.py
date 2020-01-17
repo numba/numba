@@ -163,6 +163,9 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         array = cuda.to_device(original)
         with self.assertRaises(ValueError) as e:
             original.view("i4")
+        self.assertEqual(
+            "new dtype's itemsize must evenly divide the last dimension",
+            str(e.exception))
 
     def test_devicearray_transpose_ok(self):
         original = np.array(np.arange(12)).reshape(3, 4)
