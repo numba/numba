@@ -169,7 +169,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         original = np.array(np.arange(32), dtype="i2").reshape(4, 8)[:, ::2]
         array = cuda.to_device(original)
         with self.assertRaises(ValueError) as e:
-            original.view("i4")
+            array.view("i4")
         self.assertEqual(
             "array must be C-contiguous when changing itemsize",
             str(e.exception))
@@ -178,7 +178,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         original = np.array(np.arange(12), dtype="i2").reshape(4, 3)
         array = cuda.to_device(original)
         with self.assertRaises(ValueError) as e:
-            original.view("i4")
+            array.view("i4")
         self.assertEqual(
             "new dtype's itemsize must evenly divide the last dimension",
             str(e.exception))
