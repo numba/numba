@@ -362,8 +362,8 @@ class DeviceNDArrayBase(object):
 
         shape = list(self.shape)
         shape[-1], rem = divmod(
-            dtype.itemsize,
-            shape[-1] * self.dtype.itemsize
+            shape[-1] * self.dtype.itemsize,
+            dtype.itemsize
         )
         shape = tuple(shape)
 
