@@ -56,7 +56,7 @@ class FunctionType(Type):
                 if isinstance(atype, Literal):
                     atype = atype.literal_type
                 if not (isinstance(atype, Number)
-                        and isinstance(ptype.atypes[i], Number)
+                        and isinstance(atype, type(ptype.atypes[i]))
                         and atype <= ptype.atypes[i]):
                     # TODO: implement support for non-numeric types
                     break

@@ -286,7 +286,9 @@ class TestFunctionType(TestCase):
             r2 = f(123.45)
             return (r1, r2)
 
-        for decor in [njit_func]:
+        sig = int64(int64)
+
+        for decor in [njit_func, mk_cfunc_func(sig)][:1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
