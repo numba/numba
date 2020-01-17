@@ -687,3 +687,15 @@ class TestMiscIssues(TestCase):
 
         self.assertEqual(jit(nopython=True)(foo)(f, f_inner),
                          foo(f._pyfunc, f_inner._pyfunc))
+
+    def test_function_with_none_argument(self):
+
+        @cfunc(int64(types.none))
+        def a(i):
+            return 1
+
+        @jit(nopython=True)
+        def foo(f):
+            return f(None)
+
+        self.assertEqual(foo(a), 1)

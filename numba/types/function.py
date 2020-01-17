@@ -75,12 +75,8 @@ class FunctionPrototype(Type):
     cconv = None
 
     def __init__(self, rtype, atypes):
-        from numba.types import void
         self.rtype = rtype
-        atypes = tuple(atypes)
-        if len(atypes) == 1 and atypes[0] == void:
-            atypes = ()
-        self.atypes = atypes
+        self.atypes = tuple(atypes)
 
         assert isinstance(rtype, Type), (rtype)
         lst = []
