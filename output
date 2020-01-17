@@ -1,0 +1,28 @@
+; ModuleID = '/tmp/tmpbu_j0jel/0-llvm-friendly-spir'
+source_filename = "<string>"
+target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v24:32:32-v32:32:32-v48:64:64-v64:64:64-v96:128:128-v128:128:128-v192:256:256-v256:256:256-v512:512:512-v1024:1024:1024"
+target triple = "spir64-unknown-unknown"
+
+; Function Attrs: norecurse nounwind readnone
+define spir_kernel void @dppyPy_dppy_py_devfn__5F__5F_main_5F__5F__2E_test_5F_device_5F_buff_5F_for_5F_ctypes_24_2_2E_int32(i32 %.1) local_unnamed_addr #0 {
+.3:
+  ret void
+}
+
+attributes #0 = { norecurse nounwind readnone }
+
+!opencl.kernels = !{!0}
+!dppy.spir.version = !{!6}
+!dppy.ocl.version = !{!6}
+!opencl.used.extensions = !{!7}
+!opencl.used.optional.core.features = !{!7}
+!opencl.compiler.options = !{!7}
+
+!0 = !{void (i32)* @dppyPy_dppy_py_devfn__5F__5F_main_5F__5F__2E_test_5F_device_5F_buff_5F_for_5F_ctypes_24_2_2E_int32, !1, !2, !3, !4, !5}
+!1 = !{!"kernel_arg_addr_space", i32 0}
+!2 = !{!"kernel_arg_access_qual", !"none"}
+!3 = !{!"kernel_arg_type", !"i32"}
+!4 = !{!"kernel_arg_type_qual", !""}
+!5 = !{!"kernel_arg_base_type", !"i32"}
+!6 = !{i32 2, i32 0}
+!7 = !{}

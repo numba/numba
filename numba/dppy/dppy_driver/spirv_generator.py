@@ -8,56 +8,13 @@ import tempfile
 
 from numba import config
 
-BAD_spirv_tools_home_PATH_ERRMSG = """
-SPIRV_TOOLS_HOME is set to '{0}' which is not a valid path. Set this to the
-location where you installed SPIRV-Tools.
-"""
-
-BAD_LLVM_HOME_PATH_ERRMSG = """
-LLVM_HOME is set to '{0}' which is not a valid path. Set this to the
-location where the LLVM toolchain is installed.
-"""
-
-spirv_tools_home = os.environ.get('SPIRV_TOOLS_HOME', None)
-llvm_home = os.environ.get('LLVM_HOME', None)
-
-
 def _raise_bad_env_path(msg, path, extra=None):
     error_message = msg.format(path)
     if extra is not None:
         error_message += extra
     raise ValueError(error_message)
 
-
-if spirv_tools_home is None:
-    raise ValueError("FATAL: Correctly set the SPIRV_TOOLS_HOME environment "
-                     "variable.")
-
-if spirv_tools_home is not None:
-    try:
-        os.path.abspath(spirv_tools_home)
-    except ValueError:
-        _raise_bad_env_path(BAD_spirv_tools_home_PATH_ERRMSG, spirv_tools_home)
-
-    if not os.path.isfile(spirv_tools_home + "/bin/spirv-val"):
-        _raise_bad_env_path(BAD_spirv_tools_home_PATH_ERRMSG,
-                            spirv_tools_home + "/bin/spirv-val")
-
-if llvm_home is None:
-    raise ValueError("FATAL: Correctly set the LLVM_HOME environment variable.")
-
-if llvm_home is not None:
-    try:
-        os.path.abspath(llvm_home)
-    except ValueError:
-        _raise_bad_env_path(BAD_LLVM_HOME_PATH_ERRMSG, llvm_home)
-
-    if not os.path.isfile(llvm_home + "/bin/opt"):
-        _raise_bad_env_path(BAD_LLVM_HOME_PATH_ERRMSG,
-                            llvm_home + "/bin/opt")
-
 _real_check_call = check_call
-
 
 def check_call(*args, **kwargs):
     return _real_check_call(*args, **kwargs)
@@ -66,7 +23,7 @@ class CmdLine(object):
 
     def disassemble(self, ipath, opath):
         check_call([
-            spirv_tools_home + "/bin/spirv-dis",
+            "spirv-dis",
             # "--no-indent",
             # "--no-header",
             # "--raw-id",
@@ -76,11 +33,11 @@ class CmdLine(object):
             ipath])
 
     def validate(self, ipath):
-        check_call([spirv_tools_home + "/bin/spirv-val",ipath])
+        check_call(["spirv-val",ipath])
 
     def optimize(self, ipath, opath):
         check_call([
-            spirv_tools_home + "/bin/spirv-opt",
+            "spirv-opt",
             # "--strip-debug",
             # "--freeze-spec-const",
             # "--eliminate-dead-const",
@@ -99,8 +56,8 @@ class CmdLine(object):
         # The opt step is needed for:
         #     a) generate a bitcode file from the text IR file
         #     b) hoist all allocas to the enty block of the module
-        check_call([llvm_home+"/bin/opt","-O3","-o",ipath+'.bc',ipath])
-        check_call([llvm_home + "/bin/llvm-spirv","-o",opath,ipath+'.bc'])
+        check_call(["opt","-O3","-o",ipath+'.bc',ipath])
+        check_call(["llvm-spirv","-o",opath,ipath+'.bc'])
         os.unlink(ipath + '.bc')
 
 
