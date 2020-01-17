@@ -120,6 +120,7 @@ The following Python libraries have adopted the CUDA Array Interface:
 - The **RAPIDS** stack:
     - **cuDF**: (`link <https://rapidsai.github.io/projects/cudf/en/0.11.0/10min-cudf-cupy.html>`_)
     - **cuML**: (`link <https://docs.rapids.ai/api/cuml/nightly/>`_)
+    - **cuSignal**: (`link <https://github.com/rapidsai/cusignal>`_)
     - **RMM**: (`link <https://docs.rapids.ai/api/rmm/stable/>`_)
 
 If your project is not on this list, please feel free to report to `Numba's issue tracker <https://github.com/numba/numba/issues>`_.
