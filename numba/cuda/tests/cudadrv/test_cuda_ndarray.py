@@ -158,7 +158,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
             array.view("f8").copy_to_host() == original.view("f8")
         ))
 
-    def test_devicearray_view_err(self):
+    def test_devicearray_view_bad_itemsize(self):
         original = np.array(np.arange(12), dtype="i2").reshape(4, 3)
         array = cuda.to_device(original)
         with self.assertRaises(ValueError) as e:
