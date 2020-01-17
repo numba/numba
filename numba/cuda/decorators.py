@@ -23,11 +23,11 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     function to compile.
 
     :param func_or_sig: A function to JIT compile, or a signature of a function
-       to compile. If a function is supplied, then an
+       to compile. If a function is supplied, then a
        :class:`numba.cuda.compiler.AutoJitCUDAKernel` is returned. If a
-       signature is supplied, then a function which takes a function to compile
-       and returns an :class:`numba.cuda.compiler.AutoJitCUDAKernel` is
-       returned.
+       signature is supplied, then a function is returned. The returned
+       function accepts another function, which it will compile and then return
+       a :class:`numba.cuda.compiler.AutoJitCUDAKernel`.
 
        .. note:: A kernel cannot have any return value.
     :param device: Indicates whether this is a device function.
