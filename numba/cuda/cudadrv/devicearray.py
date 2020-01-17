@@ -355,7 +355,7 @@ class DeviceNDArrayBase(object):
         """
         dtype = np.dtype(dtype)
 
-        shape = list(shape)
+        shape = list(self.shape)
         shape[-1], rem = divmod(
             dtype.itemsize,
             shape[-1] * self.dtype.itemsize
