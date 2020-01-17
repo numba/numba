@@ -7,8 +7,8 @@ from numba.compiler import run_frontend
 
 class TestByteFlowIssues(TestCase):
     def test_issue_5087(self):
-        # This is an odd issue. The number of exact number of print below is
-        # necessary to trigger it. Too many or few will alter the behavior.
+        # This is an odd issue. The exact number of print below is
+        # necessary to trigger it. Too many or too few will alter the behavior.
         # Also note that the function below will not be executed. The problem
         # occurs at compilation. The definition below is invalid for execution.
         # The problem occurs in the bytecode analysis.
