@@ -315,7 +315,9 @@ class PassManager(object):
                         internal_state.func_ir.blocks)
             alias_result = check_for_aliasing(internal_state.func_ir.blocks)
             if len(alias_result) > 0:
-                print(pss.name(), "pass result has aliases in the IR.", alias_result)
+                fid = internal_state.func_id
+                args = (pss.name(), alias_result, fid.modname, fid.func_qualname, self.pipeline_name)
+                print("%s has aliases in IR. %s %s.%s: %s" % args)
 
         # inject runtimes
         pt = pass_timings(init_time.elapsed, pass_time.elapsed,
