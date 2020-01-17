@@ -1031,6 +1031,7 @@ class TraceRunner(object):
         self.op_CALL_FUNCTION(state, inst)
 
 
+@total_ordering
 class State(object):
     """State of the trace
     """
@@ -1076,6 +1077,9 @@ class State(object):
 
     def __hash__(self):
         return hash(self.get_identity())
+
+    def __lt__(self, other):
+        return self.get_identity() < other.get_identity()
 
     def __eq__(self, other):
         return self.get_identity() == other.get_identity()
