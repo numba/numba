@@ -356,13 +356,16 @@ def _launch_threads():
                         version_func = libtbb.TBB_runtime_interface_version
                         version_func.argtypes = []
                         version_func.restype = c_int
-                        tbb_interface_version = version_func()
-                        if tbb_interface_version < 11005:
-                            msg = ("The TBB threading layer requires a version "
-                                   "of TBB greater than 2019 update 5, i.e. "
-                                   "TBB_INTERFACE_VERSION >= 11005, found "
-                                   "TBB_INTERFACE_VERSION = %s")
-                            raise RuntimeError(msg % tbb_interface_version)
+                        tbb_iface_ver = version_func()
+                        if tbb_iface_ver < 11005: # magic number from TBB
+                            msg = ("The TBB threading layer requires TBB "
+                                   "version 2019 update 5 or later i.e. "
+                                   "TBB_INTERFACE_VERSION >= 11005. Found "
+                                   "TBB_INTERFACE_VERSION = %s. The TBB "
+                                   "threading layer is disabled.")
+                            problem = errors.NumbaWarning(msg % tbb_iface_ver)
+                            warnings.warn(problem)
+                            raise ImportError # to trigger except + skip
                         # now try and load the backend
                         from . import tbbpool as lib
                     except (ImportError, OSError):
