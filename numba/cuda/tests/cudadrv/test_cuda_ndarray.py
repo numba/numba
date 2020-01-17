@@ -158,6 +158,15 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
             array.view("f8").copy_to_host() == original.view("f8")
         ))
 
+    def test_devicearray_view_bad_not_c_contig(self):
+        original = np.array(np.arange(32), dtype="i2").reshape(4, 8)[:, ::2]
+        array = cuda.to_device(original)
+        with self.assertRaises(ValueError) as e:
+            original.view("i4")
+        self.assertEqual(
+            "array must be C-contiguous when changing itemsize",
+            str(e.exception))
+
     def test_devicearray_view_bad_itemsize(self):
         original = np.array(np.arange(12), dtype="i2").reshape(4, 3)
         array = cuda.to_device(original)
