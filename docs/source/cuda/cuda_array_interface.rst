@@ -104,3 +104,22 @@ Differences with CUDA Array Interface (Version 1)
 Versions 0 and 1 of the CUDA Array Interface neither clarified the
 **strides** attribute for C-contiguous arrays nor specified the treatment for
 zero-size arrays.
+
+
+Interoperability
+----------------
+
+The following Python libraries have adopted the CUDA Array Interface:
+
+- **Numba**
+- **CuPy** (`link <https://docs-cupy.chainer.org/en/stable/reference/interoperability.html>`_)
+- **PyTorch**: (`link <https://pytorch.org>`_)
+- **PyArrow**: (`link <https://arrow.apache.org/docs/python/generated/pyarrow.cuda.Context.html#pyarrow.cuda.Context.buffer_from_object>`_)
+- **mpi4py**: (`link <https://mpi4py.readthedocs.io/en/latest/overview.html#support-for-cuda-aware-mpi>`_)
+- **ArrayViews**: (`link <https://github.com/xnd-project/arrayviews>`_)
+- The **RAPIDS** stack:
+    - **cuDF**: (`link <https://rapidsai.github.io/projects/cudf/en/0.11.0/10min-cudf-cupy.html>`_)
+    - **cuML**: (`link <https://docs.rapids.ai/api/cuml/nightly/>`_)
+    - **RMM**: (`link <https://docs.rapids.ai/api/rmm/stable/>`_)
+
+If your project is not on this list, please feel free to report to `Numba's issue tracker <https://github.com/numba/numba/issues>`_.
