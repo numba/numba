@@ -47,19 +47,19 @@ class FunctionType(Type):
         ptype = self.ftype
         if len(args) == len(ptype.atypes):
             for i, atype in enumerate(args):
-                if isinstance(atype, Array):
-                    if not isinstance(ptype.atypes[i], Array):
-                        break
-                    if not (atype.dtype <= ptype.atypes[i].dtype):
-                        break
-                    continue
                 if isinstance(atype, Literal):
                     atype = atype.literal_type
-                if not (isinstance(atype, Number)
-                        and isinstance(atype, type(ptype.atypes[i]))
-                        and atype <= ptype.atypes[i]):
-                    # TODO: implement support for non-numeric types
-                    break
+                if isinstance(atype, type(ptype.atypes[i])):
+                    continue
+                elif isinstance(atype, Array):
+                    if (
+                            isinstance(ptype.atypes[i], Array)
+                            and atype.dtype <= ptype.atypes[i].dtype):
+                        continue
+                elif isinstance(atype, Number):
+                    if atype <= ptype.atypes[i]:
+                        continue
+                break
             else:
                 return typing.signature(ptype.rtype, *ptype.atypes)
             # TODO: implement overload support

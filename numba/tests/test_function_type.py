@@ -111,23 +111,34 @@ class TestFunctionType(TestCase):
 
     def test_in_call(self):
         """Function is passed in as an argument and called.
+        Also test different return values.
         """
 
-        def a(i):
+        def a_i64(i):
             return i + 1
+
+        def a_f64(i):
+            return i + 1.5
+
+        def a_str(i):
+            return "abc"
 
         def foo(f):
             return f(123)
 
-        sig = int64(int64)
-
-        for decor in [mk_cfunc_func(sig), njit_func,
-                      mk_njit_with_sig_func(sig), mk_wap_func(sig)]:
-            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
-                jit_ = jit(**jit_opts)
-                with self.subTest(decor=decor.__name__, jit=jit_opts):
-                    a_ = decor(a)
-                    self.assertEqual(jit_(foo)(a_), foo(a))
+        for f, sig in [
+                (a_i64, int64(int64)), (a_f64, float64(int64)),
+                # fails due to limited unicode support:
+                # (a_str, types.unicode_type(int64)),
+        ]:
+            for decor in [mk_cfunc_func(sig), njit_func,
+                          mk_njit_with_sig_func(sig), mk_wap_func(sig)]:
+                for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+                    jit_ = jit(**jit_opts)
+                    with self.subTest(
+                            sig=sig, decor=decor.__name__, jit=jit_opts):
+                        f_ = decor(f)
+                        self.assertEqual(jit_(foo)(f_), foo(f))
 
     def test_in_call_out(self):
         """Function is passed in as an argument, called, and returned.
@@ -660,3 +671,19 @@ class TestMiscIssues(TestCase):
 
         r = composition((b, a, b, b, a), 0.5)
         self.assertEqual(r, ((0.5 + 1.0) ** 4 + 1.0) ** 2)
+
+    def test_apply_function_in_function(self):
+
+        def foo(f, f_inner):
+            return f(f_inner)
+
+        @cfunc('int64(float64)')
+        def f_inner(i):
+            return int64(i * 3)
+
+        @cfunc(int64(f_inner._sig.as_type()))
+        def f(f_inner):
+            return f_inner(123.4)
+
+        self.assertEqual(jit(nopython=True)(foo)(f, f_inner),
+                         foo(f._pyfunc, f_inner._pyfunc))
