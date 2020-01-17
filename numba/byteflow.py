@@ -202,11 +202,11 @@ class Flow(object):
                     for rhs, state in sorted(list(defsites)):
                         if rhs in phi_set:
                             defsites |= phismap[rhs]
-                            blacklist[id(defsites)].add((rhs, state))
-                        to_remove = blacklist[id(defsites)]
-                        if to_remove & defsites:
-                            defsites -= to_remove
-                            changing = True
+                            blacklist[phi].add((rhs, state))
+                    to_remove = blacklist[phi]
+                    if to_remove & defsites:
+                        defsites -= to_remove
+                        changing = True
 
                 _logger.debug("changing phismap: %s", _lazy_pformat(phismap))
                 if not changing:
