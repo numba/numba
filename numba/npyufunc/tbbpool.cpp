@@ -19,17 +19,19 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 
 #include "gufunc_scheduler.h"
 
-#if TBB_INTERFACE_VERSION >= 9106
+/* TBB 2019 U5 is the minimum required version as this is needed:
+ * https://github.com/intel/tbb/blob/18070344d755ece04d169e6cc40775cae9288cee/CHANGES#L133-L134
+ * and therefore
+ * https://github.com/intel/tbb/blob/18070344d755ece04d169e6cc40775cae9288cee/CHANGES#L128-L129
+ * from here:
+ * https://github.com/intel/tbb/blob/2019_U5/include/tbb/tbb_stddef.h#L29
+ */
+#if TBB_INTERFACE_VERSION < 11006
+#error "TBB version is too old, 2019 update 5, i.e. TBB_INTERFACE_VERSION >= 11005 required"
+#endif
+
 #define TSI_INIT(count) tbb::task_scheduler_init(count)
 #define TSI_TERMINATE(tsi) tsi->blocking_terminate(std::nothrow)
-#else
-#if __TBB_SUPPORTS_WORKERS_WAITING_IN_TERMINATE
-#define TSI_INIT(count) tbb::task_scheduler_init(count, 0, /*blocking termination*/true)
-#define TSI_TERMINATE(tsi) tsi->terminate()
-#else
-#error This version of TBB does not support blocking terminate
-#endif
-#endif
 
 #define _DEBUG 0
 #define _TRACE_SPLIT 0
