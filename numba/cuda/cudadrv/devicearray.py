@@ -372,9 +372,13 @@ class DeviceNDArrayBase(object):
                 "new dtype's itemsize must evenly divide the last dimension"
             )
 
+        strides = list(self.strides)
+        strides[-1] = dtype.itemsize
+        strides = tuple(strides)
+
         return DeviceNDArray(
             shape=shape,
-            strides=self.strides,
+            strides=strides,
             dtype=dtype,
             stream=self.stream,
             gpu_data=self.gpu_data,
