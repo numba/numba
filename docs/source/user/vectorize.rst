@@ -230,11 +230,11 @@ visible changes to the input::
        [4.2, 4.2, 4.2],
        [4.2, 4.2, 4.2]])
 
-This works because Numpy passes a pointer to the input data directly into the
-`init_values` function. However, it may also create and pass in a temporary
-array, in which case changes to the input are lost. For example, this can occur
-when casting is required. To demonstrate, we can  use an array of `float32`
-with the `init_values` function::
+This works because Numpy can pass the input data directly into the `init_values`
+function as the data `dtype` matches that of the declared argument.  However, it
+may also create and pass in a temporary array, in which case changes to the
+input are lost. For example, this can occur when casting is required. To
+demonstrate, we can  use an array of `float32` with the `init_values` function::
 
    >>> invals = np.zeros(shape=(3, 3), dtype=np.float32)
    >>> outvals = init_values(invals)
