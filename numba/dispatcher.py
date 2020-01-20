@@ -64,7 +64,7 @@ class _FunctionCompiler(object):
         def default_handler(index, param, default):
             return types.Omitted(default)
         def stararg_handler(index, param, values):
-            return types.Tuple(values)
+            return types.StarArgTuple(values)
         # For now, we take argument values from the @jit function, even
         # in the case of generated jit.
         args = fold_arguments(self.pysig, args, kws,
@@ -224,7 +224,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
 
         self.doc = py_func.__doc__
         self._compiling_counter = _CompilingCounter()
-        utils.finalize(self, self._make_finalizer())
+        weakref.finalize(self, self._make_finalizer())
 
     def _reset_overloads(self):
         self._clear()

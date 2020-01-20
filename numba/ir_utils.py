@@ -301,6 +301,7 @@ def replace_var_names(blocks, namedict):
 def replace_var_callback(var, vardict):
     assert isinstance(var, ir.Var)
     while var.name in vardict.keys():
+        assert(vardict[var.name].name != var.name)
         new_var = vardict[var.name]
         var = ir.Var(new_var.scope, new_var.name, new_var.loc)
     return var
@@ -534,7 +535,10 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
                                                         func_ir)
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("alias map:", alias_map)
+        print("remove_dead alias map:", alias_map)
+        print("live_map:", live_map)
+        print("usemap:", usedefs.usemap)
+        print("defmap:", usedefs.defmap)
     # keep set for easier search
     alias_set = set(alias_map.keys())
 
@@ -542,8 +546,12 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
     for label, block in blocks.items():
         # find live variables at each statement to delete dead assignment
         lives = {v.name for v in block.terminator.list_vars()}
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("remove_dead processing block", label, lives)
         # find live variables at the end of block
         for out_blk, _data in cfg.successors(label):
+            if config.DEBUG_ARRAY_OPT >= 2:
+                print("succ live_map", out_blk, live_map[out_blk])
             lives |= live_map[out_blk]
         removed |= remove_dead_block(block, lives, call_table, arg_aliases,
                                      alias_map, alias_set, func_ir, typemap)
@@ -570,6 +578,8 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
     new_body = [block.terminator]
     # for each statement in reverse order, excluding terminator
     for stmt in reversed(block.body[:-1]):
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("remove_dead_block", stmt)
         # aliases of lives are also live
         alias_lives = set()
         init_alias_lives = lives & alias_set
@@ -580,7 +590,7 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
         # let external calls handle stmt if type matches
         if type(stmt) in remove_dead_extensions:
             f = remove_dead_extensions[type(stmt)]
-            stmt = f(stmt, lives_n_aliases, arg_aliases, alias_map, func_ir,
+            stmt = f(stmt, lives, lives_n_aliases, arg_aliases, alias_map, func_ir,
                      typemap)
             if stmt is None:
                 removed = True
@@ -648,7 +658,9 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == ['stencil', numba] or
             call_list == ['log', numpy] or
             call_list == ['dtype', numpy] or
-            call_list == [numba.array_analysis.wrap_index]):
+            call_list == [numba.array_analysis.wrap_index] or
+            call_list == [numba.special.prange] or
+            call_list == [numba.parfor.internal_prange]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
@@ -911,7 +923,11 @@ def get_block_copies(blocks, typemap):
                     rhs = stmt.value.name
                     # copy is valid only if same type (see
                     # TestCFunc.test_locals)
-                    if typemap[lhs] == typemap[rhs]:
+                    # Some transformations can produce assignments of the
+                    # form A = A.  We don't put these mapping in the
+                    # copy propagation set because then you get cycles and
+                    # infinite loops in the replacement phase.
+                    if typemap[lhs] == typemap[rhs] and lhs != rhs:
                         assign_dict[lhs] = rhs
                         continue
                 if isinstance(stmt.value,
@@ -1394,6 +1410,8 @@ def simplify(func_ir, typemap, calltypes):
         calltypes)
     restore_copy_var_names(func_ir.blocks, save_copies, typemap)
     # remove dead code to enable fusion
+    if config.DEBUG_ARRAY_OPT >= 1:
+        dprint_func_ir(func_ir, "after copy prop")
     remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap)
     func_ir.blocks = simplify_CFG(func_ir.blocks)
     if config.DEBUG_ARRAY_OPT >= 1:
@@ -1936,7 +1954,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                             (use, expr)
                     raise UnsupportedError(msg, stmt.value.loc)
 
-            # this checks for gdb initilization calls, only one is permitted
+            # this checks for gdb initialization calls, only one is permitted
             if isinstance(stmt.value, (ir.Global, ir.FreeVar)):
                 val = stmt.value
                 val = getattr(val, 'value', None)
@@ -1980,7 +1998,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                        "compile-time constants and there is no known way to "
                        "compile a %s type as a constant.")
                 if (getattr(ty, 'reflected', False) or
-                    isinstance(ty, types.DictType)):
+                    isinstance(ty, (types.DictType, types.ListType))):
                     raise TypingError(msg % (ty, stmt.value.name, ty), loc=stmt.loc)
 
             # checks for generator expressions (yield in use when func_ir has

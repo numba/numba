@@ -64,6 +64,11 @@ def update_usecase(a, b, c):
     s.update(c)
     return list(s)
 
+def bool_usecase(arg):
+    # Remove one element to allow for empty sets.
+    s = set(arg[1:])
+    return bool(s)
+
 def remove_usecase(a, b):
     s = set(a)
     for v in b:
@@ -413,6 +418,15 @@ class TestSets(BaseTest):
         b = self.duplicates_array(50)
         c = self.sparse_array(50)
         check(a, b, c)
+    
+    def test_bool(self):
+        pyfunc = bool_usecase
+        check = self.unordered_checker(pyfunc)
+
+        check([1])
+        check([1, 2])
+        check([False, False])
+        check([True, False])
 
     def test_remove(self):
         pyfunc = remove_usecase

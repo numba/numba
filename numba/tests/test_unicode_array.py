@@ -43,6 +43,10 @@ def return_len(x, i):
     return len(x[i])
 
 
+def return_bool(x, i):
+    return bool(x[i])
+
+
 def equal_getitem(x, i, j):
     return x[i] == x[j]
 
@@ -454,6 +458,18 @@ class TestUnicodeArray(TestCase):
         self._test(pyfunc, cfunc, np.array(['12', '3']), 0)
         self._test(pyfunc, cfunc, np.array([b'12', b'3']), 1)
         self._test(pyfunc, cfunc, np.array(['12', '3']), 1)
+
+    def test_return_bool(self):
+        pyfunc = return_bool
+        cfunc = jit(nopython=True)(pyfunc)
+        self._test(pyfunc, cfunc, np.array(''), ())
+        self._test(pyfunc, cfunc, np.array(b''), ())
+        self._test(pyfunc, cfunc, np.array(b'12'), ())
+        self._test(pyfunc, cfunc, np.array('12'), ())
+        self._test(pyfunc, cfunc, np.array([b'12', b'']), 0)
+        self._test(pyfunc, cfunc, np.array(['12', '']), 0)
+        self._test(pyfunc, cfunc, np.array([b'12', b'']), 1)
+        self._test(pyfunc, cfunc, np.array(['12', '']), 1)
 
     def _test_op_getitem(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)

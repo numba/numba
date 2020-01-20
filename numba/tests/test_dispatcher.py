@@ -400,7 +400,7 @@ class TestDispatcher(BaseTest):
 
         self.assertIs(foo, foo_rebuilt)
 
-        # do we get the same object even if we delete all the explict
+        # do we get the same object even if we delete all the explicit
         # references?
         id_orig = id(foo_rebuilt)
         del foo

@@ -633,3 +633,14 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         FakeArrayType = types.NamedUniTuple(types.int64, 1, FakeArray)
         self.assert_prune(impl, (FakeArrayType,), [None], fa,
                           flags=enable_pyobj_flags)
+
+    def test_semantic_const_propagates_before_static_rewrites(self):
+        # see issue #5015, the ndim needs writing in as a const before
+        # the rewrite passes run to make e.g. getitems static where possible
+        @njit
+        def impl(a, b):
+            return a.shape[:b.ndim]
+
+        args = (np.zeros((5, 4, 3, 2)), np.zeros((1, 1)))
+
+        self.assertPreciseEqual(impl(*args), impl.py_func(*args))

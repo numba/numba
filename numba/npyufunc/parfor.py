@@ -296,6 +296,8 @@ def _lower_parfor_parallel(lowerer, parfor):
             name = parfor_redvars[i]
             redarr = redarrs[name]
             redvar_typ = lowerer.fndesc.typemap[name]
+            if config.DEBUG_ARRAY_OPT:
+                print("post-gufunc reduction:", name, redarr, redvar_typ)
 
             if config.DEBUG_ARRAY_OPT_RUNTIME:
                 res_print_str = "res_print"
@@ -337,7 +339,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                 lowerer.lower_inst(init_assign)
 
                 if config.DEBUG_ARRAY_OPT_RUNTIME:
-                    res_print_str = "one_res_print"
+                    res_print_str = "res_print1 for thread " + str(j) + ":"
                     strconsttyp = types.StringLiteral(res_print_str)
                     lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
                     assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
@@ -345,14 +347,15 @@ def _lower_parfor_parallel(lowerer, parfor):
                     typemap[lhs.name] = strconsttyp
                     lowerer.lower_inst(assign_lhs)
 
-                    res_print = ir.Print(args=[lhs, index_var, oneelem, init_var],
+                    res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
                                          vararg=None, loc=loc)
                     lowerer.fndesc.calltypes[res_print] = signature(types.none,
                                                              typemap[lhs.name],
                                                              typemap[index_var.name],
                                                              typemap[oneelem.name],
-                                                             typemap[init_var.name])
-                    print("res_print", res_print)
+                                                             typemap[init_var.name],
+                                                             typemap[name])
+                    print("res_print1", res_print)
                     lowerer.lower_inst(res_print)
 
                 # generate code for combining reduction variable with thread output
@@ -368,7 +371,8 @@ def _lower_parfor_parallel(lowerer, parfor):
                         rhs = inst.value
                         # We probably need to generalize this since it only does substitutions in
                         # inplace_binops.
-                        if isinstance(rhs, ir.Expr) and rhs.op == 'inplace_binop' and rhs.rhs.name == init_var.name:
+                        if (isinstance(rhs, ir.Expr) and rhs.op == 'inplace_binop' and
+                            rhs.rhs.name == init_var.name):
                             if config.DEBUG_ARRAY_OPT:
                                 print("Adding call to reduction", rhs)
                             if rhs.fn == operator.isub:
@@ -391,6 +395,29 @@ def _lower_parfor_parallel(lowerer, parfor):
                             # Add calltype back in for the expr with updated signature.
                             lowerer.fndesc.calltypes[rhs] = ct
                     lowerer.lower_inst(inst)
+                    if isinstance(inst, ir.Assign) and name == inst.target.name:
+                        break
+
+                    if config.DEBUG_ARRAY_OPT_RUNTIME:
+                        res_print_str = "res_print2 for thread " + str(j) + ":"
+                        strconsttyp = types.StringLiteral(res_print_str)
+                        lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
+                        assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
+                                               target=lhs, loc=loc)
+                        typemap[lhs.name] = strconsttyp
+                        lowerer.lower_inst(assign_lhs)
+
+                        res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
+                                             vararg=None, loc=loc)
+                        lowerer.fndesc.calltypes[res_print] = signature(types.none,
+                                                                 typemap[lhs.name],
+                                                                 typemap[index_var.name],
+                                                                 typemap[oneelem.name],
+                                                                 typemap[init_var.name],
+                                                                 typemap[name])
+                        print("res_print2", res_print)
+                        lowerer.lower_inst(res_print)
+
 
         # Cleanup reduction variable
         for v in redarrs.values():

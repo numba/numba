@@ -488,7 +488,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         """
         https://github.com/numba/numba/issues/2179
 
-        Looplifting transformation is using the wrong verion of variable `h`.
+        Looplifting transformation is using the wrong version of variable `h`.
         """
         from numba import jit
 

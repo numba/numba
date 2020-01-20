@@ -431,7 +431,7 @@ class CodeLibraryCacheImpl(_CacheImpl):
     Implements the logic to cache CodeLibrary objects.
     """
 
-    _filename_prefix = None  # must be overriden
+    _filename_prefix = None  # must be overridden
 
     def reduce(self, codelib):
         """
@@ -606,7 +606,7 @@ class Cache(_Cache):
     by a subclass of ``_CacheImpl`` specified as *_impl_class* in the subclass.
     """
 
-    # The following class variables must be overriden by subclass.
+    # The following class variables must be overridden by subclass.
     _impl_class = None
 
     def __init__(self, py_func):

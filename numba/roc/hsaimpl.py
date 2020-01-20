@@ -232,7 +232,7 @@ def hsail_atomic_add_tuple(context, builder, sig, args):
                         (aryty.ndim, len(indty)))
 
     lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
+    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
 
     return builder.atomic_rmw("add", ptr, val, ordering='monotonic')
 

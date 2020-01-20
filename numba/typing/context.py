@@ -148,7 +148,7 @@ class BaseContext(object):
 
     def init(self):
         """
-        Initialize the typing context.  Can be overriden by subclasses.
+        Initialize the typing context.  Can be overridden by subclasses.
         """
 
     def refresh(self):
@@ -405,7 +405,7 @@ class BaseContext(object):
 
     def load_additional_registries(self):
         """
-        Load target-specific registries.  Can be overriden by subclasses.
+        Load target-specific registries.  Can be overridden by subclasses.
         """
 
     def install_registry(self, registry):

@@ -8,7 +8,7 @@ NumPy arrays and functions, and loops. The most common way to use Numba is
 through its collection of decorators that can be applied to your functions to
 instruct Numba to compile them. When a call is made to a Numba decorated
 function it is compiled to machine code "just-in-time" for execution and all or
-part of your code can subsequently run at native machine code speed! 
+part of your code can subsequently run at native machine code speed!
 
 Out of the box Numba works with the following:
 
@@ -16,11 +16,11 @@ Out of the box Numba works with the following:
 * Architecture: x86, x86_64, ppc64le. Experimental on armv7l, armv8l (aarch64).
 * GPUs: Nvidia CUDA. Experimental on AMD ROC.
 * CPython
-* NumPy 1.10 - latest
+* NumPy 1.15 - latest
 
 How do I get it?
 ----------------
-Numba is available as a `conda <https://conda.io/docs/>`_ package for the 
+Numba is available as a `conda <https://conda.io/docs/>`_ package for the
 `Anaconda Python distribution <https://www.anaconda.com/>`_::
 
   $ conda install numba
@@ -157,7 +157,7 @@ using the `timeit <https://docs.python.org/3/library/timeit.html>`_ module
 functions, these measure multiple iterations of execution and, as a result,
 can be made to accommodate for the compilation time in the first execution.
 
-As a side note, if compilation time is an issue, Numba JIT supports 
+As a side note, if compilation time is an issue, Numba JIT supports
 :ref:`on-disk caching <jit-decorator-cache>` of compiled functions and also has
 an :ref:`Ahead-Of-Time <aot-compilation>` compilation mode.
 
@@ -199,7 +199,7 @@ also:
 
 Extra options available in some decorators:
 
-* ``parallel = True`` - :ref:`enable <jit-decorator-parallel>` the 
+* ``parallel = True`` - :ref:`enable <jit-decorator-parallel>` the
   :ref:`automatic parallelization <numba-parallel>` of the function.
 * ``fastmath = True`` - enable :ref:`fast-math <jit-decorator-fastmath>`
   behaviour for the function.

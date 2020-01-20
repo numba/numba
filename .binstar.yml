@@ -10,7 +10,7 @@ package: numba
 
 #===============================================================================
 # Build Matrix Options
-# Thes options may be a single item, a list or empty
+# These options may be a single item, a list or empty
 # The resulting number of builds is [platform * engine * env]
 #===============================================================================
 
@@ -37,7 +37,7 @@ engine:
 
 #===============================================================================
 # Scrip options
-# Thes options may be broken out into the before_script, script and after_script
+# These options may be broken out into the before_script, script and after_script
 # or not, that is up to you
 #===============================================================================
 

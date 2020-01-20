@@ -82,7 +82,7 @@ Parameters
 - NB_Dict **out
     Output for the new dictionary.
 - Py_ssize_t size
-    Hashtable size. Must be powe of two.
+    Hashtable size. Must be power of two.
 - Py_ssize_t key_size
     Size of a key entry.
 - Py_ssize_t val_size

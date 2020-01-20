@@ -68,27 +68,16 @@ def wrap_index(typingctx, idx, size):
     where idx > size due to the way indices are calculated
     during slice/range analysis.
     """
-    if idx != size:
+    unified_ty = typingctx.unify_types(idx, size)
+    if not unified_ty:
         raise ValueError("Argument types for wrap_index must match")
 
     def codegen(context, builder, sig, args):
-        """
-        assert(len(args) == 2)
-        idx = args[0]
-        size = args[1]
-        rem = builder.srem(idx, size)
-        zero = llvmlite.ir.Constant(idx.type, 0)
-        is_negative = builder.icmp_signed('<', rem, zero)
-        wrapped_rem = builder.add(rem, size)
-        is_oversize = builder.icmp_signed('>=', wrapped_rem, size)
-        mod = builder.select(is_negative, wrapped_rem,
-                builder.select(is_oversize, rem, wrapped_rem))
-        return mod
-        """
-        idx = args[0]
-        size = args[1]
+        ll_unified_ty = context.get_data_type(unified_ty)
+        idx = builder.sext(args[0], ll_unified_ty)
+        size = builder.sext(args[1], ll_unified_ty)
         neg_size = builder.neg(size)
-        zero = llvmlite.ir.Constant(idx.type, 0)
+        zero = llvmlite.ir.Constant(ll_unified_ty, 0)
         idx_negative = builder.icmp_signed('<', idx, zero)
         pos_oversize = builder.icmp_signed('>=', idx, size)
         neg_oversize = builder.icmp_signed('<=', idx, neg_size)
@@ -97,7 +86,7 @@ def wrap_index(typingctx, idx, size):
         mod = builder.select(idx_negative, neg_res, pos_res)
         return mod
 
-    return signature(idx, idx, size), codegen
+    return signature(unified_ty, idx, size), codegen
 
 def wrap_index_literal(idx, size):
     if idx < 0:
@@ -291,7 +280,7 @@ class EquivSet(object):
         """Insert a set of equivalent objects by modifying self. This
         method can be overloaded to transform object type before insertion.
         """
-        self._insert(objs)
+        return self._insert(objs)
 
     def intersect(self, equiv_set):
         """ Return the intersection of self and the given equiv_set,
@@ -328,7 +317,7 @@ class ShapeEquivSet(EquivSet):
     """
 
     def __init__(self, typemap, defs=None, ind_to_var=None,
-                 obj_to_ind=None, ind_to_obj=None, next_id=0):
+                 obj_to_ind=None, ind_to_obj=None, next_id=0, ind_to_const=None):
         """Create a new ShapeEquivSet object, where typemap is a dictionary
         that maps variable names to their types, and it will not be modified.
         Optional keyword arguments are for internal use only.
@@ -342,6 +331,8 @@ class ShapeEquivSet(EquivSet):
         # It is used to retrieve defined shape variables given an equivalence
         # index.
         self.ind_to_var = ind_to_var if ind_to_var else {}
+        # ind_to_const maps index number to a constant, if known.
+        self.ind_to_const = ind_to_const if ind_to_const else {}
 
         super(ShapeEquivSet, self).__init__(obj_to_ind, ind_to_obj, next_id)
 
@@ -359,11 +350,12 @@ class ShapeEquivSet(EquivSet):
             ind_to_var=copy.copy(self.ind_to_var),
             obj_to_ind=copy.deepcopy(self.obj_to_ind),
             ind_to_obj=copy.deepcopy(self.ind_to_obj),
-            next_id=self.next_ind)
+            next_id=self.next_ind,
+            ind_to_const=copy.deepcopy(self.ind_toconst))
 
     def __repr__(self):
-        return "ShapeEquivSet({}, ind_to_var={})".format(
-            self.ind_to_obj, self.ind_to_var)
+        return "ShapeEquivSet({}, ind_to_var={}, ind_to_const={})".format(
+            self.ind_to_obj, self.ind_to_var, self.ind_to_const)
 
     def _get_names(self, obj):
         """Return a set of names for the given obj, where array and tuples
@@ -372,6 +364,9 @@ class ShapeEquivSet(EquivSet):
         """
         if isinstance(obj, ir.Var) or isinstance(obj, str):
             name = obj if isinstance(obj, str) else obj.name
+            if name not in self.typemap:
+                return (name,)
+
             typ = self.typemap[name]
             if (isinstance(typ, types.BaseTuple) or
                     isinstance(typ, types.ArrayCompatible)):
@@ -454,17 +449,25 @@ class ShapeEquivSet(EquivSet):
             if obj in self.obj_to_ind:
                 inds.append(self.obj_to_ind[obj])
         varlist = []
+        constval = None
         names = set()
         for i in sorted(inds):
-            for x in self.ind_to_var[i]:
-                if not (x.name in names):
-                    varlist.append(x)
-                    names.add(x.name)
+            if i in self.ind_to_var:
+                for x in self.ind_to_var[i]:
+                    if not (x.name in names):
+                        varlist.append(x)
+                        names.add(x.name)
+            if i in self.ind_to_const:
+                assert(constval is None)
+                constval = self.ind_to_const[i]
         super(ShapeEquivSet, self)._insert(objs)
         new_ind = self.obj_to_ind[objs[0]]
         for i in set(inds):
-            del self.ind_to_var[i]
+            if i in self.ind_to_var:
+                del self.ind_to_var[i]
         self.ind_to_var[new_ind] = varlist
+        if constval is not None:
+            self.ind_to_const[new_ind] = constval
 
     def insert_equiv(self, *objs):
         """Overload EquivSet.insert_equiv to handle Numba IR variables and
@@ -482,6 +485,7 @@ class ShapeEquivSet(EquivSet):
         assert all(ndim == x for x in ndims), (
             "Dimension mismatch for {}".format(objs))
         varlist = []
+        constlist = []
         for obj in objs:
             if not isinstance(obj, tuple):
                 obj = (obj,)
@@ -492,6 +496,9 @@ class ShapeEquivSet(EquivSet):
                         varlist.insert(0, var)
                     else:
                         varlist.append(var)
+                if isinstance(var, ir.Const) and not (var.value in constlist):
+                    constlist.append(var.value)
+
         # try to populate ind_to_var if variables are present
         for obj in varlist:
             name = obj.name
@@ -500,9 +507,23 @@ class ShapeEquivSet(EquivSet):
                 self.obj_to_ind[name] = self.next_ind
                 self.ind_to_var[self.next_ind] = [obj]
                 self.next_ind += 1
+
+        # create equivalence classes for previously unseen constants
+        for const in constlist:
+            if const in names and not (const in self.obj_to_ind):
+                self.ind_to_obj[self.next_ind] = [const]
+                self.obj_to_ind[const] = self.next_ind
+                self.ind_to_const[self.next_ind] = const
+                self.next_ind += 1
+
+        some_change = False
+
         for i in range(ndim):
             names = [obj_name[i] for obj_name in obj_names]
-            super(ShapeEquivSet, self).insert_equiv(*names)
+            ie_res = super(ShapeEquivSet, self).insert_equiv(*names)
+            some_change = some_change or ie_res
+
+        return some_change
 
     def has_shape(self, name):
         """Return true if the shape of the given variable is available.
@@ -525,8 +546,12 @@ class ShapeEquivSet(EquivSet):
         for i in inds:
             require(i in self.ind_to_var)
             vs = self.ind_to_var[i]
-            require(vs != [])
-            shape.append(vs[0])
+            if vs != []:
+                shape.append(vs[0])
+            else:
+                require(i in self.ind_to_const)
+                vs = self.ind_to_const[i]
+                shape.append(vs)
         return tuple(shape)
 
     def get_shape_classes(self, name):
@@ -577,35 +602,56 @@ class ShapeEquivSet(EquivSet):
         defined. Most variables in Numba IR are SSA, i.e., defined only once,
         but not all of them. When a variable is being re-defined, it must
         be removed from the equivalence relation and added to the redefined
-        set. Those variables redefined are removed from all the blocks'
-        equivalence sets later.
+        set but only if that redefinition is not known to have the same
+        equivalence classes. Those variables redefined are removed from all
+        the blocks' equivalence sets later.
+
+        Arrays passed to define() use their whole name but these do not
+        appear in the equivalence sets since they are stored there per
+        dimension. Calling _get_names() here converts array names to
+        dimensional names.
+
+        This function would previously invalidate if there were any multiple
+        definitions of a variable.  However, we realized that this behavior
+        is overly restrictive.  You need only invalidate on multiple
+        definitions if they are not known to be equivalent. So, the
+        equivalence insertion functions now return True if some change was
+        made (meaning the definition was not equivalent) and False
+        otherwise. If no change was made, then define() need not be
+        called. For no change to have been made, the variable must
+        already be present. If the new definition of the var has the
+        case where lhs and rhs are in the same equivalence class then
+        again, no change will be made and define() need not be called
+        or the variable invalidated.
         """
         if isinstance(name, ir.Var):
             name = name.name
         if name in self.defs:
             self.defs[name] += 1
-            # NOTE: variable being redefined, must invalidate previous
-            # equivalences. Believe it is a rare case, and only happens to
-            # scalar accumuators.
-            if name in self.obj_to_ind:
-                redefined.add(name) # remove this var from all equiv sets
-                i = self.obj_to_ind[name]
-                del self.obj_to_ind[name]
-                self.ind_to_obj[i].remove(name)
-                if self.ind_to_obj[i] == []:
-                    del self.ind_to_obj[i]
-                assert(i in self.ind_to_var)
-                names = [x.name for x in self.ind_to_var[i]]
-                if name in names:
-                    j = names.index(name)
-                    del self.ind_to_var[i][j]
-                    if self.ind_to_var[i] == []:
-                        del self.ind_to_var[i]
-                        # no more size variables, remove equivalence too
-                        if i in self.ind_to_obj:
-                            for obj in self.ind_to_obj[i]:
-                                del self.obj_to_ind[obj]
-                            del self.ind_to_obj[i]
+            name_res = list(self._get_names(name))
+            for one_name in name_res:
+                # NOTE: variable being redefined, must invalidate previous
+                # equivalences. Believe it is a rare case, and only happens to
+                # scalar accumuators.
+                if one_name in self.obj_to_ind:
+                    redefined.add(one_name) # remove this var from all equiv sets
+                    i = self.obj_to_ind[one_name]
+                    del self.obj_to_ind[one_name]
+                    self.ind_to_obj[i].remove(one_name)
+                    if self.ind_to_obj[i] == []:
+                        del self.ind_to_obj[i]
+                    assert(i in self.ind_to_var)
+                    names = [x.name for x in self.ind_to_var[i]]
+                    if name in names:
+                        j = names.index(name)
+                        del self.ind_to_var[i][j]
+                        if self.ind_to_var[i] == []:
+                            del self.ind_to_var[i]
+                            # no more size variables, remove equivalence too
+                            if i in self.ind_to_obj:
+                                for obj in self.ind_to_obj[i]:
+                                    del self.obj_to_ind[obj]
+                                del self.ind_to_obj[i]
         else:
             self.defs[name] = 1
 
@@ -807,7 +853,7 @@ class SymbolicEquivSet(ShapeEquivSet):
 
     def _insert(self, objs):
         """Overload _insert method to handle ind changes between relative
-        objects.
+        objects.  Returns True if some change is made, false otherwise.
         """
         indset = set()
         uniqs = set()
@@ -819,7 +865,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                 uniqs.add(obj)
                 indset.add(ind)
         if len(uniqs) <= 1:
-            return
+            return False
         uniqs = list(uniqs)
         super(SymbolicEquivSet, self)._insert(uniqs)
         objs = self.ind_to_obj[self._get_ind(uniqs[0])]
@@ -847,6 +893,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                     get_or_set(offset_dict, offset).append(name)
         for names in offset_dict.values():
             self._insert(names)
+        return True
 
     def set_shape_setitem(self, obj, shape):
         """remember shapes of SetItem IR nodes.
@@ -987,11 +1034,17 @@ class ArrayAnalysis(object):
             # Go through each incoming edge, process prepended instructions and
             # calculate beginning equiv_set of current block as an intersection
             # of incoming ones.
+            if config.DEBUG_ARRAY_OPT >= 2:
+                print("preds:", preds)
             for (p, q) in preds:
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("p, q:", p, q)
                 if p in pruned:
                     continue
                 if p in self.equiv_sets:
                     from_set = self.equiv_sets[p].clone()
+                    if config.DEBUG_ARRAY_OPT >= 2:
+                        print("p in equiv_sets", from_set)
                     if (p, label) in self.prepends:
                         instrs = self.prepends[(p, label)]
                         for inst in instrs:
@@ -1024,7 +1077,8 @@ class ArrayAnalysis(object):
                     self.calltypes[inst] = orig_calltype
                 pre, post = self._analyze_inst(label, scope, equiv_set, inst, redefined)
                 # Remove anything multiply defined in this block from every block equivs.
-                self.remove_redefineds(redefined)
+                if len(redefined) > 0:
+                    self.remove_redefineds(redefined)
                 for instr in pre:
                     new_body.append(instr)
                 new_body.append(inst)
@@ -1101,7 +1155,11 @@ class ArrayAnalysis(object):
                 return pre, post
 
             if isinstance(typ, types.ArrayCompatible):
-                if (shape == None or isinstance(shape, tuple) or
+                if (shape is not None and
+                    isinstance(shape, ir.Var) and
+                    isinstance(self.typemap[shape.name], types.containers.Tuple)):
+                    pass
+                elif (shape == None or isinstance(shape, tuple) or
                     (isinstance(shape, ir.Var) and
                      not equiv_set.has_shape(shape))):
                     (shape, post) = self._gen_shape_call(equiv_set, lhs,
@@ -1111,9 +1169,25 @@ class ArrayAnalysis(object):
                     (shape, post) = self._gen_shape_call(equiv_set, lhs,
                                                          len(typ), shape)
 
+            """ See the comment on the define() function.
+
+                We need only call define(), which will invalidate a variable
+                from being in the equivalence sets on multiple definitions,
+                if the variable was not previously defined or if the new
+                definition would be in a conflicting equivalence class to the
+                original equivalence class for the variable.
+
+                insert_equiv() returns True if either of these conditions are
+                True and then we call define() in those cases.  If insert_equiv()
+                returns False then no changes were made and all equivalence
+                classes are consistent upon a redefinition so no invalidation
+                is needed and we don't call define().
+            """
+            needs_define = True
             if shape != None:
-                equiv_set.insert_equiv(lhs, shape)
-            equiv_set.define(lhs, redefined, self.func_ir, typ)
+                needs_define = equiv_set.insert_equiv(lhs, shape)
+            if needs_define:
+                equiv_set.define(lhs, redefined, self.func_ir, typ)
         elif isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
             index = inst.index if isinstance(inst, ir.SetItem) else inst.index_var
             result = guard(self._index_to_shape,

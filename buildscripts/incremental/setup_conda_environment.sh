@@ -48,17 +48,16 @@ source activate $CONDA_ENV
 set -v
 
 # gitpython needed for CI testing
-if [ $PYTHON \< "3.8" ]; then
-    $CONDA_INSTALL gitpython
-else
-    $PIP_INSTALL gitpython
-fi
+$CONDA_INSTALL gitpython
 
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
-    if [ $PYTHON \< "3.8" ]; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi scipy jinja2 ipython pygments
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments
+    if [[ "$PYTHON" == "3.8" &&  $(uname) == Darwin ]]; then
+        $PIP_INSTALL scipy
+    else
+        $CONDA_INSTALL ${EXTRA_CHANNELS}  scipy
     fi
 fi
 

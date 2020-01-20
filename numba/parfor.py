@@ -1741,13 +1741,26 @@ class ParforPass(object):
                     args = inst.value.args
                     loop_kind, loop_replacing = self._get_loop_kind(inst.value.func.name,
                                                                     call_table)
+                    # Get the body of the header of the loops minus the branch terminator
+                    # The general approach is to prepend the header block to the first
+                    # body block and then let dead code removal handle removing unneeded
+                    # statements.  Not all statements in the header block are unnecessary.
+                    header_body = blocks[loop.header].body[:-1]
                     # find loop index variable (pair_first in header block)
-                    for stmt in blocks[loop.header].body:
+                    loop_index = None
+                    for hbi, stmt in enumerate(header_body):
                         if (isinstance(stmt, ir.Assign)
                                 and isinstance(stmt.value, ir.Expr)
                                 and stmt.value.op == 'pair_first'):
                             loop_index = stmt.target.name
+                            li_index = hbi
                             break
+                    assert(loop_index is not None)
+                    # Remove pair_first from header.
+                    # We have to remove the pair_first by hand since it causes problems
+                    # for some code below if we don't.
+                    header_body = header_body[:li_index] + header_body[li_index+1:]
+
                     # loop_index may be assigned to other vars
                     # get header copies to find all of them
                     cps, _ = get_block_copies({0: blocks[loop.header]},
@@ -1762,8 +1775,6 @@ class ParforPass(object):
                     init_block = ir.Block(scope, loc)
                     init_block.body = self._get_prange_init_block(blocks[entry],
                                                             call_table, args)
-                    # set l=l for remove dead prange call
-                    inst.value = inst.target
                     loop_body = {l: blocks[l] for l in body_labels}
                     # Add an empty block to the end of loop body
                     end_label = next_label()
@@ -1924,6 +1935,13 @@ class ParforPass(object):
                         loops = [LoopNest(index_var, start, size_var, step)]
                         self.typemap[index_var.name] = index_var_typ
 
+                        # We can't just drop the header block since there can be things
+                        # in there other than the prange looping infrastructure.
+                        # So we just add the header to the first loop body block (minus the
+                        # branch) and let dead code elimination remove the unnecessary parts.
+                        first_body_label = min(loop_body.keys())
+                        loop_body[first_body_label].body = header_body + loop_body[first_body_label].body
+
                     index_var_map = {v: index_var for v in loop_index_vars}
                     replace_vars(loop_body, index_var_map)
                     if unsigned_index:
@@ -1974,7 +1992,7 @@ class ParforPass(object):
                         index_set.add(stmt.target.name)
                         added_indices.add(stmt.target.name)
                     # make sure parallel index is not overwritten
-                    elif stmt.target.name in index_set:
+                    elif stmt.target.name in index_set and stmt.target.name != stmt.value.name:
                         raise ValueError(
                             "Overwrite of parallel loop index at {}".format(
                             stmt.target.loc))
@@ -3026,7 +3044,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
         for stmt in reversed(parfor.loop_body[label].body):
             if (isinstance(stmt, ir.Assign)
                     and (stmt.target.name in parfor_params
-                        or stmt.target.name in var_to_param)):
+                      or stmt.target.name in var_to_param)):
                 lhs = stmt.target.name
                 rhs = stmt.value
                 cur_param = lhs if lhs in parfor_params else var_to_param[lhs]
@@ -3047,6 +3065,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
                 # recursive parfors can have reductions like test_prange8
                 get_parfor_reductions(func_ir, stmt, parfor_params, calltypes,
                     reductions, reduce_varnames, param_uses, param_nodes, var_to_param)
+
     for param, used_vars in param_uses.items():
         # a parameter is a reduction variable if its value is used to update it
         # check reduce_varnames since recursive parfors might have processed
@@ -3055,6 +3074,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
             reduce_varnames.append(param)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
+            check_conflicting_reduction_operators(param, reduce_nodes)
             gri_out = guard(get_reduction_init, reduce_nodes)
             if gri_out is not None:
                 init_val, redop = gri_out
@@ -3062,7 +3082,27 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
                 init_val = None
                 redop = None
             reductions[param] = (init_val, reduce_nodes, redop)
+
     return reduce_varnames, reductions
+
+def check_conflicting_reduction_operators(param, nodes):
+    """In prange, a user could theoretically specify conflicting
+       reduction operators.  For example, in one spot it is += and
+       another spot *=.  Here, we raise an exception if multiple
+       different reduction operators are used in one prange.
+    """
+    first_red_func = None
+    for node in nodes:
+        if (isinstance(node, ir.Assign) and
+            isinstance(node.value, ir.Expr) and
+            node.value.op=='inplace_binop'):
+            if first_red_func is None:
+                first_red_func = node.value.fn
+            else:
+                if first_red_func != node.value.fn:
+                    msg = ("Reduction variable %s has multiple conflicting "
+                           "reduction operators." % param)
+                    raise errors.UnsupportedError(msg, node.loc)
 
 def get_reduction_init(nodes):
     """
@@ -3551,7 +3591,7 @@ def get_parfor_pattern_vars(parfor):
                     out.add(v.name)
     return out
 
-def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
+def remove_dead_parfor(parfor, lives, lives_n_aliases, arg_aliases, alias_map, func_ir, typemap):
     """ remove dead code inside parfor including get/sets
     """
 
@@ -3568,7 +3608,7 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
         parfor.loop_body[first_label].body,
         parfor.index_var, alias_map,
         first_block_saved_values,
-        lives
+        lives_n_aliases
         )
 
     # remove saved first block setitems if array potentially changed later
@@ -3595,13 +3635,13 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
         block = parfor.loop_body[l]
         saved_values = first_block_saved_values.copy()
         _update_parfor_get_setitems(block.body, parfor.index_var, alias_map,
-                                        saved_values, lives)
+                                        saved_values, lives_n_aliases)
 
 
     # after getitem replacement, remove extra setitems
     blocks = parfor.loop_body.copy()  # shallow copy is enough
     last_label = max(blocks.keys())
-    return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
+    return_label, tuple_var = _add_liveness_return_block(blocks, lives_n_aliases, typemap)
     # jump to return label
     jump = ir.Jump(return_label, ir.Loc("parfors_dummy", -1))
     blocks[last_label].body.append(jump)
@@ -3634,8 +3674,14 @@ def remove_dead_parfor(parfor, lives, arg_aliases, alias_map, func_ir, typemap):
     typemap.pop(tuple_var.name)  # remove dummy tuple type
     blocks[last_label].body.pop()  # remove jump
 
-
-    # process parfor body recursively
+    """
+      Process parfor body recursively.
+      Note that this is the only place in this function that uses the
+      argument lives instead of lives_n_aliases.  The former does not
+      include the aliases of live variables but only the live variable
+      names themselves.  See a comment in this function for how that
+      is used. 
+    """
     remove_dead_parfor_recursive(
         parfor, lives, arg_aliases, alias_map, func_ir, typemap)
 
@@ -3691,6 +3737,17 @@ def remove_dead_parfor_recursive(parfor, lives, arg_aliases, alias_map,
     assert first_body_block > 0  # we are using 0 for init block here
     last_label = max(blocks.keys())
 
+    """
+      Previously, this statement used lives_n_aliases.  That had the effect of
+      keeping variables in the init_block alive if they aliased an array that
+      was later written to.  By using just lives to indicate which variables
+      names are live at exit of the parfor but then using alias_map for the
+      actual recursive dead code removal, we keep any writes to aliased arrays
+      alive but also allow aliasing assignments (i.e., a = b) to be eliminated
+      so long as 'b' is not written to through the variable 'a' later on.
+      This makes assignment handling of remove_dead_block work properly since
+      it allows distinguishing between live variables and their aliases.
+    """
     return_label, tuple_var = _add_liveness_return_block(blocks, lives, typemap)
 
     # branch back to first body label to simulate loop

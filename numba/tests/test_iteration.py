@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import numpy as np
 
+from numba import njit
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import numpy_support, types, errors
@@ -244,6 +245,20 @@ class IterationTest(MemoryLeakMixin, TestCase):
         expect = bar((x, y))
         got = cres.entry_point((x, y))
         self.assertEqual(expect, got)
+
+
+
+class TestIterationRefct(MemoryLeakMixin, TestCase):
+    def test_zip_with_arrays(self):
+        @njit
+        def foo(sequence):
+            c = 0
+            for a, b in zip(range(len(sequence)), sequence):
+                c += (a + 1) * b.sum()
+            return
+
+        sequence = [np.arange(1 + i) for i in range(10)]
+        self.assertEqual(foo(sequence), foo.py_func(sequence))
 
 
 if __name__ == '__main__':

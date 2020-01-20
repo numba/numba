@@ -2662,6 +2662,23 @@ if numpy_version >= (1, 10):
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+@overload(np.argwhere)
+def np_argwhere(a):
+
+    if type_can_asarray(a):
+        def impl(a):
+            arr = np.asarray(a)
+            return np.transpose(np.vstack(np.nonzero(arr)))
+    else:
+        def impl(a):
+            if a is not None and bool(a):
+                return np.zeros((1, 1), dtype=types.intp)
+            else:
+                return np.zeros((0, 1), dtype=types.intp)
+
+    return impl
+
+
 @overload(np.flatnonzero)
 def np_flatnonzero(a):
 
@@ -2677,10 +2694,10 @@ def np_flatnonzero(a):
             return np.nonzero(np.ravel(arr))[0]
     else:
         def impl(a):
-            if a is None:
-                data = [x for x in range(0)]
-            else:
+            if a is not None and bool(a):
                 data = [0]
+            else:
+                data = [x for x in range(0)]
             return np.array(data, dtype=types.intp)
 
     return impl
@@ -2977,7 +2994,7 @@ def array_nonzero(context, builder, sig, args):
     one = context.get_constant(types.intp, 1)
     count = cgutils.alloca_once_value(builder, zero)
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
-        ptr = cgutils.get_item_pointer2(builder, data, shape, strides,
+        ptr = cgutils.get_item_pointer2(context, builder, data, shape, strides,
                                         layout, indices)
         val = load_item(context, builder, aryty, ptr)
         nz = context.is_true(builder, aryty.dtype, val)
@@ -2994,7 +3011,7 @@ def array_nonzero(context, builder, sig, args):
     # And fill them up
     index = cgutils.alloca_once_value(builder, zero)
     with cgutils.loop_nest(builder, shape, zero.type) as indices:
-        ptr = cgutils.get_item_pointer2(builder, data, shape, strides,
+        ptr = cgutils.get_item_pointer2(context, builder, data, shape, strides,
                                         layout, indices)
         val = load_item(context, builder, aryty, ptr)
         nz = context.is_true(builder, aryty.dtype, val)
@@ -3005,7 +3022,7 @@ def array_nonzero(context, builder, sig, args):
                 indices = (zero,)
             cur = builder.load(index)
             for i in range(nouts):
-                ptr = cgutils.get_item_pointer2(builder, out_datas[i],
+                ptr = cgutils.get_item_pointer2(context, builder, out_datas[i],
                                                 out_shape, (),
                                                 'C', [cur])
                 store_item(context, builder, outaryty, indices[i], ptr)
