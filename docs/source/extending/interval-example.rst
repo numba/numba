@@ -233,21 +233,69 @@ Numba doesn't yet know how to make a native interval value from a Python
 ``Interval`` instance.  Let's teach it how to do it::
 
    from numba.extending import unbox, NativeValue
+   from contextlib import contextmanager, ExitStack
+
+   @contextmanager
+   def early_exit_if(builder, stack: ExitStack, cond):
+       """
+       Emit code similar to::
+
+           if (cond) {
+               <body>
+               return;
+           }
+           <everything after this call>
+
+       However, this "return" will just break out of the current `ExitStack`,
+       rather than out of the whole function
+       """
+       then, otherwise = stack.enter_context(builder.if_else(cond, likely=False))
+       with then:
+           yield
+       stack.enter_context(otherwise)
+
+
+   def early_exit_if_null(builder, stack, obj):
+       return early_exit_if(builder, stack, cgutils.is_null(builder, obj))
+
 
    @unbox(IntervalType)
    def unbox_interval(typ, obj, c):
        """
        Convert a Interval object to a native interval structure.
        """
-       lo_obj = c.pyapi.object_getattr_string(obj, "lo")
-       hi_obj = c.pyapi.object_getattr_string(obj, "hi")
-       interval = cgutils.create_struct_proxy(typ)(c.context, c.builder)
-       interval.lo = c.pyapi.float_as_double(lo_obj)
-       interval.hi = c.pyapi.float_as_double(hi_obj)
-       c.pyapi.decref(lo_obj)
-       c.pyapi.decref(hi_obj)
-       is_error = cgutils.is_not_null(c.builder, c.pyapi.err_occurred())
-       return NativeValue(interval._getvalue(), is_error=is_error)
+       ret_ptr = cgutils.alloca_once(c.builder, c.context.get_value_type(typ))
+       is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
+       fail_obj = c.context.get_constant_null(typ)
+
+       with ExitStack() as stack:
+           lo_obj = c.pyapi.object_getattr_string(obj, "lo")
+           with early_exit_if_null(c.builder, stack, lo_obj):
+               c.builder.store(cgutils.true_bit, is_error_ptr)
+               c.builder.store(fail_obj, ret_ptr)
+           lo_native = c.unbox(types.float64, lo_obj)
+           c.pyapi.decref(lo_obj)
+           with early_exit_if(c.builder, stack, lo_native.is_error):
+               c.builder.store(cgutils.true_bit, is_error_ptr)
+               c.builder.store(fail_obj, ret_ptr)
+
+           hi_obj = c.pyapi.object_getattr_string(obj, "hi")
+           with early_exit_if_null(c.builder, stack, hi_obj):
+               c.builder.store(cgutils.true_bit, is_error_ptr)
+               c.builder.store(fail_obj, ret_ptr)
+           hi_native = c.unbox(types.float64, hi_obj)
+           c.pyapi.decref(hi_obj)
+           with early_exit_if(c.builder, stack, hi_native.is_error):
+               c.builder.store(cgutils.true_bit, is_error_ptr)
+               c.builder.store(fail_obj, ret_ptr)
+
+           interval = cgutils.create_struct_proxy(typ)(c.context, c.builder)
+           interval.lo = lo_native
+           interval.hi = hi_native
+           c.builder.store(cgutils.false_bit, is_error_ptr)
+           c.builder.store(interval._getvalue(), ret_ptr)
+
+       return NativeValue(c.builder.load(ret_ptr), is_error=c.builder.load(is_error_ptr))
 
 *Unbox* is the other name for "convert a Python object to a native value"
 (it fits the idea of a Python object as a sophisticated box containing
@@ -272,15 +320,30 @@ interval values from Numba functions::
        """
        Convert a native interval structure to an Interval object.
        """
-       interval = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
-       lo_obj = c.pyapi.float_from_double(interval.lo)
-       hi_obj = c.pyapi.float_from_double(interval.hi)
-       class_obj = c.pyapi.unserialize(c.pyapi.serialize_object(Interval))
-       res = c.pyapi.call_function_objargs(class_obj, (lo_obj, hi_obj))
-       c.pyapi.decref(lo_obj)
-       c.pyapi.decref(hi_obj)
-       c.pyapi.decref(class_obj)
-       return res
+       ret_ptr = cgutils.alloca_once(c.builder, c.pyapi.pyobj)
+       fail_obj = c.pyapi.get_null_object()
+
+       with ExitStack() as stack:
+           interval = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
+           lo_obj = c.box(types.float64, coo.data)
+           with early_exit_if_null(c.builder, stack, lo_obj):
+               c.builder.store(fail_obj, ret_ptr)
+
+           hi_obj = c.box(types.float64, coo.data)
+           with early_exit_if_null(c.builder, stack, lo_obj):
+               c.pyapi.decref(lo_obj)
+               c.builder.store(fail_obj, ret_ptr)
+
+           class_obj = c.pyapi.unserialize(c.pyapi.serialize_object(Interval))
+           with early_exit_if_null(c.builder, stack, class_obj):
+               c.pyapi.decref(lo_obj)
+               c.pyapi.decref(hi_obj)
+
+           res = c.pyapi.call_function_objargs(class_obj, (lo_obj, hi_obj))
+           c.pyapi.decref(lo_obj)
+           c.pyapi.decref(hi_obj)
+           c.pyapi.decref(class_obj)
+           return res
 
 
 Using it
