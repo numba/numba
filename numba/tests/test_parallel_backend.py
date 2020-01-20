@@ -34,6 +34,10 @@ if utils.PYVERSION >= (3, 0):
 # Check which backends are available
 # TODO: Put this in a subprocess so the address space is kept clean
 try:
+    # Check it's a compatible TBB before loading it
+    from numba.npyufunc.parallel import _check_tbb_version_compatible
+    _check_tbb_version_compatible()
+
     from numba.npyufunc import tbbpool    # noqa: F401
     _HAVE_TBB_POOL = True
 except ImportError:

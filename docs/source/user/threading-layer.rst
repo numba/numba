@@ -269,4 +269,3 @@ API Reference
 .. autofunction:: numba.set_num_threads
 
 .. autofunction:: numba.get_num_threads
-
