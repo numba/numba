@@ -19,15 +19,17 @@ execute the parallel tasks.
 Thread masking
 --------------
 
-In order to simplify the design, it was decided that Numba should never launch
-new threads beyond the threads that are launched initially with
-``_launch_threads`` when the first parallel execution is run. Consequently,
-the programmatic setting of the number of threads can only be done by setting
-the number of threads to a number less than the total number that have already
-been launched. This is done by "masking" out unused threads, causing them to
-do no work. For example, on a 16 core machine, if the user were to call
-``set_num_threads(4)``, Numba would always have 16 threads present, but 12 of
-them would sit idle for parallel computations. A further call to
+As part of its design, Numba never launches new threads beyond the threads
+that are launched initially with ``numba.npyufunc.parallel._launch_threads()``
+when the first parallel execution is run. This is due to the way threads were
+already implemented in Numba prior to thread masking being implemented. This
+restriction was kept to keep the design simple, although it could be removed
+in the future. Consequently, it's possible to programmatically set the number
+of threads, but only to less than or equal to the total number that have
+already been launched. This is done by "masking" out unused threads, causing
+them to do no work. For example, on a 16 core machine, if the user were to
+call ``set_num_threads(4)``, Numba would always have 16 threads present, but
+12 of them would sit idle for parallel computations. A further call to
 ``set_num_threads(16)`` would cause those same threads to do work in later
 computations.
 
@@ -46,11 +48,11 @@ for this choice were that it is familiar to a lot of users, restricted in
 scope and also simple. The number of threads in use is specified by calling
 ``set_num_threads`` and the number of threads in use can be queried by calling
 ``get_num_threads``.These two functions are synonymous with their OpenMP
-counterparts (with the above restriction that the mask must be less than or equal to the number
-of launched threads). The execution semantics are also similar to OpenmP in
-that once a parallel region is launched altering the thread mask, it has no
-impact on the currently executing region but will have an impact on parallel
-regions executed subsequently.
+counterparts (with the above restriction that the mask must be less than or
+equal to the number of launched threads). The execution semantics are also
+similar to OpenmP in that once a parallel region is launched, altering the
+thread mask has no impact on the currently executing region, but will have an
+impact on parallel regions executed subsequently.
 
 The Implementation
 ~~~~~~~~~~~~~~~~~~
@@ -135,8 +137,8 @@ Thread ID
 
 A private ``get_thread_id()`` function was added to each threading backend,
 which returns a unique ID for each thread. This can be accessed from Python by
-``numba.npyufunc.parallel._get_thread_id()`` (it can also be used inside of an
-njitted function). The thread ID function is useful for testing that the
+``numba.npyufunc.parallel._get_thread_id()`` (it can also be used inside of
+JIT compiled function). The thread ID function is useful for testing that the
 thread masking behavior is correct, but it should not be used outside of the
 tests. For example, one can call ``set_num_threads(4)`` and then collect all
 unique ``_get_thread_id()``\ 's in a parallel region to verify that only 4
@@ -145,14 +147,16 @@ threads are run.
 Caveats
 ~~~~~~~
 
-Some caveats to be aware of when testing this:
+Some caveats to be aware of when testing thread masking:
 
 - The TBB backend may choose to schedule fewer than the given mask number of
   threads. Thus a test such as the one described above may return fewer than 4
   unique threads.
 
-- The workqueue backend is not threadsafe, so attempts to do nested
-  parallelism with it may result in deadlocks or other undefined behavior.
+- The workqueue backend is not threadsafe, so attempts to do multithreading
+  nested parallelism with it may result in deadlocks or other undefined
+  behavior. The workqueue backend will raise a SIGABRT signal if it detects
+  nested parallelism.
 
 - Certain backends may reuse the main thread for computation, but this
   behavior shouldn't be relied upon (for instance, if propagating exceptions).
@@ -179,10 +183,9 @@ The general pattern for using ``get_num_threads`` in code generation is
                                                  ("Invalid number of threads. "
                                                   "This likely indicates a bug in Numba.",))
 
-   # Pass num_threads through to the appropriate backend function
+   # Pass num_threads through to the appropriate backend function here
 
-See the code in ``numba/npyufunc/parfor.py``. Here ``builder.module`` is the
-thread pool backend library, e.g., ``tbbpool``.
+See the code in ``numba/npyufunc/parfor.py``.
 
 The guard against ``num_threads`` being <= 0 is not strictly necessary, but it
 can protect against accidentally incorrect behavior in case the thread masking
