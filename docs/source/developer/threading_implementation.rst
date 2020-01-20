@@ -26,7 +26,7 @@ the programmatic setting of the number of threads can only be done by setting
 the number of threads to a number less than the total number that have already
 been launched. This is done by "masking" out unused threads, causing them to
 do no work. For example, on a 16 core machine, if the user were to call
-``set_num_threads(4)``, numba would always have 16 threads present, but 12 of
+``set_num_threads(4)``, Numba would always have 16 threads present, but 12 of
 them would sit idle for parallel computations. A further call to
 ``set_num_threads(16)`` would cause those same threads to do work in later
 computations.
@@ -46,7 +46,7 @@ for this choice were that it is familiar to a lot of users, restricted in
 scope and also simple. The number of threads in use is specified by calling
 ``set_num_threads`` and the number of threads in use can be queried by calling
 ``get_num_threads``.These two functions are synonymous with their OpenMP
-counterparts (with the above restriction that the mask must be <= the number
+counterparts (with the above restriction that the mask must be less than or equal to the number
 of launched threads). The execution semantics are also similar to OpenmP in
 that once a parallel region is launched altering the thread mask, it has no
 impact on the currently executing region but will have an impact on parallel
@@ -117,10 +117,10 @@ but no further threads can run the launch sequence. This means that other
 threads will need their initial thread mask set some other way. This is
 achieved when ``get_num_threads`` is called and no thread mask is present, in
 this case the thread mask will be set to the default. In the implementation,
-"no thread mask is present" is represented by the value -1 and the "default
-thread mask" (unset) is represented by the value 0. The implementation also
+"no thread mask is present" is represented by the value ``-1`` and the "default
+thread mask" (unset) is represented by the value ``0``. The implementation also
 immediately calls ``set_num_threads(NUMBA_NUM_THREADS)`` after doing this, so
-if either -1 or 0 is encountered as a result from ``get_num_threads()`` it
+if either ``-1`` or ``0`` is encountered as a result from ``get_num_threads()`` it
 indicates a bug in the above processes.
 
 OS ``fork()`` calls
@@ -155,7 +155,7 @@ Some caveats to be aware of when testing this:
   parallelism with it may result in deadlocks or other undefined behavior.
 
 - Certain backends may reuse the main thread for computation, but this
-  behavior shouldn't be relied on (for instance, for exceptions propagating).
+  behavior shouldn't be relied upon (for instance, if propagating exceptions).
 
 Use in Code Generation
 ~~~~~~~~~~~~~~~~~~~~~~
