@@ -338,12 +338,15 @@ interval values from Numba functions::
            with early_exit_if_null(c.builder, stack, class_obj):
                c.pyapi.decref(lo_obj)
                c.pyapi.decref(hi_obj)
+               c.builder.store(fail_obj, ret_ptr)
 
            res = c.pyapi.call_function_objargs(class_obj, (lo_obj, hi_obj))
            c.pyapi.decref(lo_obj)
            c.pyapi.decref(hi_obj)
            c.pyapi.decref(class_obj)
-           return res
+           c.builder.store(res, ret_ptr)
+
+       return c.builder.load(ret_ptr)
 
 
 Using it
