@@ -474,11 +474,12 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             for i in global_typed_list:
                 x.append(i)
 
-        expected_message = ("The use of a ListType[int32] type, assigned to "
-                            "variable 'global_typed_list' in globals, is not "
-                            "supported as globals are considered compile-time "
-                            "constants and there is no known way to compile "
-                            "a ListType[int32] type as a constant.")
+        expected_message = ("The use of a ListType[int32, mutable=True] type, "
+                            "assigned to variable 'global_typed_list' in "
+                            "globals, is not supported as globals are "
+                            "considered compile-time constants and there is "
+                            "no known way to compile a ListType[int32, "
+                            "mutable=True] type as a constant.")
         with self.assertRaises(TypingError) as raises:
             foo()
         self.assertIn(
