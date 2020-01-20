@@ -760,6 +760,21 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertIn("First argument must be array-like",
                           str(raises.exception))
 
+        self.disable_leak_check()
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            with self.assertRaises(ValueError) as raises:
+                cfunc(np.array([np.NINF, np.NINF]), np.zeros((3,)))
+            self.assertIn('"x" and "out" have different shapes',
+                          str(raises.exception))
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            with self.assertRaises(ValueError) as raises:
+                cfunc(np.array([np.NINF, np.NINF, np.NINF]), np.zeros((2,)))
+            self.assertIn('"x" and "out" have different shapes',
+                          str(raises.exception))
+
     def bincount_sequences(self):
         """
         Some test sequences for np.bincount()

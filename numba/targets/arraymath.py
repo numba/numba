@@ -734,8 +734,17 @@ def is_np_inf_impl(x, out, fn):
                 return wrapper(out)
     else:
         def impl(x, out=None):
-            np.logical_and(np.isinf(x), fn(np.signbit(x)), out)
-            return wrapper(out)
+            x = np.asarray(x)
+            out = np.asarray(out)
+            # https://github.com/numpy/numpy/blob/b7c27bd2a3817f59c84b004b87bba5db57d9a9b0/numpy/doc/broadcasting.py#L52
+            if (x.shape == out.shape) or (x.shape == (1,)) \
+                or (out.shape == (1,)) \
+                or ((x.shape == ()) ^ (out.shape == ())):
+
+                np.logical_and(np.isinf(x), fn(np.signbit(x)), out)
+                return wrapper(out)
+
+            raise ValueError('"x" and "out" have different shapes')
 
     return impl
 
