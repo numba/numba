@@ -667,19 +667,21 @@ def impl_getitem(l, index):
     IS_NOT_NONE = not isinstance(l.item_type, types.NoneType)
 
     if index in index_types:
-        def integer_impl(l, index):
-            index = handle_index(l, index)
-            castedindex = _cast(index, indexty)
-            status, item = _list_getitem(l, castedindex)
-            if status == ListStatus.LIST_OK:
-                if IS_NOT_NONE:
+        if IS_NOT_NONE:
+            def integer_non_none_impl(l, index):
+                index = handle_index(l, index)
+                castedindex = _cast(index, indexty)
+                status, item = _list_getitem(l, castedindex)
+                if status == ListStatus.LIST_OK:
                     return _nonoptional(item)
                 else:
-                    return None
-            else:
-                raise AssertionError("internal list error during getitem")
-
-        return integer_impl
+                    raise AssertionError("internal list error during getitem")
+            return integer_non_none_impl
+        else:
+            def integer_none_impl(l, index):
+                index = handle_index(l, index)
+                return None
+            return integer_none_impl
 
     elif isinstance(index, types.SliceType):
         def slice_impl(l, index):
