@@ -333,29 +333,33 @@ def _check_tbb_version_compatible():
     """
     Checks that if TBB is present it is of a compatible version.
     """
-    # first check that the TBB version is new enough
-    if _IS_WINDOWS:
-        libtbb_name = 'tbb'
-    elif _IS_OSX:
-        libtbb_name = 'libtbb.dylib'
-    elif _IS_LINUX:
-        libtbb_name = 'libtbb.so.2'
-    else:
-        raise ValueError("Unknown operating system")
-    libtbb = CDLL(libtbb_name)
-    version_func = libtbb.TBB_runtime_interface_version
-    version_func.argtypes = []
-    version_func.restype = c_int
-    tbb_iface_ver = version_func()
-    if tbb_iface_ver < 11005: # magic number from TBB
-        msg = ("The TBB threading layer requires TBB "
-               "version 2019 update 5 or later i.e. "
-               "TBB_INTERFACE_VERSION >= 11005. Found "
-               "TBB_INTERFACE_VERSION = %s. The TBB "
-               "threading layer is disabled.")
-        problem = errors.NumbaWarning(msg % tbb_iface_ver)
-        warnings.warn(problem)
-        raise ImportError("Incompatible TBB version") # to trigger except + skip
+    try:
+        # first check that the TBB version is new enough
+        if _IS_WINDOWS:
+            libtbb_name = 'tbb'
+        elif _IS_OSX:
+            libtbb_name = 'libtbb.dylib'
+        elif _IS_LINUX:
+            libtbb_name = 'libtbb.so.2'
+        else:
+            raise ValueError("Unknown operating system")
+        libtbb = CDLL(libtbb_name)
+        version_func = libtbb.TBB_runtime_interface_version
+        version_func.argtypes = []
+        version_func.restype = c_int
+        tbb_iface_ver = version_func()
+        if tbb_iface_ver < 11005: # magic number from TBB
+            msg = ("The TBB threading layer requires TBB "
+                    "version 2019 update 5 or later i.e. "
+                    "TBB_INTERFACE_VERSION >= 11005. Found "
+                    "TBB_INTERFACE_VERSION = %s. The TBB "
+                    "threading layer is disabled.")
+            problem = errors.NumbaWarning(msg % tbb_iface_ver)
+            warnings.warn(problem)
+    except (ValueError, OSError) as e:
+        # Translate as an ImportError for consistent error class use, this error
+        # will never materialise
+        raise ImportError("Problem with TBB. Reason: %s" % e)
 
 
 def _launch_threads():
@@ -376,7 +380,7 @@ def _launch_threads():
                         _check_tbb_version_compatible()
                         # now try and load the backend
                         from . import tbbpool as lib
-                    except (ImportError, OSError):
+                    except ImportError:
                         pass
                 elif backend.startswith("omp"):
                     # TODO: Check that if MKL is present that it is a version
