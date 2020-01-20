@@ -354,30 +354,29 @@ class DeviceNDArrayBase(object):
         copy of the data.
         """
         dtype = np.dtype(dtype)
-
-        if self.dtype.itemsize != dtype.itemsize and not self.is_c_contiguous():
-            raise ValueError(
-                "To change to a dtype of a different size,"
-                " the array must be C-contiguous"
-            )
-
         shape = list(self.shape)
-        shape[-1], rem = divmod(
-            shape[-1] * self.dtype.itemsize,
-            dtype.itemsize
-        )
-        shape = tuple(shape)
+        strides = list(self.strides)
 
-        if rem != 0:
-            raise ValueError(
-                "When changing to a larger dtype,"
-                " its size must be a divisor of the total size in bytes"
-                " of the last axis of the array."
+        if self.dtype.itemsize != dtype.itemsize:
+            if not self.is_c_contiguous():
+                raise ValueError(
+                    "To change to a dtype of a different size,"
+                    " the array must be C-contiguous"
+                )
+
+            shape[-1], rem = divmod(
+                shape[-1] * self.dtype.itemsize,
+                dtype.itemsize
             )
 
-        strides = list(self.strides)
-        strides[-1] = dtype.itemsize
-        strides = tuple(strides)
+            if rem != 0:
+                raise ValueError(
+                    "When changing to a larger dtype,"
+                    " its size must be a divisor of the total size in bytes"
+                    " of the last axis of the array."
+                )
+
+            strides[-1] = dtype.itemsize
 
         return DeviceNDArray(
             shape=shape,
