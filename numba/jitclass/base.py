@@ -15,6 +15,8 @@ from numba.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils, utils, errors
 from numba.six import exec_, Sequence
+from numba.targets.imputils import lower_constant
+from llvmlite import ir
 from . import _box
 
 
@@ -526,3 +528,31 @@ def ctor_impl(context, builder, sig, args):
     ret = inst_struct._getvalue()
 
     return imputils.impl_ret_new_ref(context, builder, inst_typ, ret)
+
+
+@lower_constant(types.ClassInstanceType)
+def _lower_constant_class_instance(context, builder, typ, pyval):
+    # Allocate the instance
+    inst_typ = typ
+
+    alloc_type = context.get_data_type(inst_typ.get_data_type())
+    alloc_size = context.get_abi_sizeof(alloc_type)
+
+    meminfo = context.nrt.meminfo_alloc_dtor(builder, context.get_constant(types.uintp, alloc_size),
+        imp_dtor(context, builder.module, inst_typ), )
+    data_pointer = context.nrt.meminfo_data(builder, meminfo)
+    data_pointer = builder.bitcast(data_pointer, alloc_type.as_pointer())
+
+    # Nullify all data
+    builder.store(cgutils.get_null_value(alloc_type), data_pointer)
+
+    inst_struct = context.make_helper(builder, inst_typ)
+    inst_struct.meminfo = meminfo
+    inst_struct.data = data_pointer
+
+    # Load data from pyval
+
+    # Prepare return value
+    ret = inst_struct._getvalue()
+
+    return ret
