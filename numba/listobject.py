@@ -1178,19 +1178,26 @@ def _equals_helper(this, other, OP):
     this_is_none = isinstance(this.dtype, types.NoneType)
     other_is_none = isinstance(other.dtype, types.NoneType)
 
-    def impl(this, other):
-        def equals(this, other):
-            if len(this) != len(other):
-                return False
-            if this_is_none or other_is_none:
-                return this_is_none == other_is_none
-            for i in range(len(this)):
-                if this[i] != other[i]:
+    if this_is_none or other_is_none:
+        def impl_some_none(this, other):
+            def equals(this, other):
+                # Equal if both none-typed and have equal length
+                return bool(this_is_none == other_is_none
+                            and len(this) == len(other))
+            return OP(equals(this, other))
+        return impl_some_none
+    else:
+        def impl_not_none(this, other):
+            def equals(this, other):
+                if len(this) != len(other):
                     return False
-            else:
-                return True
-        return OP(equals(this, other))
-    return impl
+                for i in range(len(this)):
+                    if this[i] != other[i]:
+                        return False
+                else:
+                    return True
+            return OP(equals(this, other))
+        return impl_not_none
 
 
 @overload(operator.eq)
@@ -1204,7 +1211,7 @@ def impl_not_equals(this, other):
 
 
 @register_jitable
-def compare(this, other, this_is_none, other_is_none):
+def compare_not_none(this, other):
     """Oldschool (python 2.x) cmp.
 
        if this < other return -1
@@ -1213,18 +1220,29 @@ def compare(this, other, this_is_none, other_is_none):
     """
     if len(this) != len(other):
         return -1 if len(this) < len(other) else 1
-    if this_is_none or other_is_none:
-        if this_is_none and other_is_none: # both none
-            return 0
-        # to get here there is precisely one none, and if the first is none, by
-        # induction, the second cannot be
-        return -1 if this_is_none else 1
     for i in range(len(this)):
         this_item, other_item = this[i], other[i]
         if this_item != other_item:
             return -1 if this_item < other_item else 1
     else:
         return 0
+
+
+@register_jitable
+def compare_some_none(this, other, this_is_none, other_is_none):
+    """Oldschool (python 2.x) cmp for None typed lists.
+
+       if this < other return -1
+       if this = other return 0
+       if this > other return 1
+    """
+    if len(this) != len(other):
+        return -1 if len(this) < len(other) else 1
+    if this_is_none and other_is_none: # both none
+        return 0
+    # to get here there is precisely one none, and if the first is none, by
+    # induction, the second cannot be
+    return -1 if this_is_none else 1
 
 
 def compare_helper(this, other, accepted):
@@ -1236,8 +1254,13 @@ def compare_helper(this, other, accepted):
     this_is_none = isinstance(this.dtype, types.NoneType)
     other_is_none = isinstance(other.dtype, types.NoneType)
 
-    def impl(this, other):
-        return compare(this, other, this_is_none, other_is_none) in accepted
+    if this_is_none or other_is_none:
+        def impl(this, other):
+            return compare_some_none(
+                this, other, this_is_none, other_is_none) in accepted
+    else:
+        def impl(this, other):
+            return compare_not_none(this, other) in accepted
     return impl
 
 
