@@ -29,6 +29,10 @@ from numba import types, config, utils, errors
 from numba.npyufunc.wrappers import _wrapper_info
 from numba.extending import overload
 
+_IS_OSX = sys.platform.startswith('darwin')
+_IS_LINUX = sys.platform.startswith('linux')
+_IS_WINDOWS = sys.platform.startswith('win32')
+
 
 def get_thread_count():
     """
@@ -325,16 +329,41 @@ def threading_layer():
         return _threading_layer
 
 
+def _check_tbb_version_compatible():
+    """
+    Checks that if TBB is present it is of a compatible version.
+    """
+    # first check that the TBB version is new enough
+    if _IS_WINDOWS:
+        libtbb_name = 'tbb'
+    elif _IS_OSX:
+        libtbb_name = 'libtbb.dylib'
+    elif _IS_LINUX:
+        libtbb_name = 'libtbb.so.2'
+    else:
+        raise ValueError("Unknown operating system")
+    libtbb = CDLL(libtbb_name)
+    version_func = libtbb.TBB_runtime_interface_version
+    version_func.argtypes = []
+    version_func.restype = c_int
+    tbb_iface_ver = version_func()
+    if tbb_iface_ver < 11005: # magic number from TBB
+        msg = ("The TBB threading layer requires TBB "
+               "version 2019 update 5 or later i.e. "
+               "TBB_INTERFACE_VERSION >= 11005. Found "
+               "TBB_INTERFACE_VERSION = %s. The TBB "
+               "threading layer is disabled.")
+        problem = errors.NumbaWarning(msg % tbb_iface_ver)
+        warnings.warn(problem)
+        raise ImportError("Incompatible TBB version") # to trigger except + skip
+
+
 def _launch_threads():
     with _backend_init_process_lock:
         with _backend_init_thread_lock:
             global _is_initialized
             if _is_initialized:
                 return
-
-            _IS_OSX = sys.platform.startswith('darwin')
-            _IS_LINUX = sys.platform.startswith('linux')
-            _IS_WINDOWS = sys.platform.startswith('win32')
 
             def select_known_backend(backend):
                 """
@@ -343,29 +372,8 @@ def _launch_threads():
                 lib = None
                 if backend.startswith("tbb"):
                     try:
-                        # first check that the TBB version is new enough
-                        if _IS_WINDOWS:
-                            libtbb_name = 'tbb'
-                        elif _IS_OSX:
-                            libtbb_name = 'libtbb.dylib'
-                        elif _IS_LINUX:
-                            libtbb_name = 'libtbb.so.2'
-                        else:
-                            raise ValueError("Unknown operating system")
-                        libtbb = CDLL(libtbb_name)
-                        version_func = libtbb.TBB_runtime_interface_version
-                        version_func.argtypes = []
-                        version_func.restype = c_int
-                        tbb_iface_ver = version_func()
-                        if tbb_iface_ver < 11005: # magic number from TBB
-                            msg = ("The TBB threading layer requires TBB "
-                                   "version 2019 update 5 or later i.e. "
-                                   "TBB_INTERFACE_VERSION >= 11005. Found "
-                                   "TBB_INTERFACE_VERSION = %s. The TBB "
-                                   "threading layer is disabled.")
-                            problem = errors.NumbaWarning(msg % tbb_iface_ver)
-                            warnings.warn(problem)
-                            raise ImportError # to trigger except + skip
+                        # check if TBB is present and compatible
+                        _check_tbb_version_compatible()
                         # now try and load the backend
                         from . import tbbpool as lib
                     except (ImportError, OSError):
