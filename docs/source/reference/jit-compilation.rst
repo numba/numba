@@ -318,7 +318,7 @@ Vectorized functions (ufuncs and DUFuncs)
    If your function doesn't take an output array, you should omit the "arrow"
    in the layout string (e.g. ``"(n),(n)"``). When doing this, it is important
    to be aware that changes to the input arrays cannot always be relied on to be
-   visible outside the execution of the ufunc, as Numpy may pass in temporary
+   visible outside the execution of the ufunc, as NumPy may pass in temporary
    arrays as inputs (for example, if a cast is required).
 
    .. seealso::

@@ -233,7 +233,7 @@ visible changes to the input::
 This works because Numpy passes a pointer to the input data directly into the
 `init_values` function. However, it may also create and pass in a temporary
 array, in which case changes to the input are lost. For example, this can occur
-when casting is required. To demonstrate this, we can  use an array of `float32`
+when casting is required. To demonstrate, we can  use an array of `float32`
 with the `init_values` function::
 
    >>> invals = np.zeros(shape=(3, 3), dtype=np.float32)
