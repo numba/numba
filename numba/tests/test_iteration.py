@@ -188,24 +188,6 @@ class IterationTest(MemoryLeakMixin, TestCase):
     def test_array_1d_record_mutate(self):
         self.test_array_1d_record_mutate_npm(flags=force_pyobj_flags)
 
-    def test_array_2d_raises(self):
-
-        def foo(x):
-            for i in x:
-                pass
-
-        # 1D is fine
-        aryty = types.Array(types.int32, 1, 'C')
-        compile_isolated(foo, (aryty,))
-
-        # 2d is typing error
-        with self.assertRaises(errors.TypingError) as raises:
-            aryty = types.Array(types.int32, 2, 'C')
-            compile_isolated(foo, (aryty,))
-
-        self.assertIn("Direct iteration is not supported",
-                      str(raises.exception))
-
     def test_tuple_iter_issue1504(self):
         # The issue is due to `row` being typed as heterogeneous tuple.
         def bar(x, y):
