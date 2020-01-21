@@ -113,10 +113,10 @@ The following Python libraries have adopted the CUDA Array Interface:
 - `PyArrow <https://arrow.apache.org/docs/python/generated/pyarrow.cuda.Context.html#pyarrow.cuda.Context.buffer_from_object>`_
 - `mpi4py <https://mpi4py.readthedocs.io/en/latest/overview.html#support-for-cuda-aware-mpi>`_
 - `ArrayViews <https://github.com/xnd-project/arrayviews>`_
-- The **RAPIDS** stack:
+- The RAPIDS stack:
     - `cuDF <https://rapidsai.github.io/projects/cudf/en/0.11.0/10min-cudf-cupy.html>`_
     - `cuML <https://docs.rapids.ai/api/cuml/nightly/>`_
     - `cuSignal <https://github.com/rapidsai/cusignal>`_
     - `RMM <https://docs.rapids.ai/api/rmm/stable/>`_
 
-If your project is not on this list, please feel free to report to `Numba's issue tracker <https://github.com/numba/numba/issues>`_.
+If your project is not on this list, please feel free to report it on the `Numba issue tracker <https://github.com/numba/numba/issues>`_.
