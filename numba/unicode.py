@@ -52,6 +52,9 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM,
 
 _py38_or_later = sys.version_info[:2] >= (3, 8)
 
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L84-L85    # noqa: E501
+_MAX_UNICODE = 0x10ffff
+
 # DATA MODEL
 
 
@@ -2262,6 +2265,50 @@ def _unicode_swapcase(data, length, res, maxchars):
 @overload_method(types.UnicodeType, 'swapcase')
 def unicode_swapcase(data):
     return case_operation(_ascii_swapcase, _unicode_swapcase)
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Python/bltinmodule.c#L1781-L1824    # noqa: E501
+@overload(ord)
+def ol_ord(c):
+    if isinstance(c, types.UnicodeType):
+        def impl(c):
+            lc = len(c)
+            if lc != 1:
+                # CPython does TypeError
+                raise TypeError("ord() expected a character")
+            return _get_code_point(c, 0)
+        return impl
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L2005-L2028    # noqa: E501
+@register_jitable
+def _unicode_char(ch):
+    assert ch <= _MAX_UNICODE
+    kind = _codepoint_to_kind(ch)
+    ret = _empty_string(kind, 1, kind == PY_UNICODE_1BYTE_KIND)
+    _set_code_point(ret, 0, ch)
+    return ret
+
+
+_out_of_range_msg = "chr() arg not in range(0x%hx)" % _MAX_UNICODE
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L3045-L3055    # noqa: E501
+@register_jitable
+def _PyUnicode_FromOrdinal(ordinal):
+    if (ordinal < 0 or ordinal > _MAX_UNICODE):
+        raise ValueError(_out_of_range_msg)
+
+    return _unicode_char(_Py_UCS4(ordinal))
+
+
+# https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Python/bltinmodule.c#L715-L720    # noqa: E501
+@overload(chr)
+def ol_chr(i):
+    if isinstance(i, types.Integer):
+        def impl(i):
+            return _PyUnicode_FromOrdinal(i)
+        return impl
 
 # ------------------------------------------------------------------------------
 # iteration

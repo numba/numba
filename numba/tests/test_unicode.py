@@ -13,6 +13,7 @@ from numba import njit, types
 import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.errors import TypingError
+from numba.unicode import _MAX_UNICODE
 
 _py34_or_later = sys.version_info[:2] >= (3, 4)
 _py37_or_later = sys.version_info[:2] >= (3, 7)
@@ -342,6 +343,14 @@ def islower_usecase(x):
 
 def lower_usecase(x):
     return x.lower()
+
+
+def ord_usecase(x):
+    return ord(x)
+
+
+def chr_usecase(x):
+    return chr(x)
 
 
 class BaseTest(MemoryLeakMixin, TestCase):
@@ -2399,6 +2408,61 @@ class TestUnicodeIteration(BaseTest):
         for f in (pyfunc, cfunc):
             with self.assertRaises(StopIteration):
                 f()
+
+
+@unittest.skipUnless(_py34_or_later,
+                     'unicode support requires Python 3.4 or later')
+class TestUnicodeAuxillary(BaseTest):
+
+    def test_ord(self):
+        pyfunc = ord_usecase
+        cfunc = njit(pyfunc)
+        for ex in UNICODE_EXAMPLES:
+            for a in ex:
+                self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_ord_invalid(self):
+        self.disable_leak_check()
+
+        pyfunc = ord_usecase
+        cfunc = njit(pyfunc)
+
+        # wrong number of chars
+        for func in (pyfunc, cfunc):
+            for ch in ('', 'abc'):
+                with self.assertRaises(TypeError) as raises:
+                    func(ch)
+                self.assertIn('ord() expected a character',
+                              str(raises.exception))
+
+        # wrong type
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1.23)
+        self.assertIn('Invalid use of Function', str(raises.exception))
+
+    def test_chr(self):
+        pyfunc = chr_usecase
+        cfunc = njit(pyfunc)
+        for ex in UNICODE_EXAMPLES:
+            for x in ex:
+                a = ord(x)
+                self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_chr_invalid(self):
+        pyfunc = chr_usecase
+        cfunc = njit(pyfunc)
+
+        # value negative/>_MAX_UNICODE
+        for func in (pyfunc, cfunc):
+            for v in (-2, _MAX_UNICODE + 1):
+                with self.assertRaises(ValueError) as raises:
+                    func(v)
+                self.assertIn("chr() arg not in range", str(raises.exception))
+
+        # wrong type
+        with self.assertRaises(TypingError) as raises:
+            cfunc('abc')
+        self.assertIn('Invalid use of Function', str(raises.exception))
 
 
 if __name__ == '__main__':
