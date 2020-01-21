@@ -323,18 +323,6 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_bool_nonnumber(flags=no_pyobj_flags)
 
-    def test_chr(self, flags=enable_pyobj_flags):
-        pyfunc = chr_usecase
-
-        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
-        cfunc = cr.entry_point
-        for x in range(256):
-            self.assertPreciseEqual(cfunc(x), pyfunc(x))
-
-    def test_chr_npm(self):
-        with self.assertTypingError():
-            self.test_chr(flags=no_pyobj_flags)
-
     @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
     def test_cmp(self, flags=enable_pyobj_flags):
         pyfunc = cmp_usecase
@@ -804,18 +792,6 @@ class TestBuiltins(TestCase):
     def test_oct_npm(self):
         with self.assertTypingError():
             self.test_oct(flags=no_pyobj_flags)
-
-    def test_ord(self, flags=enable_pyobj_flags):
-        pyfunc = ord_usecase
-
-        cr = compile_isolated(pyfunc, (types.string,), flags=flags)
-        cfunc = cr.entry_point
-        for x in ['a', u'\u2020']:
-            self.assertPreciseEqual(cfunc(x), pyfunc(x))
-
-    def test_ord_npm(self):
-        with self.assertTypingError():
-            self.test_ord(flags=no_pyobj_flags)
 
     def test_reduce(self, flags=enable_pyobj_flags):
         pyfunc = reduce_usecase
