@@ -9,6 +9,7 @@ import pprint
 import re
 import sys
 import operator
+import inspect
 from types import FunctionType, BuiltinFunctionType
 from functools import total_ordering
 
@@ -22,12 +23,47 @@ from .six import StringIO
 _termcolor = errors.termcolor()
 
 
-class Loc(object):
+class Immutable(object):
+    _mutable = False
+    def __setattr__(self, name, value):
+       # Okay to modify if mutable is temporarily on or if what
+       # we are modifying is the mutable flag itself.
+       if self._mutable or name == '_mutable':
+            super(Immutable, self).__setattr__(name, value)
+       else:
+            caller = inspect.stack()[1].function
+            err = "object is read-only.  Cannot change attribute '" + name + "' from function " + caller
+            raise TypeError(err)
+
+    def __delattr__(self, name):
+        if self._mutable:
+            super(Immutable, self).__delattr__(name)
+        else:
+            caller = inspect.stack()[1].function
+            err = "object is read-only.  Cannot change attribute '" + name + "' from function " + caller
+            raise TypeError(err)
+
+def mutable(func):
+    def mfunc(self, *args, **kwargs):
+        if isinstance(self, Immutable):
+            orig_mutable = self._mutable
+            self._mutable = True
+            result = func(self, *args, **kwargs)
+            self._mutable = orig_mutable
+        else:
+            result = func(self, *args, **kwargs)
+
+        return result
+
+    return mfunc
+
+class Loc(Immutable):
     """Source location
 
     """
     _defmatcher = re.compile('def\s+(\w+)\(.*')
 
+    @mutable
     def __init__(self, filename, line, col=None, maybe_decorator=False):
         """ Arguments:
         filename - name of the file
@@ -87,6 +123,7 @@ class Loc(object):
             # Probably exec(<string>) or REPL.
             return None
 
+    @mutable
     def get_lines(self):
         if self.lines is None:
 
@@ -299,7 +336,7 @@ class AbstractRHS(object):
     """
 
 
-class Inst(EqualityCheckMixin, AbstractRHS):
+class Inst(EqualityCheckMixin, AbstractRHS, Immutable):
     """
     Base class for all IR instructions.
     """
@@ -369,6 +406,7 @@ class Expr(Inst):
     statement).
     """
 
+    @mutable
     def __init__(self, op, loc, **kws):
         assert isinstance(op, str)
         assert isinstance(loc, Loc)
@@ -377,11 +415,19 @@ class Expr(Inst):
         self._kws = kws
 
     def __getattr__(self, name):
+        if name == '_kws':
+            return self.__dict__[name]
+
         if name.startswith('_'):
             return Inst.__getattr__(self, name)
         return self._kws[name]
 
     def __setattr__(self, name, value):
+        # TODO: Is there a better way to do this rather than
+        # knowing about the implementation of the Immutable base class?
+        if name == '_mutable':
+            return super(Expr, self).__setattr__(name, value)
+
         if name in ('op', 'loc', '_kws'):
             self.__dict__[name] = value
         else:
@@ -567,6 +613,7 @@ class SetItem(Stmt):
     target[index] = value
     """
 
+    @mutable
     def __init__(self, target, index, value, loc):
         assert isinstance(target, Var)
         assert isinstance(index, Var)
@@ -586,6 +633,7 @@ class StaticSetItem(Stmt):
     target[constant index] = value
     """
 
+    @mutable
     def __init__(self, target, index, index_var, value, loc):
         assert isinstance(target, Var)
         assert not isinstance(index, Var)
@@ -607,6 +655,7 @@ class DelItem(Stmt):
     del target[index]
     """
 
+    @mutable
     def __init__(self, target, index, loc):
         assert isinstance(target, Var)
         assert isinstance(index, Var)
@@ -620,6 +669,7 @@ class DelItem(Stmt):
 
 
 class SetAttr(Stmt):
+    @mutable
     def __init__(self, target, attr, value, loc):
         assert isinstance(target, Var)
         assert isinstance(attr, str)
@@ -635,6 +685,7 @@ class SetAttr(Stmt):
 
 
 class DelAttr(Stmt):
+    @mutable
     def __init__(self, target, attr, loc):
         assert isinstance(target, Var)
         assert isinstance(attr, str)
@@ -648,6 +699,7 @@ class DelAttr(Stmt):
 
 
 class StoreMap(Stmt):
+    @mutable
     def __init__(self, dct, key, value, loc):
         assert isinstance(dct, Var)
         assert isinstance(key, Var)
@@ -663,6 +715,7 @@ class StoreMap(Stmt):
 
 
 class Del(Stmt):
+    @mutable
     def __init__(self, value, loc):
         assert isinstance(value, str)
         assert isinstance(loc, Loc)
@@ -676,6 +729,7 @@ class Del(Stmt):
 class Raise(Terminator):
     is_exit = True
 
+    @mutable
     def __init__(self, exception, loc):
         assert exception is None or isinstance(exception, Var)
         assert isinstance(loc, Loc)
@@ -697,6 +751,7 @@ class StaticRaise(Terminator):
     """
     is_exit = True
 
+    @mutable
     def __init__(self, exc_class, exc_args, loc):
         assert exc_class is None or isinstance(exc_class, type)
         assert isinstance(loc, Loc)
@@ -722,6 +777,7 @@ class TryRaise(Stmt):
     """A raise statement inside a try-block
     Similar to ``Raise`` but does not terminate.
     """
+    @mutable
     def __init__(self, exception, loc):
         assert exception is None or isinstance(exception, Var)
         assert isinstance(loc, Loc)
@@ -737,6 +793,7 @@ class StaticTryRaise(Stmt):
     Similar to ``StaticRaise`` but does not terminate.
     """
 
+    @mutable
     def __init__(self, exc_class, exc_args, loc):
         assert exc_class is None or isinstance(exc_class, type)
         assert isinstance(loc, Loc)
@@ -761,6 +818,7 @@ class Return(Terminator):
     """
     is_exit = True
 
+    @mutable
     def __init__(self, value, loc):
         assert isinstance(value, Var), type(value)
         assert isinstance(loc, Loc)
@@ -779,6 +837,7 @@ class Jump(Terminator):
     Unconditional branch.
     """
 
+    @mutable
     def __init__(self, target, loc):
         assert isinstance(loc, Loc)
         self.target = target
@@ -796,6 +855,7 @@ class Branch(Terminator):
     Conditional branch.
     """
 
+    @mutable
     def __init__(self, cond, truebr, falsebr, loc):
         assert isinstance(cond, Var)
         assert isinstance(loc, Loc)
@@ -815,6 +875,7 @@ class Assign(Stmt):
     """
     Assign to a variable.
     """
+    @mutable
     def __init__(self, value, target, loc):
         assert isinstance(value, AbstractRHS)
         assert isinstance(target, Var)
@@ -831,6 +892,7 @@ class Print(Stmt):
     """
     Print some values.
     """
+    @mutable
     def __init__(self, args, vararg, loc):
         assert all(isinstance(x, Var) for x in args)
         assert vararg is None or isinstance(vararg, Var)
@@ -846,6 +908,7 @@ class Print(Stmt):
 
 
 class Yield(Inst):
+    @mutable
     def __init__(self, value, loc, index):
         assert isinstance(value, Var)
         assert isinstance(loc, Loc)
@@ -863,6 +926,7 @@ class Yield(Inst):
 class EnterWith(Stmt):
     """Enter a "with" context
     """
+    @mutable
     def __init__(self, contextmanager, begin, end, loc):
         """
         Parameters
@@ -887,7 +951,8 @@ class EnterWith(Stmt):
         return [self.contextmanager]
 
 
-class Arg(EqualityCheckMixin, AbstractRHS):
+class Arg(EqualityCheckMixin, AbstractRHS, Immutable):
+    @mutable
     def __init__(self, name, index, loc):
         assert isinstance(name, str)
         assert isinstance(index, int)
@@ -903,7 +968,8 @@ class Arg(EqualityCheckMixin, AbstractRHS):
         raise ConstantInferenceError('%s' % self, loc=self.loc)
 
 
-class Const(EqualityCheckMixin, AbstractRHS):
+class Const(EqualityCheckMixin, AbstractRHS, Immutable):
+    @mutable
     def __init__(self, value, loc, use_literal_type=True):
         assert isinstance(loc, Loc)
         self.value = value
@@ -918,7 +984,8 @@ class Const(EqualityCheckMixin, AbstractRHS):
         return self.value
 
 
-class Global(EqualityCheckMixin, AbstractRHS):
+class Global(EqualityCheckMixin, AbstractRHS, Immutable):
+    @mutable
     def __init__(self, name, value, loc):
         assert isinstance(loc, Loc)
         self.name = name
@@ -937,12 +1004,13 @@ class Global(EqualityCheckMixin, AbstractRHS):
         return Global(self.name, self.value, copy.deepcopy(self.loc))
 
 
-class FreeVar(EqualityCheckMixin, AbstractRHS):
+class FreeVar(EqualityCheckMixin, AbstractRHS, Immutable):
     """
     A freevar, as loaded by LOAD_DECREF.
     (i.e. a variable defined in an enclosing non-global scope)
     """
 
+    @mutable
     def __init__(self, index, name, value, loc):
         assert isinstance(index, int)
         assert isinstance(name, str)
@@ -962,7 +1030,7 @@ class FreeVar(EqualityCheckMixin, AbstractRHS):
         return self.value
 
 
-class Var(EqualityCheckMixin, AbstractRHS):
+class Var(EqualityCheckMixin, AbstractRHS, Immutable):
     """
     Attributes
     -----------
@@ -974,6 +1042,7 @@ class Var(EqualityCheckMixin, AbstractRHS):
         Definition location
     """
 
+    @mutable
     def __init__(self, scope, name, loc):
         # NOTE: Use of scope=None should be removed.
         assert scope is None or isinstance(scope, Scope)
@@ -994,7 +1063,7 @@ class Var(EqualityCheckMixin, AbstractRHS):
         return self.name.startswith("$")
 
 
-class Intrinsic(EqualityCheckMixin):
+class Intrinsic(EqualityCheckMixin, Immutable):
     """
     A low-level "intrinsic" function.  Suitable as the callable of a "call"
     expression.
@@ -1004,6 +1073,7 @@ class Intrinsic(EqualityCheckMixin):
     The *type* is the equivalent Numba signature of calling the intrinsic.
     """
 
+    @mutable
     def __init__(self, name, type, args, loc=None):
         self.name = name
         self.type = type
@@ -1017,7 +1087,7 @@ class Intrinsic(EqualityCheckMixin):
         return self.name
 
 
-class Scope(EqualityCheckMixin):
+class Scope(EqualityCheckMixin, Immutable):
     """
     Attributes
     -----------
@@ -1032,6 +1102,7 @@ class Scope(EqualityCheckMixin):
 
     """
 
+    @mutable
     def __init__(self, parent, loc):
         assert parent is None or isinstance(parent, Scope)
         assert isinstance(loc, Loc)
@@ -1115,6 +1186,7 @@ class Block(EqualityCheckMixin):
 
     """
 
+    @mutable
     def __init__(self, scope, loc):
         assert isinstance(scope, Scope)
         assert isinstance(loc, Loc)
@@ -1214,7 +1286,7 @@ class Block(EqualityCheckMixin):
         return "<ir.Block at %s>" % (self.loc,)
 
 
-class Loop(SlotEqualityCheckMixin):
+class Loop(SlotEqualityCheckMixin, Immutable):
     """Describes a loop-block
     """
     __slots__ = "entry", "exit"
