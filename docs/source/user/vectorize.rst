@@ -230,7 +230,7 @@ visible changes to the input::
        [4.2, 4.2, 4.2],
        [4.2, 4.2, 4.2]])
 
-This works because Numpy can pass the input data directly into the `init_values`
+This works because NumPy can pass the input data directly into the `init_values`
 function as the data `dtype` matches that of the declared argument.  However, it
 may also create and pass in a temporary array, in which case changes to the
 input are lost. For example, this can occur when casting is required. To
