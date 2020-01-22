@@ -15,7 +15,7 @@ import weakref
 from types import ModuleType
 import numpy as np
 
-from .six import *
+from .python_utils import *
 from .errors import UnsupportedError
 try:
     # preferred over pure-python StringIO due to threadsafety

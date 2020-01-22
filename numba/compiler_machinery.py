@@ -8,7 +8,7 @@ import traceback
 from numba.compiler_lock import global_compiler_lock
 from numba import errors
 from . import config, utils, transforms
-from numba.six import add_metaclass
+from numba.python_utils import add_metaclass
 from .tracing import event
 from .postproc import PostProcessor
 

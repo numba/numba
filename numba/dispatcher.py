@@ -19,7 +19,7 @@ from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
 from numba.typing.typeof import Purpose, typeof
 from numba.bytecode import get_code_object
-from numba.six import reraise
+from numba.python_utils import reraise
 from .caching import NullCache, FunctionCache
 
 

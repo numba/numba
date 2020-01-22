@@ -9,7 +9,7 @@ import os.path
 
 from llvmlite import ir
 
-from numba.six import add_metaclass
+from numba.python_utils import add_metaclass
 
 
 @add_metaclass(abc.ABCMeta)
