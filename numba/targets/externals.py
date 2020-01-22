@@ -151,10 +151,7 @@ class _ExternalMathFunctions(_Installer):
             # (under Windows, different versions of the C runtime can
             #  be loaded at the same time, for example msvcrt100 by
             #  CPython and msvcrt120 by LLVM)
-            if fname.startswith('fmod'):
-                ll.add_symbol(fname, c_helpers['fixed_' + fname])
-            else:
-                ll.add_symbol(fname, c_helpers[fname])
+            ll.add_symbol(fname, c_helpers[fname])
 
 
 c_math_functions = _ExternalMathFunctions()
