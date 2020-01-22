@@ -22,7 +22,6 @@ import weakref
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba.utils import IS_PY3
 from numba import sigutils, types, typing, errors
 from numba.types.abstract import _typecache
 from numba.typing.templates import make_overload_template
@@ -297,13 +296,12 @@ class TestNumbers(TestCase):
         check_order([types.float32, types.float64])
         check_order([types.complex64, types.complex128])
 
-        if IS_PY3:
-            with self.assertRaises(TypeError):
-                types.int8 <= types.uint32
-            with self.assertRaises(TypeError):
-                types.int8 <= types.float32
-            with self.assertRaises(TypeError):
-                types.float64 <= types.complex128
+        with self.assertRaises(TypeError):
+            types.int8 <= types.uint32
+        with self.assertRaises(TypeError):
+            types.int8 <= types.float32
+        with self.assertRaises(TypeError):
+            types.float64 <= types.complex128
 
 
 class TestNdIter(TestCase):

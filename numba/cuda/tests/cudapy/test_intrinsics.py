@@ -4,7 +4,6 @@ import numpy as np
 import re
 from numba import cuda, int32, float32
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
-from numba.utils import IS_PY3
 
 
 def simple_threadidx(ary):
@@ -381,7 +380,6 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
         compiled(ary)
         self.assertEquals(ary[0], 32, "CUDA semantics")
 
-    @unittest.skipUnless(IS_PY3, "round() returns float on Py2")
     def test_round_f4(self):
         compiled = cuda.jit("void(int64[:], float32)")(simple_round)
         ary = np.zeros(1, dtype=np.int32)
@@ -390,7 +388,6 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
             compiled(ary, i)
             self.assertEquals(ary[0], round(i))
 
-    @unittest.skipUnless(IS_PY3, "round() returns float on Py2")
     def test_round_f8(self):
         compiled = cuda.jit("void(int64[:], float64)")(simple_round)
         ary = np.zeros(1, dtype=np.int32)

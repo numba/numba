@@ -334,23 +334,6 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_chr(flags=no_pyobj_flags)
 
-    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
-    def test_cmp(self, flags=enable_pyobj_flags):
-        pyfunc = cmp_usecase
-
-        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
-        cfunc = cr.entry_point
-
-        x_operands = [-1, 0, 1]
-        y_operands = [-1, 0, 1]
-        for x, y in itertools.product(x_operands, y_operands):
-            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
-
-    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
-    def test_cmp_npm(self):
-        with self.assertTypingError():
-            self.test_cmp(flags=no_pyobj_flags)
-
     def test_complex(self, flags=enable_pyobj_flags):
         pyfunc = complex_usecase
 
@@ -597,23 +580,6 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_locals(flags=no_pyobj_flags)
 
-    @unittest.skipIf(utils.IS_PY3, "long is not available as global is Py3")
-    def test_long(self, flags=enable_pyobj_flags):
-        pyfunc = long_usecase
-
-        cr = compile_isolated(pyfunc, (types.string, types.int64), flags=flags)
-        cfunc = cr.entry_point
-
-        x_operands = ['-1', '0', '1', '10']
-        y_operands = [2, 8, 10, 16]
-        for x, y in itertools.product(x_operands, y_operands):
-            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
-
-    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
-    def test_long_npm(self):
-        with self.assertTypingError():
-            self.test_long(flags=no_pyobj_flags)
-
     def test_map(self, flags=enable_pyobj_flags):
         pyfunc = map_usecase
         cr = compile_isolated(pyfunc, (types.Dummy('list'),
@@ -731,11 +697,7 @@ class TestBuiltins(TestCase):
         cfunc(1, [1])
 
     def test_max_1_invalid_types(self):
-        # Heterogeneous ordering is valid in Python 2
-        if utils.IS_PY3:
-            with self.assertRaises(TypeError):
-                self.check_min_max_invalid_types(max_usecase1)
-        else:
+        with self.assertRaises(TypeError):
             self.check_min_max_invalid_types(max_usecase1)
 
     def test_max_1_invalid_types_npm(self):
@@ -743,11 +705,7 @@ class TestBuiltins(TestCase):
             self.check_min_max_invalid_types(max_usecase1, flags=no_pyobj_flags)
 
     def test_min_1_invalid_types(self):
-        # Heterogeneous ordering is valid in Python 2
-        if utils.IS_PY3:
-            with self.assertRaises(TypeError):
-                self.check_min_max_invalid_types(min_usecase1)
-        else:
+        with self.assertRaises(TypeError):
             self.check_min_max_invalid_types(min_usecase1)
 
     def test_min_1_invalid_types_npm(self):
@@ -918,20 +876,6 @@ class TestBuiltins(TestCase):
         check(1.5j, 2)
         check(True, 2)
         check(2.5j, False)
-
-    @unittest.skipIf(utils.IS_PY3, "unichr not available as global is Py3")
-    def test_unichr(self, flags=enable_pyobj_flags):
-        pyfunc = unichr_usecase
-
-        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
-        cfunc = cr.entry_point
-        for x in range(0, 1000, 10):
-            self.assertPreciseEqual(cfunc(x), pyfunc(x))
-
-    @unittest.skipIf(utils.IS_PY3, "unichr not available as global is Py3")
-    def test_unichr_npm(self):
-        with self.assertTypingError():
-            self.test_unichr(flags=no_pyobj_flags)
 
     def test_zip(self, flags=forceobj_flags):
         self.run_nullary_func(zip_usecase, flags)

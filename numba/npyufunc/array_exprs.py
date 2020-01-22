@@ -250,9 +250,6 @@ _binops = {
     operator.floordiv: ast.FloorDiv,
 }
 
-if not utils.IS_PY3:
-    _binops[operator.div] = ast.Div
-
 
 _cmpops = {
     operator.eq: ast.Eq,

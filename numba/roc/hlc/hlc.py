@@ -27,11 +27,7 @@ def error_pipe():
     if NOISY_CMDLINE:
        yield subprocess.STDOUT
     else:
-        if utils.IS_PY3:
-           yield subprocess.DEVNULL
-        else:
-           with open(os.devnull, 'wb') as devnull:
-               yield devnull
+        yield subprocess.DEVNULL
 
 
 def check_call(*args, **kwargs):

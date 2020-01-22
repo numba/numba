@@ -155,10 +155,6 @@ class TestSlices(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(slice_indices)
 
         for s, l in product(slices, lengths):
-            if l < 0 and not utils.IS_PY3:
-                # Passing a negative length to slice.indices in python2 is
-                # undefined. See https://bugs.python.org/issue14794#msg174678
-                continue
             try:
                 expected = slice_indices(s, l)
             except Exception as py_e:

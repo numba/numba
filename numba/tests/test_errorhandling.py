@@ -162,11 +162,7 @@ class TestMiscErrorHandling(unittest.TestCase):
         def foo():
             y = (x for x in range(10))
 
-        if utils.IS_PY3:
-            expected = "The use of yield in a closure is unsupported."
-        else:
-            # funcsigs falls over on py27
-            expected = "Cannot obtain a signature for"
+        expected = "The use of yield in a closure is unsupported."
 
         for dec in jit(forceobj=True), njit:
             with self.assertRaises(errors.UnsupportedError) as raises:

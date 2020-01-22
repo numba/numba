@@ -15,8 +15,6 @@ from .. import types, utils
 from ..errors import TypingError, InternalError
 from ..targets.cpu_options import InlineOptions
 
-_IS_PY3 = sys.version_info >= (3,)
-
 # info store for inliner callback functions e.g. cost model
 _inline_info = namedtuple('inline_info',
                           'func_ir typemap calltypes signature')
@@ -417,14 +415,9 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                     msg = err_prefix + specialized % (sig_str, b[-1])
                     raise InternalError(msg)
 
-        if _IS_PY3:
-            def gen_diff(typing, implementing):
-                diff = set(typing) ^ set(implementing)
-                return "Difference: %s" % diff
-        else:
-            # funcsigs.Parameter cannot be hashed
-            def gen_diff(typing, implementing):
-                pass
+        def gen_diff(typing, implementing):
+            diff = set(typing) ^ set(implementing)
+            return "Difference: %s" % diff
 
         if a != b:
             specialized = "argument names.\n%s\n%s" % (sig_str, gen_diff(a, b))

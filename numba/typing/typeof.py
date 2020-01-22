@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 
 from collections import namedtuple
+from functools import singledispatch
 import ctypes
 import enum
 
@@ -35,7 +36,7 @@ def typeof(val, purpose=Purpose.argument):
     return ty
 
 
-@utils.singledispatch
+@singledispatch
 def typeof_impl(val, c):
     """
     Generic typeof() implementation.

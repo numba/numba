@@ -184,9 +184,6 @@ class NumpyRulesArrayOperator(Numpy_rules_ufunc):
         operator.ne: "not_equal",
     }
 
-    if not utils.IS_PY3:
-        _op_map[operator.div] = "divide"
-
     @property
     def ufunc(self):
         return getattr(np, self._op_map[self.key])
@@ -239,9 +236,6 @@ class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
         operator.ior: "bitwise_or",
         operator.ixor: "bitwise_xor",
     }
-
-    if not utils.IS_PY3:
-        _op_map[operator.idiv] = "divide"
 
     def generic(self, args, kws):
         # Type the inplace operator as if an explicit output was passed,

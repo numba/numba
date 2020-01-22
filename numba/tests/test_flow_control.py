@@ -7,7 +7,6 @@ from numba.controlflow import CFGraph, ControlFlowAnalysis
 from numba.compiler import compile_isolated, Flags
 from numba import types
 from numba.bytecode import FunctionIdentity, ByteCode
-from numba.utils import IS_PY3
 from .support import TestCase, tag
 
 enable_pyobj_flags = Flags()
@@ -1218,25 +1217,19 @@ class TestRealCodeDomFront(TestCase):
                 SET_BLOCK_D                 # noqa: F821
             SET_BLOCK_E                     # noqa: F821
 
-        # Whether infinite loop (i.g. while True) are optimized out.
-        infinite_loop_opt_out = bool(IS_PY3)
-
         cfa, blkpts = self.get_cfa_and_namedblocks(foo)
 
         idoms = cfa.graph.immediate_dominators()
-        if infinite_loop_opt_out:
-            self.assertNotIn(blkpts['E'], idoms)
+        self.assertNotIn(blkpts['E'], idoms)
         self.assertEqual(blkpts['B'], idoms[blkpts['C']])
         self.assertEqual(blkpts['B'], idoms[blkpts['D']])
 
         domfront = cfa.graph.dominance_frontier()
-        if infinite_loop_opt_out:
-            self.assertNotIn(blkpts['E'], domfront)
+        self.assertNotIn(blkpts['E'], domfront)
         self.assertFalse(domfront[blkpts['A']])
         self.assertFalse(domfront[blkpts['C']])
-        if infinite_loop_opt_out:
-            self.assertEqual({blkpts['B']}, domfront[blkpts['B']])
-            self.assertEqual({blkpts['B']}, domfront[blkpts['D']])
+        self.assertEqual({blkpts['B']}, domfront[blkpts['B']])
+        self.assertEqual({blkpts['B']}, domfront[blkpts['D']])
 
 
 if __name__ == '__main__':

@@ -620,9 +620,8 @@ class TestParfors(TestParforsBase):
             v = np.linspace(2, 1, 10)
             ddot(A, v)
 
-        msg = ("The 'parallel' target is not currently supported on "
-               "Windows operating systems when using Python 2.7, "
-               "or on 32 bit hardware")
+        msg = ("The 'parallel' target is not currently supported on 32 bit "
+               "hardware")
         self.assertIn(msg, str(raised.exception))
 
     @skip_unsupported
@@ -1588,15 +1587,6 @@ class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
         self.check(test_impl, arr)
 
 
-
-def iterate_bytecode(code):
-    if PYVERSION >= (3, 4):   # available since Py3.4
-        return dis.Bytecode(code)
-    else:
-        offsets, insts = zip(*ByteCodeIter(code))
-        return insts
-
-
 class TestPrangeBase(TestParforsBase):
 
     def __init__(self, *args):
@@ -1624,7 +1614,7 @@ class TestPrangeBase(TestParforsBase):
             range_idx = pyfunc_code.co_names.index('range')
             range_locations = []
             # look for LOAD_GLOBALs that point to 'range'
-            for instr in iterate_bytecode(pyfunc_code):
+            for instr in dis.Bytecode(pyfunc_code):
                 if instr.opname == 'LOAD_GLOBAL':
                     if instr.arg == range_idx:
                         range_locations.append(instr.offset + 1)

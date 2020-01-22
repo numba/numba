@@ -11,7 +11,6 @@ from functools import reduce
 import numpy as np
 
 from numba.utils import longint
-from numba.utils import IS_PY3
 from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder, parse_identity
 from numba import sigutils, types
 from numba.typing import signature
