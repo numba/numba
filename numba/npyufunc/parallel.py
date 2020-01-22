@@ -276,18 +276,15 @@ class _nop(object):
 
 
 try:
-    if utils.PY3:
-        # Force the use of an RLock in the case a fork was used to start the
-        # process and thereby the init sequence, some of the threading backend
-        # init sequences are not fork safe. Also, windows global mp locks seem
-        # to be fine.
-        if "fork" in multiprocessing.get_start_method() or _windows:
-            _backend_init_process_lock = multiprocessing.get_context().RLock()
-        else:
-            _backend_init_process_lock = _nop()
+    # Force the use of an RLock in the case a fork was used to start the
+    # process and thereby the init sequence, some of the threading backend
+    # init sequences are not fork safe. Also, windows global mp locks seem
+    # to be fine.
+    if "fork" in multiprocessing.get_start_method() or _windows:
+        _backend_init_process_lock = multiprocessing.get_context().RLock()
     else:
-        # windows uses spawn so is fine, linux uses fork has the lock
-        _backend_init_process_lock = multiprocessing.RLock()
+        _backend_init_process_lock = _nop()
+
 except OSError as e:
 
     # probably lack of /dev/shm for semaphore writes, warn the user
