@@ -1000,17 +1000,17 @@ class VDot(CallableTemplate):
 
         return typer
 
-if utils.HAS_MATMUL_OPERATOR:
-    @infer_global(operator.matmul)
-    class MatMul(MatMulTyperMixin, AbstractTemplate):
-        key = operator.matmul
-        func_name = "'@'"
 
-        def generic(self, args, kws):
-            assert not kws
-            restype = self.matmul_typer(*args)
-            if restype is not None:
-                return signature(restype, *args)
+@infer_global(operator.matmul)
+class MatMul(MatMulTyperMixin, AbstractTemplate):
+    key = operator.matmul
+    func_name = "'@'"
+
+    def generic(self, args, kws):
+        assert not kws
+        restype = self.matmul_typer(*args)
+        if restype is not None:
+            return signature(restype, *args)
 
 
 def _check_linalg_matrix(a, func_name):
