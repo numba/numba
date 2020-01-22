@@ -240,8 +240,6 @@ Misc Support
   data structures
 - :ghfile:`numba/cgutils.py` - Utility functions for generating common code
   patterns in LLVM IR
-- :ghfile:`numba/io_support.py` - Workaround for various names of StringIO
-  in different Python versions (should this be in six?)
 - :ghfile:`numba/utils.py` - Python 2 backports of Python 3 functionality
   (also imports local copy of ``six``)
 - :ghfile:`numba/appdirs.py` - Vendored package for determining application
@@ -271,8 +269,6 @@ Misc Support
   on the host, but not the data.
 - :ghfile:`numba/callwrapper.py` - Handles argument unboxing and releasing
   the GIL when moving from Python to nopython mode
-- :ghfile:`numba/ctypes_support.py` - Import this instead of ``ctypes`` to
-  workaround portability issue with Python 2.7
 - :ghfile:`numba/cffi_support.py` - Alias of numba.typing.cffi_utils for
   backward compatibility (still needed?)
 - :ghfile:`numba/numpy_support.py` - Helper functions for working with NumPy
