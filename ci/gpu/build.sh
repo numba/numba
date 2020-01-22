@@ -17,10 +17,12 @@ function hasArg {
     (( ${NUMARGS} != 0 )) && (echo " ${ARGS} " | grep -q " $1 ")
 }
 
-# Set path and build parallel level
+# Set path
 export PATH=/conda/bin:/usr/local/cuda/bin:$PATH
-export PARALLEL_LEVEL=4
 export CUDA_REL=${CUDA_VERSION%.*}
+
+# Set python version
+export PY_VER=`python --version | awk '{print $2}'`
 
 # Set home to the job's workspace
 export HOME=$WORKSPACE
@@ -41,9 +43,9 @@ logger "Check GPU usage..."
 nvidia-smi
 
 logger "Activate conda env..."
-source activate gdf
 conda config --add channels numba
-conda install "llvmlite" "numpy" "scipy" "jinja2" "cffi" "cudatoolkit=$CUDA_REL"
+conda create -n numbatest python=$PY_VER "llvmlite" "numpy" "scipy" "jinja2" "cffi" "cudatoolkit=$CUDA_REL"
+source activate numbatest
 
 logger "Check versions..."
 python --version
