@@ -12,10 +12,10 @@ import sys
 import time
 import warnings
 
+from io import StringIO
 from unittest import result, runner, signals, suite, loader, case
 
 from .loader import TestLoader
-from numba.utils import StringIO
 from numba import config
 
 try:

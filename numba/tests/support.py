@@ -170,7 +170,7 @@ class TestCase(unittest.TestCase):
 
     _bool_types = (bool, np.bool_)
     _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,),
-                       (utils.text_type), (bytes, np.bytes_)]
+                       (bytes, np.bytes_)]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]
     _float_types = (float, np.floating)
@@ -609,7 +609,7 @@ def captured_output(stream_name):
     """Return a context manager used by captured_stdout/stdin/stderr
     that temporarily replaces the sys stream *stream_name* with a StringIO."""
     orig_stdout = getattr(sys, stream_name)
-    setattr(sys, stream_name, utils.StringIO())
+    setattr(sys, stream_name, io.StringIO())
     try:
         yield getattr(sys, stream_name)
     finally:
