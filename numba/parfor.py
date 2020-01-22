@@ -77,7 +77,8 @@ from numba.ir_utils import (
     is_get_setitem,
     index_var_of_get_setitem,
     set_index_var_of_get_setitem,
-    find_potential_aliases)
+    find_potential_aliases,
+    replace_var_names)
 
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
@@ -1547,7 +1548,7 @@ class ParforPass(object):
         simplify(self.func_ir, self.typemap, self.calltypes)
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
-        push_call_vars(self.func_ir.blocks, {}, {})
+        push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)
         # simplify again
         simplify(self.func_ir, self.typemap, self.calltypes)
         dprint_func_ir(self.func_ir, "after optimization")
@@ -2676,7 +2677,7 @@ def _arrayexpr_tree_to_ir(
                 func_var_name = _find_func_var(typemap, op, avail_vars)
                 func_var = ir.Var(scope, mk_unique_var(func_var_name), loc)
                 typemap[func_var.name] = typemap[func_var_name]
-                func_var_def = func_ir.get_definition(func_var_name)
+                func_var_def = copy.deepcopy(func_ir.get_definition(func_var_name))
                 if isinstance(func_var_def, ir.Expr) and func_var_def.op == 'getattr' and func_var_def.attr == 'sqrt':
                      g_math_var = ir.Var(scope, mk_unique_var("$math_g_var"), loc)
                      typemap[g_math_var.name] = types.misc.Module(math)
@@ -3926,7 +3927,7 @@ def apply_copies_parfor(parfor, var_dict, name_var_table,
 ir_utils.apply_copy_propagate_extensions[Parfor] = apply_copies_parfor
 
 
-def push_call_vars(blocks, saved_globals, saved_getattrs, nested=False):
+def push_call_vars(blocks, saved_globals, saved_getattrs, typemap, nested=False):
     """push call variables to right before their call site.
     assuming one global/getattr is created for each call site and control flow
     doesn't change it.
@@ -3936,6 +3937,12 @@ def push_call_vars(blocks, saved_globals, saved_getattrs, nested=False):
         # global/attr variables that are defined in this block already,
         #   no need to reassign them
         block_defs = set()
+        # Some definitions are copied right before the call but then we
+        # need to rename that symbol in that block so that typing won't
+        # generate an error trying to lock the save var twice.
+        # In rename_dict, we collect the symbols that must be renamed in
+        # this block.  We collect them then apply the renaming at the end.
+        rename_dict = {}
         for stmt in block.body:
             def process_assign(stmt):
                 if isinstance(stmt, ir.Assign):
@@ -3954,33 +3961,58 @@ def push_call_vars(blocks, saved_globals, saved_getattrs, nested=False):
                 for s in stmt.init_block.body:
                     process_assign(s)
                 pblocks = stmt.loop_body.copy()
-                push_call_vars(pblocks, saved_globals, saved_getattrs, nested=True)
+                push_call_vars(pblocks, saved_globals, saved_getattrs, typemap, nested=True)
                 new_body.append(stmt)
                 continue
             else:
                 process_assign(stmt)
             for v in stmt.list_vars():
                 new_body += _get_saved_call_nodes(v.name, saved_globals,
-                                                  saved_getattrs, block_defs)
+                                                  saved_getattrs, block_defs, rename_dict)
             new_body.append(stmt)
         block.body = new_body
+        # If there is anything to rename then apply the renaming here.
+        if len(rename_dict) > 0:
+            # Fix-up the typing for the renamed vars.
+            for k, v in rename_dict.items():
+                typemap[v] = typemap[k]
+            # This is only to call replace_var_names which takes a dict.
+            temp_blocks = {0: block}
+            replace_var_names(temp_blocks, rename_dict)
 
     return
 
 
-def _get_saved_call_nodes(fname, saved_globals, saved_getattrs, block_defs):
+def _get_saved_call_nodes(fname, saved_globals, saved_getattrs, block_defs, rename_dict):
+    """ Implement the copying of globals or getattrs for the purposes noted in
+        push_call_vars.  We make a new var and assign to it a copy of the
+        global or getattr.  We remember this new assignment node and add an
+        entry in the renaming dictionary so that for this block the original
+        var name is replaced by the new var name we created.
+    """
     nodes = []
     while (fname not in block_defs and (fname in saved_globals
                                         or fname in saved_getattrs)):
+        def rename_global_or_getattr(obj, var_base, nodes, block_defs, rename_dict):
+            assert(isinstance(obj, ir.Assign))
+            renamed_var = ir.Var(obj.target.scope,
+                                 mk_unique_var(var_base),
+                                 obj.target.loc)
+            renamed_assign = ir.Assign(copy.deepcopy(obj.value),
+                                       renamed_var,
+                                       obj.loc)
+            nodes.append(renamed_assign)
+            block_defs.add(obj.target.name)
+            rename_dict[obj.target.name] = renamed_assign.target.name
+
         if fname in saved_globals:
-            nodes.append(saved_globals[fname])
-            block_defs.add(saved_globals[fname].target.name)
+            rename_global_or_getattr(saved_globals[fname], "$push_global_to_block",
+                                     nodes, block_defs, rename_dict)
             fname = '_PA_DONE'
         elif fname in saved_getattrs:
-            up_name = saved_getattrs[fname].value.value.name
-            nodes.append(saved_getattrs[fname])
-            block_defs.add(saved_getattrs[fname].target.name)
-            fname = up_name
+            rename_global_or_getattr(saved_getattrs[fname], "$push_getattr_to_block",
+                                     nodes, block_defs, rename_dict)
+            fname = saved_getattrs[fname].value.value.name
     nodes.reverse()
     return nodes
 
