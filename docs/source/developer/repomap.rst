@@ -240,8 +240,6 @@ Misc Support
   data structures
 - :ghfile:`numba/cgutils.py` - Utility functions for generating common code
   patterns in LLVM IR
-- :ghfile:`numba/six.py` - Vendored subset of ``six`` package for Python 2 +
-  3 compatibility
 - :ghfile:`numba/io_support.py` - Workaround for various names of StringIO
   in different Python versions (should this be in six?)
 - :ghfile:`numba/utils.py` - Python 2 backports of Python 3 functionality
