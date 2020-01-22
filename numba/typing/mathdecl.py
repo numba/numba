@@ -61,17 +61,11 @@ class Math_converter(ConcreteTemplate):
         signature(types.int64, types.float64),
     ]
 
-# math.floor and math.ceil return float on 2.x, int on 3.x
-if utils.PYVERSION > (3, 0):
-    @infer_global(math.floor)
-    @infer_global(math.ceil)
-    class Math_floor_ceil(Math_converter):
-        pass
-else:
-    @infer_global(math.floor)
-    @infer_global(math.ceil)
-    class Math_floor_ceil(Math_unary):
-        pass
+
+@infer_global(math.floor)
+@infer_global(math.ceil)
+class Math_floor_ceil(Math_converter):
+    pass
 
 
 @infer_global(math.copysign)
@@ -102,10 +96,10 @@ class Math_predicate(ConcreteTemplate):
         signature(types.boolean, types.float64),
     ]
 
-if utils.PYVERSION >= (3, 2):
-    @infer_global(math.isfinite)
-    class Math_isfinite(Math_predicate):
-        pass
+
+@infer_global(math.isfinite)
+class Math_isfinite(Math_predicate):
+    pass
 
 
 @infer_global(math.pow)
@@ -118,19 +112,18 @@ class Math_pow(ConcreteTemplate):
     ]
 
 
-if utils.PYVERSION >= (3, 5):
-    @infer_global(math.gcd)
-    class Math_gcd(ConcreteTemplate):
-        cases = [
-            signature(types.int64, types.int64, types.int64),
-            signature(types.int32, types.int32, types.int32),
-            signature(types.int16, types.int16, types.int16),
-            signature(types.int8, types.int8, types.int8),
-            signature(types.uint64, types.uint64, types.uint64),
-            signature(types.uint32, types.uint32, types.uint32),
-            signature(types.uint16, types.uint16, types.uint16),
-            signature(types.uint8, types.uint8, types.uint8),
-        ]
+@infer_global(math.gcd)
+class Math_gcd(ConcreteTemplate):
+    cases = [
+        signature(types.int64, types.int64, types.int64),
+        signature(types.int32, types.int32, types.int32),
+        signature(types.int16, types.int16, types.int16),
+        signature(types.int8, types.int8, types.int8),
+        signature(types.uint64, types.uint64, types.uint64),
+        signature(types.uint32, types.uint32, types.uint32),
+        signature(types.uint16, types.uint16, types.uint16),
+        signature(types.uint8, types.uint8, types.uint8),
+    ]
 
 
 @infer_global(math.frexp)

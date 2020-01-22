@@ -528,7 +528,6 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
         r = call(123, 0)
         self.assertEqual(r, Rect(width=123, height=-321))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_string_literal_in_ctor(self):
         # Test for issue #3813
 
@@ -611,7 +610,6 @@ class TestMethods(TestCase):
 
 class TestTupleBuild(TestCase):
 
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_build_unpack(self):
         def check(p):
             # using eval here since Python 2 doesn't even support the syntax
@@ -624,8 +622,6 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check((4, 5.5))
 
-
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_build_unpack_more(self):
         def check(p):
             # using eval here since Python 2 doesn't even support the syntax
@@ -638,8 +634,6 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check((4, 5.5))
 
-
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_build_unpack_call(self):
         def check(p):
             # using eval here since Python 2 doesn't even support the syntax

@@ -15,7 +15,6 @@ from numba import types, typing, utils, typeof, numpy_support, njit
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import from_dtype, version as numpy_version
 from numba import jit, vectorize
-from numba.config import PYVERSION
 from numba.errors import LoweringError, TypingError
 from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
 from numba.typing.npydecl import supported_ufuncs, all_ufuncs
@@ -341,8 +340,7 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         # Bear in mind that in python3 divide IS true_divide
         # so the out type for int types will be a double
         int_out_type = None
-        if PYVERSION >= (3, 0):
-            int_out_type = types.float64
+        int_out_type = types.float64
 
         self.binary_ufunc_test(np.divide, flags=flags, int_output_type=int_out_type)
 
@@ -1212,8 +1210,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
     @tag('important')
     def test_divide_array_op(self):
         int_out_type = None
-        if PYVERSION >= (3, 0):
-            int_out_type = types.float64
+        int_out_type = types.float64
         self.binary_op_test('/', int_output_type=int_out_type)
 
     @tag('important')

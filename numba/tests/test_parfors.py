@@ -20,7 +20,6 @@ import operator
 from collections import defaultdict
 
 import numba
-from numba.utils import PYVERSION
 from numba import unittest_support as unittest
 from .support import TestCase, captured_stdout, MemoryLeakMixin, override_env_config
 from numba import njit, prange, stencil, inline_closurecall

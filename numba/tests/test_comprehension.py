@@ -194,10 +194,7 @@ class TestListComprehension(TestCase):
              list6, list7, list8, list9, list10, list11,
              list12, list13, list14, list15,
              list16, list17, list18, list19, list20,
-             list21, list23, list24]
-
-        if utils.PYVERSION >= (3, 0):
-            f.append(list22)
+             list21, list22, list23, list24]
 
         var = [1, 2, 3, 4, 5]
         for ref in f:
@@ -221,13 +218,6 @@ class TestListComprehension(TestCase):
             bits = 64
         else:
             bits = 32
-
-        if utils.PYVERSION < (3, 0):
-            with self.assertRaises(TypingError) as raises:
-                cfunc = jit(nopython=True)(list22)
-                cfunc(var)
-            msg = "Cannot unify reflected list(int%d) and int%d" % (bits, bits)
-            self.assertIn(msg, str(raises.exception))
 
     def test_objmode_inlining(self):
         def objmode_func(y):

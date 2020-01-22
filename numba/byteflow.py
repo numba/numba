@@ -966,7 +966,7 @@ class TraceRunner(object):
         name = state.pop()
         code = state.pop()
         closure = annotations = kwdefaults = defaults = None
-        if PYVERSION >= (3, 0) and PYVERSION < (3, 6):
+        if PYVERSION < (3, 6):
             num_posdefaults = inst.arg & 0xFF
             num_kwdefaults = (inst.arg >> 8) & 0xFF
             num_annotations = (inst.arg >> 16) & 0x7FFF

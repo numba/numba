@@ -1,11 +1,11 @@
 from __future__ import print_function, absolute_import, division
 
+from ctypes import *
 import sys
 import threading
 
 import numpy as np
 
-from numba.ctypes_support import *
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated

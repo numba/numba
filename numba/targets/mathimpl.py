@@ -200,14 +200,10 @@ sinh_impl = unary_math_extern(math.sinh, "sinhf", "sinh")
 cosh_impl = unary_math_extern(math.cosh, "coshf", "cosh")
 tanh_impl = unary_math_extern(math.tanh, "tanhf", "tanh")
 
-# math.floor and math.ceil return float on 2.x, int on 3.x
-if utils.PYVERSION > (3, 0):
-    log2_impl = unary_math_extern(math.log2, "log2f", "log2")
-    ceil_impl = unary_math_extern(math.ceil, "ceilf", "ceil", True)
-    floor_impl = unary_math_extern(math.floor, "floorf", "floor", True)
-else:
-    ceil_impl = unary_math_extern(math.ceil, "ceilf", "ceil")
-    floor_impl = unary_math_extern(math.floor, "floorf", "floor")
+log2_impl = unary_math_extern(math.log2, "log2f", "log2")
+ceil_impl = unary_math_extern(math.ceil, "ceilf", "ceil", True)
+floor_impl = unary_math_extern(math.floor, "floorf", "floor", True)
+
 gamma_impl = unary_math_extern(math.gamma, "numba_gammaf", "numba_gamma") # work-around
 sqrt_impl = unary_math_extern(math.sqrt, "sqrtf", "sqrt")
 trunc_impl = unary_math_extern(math.trunc, "truncf", "trunc", True)
@@ -238,17 +234,17 @@ def isinf_int_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-if utils.PYVERSION >= (3, 2):
-    @lower(math.isfinite, types.Float)
-    def isfinite_float_impl(context, builder, sig, args):
-        [val] = args
-        res = is_finite(builder, val)
-        return impl_ret_untracked(context, builder, sig.return_type, res)
+@lower(math.isfinite, types.Float)
+def isfinite_float_impl(context, builder, sig, args):
+    [val] = args
+    res = is_finite(builder, val)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
-    @lower(math.isfinite, types.Integer)
-    def isfinite_int_impl(context, builder, sig, args):
-        res = cgutils.true_bit
-        return impl_ret_untracked(context, builder, sig.return_type, res)
+
+@lower(math.isfinite, types.Integer)
+def isfinite_int_impl(context, builder, sig, args):
+    res = cgutils.true_bit
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @lower(math.copysign, types.Float, types.Float)
@@ -458,5 +454,5 @@ def gcd_impl(context, builder, sig, args):
     res = context.compile_internal(builder, gcd, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-if utils.PYVERSION >= (3, 5):
-    lower(math.gcd, types.Integer, types.Integer)(gcd_impl)
+
+lower(math.gcd, types.Integer, types.Integer)(gcd_impl)

@@ -36,10 +36,9 @@ class CMath_predicate(ConcreteTemplate):
              sorted(types.complex_domain)]
 
 
-if utils.PYVERSION >= (3, 2):
-    @infer_global(cmath.isfinite)
-    class CMath_isfinite(CMath_predicate):
-        pass
+@infer_global(cmath.isfinite)
+class CMath_isfinite(CMath_predicate):
+    pass
 
 
 @infer_global(cmath.log)

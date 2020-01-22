@@ -189,7 +189,6 @@ class TestPrint(TestCase):
                     "keyword arguments.")
         self.assertIn(raises.exception.msg, expected)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
     def test_print_no_truncation(self):
         ''' See: https://github.com/numba/numba/issues/3811
         '''

@@ -11,7 +11,6 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types, typeinfer, utils, errors
-from numba.config import PYVERSION
 from .support import TestCase, tag
 from .true_div_usecase import truediv_usecase, itruediv_usecase
 from .matmul_usecase import (matmul_usecase, imatmul_usecase, DumbMatrix,
@@ -224,18 +223,6 @@ class FunctionalOperatorImpl(object):
     def imul_usecase(x, y):
         return operator.imul(x, y)
 
-    if PYVERSION >= (3, 0):
-        div_usecase = NotImplemented
-        idiv_usecase = NotImplemented
-    else:
-        @staticmethod
-        def div_usecase(x, y):
-            return operator.div(x, y)
-
-        @staticmethod
-        def idiv_usecase(x, y):
-            return operator.idiv(x, y)
-
     @staticmethod
     def floordiv_usecase(x, y):
         return operator.floordiv(x, y)
@@ -394,8 +381,6 @@ class TestOperators(TestCase):
 
     def run_test_ints(self, pyfunc, x_operands, y_operands, types_list,
                       flags=force_pyobj_flags):
-        if pyfunc is NotImplemented:
-            self.skipTest("test irrelevant on this version of Python")
         for arg_types in types_list:
             cr = compile_isolated(pyfunc, arg_types, flags=flags)
             cfunc = cr.entry_point
@@ -417,8 +402,6 @@ class TestOperators(TestCase):
 
     def run_test_floats(self, pyfunc, x_operands, y_operands, types_list,
                         flags=force_pyobj_flags):
-        if pyfunc is NotImplemented:
-            self.skipTest("test irrelevant on this version of Python")
         for arg_types in types_list:
             cr = compile_isolated(pyfunc, arg_types, flags=flags)
             cfunc = cr.entry_point
@@ -629,8 +612,6 @@ class TestOperators(TestCase):
     def check_div_errors(self, usecase_name, msg, flags=force_pyobj_flags,
                          allow_complex=False):
         pyfunc = getattr(self.op, usecase_name)
-        if pyfunc is NotImplemented:
-            self.skipTest("%r not implemented" % (usecase_name,))
         # Signed and unsigned division can take different code paths,
         # test them both.
         arg_types = [types.int32, types.uint32, types.float64]
@@ -1290,9 +1271,6 @@ class TestMixedInts(TestCase):
 
     def run_binary(self, pyfunc, control_func, operands, types,
                    expected_type=utils.INT_TYPES, **assertPreciseEqualArgs):
-        if pyfunc is NotImplemented:
-            self.skipTest("test irrelevant on this version of Python")
-
         for xt, yt in types:
             cr = compile_isolated(pyfunc, (xt, yt), flags=Noflags)
             cfunc = cr.entry_point
@@ -1310,9 +1288,6 @@ class TestMixedInts(TestCase):
 
     def run_unary(self, pyfunc, control_func, operands, types,
                   expected_type=utils.INT_TYPES):
-        if pyfunc is NotImplemented:
-            self.skipTest("test irrelevant on this version of Python")
-
         for xt in types:
             cr = compile_isolated(pyfunc, (xt,), flags=Noflags)
             cfunc = cr.entry_point

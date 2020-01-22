@@ -8,7 +8,6 @@ import math
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba.utils import PYVERSION
 from numba import types
 from numba.errors import TypingError
 

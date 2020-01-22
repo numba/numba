@@ -1,9 +1,10 @@
 from __future__ import print_function
 
+from ctypes import *
+
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.ctypes_support import *
 from numba import _helperlib
 
 

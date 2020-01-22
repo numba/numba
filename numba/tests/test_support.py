@@ -22,8 +22,6 @@ class TestAssertPreciseEqual(TestCase):
     """
 
     int_types = [int]
-    if utils.PYVERSION < (3,):
-        int_types.append(long)
     np_float_types = [np.float32, np.float64]
     float_types = [float] + np_float_types
     np_complex_types = [np.complex64, np.complex128]

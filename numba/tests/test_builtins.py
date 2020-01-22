@@ -420,11 +420,8 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)
         with self.assertRaises(TypeError) as raises:
             cr.entry_point()
-        if config.PYVERSION == (2, 7):
-            thing = 'index'
-        else:
-            thing = 'integer'
-        msg = "'float' object cannot be interpreted as an %s" % thing
+
+        msg = "'float' object cannot be interpreted as an integer"
         self.assertIn(msg, str(raises.exception))
 
     def test_enumerate_start_invalid_start_type_npm(self):

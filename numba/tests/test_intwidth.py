@@ -75,8 +75,6 @@ class IntWidthTest(TestCase):
         self.assertEqual(f(0xffffffff), 32)
         self.assertEqual(f(0xffffffffffffffff), 64)
         self.assertEqual(f(0x10000000000000000), 65)
-        if utils.PYVERSION < (3, 0):
-            self.assertEqual(f(long(0xffffffffffffffff)), 64)
 
     @tag('important')
     def test_constant_int64(self, nopython=False):

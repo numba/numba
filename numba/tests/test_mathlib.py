@@ -10,7 +10,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import types, numpy_support
-from numba.config import PYVERSION, IS_WIN32, IS_32BITS
+from numba.config import IS_WIN32, IS_32BITS
 from .support import TestCase, CompilationCache, tag
 
 enable_pyobj_flags = Flags()
@@ -509,11 +509,9 @@ class TestMathLib(TestCase):
     def test_isinf_npm(self):
         self.check_predicate_func(isinf, flags=no_pyobj_flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
     def test_isfinite(self):
         self.check_predicate_func(isfinite, flags=enable_pyobj_flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
     def test_isfinite_npm(self):
         self.check_predicate_func(isfinite, flags=no_pyobj_flags)
 
@@ -592,8 +590,6 @@ class TestMathLib(TestCase):
     def test_erfc_npm(self):
         self.test_erfc(flags=no_pyobj_flags)
 
-    @unittest.skipIf(PYVERSION == (2, 7) and IS_WIN32 and not IS_32BITS,
-                     'unknown error with tgamma')
     def test_gamma(self, flags=enable_pyobj_flags):
         pyfunc = gamma
         x_values = [1., -0.9, -0.5, 0.5]
@@ -625,7 +621,6 @@ class TestMathLib(TestCase):
         y_values = [x * 2 for x in x_values]
         self.run_binary(pyfunc, x_types, x_values, y_values, flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 5), "gcd added in Python 3.5")
     def test_gcd(self, flags=enable_pyobj_flags):
         from itertools import product, repeat, chain
         pyfunc = gcd
@@ -638,7 +633,6 @@ class TestMathLib(TestCase):
         x_types, x_values, y_values = zip(*chain(signed_args, unsigned_args))
         self.run_binary(pyfunc, x_types, x_values, y_values, flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 5), "gcd added in Python 3.5")
     def test_gcd_npm(self):
         self.test_gcd(flags=no_pyobj_flags)
 

@@ -157,7 +157,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_inner_function_with_closure_3(self):
 
         code = """

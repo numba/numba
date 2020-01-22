@@ -1622,28 +1622,6 @@ def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
     loc = {}
     exec(func_text, glbls, loc)
 
-    # hack parameter name .0 for Python 3 versions < 3.6
-    if utils.PYVERSION >= (3,) and utils.PYVERSION < (3, 6):
-        co_varnames = list(fcode.co_varnames)
-        if len(co_varnames) > 0 and co_varnames[0] == ".0":
-            co_varnames[0] = "implicit0"
-        fcode = pytypes.CodeType(
-            fcode.co_argcount,
-            fcode.co_kwonlyargcount,
-            fcode.co_nlocals,
-            fcode.co_stacksize,
-            fcode.co_flags,
-            fcode.co_code,
-            fcode.co_consts,
-            fcode.co_names,
-            tuple(co_varnames),
-            fcode.co_filename,
-            fcode.co_name,
-            fcode.co_firstlineno,
-            fcode.co_lnotab,
-            fcode.co_freevars,
-            fcode.co_cellvars)
-
     f = loc['g']()
     # replace the code body
     f.__code__ = fcode

@@ -18,9 +18,8 @@ def giveup_context(state, msg):
         if not state.status.can_giveup:
             raise
         else:
-            if utils.PYVERSION >= (3,):
-                # Clear all references attached to the traceback
-                e = e.with_traceback(None)
+            # Clear all references attached to the traceback
+            e = e.with_traceback(None)
             warnings.warn_explicit('%s: %s' % (msg, e),
                                    errors.NumbaWarning,
                                    state.func_id.filename,

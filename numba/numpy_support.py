@@ -12,7 +12,6 @@ from numba.cgutils import is_nonelike   # noqa: F401
 
 
 version = tuple(map(int, np.__version__.split('.')[:2]))
-int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
 
 # Starting from Numpy 1.10, ufuncs accept argument conversion according
 # to the "same_kind" rule (used to be "unsafe").

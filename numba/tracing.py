@@ -153,10 +153,7 @@ def dotrace(*args, **kwds):
         elif type(func) == property:
             raise NotImplementedError
 
-        if config.PYVERSION >= (3, 0):
-            spec = inspect.getfullargspec(func)
-        else:
-            spec = inspect.getargspec(func)
+        spec = inspect.getfullargspec(func)
         return rewrap(wraps(func)(wrapper))
 
     arg0 = len(args) and args[0] or None
