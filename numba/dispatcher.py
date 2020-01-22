@@ -7,7 +7,7 @@ import functools
 import os
 import struct
 import sys
-import types
+import types as pytypes
 import uuid
 import weakref
 from copy import deepcopy
@@ -684,7 +684,7 @@ class Dispatcher(_DispatcherBase):
         if obj is None:  # Unbound method
             return self
         else:  # Bound method
-            return types.MethodType(self, obj)
+            return pytypes.MethodType(self, obj)
 
     def __reduce__(self):
         """
