@@ -1107,7 +1107,7 @@ class PythonAPI(object):
 
     def string_from_string(self, string):
         fnty = Type.function(self.pyobj, [self.cstring])
-        fname = "PyString_FromString"
+        fname = "PyUnicode_FromString"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string])
 
