@@ -1,6 +1,7 @@
+from io import StringIO
 import numpy as np
 
-from numba import types, utils
+from numba import types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from .support import TestCase, tag, MemoryLeakMixin
@@ -254,7 +255,7 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, xcopy + 1)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfoo.inspect_types(file=buf)
         annotation = buf.getvalue()
         buf.close()
@@ -291,7 +292,7 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, (xcopy + 1) * 2)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfoo.inspect_types(file=buf)
         annotation = buf.getvalue()
         buf.close()

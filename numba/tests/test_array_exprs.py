@@ -1,4 +1,5 @@
 import gc
+from io import StringIO
 
 import numpy as np
 
@@ -460,7 +461,7 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
         a = np.linspace(0, 1, 10)
         cfunc(a, a, a, a)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfunc.inspect_types(buf)
         res = buf.getvalue()
         self.assertIn("#   u.1 = ", res)

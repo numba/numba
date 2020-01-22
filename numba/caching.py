@@ -16,10 +16,10 @@ import tempfile
 import warnings
 
 from .appdirs import AppDirs
-from numba.utils import add_metaclass
+from numba.utils import add_metaclass, file_replace
 
 import numba
-from . import compiler, config, utils
+from . import compiler, config
 from .errors import NumbaWarning
 from numba.targets.base import BaseContext
 from numba.targets.codegen import CodeLibrary
@@ -573,7 +573,7 @@ class IndexDataCacheFile(object):
         try:
             with open(tmpname, "wb") as f:
                 yield f
-            utils.file_replace(tmpname, filepath)
+            file_replace(tmpname, filepath)
         except Exception:
             # In case of error, remove dangling tmp file
             try:

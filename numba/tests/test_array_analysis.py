@@ -3,10 +3,11 @@ import itertools
 import numpy as np
 import sys
 from collections import namedtuple
+from io import StringIO
 
 from numba import unittest_support as unittest
-from numba import (njit, typeof, types, typing, typeof, ir, utils, bytecode,
-    jitclass, prange, postproc)
+from numba import (njit, typeof, types, typing, typeof, ir, bytecode, jitclass,
+                   prange, postproc)
 from .support import TestCase, tag
 from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Compiler, Flags, PassManager
@@ -167,7 +168,7 @@ class TestArrayAnalysis(TestCase):
         outputs = []
         for func_ir in ir_list:
             remove_dead(func_ir.blocks, func_ir.arg_names, func_ir)
-            output = utils.StringIO()
+            output = StringIO()
             func_ir.dump(file=output)
             outputs.append(output.getvalue())
         self.assertTrue(len(set(outputs)) == 1)  # assert all outputs are equal

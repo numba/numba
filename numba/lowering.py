@@ -44,20 +44,7 @@ class Environment(_dynfunc.Environment):
         )
 
     def __del__(self):
-        if utils is None:
-            return
-        if _keepalive is None:
-            return
-        if time is None or time.time is None:
-            return
-        _keepalive.append((time.time(), self))
-        if len(_keepalive) > 10:
-            cur = time.time()
-            while _keepalive and cur - _keepalive[0][0] > 1:
-                _keepalive.popleft()
-
-
-_keepalive = deque()
+        return
 
 
 def _rebuild_env(modname, consts, env_name):

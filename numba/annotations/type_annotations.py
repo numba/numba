@@ -7,8 +7,8 @@ import os
 import re
 import sys
 import textwrap
+from io import StringIO
 
-from numba.io_support import StringIO
 from numba import ir
 import numba.dispatcher
 
