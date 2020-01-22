@@ -11,7 +11,7 @@ import hashlib
 import inspect
 import itertools
 import os
-from .six.moves import cPickle as pickle
+import pickle
 import sys
 import tempfile
 import warnings

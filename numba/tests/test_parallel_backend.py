@@ -23,7 +23,7 @@ from .support import temp_directory, override_config, TestCase, tag
 from .test_parfors import skip_unsupported as parfors_skip_unsupported
 from .test_parfors import linux_only
 
-from numba.six.moves import queue as t_queue
+import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.

@@ -3,7 +3,6 @@ from __future__ import print_function, absolute_import
 
 
 from numba import njit, cfunc, cgutils
-from numba.six import exec_
 from numba.utils import PY2
 
 from .support import TestCase, unittest
@@ -23,7 +22,7 @@ def Ծ_Ծ(ಠ_ರೃ, ಠਊಠ):
 class TestUnicodeNames(TestCase):
     def make_testcase(self, src, fname):
         glb = {}
-        exec_(src, glb)
+        exec(src, glb)
         fn = glb[fname]
         return fn
 

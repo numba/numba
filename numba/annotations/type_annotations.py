@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 
 from collections import defaultdict, OrderedDict
+from collections.abc import Mapping
 from contextlib import closing
 import copy
 import inspect
@@ -12,7 +13,6 @@ import textwrap
 from numba.io_support import StringIO
 from numba import ir
 import numba.dispatcher
-from numba.six import Mapping
 
 
 class SourceLines(Mapping):

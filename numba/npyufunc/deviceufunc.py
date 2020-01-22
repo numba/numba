@@ -10,7 +10,6 @@ from functools import reduce
 
 import numpy as np
 
-from numba.six import exec_
 from numba.utils import longint
 from numba.utils import IS_PY3
 from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder, parse_identity
@@ -403,7 +402,7 @@ class DeviceVectorize(_BaseUFuncBuilder):
         corefn, return_type = self._compile_core(devfnsig)
         glbl = self._get_globals(corefn)
         sig = signature(types.void, *([a[:] for a in args] + [return_type[:]]))
-        exec_(kernelsource, glbl)
+        exec(kernelsource, glbl)
 
         stager = glbl['__vectorized_%s' % funcname]
         kernel = self._compile_kernel(stager, sig)
@@ -480,7 +479,7 @@ class DeviceGUFuncVectorize(_BaseUFuncBuilder):
 
         glbls = self._get_globals(sig)
 
-        exec_(src, glbls)
+        exec(src, glbls)
         fnobj = glbls['__gufunc_{name}'.format(name=funcname)]
 
         outertys = list(_determine_gufunc_outer_types(args, indims + outdims))

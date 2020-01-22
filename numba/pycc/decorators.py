@@ -5,7 +5,6 @@ import warnings
 
 from numba import sigutils, typing
 from .compiler import ExportEntry
-from numba.six import exec_
 
 # Registry is okay to be a global because we are using pycc as a standalone
 # commandline tool.
@@ -44,7 +43,7 @@ def process_input_files(inputs):
     """
     for ifile in inputs:
         with open(ifile) as fin:
-            exec_(compile(fin.read(), ifile, 'exec'))
+            exec(compile(fin.read(), ifile, 'exec'))
 
 
 def clear_export_registry():

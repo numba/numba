@@ -10,7 +10,6 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import jit, typeof, errors, types, utils, config, njit
-from numba.six import PY2
 from .support import TestCase, tag
 
 
@@ -1045,9 +1044,7 @@ class TestOperatorMixedTypes(TestCase):
 
             # all these things should evaluate to being equal or not, all should
             # survive typing.
-            things = (1, 0, True, False, 1.0, 2.0, 1.1, 1j, None,)
-            if not PY2:
-                things = things + ("", "1")
+            things = (1, 0, True, False, 1.0, 2.0, 1.1, 1j, None, "", "1")
             for x, y in itertools.product(things, things):
                 self.assertPreciseEqual(func.py_func(x, y), func(x, y))
 

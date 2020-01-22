@@ -8,7 +8,6 @@ import struct
 
 from .support import TestCase
 from numba import _helperlib
-from numba.six import b
 
 
 LIST_OK = 0

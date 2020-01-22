@@ -10,7 +10,6 @@ import llvmlite.binding as ll
 
 from numba.targets.imputils import Registry
 from numba import cgutils
-from numba import six
 from numba import types
 from numba.utils import IS_PY3
 from .cudadrv import nvvm
@@ -107,7 +106,7 @@ def ptx_cmem_arylike(context, builder, sig, args):
 
     constvals = [
         context.get_constant(types.byte, i)
-        for i in six.iterbytes(arr.tobytes(order='A'))
+        for i in iter(arr.tobytes(order='A'))
     ]
     constary = lc.Constant.array(Type.int(8), constvals)
 

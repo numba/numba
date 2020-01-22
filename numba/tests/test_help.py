@@ -7,7 +7,7 @@ import os.path
 
 import numpy as np
 
-from numba.six.moves import builtins
+import builtins
 from numba import types, utils
 from .support import TestCase, temp_directory
 from numba.help.inspector import inspect_function, inspect_module

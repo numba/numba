@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 
 from collections import defaultdict
+from collections.abc import Sequence
 import types as pytypes
 import weakref
 import threading
@@ -14,7 +15,6 @@ from . import templates
 from .typeof import typeof, Purpose
 
 from numba import utils
-from numba.six import Sequence
 
 
 class Rating(object):

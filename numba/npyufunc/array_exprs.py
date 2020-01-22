@@ -8,7 +8,7 @@ import sys
 import numpy as np
 import operator
 
-from .. import compiler, ir, types, rewrites, six, utils
+from .. import compiler, ir, types, rewrites, utils
 from ..typing import npydecl
 from .dufunc import DUFunc
 
@@ -368,7 +368,7 @@ def _lower_array_expr(lowerer, expr):
 
     # 2. Compile the AST module and extract the Python function.
     code_obj = compile(ast_module, expr_filename, 'exec')
-    six.exec_(code_obj, namespace)
+    exec(code_obj, namespace)
     impl = namespace[expr_name]
 
     # 3. Now compile a ufunc using the Python function as kernel.

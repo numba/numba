@@ -9,7 +9,8 @@ and uses `@jit` functions to access it. Since it inherits from MutableSequence
 it should really quack like the CPython `list`.
 
 """
-from numba.six import MutableSequence
+from collections.abc import MutableSequence
+
 from numba.types import ListType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
 from numba import listobject

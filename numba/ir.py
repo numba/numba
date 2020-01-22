@@ -16,7 +16,7 @@ from numba import config, errors
 from .utils import BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS, UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS
 from .errors import (NotDefinedError, RedefinedError, VerificationError,
                      ConstantInferenceError)
-from .six import StringIO
+from io import StringIO
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -1447,7 +1447,6 @@ class FunctionIR(object):
 
 
     def dump(self, file=None):
-        from numba.six import StringIO
         nofile = file is None
         # Avoid early bind of sys.stdout as default value
         file = file or StringIO()

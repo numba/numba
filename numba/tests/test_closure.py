@@ -8,7 +8,6 @@ import numba.unittest_support as unittest
 from numba import njit, jit, testing, utils
 from numba.errors import TypingError, UnsupportedError
 from .support import TestCase, tag
-from numba.six import exec_
 
 
 class TestClosure(TestCase):
@@ -174,7 +173,7 @@ class TestInlinedClosure(TestCase):
                 return inner(x) + inner(x) + z
         """
         ns = {}
-        exec_(code.strip(), ns)
+        exec(code.strip(), ns)
 
         cfunc = njit(ns['outer'])
         self.assertEqual(cfunc(10), ns['outer'](10))

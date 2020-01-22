@@ -13,7 +13,6 @@ import numba
 from numba import prange, njit, unittest_support as unittest
 from numba.targets import cpu
 from numba.compiler import compile_isolated, Flags
-from numba.six import exec_
 from .support import TestCase, tag, override_env_config
 
 needs_svml = unittest.skipUnless(numba.config.USING_SVML,
@@ -166,7 +165,7 @@ def combo_svml_usecase(dtype, mode, vlen, flags):
     body += " "*8 + "return ret"
     # now compile and return it along with its body in __doc__  and patterns
     ldict = {}
-    exec_(body, globals(), ldict)
+    exec(body, globals(), ldict)
     ldict[name].__doc__ = body
     return ldict[name], contains, avoids
 

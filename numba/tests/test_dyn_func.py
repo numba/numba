@@ -4,7 +4,6 @@ import numpy as np
 
 import numba
 from .support import TestCase
-from numba.six import exec_
 
 
 class Issue455(object):
@@ -23,7 +22,7 @@ class Issue455(object):
                 x[i] = 1.
         """
         d = {}
-        exec_(code.strip(), d)
+        exec(code.strip(), d)
         self.f.append(numba.jit("void(f8[:])", nopython=True)(d['f']))
 
     def call_f(self):

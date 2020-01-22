@@ -2,11 +2,10 @@
 Implement slices and various slice computations.
 """
 
-import itertools
+from itertools import zip_longest
 
 from llvmlite import ir
 
-from numba.six.moves import zip_longest
 from numba import cgutils, types, typing, utils
 from .imputils import (lower_builtin, lower_getattr,
                        iternext_impl, impl_ret_borrowed,

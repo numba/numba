@@ -10,7 +10,6 @@ import math
 import functools
 import operator
 import copy
-from numba import six
 from ctypes import c_void_p
 
 import numpy as np
@@ -47,7 +46,7 @@ def verify_cuda_ndarray_interface(obj):
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
     requires_attr('dtype', np.dtype)
-    requires_attr('size', six.integer_types)
+    requires_attr('size', int)
 
 
 def require_cuda_ndarray(obj):
@@ -81,9 +80,9 @@ class DeviceNDArrayBase(object):
         gpu_data
             user provided device memory for the ndarray data buffer
         """
-        if isinstance(shape, six.integer_types):
+        if isinstance(shape, int):
             shape = (shape,)
-        if isinstance(strides, six.integer_types):
+        if isinstance(strides, int):
             strides = (strides,)
         self.ndim = len(shape)
         if len(strides) != self.ndim:

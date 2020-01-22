@@ -25,7 +25,6 @@ from numba.analysis import (compute_use_defs, compute_live_map,
 from ..typing import signature
 from numba import config
 from numba.targets.cpu import ParallelOptions
-from numba.six import exec_
 from numba.parfor import print_wrapped, ensure_parallel_support
 import types as pytypes
 import operator
@@ -1005,7 +1004,7 @@ def _create_gufunc_for_parfor_body(
     # Force gufunc outline into existence.
     globls = {"np": np}
     locls = {}
-    exec_(gufunc_txt, globls, locls)
+    exec(gufunc_txt, globls, locls)
     gufunc_func = locls[gufunc_name]
 
     if config.DEBUG_ARRAY_OPT:

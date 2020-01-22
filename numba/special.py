@@ -31,7 +31,7 @@ def _gdb_python_call_gen(func_name, *args):
     defn = """def _gdb_func_injection():\n\t%s(%s)\n
     """ % (func_name, argstr)
     l = {}
-    numba.six.exec_(defn, {func_name: fn}, l)
+    exec(defn, {func_name: fn}, l)
     return numba.njit(l['_gdb_func_injection'])
 
 

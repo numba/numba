@@ -229,7 +229,6 @@ class _MovedItems(_LazyModule):
 
 
 _moved_attributes = [
-    MovedAttribute("cStringIO", "cStringIO", "io", "StringIO"),
     MovedAttribute("filter", "itertools", "builtins", "ifilter", "filter"),
     MovedAttribute("filterfalse", "itertools", "itertools", "ifilterfalse", "filterfalse"),
     MovedAttribute("input", "__builtin__", "builtins", "raw_input", "input"),

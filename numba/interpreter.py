@@ -5,7 +5,7 @@ import dis
 import operator
 import logging
 
-from . import config, ir, controlflow, dataflow, utils, errors, six
+from . import config, ir, controlflow, dataflow, utils, errors
 from .utils import builtins, PYVERSION
 from .errors import NotDefinedError
 from .utils import (
@@ -377,7 +377,7 @@ class Interpreter(object):
 
                 err = errors.NotDefinedError(e.name, loc=loc)
                 if not config.FULL_TRACEBACKS:
-                    six.raise_from(err, None)
+                    raise value from None
                 else:
                     raise err
 

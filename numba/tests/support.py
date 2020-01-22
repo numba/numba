@@ -32,7 +32,6 @@ from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest
 from numba.runtime import rtsys
-from numba.six import PY2
 
 
 enable_pyobj_flags = Flags()
@@ -445,14 +444,6 @@ class TestCase(unittest.TestCase):
         got = cfunc()
         self.assertPreciseEqual(got, expected)
         return got, expected
-
-    if PY2:
-        @contextmanager
-        def subTest(self, *args, **kwargs):
-            """A stub TestCase.subTest backport.
-            This implementation is a no-op.
-            """
-            yield
 
 
 class SerialMixin(object):
