@@ -7,7 +7,8 @@ import inspect
 import traceback
 from numba.compiler_lock import global_compiler_lock
 from numba import errors
-from . import config, utils, transforms, six
+from . import config, utils, transforms
+from numba.six import add_metaclass
 from .tracing import event
 from .postproc import PostProcessor
 
@@ -28,7 +29,7 @@ class SimpleTimer(object):
         self.elapsed = timeit.default_timer() - self.ts
 
 
-@six.add_metaclass(ABCMeta)
+@add_metaclass(ABCMeta)
 class CompilerPass(object):
     """ The base class for all compiler passes.
     """

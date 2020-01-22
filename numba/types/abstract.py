@@ -6,7 +6,7 @@ import weakref
 
 import numpy as np
 
-from ..six import add_metaclass
+from numba.six import add_metaclass
 from ..utils import cached_property
 
 

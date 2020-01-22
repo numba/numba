@@ -7,7 +7,6 @@ import threading
 
 import numpy as np
 
-from numba import six
 from numba.six import reraise
 from .cudadrv.devicearray import to_device, auto_device
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module

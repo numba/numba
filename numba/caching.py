@@ -17,7 +17,7 @@ import tempfile
 import warnings
 
 from .appdirs import AppDirs
-from .six import add_metaclass
+from numba.six import add_metaclass
 
 import numba
 from . import compiler, config, utils
