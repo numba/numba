@@ -1,7 +1,6 @@
 """
 Unspecified error handling tests
 """
-from __future__ import division
 
 from numba import jit, njit, typed, int64
 from numba import unittest_support as unittest

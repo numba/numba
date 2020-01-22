@@ -2,7 +2,6 @@
 Implement a rewrite pass on LLVM module to remove unnecessary refcount
 operation.
 """
-from __future__ import absolute_import, print_function
 
 from llvmlite.ir.transforms import CallVisitor
 

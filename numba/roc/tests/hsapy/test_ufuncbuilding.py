@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 import numpy as np
 
 from numba import unittest_support as unittest

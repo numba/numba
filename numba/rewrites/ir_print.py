@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 from numba import ir, errors
 from . import register_rewrite, Rewrite
 

@@ -2,7 +2,6 @@
 Serialization support for compiled functions.
 """
 
-from __future__ import print_function, division, absolute_import
 
 from importlib.util import MAGIC_NUMBER as bc_magic
 

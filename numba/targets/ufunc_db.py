@@ -7,7 +7,6 @@ Use the function get_ufunc_info to get the information related to the
 ufunc
 """
 
-from __future__ import print_function, division, absolute_import
 
 import numpy as np
 

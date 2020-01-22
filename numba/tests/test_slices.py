@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from functools import partial
 import itertools
 from itertools import chain, product, starmap

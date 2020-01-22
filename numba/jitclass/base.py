@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function
-
 from collections import OrderedDict
 from collections.abc import Sequence
 import types as pytypes

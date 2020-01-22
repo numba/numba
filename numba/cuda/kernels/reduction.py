@@ -1,7 +1,6 @@
 """
 A library written in CUDA Python for generating reduction kernels
 """
-from __future__ import division
 
 from numba.numpy_support import from_dtype
 

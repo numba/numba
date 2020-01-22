@@ -2,7 +2,6 @@
 Lowering implementation for object mode.
 """
 
-from __future__ import print_function, division, absolute_import
 
 import builtins
 import operator

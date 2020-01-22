@@ -2,7 +2,6 @@
 Tests for @cfunc and friends.
 """
 
-from __future__ import division, print_function, absolute_import
 
 import ctypes
 import os

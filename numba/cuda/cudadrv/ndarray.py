@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 from . import devices, driver
 from numba.targets.registry import cpu_target
 

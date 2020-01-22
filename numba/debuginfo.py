@@ -2,7 +2,6 @@
 Implements helpers to build LLVM debuginfo.
 """
 
-from __future__ import absolute_import
 
 import abc
 import os.path

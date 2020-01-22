@@ -1,5 +1,4 @@
 # Tests numpy methods of <class 'function'>
-from __future__ import print_function, absolute_import, division
 
 import itertools
 import math

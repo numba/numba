@@ -2,7 +2,6 @@
 Implement transformation on Numba IR
 """
 
-from __future__ import absolute_import, print_function
 
 from collections import namedtuple, defaultdict
 import logging

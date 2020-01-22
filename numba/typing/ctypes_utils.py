@@ -2,7 +2,6 @@
 Support for typing ctypes function pointers.
 """
 
-from __future__ import absolute_import
 
 import ctypes
 import sys

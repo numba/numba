@@ -3,7 +3,6 @@ Test problems in nested calls.
 Usually due to invalid type conversion between function boundaries.
 """
 
-from __future__ import print_function, division, absolute_import
 
 from numba import int32, int64
 from numba import jit, generated_jit, types

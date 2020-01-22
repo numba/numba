@@ -2,7 +2,6 @@
 Tests for numba.types.
 """
 
-from __future__ import print_function, absolute_import
 
 from collections import namedtuple
 import contextlib

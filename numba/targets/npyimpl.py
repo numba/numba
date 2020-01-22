@@ -2,7 +2,6 @@
 Implementation of functions in the Numpy package.
 """
 
-from __future__ import print_function, division, absolute_import
 
 import math
 import sys

@@ -2,7 +2,6 @@
 Implement logic relating to wrapping (box) and unwrapping (unbox) instances
 of jitclasses for use inside the python interpreter.
 """
-from __future__ import print_function, absolute_import
 
 from functools import wraps, partial
 

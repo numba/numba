@@ -2,7 +2,6 @@
 Test generic manipulation of objects.
 """
 
-from __future__ import print_function
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags

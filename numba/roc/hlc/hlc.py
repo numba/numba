@@ -1,6 +1,5 @@
 # A temporary wrapper to connect to the HLC LLVM binaries.
 # Currently, connect to commandline interface.
-from __future__ import print_function, absolute_import
 import sys
 from subprocess import check_call, check_output
 import subprocess

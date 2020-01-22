@@ -1,7 +1,6 @@
 """
 Testing C implementation of the numba typed-list
 """
-from __future__ import print_function, absolute_import, division
 
 import ctypes
 import struct

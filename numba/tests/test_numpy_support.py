@@ -2,7 +2,6 @@
 Test helper functions from numba.numpy_support.
 """
 
-from __future__ import print_function
 
 import sys
 from itertools import product

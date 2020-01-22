@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 from functools import partial
 
 from llvmlite import ir

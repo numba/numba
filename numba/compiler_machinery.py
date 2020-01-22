@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 import timeit
 from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict

@@ -1,5 +1,3 @@
-from __future__ import division
-
 import numba
 
 from numba import unittest_support as unittest

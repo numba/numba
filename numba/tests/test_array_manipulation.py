@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 from functools import partial
 from itertools import permutations
 import numba.unittest_support as unittest

@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import weakref
 import time
 from collections import namedtuple, deque

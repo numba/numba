@@ -4,7 +4,6 @@ Typically, the kernels of several ufuncs that can't map directly to
 Python builtins
 """
 
-from __future__ import print_function, absolute_import, division
 
 import math
 

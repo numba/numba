@@ -2,7 +2,6 @@
 Provide math calls that uses intrinsics or libc math functions.
 """
 
-from __future__ import print_function, absolute_import, division
 import math
 import operator
 import sys

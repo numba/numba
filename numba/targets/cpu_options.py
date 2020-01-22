@@ -1,7 +1,6 @@
 """
 Defines CPU Options for use in the CPU target
 """
-from __future__ import print_function, division, absolute_import
 
 
 class FastMathOptions(object):

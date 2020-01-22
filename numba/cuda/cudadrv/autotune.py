@@ -2,7 +2,6 @@
 - Parse jit compile info
 - Compute warp occupancy histogram
 """
-from __future__ import division, absolute_import, print_function
 import math
 import re
 

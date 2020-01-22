@@ -2,7 +2,6 @@
 HSA driver bridge implementation
 """
 
-from __future__ import absolute_import, print_function, division
 from collections.abc import Sequence
 
 import sys

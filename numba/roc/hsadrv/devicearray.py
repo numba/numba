@@ -3,7 +3,6 @@ A HSA dGPU backed ND Array is recognized by checking the __hsa_memory__
 attribute on the object.  If it exists and evaluate to True, it must define
 shape, strides, dtype and size attributes similar to a NumPy ndarray.
 """
-from __future__ import print_function, absolute_import, division
 import warnings
 import math
 import copy

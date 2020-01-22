@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import
 import warnings
 from numba import jit
 from numba.errors import (NumbaDeprecationWarning,

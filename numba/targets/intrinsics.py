@@ -1,7 +1,6 @@
 """
 LLVM pass that converts intrinsic into other math calls
 """
-from __future__ import print_function, absolute_import
 
 from llvmlite import ir
 

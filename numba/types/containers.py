@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from collections.abc import Iterable
 from .abstract import (ConstSized, Container, Hashable, MutableSequence,
                        Sequence, Type, TypeRef)

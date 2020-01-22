@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from distutils import dir_util, log
 from distutils.command import build_ext
 from distutils.extension import Extension

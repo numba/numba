@@ -1,6 +1,3 @@
-from __future__ import absolute_import, print_function
-
-
 import ctypes
 import os
 from functools import reduce, wraps

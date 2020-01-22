@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 from llvmlite.llvmpy.core import Type, Constant
 
 from numba import types, typing, cgutils, utils

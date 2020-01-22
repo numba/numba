@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from .. import types, utils, errors
 import operator
 from .templates import (AttributeTemplate, ConcreteTemplate, AbstractTemplate,

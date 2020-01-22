@@ -1,4 +1,3 @@
-from __future__ import absolute_import, print_function, division
 from numba.npyufunc.deviceufunc import GUFuncEngine
 from numba import unittest_support as unittest
 

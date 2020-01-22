@@ -1,7 +1,6 @@
 """
 There was a deadlock problem when work count is smaller than number of threads.
 """
-from __future__ import absolute_import, print_function, division
 
 from numba import unittest_support as unittest
 

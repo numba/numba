@@ -2,7 +2,6 @@
 Implement background services for the application.
 This is implemented as a cooperative concurrent task.
 """
-from __future__ import absolute_import, print_function, division
 
 import functools
 

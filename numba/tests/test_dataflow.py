@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import warnings
 
 import numba.unittest_support as unittest

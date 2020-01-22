@@ -1,5 +1,3 @@
-from __future__ import division
-
 from itertools import product, cycle, permutations
 import sys
 import warnings

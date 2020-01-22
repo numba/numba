@@ -2,7 +2,6 @@
 Implementation of some CFFI functions
 """
 
-from __future__ import print_function, absolute_import, division
 
 from numba.targets.imputils import Registry
 from numba import types

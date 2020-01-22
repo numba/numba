@@ -2,7 +2,6 @@
 Tests for the typeof() machinery.
 """
 
-from __future__ import print_function
 
 import array
 from collections import namedtuple

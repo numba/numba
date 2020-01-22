@@ -1,5 +1,3 @@
-from __future__ import division
-
 from itertools import product, combinations_with_replacement
 
 import numpy as np

@@ -2,7 +2,6 @@
 Support for native homogeneous lists.
 """
 
-from __future__ import print_function, absolute_import, division
 
 import math
 import operator

@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 # import numpy in two ways, both uses needed
 import numpy as np
 import numpy

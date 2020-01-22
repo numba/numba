@@ -1,6 +1,3 @@
-from __future__ import absolute_import, print_function
-
-
 def init_jit():
     from numba.cuda.dispatcher import CUDADispatcher
     return CUDADispatcher

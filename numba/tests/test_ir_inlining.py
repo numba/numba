@@ -3,7 +3,6 @@ This tests the inline kwarg to @jit and @overload etc, it has nothing to do with
 LLVM or low level inlining.
 """
 
-from __future__ import print_function, absolute_import
 
 import numpy as np
 

@@ -1,5 +1,3 @@
-from __future__ import print_function, unicode_literals
-
 import sys
 
 import numba.unittest_support as unittest

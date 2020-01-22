@@ -4,7 +4,6 @@ Test np.datetime64 and np.timedelta64 support.
 
 # NOTE: datetime64 and timedelta64 ufuncs are tested in test_ufuncs.
 
-from __future__ import print_function
 
 import contextlib
 import itertools

@@ -3,7 +3,6 @@
 # This file tests Python 3.4 style unicode strings
 # Tests should be skipped on Python < 3.4
 
-from __future__ import print_function
 
 import sys
 from itertools import product

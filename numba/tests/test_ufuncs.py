@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import functools
 import itertools
 import re

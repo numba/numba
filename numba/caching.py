@@ -2,7 +2,6 @@
 Caching mechanism for compiled functions.
 """
 
-from __future__ import print_function, division, absolute_import
 
 from abc import ABCMeta, abstractmethod, abstractproperty
 import contextlib

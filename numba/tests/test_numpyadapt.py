@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 from ctypes import *
 
 import numpy as np

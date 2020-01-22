@@ -2,7 +2,6 @@
 Implementation of math operations on Array objects.
 """
 
-from __future__ import print_function, absolute_import, division
 
 import math
 from collections import namedtuple

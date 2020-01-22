@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-
 import contextlib
 import gc
 from itertools import product, cycle

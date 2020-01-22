@@ -1,7 +1,6 @@
 """
 Implements custom ufunc dispatch mechanism for non-CPU devices.
 """
-from __future__ import print_function, absolute_import
 
 from collections import OrderedDict
 import operator

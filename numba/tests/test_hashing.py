@@ -2,7 +2,6 @@
 """
 Test hashing of various supported types.
 """
-from __future__ import print_function
 
 import numba.unittest_support as unittest
 

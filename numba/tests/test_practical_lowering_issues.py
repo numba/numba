@@ -3,7 +3,6 @@ Tests for practical lowering specific errors.
 """
 
 
-from __future__ import print_function
 
 import numpy as np
 from numba import njit, types, ir

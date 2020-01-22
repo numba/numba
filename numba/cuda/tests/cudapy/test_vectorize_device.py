@@ -1,4 +1,3 @@
-from __future__ import absolute_import, print_function, division
 from numba import vectorize
 from numba import cuda, float32
 import numpy as np

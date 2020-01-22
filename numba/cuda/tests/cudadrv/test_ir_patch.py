@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim
 

@@ -1,4 +1,3 @@
-
 """
 Python wrapper that connects CPython interpreter to the Numba typed-list.
 

@@ -2,7 +2,6 @@
 Shared code for the low level compiler tooling
 """
 
-from __future__ import print_function, division, absolute_import
 
 from abc import abstractmethod, ABCMeta
 from numba.python_utils import add_metaclass

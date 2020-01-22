@@ -1,4 +1,3 @@
-from __future__ import print_function
 import pickle
 import numpy as np
 from numba import cuda, vectorize, numpy_support, types

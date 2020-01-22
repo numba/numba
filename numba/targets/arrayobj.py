@@ -3,7 +3,6 @@ Implementation of operations on Array objects and objects supporting
 the buffer protocol.
 """
 
-from __future__ import print_function, absolute_import, division
 
 import functools
 import math

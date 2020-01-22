@@ -1,4 +1,3 @@
-from __future__ import print_function
 import itertools
 
 from numba import unittest_support as unittest

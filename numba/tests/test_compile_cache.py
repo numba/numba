@@ -1,5 +1,3 @@
-from __future__ import division
-
 import numba.unittest_support as unittest
 from contextlib import contextmanager
 

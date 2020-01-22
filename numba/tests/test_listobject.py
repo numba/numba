@@ -10,7 +10,6 @@ test for getitem assumes makes use of these three operations and therefore
 assumes that they work.
 
 """
-from __future__ import print_function, absolute_import, division
 
 from numba import njit
 from numba import int32, types

@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 from contextlib import contextmanager
 from functools import reduce
 import sys
