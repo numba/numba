@@ -12,6 +12,7 @@ from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
 from numba import config
 from numba import types, utils, cgutils, lowering, _helperlib
+from numba.targets import imputils
 
 
 if PYVERSION >= (3,3):
@@ -1581,3 +1582,39 @@ class PythonAPI(object):
         cstr = self.context.insert_const_string(self.module, string)
         sz = self.context.get_constant(types.intp, len(string))
         return self.string_from_string_and_size(cstr, sz)
+
+    def call_jit_code(self, func, sig, args):
+        """Calls into Numba jitted code and propagate error using the Python
+        calling convention.
+        """
+        builder = self.builder
+        cres = self.context.compile_subroutine(builder, func, sig)
+        got_retty = cres.signature.return_type
+        retty = sig.return_type
+        if got_retty != retty:
+            # This error indicates an error in *func* or the caller of this
+            # method.
+            raise errors.LoweringError(
+                f'mismatching signature {got_retty} != {retty}.\n'
+            )
+        status, res = self.context.call_internal_no_propagate(
+            builder, cres.fndesc, sig, args,
+        )
+        is_error_ptr = cgutils.alloca_once(builder, cgutils.bool_t, zfill=True)
+        res_type = self.context.get_value_type(sig.return_type)
+        res_ptr = cgutils.alloca_once(builder, res_type, zfill=True)
+
+        with builder.if_else(status.is_error) as (has_err, no_err):
+            with has_err:
+                builder.store(status.is_error, is_error_ptr)
+                self.context.call_conv.raise_error(builder, self, status)
+            with no_err:
+                res = imputils.fix_returning_optional(
+                    self.context, builder, sig, status, res,
+                )
+                builder.store(res, res_ptr)
+
+        is_error = builder.load(is_error_ptr)
+        res = builder.load(res_ptr)
+        return is_error, res
+

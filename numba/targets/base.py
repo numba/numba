@@ -877,17 +877,23 @@ class BaseContext(object):
         Given the function descriptor of an internally compiled function,
         emit a call to that function with the given arguments.
         """
-        # Add call to the generated function
-        llvm_mod = builder.module
-        fn = self.declare_function(llvm_mod, fndesc)
-        status, res = self.call_conv.call_function(builder, fn, sig.return_type,
-                                                   sig.args, args)
-
+        status, res = self.call_internal_no_propagate(builder, fndesc, sig, args)
         with cgutils.if_unlikely(builder, status.is_error):
             self.call_conv.return_status_propagate(builder, status)
 
         res = imputils.fix_returning_optional(self, builder, sig, status, res)
         return res
+
+    def call_internal_no_propagate(self, builder, fndesc, sig, args):
+        """Similar to `.call_internal()` but does not handle or propagate
+        the return status automatically.
+        """
+        # Add call to the generated function
+        llvm_mod = builder.module
+        fn = self.declare_function(llvm_mod, fndesc)
+        status, res = self.call_conv.call_function(builder, fn, sig.return_type,
+                                                   sig.args, args)
+        return status, res
 
     def call_unresolved(self, builder, name, sig, args):
         """
