@@ -97,7 +97,7 @@ class TestParallelVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
 
 class TestCPUVectorizeJitted(unittest.TestCase, BaseVectorizeDecor):
     target = 'cpu'
-    wrapper = staticmethod(jit)  # staticmethod required for py27
+    wrapper = jit
 
 
 class BaseVectorizeNopythonArg(unittest.TestCase, CheckWarningsMixin):
