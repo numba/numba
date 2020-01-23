@@ -8,7 +8,7 @@ from io import StringIO
 from numba import unittest_support as unittest
 from numba import (njit, typeof, types, typing, typeof, ir, bytecode, jitclass,
                    prange, postproc)
-from .support import TestCase, tag
+from .support import TestCase, tag, skip_parfors_unsupported
 from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Compiler, Flags, PassManager
 from numba.targets import cpu, registry
@@ -24,12 +24,8 @@ from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
 
 from numba.compiler_machinery import FunctionPass, PassManager, register_pass
 
-# for parallel tests, marking that Windows with Python 2.7 is not supported
-_windows_py27 = (sys.platform.startswith('win32') and
-                 sys.version_info[:2] == (2, 7))
-_32bit = sys.maxsize <= 2 ** 32
-_reason = 'parfors not supported'
-skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+
+skip_unsupported = skip_parfors_unsupported
 
 
 # test class for #3700
