@@ -990,13 +990,7 @@ class BaseCacheTest(TestCase):
         old = sys.modules.pop(self.modname, None)
         if old is not None:
             # Make sure cached bytecode is removed
-            if sys.version_info >= (3,):
-                cached = [old.__cached__]
-            else:
-                if old.__file__.endswith(('.pyc', '.pyo')):
-                    cached = [old.__file__]
-                else:
-                    cached = [old.__file__ + 'c', old.__file__ + 'o']
+            cached = [old.__cached__]
             for fn in cached:
                 try:
                     os.unlink(fn)

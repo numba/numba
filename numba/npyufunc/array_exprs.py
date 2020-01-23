@@ -287,10 +287,7 @@ def _arr_expr_to_ast(expr):
                 hex(hash(op)).replace("-", "_"))
             fn_ast_name = ast.Name(fn_name, ast.Load())
             env[fn_name] = op # Stash the ufunc or DUFunc in the environment
-            if sys.version_info >= (3, 5):
-                ast_call = ast.Call(fn_ast_name, ast_args, [])
-            else:
-                ast_call = ast.Call(fn_ast_name, ast_args, [], None, None)
+            ast_call = ast.Call(fn_ast_name, ast_args, [])
             return ast_call, env
     elif isinstance(expr, ir.Var):
         return ast.Name(expr.name, ast.Load(),
