@@ -9,8 +9,8 @@ import tempfile
 from numba import config
 
 BAD_CONDA_ENV_PATH_ERRMSG = """
-LLVM_HOME is set to '{0}' which is not a valid path. Set this to the
-location where the LLVM toolchain is installed.
+Conda environment path is set to '{0}' which is not a valid path.
+Please activate the correct Conda environment.
 """
 conda_env_path = os.environ.get('CONDA_PREFIX', None)
 
@@ -24,6 +24,13 @@ _real_check_call = check_call
 
 if conda_env_path  is None:
     raise ValueError("FATAL: Could not find correct Conda environment.")
+
+if conda_env_path is not None:
+    try:
+        os.path.abspath(conda_env_path)
+    except ValueError:
+        _raise_bad_env_path(BAD_CONDA_ENV_PATH_ERRMSG, conda_env_path)
+
 
 def check_call(*args, **kwargs):
     return _real_check_call(*args, **kwargs)
