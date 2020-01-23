@@ -892,6 +892,9 @@ class Context(object):
     def unload_module(self, module):
         del self.modules[module.handle.value]
 
+    def get_default_stream(self):
+        return Stream(weakref.proxy(self), drvapi.cu_stream(0), None)
+
     def create_stream(self):
         handle = drvapi.cu_stream()
         driver.cuStreamCreate(byref(handle), 0)
@@ -1408,10 +1411,14 @@ class Stream(object):
             weakref.finalize(self, finalizer)
 
     def __int__(self):
-        return self.handle.value
+        # The default stream's handle.value is 0, which gives `None`
+        return self.handle.value or 0
 
     def __repr__(self):
-        return "<CUDA stream %d on %s>" % (self.handle.value, self.context)
+        if self.handle.value:
+            return "<CUDA stream %d on %s>" % (self.handle.value, self.context)
+        else:
+            return "<Default CUDA stream on %s>" % self.context
 
     def synchronize(self):
         '''

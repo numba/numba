@@ -270,6 +270,14 @@ def stream():
     """
     return current_context().create_stream()
 
+@require_context
+def default_stream():
+    """default_stream()
+
+    Get the default CUDA stream.
+    """
+    return current_context().get_default_stream()
+
 # Page lock
 @require_context
 @contextlib.contextmanager

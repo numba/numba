@@ -93,7 +93,7 @@ class TestCudaDriver(SerialMixin, unittest.TestCase):
 
         module.unload()
 
-    def test_cuda_driver_stream(self):
+    def test_cuda_driver_stream_operations(self):
         module = self.context.create_module_ptx(self.ptx)
         function = module.get_function('_Z10helloworldPi')
 
@@ -112,6 +112,21 @@ class TestCudaDriver(SerialMixin, unittest.TestCase):
 
         for i, v in enumerate(array):
             self.assertEqual(i, v)
+
+    def test_cuda_driver_default_stream(self):
+        # Test properties of the default stream
+        ds = self.context.get_default_stream()
+        self.assertIn("Default CUDA stream", repr(ds))
+        self.assertEqual(0, int(ds))
+        self.assertTrue(ds)
+
+    def test_cuda_driver_stream(self):
+        # Test properties of non-default streams
+        s = self.context.create_stream()
+        self.assertIn("CUDA stream", repr(s))
+        self.assertNotIn("Default", repr(s))
+        self.assertNotEqual(0, int(s))
+        self.assertTrue(s)
 
     def test_cuda_driver_occupancy(self):
         module = self.context.create_module_ptx(self.ptx)
