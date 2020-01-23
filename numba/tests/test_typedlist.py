@@ -8,11 +8,10 @@ from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.errors import TypingError
 from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
-                      forbid_codegen)
+                      forbid_codegen, skip_parfors_unsupported)
 
 from numba.unsafe.refcount import get_refcount
 
-from .test_parfors import skip_unsupported as parfors_skip_unsupported
 
 # global typed-list for testing purposes
 global_typed_list = List.empty_list(int32)
@@ -153,7 +152,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(L.pop(ui32_1), 2)
         self.assertEqual(L.pop(ui32_0), 123)
 
-    @parfors_skip_unsupported
+    @skip_parfors_unsupported
     def test_unsigned_prange(self):
         @njit(parallel=True)
         def foo(a):

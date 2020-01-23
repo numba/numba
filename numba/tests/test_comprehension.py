@@ -11,12 +11,10 @@ import numpy
 from numba.compiler import compile_isolated
 from numba import types, utils, jit, types
 from numba.errors import TypingError, LoweringError
-from .support import tag
+from .support import tag, _32bit
 from numba.tests.support import captured_stdout
 
-from .test_parfors import _windows_py27, _32bit
-
-PARALLEL_SUPPORTED = not (_windows_py27 or _32bit)
+PARALLEL_SUPPORTED = not _32bit
 
 def comp_list(n):
     l = [i for i in range(n)]

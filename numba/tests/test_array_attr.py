@@ -5,9 +5,9 @@ from numba import jitclass
 from numba.compiler import compile_isolated
 from numba.numpy_support import from_dtype
 from numba import types, njit, typeof, numpy_support
-from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
+from .support import (TestCase, CompilationCache, MemoryLeakMixin, tag,
+                      skip_parfors_unsupported)
 from numba.errors import TypingError
-from .test_parfors import skip_unsupported
 
 
 def array_dtype(a):
@@ -238,7 +238,7 @@ class TestArrayCTypes(MemoryLeakMixin, TestCase):
         arr = np.arange(3)
         self.assertEqual(pyfunc(arr), cfunc(arr))
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_array_ctypes_ref_error_in_parallel(self):
         # Issue #2887
         from ctypes import CFUNCTYPE, c_void_p, c_int32, c_double, c_bool

@@ -18,10 +18,8 @@ from numba import config, utils
 from numba import unittest_support as unittest
 from numba import jit, vectorize, guvectorize
 
-from .support import temp_directory, override_config, TestCase, tag
-
-from .test_parfors import skip_unsupported as parfors_skip_unsupported
-from .test_parfors import linux_only
+from .support import (temp_directory, override_config, TestCase, tag,
+                      skip_parfors_unsupported, linux_only)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
@@ -58,10 +56,8 @@ skip_unless_gnu_omp = unittest.skipUnless(_gnuomp, "GNU OpenMP only tests")
 
 _windows = sys.platform.startswith('win')
 _osx = sys.platform.startswith('darwin')
-_windows_py27 = (sys.platform.startswith('win32') and
-                 sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
-_parfors_unsupported = _32bit or _windows_py27
+_parfors_unsupported = _32bit
 
 _HAVE_OS_FORK = not _windows
 
@@ -455,7 +451,7 @@ class ThreadLayerTestHelper(TestCase):
         return out.decode(), err.decode()
 
 
-@parfors_skip_unsupported
+@skip_parfors_unsupported
 class TestThreadingLayerSelection(ThreadLayerTestHelper):
     """
     Checks that numba.threading_layer() reports correctly.
@@ -496,7 +492,7 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
 TestThreadingLayerSelection.generate()
 
 
-@parfors_skip_unsupported
+@skip_parfors_unsupported
 class TestMiscBackendIssues(ThreadLayerTestHelper):
     """
     Checks fixes for the issues with threading backends implementation
@@ -559,7 +555,7 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
 
 
 # 32bit or windows py27 (not that this runs on windows)
-@parfors_skip_unsupported
+@skip_parfors_unsupported
 @skip_unless_gnu_omp
 class TestForkSafetyIssues(ThreadLayerTestHelper):
     """
@@ -792,7 +788,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             print(out, err)
 
 
-@parfors_skip_unsupported
+@skip_parfors_unsupported
 class TestInitSafetyIssues(TestCase):
 
     _DEBUG = False

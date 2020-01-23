@@ -1,14 +1,14 @@
 import re
 import numpy as np
 
-from .support import TestCase, override_config, captured_stdout
+from .support import (TestCase, override_config, captured_stdout,
+                      skip_parfors_unsupported)
 import numba
 from numba import unittest_support as unittest
 from numba import jit, njit, types, ir, compiler
 from numba.ir_utils import guard, find_callname, find_const, get_definition
 from numba.targets.registry import CPUDispatcher
 from numba.inline_closurecall import inline_closure_call
-from .test_parfors import skip_unsupported
 
 from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
@@ -160,7 +160,7 @@ class TestInlining(TestCase):
         self.assert_not_has_pattern('%s.more' % prefix, asm)
         self.assert_not_has_pattern('%s.inner' % prefix, asm)
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_call_after_parfor(self):
         # replace the call to make sure inlining doesn't cause label conflict
         # with parfor body
@@ -172,7 +172,7 @@ class TestInlining(TestCase):
         A = np.arange(10)
         self.assertEqual(test_impl(A), j_func(A))
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_update_target_def(self):
 
         def test_impl(a):
@@ -199,7 +199,7 @@ class TestInlining(TestCase):
 
         self.assertEqual(len(func_ir._definitions['b']), 2)
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_var_dict_ret(self):
         # make sure inline_closure_call returns the variable replacement dict
         # and it contains the original variable name used in locals
@@ -228,7 +228,7 @@ class TestInlining(TestCase):
 
         self.assertTrue('b' in var_map)
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_call_branch_pruning(self):
         # branch pruning pass should run properly in inlining to enable
         # functions with type checks

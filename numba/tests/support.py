@@ -65,6 +65,9 @@ skip_tryexcept_supported = unittest.skipIf(
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
+_lnx_reason = 'linux only test'
+linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
+
 
 class CompilationCache(object):
     """
