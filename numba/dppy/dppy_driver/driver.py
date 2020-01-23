@@ -412,6 +412,12 @@ class _Runtime():
         if(retval):
             _raise_driver_error("destroy_dp_runtime", -1)
 
+    def has_cpu_device(self):
+        return self._cpu_device is None
+
+    def has_gpu_device(self):
+        return self._gpu_device is None
+
     def get_cpu_device(self):
         if(self._cpu_device is None):
             _raise_device_not_found_error("get_cpu_device")
@@ -460,3 +466,12 @@ def enqueue_kernel(device_env, kernel, kernelargs, global_work_size,
                   ))
     if(retval):
         _raise_driver_error("set_args_and_enqueue_dp_kernel", -1)
+
+
+def is_available():
+    """Return a boolean to indicate the availability of a DPPY device.
+    """
+    return runtime.has_cpu_device()  or runtime.has_gpu_device()
+
+def dppy_error():
+    _raise_driver_error()
