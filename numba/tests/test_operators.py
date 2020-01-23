@@ -1320,8 +1320,9 @@ class TestMixedInts(TestCase):
                         samples, signed_pairs)
 
     def test_truediv(self):
+
         def control(a, b):
-            return truediv_usecase(float(a), float(b))
+            return float(a) / float(b)
         samples = [x for x in self.int_samples if x != 0]
         pyfunc = self.op.truediv_usecase
 

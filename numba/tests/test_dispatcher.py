@@ -11,6 +11,7 @@ import inspect
 import pickle
 import weakref
 from itertools import chain
+from io import StringIO
 
 try:
     import jinja2
@@ -25,7 +26,7 @@ except ImportError:
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import utils, jit, generated_jit, types, typeof, errors
+from numba import jit, generated_jit, types, typeof, errors
 from numba import _dispatcher
 from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
@@ -867,7 +868,7 @@ class TestDispatcherMethods(TestCase):
 
         foo(1, 2)
         # Exercise the method
-        foo.inspect_types(utils.StringIO())
+        foo.inspect_types(StringIO())
 
         # Test output
         expected = str(foo.overloads[foo.signatures[0]].type_annotation)
@@ -917,7 +918,7 @@ class TestDispatcherMethods(TestCase):
 
         # check that file+pretty kwarg combo raises
         with self.assertRaises(ValueError) as raises:
-            foo.inspect_types(file=utils.StringIO(), pretty=True)
+            foo.inspect_types(file=StringIO(), pretty=True)
 
         self.assertIn("`file` must be None if `pretty=True`",
                       str(raises.exception))
