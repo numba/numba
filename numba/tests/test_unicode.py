@@ -13,7 +13,6 @@ import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.errors import TypingError
 
-_py34_or_later = sys.version_info[:2] >= (3, 4)
 _py37_or_later = sys.version_info[:2] >= (3, 7)
 
 
@@ -411,8 +410,6 @@ UNICODE_COUNT_EXAMPLES = [
 ]
 
 
-@unittest.skipUnless(_py34_or_later,
-                     'unicode support requires Python 3.4 or later')
 class TestUnicode(BaseTest):
 
     def test_literal(self, flags=no_pyobj_flags):
@@ -2283,8 +2280,6 @@ class TestUnicode(BaseTest):
         self.assertIn(msg, str(raises.exception))
 
 
-@unittest.skipUnless(_py34_or_later,
-                     'unicode support requires Python 3.4 or later')
 class TestUnicodeInTuple(BaseTest):
 
     def test_const_unicode_in_tuple(self):
@@ -2362,8 +2357,6 @@ class TestUnicodeInTuple(BaseTest):
         self.assertEqual(f(), (1, 0, 0, 1, 0))
 
 
-@unittest.skipUnless(_py34_or_later,
-                     'unicode support requires Python 3.4 or later')
 class TestUnicodeIteration(BaseTest):
 
     def test_unicode_iter(self):
