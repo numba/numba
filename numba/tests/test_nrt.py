@@ -117,7 +117,6 @@ class TestNrtMemInfo(unittest.TestCase):
         del mi
         self.assertEqual(Dummy.alive, 0)
 
-    @unittest.skipIf(sys.version_info < (3,), "memoryview not supported")
     def test_fake_memoryview(self):
         d = Dummy()
         self.assertEqual(Dummy.alive, 1)
@@ -140,7 +139,6 @@ class TestNrtMemInfo(unittest.TestCase):
         del mview
         self.assertEqual(Dummy.alive, 0)
 
-    @unittest.skipIf(sys.version_info < (3,), "memoryview not supported")
     def test_memoryview(self):
         from ctypes import c_uint32, c_void_p, POINTER, cast
 
@@ -219,8 +217,6 @@ class TestNrtMemInfo(unittest.TestCase):
         # consumed by another thread.
 
 
-@unittest.skipUnless(sys.version_info >= (3, 4),
-                     "need Python 3.4+ for the tracemalloc module")
 class TestTracemalloc(unittest.TestCase):
     """
     Test NRT-allocated memory can be tracked by tracemalloc.

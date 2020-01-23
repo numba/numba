@@ -20,7 +20,7 @@ from collections import defaultdict
 
 import numba
 from numba import unittest_support as unittest
-from numba import njit, prange, stencil, inline_closurecall
+from numba import njit, prange, stencil, inline_closurecall, utils
 from numba import compiler, typing, errors, typed_passes
 from numba.targets import cpu
 from numba import types
@@ -1623,10 +1623,9 @@ class TestPrangeBase(TestParforsBase):
         # create new code parts
         co_args = [pyfunc_code.co_argcount]
 
-        if sys.version_info >= (3, 8):
+        if utils.PYVERSION >= (3, 8):
             co_args.append(pyfunc_code.co_posonlyargcount)
-        if sys.version_info > (3, 0):
-            co_args.append(pyfunc_code.co_kwonlyargcount)
+        co_args.append(pyfunc_code.co_kwonlyargcount)
         co_args.extend([pyfunc_code.co_nlocals,
                         pyfunc_code.co_stacksize,
                         pyfunc_code.co_flags,

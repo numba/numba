@@ -636,13 +636,9 @@ class TestLists(MemoryLeakMixin, TestCase):
         for v in range(5):
             self.assertPreciseEqual(cfunc(18, v), pyfunc(18, v))
 
-    @unittest.skipUnless(sys.version_info >= (3, 3),
-                         "list.clear() needs Python 3.3+")
     def test_clear(self):
         self.check_unary_with_size(list_clear)
 
-    @unittest.skipUnless(sys.version_info >= (3, 3),
-                         "list.copy() needs Python 3.3+")
     def test_copy(self):
         self.check_unary_with_size(list_copy)
 
