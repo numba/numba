@@ -1,13 +1,10 @@
 """
 Tests for the typeof() machinery.
 """
-
-
 import array
 from collections import namedtuple
 import enum
 import mmap
-import sys
 
 import numpy as np
 
@@ -142,18 +139,17 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         check(arr, rec_ty, 1, "C", True)
 
     def test_buffers(self):
-        if sys.version_info >= (3,):
-            b = b"xx"
-            ty = typeof(b)
-            self.assertEqual(ty, types.Bytes(types.uint8, 1, "C"))
-            self.assertFalse(ty.mutable)
-            ty = typeof(memoryview(b))
-            self.assertEqual(ty, types.MemoryView(types.uint8, 1, "C",
-                                                  readonly=True))
-            self.assertFalse(ty.mutable)
-            ty = typeof(array.array('i', [0, 1, 2]))
-            self.assertEqual(ty, types.PyArray(types.int32, 1, "C"))
-            self.assertTrue(ty.mutable)
+        b = b"xx"
+        ty = typeof(b)
+        self.assertEqual(ty, types.Bytes(types.uint8, 1, "C"))
+        self.assertFalse(ty.mutable)
+        ty = typeof(memoryview(b))
+        self.assertEqual(ty, types.MemoryView(types.uint8, 1, "C",
+                                                readonly=True))
+        self.assertFalse(ty.mutable)
+        ty = typeof(array.array('i', [0, 1, 2]))
+        self.assertEqual(ty, types.PyArray(types.int32, 1, "C"))
+        self.assertTrue(ty.mutable)
 
         b = bytearray(10)
         ty = typeof(b)
@@ -458,14 +454,13 @@ class TestFingerprint(TestCase):
         m_uint8_1d = compute_fingerprint(memoryview(bytearray()))
         distinct.add(m_uint8_1d)
 
-        if sys.version_info >= (3,):
-            arr = array.array('B', [42])
+        arr = array.array('B', [42])
+        distinct.add(compute_fingerprint(arr))
+        self.assertEqual(compute_fingerprint(memoryview(arr)), m_uint8_1d)
+        for array_code in 'bi':
+            arr = array.array(array_code, [0, 1, 2])
             distinct.add(compute_fingerprint(arr))
-            self.assertEqual(compute_fingerprint(memoryview(arr)), m_uint8_1d)
-            for array_code in 'bi':
-                arr = array.array(array_code, [0, 1, 2])
-                distinct.add(compute_fingerprint(arr))
-                distinct.add(compute_fingerprint(memoryview(arr)))
+            distinct.add(compute_fingerprint(memoryview(arr)))
 
         arr = np.empty(16, dtype=np.uint8)
         distinct.add(compute_fingerprint(arr))
@@ -480,10 +475,9 @@ class TestFingerprint(TestCase):
         distinct.add(compute_fingerprint(arr))
         distinct.add(compute_fingerprint(memoryview(arr)))
 
-        if sys.version_info >= (3,):
-            m = mmap.mmap(-1, 16384)
-            distinct.add(compute_fingerprint(m))
-            self.assertEqual(compute_fingerprint(memoryview(m)), m_uint8_1d)
+        m = mmap.mmap(-1, 16384)
+        distinct.add(compute_fingerprint(m))
+        self.assertEqual(compute_fingerprint(memoryview(m)), m_uint8_1d)
 
     def test_dtype(self):
         distinct = DistinctChecker()
