@@ -7,10 +7,10 @@ import contextlib
 import uuid
 import numpy as np
 import logging
+from io import StringIO
 
 import numba.unittest_support as unittest
 from numba import dispatcher
-from numba.utils import StringIO
 from numba.tests.support import temp_directory, SerialMixin
 
 

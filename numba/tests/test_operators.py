@@ -10,9 +10,8 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types, typeinfer, utils, errors
 from .support import TestCase, tag
-from .true_div_usecase import truediv_usecase, itruediv_usecase
 from .matmul_usecase import (matmul_usecase, imatmul_usecase, DumbMatrix,
-                             needs_matmul, needs_blas)
+                             needs_blas)
 
 Noflags = Flags()
 
@@ -56,15 +55,6 @@ class LiteralOperatorImpl(object):
         return x
 
     @staticmethod
-    def div_usecase(x, y):
-        return x / y
-
-    @staticmethod
-    def idiv_usecase(x, y):
-        x /= y
-        return x
-
-    @staticmethod
     def floordiv_usecase(x, y):
         return x // y
 
@@ -73,8 +63,15 @@ class LiteralOperatorImpl(object):
         x //= y
         return x
 
-    truediv_usecase = staticmethod(truediv_usecase)
-    itruediv_usecase = staticmethod(itruediv_usecase)
+    @staticmethod
+    def truediv_usecase(x, y):
+        return x / y
+
+    @staticmethod
+    def itruediv_usecase(x, y):
+        x /= y
+        return x
+
     if matmul_usecase:
         matmul_usecase = staticmethod(matmul_usecase)
         imatmul_usecase = staticmethod(imatmul_usecase)
@@ -594,7 +591,7 @@ class TestOperators(TestCase):
                           })
 
     generate_binop_tests(locals(),
-                         ('div', 'idiv', 'truediv', 'itruediv'),
+                         ('truediv', 'itruediv'),
                          {'ints': 'run_binop_ints',
                           'floats': 'run_binop_floats',
                           'complex': 'run_binop_complex',
@@ -636,12 +633,6 @@ class TestOperators(TestCase):
 
     def test_floordiv_errors_npm(self):
         self.test_floordiv_errors(flags=Noflags)
-
-    def test_div_errors(self, flags=force_pyobj_flags):
-        self.check_div_errors("div_usecase", "division by zero", flags=flags)
-
-    def test_div_errors_npm(self):
-        self.test_div_errors(flags=Noflags)
 
     def test_mod_errors(self, flags=force_pyobj_flags):
         self.check_div_errors("mod_usecase", "modulo by zero", flags=flags)
@@ -743,22 +734,6 @@ class TestOperators(TestCase):
     def test_mul_complex_npm(self):
         self.test_mul_complex(flags=Noflags)
 
-    def test_div_complex(self, flags=force_pyobj_flags):
-        pyfunc = self.op.div_usecase
-
-        x_operands = [1+0j, 1j, -1-1j]
-        y_operands = [1, 2, 3]
-
-        types_list = [(types.complex64, types.complex64),
-                      (types.complex128, types.complex128),]
-
-        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
-                             flags=flags)
-
-    @tag('important')
-    def test_div_complex_npm(self):
-        self.test_div_complex(flags=Noflags)
-
     def test_truediv_complex(self, flags=force_pyobj_flags):
         pyfunc = self.op.truediv_usecase
 
@@ -789,7 +764,6 @@ class TestOperators(TestCase):
     # (just check with simple values; computational tests are in test_linalg)
     #
 
-    @needs_matmul
     def check_matmul_objmode(self, pyfunc, inplace):
         # Use dummy objects, to work with any Numpy / Scipy version
         # (and because Numpy 1.10 doesn't implement "@=")
@@ -805,16 +779,13 @@ class TestOperators(TestCase):
             self.assertIsNot(got, a)
             self.assertIsNot(got, b)
 
-    @needs_matmul
     def test_matmul(self):
         self.check_matmul_objmode(self.op.matmul_usecase, inplace=False)
 
-    @needs_matmul
     def test_imatmul(self):
         self.check_matmul_objmode(self.op.imatmul_usecase, inplace=True)
 
     @needs_blas
-    @needs_matmul
     def check_matmul_npm(self, pyfunc):
         arrty = types.Array(types.float32, 1, 'C')
         cres = compile_isolated(pyfunc, (arrty, arrty), flags=Noflags)
@@ -828,12 +799,10 @@ class TestOperators(TestCase):
         self.assertIsNot(got, b)
 
     @tag('important')
-    @needs_matmul
     def test_matmul_npm(self):
         self.check_matmul_npm(self.op.matmul_usecase)
 
     @tag('important')
-    @needs_matmul
     def test_imatmul_npm(self):
         with self.assertTypingError() as raises:
             self.check_matmul_npm(self.op.imatmul_usecase)

@@ -9,36 +9,14 @@ except ImportError:
 import numba.unittest_support as unittest
 from numba.numpy_support import version as numpy_version
 
+def matmul_usecase(x, y):
+    return x @ y
 
-# The "@" operator only compiles on Python 3.5+.
-# It is only supported by Numpy 1.10+.
-has_matmul = sys.version_info >= (3, 5) and numpy_version >= (1, 10)
+def imatmul_usecase(x, y):
+    x @= y
+    return x
 
-if has_matmul:
-    code = """if 1:
-    def matmul_usecase(x, y):
-        return x @ y
-
-    def imatmul_usecase(x, y):
-        x @= y
-        return x
-    """
-    co = compile(code, "<string>", "exec")
-    ns = {}
-    eval(co, globals(), ns)
-    globals().update(ns)
-    del code, co, ns
-
-else:
-    matmul_usecase = None
-    imatmul_usecase = None
-
-needs_matmul = unittest.skipUnless(
-    has_matmul,
-    "the matrix multiplication operator needs Python 3.5+ and Numpy 1.10+")
-
-needs_blas = unittest.skipUnless(has_blas, "BLAS needs Scipy 0.16+")
-
+needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
 
 class DumbMatrix(object):
 
