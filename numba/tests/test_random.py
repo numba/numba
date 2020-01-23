@@ -401,24 +401,22 @@ class TestRandom(BaseTest):
             if func3 is not None:
                 ints.append(func3(5, 500000000, 3))
         self.assertEqual(len(ints), len(set(ints)), ints)
-        # Our implementation follows Python 3's.
-        if sys.version_info >= (3,):
-            if is_numpy:
-                rr = self._follow_numpy(ptr).randint
-            else:
-                rr = self._follow_cpython(ptr).randrange
-            widths = [w for w in [1, 5, 8, 5000, 2**40, 2**62 + 2**61] if w < max_width]
-            pydtype = tp if is_numpy and np.__version__ >= '1.11.0' else None
-            for width in widths:
-                self._check_dist(func1, rr, [(width,)], niters=10,
-                                 pydtype=pydtype)
-                self._check_dist(func2, rr, [(-2, 2 +width)], niters=10,
-                                 pydtype=pydtype)
-                if func3 is not None:
-                    self.assertPreciseEqual(func3(-2, 2 + width, 6),
-                                            rr(-2, 2 + width, 6))
-                    self.assertPreciseEqual(func3(2 + width, 2, -3),
-                                            rr(2 + width, 2, -3))
+        if is_numpy:
+            rr = self._follow_numpy(ptr).randint
+        else:
+            rr = self._follow_cpython(ptr).randrange
+        widths = [w for w in [1, 5, 8, 5000, 2**40, 2**62 + 2**61] if w < max_width]
+        pydtype = tp if is_numpy else None
+        for width in widths:
+            self._check_dist(func1, rr, [(width,)], niters=10,
+                            pydtype=pydtype)
+            self._check_dist(func2, rr, [(-2, 2 +width)], niters=10,
+                            pydtype=pydtype)
+            if func3 is not None:
+                self.assertPreciseEqual(func3(-2, 2 + width, 6),
+                                        rr(-2, 2 + width, 6))
+                self.assertPreciseEqual(func3(2 + width, 2, -3),
+                                        rr(2 + width, 2, -3))
         # Empty ranges
         self.assertRaises(ValueError, func1, 0)
         self.assertRaises(ValueError, func1, -5)
@@ -456,13 +454,12 @@ class TestRandom(BaseTest):
         for i in range(10):
             ints.append(func(5, 500000000))
         self.assertEqual(len(ints), len(set(ints)), ints)
-        # Our implementation follows Python 3's.
-        if sys.version_info >= (3,):
-            r = self._follow_cpython(ptr)
-            for args in [(1, 5), (13, 5000), (20, 2**62 + 2**61)]:
-                if args[1] > max_width:
-                    continue
-                self._check_dist(func, r.randint, [args], niters=10)
+
+        r = self._follow_cpython(ptr)
+        for args in [(1, 5), (13, 5000), (20, 2**62 + 2**61)]:
+            if args[1] > max_width:
+                continue
+            self._check_dist(func, r.randint, [args], niters=10)
         # Empty ranges
         self.assertRaises(ValueError, func, 5, 4)
         self.assertRaises(ValueError, func, 5, 2)
@@ -567,7 +564,6 @@ class TestRandom(BaseTest):
         """
         Check a vonmisesvariate()-like function.
         """
-        # Our implementation follows Python 2.7+'s.
         r = self._follow_cpython(ptr)
         self._check_dist(func, r.vonmisesvariate, [(0.5, 2.5)])
 
@@ -584,7 +580,6 @@ class TestRandom(BaseTest):
         Check a expovariate()-like function.  Note the second argument
         is inversed compared to np.random.exponential().
         """
-        # Our implementation follows Numpy's (and Python 2.7+'s).
         r = self._follow_numpy(ptr)
         for lambd in (0.2, 0.5, 1.5):
             for i in range(3):
@@ -598,7 +593,6 @@ class TestRandom(BaseTest):
         """
         Check a exponential()-like function.
         """
-        # Our implementation follows Numpy's (and Python 2.7+'s).
         r = self._follow_numpy(ptr)
         if func1 is not None:
             self._check_dist(func1, r.exponential, [(0.5,), (1.0,), (1.5,)])
@@ -853,31 +847,19 @@ class TestRandom(BaseTest):
         """
         Check a shuffle()-like function for arrays.
         """
-        # Our implementation follows Python 3's.
         arrs = [np.arange(20), np.arange(32).reshape((8, 4))]
-        if sys.version_info >= (3,):
-            if is_numpy:
-                r = self._follow_numpy(ptr)
-            else:
-                r = self._follow_cpython(ptr)
-            for a in arrs:
-                for i in range(3):
-                    got = a.copy()
-                    expected = a.copy()
-                    func(got)
-                    if is_numpy or len(a.shape) == 1:
-                        r.shuffle(expected)
-                        self.assertPreciseEqual(got, expected)
+        if is_numpy:
+            r = self._follow_numpy(ptr)
         else:
-            # Sanity check
-            for a in arrs:
-                for i in range(3):
-                    b = a.copy()
-                    func(b)
-                    self.assertFalse(np.array_equal(a, b))
-                    self.assertTrue(np.array_equal(np.sort(a, axis=0),
-                                                   np.sort(b, axis=0)))
-                    a = b
+            r = self._follow_cpython(ptr)
+        for a in arrs:
+            for i in range(3):
+                got = a.copy()
+                expected = a.copy()
+                func(got)
+                if is_numpy or len(a.shape) == 1:
+                    r.shuffle(expected)
+                    self.assertPreciseEqual(got, expected)
         # Test with an arbitrary buffer-providing object
         a = arrs[0]
         b = a.copy()
@@ -929,40 +911,25 @@ class TestRandom(BaseTest):
         self._check_startup_randomness("numpy_normal", (1.0, 1.0))
 
     def test_numpy_random_permutation(self):
-        # Our implementation follows Python 3's.
         func = jit_unary("np.random.permutation")
-        if sys.version_info >= (3,):
-            r = self._follow_numpy(get_np_state_ptr())
-            for s in [5, 10, 15, 20]:
-                a = np.arange(s)
-                b = a.copy()
-                # Test array version
-                self.assertPreciseEqual(func(a), r.permutation(a))
-                # Test int version
-                self.assertPreciseEqual(func(s), r.permutation(s))
-                # Permutation should not modify its argument
-                self.assertPreciseEqual(a, b)
-            # Check multi-dimensional arrays
-            arrs = [np.arange(10).reshape(2, 5),
-                    np.arange(27).reshape(3, 3, 3),
-                    np.arange(36).reshape(2, 3, 3, 2)]
-            for a in arrs:
-                b = a.copy()
-                self.assertPreciseEqual(func(a), r.permutation(a))
-                self.assertPreciseEqual(a, b)
-        else:
-            # Sanity check
-            arrs = [np.arange(20), np.arange(20).reshape(5, 2, 2)]
-            for a in arrs:
-                checked = 0
-                while checked < 3:
-                    b = func(a)
-                    # check that permuted arrays are equal when sorted
-                    # account for the possibility of the identity permutation
-                    if not np.array_equal(a, b):
-                        self.assertTrue(np.array_equal(np.sort(a, axis=0),
-                                                       np.sort(b, axis=0)))
-                        checked += 1
+        r = self._follow_numpy(get_np_state_ptr())
+        for s in [5, 10, 15, 20]:
+            a = np.arange(s)
+            b = a.copy()
+            # Test array version
+            self.assertPreciseEqual(func(a), r.permutation(a))
+            # Test int version
+            self.assertPreciseEqual(func(s), r.permutation(s))
+            # Permutation should not modify its argument
+            self.assertPreciseEqual(a, b)
+        # Check multi-dimensional arrays
+        arrs = [np.arange(10).reshape(2, 5),
+                np.arange(27).reshape(3, 3, 3),
+                np.arange(36).reshape(2, 3, 3, 2)]
+        for a in arrs:
+            b = a.copy()
+            self.assertPreciseEqual(func(a), r.permutation(a))
+            self.assertPreciseEqual(a, b)
 
 
 class TestRandomArrays(BaseTest):

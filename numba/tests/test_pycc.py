@@ -17,6 +17,7 @@ except ImportError:
 import llvmlite.binding as ll
 
 from numba import unittest_support as unittest
+from numba import utils
 from numba.pycc import main
 from numba.pycc.decorators import clear_export_registry
 from numba.pycc.platform import find_shared_ending, find_pyext_ending
@@ -234,7 +235,7 @@ class TestCC(BasePYCCTest):
 
     @tag('important')
     @unittest.skipIf(sys.platform == 'darwin' and
-                     sys.version_info[:2] == (3, 8),
+                     utils.PYVERSION == (3, 8),
                      'distutils incorrectly using gcc on python 3.8 builds')
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
