@@ -26,8 +26,6 @@ Build and Packaging
   fixed and removed from the exception list as time allows.
 - :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
-- :ghfile:`buildscripts/remove_unwanted_files.py` - Helper script to remove
-  files that will not compile under Python 2. Used by build recipes.
 - :ghfile:`buildscripts/condarecipe_clone_icc_rt` - Recipe to build a
   standalone icc_rt package.
 
