@@ -18,9 +18,6 @@ def _ov_literally(obj):
 
 @overload(literal_unroll)
 def literal_unroll_impl(container):
-    from numba.errors import UnsupportedError
-    if sys.version_info[:2] < (3, 6):
-        raise UnsupportedError("literal_unroll is only support in Python > 3.5")
 
     def impl(container):
         return container
