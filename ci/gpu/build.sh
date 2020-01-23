@@ -61,6 +61,9 @@ logger "Build Numba..."
 python setup.py build_ext --inplace
 python setup.py develop
 
+# Dump system information from Numba
+python -m numba -s
+
 ################################################################################
 # TEST - Run CUDA tests
 ################################################################################
