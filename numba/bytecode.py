@@ -6,7 +6,6 @@ From NumbaPro
 from collections import namedtuple, OrderedDict
 import dis
 import inspect
-import sys
 import itertools
 from types import CodeType, ModuleType
 
@@ -110,15 +109,9 @@ class ByteCodeInst(object):
             return 0
 
 
-if sys.version_info[:2] >= (3, 6):
-    CODE_LEN = 1
-    ARG_LEN = 1
-    NO_ARG_LEN = 1
-else:
-    CODE_LEN = 1
-    ARG_LEN = 2
-    NO_ARG_LEN = 0
-
+CODE_LEN = 1
+ARG_LEN = 1
+NO_ARG_LEN = 1
 
 OPCODE_NOP = dis.opname.index('NOP')
 
@@ -129,9 +122,6 @@ def _unpack_opargs(code):
     Returns a 4-int-tuple of
     (bytecode offset, opcode, argument, offset of next bytecode).
     """
-    if sys.version_info[0] < 3:
-        code = list(map(ord, code))
-
     extended_arg = 0
     n = len(code)
     offset = i = 0
