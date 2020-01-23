@@ -8,12 +8,6 @@ import tempfile
 
 from numba import config
 
-BAD_CONDA_ENV_PATH_ERRMSG = """
-Conda environment path is set to '{0}' which is not a valid path.
-Please activate the correct Conda environment.
-"""
-conda_env_path = os.environ.get('CONDA_PREFIX', None)
-
 def _raise_bad_env_path(msg, path, extra=None):
     error_message = msg.format(path)
     if extra is not None:
@@ -22,16 +16,6 @@ def _raise_bad_env_path(msg, path, extra=None):
 
 _real_check_call = check_call
 
-if conda_env_path  is None:
-    raise ValueError("FATAL: Could not find correct Conda environment.")
-
-if conda_env_path is not None:
-    try:
-        os.path.abspath(conda_env_path)
-    except ValueError:
-        _raise_bad_env_path(BAD_CONDA_ENV_PATH_ERRMSG, conda_env_path)
-
-
 def check_call(*args, **kwargs):
     return _real_check_call(*args, **kwargs)
 
@@ -39,7 +23,7 @@ class CmdLine(object):
 
     def disassemble(self, ipath, opath):
         check_call([
-            conda_env_path + "/bin/spirv-dis",
+            "spirv-dis",
             # "--no-indent",
             # "--no-header",
             # "--raw-id",
@@ -49,11 +33,11 @@ class CmdLine(object):
             ipath])
 
     def validate(self, ipath):
-        check_call([conda_env_path + "/bin/spirv-val",ipath])
+        check_call(["spirv-val",ipath])
 
     def optimize(self, ipath, opath):
         check_call([
-            conda_env_path + "/bin/spirv-opt",
+            "spirv-opt",
             # "--strip-debug",
             # "--freeze-spec-const",
             # "--eliminate-dead-const",
@@ -72,8 +56,8 @@ class CmdLine(object):
         # The opt step is needed for:
         #     a) generate a bitcode file from the text IR file
         #     b) hoist all allocas to the enty block of the module
-        check_call([conda_env_path + "/bin/opt","-O3","-o",ipath+'.bc',ipath])
-        check_call([conda_env_path + "/bin/llvm-spirv","-o",opath,ipath+'.bc'])
+        check_call(["opt","-O3","-o",ipath+'.bc',ipath])
+        check_call(["llvm-spirv","-o",opath,ipath+'.bc'])
         os.unlink(ipath + '.bc')
 
 
