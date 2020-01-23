@@ -1,5 +1,4 @@
 from collections import namedtuple
-import sys
 import copy
 import warnings
 from .tracing import event

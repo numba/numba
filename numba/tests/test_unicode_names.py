@@ -47,7 +47,7 @@ class TestUnicodeUtils(TestCase):
         # try encoding to latin
         out.encode('latin1')
 
-    def test_normalize_ir_text(self):
+    def test_normalize_ir_text_unicode(self):
         # unicode input
         out = cgutils.normalize_ir_text(unicode_name2)
         # str returned

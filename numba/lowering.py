@@ -1,6 +1,5 @@
 import weakref
-import time
-from collections import namedtuple, deque
+from collections import namedtuple
 import operator
 from functools import partial
 

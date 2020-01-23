@@ -1,7 +1,6 @@
 from contextlib import contextmanager
 import warnings
-from . import (config, errors, types, funcdesc,  utils, typing, pylowering,
-               transforms)
+from . import (config, errors, types, funcdesc, typing, pylowering, transforms)
 from .compiler_machinery import FunctionPass, LoweringPass, register_pass
 from collections import defaultdict
 

@@ -11,7 +11,7 @@ import warnings
 
 import numpy as np
 
-from numba import njit, utils, jitclass
+from numba import njit, jitclass
 from numba import int32, int64, float32, float64, types
 from numba import dictobject, typeof
 from numba.typed import Dict

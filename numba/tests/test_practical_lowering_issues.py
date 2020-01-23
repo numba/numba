@@ -2,8 +2,6 @@
 Tests for practical lowering specific errors.
 """
 
-
-
 import numpy as np
 from numba import njit, types, ir
 from numba.compiler import CompilerBase, DefaultPassBuilder

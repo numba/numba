@@ -2,10 +2,9 @@ import timeit
 from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
-import traceback
 from numba.compiler_lock import global_compiler_lock
 from numba import errors
-from . import config, utils, transforms
+from . import config, transforms
 from numba.utils import add_metaclass
 from .tracing import event
 from .postproc import PostProcessor

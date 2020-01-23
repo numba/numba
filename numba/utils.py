@@ -52,6 +52,7 @@ asbyteint = int
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+
 def add_metaclass(metaclass):
     """Class decorator for creating a class with a metaclass."""
     def wrapper(cls):
@@ -75,16 +76,20 @@ def reraise(tp, value, tb=None):
         raise value.with_traceback(tb)
     raise value
 
+
 def iteritems(d, **kw):
     return iter(d.items(**kw))
 
+
 def itervalues(d, **kw):
     return iter(d.values(**kw))
+
 
 get_function_globals = operator.attrgetter("__globals__")
 
 # End: Originally from `numba.six` under the following license
 # ------------------------------------------------------------------------------
+
 
 def erase_traceback(exc_value):
     """

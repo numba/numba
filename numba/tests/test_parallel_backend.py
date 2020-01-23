@@ -13,7 +13,7 @@ import threading
 
 import numpy as np
 
-from numba import config, utils
+from numba import config
 
 from numba import unittest_support as unittest
 from numba import jit, vectorize, guvectorize

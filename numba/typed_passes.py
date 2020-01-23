@@ -2,7 +2,7 @@ from contextlib import contextmanager
 import warnings
 
 from . import (config,  errors, types, rewrites, typeinfer, funcdesc, lowering,
-               utils, typing, ir)
+               typing, ir)
 
 from .parfor import PreParforPass as _parfor_PreParforPass
 from .parfor import ParforPass as _parfor_ParforPass

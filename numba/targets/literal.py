@@ -1,5 +1,3 @@
-import sys
-
 from numba.extending import overload
 from numba import types
 from numba.special import literally, literal_unroll

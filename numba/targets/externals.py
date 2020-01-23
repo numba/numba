@@ -3,12 +3,11 @@ Register external C functions necessary for Numba code generation.
 """
 
 import sys
-import ctypes
 
 from llvmlite import ir
 import llvmlite.binding as ll
 
-from numba import utils, config
+from numba import utils
 from numba import _helperlib
 from . import intrinsics
 
