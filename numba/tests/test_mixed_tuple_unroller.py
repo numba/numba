@@ -1,4 +1,3 @@
-import sys
 import numpy as np
 
 from numba.tests.support import (TestCase, MemoryLeakMixin,
@@ -15,11 +14,7 @@ from numba.typed_passes import (NopythonTypeInference, IRLegalization,
                                 NoPythonBackend, PartialTypeInference)
 from numba.ir_utils import (compute_cfg_from_blocks, flatten_labels)
 
-_lt_py_36 = sys.version_info[:2] < (3, 6)
-skip_lt_py36 = unittest.skipIf(_lt_py_36, "Unsupported on < Python 3.6")
 
-
-@skip_lt_py36
 class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):
 
     def check(self, func, var):
@@ -86,7 +81,6 @@ class ResetTypeInfo(FunctionPass):
         return True
 
 
-@skip_lt_py36
 class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
 
     def get_pipeline(use_canonicaliser, use_partial_typing=False):
@@ -467,7 +461,6 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
                          len(canonicalise_loops_fndesc.calltypes))
 
 
-@skip_lt_py36
 class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
 
     def test_01(self):
@@ -1218,7 +1211,6 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         self.assertEqual(cfunc(), pyfunc())
 
 
-@skip_lt_py36
 class TestConstListUnroll(MemoryLeakMixin, TestCase):
 
     def test_01(self):
@@ -1513,27 +1505,6 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
                       str(raises.exception))
 
 
-@unittest.skipIf(not _lt_py_36, "Python < 3.6 only test")
-class TestLiteralUnrollPy2(TestCase):
-
-    def test_py_lt_36_not_supported(self):
-
-        @njit
-        def foo():
-            x = (1000, 2000, 3000, 4000)
-            acc = 0
-            for a in literal_unroll(x):
-                acc += a
-            return acc
-
-        with self.assertRaises(errors.TypingError) as raises:
-            foo()
-
-        self.assertIn("literal_unroll is only support in Python > 3.5",
-                      str(raises.exception))
-
-
-@skip_lt_py36
 class TestMore(TestCase):
     def test_invalid_use_of_unroller(self):
         @njit
@@ -1734,7 +1705,6 @@ class CapturingCompiler(CompilerBase):
         return [pm]
 
 
-@skip_lt_py36
 class TestLiteralUnrollPassTriggering(TestCase):
 
     def test_literal_unroll_not_invoked(self):

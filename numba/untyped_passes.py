@@ -3,7 +3,7 @@ from copy import deepcopy, copy
 
 from .compiler_machinery import FunctionPass, register_pass
 from . import (config, bytecode, interpreter, postproc, errors, types, rewrites,
-               transforms, ir, utils)
+               transforms, ir)
 from .special import literal_unroll
 import warnings
 from .analysis import (
@@ -1181,8 +1181,7 @@ class MixedContainerUnroller(FunctionPass):
         blks = state.func_ir.blocks
         orig_lbl = tuple(this_loop_body)
 
-        # python 2 can't star unpack
-        replace, delete = orig_lbl[0], orig_lbl[1:]
+        replace, *delete = orig_lbl
         unroll, header_block = unrolled_body, this_loop.header
         unroll_lbl = [x for x in sorted(unroll.blocks.keys())]
         blks[replace] = unroll.blocks[unroll_lbl[0]]
