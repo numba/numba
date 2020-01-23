@@ -47,11 +47,8 @@ nrt_flags.set("nrt")
 
 tag = testing.make_tag_decorator(['important', 'long_running'])
 
-_windows_py27 = (sys.platform.startswith('win32') and
-                 sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
-_reason = 'parfors not supported'
-skip_parfors_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+skip_parfors_unsupported = unittest.skipIf(_32bit, 'parfors not supported')
 skip_py38_or_later = unittest.skipIf(
     utils.PYVERSION >= (3, 8),
     "unsupported on py3.8 or later"

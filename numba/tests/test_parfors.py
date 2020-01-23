@@ -41,10 +41,6 @@ from .test_linalg import needs_lapack
 import cmath
 
 
-
-# for decorating tests, marking that Windows with Python 2.7 is not supported
-_windows_py27 = (sys.platform.startswith('win32') and
-                 sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
 skip_unsupported = skip_parfors_unsupported
 test_disabled = unittest.skipIf(True, 'Test disabled')
@@ -601,13 +597,12 @@ class TestParfors(TestParforsBase):
         self.assertTrue(
             countNonParforArrayAccesses(test_kmeans_example, arg_typs) == 0)
 
-    @unittest.skipIf(not (_windows_py27 or _32bit),
-                     "Only impacts Windows with Python 2.7 / 32 bit hardware")
+    @unittest.skipIf(not _32bit, "Only impacts 32 bit hardware")
     @needs_blas
     def test_unsupported_combination_raises(self):
         """
         This test is in place until issues with the 'parallel'
-        target on Windows with Python 2.7 / 32 bit hardware are fixed.
+        target on 32 bit hardware are fixed.
         """
         with self.assertRaises(errors.UnsupportedParforsError) as raised:
             @njit(parallel=True)
