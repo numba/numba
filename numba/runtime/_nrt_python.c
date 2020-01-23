@@ -61,32 +61,6 @@ int MemInfo_init(MemInfoObject *self, PyObject *args, PyObject *kwds) {
 }
 
 
-#if PY_MAJOR_VERSION < 3
-static Py_ssize_t
-MemInfo_rdwrbufferproc(PyObject *self, Py_ssize_t segment, void **ptrptr)
-{
-    MemInfoObject *mio = (MemInfoObject *)self;
-    NRT_MemInfo *mi = mio->meminfo;
-    if (segment != 0) {
-        PyErr_SetString(PyExc_TypeError, "MemInfo only has 1 segment");
-        return -1;
-    }
-    *ptrptr = NRT_MemInfo_data(mi);
-    return NRT_MemInfo_size(mi);
-}
-
-static Py_ssize_t
-MemInfo_segcountproc(PyObject *self, Py_ssize_t *lenp) {
-    MemInfoObject *mio = (MemInfoObject *)self;
-    NRT_MemInfo *mi = mio->meminfo;
-    if (lenp) {
-        *lenp = NRT_MemInfo_size(mi);
-    }
-    return 1;
-}
-
-#else /* PY_MAJOR_VERSION < 3 */
-
 static int
 MemInfo_getbuffer(PyObject *exporter, Py_buffer *view, int flags) {
     Py_ssize_t len;
@@ -100,16 +74,8 @@ MemInfo_getbuffer(PyObject *exporter, Py_buffer *view, int flags) {
     len = NRT_MemInfo_size(mi);
     return PyBuffer_FillInfo(view, exporter, buf, len, readonly, flags);
 }
-#endif /* PY_MAJOR_VERSION < 3 */
 
-#if PY_MAJOR_VERSION < 3
-static PyBufferProcs MemInfo_bufferProcs = {MemInfo_rdwrbufferproc,
-                                            MemInfo_rdwrbufferproc,
-                                            MemInfo_segcountproc,
-                                            NULL};
-#else
 static PyBufferProcs MemInfo_bufferProcs = {MemInfo_getbuffer, NULL};
-#endif
 
 static
 PyObject*
@@ -174,12 +140,7 @@ static PyGetSetDef MemInfo_getsets[] = {
 
 
 static PyTypeObject MemInfoType = {
-#if (PY_MAJOR_VERSION < 3)
-    PyObject_HEAD_INIT(NULL)
-    0,                                        /* ob_size*/
-#else
     PyVarObject_HEAD_INIT(NULL, 0)
-#endif
     "_nrt_python._MemInfo",                   /* tp_name*/
     sizeof(MemInfoObject),                    /* tp_basicsize*/
     0,                                        /* tp_itemsize*/

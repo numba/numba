@@ -3,8 +3,7 @@
 
 #include "_numba_common.h"
 
-/* We require C99 on POSIX, but have to be tolerant on Windows since
-   Python < 3.5 is compiled with old MSVC versions */
+/* We require C99 on POSIX */
 
 #if !defined(_MSC_VER) || _MSC_VER >= 1800  /* Visual Studio 2013 */
 #define HAVE_C99_MATH 1

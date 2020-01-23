@@ -51,12 +51,7 @@ static const char Box_doc[] = "A box for numba created jit-class instance";
 
 
 static PyTypeObject BoxType = {
-#if (PY_MAJOR_VERSION < 3)
-    PyObject_HEAD_INIT(NULL)
-    0,                         /*ob_size*/
-#else
     PyVarObject_HEAD_INIT(NULL, 0)
-#endif
     "_box.Box",                /*tp_name*/
     sizeof(BoxObject),         /*tp_basicsize*/
     0,                         /*tp_itemsize*/
