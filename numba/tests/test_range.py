@@ -99,14 +99,6 @@ class TestRange(unittest.TestCase):
             self.assertEqual(cfunc(*args), pyfunc(*args))
 
     @tag('important')
-    @unittest.skipIf(sys.version_info >= (3,), "test is Python 2-specific")
-    def test_xrange(self):
-        pyfunc = xrange_usecase
-        cres = compile_isolated(pyfunc, (types.int32,))
-        cfunc = cres.entry_point
-        self.assertEqual(cfunc(5), pyfunc(5))
-
-    @tag('important')
     def test_range_len1(self):
         pyfunc = range_len1
         typelist = [types.int16, types.int32, types.int64]

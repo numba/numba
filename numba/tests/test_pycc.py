@@ -201,8 +201,7 @@ class TestCC(BasePYCCTest):
         self.assertTrue(os.path.basename(f).startswith('pycc_test_simple.'), f)
         if sys.platform.startswith('linux'):
             self.assertTrue(f.endswith('.so'), f)
-            if sys.version_info >= (3,):
-                self.assertIn('.cpython', f)
+            self.assertIn('.cpython', f)
 
     def test_compile(self):
         with self.check_cc_compiled(self._test_module.cc) as lib:
@@ -357,9 +356,6 @@ class TestDistutilsSupport(TestCase):
         run_python(["-c", code])
 
     def test_setup_py_distutils(self):
-        if sys.version_info < (3,) and sys.platform == "win32":
-            # See e.g. https://stackoverflow.com/questions/28931875/problems-finding-vcvarsall-bat-when-using-distutils
-            self.skipTest("must use setuptools to build extensions for Python 2")
         self.check_setup_py("setup_distutils.py")
 
     @unittest.skipIf(setuptools is None, "test needs setuptools")

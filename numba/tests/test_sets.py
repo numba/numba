@@ -278,10 +278,6 @@ def unique_usecase(src):
     return res
 
 
-needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
-                                     "set literals unavailable before Python 2.7")
-
-
 class BaseTest(MemoryLeakMixin, TestCase):
 
     def setUp(self):
@@ -338,29 +334,19 @@ class BaseTest(MemoryLeakMixin, TestCase):
 
 class TestSetLiterals(BaseTest):
 
-    @needs_set_literals
     def test_build_set(self, flags=enable_pyobj_flags):
         pyfunc = set_literal_return_usecase((1, 2, 3, 2))
         self.run_nullary_func(pyfunc, flags=flags)
 
-    @needs_set_literals
     def test_build_heterogeneous_set(self, flags=enable_pyobj_flags):
         pyfunc = set_literal_return_usecase((1, 2.0, 3j, 2))
         self.run_nullary_func(pyfunc, flags=flags)
         pyfunc = set_literal_return_usecase((2.0, 2))
         got, expected = self.run_nullary_func(pyfunc, flags=flags)
 
-        # Check that items are inserted in the right order (here the
-        # result will be {2.0}, not {2})
-        # Note: http://bugs.python.org/issue26020 changed the previously invalid
-        #       ordering.
-        if ((sys.version_info[:2] == (2, 7) and sys.version_info[2] >= 13) or
-              (sys.version_info[:2] == (3, 5) and sys.version_info[2] >= 3) or
-              (sys.version_info[:2] >= (3, 6))):
-            self.assertIs(type(got.pop()), type(expected.pop()))
+        self.assertIs(type(got.pop()), type(expected.pop()))
 
     @tag('important')
-    @needs_set_literals
     def test_build_set_nopython(self):
         arg = list(self.sparse_array(50))
         pyfunc = set_literal_convert_usecase(arg)
