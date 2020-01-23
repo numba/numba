@@ -12,7 +12,7 @@ from numba import unittest_support as unittest
 from numba import jit, errors
 from numba.numpy_support import version as numpy_version
 from .support import TestCase, tag
-from .matmul_usecase import matmul_usecase, needs_matmul, needs_blas
+from .matmul_usecase import matmul_usecase, needs_blas
 
 _is_armv7l = platform.machine() == 'armv7l'
 
@@ -129,7 +129,6 @@ class TestProduct(TestCase):
                       % (func_name,),
                       str(raises.exception))
 
-    @needs_blas
     def check_dot_vv(self, pyfunc, func_name):
         n = 3
         cfunc = jit(nopython=True)(pyfunc)
@@ -149,19 +148,20 @@ class TestProduct(TestCase):
         b = self.sample_vector(n, np.float64)
         self.assert_mismatching_dtypes(cfunc, (a, b), func_name=func_name)
 
+    @needs_blas
     def test_dot_vv(self):
         """
         Test vector * vector np.dot()
         """
         self.check_dot_vv(dot2, "np.dot()")
 
+    @needs_blas
     def test_vdot(self):
         """
         Test np.vdot()
         """
         self.check_dot_vv(vdot, "np.vdot()")
 
-    @needs_blas
     def check_dot_vm(self, pyfunc2, pyfunc3, func_name):
         m, n = 2, 3
 
@@ -213,13 +213,13 @@ class TestProduct(TestCase):
             out = np.empty(m, np.float32)
             self.assert_mismatching_dtypes(cfunc3, (a, b, out), func_name)
 
+    @needs_blas
     def test_dot_vm(self):
         """
         Test vector * matrix and matrix * vector np.dot()
         """
         self.check_dot_vm(dot2, dot3, "np.dot()")
 
-    @needs_blas
     def check_dot_mm(self, pyfunc2, pyfunc3, func_name):
 
         def samples(m, n, k):
@@ -277,28 +277,28 @@ class TestProduct(TestCase):
             out = np.empty((m, n), np.float32)
             self.assert_mismatching_dtypes(cfunc3, (a, b, out), func_name)
 
-    @tag('important')
+    @needs_blas
     def test_dot_mm(self):
         """
         Test matrix * matrix np.dot()
         """
         self.check_dot_mm(dot2, dot3, "np.dot()")
 
-    @needs_matmul
+    @needs_blas
     def test_matmul_vv(self):
         """
         Test vector @ vector
         """
         self.check_dot_vv(matmul_usecase, "'@'")
 
-    @needs_matmul
+    @needs_blas
     def test_matmul_vm(self):
         """
         Test vector @ matrix and matrix @ vector
         """
         self.check_dot_vm(matmul_usecase, None, "'@'")
 
-    @needs_matmul
+    @needs_blas
     def test_matmul_mm(self):
         """
         Test matrix @ matrix
