@@ -493,9 +493,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         b = bytearray(range(16))
         check(b)
-        if sys.version_info >= (3,):
-            check(bytes(b))
-            check(memoryview(b))
+        check(bytes(b))
+        check(memoryview(b))
         check(np.arange(12))
         b = np.arange(12).reshape((3, 4))
         check(b)
@@ -610,9 +609,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             arr = np.array([v]).reshape(())
             check_arr(arr)
 
-        if sys.version_info >= (3,):
-            arr = np.array(["Hello", "", "world"])
-            check_arr(arr)
+        arr = np.array(["Hello", "", "world"])
+        check_arr(arr)
 
     def test_array_nonzero(self):
         self.check_nonzero(array_nonzero)
