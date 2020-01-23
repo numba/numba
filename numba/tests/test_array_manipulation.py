@@ -1,10 +1,9 @@
 from functools import partial
 from itertools import permutations
-import numba.unittest_support as unittest
 
-import sys
 import numpy as np
 
+import numba.unittest_support as unittest
 from numba.numpy_support import version as np_version
 from numba.compiler import compile_isolated, Flags
 from numba import jit, njit, types, from_dtype, errors, typeof
@@ -841,9 +840,8 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         yield 2 + 1j
         # the following are not array-like, but numpy 1.15+ does not raise
         yield None
-        if not sys.version_info < (3,):
-            yield 'a_string'
-            yield ''
+        yield 'a_string'
+        yield ''
 
     @unittest.skipUnless(np_version >= (1, 15),
                          "flatnonzero array-like handling per 1.15+")

@@ -14,10 +14,10 @@ from llvmlite import ir
 
 from numba.extending import (
     overload, overload_method, intrinsic, register_jitable)
-from numba import types, errors
+from numba import types, errors, utils
 from numba.unsafe.bytes import grab_byte, grab_uint64_t
 
-_py38_or_later = sys.version_info[:2] >= (3, 8)
+_py38_or_later = utils.PYVERSION >= (3, 8)
 
 # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
 # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96    # noqa: E501

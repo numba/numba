@@ -1,7 +1,6 @@
 from collections import OrderedDict
 import ctypes
 import random
-import sys
 import pickle
 
 import numpy as np
@@ -16,9 +15,22 @@ from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
 from numba.errors import LoweringError
 
-# there are some python 3 specific syntax tests
-if sys.version_info >= (3,):
-    from .jitclass_usecases import TestClass1, TestClass2
+
+class TestClass1(object):
+    def __init__(self, x, y, z=1, *, a=5):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.a = a
+
+
+class TestClass2(object):
+    def __init__(self, x, y, z=1, *args, a=5):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.args = args
+        self.a = a
 
 
 def _get_meminfo(box):
@@ -568,7 +580,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             access_dunder.py_func(inst)
         self.assertIn('_TestJitClass__value', str(raises.exception))
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
     def test_annotations(self):
         """
         Methods with annotations should compile fine (issue #1911).
@@ -647,7 +658,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.y, 2)
         self.assertEqual(tc.z, 5)
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
     def test_default_args_keyonly(self):
         spec = [('x', int32),
                 ('y', int32),
@@ -680,7 +690,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.z, 1)
         self.assertEqual(tc.a, 5)
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
     def test_default_args_starargs_and_keyonly(self):
         spec = [('x', int32),
                 ('y', int32),

@@ -1,6 +1,5 @@
 import array
 import numpy as np
-import sys
 
 from numba import unittest_support as unittest
 from numba import jit, cffi_support, types, errors
@@ -122,8 +121,6 @@ class TestCFFI(TestCase):
         imag_cfunc(x, y)
         np.testing.assert_equal(x.imag, y)
 
-    @unittest.skipIf(sys.version_info < (3,),
-                     "buffer protocol on array.array needs Python 3+")
     def test_from_buffer_pyarray(self):
         pyfunc = mod.vector_sin_float32
         cfunc = jit(nopython=True)(pyfunc)

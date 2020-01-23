@@ -512,21 +512,15 @@ def tweak_code(func, codestring=None, consts=None):
         codestring = co.co_code
     if consts is None:
         consts = co.co_consts
-    if sys.version_info >= (3, 8):
+    if utils.PYVERSION >= (3, 8):
         new_code = tp(co.co_argcount, co.co_posonlyargcount,
                       co.co_kwonlyargcount, co.co_nlocals,
                       co.co_stacksize, co.co_flags, codestring,
                       consts, co.co_names, co.co_varnames,
                       co.co_filename, co.co_name, co.co_firstlineno,
                       co.co_lnotab)
-    elif sys.version_info >= (3,):
-        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
-                      co.co_stacksize, co.co_flags, codestring,
-                      consts, co.co_names, co.co_varnames,
-                      co.co_filename, co.co_name, co.co_firstlineno,
-                      co.co_lnotab)
     else:
-        new_code = tp(co.co_argcount, co.co_nlocals,
+        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
                       co.co_stacksize, co.co_flags, codestring,
                       consts, co.co_names, co.co_varnames,
                       co.co_filename, co.co_name, co.co_firstlineno,
@@ -595,9 +589,8 @@ def import_dynamic(modname):
     Import and return a module of the given name.  Care is taken to
     avoid issues due to Python's internal directory caching.
     """
-    if sys.version_info >= (3, 3):
-        import importlib
-        importlib.invalidate_caches()
+    import importlib
+    importlib.invalidate_caches()
     __import__(modname)
     return sys.modules[modname]
 

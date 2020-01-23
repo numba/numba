@@ -162,10 +162,7 @@ class TestCFunc(TestCase):
             self.assertPreciseEqual(res, 0.0)
         err = err.getvalue()
         self.assertIn("ZeroDivisionError:", err)
-        if sys.version_info >= (3,):
-            self.assertIn("Exception ignored", err)
-        else:
-            self.assertIn(" ignored", err)
+        self.assertIn("Exception ignored", err)
 
     def test_llvm_ir(self):
         f = cfunc(add_sig)(add_usecase)
