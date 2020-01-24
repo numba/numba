@@ -8,7 +8,6 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <math.h>
-#include "_math_c99.h"
 #ifdef _MSC_VER
     #define int64_t signed __int64
     #define uint64_t unsigned __int64
@@ -134,8 +133,7 @@ numba_cpowf(npy_cfloat *a, npy_cfloat *b, npy_cfloat *out) {
     *out = npy_cpackf((float) _out.real, (float) _out.imag);
 }
 
-/* C99 math functions: redirect to system implementations
-   (but see _math_c99.h for Windows) */
+/* C99 math functions: redirect to system implementations */
 
 NUMBA_EXPORT_FUNC(double)
 numba_gamma(double x)

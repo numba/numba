@@ -80,7 +80,6 @@ atan
 atanf
 atan2
 atan2f
-atan2_fixed
 asinh
 asinhf
 acosh
