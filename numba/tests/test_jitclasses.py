@@ -10,7 +10,7 @@ from numba import (float32, float64, int16, int32, boolean, deferred_type,
 from numba import njit, typeof, types, errors
 from numba import unittest_support as unittest
 from numba import jitclass
-from .support import TestCase, MemoryLeakMixin, tag
+from .support import TestCase, MemoryLeakMixin
 from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
 from numba.errors import LoweringError

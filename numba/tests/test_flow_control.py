@@ -5,7 +5,7 @@ from numba.controlflow import CFGraph, ControlFlowAnalysis
 from numba.compiler import compile_isolated, Flags
 from numba import types
 from numba.bytecode import FunctionIdentity, ByteCode
-from .support import TestCase, tag
+from .support import TestCase
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")

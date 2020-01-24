@@ -5,7 +5,7 @@ import numpy
 import numba.unittest_support as unittest
 from numba import njit, jit, testing
 from numba.errors import TypingError, UnsupportedError
-from .support import TestCase, tag
+from .support import TestCase
 
 
 class TestClosure(TestCase):

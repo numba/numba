@@ -4,7 +4,7 @@ from numba import unittest_support as unittest
 from numba import float32, jit
 from numba.npyufunc import Vectorize
 from numba.errors import TypingError
-from ..support import tag, TestCase
+from ..support import TestCase
 
 
 dtype = np.float32

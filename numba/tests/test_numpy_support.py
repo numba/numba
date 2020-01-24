@@ -10,7 +10,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import numpy_support, types
-from .support import TestCase, tag
+from .support import TestCase
 from .enum_usecases import Shake, RequestError
 
 

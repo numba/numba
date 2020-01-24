@@ -1,6 +1,6 @@
 import re
 
-from .support import TestCase, override_config, tag
+from .support import TestCase, override_config
 from numba import unittest_support as unittest
 from numba import jit, types
 
