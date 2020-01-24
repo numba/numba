@@ -213,7 +213,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         arr = np.float64(['nan', 'nan'])
         check(arr)
 
-    @tag('important')
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -229,7 +228,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         check(arr[::-1])
 
-    @tag('important')
     def test_any_basic(self, pyfunc=array_any):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -247,63 +245,48 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         check(arr[::-1])
 
-    @tag('important')
     def test_sum_basic(self):
         self.check_reduction_basic(array_sum)
 
-    @tag('important')
     def test_mean_basic(self):
         self.check_reduction_basic(array_mean)
 
-    @tag('important')
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
 
-    @tag('important')
     def test_std_basic(self):
         self.check_reduction_basic(array_std)
 
-    @tag('important')
     def test_min_basic(self):
         self.check_reduction_basic(array_min)
 
-    @tag('important')
     def test_max_basic(self):
         self.check_reduction_basic(array_max)
 
-    @tag('important')
     def test_argmin_basic(self):
         self.check_reduction_basic(array_argmin)
 
-    @tag('important')
     def test_argmax_basic(self):
         self.check_reduction_basic(array_argmax)
 
-    @tag('important')
     def test_nanmin_basic(self):
         self.check_reduction_basic(array_nanmin)
 
-    @tag('important')
     def test_nanmax_basic(self):
         self.check_reduction_basic(array_nanmax)
 
-    @tag('important')
     def test_nanmean_basic(self):
         self.check_reduction_basic(array_nanmean)
 
-    @tag('important')
     def test_nansum_basic(self):
         self.check_reduction_basic(array_nansum)
 
-    @tag('important')
     def test_nanprod_basic(self):
         self.check_reduction_basic(array_nanprod)
 
-    @tag('important')
     def test_nanstd_basic(self):
         self.check_reduction_basic(array_nanstd)
 
-    @tag('important')
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar, prec='double')
 
@@ -347,7 +330,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         a[:] = np.nan
         yield a
 
-    @tag('important')
     def test_median_basic(self):
         pyfunc = array_median_global
 
@@ -603,14 +585,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         expected, got = run_comparative(pyfunc, arr)
         self.assertPreciseEqual(got, expected)
 
-    @tag('important')
     def test_array_cumsum(self):
         self.check_cumulative(array_cumsum)
 
     def test_array_cumsum_global(self):
         self.check_cumulative(array_cumsum_global)
 
-    @tag('important')
     def test_array_cumprod(self):
         self.check_cumulative(array_cumprod)
 

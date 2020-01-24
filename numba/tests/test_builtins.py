@@ -252,7 +252,6 @@ class TestBuiltins(TestCase):
             for x in unsigned_values:
                 self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
-    @tag('important')
     def test_abs_npm(self):
         self.test_abs(flags=no_pyobj_flags)
 
@@ -343,7 +342,6 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
-    @tag('important')
     def test_complex_npm(self):
         self.test_complex(flags=no_pyobj_flags)
 
@@ -374,7 +372,6 @@ class TestBuiltins(TestCase):
             with self.assertRaises(ZeroDivisionError):
                 cfunc(x, 0)
 
-    @tag('important')
     def test_divmod_ints_npm(self):
         self.test_divmod_ints(flags=no_pyobj_flags)
 
@@ -397,7 +394,6 @@ class TestBuiltins(TestCase):
             with self.assertRaises(ZeroDivisionError):
                 cfunc(x, 0.0)
 
-    @tag('important')
     def test_divmod_floats_npm(self):
         self.test_divmod_floats(flags=no_pyobj_flags)
 
@@ -463,7 +459,6 @@ class TestBuiltins(TestCase):
         for x in ['-1.1', '0.0', '1.1']:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
-    @tag('important')
     def test_float_npm(self):
         with self.assertTypingError():
             self.test_float(flags=no_pyobj_flags)
@@ -541,7 +536,6 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
-    @tag('important')
     def test_int_npm(self):
         with self.assertTypingError():
             self.test_int(flags=no_pyobj_flags)
@@ -559,7 +553,6 @@ class TestBuiltins(TestCase):
         with self.assertRaises(StopIteration):
             cfunc((1,))
 
-    @tag('important')
     def test_iter_next_npm(self):
         self.test_iter_next(flags=no_pyobj_flags)
 
@@ -616,11 +609,9 @@ class TestBuiltins(TestCase):
         """
         self.check_minmax_1(min_usecase1, flags)
 
-    @tag('important')
     def test_max_npm_1(self):
         self.test_max_1(flags=no_pyobj_flags)
 
-    @tag('important')
     def test_min_npm_1(self):
         self.test_min_1(flags=no_pyobj_flags)
 
@@ -677,11 +668,9 @@ class TestBuiltins(TestCase):
         """
         self.check_minmax_3(min_usecase3, flags)
 
-    @tag('important')
     def test_max_npm_3(self):
         self.test_max_3(flags=no_pyobj_flags)
 
-    @tag('important')
     def test_min_npm_3(self):
         self.test_min_3(flags=no_pyobj_flags)
 
@@ -821,7 +810,6 @@ class TestBuiltins(TestCase):
                     self.assertPreciseEqual(cfunc(-x, n), pyfunc(-x, n),
                                             prec=prec)
 
-    @tag('important')
     def test_round2_npm(self):
         self.test_round2(flags=no_pyobj_flags)
 
@@ -869,21 +857,18 @@ class TestBuiltins(TestCase):
     def test_zip(self, flags=forceobj_flags):
         self.run_nullary_func(zip_usecase, flags)
 
-    @tag('important')
     def test_zip_npm(self):
         self.test_zip(flags=no_pyobj_flags)
 
     def test_zip_1(self, flags=forceobj_flags):
         self.run_nullary_func(zip_1_usecase, flags)
 
-    @tag('important')
     def test_zip_1_npm(self):
         self.test_zip_1(flags=no_pyobj_flags)
 
     def test_zip_3(self, flags=forceobj_flags):
         self.run_nullary_func(zip_3_usecase, flags)
 
-    @tag('important')
     def test_zip_3_npm(self):
         self.test_zip_3(flags=no_pyobj_flags)
 
@@ -900,7 +885,6 @@ class TestBuiltins(TestCase):
         """
         self.run_nullary_func(zip_first_exhausted, flags)
 
-    @tag('important')
     def test_zip_first_exhausted_npm(self):
         self.test_zip_first_exhausted(flags=nrt_no_pyobj_flags)
 
@@ -918,7 +902,6 @@ class TestBuiltins(TestCase):
             r = cres.entry_point(x, y)
             self.assertPreciseEqual(r, pow_op_usecase(x, y))
 
-    @tag('important')
     def test_pow_usecase(self):
         args = [
             (2, 3),

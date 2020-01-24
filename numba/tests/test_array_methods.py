@@ -532,11 +532,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_array_transpose(self):
         self.check_layout_dependent_func(array_transpose)
 
-    @tag('important')
     def test_array_T(self):
         self.check_layout_dependent_func(array_T)
 
-    @tag('important')
     def test_array_copy(self):
         self.check_layout_dependent_func(array_copy)
 

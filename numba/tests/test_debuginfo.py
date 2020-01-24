@@ -26,7 +26,6 @@ class TestDebugInfo(TestCase):
 
         self._check(foo, sig=(types.int32,), expect=False)
 
-    @tag('important')
     def test_debuginfo_in_asm(self):
         @jit(nopython=True, debug=True)
         def foo(x):

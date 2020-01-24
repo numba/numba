@@ -139,7 +139,6 @@ class TestStencil(TestStencilBase):
         super(TestStencil, self).__init__(*args, **kwargs)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil1(self):
         """Tests whether the optional out argument to stencil calls works.
         """
@@ -168,7 +167,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_without_out, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil2(self):
         """Tests whether the optional neighborhood argument to the stencil
         decorate works.
@@ -254,7 +252,6 @@ class TestStencil(TestStencilBase):
         self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
 
     @skip_unsupported
-    @tag('important')
     def test_stencil3(self):
         """Tests whether a non-zero optional cval argument to the stencil
         decorator works.  Also tests integer result type.
@@ -277,7 +274,6 @@ class TestStencil(TestStencilBase):
         self.assertTrue(par_res[0, 0] == 1.0 and par_res[4, 4] == 1.0)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_standard_indexing_1d(self):
         """Tests standard indexing with a 1d array.
         """
@@ -300,7 +296,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_standard_indexing_2d(self):
         """Tests standard indexing with a 2d array and multiple stencil calls.
         """
@@ -331,7 +326,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_multiple_inputs(self):
         """Tests whether multiple inputs of the same size work.
         """
@@ -367,7 +361,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_call(self):
         """Tests 2D numba.stencil calls.
         """
@@ -401,7 +394,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_impl2, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_call_1D(self):
         """Tests 1D numba.stencil calls.
         """
@@ -422,7 +414,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_impl, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_call_const(self):
         """Tests numba.stencil call that has an index that can be inferred as
         constant from a unary expr. Otherwise, this would raise an error since
@@ -503,7 +494,6 @@ class TestStencil(TestStencilBase):
                       "'neighborhood' option required", str(e.exception))
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_parallel_off(self):
         """Tests 1D numba.stencil calls without parallel translation
            turned off.

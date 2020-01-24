@@ -26,7 +26,6 @@ def comp_list(n):
 
 class TestListComprehension(TestCase):
 
-    @tag('important')
     def test_comp_list(self):
         pyfunc = comp_list
         cres = compile_isolated(pyfunc, [types.intp])
@@ -35,7 +34,6 @@ class TestListComprehension(TestCase):
         self.assertEqual(cfunc(0), pyfunc(0))
         self.assertEqual(cfunc(-1), pyfunc(-1))
 
-    @tag('important')
     def test_bulk_use_cases(self):
         """ Tests the large number of use cases defined below """
 
@@ -251,7 +249,6 @@ class TestArrayComprehension(unittest.TestCase):
         if run_parallel:
             self.assertIn('@do_scheduling', cfunc.inspect_llvm(cfunc.signatures[0]))
 
-    @tag('important')
     def test_comp_with_array_1(self):
         def comp_with_array_1(n):
             m = n * 2
@@ -262,7 +259,6 @@ class TestArrayComprehension(unittest.TestCase):
         if PARALLEL_SUPPORTED:
             self.check(comp_with_array_1, 5, run_parallel=True)
 
-    @tag('important')
     def test_comp_with_array_2(self):
         def comp_with_array_2(n, threshold):
             A = np.arange(-n, n)
@@ -270,7 +266,6 @@ class TestArrayComprehension(unittest.TestCase):
 
         self.check(comp_with_array_2, 5, 0)
 
-    @tag('important')
     def test_comp_with_array_noinline(self):
         def comp_with_array_noinline(n):
             m = n * 2
@@ -284,7 +279,6 @@ class TestArrayComprehension(unittest.TestCase):
         finally:
             ic.enable_inline_arraycall = True
 
-    @tag('important')
     def test_comp_nest_with_array(self):
         def comp_nest_with_array(n):
             l = np.array([[i * j for j in range(n)] for i in range(n)])
@@ -294,7 +288,6 @@ class TestArrayComprehension(unittest.TestCase):
         if PARALLEL_SUPPORTED:
             self.check(comp_nest_with_array, 5, run_parallel=True)
 
-    @tag('important')
     def test_comp_nest_with_array_3(self):
         def comp_nest_with_array_3(n):
             l = np.array([[[i * j * k for k in range(n)] for j in range(n)] for i in range(n)])
@@ -304,7 +297,6 @@ class TestArrayComprehension(unittest.TestCase):
         if PARALLEL_SUPPORTED:
             self.check(comp_nest_with_array_3, 5, run_parallel=True)
 
-    @tag('important')
     def test_comp_nest_with_array_noinline(self):
         def comp_nest_with_array_noinline(n):
             l = np.array([[i * j for j in range(n)] for i in range(n)])
@@ -318,7 +310,6 @@ class TestArrayComprehension(unittest.TestCase):
         finally:
             ic.enable_inline_arraycall = True
 
-    @tag('important')
     def test_comp_with_array_range(self):
         def comp_with_array_range(m, n):
             l = np.array([i for i in range(m, n)])
@@ -326,7 +317,6 @@ class TestArrayComprehension(unittest.TestCase):
 
         self.check(comp_with_array_range, 5, 10)
 
-    @tag('important')
     def test_comp_with_array_range_and_step(self):
         def comp_with_array_range_and_step(m, n):
             l = np.array([i for i in range(m, n, 2)])
@@ -334,7 +324,6 @@ class TestArrayComprehension(unittest.TestCase):
 
         self.check(comp_with_array_range_and_step, 5, 10)
 
-    @tag('important')
     def test_comp_with_array_conditional(self):
         def comp_with_array_conditional(n):
             l = np.array([i for i in range(n) if i % 2 == 1])
@@ -342,7 +331,6 @@ class TestArrayComprehension(unittest.TestCase):
         # arraycall inline would not happen when conditional is present
         self.check(comp_with_array_conditional, 10, assert_allocate_list=True)
 
-    @tag('important')
     def test_comp_nest_with_array_conditional(self):
         def comp_nest_with_array_conditional(n):
             l = np.array([[i * j for j in range(n)] for i in range(n) if i % 2 == 1])
@@ -350,7 +338,6 @@ class TestArrayComprehension(unittest.TestCase):
         self.check(comp_nest_with_array_conditional, 5,
                    assert_allocate_list=True)
 
-    @tag('important')
     def test_comp_nest_with_dependency(self):
         def comp_nest_with_dependency(n):
             l = np.array([[i * j for j in range(i+1)] for i in range(n)])
@@ -361,7 +348,6 @@ class TestArrayComprehension(unittest.TestCase):
         self.assertIn('Invalid use of Function', str(raises.exception))
         self.assertIn('array(undefined,', str(raises.exception))
 
-    @tag('important')
     def test_no_array_comp(self):
         def no_array_comp1(n):
             l = [1,2,3,4]
@@ -376,7 +362,6 @@ class TestArrayComprehension(unittest.TestCase):
             return a
         self.check(no_array_comp2, 10, assert_allocate_list=True)
 
-    @tag('important')
     def test_nested_array(self):
         def nested_array(n):
             l = np.array([ np.array([x for x in range(n)]) for y in range(n)])
@@ -384,7 +369,6 @@ class TestArrayComprehension(unittest.TestCase):
 
         self.check(nested_array, 10)
 
-    @tag('important')
     def test_nested_array_with_const(self):
         def nested_array(n):
             l = np.array([ np.array([x for x in range(3)]) for y in range(4)])
@@ -392,7 +376,6 @@ class TestArrayComprehension(unittest.TestCase):
 
         self.check(nested_array, 0)
 
-    @tag('important')
     def test_array_comp_with_iter(self):
         def array_comp(a):
             l = np.array([ x * x for x in a ])

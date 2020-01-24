@@ -113,7 +113,6 @@ class TestInlinedClosure(TestCase):
     at compile time.
     """
 
-    @tag('important')
     def test_inner_function(self):
 
         def outer(x):
@@ -126,7 +125,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @tag('important')
     def test_inner_function_with_closure(self):
 
         def outer(x):
@@ -140,7 +138,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @tag('important')
     def test_inner_function_with_closure_2(self):
 
         def outer(x):
@@ -175,7 +172,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(ns['outer'])
         self.assertEqual(cfunc(10), ns['outer'](10))
 
-    @tag('important')
     def test_inner_function_nested(self):
 
         def outer(x):
@@ -195,7 +191,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @tag('important')
     def test_bulk_use_cases(self):
         """ Tests the large number of use cases defined below """
 

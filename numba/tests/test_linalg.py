@@ -709,7 +709,6 @@ class TestLinalgInv(TestLinalgBase):
     Tests for np.linalg.inv.
     """
 
-    @tag('important')
     @needs_lapack
     def test_linalg_inv(self):
         """

@@ -71,15 +71,12 @@ class TestScalarNumberCtor(TestCase):
             cfunc = cres.entry_point
             self.assertPreciseEqual(pyfunc(x), cfunc(x))
 
-    @tag('important')
     def test_bool(self):
         self.check_int_constructor(dobool)
 
-    @tag('important')
     def test_int(self):
         self.check_int_constructor(doint)
 
-    @tag('important')
     def test_float(self):
         pyfunc = dofloat
 
@@ -94,7 +91,6 @@ class TestScalarNumberCtor(TestCase):
             self.assertPreciseEqual(pyfunc(x), cfunc(x),
                 prec='single' if ty is types.float32 else 'exact')
 
-    @tag('important')
     def test_complex(self):
         pyfunc = docomplex
 
@@ -124,7 +120,6 @@ class TestScalarNumberCtor(TestCase):
         cfunc = cres.entry_point
         self.assertGreater(cfunc(x), 1.0)
 
-    @tag('important')
     def test_complex2(self):
         pyfunc = docomplex2
 

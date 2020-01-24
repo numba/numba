@@ -40,7 +40,6 @@ class TestEquivSet(TestCase):
     """
     Test array_analysis.EquivSet.
     """
-    @tag('important')
     def test_insert_equiv(self):
         s1 = EquivSet()
         s1.insert_equiv('a', 'b')
@@ -53,7 +52,6 @@ class TestEquivSet(TestCase):
         self.assertTrue(s1.is_equiv('a', 'b', 'c', 'd'))
         self.assertFalse(s1.is_equiv('a', 'e'))
 
-    @tag('important')
     def test_intersect(self):
         s1 = EquivSet()
         s2 = EquivSet()

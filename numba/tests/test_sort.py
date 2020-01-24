@@ -172,7 +172,6 @@ class BaseTimsortTest(BaseSortingTest):
         f = self.timsort.merge_init
         return f(keys)
 
-    @tag('important')
     def test_binarysort(self):
         n = 20
         def check(l, n, start=0):
@@ -258,7 +257,6 @@ class BaseTimsortTest(BaseSortingTest):
         for i in range(len(l) - 1):
             check(l, i, n)
 
-    @tag('important')
     def test_gallop_left(self):
         n = 20
         f = self.timsort.gallop_left
@@ -647,7 +645,6 @@ class BaseQuicksortTest(BaseSortingTest):
         l = self.duprandom_list(n)
         check(l, n)
 
-    @tag('important')
     def test_run_quicksort(self):
         f = self.quicksort.run_quicksort
 
@@ -781,7 +778,6 @@ class TestNumpySort(TestCase):
         for orig in self.int_arrays():
             self.check_sort_inplace(pyfunc, cfunc, orig)
 
-    @tag('important')
     def test_array_sort_float(self):
         pyfunc = sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -826,7 +822,6 @@ class TestNumpySort(TestCase):
         check(argsort_kind_usecase, is_stable=False)
         check(np_argsort_kind_usecase, is_stable=False)
 
-    @tag('important')
     def test_argsort_float(self):
         def check(pyfunc):
             cfunc = jit(nopython=True)(pyfunc)
@@ -836,7 +831,6 @@ class TestNumpySort(TestCase):
         check(argsort_usecase)
         check(np_argsort_usecase)
 
-    @tag('important')
     def test_argsort_float(self):
         def check(pyfunc, is_stable):
             cfunc = jit(nopython=True)(pyfunc)
@@ -852,7 +846,6 @@ class TestNumpySort(TestCase):
 
 class TestPythonSort(TestCase):
 
-    @tag('important')
     def test_list_sort(self):
         pyfunc = list_sort_usecase
         cfunc = jit(nopython=True)(pyfunc)

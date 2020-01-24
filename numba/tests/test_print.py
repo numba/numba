@@ -44,7 +44,6 @@ def make_print_closure(x):
 
 class TestPrint(TestCase):
 
-    @tag('important')
     def test_print_values(self):
         """
         Test printing a single argument value.
@@ -95,7 +94,6 @@ class TestPrint(TestCase):
             self.assertEqual(sys.stdout.getvalue(),
                              '[0 1 2 3 4 5 6 7 8 9]\n')
 
-    @tag('important')
     def test_print_array_item(self):
         """
         Test printing a Numpy character sequence
@@ -110,7 +108,6 @@ class TestPrint(TestCase):
                 cfunc(arr, i)
                 self.assertEqual(sys.stdout.getvalue(), str(arr[i]['x']) + '\n')
 
-    @tag('important')
     def test_print_multiple_values(self):
         pyfunc = print_values
         cr = compile_isolated(pyfunc, (types.int32,) * 3)
@@ -126,7 +123,6 @@ class TestPrint(TestCase):
             cfunc(1, 2, 3)
             self.assertEqual(sys.stdout.getvalue(), '1 2 3\n')
 
-    @tag('important')
     def test_print_empty(self):
         pyfunc = print_empty
         cr = compile_isolated(pyfunc, ())
@@ -135,7 +131,6 @@ class TestPrint(TestCase):
             cfunc()
             self.assertEqual(sys.stdout.getvalue(), '\n')
 
-    @tag('important')
     def test_print_strings(self):
         pyfunc = print_string
         cr = compile_isolated(pyfunc, (types.int32,))

@@ -261,7 +261,6 @@ class TestTimedeltaArithmetic(TestCase):
     def jit(self, pyfunc):
         return jit(**self.jitargs)(pyfunc)
 
-    @tag('important')
     def test_add(self):
         f = self.jit(add_usecase)
         def check(a, b, expected):
@@ -281,7 +280,6 @@ class TestTimedeltaArithmetic(TestCase):
         with self.assertRaises((TypeError, TypingError)):
             f(TD(1, 'M'), TD(1, 'D'))
 
-    @tag('important')
     def test_sub(self):
         f = self.jit(sub_usecase)
         def check(a, b, expected):
@@ -367,7 +365,6 @@ class TestTimedeltaArithmetic(TestCase):
         with self.assertRaises((TypeError, TypingError)):
             div(TD(1, 'M'), TD(1, 'D'))
 
-    @tag('important')
     def test_eq_ne(self):
         eq = self.jit(eq_usecase)
         ne = self.jit(ne_usecase)
@@ -543,7 +540,6 @@ class TestDatetimeArithmetic(TestCase):
                                     category=DeprecationWarning)
             yield
 
-    @tag('important')
     def test_add_sub_timedelta(self):
         """
         Test `datetime64 + timedelta64` and `datetime64 - timedelta64`.
@@ -645,7 +641,6 @@ class TestDatetimeArithmetic(TestCase):
                     continue
                 self.assertPreciseEqual(sub(a, b), a - b, (a, b))
 
-    @tag('important')
     def test_comparisons(self):
         # Test all datetime comparisons all at once
         eq = self.jit(eq_usecase)

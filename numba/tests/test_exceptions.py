@@ -169,7 +169,6 @@ class TestRaising(TestCase):
         self.check_against_python(flags, pyfunc, cfunc,
                                   np.linalg.linalg.LinAlgError, 3)
 
-    @tag('important')
     def test_raise_class_nopython(self):
         self.check_raise_class(flags=no_pyobj_flags)
 
@@ -192,7 +191,6 @@ class TestRaising(TestCase):
     def test_raise_instance_objmode(self):
         self.check_raise_instance(flags=force_pyobj_flags)
 
-    @tag('important')
     def test_raise_instance_nopython(self):
         self.check_raise_instance(flags=no_pyobj_flags)
 
@@ -214,7 +212,6 @@ class TestRaising(TestCase):
     def test_raise_nested_objmode(self):
         self.check_raise_nested(force_pyobj_flags, forceobj=True)
 
-    @tag('important')
     def test_raise_nested_nopython(self):
         self.check_raise_nested(no_pyobj_flags, nopython=True)
 
@@ -244,7 +241,6 @@ class TestRaising(TestCase):
     def test_reraise_objmode(self):
         self.check_reraise(flags=force_pyobj_flags)
 
-    @tag('important')
     def test_reraise_nopython(self):
         self.check_reraise(flags=no_pyobj_flags)
 

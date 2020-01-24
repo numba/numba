@@ -432,7 +432,6 @@ class TestRecordDtype(unittest.TestCase):
             self.assertEqual(pyfunc(self.refsample1d, i),
                              cfunc(self.nbsample1d, i))
 
-    @tag('important')
     def test_get_a(self):
         self._test_get_equal(get_a)
         self._test_get_equal(get_a_subarray)
@@ -499,7 +498,6 @@ class TestRecordDtype(unittest.TestCase):
             # Match the entire array to ensure no memory corruption
             np.testing.assert_equal(expect, got)
 
-    @tag('important')
     def test_set_a(self):
         def check(pyfunc):
             self._test_set_equal(pyfunc, 3.1415, types.float64)
@@ -520,7 +518,6 @@ class TestRecordDtype(unittest.TestCase):
         check(setitem_b)
         check(setitem_b_subarray)
 
-    @tag('important')
     def test_set_c(self):
         def check(pyfunc):
             self._test_set_equal(pyfunc, 43j, types.complex64)
@@ -531,7 +528,6 @@ class TestRecordDtype(unittest.TestCase):
         check(setitem_c)
         check(setitem_c_subarray)
 
-    @tag('important')
     def test_set_record(self):
         pyfunc = set_record
         rec = numpy_support.from_dtype(recordtype)
@@ -655,7 +651,6 @@ class TestRecordDtype(unittest.TestCase):
         expected[0].h[1] = 4.0
         np.testing.assert_equal(expected, nbval)
 
-    @tag('important')
     def test_record_write_2d_array(self):
         '''
         Test writing to a 2D array within a structured type
@@ -687,7 +682,6 @@ class TestRecordDtype(unittest.TestCase):
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].h[1])
 
-    @tag('important')
     def test_record_read_2d_array(self):
         '''
         Test reading from a 2D array within a structured type
@@ -708,7 +702,6 @@ class TestRecordDtype(unittest.TestCase):
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].j[1, 0])
 
-    @tag('important')
     def test_record_return(self):
         """
         Testing scalar record value as return value.

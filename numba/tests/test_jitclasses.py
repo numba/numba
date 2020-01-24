@@ -121,7 +121,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         return Vector2
 
-    @tag('important')
     def test_jit_class_1(self):
         Float2AndArray = self._make_Float2AndArray()
         Vector2 = self._make_Vector2()
@@ -144,7 +143,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(b, 3 + 4)
         self.assertPreciseEqual(c, inp)
 
-    @tag('important')
     def test_jitclass_usage_from_python(self):
         Float2AndArray = self._make_Float2AndArray()
 
@@ -213,7 +211,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertTrue(Foo(True).val)
         self.assertFalse(Foo(False).val)
 
-    @tag('important')
     def test_deferred_type(self):
         node_type = deferred_type()
 
@@ -360,7 +357,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(str(raises.exception),
                          "class members are not yet supported: constant")
 
-    @tag('important')
     def test_user_getter_setter(self):
         @jitclass([('attr', int32)])
         class Foo(object):
@@ -491,7 +487,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         d = create_my_class(np.array([12.3]))
         np.testing.assert_equal(d.value, [12.3])
 
-    @tag('important')
     def test_protected_attrs(self):
         spec = {
             'value': int32,

@@ -127,7 +127,6 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
         del got_arr
 
-    @tag('important')
     def test_empty_3d(self):
         def pyfunc(m, n, p):
             arr = np.empty((m, n, p), np.int32)
@@ -153,7 +152,6 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
         del got_arr
 
-    @tag('important')
     def test_empty_2d_sliced(self):
         def pyfunc(m, n, p):
             arr = np.empty((m, n), np.int32)
@@ -178,7 +176,6 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
         del got_arr
 
-    @tag('important')
     def test_return_global_array(self):
         y = np.ones(4, dtype=np.float32)
         initrefct = sys.getrefcount(y)
@@ -206,7 +203,6 @@ class TestDynArray(NrtRefCtTest, TestCase):
         # y is no longer referenced by cfunc
         self.assertEqual(initrefct, sys.getrefcount(y))
 
-    @tag('important')
     def test_return_global_array_sliced(self):
         y = np.ones(4, dtype=np.float32)
 
@@ -237,7 +233,6 @@ class TestDynArray(NrtRefCtTest, TestCase):
         self.assertIs(expected, arr)
         self.assertIs(expected, got)
 
-    @tag('important')
     def test_array_pass_through_sliced(self):
         def pyfunc(y):
             return y[y.size // 2:]
@@ -642,7 +637,6 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
             with self.assertRaises(ValueError):
                 cfunc(np.int64(1 << (32 - 1)), 1)
 
-    @tag('important')
     def test_2d_dtype_kwarg(self):
         pyfunc = self.pyfunc
         def func(m, n):
@@ -1144,7 +1138,6 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                             ((),),
                             ])
 
-    @tag('important')
     def test_2d(self):
         def pyfunc(arg):
             return np.array(arg)
@@ -1224,7 +1217,6 @@ class TestNpConcatenate(MemoryLeakMixin, TestCase):
         self.assertIn("input sizes over dimension %d do not match" % axis,
                       str(raises.exception))
 
-    @tag('important')
     def test_3d(self):
         pyfunc = np_concatenate2
         cfunc = nrtjit(pyfunc)
@@ -1407,7 +1399,6 @@ class TestNpStack(MemoryLeakMixin, TestCase):
             args = next(generate_starargs())
             cfunc(a[:-1], b, c, *args)
 
-    @tag('important')
     def test_3d(self):
         """
         stack(3d arrays, axis)
@@ -1463,7 +1454,6 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         c = np.array(True)
         self.check_stack(pyfunc, cfunc, (a, b, a))
 
-    @tag('important')
     def test_hstack(self):
         pyfunc = np_hstack
         cfunc = nrtjit(pyfunc)
@@ -1478,7 +1468,6 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         b = np.arange(8).reshape((2, 4)) + 100
         self.check_stack(pyfunc, cfunc, (a, b, a))
 
-    @tag('important')
     def test_vstack(self):
         pyfunc = np_vstack
         cfunc = nrtjit(pyfunc)
@@ -1493,7 +1482,6 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         b = np.arange(8).reshape((4, 2)) + 100
         self.check_stack(pyfunc, cfunc, (a, b, b))
 
-    @tag('important')
     def test_dstack(self):
         pyfunc = np_dstack
         cfunc = nrtjit(pyfunc)
@@ -1508,7 +1496,6 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         b = a + 100
         self.check_stack(pyfunc, cfunc, (a, b, b))
 
-    @tag('important')
     def test_column_stack(self):
         pyfunc = np_column_stack
         cfunc = nrtjit(pyfunc)

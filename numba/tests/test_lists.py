@@ -440,21 +440,18 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_append(self):
         self.check_unary_with_size(list_append)
 
-    @tag('important')
     def test_append_heterogeneous(self):
         self.check_unary_with_size(list_append_heterogeneous, precise=False)
 
     def test_extend(self):
         self.check_unary_with_size(list_extend)
 
-    @tag('important')
     def test_extend_heterogeneous(self):
         self.check_unary_with_size(list_extend_heterogeneous, precise=False)
 
     def test_pop0(self):
         self.check_unary_with_size(list_pop0)
 
-    @tag('important')
     def test_pop1(self):
         pyfunc = list_pop1
         cfunc = jit(nopython=True)(pyfunc)
@@ -486,11 +483,9 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_len(self):
         self.check_unary_with_size(list_len)
 
-    @tag('important')
     def test_getitem(self):
         self.check_unary_with_size(list_getitem)
 
-    @tag('important')
     def test_setitem(self):
         self.check_unary_with_size(list_setitem)
 
@@ -516,7 +511,6 @@ class TestLists(MemoryLeakMixin, TestCase):
                 expected = pyfunc(n, n_src, start, stop)
                 self.assertPreciseEqual(cfunc(n, n_src, start, stop), expected)
 
-    @tag('important')
     def test_getslice3(self):
         pyfunc = list_getslice3
         cfunc = jit(nopython=True)(pyfunc)
@@ -527,7 +521,6 @@ class TestLists(MemoryLeakMixin, TestCase):
                 expected = pyfunc(n, start, stop, step)
                 self.assertPreciseEqual(cfunc(n, start, stop, step), expected)
 
-    @tag('important')
     def test_setslice3(self):
         pyfunc = list_setslice3
         cfunc = jit(nopython=True)(pyfunc)
@@ -556,7 +549,6 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_delslice1(self):
         self.check_slicing2(list_delslice1)
 
-    @tag('important')
     def test_delslice2(self):
         self.check_slicing2(list_delslice2)
 
@@ -571,7 +563,6 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_iteration(self):
         self.check_unary_with_size(list_iteration)
 
-    @tag('important')
     def test_reverse(self):
         self.check_unary_with_size(list_reverse)
 
@@ -792,7 +783,6 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         check([(1, 2j), (3, 4j)])
         check([(), (), ()])
 
-    @tag('important')
     def test_list_inside_tuple(self):
         check = self.check_unary(unbox_usecase3)
         check((1, [2, 3, 4]))
@@ -870,7 +860,6 @@ class TestListReflection(MemoryLeakMixin, TestCase):
                 cfunc(l)
             self.assertPreciseEqual(l, [1, 2, 3, 42])
 
-    @tag('important')
     def test_reflect_same_list(self):
         """
         When the same list object is reflected twice, behaviour should

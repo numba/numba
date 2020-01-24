@@ -203,7 +203,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
     def test_lift3(self):
         self.check_lift_ok(lift3, (types.intp,), (123,))
 
-    @tag('important')
     def test_lift4(self):
         self.check_lift_ok(lift4, (types.intp,), (123,))
 
@@ -213,7 +212,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
     def test_lift_issue2561(self):
         self.check_no_lift(lift_issue2561, (), ())
 
-    @tag('important')
     def test_lift_gen1(self):
         self.check_lift_generator_ok(lift_gen1, (types.intp,), (123,))
 

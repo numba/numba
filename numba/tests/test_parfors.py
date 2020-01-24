@@ -491,7 +491,6 @@ class TestParfors(TestParforsBase):
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
     @skip_parfors_unsupported
-    @tag('important')
     def test_arraymap(self):
         def test_impl(a, x, y):
             return a * x + y
@@ -504,7 +503,6 @@ class TestParfors(TestParforsBase):
 
     @skip_parfors_unsupported
     @needs_blas
-    @tag('important')
     def test_mvdot(self):
         def test_impl(a, v):
             return np.dot(a, v)
@@ -515,7 +513,6 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, A, v)
 
     @skip_parfors_unsupported
-    @tag('important')
     def test_0d_broadcast(self):
         def test_impl():
             X = np.array(1)
@@ -525,7 +522,6 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countParfors(test_impl, ()) == 1)
 
     @skip_parfors_unsupported
-    @tag('important')
     def test_2d_parfor(self):
         def test_impl():
             X = np.ones((10, 12))
@@ -535,7 +531,6 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countParfors(test_impl, ()) == 1)
 
     @skip_parfors_unsupported
-    @tag('important')
     def test_pi(self):
         def test_impl(n):
             x = 2 * np.random.ranf(n) - 1
@@ -547,7 +542,6 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
 
     @skip_parfors_unsupported
-    @tag('important')
     def test_fuse_argmin_argmax_max_min(self):
         for op in [np.argmin, np.argmax, np.min, np.max]:
             def test_impl(n):
@@ -560,7 +554,6 @@ class TestParfors(TestParforsBase):
             self.assertTrue(countArrays(test_impl, (types.intp,)) == 0)
 
     @skip_parfors_unsupported
-    @tag('important')
     def test_blackscholes(self):
         # blackscholes takes 5 1D float array args
         args = (numba.float64[:], ) * 5
@@ -568,7 +561,6 @@ class TestParfors(TestParforsBase):
 
     @skip_parfors_unsupported
     @needs_blas
-    @tag('important')
     def test_logistic_regression(self):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
@@ -576,7 +568,6 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countArrayAllocs(lr_impl, args) == 1)
 
     @skip_parfors_unsupported
-    @tag('important')
     def test_kmeans(self):
         np.random.seed(0)
         N = 1024

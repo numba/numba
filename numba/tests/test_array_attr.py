@@ -120,7 +120,6 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         cres = self.ccache.compile(pyfunc, argspec)
         return cres.entry_point
 
-    @tag('important')
     def test_shape(self):
         pyfunc = array_shape
         cfunc = self.get_cfunc(pyfunc, (types.int32[:,:], types.int32))
@@ -180,7 +179,6 @@ class TestNestedArrayAttr(MemoryLeakMixin, unittest.TestCase):
         cres = compile_isolated(pyfunc, (self.nbrecord,))
         return cres.entry_point
 
-    @tag('important')
     def test_shape(self):
         pyfunc = nested_array_shape
         cfunc = self.get_cfunc(pyfunc)

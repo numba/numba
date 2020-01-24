@@ -335,7 +335,6 @@ class TestSVML(TestCase):
         self.check(math_sin_scalar, 7., std_pattern=pat)
         self.check(math_sin_scalar, 7., fast_pattern=pat)
 
-    @tag('important')
     def test_svml(self):
         # loops both with and without fastmath should use SVML.
         # The high accuracy routines are dropped if `fastmath` is set

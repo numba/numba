@@ -46,7 +46,6 @@ class Dummy(object):
 
 class TestTypes(TestCase):
 
-    @tag('important')
     def test_equality(self):
         self.assertEqual(types.int32, types.int32)
         self.assertEqual(types.uint32, types.uint32)
@@ -138,7 +137,6 @@ class TestTypes(TestCase):
         self.assertTrue(b != c)
         self.assertTrue(a != z)
 
-    @tag('important')
     def test_interning(self):
         # Test interning and lifetime of dynamic types.
         a = types.Dummy('xyzzyx')
@@ -174,7 +172,6 @@ class TestTypes(TestCase):
         gc.collect()
         self.assertEqual(len(cache), cache_len)
 
-    @tag('important')
     def test_array_notation(self):
         def check(arrty, scalar, ndim, layout):
             self.assertIs(arrty.dtype, scalar)
@@ -200,7 +197,6 @@ class TestTypes(TestCase):
         check(dtyped[:, ::1], scalar, 2, 'C')
         check(dtyped[::1, :], scalar, 2, 'F')
 
-    @tag('important')
     def test_call_notation(self):
         # Function call signature
         i = types.int32

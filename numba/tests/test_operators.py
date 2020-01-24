@@ -455,42 +455,36 @@ class TestOperators(TestCase):
     def test_lt_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.lt_usecase, flags)
 
-    @tag('important')
     def test_lt_scalar_npm(self):
         self.test_lt_scalar(flags=Noflags)
 
     def test_le_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.le_usecase, flags)
 
-    @tag('important')
     def test_le_scalar_npm(self):
         self.test_le_scalar(flags=Noflags)
 
     def test_gt_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.gt_usecase, flags)
 
-    @tag('important')
     def test_gt_scalar_npm(self):
         self.test_gt_scalar(flags=Noflags)
 
     def test_ge_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.ge_usecase, flags)
 
-    @tag('important')
     def test_ge_scalar_npm(self):
         self.test_ge_scalar(flags=Noflags)
 
     def test_eq_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.eq_usecase, flags, ordered=False)
 
-    @tag('important')
     def test_eq_scalar_npm(self):
         self.test_eq_scalar(flags=Noflags)
 
     def test_ne_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.ne_usecase, flags, ordered=False)
 
-    @tag('important')
     def test_ne_scalar_npm(self):
         self.test_ne_scalar(flags=Noflags)
 
@@ -697,7 +691,6 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
-    @tag('important')
     def test_add_complex_npm(self):
         self.test_add_complex(flags=Noflags)
 
@@ -713,7 +706,6 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
-    @tag('important')
     def test_sub_complex_npm(self):
         self.test_sub_complex(flags=Noflags)
 
@@ -729,7 +721,6 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
-    @tag('important')
     def test_mul_complex_npm(self):
         self.test_mul_complex(flags=Noflags)
 
@@ -745,7 +736,6 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
-    @tag('important')
     def test_truediv_complex_npm(self):
         self.test_truediv_complex(flags=Noflags)
 
@@ -754,7 +744,6 @@ class TestOperators(TestCase):
         with self.assertTypingError():
             cres = compile_isolated(pyfunc, (types.complex64, types.complex64))
 
-    @tag('important')
     def test_mod_complex_npm(self):
         self.test_mod_complex(flags=Noflags)
 
@@ -796,11 +785,9 @@ class TestOperators(TestCase):
         self.assertIsNot(got, a)
         self.assertIsNot(got, b)
 
-    @tag('important')
     def test_matmul_npm(self):
         self.check_matmul_npm(self.op.matmul_usecase)
 
-    @tag('important')
     def test_imatmul_npm(self):
         with self.assertTypingError() as raises:
             self.check_matmul_npm(self.op.imatmul_usecase)
@@ -978,7 +965,6 @@ class TestOperators(TestCase):
         for val in values:
             self.assertPreciseEqual(pyfunc(val), cfunc(val))
 
-    @tag('important')
     def test_bitwise_not_npm(self):
         self.test_bitwise_not(flags=Noflags)
 
@@ -1032,7 +1018,6 @@ class TestOperators(TestCase):
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
 
-    @tag('important')
     def test_not_npm(self):
         pyfunc = self.op.not_usecase
         # test native mode
@@ -1058,7 +1043,6 @@ class TestOperators(TestCase):
 
     # XXX test_negate should check for negative and positive zeros and infinities
 
-    @tag('important')
     def test_negate_npm(self):
         pyfunc = self.op.negate_usecase
         # test native mode
@@ -1273,15 +1257,12 @@ class TestMixedInts(TestCase):
         self.run_binary(pyfunc, self.get_control_unsigned(opname),
                         samples, self.unsigned_pairs, expected_type)
 
-    @tag('important')
     def test_add(self):
         self.run_arith_binop(self.op.add_usecase, 'add', self.int_samples)
 
-    @tag('important')
     def test_sub(self):
         self.run_arith_binop(self.op.sub_usecase, 'sub', self.int_samples)
 
-    @tag('important')
     def test_mul(self):
         self.run_arith_binop(self.op.mul_usecase, 'mul', self.int_samples)
 

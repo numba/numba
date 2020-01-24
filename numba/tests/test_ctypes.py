@@ -29,7 +29,6 @@ class TestCTypesTypes(TestCase):
 
         check(None, types.void)
 
-    @tag('important')
     def test_from_ctypes(self):
         """
         Test converting a ctypes type to a Numba type.
@@ -45,7 +44,6 @@ class TestCTypesTypes(TestCase):
             ctypes_utils.from_ctypes(c_wchar_p)
         self.assertIn("Unsupported ctypes type", str(raises.exception))
 
-    @tag('important')
     def test_to_ctypes(self):
         """
         Test converting a Numba type to a ctypes type.
@@ -65,7 +63,6 @@ class TestCTypesTypes(TestCase):
 
 class TestCTypesUseCases(MemoryLeakMixin, TestCase):
 
-    @tag('important')
     def test_c_sin(self):
         pyfunc = use_c_sin
         cres = compile_isolated(pyfunc, [types.double])
@@ -179,7 +176,6 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         for got in outputs:
             self.assertEqual(expected, got)
 
-    @tag('important')
     def test_passing_array_ctypes_data(self):
         """
         Test the ".ctypes.data" attribute of an array can be passed
@@ -206,7 +202,6 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(expected, got)
         return cfunc
 
-    @tag('important')
     def test_passing_array_ctypes_voidptr(self):
         """
         Test the ".ctypes" attribute of an array can be passed
@@ -214,7 +209,6 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         """
         self.check_array_ctypes(use_c_vsquare)
 
-    @tag('important')
     def test_passing_array_ctypes_voidptr_pass_ptr(self):
         """
         Test the ".ctypes" attribute of an array can be passed

@@ -16,7 +16,6 @@ from .enum_usecases import Shake, RequestError
 
 class TestFromDtype(TestCase):
 
-    @tag('important')
     def test_number_types(self):
         """
         Test from_dtype() and as_dtype() with the various scalar number types.
@@ -93,21 +92,18 @@ class TestFromDtype(TestCase):
         # Unit-less ("generic") type
         check(np.dtype(letter), nb_class(''), 14)
 
-    @tag('important')
     def test_datetime_types(self):
         """
         Test from_dtype() and as_dtype() with the datetime types.
         """
         self.check_datetime_types('M', types.NPDatetime)
 
-    @tag('important')
     def test_timedelta_types(self):
         """
         Test from_dtype() and as_dtype() with the timedelta types.
         """
         self.check_datetime_types('m', types.NPTimedelta)
 
-    @tag('important')
     def test_struct_types(self):
         def check(dtype, fields, size, aligned):
             tp = numpy_support.from_dtype(dtype)
@@ -136,7 +132,6 @@ class TestFromDtype(TestCase):
                       'n': (types.CharSeq(5), 4, None, None)},
               size=9, aligned=False)
 
-    @tag('important')
     def test_enum_type(self):
 
         def check(base_inst, enum_def, type_class):
@@ -213,14 +208,12 @@ class ValueTypingTestBase(object):
 
 class TestArrayScalars(ValueTypingTestBase, TestCase):
 
-    @tag('important')
     def test_number_values(self):
         """
         Test map_arrayscalar_type() with scalar number values.
         """
         self.check_number_values(numpy_support.map_arrayscalar_type)
 
-    @tag('important')
     def test_datetime_values(self):
         """
         Test map_arrayscalar_type() with np.datetime64 values.
@@ -232,7 +225,6 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
         with self.assertRaises(NotImplementedError):
             f(t)
 
-    @tag('important')
     def test_timedelta_values(self):
         """
         Test map_arrayscalar_type() with np.timedelta64 values.

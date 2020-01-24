@@ -346,7 +346,6 @@ class TestSetLiterals(BaseTest):
 
         self.assertIs(type(got.pop()), type(expected.pop()))
 
-    @tag('important')
     def test_build_set_nopython(self):
         arg = list(self.sparse_array(50))
         pyfunc = set_literal_convert_usecase(arg)
@@ -373,7 +372,6 @@ class TestSets(BaseTest):
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
-    @tag('important')
     def test_set_return(self):
         pyfunc = set_return_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -381,7 +379,6 @@ class TestSets(BaseTest):
         arg = (1, 2, 3, 2, 7)
         self.assertEqual(cfunc(arg), set(arg))
 
-    @tag('important')
     def test_iterator(self):
         pyfunc = iterator_usecase
         check = self.unordered_checker(pyfunc)
@@ -390,7 +387,6 @@ class TestSets(BaseTest):
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
-    @tag('important')
     def test_update(self):
         pyfunc = update_usecase
         check = self.unordered_checker(pyfunc)
@@ -429,7 +425,6 @@ class TestSets(BaseTest):
         with self.assertRaises(KeyError) as raises:
             cfunc((1, 2, 3), (5, ))
 
-    @tag('important')
     def test_discard(self):
         pyfunc = discard_usecase
         check = self.unordered_checker(pyfunc)
@@ -452,7 +447,6 @@ class TestSets(BaseTest):
         check = self.unordered_checker(pyfunc)
         check((1,), 5, 5)
 
-    @tag('important')
     def test_pop(self):
         pyfunc = pop_usecase
         check = self.unordered_checker(pyfunc)
@@ -460,7 +454,6 @@ class TestSets(BaseTest):
         check((2, 3, 55, 11, 8, 42))
         check(self.sparse_array(50))
 
-    @tag('important')
     def test_contains(self):
         pyfunc = contains_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -626,7 +619,6 @@ class OtherTypesTest(object):
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
-    @tag('important')
     def test_update(self):
         pyfunc = update_usecase
         check = self.unordered_checker(pyfunc)
@@ -680,7 +672,6 @@ class TestUnboxing(BaseTest):
             self.assertPreciseEqual(got, expected)
         return check
 
-    @tag('important')
     def test_numbers(self):
         check = self.check_unary(unbox_usecase)
         check(set([1, 2]))
@@ -693,7 +684,6 @@ class TestUnboxing(BaseTest):
         check(set([(1, 2), (3, 4)]))
         check(set([(1, 2j), (3, 4j)]))
 
-    @tag('important')
     def test_set_inside_tuple(self):
         check = self.check_unary(unbox_usecase3)
         check((1, set([2, 3, 4])))
@@ -768,7 +758,6 @@ class TestSetReflection(BaseTest):
                 cfunc(s)
             self.assertPreciseEqual(s, set([1, 2, 3, 42]))
 
-    @tag('important')
     def test_reflect_same_set(self):
         """
         When the same set object is reflected twice, behaviour should
@@ -801,7 +790,6 @@ class TestExamples(BaseTest):
     Examples of using sets.
     """
 
-    @tag('important')
     def test_unique(self):
         pyfunc = unique_usecase
         check = self.unordered_checker(pyfunc)

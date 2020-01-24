@@ -469,7 +469,6 @@ class TestGetItem(TestCase):
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
 
-    @tag('important')
     def test_3d_slicing_npm(self):
         self.test_3d_slicing(flags=Noflags)
 
@@ -565,7 +564,6 @@ class TestGetItem(TestCase):
         a = np.arange(20, dtype='i4').reshape(5, 4)[::2]
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
 
-    @tag('important')
     def test_integer_indexing_1d_for_2d_npm(self):
         self.test_integer_indexing_1d_for_2d(flags=Noflags)
 
@@ -609,7 +607,6 @@ class TestGetItem(TestCase):
             j = np.array(j).astype(np.int32)
             self.assertEqual(pyfunc(a, i, j), cfunc(a, i, j))
 
-    @tag('important')
     def test_2d_integer_indexing_npm(self):
         self.test_2d_integer_indexing(flags=Noflags)
 
@@ -901,7 +898,6 @@ class TestSetItem(TestCase):
     def test_1d_slicing_add_npm(self):
         self.test_1d_slicing_add(flags=Noflags)
 
-    @tag('important')
     def test_2d_slicing_set(self, flags=enable_pyobj_flags):
         """
         2d to 2d slice assignment

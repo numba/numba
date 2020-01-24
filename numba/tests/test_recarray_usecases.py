@@ -67,7 +67,6 @@ class TestRecordUsecase(TestCase):
         self.unaligned_dtype = np.dtype(fields)
         self.aligned_dtype = np.dtype(fields, align=True)
 
-    @tag('important')
     def test_usecase1(self):
         pyfunc = usecase1
 

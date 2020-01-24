@@ -170,7 +170,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         super(TestArrayManipulation, self).setUp()
         self.ccache = CompilationCache()
 
-    @tag('important')
     def test_array_reshape(self):
         pyfuncs_to_use = [array_reshape, numpy_array_reshape]
 
@@ -377,7 +376,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("np.transpose does not accept tuples",
                         str(e.exception))
 
-    @tag('important')
     def test_expand_dims(self):
         pyfunc = expand_dims
 

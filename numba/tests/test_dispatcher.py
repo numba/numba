@@ -583,7 +583,6 @@ class TestSignatureHandling(BaseTest):
     Test support for various parameter passing styles.
     """
 
-    @tag('important')
     def test_named_args(self):
         """
         Test passing named arguments to a dispatcher.
@@ -671,7 +670,6 @@ class TestGeneratedDispatcher(TestCase):
     Tests for @generated_jit.
     """
 
-    @tag('important')
     def test_generated(self):
         f = generated_jit(nopython=True)(generated_usecase)
         self.assertEqual(f(8), 8 - 5)
@@ -681,7 +679,6 @@ class TestGeneratedDispatcher(TestCase):
         self.assertEqual(f(1j, 42), 42 + 1j)
         self.assertEqual(f(x=1j, y=7), 7 + 1j)
 
-    @tag('important')
     def test_generated_dtype(self):
         f = generated_jit(nopython=True)(dtype_generated_usecase)
         a = np.ones((10,), dtype=np.float32)
@@ -746,7 +743,6 @@ class TestDispatcherMethods(TestCase):
         self.assertPreciseEqual(foo(1), 3)
         self.assertPreciseEqual(foo(1.5), 3)
 
-    @tag('important')
     def test_inspect_llvm(self):
         # Create a jited function
         @jit
@@ -1073,7 +1069,6 @@ class BaseCacheUsecasesTest(BaseCacheTest):
 
 class TestCache(BaseCacheUsecasesTest):
 
-    @tag('important')
     def test_caching(self):
         self.check_pycache(0)
         mod = self.import_module()
@@ -1108,7 +1103,6 @@ class TestCache(BaseCacheUsecasesTest):
         # Check the code runs ok from another process
         self.run_in_separate_process()
 
-    @tag('important')
     def test_caching_nrt_pruned(self):
         self.check_pycache(0)
         mod = self.import_module()

@@ -248,7 +248,6 @@ class TestFlowControl(TestCase):
     def test_for_loop1(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase1, [-10, 0, 10], [0], flags=flags)
 
-    @tag('important')
     def test_for_loop1_npm(self):
         self.test_for_loop1(flags=no_pyobj_flags)
 
@@ -256,7 +255,6 @@ class TestFlowControl(TestCase):
         self.run_test(for_loop_usecase2, [-10, 0, 10], [-10, 0, 10],
                       flags=flags)
 
-    @tag('important')
     def test_for_loop2_npm(self):
         self.test_for_loop2(flags=no_pyobj_flags)
 
@@ -273,49 +271,42 @@ class TestFlowControl(TestCase):
     def test_for_loop4(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase4, [10], [10], flags=flags)
 
-    @tag('important')
     def test_for_loop4_npm(self):
         self.test_for_loop4(flags=no_pyobj_flags)
 
     def test_for_loop5(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase5, [100], [50], flags=flags)
 
-    @tag('important')
     def test_for_loop5_npm(self):
         self.test_for_loop5(flags=no_pyobj_flags)
 
     def test_for_loop6(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase6, [100], [50], flags=flags)
 
-    @tag('important')
     def test_for_loop6_npm(self):
         self.test_for_loop6(flags=no_pyobj_flags)
 
     def test_for_loop7(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase7, [5], [0], flags=flags)
 
-    @tag('important')
     def test_for_loop7_npm(self):
         self.test_for_loop7(flags=no_pyobj_flags)
 
     def test_for_loop8(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase8, [0, 1], [0, 2, 10], flags=flags)
 
-    @tag('important')
     def test_for_loop8_npm(self):
         self.test_for_loop8(flags=no_pyobj_flags)
 
     def test_for_loop9(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase9, [0, 1], [0, 2, 10], flags=flags)
 
-    @tag('important')
     def test_for_loop9_npm(self):
         self.test_for_loop9(flags=no_pyobj_flags)
 
     def test_for_loop10(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase10, [5], [2, 7], flags=flags)
 
-    @tag('important')
     def test_for_loop10_npm(self):
         self.test_for_loop10(flags=no_pyobj_flags)
 
@@ -334,21 +325,18 @@ class TestFlowControl(TestCase):
     def test_while_loop3(self, flags=enable_pyobj_flags):
         self.run_test(while_loop_usecase3, [10], [10], flags=flags)
 
-    @tag('important')
     def test_while_loop3_npm(self):
         self.test_while_loop3(flags=no_pyobj_flags)
 
     def test_while_loop4(self, flags=enable_pyobj_flags):
         self.run_test(while_loop_usecase4, [10], [0], flags=flags)
 
-    @tag('important')
     def test_while_loop4_npm(self):
         self.test_while_loop4(flags=no_pyobj_flags)
 
     def test_while_loop5(self, flags=enable_pyobj_flags):
         self.run_test(while_loop_usecase5, [0, 5, 10], [0, 5, 10], flags=flags)
 
-    @tag('important')
     def test_while_loop5_npm(self):
         self.test_while_loop5(flags=no_pyobj_flags)
 
@@ -361,21 +349,18 @@ class TestFlowControl(TestCase):
     def test_ifelse2(self, flags=enable_pyobj_flags):
         self.run_test(ifelse_usecase2, [-1, 0, 1], [-1, 0, 1], flags=flags)
 
-    @tag('important')
     def test_ifelse2_npm(self):
         self.test_ifelse2(flags=no_pyobj_flags)
 
     def test_ifelse3(self, flags=enable_pyobj_flags):
         self.run_test(ifelse_usecase3, [-1, 0, 1], [-1, 0, 1], flags=flags)
 
-    @tag('important')
     def test_ifelse3_npm(self):
         self.test_ifelse3(flags=no_pyobj_flags)
 
     def test_ifelse4(self, flags=enable_pyobj_flags):
         self.run_test(ifelse_usecase4, [-1, 0, 1], [-1, 0, 1], flags=flags)
 
-    @tag('important')
     def test_ifelse4_npm(self):
         self.test_ifelse4(flags=no_pyobj_flags)
 
@@ -383,7 +368,6 @@ class TestFlowControl(TestCase):
         self.run_test(ternary_ifelse_usecase1, [-1, 0, 1], [-1, 0, 1],
                       flags=flags)
 
-    @tag('important')
     def test_ternary_ifelse1_npm(self):
         self.test_ternary_ifelse1(flags=no_pyobj_flags)
 

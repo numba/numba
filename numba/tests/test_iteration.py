@@ -94,7 +94,6 @@ class IterationTest(MemoryLeakMixin, TestCase):
     def test_int_tuple_iter(self, flags=force_pyobj_flags):
         self.run_nullary_func(int_tuple_iter_usecase, flags)
 
-    @tag('important')
     def test_int_tuple_iter_npm(self):
         self.test_int_tuple_iter(flags=no_pyobj_flags)
 
@@ -110,21 +109,18 @@ class IterationTest(MemoryLeakMixin, TestCase):
     def test_tuple_tuple_iter(self, flags=force_pyobj_flags):
         self.run_nullary_func(tuple_tuple_iter_usecase, flags)
 
-    @tag('important')
     def test_tuple_tuple_iter_npm(self):
         self.test_tuple_tuple_iter(flags=no_pyobj_flags)
 
     def test_enumerate_nested_tuple(self, flags=force_pyobj_flags):
         self.run_nullary_func(enumerate_nested_tuple_usecase, flags)
 
-    @tag('important')
     def test_enumerate_nested_tuple_npm(self):
         self.test_enumerate_nested_tuple(flags=no_pyobj_flags)
 
     def test_nested_enumerate(self, flags=force_pyobj_flags):
         self.run_nullary_func(nested_enumerate_usecase, flags)
 
-    @tag('important')
     def test_nested_enumerate_npm(self):
         self.test_nested_enumerate(flags=no_pyobj_flags)
 
@@ -153,7 +149,6 @@ class IterationTest(MemoryLeakMixin, TestCase):
     def test_array_1d_complex(self, flags=force_pyobj_flags):
         self.run_array_1d(types.complex128, np.arange(5.0) * 1.0j, flags)
 
-    @tag('important')
     def test_array_1d_complex_npm(self):
         self.test_array_1d_complex(no_pyobj_flags)
 
