@@ -5,6 +5,7 @@ import traceback
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types, errors, njit
 from numba import unittest_support as unittest
+from .support import TestCase
 
 force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")

@@ -3527,6 +3527,7 @@ def numpy_full_nd(context, builder, sig, args):
     res = context.compile_internal(builder, full, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
+
 @lower_builtin(np.full, types.Any, types.Any, types.DTypeSpec)
 def numpy_full_dtype_nd(context, builder, sig, args):
 
@@ -3539,6 +3540,7 @@ def numpy_full_dtype_nd(context, builder, sig, args):
     res = context.compile_internal(builder, full, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
+
 @lower_builtin(np.full_like, types.Any, types.Any)
 def numpy_full_like_nd(context, builder, sig, args):
 
@@ -3550,6 +3552,7 @@ def numpy_full_like_nd(context, builder, sig, args):
 
     res = context.compile_internal(builder, full_like, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
+
 
 @lower_builtin(np.full_like, types.Any, types.Any, types.DTypeSpec)
 def numpy_full_like_nd_type_spec(context, builder, sig, args):

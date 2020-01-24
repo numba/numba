@@ -770,6 +770,7 @@ def np_nanmean(a):
 
     return nanmean_impl
 
+
 @overload(np.nanvar)
 def np_nanvar(a):
     if not isinstance(a, types.Array):
@@ -793,6 +794,7 @@ def np_nanvar(a):
         return np.divide(ssd, count)
 
     return nanvar_impl
+
 
 @overload(np.nanstd)
 def np_nanstd(a):
@@ -872,6 +874,7 @@ def np_nancumprod(a):
             return out
 
         return nancumprod_impl
+
 
 @overload(np.nancumsum)
 def np_nancumsum(a):
@@ -1631,7 +1634,7 @@ def np_ediff1d(ary, to_end=None, to_begin=None):
 
         if len(mid) > 0:
             out = np.empty((len(start) + len(mid) + len(end) - 1),
-                            dtype=out_dtype)
+                           dtype=out_dtype)
             start_idx = len(start)
             mid_idx = len(start) + len(mid) - 1
             out[:start_idx] = start
@@ -2574,19 +2577,18 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
     def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
         X = _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER,
-                                _M_DIM_HANDLER).astype(dtype)
+                               _M_DIM_HANDLER).astype(dtype)
 
         if np.any(np.array(X.shape) == 0):
-            return np.full((X.shape[0], X.shape[0]),
-                            fill_value=np.nan,
-                            dtype=dtype)
+            return np.full((X.shape[0], X.shape[0]), fill_value=np.nan,
+                           dtype=dtype)
         else:
             return np_cov_impl_inner(X, bias, ddof)
 
     def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False,
                                     ddof=None):
         X = _prepare_cov_input(m, y, rowvar, ddof, dtype, _DDOF_HANDLER,
-                                _M_DIM_HANDLER).astype(dtype)
+                               _M_DIM_HANDLER).astype(dtype)
 
         if np.any(np.array(X.shape) == 0):
             variance = np.nan
@@ -2599,6 +2601,7 @@ def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
         return np_cov_impl_single_variable
     else:
         return np_cov_impl
+
 
 @overload(np.corrcoef)
 def np_corrcoef(x, y=None, rowvar=True):
