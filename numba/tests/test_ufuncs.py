@@ -11,7 +11,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import types, typing, utils, typeof, numpy_support, njit
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
-from numba.numpy_support import from_dtype, version as numpy_version
+from numba.numpy_support import from_dtype
 from numba import jit, vectorize
 from numba.errors import LoweringError, TypingError
 from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
@@ -19,7 +19,6 @@ from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
-after_numpy_112 = numpy_version >= (1, 12)
 
 # NOTE: to test the implementation of Numpy ufuncs, we disable rewriting
 # of array expressions.
@@ -367,15 +366,13 @@ class TestUFuncs(BaseUFuncTest, TestCase):
     @tag('important')
     def test_power_ufunc(self, flags=no_pyobj_flags):
         self.binary_ufunc_test(np.power, flags=flags,
-                               positive_only=after_numpy_112)
+                               positive_only=True)
 
     def test_gcd_ufunc(self, flags=no_pyobj_flags):
-        if numpy_support.version >= (1, 15):
-            self.binary_ufunc_test(np.gcd, flags=flags, kinds="iu")
+        self.binary_ufunc_test(np.gcd, flags=flags, kinds="iu")
 
     def test_lcm_ufunc(self, flags=no_pyobj_flags):
-        if numpy_support.version >= (1, 15):
-            self.binary_ufunc_test(np.lcm, flags=flags, kinds="iu")
+        self.binary_ufunc_test(np.lcm, flags=flags, kinds="iu")
 
     @tag('important')
     def test_remainder_ufunc(self, flags=no_pyobj_flags):
@@ -1244,7 +1241,7 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
 
     @tag('important')
     def test_power_array_op(self):
-        self.binary_op_test('**', positive_rhs=after_numpy_112)
+        self.binary_op_test('**', positive_rhs=True)
 
     @tag('important')
     def test_left_shift_array_op(self):

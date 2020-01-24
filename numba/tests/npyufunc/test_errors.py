@@ -5,7 +5,6 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import vectorize, guvectorize
-from numba.numpy_support import version as np_version
 
 from ..support import TestCase, CheckWarningsMixin
 
@@ -33,11 +32,6 @@ def remainder(a, b):
 
 def power(a, b):
     return a ** b
-
-# See https://github.com/numpy/numpy/pull/3691
-skipIfFPStatusBug = unittest.skipIf(
-    sys.platform == 'win32' and np_version < (1, 8) and sys.maxsize < 2 ** 32,
-    "test disabled because of FPU state handling issue on Numpy < 1.8")
 
 
 class TestExceptions(TestCase):
@@ -84,7 +78,6 @@ class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
     Note the warnings emitted by Numpy reflect IEEE-754 semantics.
     """
 
-    @skipIfFPStatusBug
     def check_truediv_real(self, dtype):
         """
         Test 1 / 0 and 0 / 0.
