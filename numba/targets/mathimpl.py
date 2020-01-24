@@ -317,8 +317,7 @@ def atan2_float_impl(context, builder, sig, args):
     lty = context.get_value_type(ty)
     func_name = {
         types.float32: "atan2f",
-        # Workaround atan2() issues under Windows
-        types.float64: "atan2_fixed" if sys.platform == "win32" else "atan2"
+        types.float64: "atan2"
         }[ty]
     fnty = Type.function(lty, (lty, lty))
     fn = cgutils.insert_pure_function(builder.module, fnty, name=func_name)
