@@ -411,22 +411,22 @@ class TestUFuncs(TestCase):
         # middle axis is shape 1
         check_arr(arr.reshape((2, 3, 4))[:, ::3])
         check_arr(arr.reshape((2, 3, 4)).T[:, ::3])
-        if numpy_support.version > (1, 11):
-            # leading axis is shape 1
-            check_arr(arr.reshape((2, 3, 4))[::2])
-            check_arr(arr.reshape((2, 3, 4)).T[:, :, ::2])
-            # 2 leading axis are shape 1
-            check_arr(arr.reshape((2, 3, 4))[::2, ::3])
-            check_arr(arr.reshape((2, 3, 4)).T[:, ::3, ::2])
-            # single item slices for all axis
-            check_arr(arr.reshape((2, 3, 4))[::2, ::3, ::4])
-            check_arr(arr.reshape((2, 3, 4)).T[::4, ::3, ::2])
-            # 4D
-            check_arr(arr.reshape((2, 2, 3, 2))[::2, ::2, ::3])
-            check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::2])
-            # outer zero dims
-            check_arr(arr.reshape((2, 2, 3, 2))[::5, ::2, ::3])
-            check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::5])
+
+        # leading axis is shape 1
+        check_arr(arr.reshape((2, 3, 4))[::2])
+        check_arr(arr.reshape((2, 3, 4)).T[:, :, ::2])
+        # 2 leading axis are shape 1
+        check_arr(arr.reshape((2, 3, 4))[::2, ::3])
+        check_arr(arr.reshape((2, 3, 4)).T[:, ::3, ::2])
+        # single item slices for all axis
+        check_arr(arr.reshape((2, 3, 4))[::2, ::3, ::4])
+        check_arr(arr.reshape((2, 3, 4)).T[::4, ::3, ::2])
+        # 4D
+        check_arr(arr.reshape((2, 2, 3, 2))[::2, ::2, ::3])
+        check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::2])
+        # outer zero dims
+        check_arr(arr.reshape((2, 2, 3, 2))[::5, ::2, ::3])
+        check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::5])
 
 
 if __name__ == '__main__':

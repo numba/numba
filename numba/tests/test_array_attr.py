@@ -4,7 +4,7 @@ import numba.unittest_support as unittest
 from numba import jitclass
 from numba.compiler import compile_isolated
 from numba.numpy_support import from_dtype
-from numba import types, njit, typeof, numpy_support
+from numba import types, njit, typeof
 from .support import (TestCase, CompilationCache, MemoryLeakMixin, tag,
                       skip_parfors_unsupported)
 from numba.errors import TypingError
@@ -102,8 +102,7 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         cfunc = self.get_cfunc(pyfunc, (aryty.copy(layout='A'),))
         self.assertPreciseEqual(cfunc(arr), expected)
 
-    def check_unary_with_arrays(self, pyfunc,
-                                use_reshaped_empty_array=True):
+    def check_unary_with_arrays(self, pyfunc,):
         self.check_unary(pyfunc, self.a)
         self.check_unary(pyfunc, self.a.T)
         self.check_unary(pyfunc, self.a[::2])
@@ -113,8 +112,9 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         # array with an empty dimension
         arr = np.zeros(0)
         self.check_unary(pyfunc, arr)
-        if use_reshaped_empty_array:
-            self.check_unary(pyfunc, arr.reshape((1, 0, 2)))
+
+        # check with reshape
+        self.check_unary(pyfunc, arr.reshape((1, 0, 2)))
 
     def get_cfunc(self, pyfunc, argspec):
         cres = self.ccache.compile(pyfunc, argspec)
@@ -166,11 +166,7 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         self.check_unary_with_arrays(array_flags_c_contiguous)
 
     def test_flags_f_contiguous(self):
-        # Numpy 1.12+ is more opportunistic when computing contiguousness
-        # of empty arrays.
-        use_reshaped_empty_array = numpy_support.version > (1, 11)
-        self.check_unary_with_arrays(array_flags_f_contiguous,
-                                     use_reshaped_empty_array=use_reshaped_empty_array)
+        self.check_unary_with_arrays(array_flags_f_contiguous)
 
 
 class TestNestedArrayAttr(MemoryLeakMixin, unittest.TestCase):

@@ -579,8 +579,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         def check_arr(arr):
             cres = compile_isolated(pyfunc, (typeof(arr),))
             expected = pyfunc(arr)
-            # NOTE: Numpy 1.9 returns readonly arrays for multidimensional
-            # arrays.  Workaround this by copying the results.
             expected = [a.copy() for a in expected]
             self.assertPreciseEqual(cres.entry_point(arr), expected)
 

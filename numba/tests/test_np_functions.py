@@ -1836,7 +1836,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {first_arg_name: m, 'y': y}
         _check(params)
 
-        # The following tests pass with numpy version >= 1.10, but fail with 1.9
         m = np.array([-2.1, -1, 4.3])
         y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12]])
         params = {first_arg_name: m, 'y': y}
