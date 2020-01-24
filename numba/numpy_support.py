@@ -11,10 +11,6 @@ from numba.cgutils import is_nonelike   # noqa: F401
 
 numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
-# Starting from Numpy 1.10, ufuncs accept argument conversion according
-# to the "same_kind" rule (used to be "unsafe").
-strict_ufunc_typing = numpy_version >= (1, 10)
-
 
 FROM_DTYPE = {
     np.dtype('bool'): types.boolean,
@@ -411,7 +407,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                                     has_mixed_inputs, 'safe'):
                 found = False
                 break
-        if found and strict_ufunc_typing:
+        if found:
             # Can we cast the inner result to the outer result type?
             for outer, inner in zip(np_output_types, ufunc_outputs):
                 if (outer.char not in 'mM' and not

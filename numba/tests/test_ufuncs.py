@@ -199,10 +199,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
             if input_type in skip_inputs:
                 continue
-            # Some ufuncs don't allow all kinds of arguments, and implicit
-            # conversion has become stricter in 1.10.
-            if (numpy_support.strict_ufunc_typing and
-                input_operand.dtype.kind not in kinds):
+            # Some ufuncs don't allow all kinds of arguments
+            if (input_operand.dtype.kind not in kinds):
                 continue
 
             output_type = self._determine_output_type(
@@ -279,10 +277,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
             if positive_only and np.any(lhs < 0):
                 continue
 
-            # Some ufuncs don't allow all kinds of arguments, and implicit
-            # conversion has become stricter in 1.10.
-            if (numpy_support.strict_ufunc_typing and
-                lhs.dtype.kind not in kinds):
+            # Some ufuncs don't allow all kinds of arguments
+            if (lhs.dtype.kind not in kinds):
                 continue
 
             output_type = self._determine_output_type(
@@ -772,10 +768,6 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                     if scalar_type in (types.float32, types.complex64)
                     else 'double')
             self.assertPreciseEqual(expected, result, prec=prec)
-
-    def test_mixed_types(self):
-        if not numpy_support.strict_ufunc_typing:
-            self.binary_ufunc_mixed_types_test(np.divide, flags=no_pyobj_flags)
 
     @tag('important')
     def test_broadcasting(self):
@@ -1596,9 +1588,7 @@ class TestLoopTypesSubtractAndNegativeNoPython(_LoopTypesTester):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.subtract, np.negative]
     _required_types = '?bBhHiIlLqQfdFD'
-    _skip_types = 'mMO' + _LoopTypesTester._skip_types
-    if after_numpy_112: # np1.13 deprecated/not supported
-        _skip_types += '?'
+    _skip_types = 'mMO' + _LoopTypesTester._skip_types + '?'
 
 TestLoopTypesSubtractAndNegativeNoPython.autogenerate()
 
@@ -1766,9 +1756,6 @@ class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
         # heterogeneous inputs
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'm8[s]'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[s]'])
-        if not numpy_support.strict_ufunc_typing:
-            self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8', 'm8[m]'])
-            self._check_ufunc_with_dtypes(fn, ufunc, ['m8', 'm8[m]', 'm8[m]'])
         # heterogeneous inputs, scaled output
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'm8[ms]'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[ms]'])
@@ -1827,9 +1814,6 @@ class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
         # timedelta
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', '?'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', '?'])
-        if not numpy_support.strict_ufunc_typing:
-            self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8', '?'])
-            self._check_ufunc_with_dtypes(fn, ufunc, ['m8', 'm8[m]', '?'])
         # datetime
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', '?'])
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', '?'])

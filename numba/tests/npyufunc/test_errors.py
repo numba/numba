@@ -97,7 +97,6 @@ class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
     def test_truediv_integer(self):
         self.check_truediv_real(np.int32)
 
-    @skipIfFPStatusBug
     def check_divmod_float(self, pyfunc, values, messages):
         """
         Test 1 // 0 and 0 // 0.
@@ -140,7 +139,6 @@ class TestFloatingPointExceptions(TestCase, CheckWarningsMixin):
     def test_remainder_int(self):
         self.check_divmod_int(remainder, [0, 0, 0, 1])
 
-    @skipIfFPStatusBug
     def test_power_float(self):
         """
         Test 0 ** -1 and 2 ** <big number>.

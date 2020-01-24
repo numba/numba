@@ -8,7 +8,7 @@ from numba import unittest_support as unittest
 from numba import jit, typeof, types
 from numba.compiler import compile_isolated
 from numba.errors import TypingError, LoweringError
-from numba.numpy_support import as_dtype, strict_ufunc_typing
+from numba.numpy_support import as_dtype
 from .support import (TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin,
                       tag, needs_blas)
 
@@ -325,10 +325,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         values = np.array([-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75])
 
-        if strict_ufunc_typing:
-            argtypes = (types.float64, types.float32)
-        else:
-            argtypes = (types.float64, types.float32, types.int32)
+        argtypes = (types.float64, types.float32)
         check_types(argtypes, argtypes, values)
 
         argtypes = (types.complex64, types.complex128)
