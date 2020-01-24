@@ -9,9 +9,8 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types, typeinfer, utils, errors
-from .support import TestCase, tag
-from .matmul_usecase import (matmul_usecase, imatmul_usecase, DumbMatrix,
-                             needs_blas)
+from .support import TestCase, tag, needs_blas
+from .matmul_usecase import (matmul_usecase, imatmul_usecase, DumbMatrix,)
 
 Noflags = Flags()
 

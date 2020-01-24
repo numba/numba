@@ -37,8 +37,7 @@ from numba.targets import codegen
 from numba.caching import _UserWideCacheLocator
 from numba.dispatcher import Dispatcher
 from numba import parfor
-from .test_linalg import needs_lapack
-from .support import skip_parfors_unsupported
+from .support import skip_parfors_unsupported, needs_lapack
 
 import llvmlite.binding as ll
 

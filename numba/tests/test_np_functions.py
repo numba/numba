@@ -15,8 +15,8 @@ from numba.errors import TypingError
 from numba.config import IS_WIN32, IS_32BITS
 from numba.utils import pysignature
 from numba.targets.arraymath import cross2d
-from .support import TestCase, CompilationCache, MemoryLeakMixin
-from .matmul_usecase import needs_blas
+from .support import TestCase, CompilationCache, MemoryLeakMixin, needs_blas
+
 
 no_pyobj_flags = Flags()
 no_pyobj_flags.set("nrt")

@@ -34,11 +34,10 @@ from numba import ir
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter
-from .matmul_usecase import needs_blas
-from .test_linalg import needs_lapack
 from .support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
-                      skip_parfors_unsupported, _32bit)
+                      skip_parfors_unsupported, _32bit, needs_blas,
+                      needs_lapack)
 import cmath
 
 

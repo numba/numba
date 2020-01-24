@@ -1,22 +1,11 @@
-import sys
-
-try:
-    import scipy.linalg.cython_blas
-    has_blas = True
-except ImportError:
-    has_blas = False
-
-import numba.unittest_support as unittest
-from numba.numpy_support import version as numpy_version
-
+"""Use cases for testing matmul (@)
+"""
 def matmul_usecase(x, y):
     return x @ y
 
 def imatmul_usecase(x, y):
     x @= y
     return x
-
-needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
 
 class DumbMatrix(object):
 

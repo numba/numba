@@ -8,6 +8,7 @@ import enum
 import errno
 import gc
 import math
+import platform
 import os
 import shutil
 import subprocess
@@ -67,6 +68,25 @@ skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
+
+_is_armv7l = platform.machine() == 'armv7l'
+
+try:
+    import scipy.linalg.cython_lapack
+    has_lapack = True
+except ImportError:
+    has_lapack = False
+
+needs_lapack = unittest.skipUnless(has_lapack,
+                                   "LAPACK needs SciPy 1.0+")
+
+try:
+    import scipy.linalg.cython_blas
+    has_blas = True
+except ImportError:
+    has_blas = False
+
+needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
 
 
 class CompilationCache(object):

@@ -11,19 +11,8 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, errors
 from numba.numpy_support import version as numpy_version
-from .support import TestCase, tag
-from .matmul_usecase import matmul_usecase, needs_blas
-
-_is_armv7l = platform.machine() == 'armv7l'
-
-try:
-    import scipy.linalg.cython_lapack
-    has_lapack = True
-except ImportError:
-    has_lapack = False
-
-needs_lapack = unittest.skipUnless(has_lapack,
-                                   "LAPACK needs Scipy 0.16+")
+from .support import TestCase, tag, needs_lapack, needs_blas, _is_armv7l
+from .matmul_usecase import matmul_usecase
 
 
 def dot2(a, b):

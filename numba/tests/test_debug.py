@@ -7,14 +7,15 @@ import warnings
 import numpy as np
 
 from .support import (TestCase, override_config, override_env_config,
-                      captured_stdout, forbid_codegen, skip_parfors_unsupported)
+                      captured_stdout, forbid_codegen, skip_parfors_unsupported,
+                      needs_blas)
 from numba import unittest_support as unittest
 from numba import jit, jitclass, types
 from numba.compiler import compile_isolated, Flags
 from numba.targets.cpu import ParallelOptions
 from numba.errors import NumbaPerformanceWarning
 from numba import compiler, prange
-from .matmul_usecase import needs_blas
+
 
 def simple_nopython(somearg):
     retval = somearg + 1

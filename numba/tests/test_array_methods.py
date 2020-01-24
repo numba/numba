@@ -11,8 +11,8 @@ from numba.errors import TypingError, LoweringError
 from numba.numpy_support import (as_dtype, strict_ufunc_typing,
                                  version as numpy_version)
 from .support import (TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin,
-                      tag)
-from .matmul_usecase import needs_blas
+                      tag, needs_blas)
+
 
 def np_around_array(arr, decimals, out):
     np.around(arr, decimals, out)
