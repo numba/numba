@@ -350,7 +350,7 @@ def _check_tbb_version_compatible():
         tbb_iface_ver = version_func()
         if tbb_iface_ver < 11005: # magic number from TBB
             msg = ("The TBB threading layer requires TBB "
-                   "version 2019 update 5 or later i.e. "
+                   "version 2019.5 or later i.e., "
                    "TBB_INTERFACE_VERSION >= 11005. Found "
                    "TBB_INTERFACE_VERSION = %s. The TBB "
                    "threading layer is disabled.")
