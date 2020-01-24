@@ -444,7 +444,7 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first.imag, second.imag, delta)
         elif isinstance(first, (np.timedelta64, np.datetime64)):
             # Since Np 1.16 NaT == NaT is False, so special comparison needed
-            if numpy_support.version >= (1, 16) and np.isnat(first):
+            if numpy_support.numpy_version >= (1, 16) and np.isnat(first):
                 self.assertEqual(np.isnat(first), np.isnat(second))
             else:
                 _assertNumberEqual(first, second, delta)

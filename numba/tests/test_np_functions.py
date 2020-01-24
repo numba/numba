@@ -10,7 +10,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import Flags
 from numba import jit, njit, typeof, types
-from numba.numpy_support import version as np_version
+from numba.numpy_support import numpy_version
 from numba.errors import TypingError
 from numba.config import IS_WIN32, IS_32BITS
 from numba.utils import pysignature
@@ -477,7 +477,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
-    @unittest.skipIf(np_version < (1, 12), "NumPy Unsupported")
     def test_count_nonzero(self):
 
         def arrays():
@@ -495,18 +494,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             expected = pyfunc(arr, axis)
             got = cfunc(arr, axis)
             self.assertPreciseEqual(expected, got)
-
-    @unittest.skipUnless(np_version < (1, 12), "NumPy Unsupported")
-    def test_count_nonzero_exception(self):
-        pyfunc = count_nonzero
-        cfunc = jit(nopython=True)(pyfunc)
-
-        with self.assertRaises(TypingError) as raises:
-            cfunc(np.arange(3 * 4).reshape(3, 4), 0)
-        self.assertIn(
-            "axis is not supported for NumPy versions < 1.12.0",
-            str(raises.exception)
-        )
 
     def test_np_append(self):
         def arrays():
@@ -818,13 +805,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         bins2 = np.float64([1, 3, 4.5, 8, float('inf'), float('-inf')])
         bins3 = np.float64([1, 3, 4.5, 8, float('inf'), float('-inf')]
                            + [float('nan')] * 10)
-        if np_version >= (1, 10):
-            all_bins = [bins1, bins2, bins3]
-            xs = [values, values.reshape((3, 4))]
-        else:
-            # Numpy < 1.10 had trouble with NaNs and N-d arrays
-            all_bins = [bins1, bins2]
-            xs = [values]
+
+        all_bins = [bins1, bins2, bins3]
+        xs = [values, values.reshape((3, 4))]
 
         # 2-ary digitize()
         for bins in all_bins:
@@ -909,26 +892,24 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_correlate(self):
         self._test_correlate_convolve(correlate)
-        # correlate supports 0 dimension arrays
-        _a = np.ones(shape=(0,))
-        _b = np.arange(5)
-        cfunc = jit(nopython=True)(correlate)
-        for x, y in [(_a, _b), (_b, _a), (_a, _a)]:
-            expected = correlate(x, y)
-            got = cfunc(x, y)
-            self.assertPreciseEqual(expected, got)
+        if numpy_version < (1, 18):
+            # correlate supported 0 dimension arrays until 1.18
+            _a = np.ones(shape=(0,))
+            _b = np.arange(5)
+            cfunc = jit(nopython=True)(correlate)
+            for x, y in [(_a, _b), (_b, _a), (_a, _a)]:
+                expected = correlate(x, y)
+                got = cfunc(x, y)
+                self.assertPreciseEqual(expected, got)
 
-    def test_convolve(self):
-        self._test_correlate_convolve(convolve)
-
-    def test_convolve_exceptions(self):
+    def _test_correlate_convolve_exceptions(self, fn):
         # Exceptions leak references
         self.disable_leak_check()
 
         # convolve raises if either array has a 0 dimension
         _a = np.ones(shape=(0,))
         _b = np.arange(5)
-        cfunc = jit(nopython=True)(convolve)
+        cfunc = jit(nopython=True)(fn)
         for x, y in [(_a, _b), (_b, _a)]:
             with self.assertRaises(ValueError) as raises:
                 cfunc(x, y)
@@ -936,6 +917,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertIn("'a' cannot be empty", str(raises.exception))
             else:
                 self.assertIn("'v' cannot be empty", str(raises.exception))
+
+    @unittest.skipIf(numpy_version < (1, 18), "NumPy > 1.17 required")
+    def test_correlate_exceptions(self):
+        # correlate supported 0 dimension arrays until 1.18
+        self._test_correlate_convolve_exceptions(correlate)
+
+    def test_convolve(self):
+        self._test_correlate_convolve(convolve)
+
+    def test_convolve_exceptions(self):
+        self._test_correlate_convolve_exceptions(convolve)
 
     def _check_output(self, pyfunc, cfunc, params, abs_tol=None):
         expected = pyfunc(**params)
@@ -1691,7 +1683,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for kth in True, False, -1, 0, 1:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_invalid_ddof(self):
         pyfunc = cov
@@ -1755,19 +1746,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for input_arr in input_variations():
             _check({first_arg_name: input_arr})
 
-    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
     @needs_blas
     def test_corrcoef_basic(self):
         pyfunc = corrcoef
         self.corr_corrcoef_basic(pyfunc, first_arg_name='x')
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_basic(self):
         pyfunc = cov
         self.corr_corrcoef_basic(pyfunc, first_arg_name='m')
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_explicit_arguments(self):
         pyfunc = cov
@@ -1787,7 +1775,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                       'bias': bias, 'rowvar': rowvar}
             _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
     @needs_blas
     def test_corrcoef_explicit_arguments(self):
         pyfunc = corrcoef
@@ -1864,7 +1851,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             params = {first_arg_name: y, 'y': m, 'rowvar': rowvar}
             _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
     @needs_blas
     def test_corrcoef_edge_cases(self):
         pyfunc = corrcoef
@@ -1877,7 +1863,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             params = {'x': x}
             _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 11), "behaviour per Numpy 1.11+")
     @needs_blas
     def test_corrcoef_edge_case_extreme_values(self):
         pyfunc = corrcoef
@@ -1889,19 +1874,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'x': x}
         _check(params)
 
-        # Note
-        # ----
-        # Numpy 1.10 output is:
-        # [[ 0. -0.]
-        #  [-0.  0.]]
-        #
-        # Numpy 1.11+ output is:
-        # [[ 1. -1.]
-        #  [-1.  1.]]
-        #
-        # Numba implementation replicates Numpy 1.11+ behaviour
-
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_edge_cases(self):
         pyfunc = cov
@@ -1915,7 +1887,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': m, 'ddof': 5}
         _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_exceptions(self):
         pyfunc = cov
@@ -1966,7 +1937,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn('2D array containing a single row is unsupported',
                       str(raises.exception))
 
-    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_basic(self):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
@@ -1997,7 +1967,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     params = {'ary': ary, 'to_begin': a, 'to_end': b}
                     _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_edge_cases(self):
         # NOTE: NumPy 1.16 has a variety of behaviours for type conversion, see
         # https://github.com/numpy/numpy/issues/13103, as this is not resolved
@@ -2025,7 +1994,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield [4, 5, 6]
             yield np.array([])
             yield ()
-            if np_version < (1, 16):
+            if numpy_version < (1, 16):
                 yield np.array([np.nan, np.inf, 4, -np.inf, 3.142])
                 parts = np.array([np.nan, 2, np.nan, 4, 5, 6, 7, 8, 9])
                 a = parts + 1j * parts[::-1]
@@ -2043,7 +2012,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         ## fixed here: https://github.com/numpy/numpy/pull/12713 for np 1.16
         to_begin = np.array([1, 2, 3.142, np.nan, 5, 6, 7, -8, np.nan])
         params = {'ary': np.arange(-4, 6), 'to_begin': to_begin}
-        if np_version < (1, 16):
+        if numpy_version < (1, 16):
             _check(params)
         else:
             # np 1.16 raises, cannot cast float64 array to intp array
@@ -2054,7 +2023,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(params)
 
         params = {'ary': 3, 'to_begin': 3.142}
-        if np_version < (1, 16):
+        if numpy_version < (1, 16):
             _check(params)
         else:
             _check_raises_type_error(params, 'to_begin')
@@ -2063,7 +2032,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             _check(params)
 
         params = {'ary': np.arange(-4, 6), 'to_begin': -5, 'to_end': False}
-        if IS_WIN32 and not IS_32BITS and np_version >= (1, 16):
+        if IS_WIN32 and not IS_32BITS and numpy_version >= (1, 16):
             # XFAIL on 64-bits windows + numpy 1.16. See #3898
             with self.assertRaises(TypingError) as raises:
                 _check(params)
@@ -2077,7 +2046,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': [1e100]}
         # _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_exceptions(self):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
@@ -2462,7 +2430,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             self.assertIn('y cannot be a scalar', str(e.exception))
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_basic(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2682,7 +2649,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # random_grid
         yield self.rnd.rand(1 + ndata * 2) * 4.0 + 1.3
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2732,7 +2698,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(x, xp, fp)
             self.assertPreciseEqual(expected, got, abs_tol=atol)
 
-    @unittest.skipUnless(np_version >= (1, 12), "complex interp: Numpy 1.12+")
     def test_interp_complex_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2760,7 +2725,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.rnd.shuffle(fp)
             np.testing.assert_allclose(expected, got, equal_nan=True)
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_exceptions(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2830,29 +2794,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         self.assertIn(complex_dtype_msg, str(e.exception))
 
-    @unittest.skipUnless((1, 10) <= np_version < (1, 12),
-                         'complex interp: Numpy 1.12+')
-    def test_interp_pre_112_exceptions(self):
-        pyfunc = interp
-        cfunc = jit(nopython=True)(pyfunc)
-
-        # Exceptions leak references
-        self.disable_leak_check()
-
-        x = np.arange(6)
-        xp = np.arange(6)
-        fp = np.arange(6) * 1j
-
-        with self.assertTypingError() as e:
-            cfunc(x, xp, fp)
-
-        complex_dtype_msg = (
-            "Cannot cast array data from complex dtype "
-            "to float64 dtype"
-        )
-        self.assertIn(complex_dtype_msg, str(e.exception))
-
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_non_finite_calibration(self):
         # examples from
         # https://github.com/numpy/numpy/issues/12951
@@ -2872,7 +2813,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'x': x, 'xp': xp, 'fp': fp}
         _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_supplemental_tests(self):
         # inspired by class TestInterp
         # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py    # noqa: E501
@@ -2914,7 +2854,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.sin(xp)
         np.testing.assert_almost_equal(cfunc(np.pi, xp, fp), 0.0)
 
-    @unittest.skipUnless(np_version >= (1, 12), "complex interp: Numpy 1.10+")
     def test_interp_supplemental_complex_tests(self):
         # inspired by class TestInterp
         # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py    # noqa: E501
@@ -2927,7 +2866,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y0 = x0 + (1 + x0) * 1.0j
         np.testing.assert_almost_equal(cfunc(x0, x, y), y0)
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_float_precision_handled_per_numpy(self):
         # test cases from https://github.com/numba/numba/issues/4890
         pyfunc = interp
@@ -3494,8 +3432,6 @@ def foo():
     return np.%s(ty)
 '''
 
-    bits = ('bits',) if np_version >= (1, 12) else ()
-
     def check(self, func, attrs, *args):
         pyfunc = func
         cfunc = jit(nopython=True)(pyfunc)
@@ -3525,9 +3461,8 @@ def foo():
 
     def test_finfo(self):
         types = [np.float32, np.float64, np.complex64, np.complex128]
-        attrs = self.bits + ('eps', 'epsneg', 'iexp', 'machep', 'max',
-                             'maxexp', 'negep', 'nexp', 'nmant', 'precision',
-                             'resolution', 'tiny',)
+        attrs = ('eps', 'epsneg', 'iexp', 'machep', 'max', 'maxexp', 'negep',
+                 'nexp', 'nmant', 'precision', 'resolution', 'tiny', 'bits',)
         for ty in types:
             self.check(finfo, attrs, ty(1))
             hc_func = self.create_harcoded_variant(np.finfo, ty)
@@ -3549,7 +3484,7 @@ def foo():
         # check types and instances of types
         types = [np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16,
                  np.uint32, np.uint64]
-        attrs = ('min', 'max') + self.bits
+        attrs = ('min', 'max', 'bits',)
         for ty in types:
             self.check(iinfo, attrs, ty(1))
             hc_func = self.create_harcoded_variant(np.iinfo, ty)

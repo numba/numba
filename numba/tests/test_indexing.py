@@ -5,7 +5,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils, njit, errors, typeof, numpy_support
+from numba import types, utils, njit, errors, typeof
 from .support import TestCase, tag
 
 
@@ -831,11 +831,9 @@ class TestSetItem(TestCase):
         got = cfunc(arg.copy(), *args)
         self.assertPreciseEqual(expected, got)
 
-        if numpy_support.version != (1, 7):
-            # Numpy 1.7 doesn't always raise an error here (object mode)
-            args = (seq, 1, -N + k, 1)
-            with self.assertRaises(ValueError) as raises:
-                cfunc(arg.copy(), *args)
+        args = (seq, 1, -N + k, 1)
+        with self.assertRaises(ValueError) as raises:
+            cfunc(arg.copy(), *args)
 
     def test_1d_slicing_set_tuple(self, flags=enable_pyobj_flags):
         """
