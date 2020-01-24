@@ -13,7 +13,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import config, jit, npdatetime, types, vectorize, numpy_support
-from numba.numpy_support import version as numpy_version
+from numba.numpy_support import numpy_version
 from numba.errors import TypingError
 from .support import TestCase, tag
 
@@ -383,7 +383,7 @@ class TestTimedeltaArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_support.version >= (1, 16):
+            if numpy_version >= (1, 16):
                 # since np 1.16 all NaT == comparisons are False, including
                 # NaT==NaT, conversely != is True
                 if np.isnat(a) or np.isnat(a):
@@ -419,7 +419,7 @@ class TestTimedeltaArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_support.version >= (1, 16):
+            if numpy_version >= (1, 16):
                 # since np 1.16 all NaT magnitude comparisons including equality
                 # are False (as NaT == NaT is now False)
                 if np.isnat(a) or np.isnat(a):
@@ -459,7 +459,7 @@ class TestTimedeltaArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_support.version >= (1, 16):
+            if numpy_version >= (1, 16):
                 # since np 1.16 all NaT magnitude comparisons including equality
                 # are False (as NaT == NaT is now False)
                 if np.isnat(a) or np.isnat(a):
@@ -688,7 +688,7 @@ class TestDatetimeArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_support.version >= (1, 16):
+            if numpy_version >= (1, 16):
                 # since np 1.16 all NaT comparisons bar != are False, including
                 # NaT==NaT
                 if np.isnat(a) or np.isnat(b):
@@ -726,7 +726,7 @@ class TestDatetimeArithmetic(TestCase):
             expected_val = expected
             not_expected_val = not expected
 
-            if numpy_support.version >= (1, 16):
+            if numpy_version >= (1, 16):
                 # since np 1.16 all NaT magnitude comparisons including equality
                 # are False (as NaT == NaT is now False)
                 if np.isnat(a) or np.isnat(b):

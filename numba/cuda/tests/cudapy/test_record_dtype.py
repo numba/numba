@@ -129,11 +129,7 @@ class TestRecordDtype(SerialMixin, unittest.TestCase):
             # Force the argument to the pure Python function to be
             # a recarray, as attribute access isn't supported on
             # structured arrays.
-            if numpy_support.version <= (1, 9):
-                expect = np.recarray(got.shape, got.dtype)
-                expect[:] = got
-            else:
-                expect = got.copy().view(np.recarray)
+            expect = got.copy().view(np.recarray)
 
             cfunc(got, i, value)
             pyfunc(expect, i, value)
