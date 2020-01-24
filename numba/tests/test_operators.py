@@ -764,8 +764,7 @@ class TestOperators(TestCase):
     #
 
     def check_matmul_objmode(self, pyfunc, inplace):
-        # Use dummy objects, to work with any Numpy / Scipy version
-        # (and because Numpy 1.10 doesn't implement "@=")
+        # Use dummy objects, to work with any NumPy / SciPy version
         cres = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
         cfunc = cres.entry_point
         a = DumbMatrix(3)

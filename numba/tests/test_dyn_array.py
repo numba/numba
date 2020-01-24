@@ -708,8 +708,7 @@ class TestNdFull(ConstructorBaseTest, TestCase):
             return np.full((m, n), np.int32(1))
         self.check_2d(func)
 
-        # tests meta issues from #2862, that np < 1.12 always
-        # returns float64. Complex uses `.real`, imaginary part dropped
+        # Complex uses `.real`, imaginary part dropped
         def func(m, n):
             return np.full((m, n), np.complex128(1))
         self.check_2d(func)

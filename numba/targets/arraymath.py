@@ -1260,9 +1260,6 @@ def _percentile_quantile_inner(a, q, skip_nan, factor, check_q):
 
 @overload(np.percentile)
 def np_percentile(a, q):
-    # Note: np.percentile behaviour in the case of an array containing one
-    # or more NaNs was changed in numpy 1.10 to return an array of np.NaN of
-    # length equal to q, hence version guard.
     return _percentile_quantile_inner(
         a, q, skip_nan=False, factor=1.0, check_q=percentile_is_valid
     )
@@ -1270,9 +1267,6 @@ def np_percentile(a, q):
 
 @overload(np.nanpercentile)
 def np_nanpercentile(a, q):
-    # Note: np.nanpercentile return type in the case of an all-NaN slice
-    # was changed in 1.11 to be an array of np.NaN of length equal to q,
-    # hence version guard.
     return _percentile_quantile_inner(
         a, q, skip_nan=True, factor=1.0, check_q=percentile_is_valid
     )

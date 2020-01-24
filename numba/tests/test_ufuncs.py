@@ -1575,7 +1575,7 @@ class TestLoopTypesIntNoPython(_LoopTypesTester):
     _ufuncs.remove(np.reciprocal)
     _ufuncs.remove(np.left_shift) # has its own test class
     _ufuncs.remove(np.right_shift) # has its own test class
-    # special test for bool subtract/negative, np1.13 deprecated/not supported
+    # special test for bool subtract/negative
     _ufuncs.remove(np.subtract)
     _ufuncs.remove(np.negative)
     _required_types = '?bBhHiIlLqQ'
