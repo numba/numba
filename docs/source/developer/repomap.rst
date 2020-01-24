@@ -216,8 +216,6 @@ with CPython APIs.
 - :ghfile:`numba/mathnames.h` - Macros for defining names of math functions
 - :ghfile:`numba/_pymodule.h` - C macros for Python 2/3 portable naming of C
   API functions
-- :ghfile:`numba/_math_c99.{h,c}` - C99 math compatibility (needed Python
-  2.7 on Windows, compiled with VS2008)
 - :ghfile:`numba/mviewbuf.c` - Handles Python memoryviews
 - :ghfile:`numba/_typeof.{h,c}` - C implementation of type fingerprinting,
   used by dispatcher
