@@ -31,8 +31,7 @@ _skip_reason = 'windows only'
 _windows_only = unittest.skipIf(not sys.platform.startswith('win'),
                                 _skip_reason)
 
-from .matmul_usecase import has_blas
-from .support import TestCase, tag, import_dynamic, temp_directory
+from .support import TestCase, tag, import_dynamic, temp_directory, has_blas
 
 
 base_path = os.path.dirname(os.path.abspath(__file__))
