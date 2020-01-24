@@ -291,7 +291,7 @@ def timedelta_over_timedelta(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-if numpy_support.version >= (1, 16):
+if numpy_support.numpy_version >= (1, 16):
     # np 1.16 added support for:
     # * np.floor_divide on mm->q
     # * np.remainder on mm->m
@@ -384,7 +384,7 @@ def _create_timedelta_comparison_impl(ll_op, default_value):
                 else:
                     builder.store(builder.icmp(ll_op, norm_a, norm_b), ret)
             with otherwise:
-                if numpy_support.version < (1, 16):
+                if numpy_support.numpy_version < (1, 16):
                     # No scaling when comparing NaTs
                     builder.store(builder.icmp(ll_op, va, vb), ret)
                 else:
@@ -411,7 +411,7 @@ def _create_timedelta_ordering_impl(ll_op):
                     context, builder, va, vb, ta, tb)
                 builder.store(builder.icmp(ll_op, norm_a, norm_b), ret)
             with otherwise:
-                if numpy_support.version < (1, 16):
+                if numpy_support.numpy_version < (1, 16):
                     # No scaling when comparing NaT with something else
                     # (i.e. NaT is <= everything else, since it's the smallest
                     #  int64 value)
@@ -674,7 +674,7 @@ def _create_datetime_comparison_impl(ll_op):
                 ret_val = builder.icmp(ll_op, norm_a, norm_b)
                 builder.store(ret_val, ret)
             with otherwise:
-                if numpy_support.version < (1, 16):
+                if numpy_support.numpy_version < (1, 16):
                     # No scaling when comparing NaTs
                     ret_val = builder.icmp(ll_op, va, vb)
                 else:

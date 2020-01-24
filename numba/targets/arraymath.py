@@ -15,7 +15,7 @@ import llvmlite.llvmpy.core as lc
 from numba import types, cgutils, generated_jit
 from numba.extending import overload, overload_method, register_jitable
 from numba.numpy_support import as_dtype, type_can_asarray
-from numba.numpy_support import version as numpy_version
+from numba.numpy_support import numpy_version
 from numba.numpy_support import is_nonelike
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
@@ -557,11 +557,8 @@ def array_max(context, builder, sig, args):
 @lower_builtin("array.argmin", types.Array)
 def array_argmin(context, builder, sig, args):
     ty = sig.args[0].dtype
-    # NOTE: Under Numpy < 1.10, argmin() is inconsistent with min()
-    # on NaT values: https://github.com/numpy/numpy/issues/6030
 
-    if (numpy_version >= (1, 10) and
-            isinstance(ty, (types.NPDatetime, types.NPTimedelta))):
+    if (isinstance(ty, (types.NPDatetime, types.NPTimedelta))):
         # NaT is smaller than every other value, but it is
         # ignored as far as argmin() is concerned.
         nat = ty('NaT')
@@ -754,59 +751,58 @@ def np_nanmax(a):
         return real_nanmax
 
 
-if numpy_version >= (1, 8):
-    @overload(np.nanmean)
-    def np_nanmean(a):
-        if not isinstance(a, types.Array):
-            return
-        isnan = get_isnan(a.dtype)
+@overload(np.nanmean)
+def np_nanmean(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
 
-        def nanmean_impl(a):
-            c = 0.0
-            count = 0
-            for view in np.nditer(a):
-                v = view.item()
-                if not isnan(v):
-                    c += v.item()
-                    count += 1
-            # np.divide() doesn't raise ZeroDivisionError
-            return np.divide(c, count)
+    def nanmean_impl(a):
+        c = 0.0
+        count = 0
+        for view in np.nditer(a):
+            v = view.item()
+            if not isnan(v):
+                c += v.item()
+                count += 1
+        # np.divide() doesn't raise ZeroDivisionError
+        return np.divide(c, count)
 
-        return nanmean_impl
+    return nanmean_impl
 
-    @overload(np.nanvar)
-    def np_nanvar(a):
-        if not isinstance(a, types.Array):
-            return
-        isnan = get_isnan(a.dtype)
+@overload(np.nanvar)
+def np_nanvar(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
 
-        def nanvar_impl(a):
-            # Compute the mean
-            m = np.nanmean(a)
+    def nanvar_impl(a):
+        # Compute the mean
+        m = np.nanmean(a)
 
-            # Compute the sum of square diffs
-            ssd = 0.0
-            count = 0
-            for view in np.nditer(a):
-                v = view.item()
-                if not isnan(v):
-                    val = (v.item() - m)
-                    ssd += np.real(val * np.conj(val))
-                    count += 1
-            # np.divide() doesn't raise ZeroDivisionError
-            return np.divide(ssd, count)
+        # Compute the sum of square diffs
+        ssd = 0.0
+        count = 0
+        for view in np.nditer(a):
+            v = view.item()
+            if not isnan(v):
+                val = (v.item() - m)
+                ssd += np.real(val * np.conj(val))
+                count += 1
+        # np.divide() doesn't raise ZeroDivisionError
+        return np.divide(ssd, count)
 
-        return nanvar_impl
+    return nanvar_impl
 
-    @overload(np.nanstd)
-    def np_nanstd(a):
-        if not isinstance(a, types.Array):
-            return
+@overload(np.nanstd)
+def np_nanstd(a):
+    if not isinstance(a, types.Array):
+        return
 
-        def nanstd_impl(a):
-            return np.nanvar(a) ** 0.5
+    def nanstd_impl(a):
+        return np.nanvar(a) ** 0.5
 
-        return nanstd_impl
+    return nanstd_impl
 
 
 @overload(np.nansum)
@@ -831,76 +827,75 @@ def np_nansum(a):
     return nansum_impl
 
 
-if numpy_version >= (1, 10):
-    @overload(np.nanprod)
-    def np_nanprod(a):
-        if not isinstance(a, types.Array):
-            return
-        if isinstance(a.dtype, types.Integer):
-            retty = types.intp
-        else:
-            retty = a.dtype
+@overload(np.nanprod)
+def np_nanprod(a):
+    if not isinstance(a, types.Array):
+        return
+    if isinstance(a.dtype, types.Integer):
+        retty = types.intp
+    else:
+        retty = a.dtype
+    one = retty(1)
+    isnan = get_isnan(a.dtype)
+
+    def nanprod_impl(a):
+        c = one
+        for view in np.nditer(a):
+            v = view.item()
+            if not isnan(v):
+                c *= v
+        return c
+
+    return nanprod_impl
+
+
+@overload(np.nancumprod)
+def np_nancumprod(a):
+    if not isinstance(a, types.Array):
+        return
+
+    if isinstance(a.dtype, (types.Boolean, types.Integer)):
+        # dtype cannot possibly contain NaN
+        return lambda a: np.cumprod(a)
+    else:
+        retty = a.dtype
+        is_nan = get_isnan(retty)
         one = retty(1)
-        isnan = get_isnan(a.dtype)
 
-        def nanprod_impl(a):
+        def nancumprod_impl(a):
+            out = np.empty(a.size, retty)
             c = one
-            for view in np.nditer(a):
-                v = view.item()
-                if not isnan(v):
+            for idx, v in enumerate(a.flat):
+                if ~is_nan(v):
                     c *= v
-            return c
+                out[idx] = c
+            return out
 
-        return nanprod_impl
+        return nancumprod_impl
 
-if numpy_version >= (1, 12):
-    @overload(np.nancumprod)
-    def np_nancumprod(a):
-        if not isinstance(a, types.Array):
-            return
+@overload(np.nancumsum)
+def np_nancumsum(a):
+    if not isinstance(a, types.Array):
+        return
 
-        if isinstance(a.dtype, (types.Boolean, types.Integer)):
-            # dtype cannot possibly contain NaN
-            return lambda a: np.cumprod(a)
-        else:
-            retty = a.dtype
-            is_nan = get_isnan(retty)
-            one = retty(1)
+    if isinstance(a.dtype, (types.Boolean, types.Integer)):
+        # dtype cannot possibly contain NaN
+        return lambda a: np.cumsum(a)
+    else:
+        retty = a.dtype
+        is_nan = get_isnan(retty)
+        zero = retty(0)
 
-            def nancumprod_impl(a):
-                out = np.empty(a.size, retty)
-                c = one
-                for idx, v in enumerate(a.flat):
-                    if ~is_nan(v):
-                        c *= v
-                    out[idx] = c
-                return out
+        def nancumsum_impl(a):
+            out = np.empty(a.size, retty)
+            c = zero
+            for idx, v in enumerate(a.flat):
+                if ~is_nan(v):
+                    c += v
+                out[idx] = c
+            return out
 
-            return nancumprod_impl
-
-    @overload(np.nancumsum)
-    def np_nancumsum(a):
-        if not isinstance(a, types.Array):
-            return
-
-        if isinstance(a.dtype, (types.Boolean, types.Integer)):
-            # dtype cannot possibly contain NaN
-            return lambda a: np.cumsum(a)
-        else:
-            retty = a.dtype
-            is_nan = get_isnan(retty)
-            zero = retty(0)
-
-            def nancumsum_impl(a):
-                out = np.empty(a.size, retty)
-                c = zero
-                for idx, v in enumerate(a.flat):
-                    if ~is_nan(v):
-                        c += v
-                    out[idx] = c
-                return out
-
-            return nancumsum_impl
+        return nancumsum_impl
 
 
 @register_jitable
@@ -1263,68 +1258,63 @@ def _percentile_quantile_inner(a, q, skip_nan, factor, check_q):
         return np_percentile_impl
 
 
-if numpy_version >= (1, 10):
-    @overload(np.percentile)
-    def np_percentile(a, q):
-        # Note: np.percentile behaviour in the case of an array containing one
-        # or more NaNs was changed in numpy 1.10 to return an array of np.NaN of
-        # length equal to q, hence version guard.
-        return _percentile_quantile_inner(
-            a, q, skip_nan=False, factor=1.0, check_q=percentile_is_valid
-        )
+@overload(np.percentile)
+def np_percentile(a, q):
+    # Note: np.percentile behaviour in the case of an array containing one
+    # or more NaNs was changed in numpy 1.10 to return an array of np.NaN of
+    # length equal to q, hence version guard.
+    return _percentile_quantile_inner(
+        a, q, skip_nan=False, factor=1.0, check_q=percentile_is_valid
+    )
 
 
-if numpy_version >= (1, 11):
-    @overload(np.nanpercentile)
-    def np_nanpercentile(a, q):
-        # Note: np.nanpercentile return type in the case of an all-NaN slice
-        # was changed in 1.11 to be an array of np.NaN of length equal to q,
-        # hence version guard.
-        return _percentile_quantile_inner(
-            a, q, skip_nan=True, factor=1.0, check_q=percentile_is_valid
-        )
+@overload(np.nanpercentile)
+def np_nanpercentile(a, q):
+    # Note: np.nanpercentile return type in the case of an all-NaN slice
+    # was changed in 1.11 to be an array of np.NaN of length equal to q,
+    # hence version guard.
+    return _percentile_quantile_inner(
+        a, q, skip_nan=True, factor=1.0, check_q=percentile_is_valid
+    )
 
 
-if numpy_version >= (1, 15):
-    @overload(np.quantile)
-    def np_quantile(a, q):
-        return _percentile_quantile_inner(
-            a, q, skip_nan=False, factor=100.0, check_q=quantile_is_valid
-        )
+@overload(np.quantile)
+def np_quantile(a, q):
+    return _percentile_quantile_inner(
+        a, q, skip_nan=False, factor=100.0, check_q=quantile_is_valid
+    )
 
 
-if numpy_version >= (1, 15):
-    @overload(np.nanquantile)
-    def np_nanquantile(a, q):
-        return _percentile_quantile_inner(
-            a, q, skip_nan=True, factor=100.0, check_q=quantile_is_valid
-        )
+@overload(np.nanquantile)
+def np_nanquantile(a, q):
+    return _percentile_quantile_inner(
+        a, q, skip_nan=True, factor=100.0, check_q=quantile_is_valid
+    )
 
 
-if numpy_version >= (1, 9):
-    @overload(np.nanmedian)
-    def np_nanmedian(a):
-        if not isinstance(a, types.Array):
-            return
-        isnan = get_isnan(a.dtype)
+@overload(np.nanmedian)
+def np_nanmedian(a):
+    if not isinstance(a, types.Array):
+        return
+    isnan = get_isnan(a.dtype)
 
-        def nanmedian_impl(a):
-            # Create a temporary workspace with only non-NaN values
-            temp_arry = np.empty(a.size, a.dtype)
-            n = 0
-            for view in np.nditer(a):
-                v = view.item()
-                if not isnan(v):
-                    temp_arry[n] = v
-                    n += 1
+    def nanmedian_impl(a):
+        # Create a temporary workspace with only non-NaN values
+        temp_arry = np.empty(a.size, a.dtype)
+        n = 0
+        for view in np.nditer(a):
+            v = view.item()
+            if not isnan(v):
+                temp_arry[n] = v
+                n += 1
 
-            # all NaNs
-            if n == 0:
-                return np.nan
+        # all NaNs
+        if n == 0:
+            return np.nan
 
-            return _median_inner(temp_arry, n)
+        return _median_inner(temp_arry, n)
 
-        return nanmedian_impl
+    return nanmedian_impl
 
 
 @register_jitable
@@ -1605,63 +1595,62 @@ def _dtype_of_compound(inobj):
             return as_dtype(dt)
 
 
-if numpy_version >= (1, 12):  # replicate behaviour of NumPy 1.12 bugfix release
-    @overload(np.ediff1d)
-    def np_ediff1d(ary, to_end=None, to_begin=None):
+@overload(np.ediff1d)
+def np_ediff1d(ary, to_end=None, to_begin=None):
 
-        if isinstance(ary, types.Array):
-            if isinstance(ary.dtype, types.Boolean):
-                raise TypeError("Boolean dtype is unsupported (as per NumPy)")
-                # Numpy tries to do this: return ary[1:] - ary[:-1] which
-                # results in a TypeError exception being raised
+    if isinstance(ary, types.Array):
+        if isinstance(ary.dtype, types.Boolean):
+            raise TypeError("Boolean dtype is unsupported (as per NumPy)")
+            # Numpy tries to do this: return ary[1:] - ary[:-1] which
+            # results in a TypeError exception being raised
 
-        # since np 1.16 there are casting checks for to_end and to_begin to make
-        # sure they are compatible with the ary
-        if numpy_version >= (1, 16):
-            ary_dt = _dtype_of_compound(ary)
-            to_begin_dt = None
-            if not(is_nonelike(to_begin)):
-                to_begin_dt = _dtype_of_compound(to_begin)
-            to_end_dt = None
-            if not(is_nonelike(to_end)):
-                to_end_dt = _dtype_of_compound(to_end)
+    # since np 1.16 there are casting checks for to_end and to_begin to make
+    # sure they are compatible with the ary
+    if numpy_version >= (1, 16):
+        ary_dt = _dtype_of_compound(ary)
+        to_begin_dt = None
+        if not(is_nonelike(to_begin)):
+            to_begin_dt = _dtype_of_compound(to_begin)
+        to_end_dt = None
+        if not(is_nonelike(to_end)):
+            to_end_dt = _dtype_of_compound(to_end)
 
-            if to_begin_dt is not None and not np.can_cast(to_begin_dt, ary_dt):
-                msg = "dtype of to_begin must be compatible with input ary"
-                raise TypeError(msg)
+        if to_begin_dt is not None and not np.can_cast(to_begin_dt, ary_dt):
+            msg = "dtype of to_begin must be compatible with input ary"
+            raise TypeError(msg)
 
-            if to_end_dt is not None and not np.can_cast(to_end_dt, ary_dt):
-                msg = "dtype of to_end must be compatible with input ary"
-                raise TypeError(msg)
+        if to_end_dt is not None and not np.can_cast(to_end_dt, ary_dt):
+            msg = "dtype of to_end must be compatible with input ary"
+            raise TypeError(msg)
 
-        def np_ediff1d_impl(ary, to_end=None, to_begin=None):
-            # transform each input into an equivalent 1d array
-            start = _prepare_array(to_begin)
-            mid = _prepare_array(ary)
-            end = _prepare_array(to_end)
+    def np_ediff1d_impl(ary, to_end=None, to_begin=None):
+        # transform each input into an equivalent 1d array
+        start = _prepare_array(to_begin)
+        mid = _prepare_array(ary)
+        end = _prepare_array(to_end)
 
-            out_dtype = mid.dtype
-            # output array dtype determined by ary dtype, per NumPy
-            # (for the most part); an exception to the rule is a zero length
-            # array-like, where NumPy falls back to np.float64; this behaviour
-            # is *not* replicated
+        out_dtype = mid.dtype
+        # output array dtype determined by ary dtype, per NumPy
+        # (for the most part); an exception to the rule is a zero length
+        # array-like, where NumPy falls back to np.float64; this behaviour
+        # is *not* replicated
 
-            if len(mid) > 0:
-                out = np.empty((len(start) + len(mid) + len(end) - 1),
-                               dtype=out_dtype)
-                start_idx = len(start)
-                mid_idx = len(start) + len(mid) - 1
-                out[:start_idx] = start
-                out[start_idx:mid_idx] = np.diff(mid)
-                out[mid_idx:] = end
-            else:
-                out = np.empty((len(start) + len(end)), dtype=out_dtype)
-                start_idx = len(start)
-                out[:start_idx] = start
-                out[start_idx:] = end
-            return out
+        if len(mid) > 0:
+            out = np.empty((len(start) + len(mid) + len(end) - 1),
+                            dtype=out_dtype)
+            start_idx = len(start)
+            mid_idx = len(start) + len(mid) - 1
+            out[:start_idx] = start
+            out[start_idx:mid_idx] = np.diff(mid)
+            out[mid_idx:] = end
+        else:
+            out = np.empty((len(start) + len(end)), dtype=out_dtype)
+            start_idx = len(start)
+            out[:start_idx] = start
+            out[start_idx:] = end
+        return out
 
-        return np_ediff1d_impl
+    return np_ediff1d_impl
 
 
 def _select_element(arr):
@@ -2295,88 +2284,82 @@ def np_interp_impl_inner_factory(np117_nan_handling):
     return impl
 
 
-if numpy_version >= (1, 10):
-    np_interp_impl_inner_post_np117 = register_jitable(
-        np_interp_impl_inner_factory(np117_nan_handling=True)
-    )
-    np_interp_impl_complex_inner_post_np117 = register_jitable(
-        np_interp_impl_complex_fp_inner_factory(np117_nan_handling=True)
-    )
-    np_interp_impl_inner_pre_np117 = register_jitable(
-        np_interp_impl_inner_factory(np117_nan_handling=False)
-    )
-    np_interp_impl_complex_inner_pre_np117 = register_jitable(
-        np_interp_impl_complex_fp_inner_factory(np117_nan_handling=False)
+np_interp_impl_inner_post_np117 = register_jitable(
+    np_interp_impl_inner_factory(np117_nan_handling=True)
+)
+np_interp_impl_complex_inner_post_np117 = register_jitable(
+    np_interp_impl_complex_fp_inner_factory(np117_nan_handling=True)
+)
+np_interp_impl_inner_pre_np117 = register_jitable(
+    np_interp_impl_inner_factory(np117_nan_handling=False)
+)
+np_interp_impl_complex_inner_pre_np117 = register_jitable(
+    np_interp_impl_complex_fp_inner_factory(np117_nan_handling=False)
+)
+
+
+@overload(np.interp)
+def np_interp(x, xp, fp):
+    # NOTE: there is considerable duplication present in the functions:
+    # np_interp_impl_complex_fp_inner_116
+    # np_interp_impl_complex_fp_inner
+    # np_interp_impl_inner_116
+    # np_interp_impl_inner
+    #
+    # This is because:
+    # 1. Replicating basic interp is relatively simple, however matching the
+    #    behaviour of NumPy for edge cases is really quite hard, after a
+    #    couple of attempts trying to avoid translation of the C source it
+    #    was deemed unavoidable.
+    # 2. Due to 1. it is much easier to keep track of changes if the Numba
+    #    source reflects the NumPy C source, so the duplication is kept.
+    # 3. There are significant changes that happened in the NumPy 1.16
+    #    release series, hence functions with `np116` appended, they behave
+    #    slightly differently!
+
+    if hasattr(xp, 'ndim') and xp.ndim > 1:
+        raise TypingError('xp must be 1D')
+    if hasattr(fp, 'ndim') and fp.ndim > 1:
+        raise TypingError('fp must be 1D')
+
+    complex_dtype_msg = (
+        "Cannot cast array data from complex dtype to float64 dtype"
     )
 
-    # replicate behaviour change of 1.10+
-    @overload(np.interp)
-    def np_interp(x, xp, fp):
-        # NOTE: there is considerable duplication present in the functions:
-        # np_interp_impl_complex_fp_inner_116
-        # np_interp_impl_complex_fp_inner
-        # np_interp_impl_inner_116
-        # np_interp_impl_inner
-        #
-        # This is because:
-        # 1. Replicating basic interp is relatively simple, however matching the
-        #    behaviour of NumPy for edge cases is really quite hard, after a
-        #    couple of attempts trying to avoid translation of the C source it
-        #    was deemed unavoidable.
-        # 2. Due to 1. it is much easier to keep track of changes if the Numba
-        #    source reflects the NumPy C source, so the duplication is kept.
-        # 3. There are significant changes that happened in the NumPy 1.16
-        #    release series, hence functions with `np116` appended, they behave
-        #    slightly differently!
+    xp_dt = determine_dtype(xp)
+    if np.issubdtype(xp_dt, np.complexfloating):
+        raise TypingError(complex_dtype_msg)
 
-        if hasattr(xp, 'ndim') and xp.ndim > 1:
-            raise TypingError('xp must be 1D')
-        if hasattr(fp, 'ndim') and fp.ndim > 1:
-            raise TypingError('fp must be 1D')
+    if numpy_version >= (1, 17):
+        impl = np_interp_impl_inner_post_np117
+        impl_complex = np_interp_impl_complex_inner_post_np117
+    elif numpy_version >= (1, 16):
+        impl = np_interp_impl_inner_pre_np117
+        impl_complex = np_interp_impl_complex_inner_pre_np117
+    else:
+        impl = np_interp_impl_inner
+        impl_complex = np_interp_impl_complex_fp_inner
 
-        complex_dtype_msg = (
-            "Cannot cast array data from complex dtype to float64 dtype"
-        )
+    fp_dt = determine_dtype(fp)
+    dtype = np.result_type(fp_dt, np.float64)
 
-        xp_dt = determine_dtype(xp)
-        if np.issubdtype(xp_dt, np.complexfloating):
+    if np.issubdtype(dtype, np.complexfloating):
+        inner = impl_complex
+    else:
+        inner = impl
+
+    def np_interp_impl(x, xp, fp):
+        return inner(x, xp, fp, dtype)
+
+    def np_interp_scalar_impl(x, xp, fp):
+        return inner(x, xp, fp, dtype).flat[0]
+
+    if isinstance(x, types.Number):
+        if isinstance(x, types.Complex):
             raise TypingError(complex_dtype_msg)
+        return np_interp_scalar_impl
 
-        if numpy_version < (1, 12):
-            fp_dt = determine_dtype(fp)
-            if np.issubdtype(fp_dt, np.complexfloating):
-                raise TypingError(complex_dtype_msg)
-
-        if numpy_version >= (1, 17):
-            impl = np_interp_impl_inner_post_np117
-            impl_complex = np_interp_impl_complex_inner_post_np117
-        elif numpy_version >= (1, 16):
-            impl = np_interp_impl_inner_pre_np117
-            impl_complex = np_interp_impl_complex_inner_pre_np117
-        else:
-            impl = np_interp_impl_inner
-            impl_complex = np_interp_impl_complex_fp_inner
-
-        fp_dt = determine_dtype(fp)
-        dtype = np.result_type(fp_dt, np.float64)
-
-        if np.issubdtype(dtype, np.complexfloating):
-            inner = impl_complex
-        else:
-            inner = impl
-
-        def np_interp_impl(x, xp, fp):
-            return inner(x, xp, fp, dtype)
-
-        def np_interp_scalar_impl(x, xp, fp):
-            return inner(x, xp, fp, dtype).flat[0]
-
-        if isinstance(x, types.Number):
-            if isinstance(x, types.Complex):
-                raise TypingError(complex_dtype_msg)
-            return np_interp_scalar_impl
-
-        return np_interp_impl
+    return np_interp_impl
 
 
 #----------------------------------------------------------------------------
@@ -2564,98 +2547,96 @@ def _clip_complex(x):
     return real + 1j * imag
 
 
-# replicate behaviour post numpy 1.10 bugfix release
-if numpy_version >= (1, 10):
-    @overload(np.cov)
-    def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
+@overload(np.cov)
+def np_cov(m, y=None, rowvar=True, bias=False, ddof=None):
 
-        # reject problem if m and / or y are more than 2D
-        check_dimensions(m, 'm')
-        check_dimensions(y, 'y')
+    # reject problem if m and / or y are more than 2D
+    check_dimensions(m, 'm')
+    check_dimensions(y, 'y')
 
-        # reject problem if ddof invalid (either upfront if type is
-        # obviously invalid, or later if value found to be non-integral)
-        if ddof in (None, types.none):
+    # reject problem if ddof invalid (either upfront if type is
+    # obviously invalid, or later if value found to be non-integral)
+    if ddof in (None, types.none):
+        _DDOF_HANDLER = _handle_ddof_nop
+    else:
+        if isinstance(ddof, (types.Integer, types.Boolean)):
             _DDOF_HANDLER = _handle_ddof_nop
+        elif isinstance(ddof, types.Float):
+            _DDOF_HANDLER = _handle_ddof
         else:
-            if isinstance(ddof, (types.Integer, types.Boolean)):
-                _DDOF_HANDLER = _handle_ddof_nop
-            elif isinstance(ddof, types.Float):
-                _DDOF_HANDLER = _handle_ddof
-            else:
-                raise TypingError('ddof must be a real numerical scalar type')
+            raise TypingError('ddof must be a real numerical scalar type')
 
-        # special case for 2D array input with 1 row of data - select
-        # handler function which we'll call later when we have access
-        # to the shape of the input array
-        _M_DIM_HANDLER = _handle_m_dim_nop
-        if isinstance(m, types.Array):
-            _M_DIM_HANDLER = _handle_m_dim_change
+    # special case for 2D array input with 1 row of data - select
+    # handler function which we'll call later when we have access
+    # to the shape of the input array
+    _M_DIM_HANDLER = _handle_m_dim_nop
+    if isinstance(m, types.Array):
+        _M_DIM_HANDLER = _handle_m_dim_change
 
-        # infer result dtype
-        m_dt = determine_dtype(m)
-        y_dt = determine_dtype(y)
-        dtype = np.result_type(m_dt, y_dt, np.float64)
+    # infer result dtype
+    m_dt = determine_dtype(m)
+    y_dt = determine_dtype(y)
+    dtype = np.result_type(m_dt, y_dt, np.float64)
 
-        def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
-            X = _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER,
-                                   _M_DIM_HANDLER).astype(dtype)
+    def np_cov_impl(m, y=None, rowvar=True, bias=False, ddof=None):
+        X = _prepare_cov_input(m, y, rowvar, dtype, ddof, _DDOF_HANDLER,
+                                _M_DIM_HANDLER).astype(dtype)
 
-            if np.any(np.array(X.shape) == 0):
-                return np.full((X.shape[0], X.shape[0]),
-                               fill_value=np.nan,
-                               dtype=dtype)
-            else:
-                return np_cov_impl_inner(X, bias, ddof)
-
-        def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False,
-                                        ddof=None):
-            X = _prepare_cov_input(m, y, rowvar, ddof, dtype, _DDOF_HANDLER,
-                                   _M_DIM_HANDLER).astype(dtype)
-
-            if np.any(np.array(X.shape) == 0):
-                variance = np.nan
-            else:
-                variance = np_cov_impl_inner(X, bias, ddof).flat[0]
-
-            return np.array(variance)
-
-        if scalar_result_expected(m, y):
-            return np_cov_impl_single_variable
+        if np.any(np.array(X.shape) == 0):
+            return np.full((X.shape[0], X.shape[0]),
+                            fill_value=np.nan,
+                            dtype=dtype)
         else:
-            return np_cov_impl
+            return np_cov_impl_inner(X, bias, ddof)
 
-    @overload(np.corrcoef)
-    def np_corrcoef(x, y=None, rowvar=True):
+    def np_cov_impl_single_variable(m, y=None, rowvar=True, bias=False,
+                                    ddof=None):
+        X = _prepare_cov_input(m, y, rowvar, ddof, dtype, _DDOF_HANDLER,
+                                _M_DIM_HANDLER).astype(dtype)
 
-        x_dt = determine_dtype(x)
-        y_dt = determine_dtype(y)
-        dtype = np.result_type(x_dt, y_dt, np.float64)
-
-        if dtype == np.complex:
-            clip_fn = _clip_complex
+        if np.any(np.array(X.shape) == 0):
+            variance = np.nan
         else:
-            clip_fn = _clip_corr
+            variance = np_cov_impl_inner(X, bias, ddof).flat[0]
 
-        def np_corrcoef_impl(x, y=None, rowvar=True):
-            c = np.cov(x, y, rowvar)
-            d = np.diag(c)
-            stddev = np.sqrt(d.real)
+        return np.array(variance)
 
-            for i in range(c.shape[0]):
-                c[i, :] /= stddev
-                c[:, i] /= stddev
+    if scalar_result_expected(m, y):
+        return np_cov_impl_single_variable
+    else:
+        return np_cov_impl
 
-            return clip_fn(c)
+@overload(np.corrcoef)
+def np_corrcoef(x, y=None, rowvar=True):
 
-        def np_corrcoef_impl_single_variable(x, y=None, rowvar=True):
-            c = np.cov(x, y, rowvar)
-            return c / c
+    x_dt = determine_dtype(x)
+    y_dt = determine_dtype(y)
+    dtype = np.result_type(x_dt, y_dt, np.float64)
 
-        if scalar_result_expected(x, y):
-            return np_corrcoef_impl_single_variable
-        else:
-            return np_corrcoef_impl
+    if dtype == np.complex:
+        clip_fn = _clip_complex
+    else:
+        clip_fn = _clip_corr
+
+    def np_corrcoef_impl(x, y=None, rowvar=True):
+        c = np.cov(x, y, rowvar)
+        d = np.diag(c)
+        stddev = np.sqrt(d.real)
+
+        for i in range(c.shape[0]):
+            c[i, :] /= stddev
+            c[:, i] /= stddev
+
+        return clip_fn(c)
+
+    def np_corrcoef_impl_single_variable(x, y=None, rowvar=True):
+        c = np.cov(x, y, rowvar)
+        return c / c
+
+    if scalar_result_expected(x, y):
+        return np_corrcoef_impl_single_variable
+    else:
+        return np_corrcoef_impl
 
 
 #----------------------------------------------------------------------------
@@ -2680,12 +2661,6 @@ def np_argwhere(a):
 
 @overload(np.flatnonzero)
 def np_flatnonzero(a):
-
-    if numpy_version < (1, 15):
-        if not isinstance(a, types.Array):
-            raise TypingError("Argument 'a' must be an array")
-            # numpy raises an Attribute error with:
-            # 'xxx' object has no attribute 'ravel'
 
     if type_can_asarray(a):
         def impl(a):
@@ -3171,9 +3146,6 @@ def np_count_nonzero(arr, axis=None):
     if not type_can_asarray(arr):
         raise TypingError("The argument to np.count_nonzero must be array-like")
 
-    if (numpy_version < (1, 12)):
-        raise TypingError("axis is not supported for NumPy versions < 1.12.0")
-
     if is_nonelike(axis):
         def impl(arr, axis=None):
             arr2 = np.ravel(arr)
@@ -3652,16 +3624,13 @@ MachAr = namedtuple('MachAr', _mach_ar_supported)
 # finfo
 _finfo_supported = ('eps', 'epsneg', 'iexp', 'machep', 'max', 'maxexp', 'min',
                     'minexp', 'negep', 'nexp', 'nmant', 'precision',
-                    'resolution', 'tiny',)
-if numpy_version >= (1, 12):
-    _finfo_supported = ('bits',) + _finfo_supported
+                    'resolution', 'tiny', 'bits',)
+
 
 finfo = namedtuple('finfo', _finfo_supported)
 
 # iinfo
-_iinfo_supported = ('min', 'max')
-if numpy_version >= (1, 12):
-    _iinfo_supported = _iinfo_supported + ('bits',)
+_iinfo_supported = ('min', 'max', 'bits',)
 
 iinfo = namedtuple('iinfo', _iinfo_supported)
 

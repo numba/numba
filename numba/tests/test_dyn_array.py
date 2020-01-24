@@ -11,7 +11,6 @@ from numba import config
 from numba import njit
 from numba import types
 from numba import utils
-from numba.numpy_support import version as numpy_version
 from .support import MemoryLeakMixin, TestCase, tag
 
 
@@ -667,7 +666,6 @@ class TestNdOnes(TestNdZeros):
         self.pyfunc = np.ones
 
 
-@unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
 class TestNdFull(ConstructorBaseTest, TestCase):
 
     def check_result_value(self, ret, expected):
@@ -874,7 +872,6 @@ class TestNdOnesLike(TestNdZerosLike):
         super(TestNdOnesLike, self).test_like_dtype_structured()
 
 
-@unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
 class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
 
     def check_result_value(self, ret, expected):

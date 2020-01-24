@@ -9,11 +9,11 @@ from . import errors, types, utils
 from numba.cgutils import is_nonelike   # noqa: F401
 
 
-version = tuple(map(int, np.__version__.split('.')[:2]))
+numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
 # Starting from Numpy 1.10, ufuncs accept argument conversion according
 # to the "same_kind" rule (used to be "unsafe").
-strict_ufunc_typing = version >= (1, 10)
+strict_ufunc_typing = numpy_version >= (1, 10)
 
 
 FROM_DTYPE = {

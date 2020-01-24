@@ -11,7 +11,6 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
                              from_dtype, as_dtype, resolve_output_type,
                              carray, farray)
-from ..numpy_support import version as numpy_version
 from ..errors import TypingError, NumbaPerformanceWarning
 from numba import pndindex
 
@@ -275,10 +274,7 @@ _math_operations = [ "add", "subtract", "multiply",
                      "rint", "sign", "conjugate", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
                      "sqrt", "square", "reciprocal",
-                     "divide", "mod", "abs", "fabs" ]
-
-if numpy_version >= (1, 15):
-    _math_operations += ["gcd", "lcm"]
+                     "divide", "mod", "abs", "fabs" , "gcd", "lcm"]
 
 _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
                              "arccos", "arctan", "arctan2",
@@ -562,48 +558,44 @@ class NdConstructorLike(CallableTemplate):
 infer_global(np.ones_like)(NdConstructorLike)
 
 
-if numpy_version >= (1, 8):
-    @infer_global(np.full)
-    class NdFull(CallableTemplate):
+@infer_global(np.full)
+class NdFull(CallableTemplate):
 
-        def generic(self):
-            def typer(shape, fill_value, dtype=None):
-                if dtype is None:
-                    if numpy_version < (1, 12):
-                        nb_dtype = types.float64
-                    else:
-                        nb_dtype = fill_value
+    def generic(self):
+        def typer(shape, fill_value, dtype=None):
+            if dtype is None:
+                nb_dtype = fill_value
+            else:
+                nb_dtype = _parse_dtype(dtype)
+
+            ndim = _parse_shape(shape)
+            if nb_dtype is not None and ndim is not None:
+                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
+        return typer
+
+@infer_global(np.full_like)
+class NdFullLike(CallableTemplate):
+
+    def generic(self):
+        """
+        np.full_like(array, val) -> array of the same shape and layout
+        np.full_like(scalar, val) -> 0-d array of the scalar type
+        """
+        def typer(arg, fill_value, dtype=None):
+            if dtype is not None:
+                nb_dtype = _parse_dtype(dtype)
+            elif isinstance(arg, types.Array):
+                nb_dtype = arg.dtype
+            else:
+                nb_dtype = arg
+            if nb_dtype is not None:
+                if isinstance(arg, types.Array):
+                    return arg.copy(dtype=nb_dtype, readonly=False)
                 else:
-                    nb_dtype = _parse_dtype(dtype)
+                    return types.Array(dtype=nb_dtype, ndim=0, layout='C')
 
-                ndim = _parse_shape(shape)
-                if nb_dtype is not None and ndim is not None:
-                    return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
-
-            return typer
-
-    @infer_global(np.full_like)
-    class NdFullLike(CallableTemplate):
-
-        def generic(self):
-            """
-            np.full_like(array, val) -> array of the same shape and layout
-            np.full_like(scalar, val) -> 0-d array of the scalar type
-            """
-            def typer(arg, fill_value, dtype=None):
-                if dtype is not None:
-                    nb_dtype = _parse_dtype(dtype)
-                elif isinstance(arg, types.Array):
-                    nb_dtype = arg.dtype
-                else:
-                    nb_dtype = arg
-                if nb_dtype is not None:
-                    if isinstance(arg, types.Array):
-                        return arg.copy(dtype=nb_dtype, readonly=False)
-                    else:
-                        return types.Array(dtype=nb_dtype, ndim=0, layout='C')
-
-            return typer
+        return typer
 
 
 @infer_global(np.identity)
@@ -824,28 +816,27 @@ class NdConcatenate(CallableTemplate):
         return typer
 
 
-if numpy_version >= (1, 10):
-    @infer_global(np.stack)
-    class NdStack(CallableTemplate):
+@infer_global(np.stack)
+class NdStack(CallableTemplate):
 
-        def generic(self):
-            def typer(arrays, axis=None):
-                if axis is not None and not isinstance(axis, types.Integer):
-                    # Note Numpy allows axis=None, but it isn't documented:
-                    # https://github.com/numpy/numpy/issues/7968
-                    return
+    def generic(self):
+        def typer(arrays, axis=None):
+            if axis is not None and not isinstance(axis, types.Integer):
+                # Note Numpy allows axis=None, but it isn't documented:
+                # https://github.com/numpy/numpy/issues/7968
+                return
 
-                dtype, ndim = _sequence_of_arrays(self.context,
-                                                  "np.stack", arrays)
+            dtype, ndim = _sequence_of_arrays(self.context,
+                                                "np.stack", arrays)
 
-                # This diverges from Numpy's behaviour, which simply inserts
-                # a new stride at the requested axis (therefore can return
-                # a 'A' array).
-                layout = 'F' if all(a.layout == 'F' for a in arrays) else 'C'
+            # This diverges from Numpy's behaviour, which simply inserts
+            # a new stride at the requested axis (therefore can return
+            # a 'A' array).
+            layout = 'F' if all(a.layout == 'F' for a in arrays) else 'C'
 
-                return types.Array(dtype, ndim + 1, layout)
+            return types.Array(dtype, ndim + 1, layout)
 
-            return typer
+        return typer
 
 
 class BaseStackTemplate(CallableTemplate):

@@ -4,7 +4,6 @@ from itertools import permutations
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.numpy_support import version as np_version
 from numba.compiler import compile_isolated, Flags
 from numba import jit, njit, types, from_dtype, errors, typeof
 from numba.errors import TypingError
@@ -781,7 +780,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                       str(raises.exception))
 
     def test_flatnonzero_basic(self):
-        # these tests should pass in all numpy versions
         pyfunc = numpy_flatnonzero
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -838,15 +836,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         yield True
         yield (True, False, True)
         yield 2 + 1j
-        # the following are not array-like, but numpy 1.15+ does not raise
+        # the following are not array-like, but NumPy does not raise
         yield None
         yield 'a_string'
         yield ''
 
-    @unittest.skipUnless(np_version >= (1, 15),
-                         "flatnonzero array-like handling per 1.15+")
-    def test_flatnonzero_array_like_115_and_on(self):
-        # these tests should pass where numpy version is >= 1.15
+
+    def test_flatnonzero_array_like(self):
         pyfunc = numpy_flatnonzero
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -854,26 +850,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             expected = pyfunc(a)
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
-
-    @unittest.skipUnless(np_version < (1, 15),
-                         "flatnonzero array-like handling pre 1.15")
-    def test_flatnonzero_array_like_pre_115(self):
-        # these tests should pass where numpy version is < 1.15
-        pyfunc = numpy_flatnonzero
-        cfunc = jit(nopython=True)(pyfunc)
-
-        for a in self.array_like_variations():
-            with self.assertTypingError() as e:
-                cfunc(a)
-
-            self.assertIn("Argument 'a' must be an array", str(e.exception))
-
-            # numpy raises an Attribute error with:
-            # 'xxx' object has no attribute 'ravel'
-            with self.assertRaises(AttributeError) as e:
-                pyfunc(a)
-
-            self.assertIn("object has no attribute 'ravel'", str(e.exception))
 
     def test_argwhere_array_like(self):
         pyfunc = numpy_argwhere
@@ -882,7 +858,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             expected = pyfunc(a)
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
-            
+
 
 if __name__ == '__main__':
     unittest.main()

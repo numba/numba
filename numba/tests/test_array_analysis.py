@@ -12,7 +12,6 @@ from .support import TestCase, tag, skip_parfors_unsupported
 from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Compiler, Flags, PassManager
 from numba.targets import cpu, registry
-from numba.numpy_support import version as numpy_version
 from numba.ir_utils import remove_dead
 from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
@@ -850,29 +849,28 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('v', (2, 3, 8)),
                                        ])
 
-        if numpy_version >= (1, 10):
-            def test_stack(m, n):
-                a = np.ones(m)
-                b = np.ones(n)
-                c = np.stack((a, b))
-                d = np.ones((m, n))
-                e = np.ones((m, n))
-                f = np.stack((d, e))
-                g = np.stack((d, e), axis=0)
-                h = np.stack((d, e), axis=1)
-                i = np.stack((d, e), axis=2)
-                j = np.stack((d, e), axis=-1)
+        def test_stack(m, n):
+            a = np.ones(m)
+            b = np.ones(n)
+            c = np.stack((a, b))
+            d = np.ones((m, n))
+            e = np.ones((m, n))
+            f = np.stack((d, e))
+            g = np.stack((d, e), axis=0)
+            h = np.stack((d, e), axis=1)
+            i = np.stack((d, e), axis=2)
+            j = np.stack((d, e), axis=-1)
 
-            self._compile_and_test(test_stack, (types.intp, types.intp),
-                                   equivs=[self.with_equiv('m', 'n'),
-                                           self.with_equiv('c', (2, 'm')),
-                                           self.with_equiv(
-                                       'f', 'g', (2, 'm', 'n')),
-                self.with_equiv(
-                                       'h', ('m', 2, 'n')),
-                self.with_equiv(
-                                       'i', 'j', ('m', 'n', 2)),
-            ])
+        self._compile_and_test(test_stack, (types.intp, types.intp),
+                                equivs=[self.with_equiv('m', 'n'),
+                                        self.with_equiv('c', (2, 'm')),
+                                        self.with_equiv(
+                                    'f', 'g', (2, 'm', 'n')),
+            self.with_equiv(
+                                    'h', ('m', 2, 'n')),
+            self.with_equiv(
+                                    'i', 'j', ('m', 'n', 2)),
+        ])
 
         def test_linspace(m, n):
             a = np.linspace(m, n)

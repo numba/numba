@@ -10,7 +10,6 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import jit, errors
-from numba.numpy_support import version as numpy_version
 from .support import TestCase, tag, needs_lapack, needs_blas, _is_armv7l
 from .matmul_usecase import matmul_usecase
 
@@ -395,12 +394,8 @@ def trace_matrix_no_offset(a):
     return np.trace(a)
 
 
-if numpy_version >= (1, 9):
-    def outer_matrix(a, b, out=None):
-        return np.outer(a, b, out=out)
-else:
-    def outer_matrix(a, b):
-        return np.outer(a, b)
+def outer_matrix(a, b, out=None):
+    return np.outer(a, b, out=out)
 
 
 def kron_matrix(a, b):
@@ -511,20 +506,6 @@ class TestLinalgBase(TestCase):
             Q = np.array(Q, dtype=dtype, order=order)  # sort out order/type
 
         return Q
-
-    def shape_with_0_input(self, *args):
-        """
-        returns True if an input argument has a dimension that is zero
-        and Numpy version is < 1.13, else False. This is due to behaviour
-        changes in handling dimension zero arrays:
-        https://github.com/numpy/numpy/issues/10573
-        """
-        if numpy_version < (1, 13):
-            for x in args:
-                if isinstance(x, np.ndarray):
-                    if 0 in x.shape:
-                        return True
-        return False
 
     def assert_error(self, cfunc, args, msg, err=ValueError):
         with self.assertRaises(err) as raises:
@@ -811,11 +792,6 @@ class TestLinalgCholesky(TestLinalgBase):
         cfunc = jit(nopython=True)(cholesky_matrix)
 
         def check(a):
-            if self.shape_with_0_input(a):
-                # has shape with 0 on input, numpy will fail,
-                # just make sure Numba runs without error
-                cfunc(a)
-                return
             expected = cholesky_matrix(a)
             got = cfunc(a)
             use_reconstruction = False
@@ -898,11 +874,6 @@ class TestLinalgEigenSystems(TestLinalgBase):
         cfunc = jit(nopython=True)(func)
 
         def check(a):
-            if self.shape_with_0_input(a):
-                # has shape with 0 on input, numpy will fail,
-                # just make sure Numba runs without error
-                cfunc(a)
-                return
             expected = func(a)
             got = cfunc(a)
             # check that the returned tuple is same length
@@ -1658,11 +1629,6 @@ class TestLinalgPinv(TestLinalgBase):
         cfunc = jit(nopython=True)(pinv_matrix)
 
         def check(a, **kwargs):
-            if self.shape_with_0_input(a):
-                # has shape with 0 on input, numpy will fail,
-                # just make sure Numba runs without error
-                cfunc(a, **kwargs)
-                return
             expected = pinv_matrix(a, **kwargs)
             got = cfunc(a, **kwargs)
 
@@ -1781,11 +1747,6 @@ class TestLinalgDetAndSlogdet(TestLinalgBase):
     """
 
     def check_det(self, cfunc, a, **kwargs):
-        if self.shape_with_0_input(a):
-            # has shape with 0 on input, numpy will fail,
-            # just make sure Numba runs without error
-            cfunc(a, **kwargs)
-            return
         expected = det_matrix(a, **kwargs)
         got = cfunc(a, **kwargs)
 
@@ -1799,11 +1760,6 @@ class TestLinalgDetAndSlogdet(TestLinalgBase):
             cfunc(a, **kwargs)
 
     def check_slogdet(self, cfunc, a, **kwargs):
-        if self.shape_with_0_input(a):
-            # has shape with 0 on input, numpy will fail,
-            # just make sure Numba runs without error
-            cfunc(a, **kwargs)
-            return
         expected = slogdet_matrix(a, **kwargs)
         got = cfunc(a, **kwargs)
 
@@ -2040,26 +1996,17 @@ class TestLinalgCond(TestLinalgBase):
             self.assert_raise_on_empty(cfunc, (np.empty(sz),))
 
         # singular systems to trip divide-by-zero
-        # only for np > 1.14, before this norm was computed via inversion which
-        # will fail with numpy.linalg.linalg.LinAlgError: Singular matrix
-        if numpy_version > (1, 14):
-            x = np.array([[1, 0], [0, 0]], dtype=np.float64)
-            check(x)
-            check(x, p=2)
-            x = np.array([[0, 0], [0, 0]], dtype=np.float64)
-            check(x, p=-2)
+        x = np.array([[1, 0], [0, 0]], dtype=np.float64)
+        check(x)
+        check(x, p=2)
+        x = np.array([[0, 0], [0, 0]], dtype=np.float64)
+        check(x, p=-2)
 
         # try an ill-conditioned system with 2-norm, make sure np raises an
         # overflow warning as the result is `+inf` and that the result from
         # numba matches.
         with warnings.catch_warnings():
             a = np.array([[1.e308, 0], [0, 0.1]], dtype=np.float64)
-            if numpy_version < (1, 15):
-                # overflow warning is silenced in np >= 1.15
-                warnings.simplefilter("error", RuntimeWarning)
-                self.assertRaisesRegexp(RuntimeWarning,
-                                        'overflow encountered in.*',
-                                        check, a)
             warnings.simplefilter("ignore", RuntimeWarning)
             check(a)
 
@@ -2406,10 +2353,9 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
                 product(self.sizes, self.sizes, self.dtypes):
             (a, b) = self._get_input(size1, size2, dtype)
             check(a, b)
-            if numpy_version >= (1, 9):
-                c = np.empty((np.asarray(a).size, np.asarray(b).size),
-                             dtype=np.asarray(a).dtype)
-                check(a, b, out=c)
+            c = np.empty((np.asarray(a).size, np.asarray(b).size),
+                            dtype=np.asarray(a).dtype)
+            check(a, b, out=c)
 
         self._assert_wrong_dim("outer", cfunc)
 

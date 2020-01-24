@@ -17,9 +17,7 @@ import numpy as np
 from numba import types, cgutils, typing, utils, extending, pndindex, errors
 from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                  is_fortran)
-from numba.numpy_support import version as numpy_version
-from numba.numpy_support import type_can_asarray
-from numba.numpy_support import is_nonelike
+from numba.numpy_support import type_can_asarray, is_nonelike
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
                                     lower_setattr_generic,
@@ -3517,62 +3515,53 @@ def numpy_zeros_like_nd(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, ary._getvalue())
 
 
-if numpy_version >= (1, 8):
-    @lower_builtin(np.full, types.Any, types.Any)
-    def numpy_full_nd(context, builder, sig, args):
-        if numpy_version < (1, 12):
-            # np < 1.12 returns float64 full regardless of value type
-            def full(shape, value):
-                arr = np.empty(shape)
-                val = np.float64(value.real)
-                for idx in np.ndindex(arr.shape):
-                    arr[idx] = val
-                return arr
-        else:
-            def full(shape, value):
-                arr = np.empty(shape, type(value))
-                for idx in np.ndindex(arr.shape):
-                    arr[idx] = value
-                return arr
+@lower_builtin(np.full, types.Any, types.Any)
+def numpy_full_nd(context, builder, sig, args):
 
-        res = context.compile_internal(builder, full, sig, args)
-        return impl_ret_new_ref(context, builder, sig.return_type, res)
+    def full(shape, value):
+        arr = np.empty(shape, type(value))
+        for idx in np.ndindex(arr.shape):
+            arr[idx] = value
+        return arr
 
-    @lower_builtin(np.full, types.Any, types.Any, types.DTypeSpec)
-    def numpy_full_dtype_nd(context, builder, sig, args):
+    res = context.compile_internal(builder, full, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-        def full(shape, value, dtype):
-            arr = np.empty(shape, dtype)
-            for idx in np.ndindex(arr.shape):
-                arr[idx] = value
-            return arr
+@lower_builtin(np.full, types.Any, types.Any, types.DTypeSpec)
+def numpy_full_dtype_nd(context, builder, sig, args):
 
-        res = context.compile_internal(builder, full, sig, args)
-        return impl_ret_new_ref(context, builder, sig.return_type, res)
+    def full(shape, value, dtype):
+        arr = np.empty(shape, dtype)
+        for idx in np.ndindex(arr.shape):
+            arr[idx] = value
+        return arr
 
-    @lower_builtin(np.full_like, types.Any, types.Any)
-    def numpy_full_like_nd(context, builder, sig, args):
+    res = context.compile_internal(builder, full, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-        def full_like(arr, value):
-            arr = np.empty_like(arr)
-            for idx in np.ndindex(arr.shape):
-                arr[idx] = value
-            return arr
+@lower_builtin(np.full_like, types.Any, types.Any)
+def numpy_full_like_nd(context, builder, sig, args):
 
-        res = context.compile_internal(builder, full_like, sig, args)
-        return impl_ret_new_ref(context, builder, sig.return_type, res)
+    def full_like(arr, value):
+        arr = np.empty_like(arr)
+        for idx in np.ndindex(arr.shape):
+            arr[idx] = value
+        return arr
 
-    @lower_builtin(np.full_like, types.Any, types.Any, types.DTypeSpec)
-    def numpy_full_like_nd_type_spec(context, builder, sig, args):
+    res = context.compile_internal(builder, full_like, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
-        def full_like(arr, value, dtype):
-            arr = np.empty_like(arr, dtype)
-            for idx in np.ndindex(arr.shape):
-                arr[idx] = value
-            return arr
+@lower_builtin(np.full_like, types.Any, types.Any, types.DTypeSpec)
+def numpy_full_like_nd_type_spec(context, builder, sig, args):
 
-        res = context.compile_internal(builder, full_like, sig, args)
-        return impl_ret_new_ref(context, builder, sig.return_type, res)
+    def full_like(arr, value, dtype):
+        arr = np.empty_like(arr, dtype)
+        for idx in np.ndindex(arr.shape):
+            arr[idx] = value
+        return arr
+
+    res = context.compile_internal(builder, full_like, sig, args)
+    return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
 @lower_builtin(np.ones, types.Any)
@@ -4774,16 +4763,16 @@ def _np_stack_common(context, builder, sig, args, axis):
                      axis)
 
 
-if numpy_version >= (1, 10):
-    @lower_builtin(np.stack, types.BaseTuple)
-    def np_stack(context, builder, sig, args):
-        axis = context.get_constant(types.intp, 0)
-        return _np_stack_common(context, builder, sig, args, axis)
+@lower_builtin(np.stack, types.BaseTuple)
+def np_stack(context, builder, sig, args):
+    axis = context.get_constant(types.intp, 0)
+    return _np_stack_common(context, builder, sig, args, axis)
 
-    @lower_builtin(np.stack, types.BaseTuple, types.Integer)
-    def np_stack_axis(context, builder, sig, args):
-        axis = context.cast(builder, args[1], sig.args[1], types.intp)
-        return _np_stack_common(context, builder, sig, args, axis)
+
+@lower_builtin(np.stack, types.BaseTuple, types.Integer)
+def np_stack_axis(context, builder, sig, args):
+    axis = context.cast(builder, args[1], sig.args[1], types.intp)
+    return _np_stack_common(context, builder, sig, args, axis)
 
 
 @lower_builtin(np.hstack, types.BaseTuple)

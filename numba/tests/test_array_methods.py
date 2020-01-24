@@ -8,8 +8,7 @@ from numba import unittest_support as unittest
 from numba import jit, typeof, types
 from numba.compiler import compile_isolated
 from numba.errors import TypingError, LoweringError
-from numba.numpy_support import (as_dtype, strict_ufunc_typing,
-                                 version as numpy_version)
+from numba.numpy_support import as_dtype, strict_ufunc_typing
 from .support import (TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin,
                       tag, needs_blas)
 
@@ -513,8 +512,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_np_frombuffer_dtype(self):
         self.check_np_frombuffer(np_frombuffer_dtype)
 
-    def check_layout_dependent_func(self, pyfunc, fac=np.arange,
-                                    check_sameness=True):
+    def check_layout_dependent_func(self, pyfunc, fac=np.arange):
         def is_same(a, b):
             return a.ctypes.data == b.ctypes.data
         def check_arr(arr):
@@ -522,8 +520,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             expected = pyfunc(arr)
             got = cres.entry_point(arr)
             self.assertPreciseEqual(expected, got)
-            if check_sameness:
-                self.assertEqual(is_same(expected, arr), is_same(got, arr))
+            self.assertEqual(is_same(expected, arr), is_same(got, arr))
         arr = fac(24)
         check_arr(arr)
         check_arr(arr.reshape((3, 8)))
@@ -550,12 +547,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.check_layout_dependent_func(np_copy)
 
     def test_np_asfortranarray(self):
-        self.check_layout_dependent_func(np_asfortranarray,
-                                         check_sameness=numpy_version >= (1, 8))
+        self.check_layout_dependent_func(np_asfortranarray)
 
     def test_np_ascontiguousarray(self):
-        self.check_layout_dependent_func(np_ascontiguousarray,
-                                         check_sameness=numpy_version > (1, 11))
+        self.check_layout_dependent_func(np_ascontiguousarray)
 
     def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):
@@ -650,13 +645,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             cres = compile_isolated(pyfunc, (typeof(arr), typeof(x), typeof(y)))
             expected = pyfunc(arr, x, y)
             got = cres.entry_point(arr, x, y)
-            # Contiguity of result varies across Numpy versions, only
-            # check contents. NumPy 1.11+ seems to stabilize.
-            if numpy_version < (1, 11):
-                self.assertEqual(got.dtype, expected.dtype)
-                np.testing.assert_array_equal(got, expected)
-            else:
-                self.assertPreciseEqual(got, expected)
+            self.assertPreciseEqual(got, expected)
 
         def check_scal(scal):
             x = 4

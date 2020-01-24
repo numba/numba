@@ -116,7 +116,7 @@ def _ensure_critical_deps():
     if PYVERSION < (3, 6):
         raise ImportError("Numba needs Python 3.6 or greater")
 
-    np_version = numpy_support.version[:2]
+    np_version = numpy_support.numpy_version[:2]
     if np_version < (1, 15):
         raise ImportError("Numba needs NumPy 1.15 or greater")
 
