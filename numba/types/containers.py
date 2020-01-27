@@ -497,7 +497,7 @@ class ListType(IterableType):
     def __init__(self, itemty):
         assert not isinstance(itemty, TypeRef)
         itemty = unliteral(itemty)
-        if isinstance(itemty, (Optional, NoneType)):
+        if isinstance(itemty, Optional):
             fmt = 'List.item_type cannot be of type {}'
             raise TypingError(fmt.format(itemty))
         # FIXME: _sentry_forbidden_types(itemty)
