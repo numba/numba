@@ -192,6 +192,10 @@ class Kernel():
     def get_kernel_t_obj(self):
         return self._kernel_t_obj[0]
 
+    def dump(self):
+        retval = self._kernel_t_obj.dump_fn(self._kernel_t_obj)
+        if retval == -1:
+            _raise_driver_error("kernel dump_fn", -1)
 
 ##########################################################################
 # KernelArg class
@@ -349,6 +353,11 @@ class DeviceEnv():
     def get_max_work_group_size(self):
         return self._env_ptr.max_work_group_size
 
+    def dump(self):
+        retval = self._env_ptr.dump_fn(self._env_ptr)
+        if retval == -1:
+            _raise_driver_error("env dump_fn", -1)
+
 ##########################################################################
 # Runtime class
 ##########################################################################
@@ -427,6 +436,10 @@ class _Runtime():
 
         return self._gpu_device
 
+    def dump(self):
+        retval = self._runtime.dump_fn(self._runtime)
+        if retval == -1:
+            _raise_driver_error("runtime dump_fn", -1)
 
 runtime = _Runtime()
 
