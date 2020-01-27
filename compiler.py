@@ -282,20 +282,18 @@ class DPPyKernel(DPPyKernelBase):
             #kernelargs.append(ctypes.c_float(val.imag))
             raise NotImplementedError(ty, val)
 
-
         elif ty == types.complex128:
             #kernelargs.append(ctypes.c_double(val.real))
             #kernelargs.append(ctypes.c_double(val.imag))
             raise NotImplementedError(ty, val)
-
 
         else:
             raise NotImplementedError(ty, val)
 
 
 class AutoJitDPPyKernel(DPPyKernelBase):
-    def __init__(self, func):
 
+    def __init__(self, func):
         super(AutoJitDPPyKernel, self).__init__()
         self.py_func = func
         self.definitions = {}
