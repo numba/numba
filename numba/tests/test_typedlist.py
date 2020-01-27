@@ -556,6 +556,7 @@ class TestNoneType(MemoryLeakMixin, TestCase):
 
         self.assertEqual(impl.py_func(), impl())
 
+    @unittest.skip("Works only with _disable_reflected_list")
     def test_square_bracket_builtin_with_None(self):
         @njit(_disable_reflected_list=True)
         def foo():
@@ -568,6 +569,7 @@ class TestNoneType(MemoryLeakMixin, TestCase):
         received = foo()
         self.assertEqual(expected, received)
 
+    @unittest.skip("Works only with _disable_reflected_list")
     def test_list_comprehension_with_none(self):
         @njit(_disable_reflected_list=True)
         def foo():
