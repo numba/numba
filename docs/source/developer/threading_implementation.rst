@@ -77,7 +77,7 @@ scope and also simple. The number of threads in use is specified by calling
 ``get_num_threads``.These two functions are synonymous with their OpenMP
 counterparts (with the above restriction that the mask must be less than or
 equal to the number of launched threads). The execution semantics are also
-similar to OpenmP in that once a parallel region is launched, altering the
+similar to OpenMP in that once a parallel region is launched, altering the
 thread mask has no impact on the currently executing region, but will have an
 impact on parallel regions executed subsequently.
 
@@ -164,11 +164,11 @@ Thread ID
 
 A private ``get_thread_id()`` function was added to each threading backend,
 which returns a unique ID for each thread. This can be accessed from Python by
-``numba.npyufunc.parallel._get_thread_id()`` (it can also be used inside of
+``numba.npyufunc.parallel._get_thread_id()`` (it can also be used inside a
 JIT compiled function). The thread ID function is useful for testing that the
 thread masking behavior is correct, but it should not be used outside of the
 tests. For example, one can call ``set_num_threads(4)`` and then collect all
-unique ``_get_thread_id()``\ 's in a parallel region to verify that only 4
+unique ``_get_thread_id()``\ s in a parallel region to verify that only 4
 threads are run.
 
 Caveats
