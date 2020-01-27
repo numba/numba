@@ -267,7 +267,6 @@ class DeviceEnv():
         pass
 
     def retain_context(self):
-        print('return first_cpu_conext.context after calling clRetainContext')
         retval = (_numba_dppy_bindings
                   .lib
                   .retain_dp_context(self._env_ptr.context))
@@ -296,8 +295,7 @@ class DeviceEnv():
                           array.get_data_ptr()))
             if retval == -1:
                 print("Error Code  : ", retval)
-                _raise_driver_error("write_dp_mem_buffer_to_device",
-                                    -1)
+                _raise_driver_error("write_dp_mem_buffer_to_device", -1)
             return array
         elif isinstance(array, ndarray):
             dArr = DeviceArray(self._env_ptr, array)
@@ -312,8 +310,7 @@ class DeviceEnv():
                           dArr.get_data_ptr()))
             if retval == -1:
                 print("Error Code  : ", retval)
-                _raise_driver_error("write_dp_mem_buffer_to_device",
-                                    -1)
+                _raise_driver_error("write_dp_mem_buffer_to_device", -1)
             return dArr
         else:
             _raise_unsupported_type_error("copy_array_to_device")
