@@ -905,6 +905,8 @@ def impl_extend(l, iterable):
     if not isinstance(iterable, types.IterableType):
         raise TypingError("extend argument must be iterable")
 
+    _check_for_none_typed(l, 'insert')
+
     def select_impl():
         if isinstance(iterable, types.ListType):
             def impl(l, iterable):
