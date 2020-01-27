@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import ctypes
 import ctypes.util
 import os
@@ -118,7 +116,6 @@ class TestGILRelease(TestCase):
         cfunc = jit(f_sig, nopython=True)(f)
         self.check_gil_held(cfunc)
 
-    @tag('important')
     def test_gil_released(self):
         """
         Test releasing the GIL, by checking parallel runs produce

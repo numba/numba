@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import os
 
 # 32-bit private, local, and region pointers. 64-bit global, constant and flat.

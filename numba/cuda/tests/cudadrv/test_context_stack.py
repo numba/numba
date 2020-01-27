@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import numbers
 from ctypes import byref
 import weakref

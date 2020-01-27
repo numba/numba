@@ -1,12 +1,10 @@
-from __future__ import print_function, division, absolute_import
-
 import math
 import warnings
 
 from numba import jit
 from numba import unittest_support as unittest
 from numba.errors import TypingError, NumbaWarning
-from .support import TestCase, tag
+from .support import TestCase
 
 
 class TestSelfRecursion(TestCase):
@@ -20,14 +18,12 @@ class TestSelfRecursion(TestCase):
     def check_fib(self, cfunc):
         self.assertPreciseEqual(cfunc(10), 55)
 
-    @tag('important')
     def test_global_explicit_sig(self):
         self.check_fib(self.mod.fib1)
 
     def test_inner_explicit_sig(self):
         self.check_fib(self.mod.fib2)
 
-    @tag('important')
     def test_global_implicit_sig(self):
         self.check_fib(self.mod.fib3)
 
@@ -88,7 +84,6 @@ class TestMutualRecursion(TestCase):
         self.assertIn("cannot type infer runaway recursion",
                       str(raises.exception))
 
-    @tag('important')
     def test_type_change(self):
         pfunc = self.mod.make_type_change_mutual()
         cfunc = self.mod.make_type_change_mutual(jit(nopython=True))

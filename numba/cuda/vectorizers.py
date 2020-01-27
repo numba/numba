@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 from numba import cuda
 from numba.npyufunc import deviceufunc
 from . import dispatcher

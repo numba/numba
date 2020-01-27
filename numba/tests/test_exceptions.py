@@ -1,4 +1,3 @@
-
 import numpy as np
 import sys
 import traceback
@@ -6,7 +5,7 @@ import traceback
 from numba.compiler import compile_isolated, Flags
 from numba import jit, types, errors, njit
 from numba import unittest_support as unittest
-from .support import TestCase, tag
+from .support import TestCase
 
 force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")
@@ -170,7 +169,6 @@ class TestRaising(TestCase):
         self.check_against_python(flags, pyfunc, cfunc,
                                   np.linalg.linalg.LinAlgError, 3)
 
-    @tag('important')
     def test_raise_class_nopython(self):
         self.check_raise_class(flags=no_pyobj_flags)
 
@@ -193,7 +191,6 @@ class TestRaising(TestCase):
     def test_raise_instance_objmode(self):
         self.check_raise_instance(flags=force_pyobj_flags)
 
-    @tag('important')
     def test_raise_instance_nopython(self):
         self.check_raise_instance(flags=no_pyobj_flags)
 
@@ -215,7 +212,6 @@ class TestRaising(TestCase):
     def test_raise_nested_objmode(self):
         self.check_raise_nested(force_pyobj_flags, forceobj=True)
 
-    @tag('important')
     def test_raise_nested_nopython(self):
         self.check_raise_nested(no_pyobj_flags, nopython=True)
 
@@ -245,7 +241,6 @@ class TestRaising(TestCase):
     def test_reraise_objmode(self):
         self.check_reraise(flags=force_pyobj_flags)
 
-    @tag('important')
     def test_reraise_nopython(self):
         self.check_reraise(flags=no_pyobj_flags)
 

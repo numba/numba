@@ -1,7 +1,6 @@
 """
 This implements the typing template for `dict()`.
 """
-from __future__ import absolute_import, print_function
 
 from .. import types, errors
 from .templates import (

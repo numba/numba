@@ -2,7 +2,6 @@
 Implementation of functions in the Numpy package.
 """
 
-from __future__ import print_function, division, absolute_import
 
 import math
 import sys
@@ -17,7 +16,6 @@ import operator
 from . import builtins, callconv, ufunc_db, arrayobj
 from .imputils import Registry, impl_ret_new_ref, force_error_model
 from .. import typing, types, cgutils, numpy_support, utils
-from ..config import PYVERSION
 from ..numpy_support import ufunc_find_matching_loop, select_array_wrapper, from_dtype
 from ..typing import npydecl
 from ..extending import overload, intrinsic

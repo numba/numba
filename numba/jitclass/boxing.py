@@ -2,7 +2,6 @@
 Implement logic relating to wrapping (box) and unwrapping (unbox) instances
 of jitclasses for use inside the python interpreter.
 """
-from __future__ import print_function, absolute_import
 
 from functools import wraps, partial
 
@@ -11,7 +10,6 @@ from llvmlite import ir
 from numba import types, cgutils
 from numba.pythonapi import box, unbox, NativeValue
 from numba import njit
-from numba.six import exec_
 from . import _box
 
 
@@ -37,7 +35,7 @@ def _generate_property(field, template, fname):
     """
     source = template.format(field)
     glbls = {}
-    exec_(source, glbls)
+    exec(source, glbls)
     return njit(glbls[fname])
 
 
@@ -54,7 +52,7 @@ def _generate_method(name, func):
     """
     source = _method_code_template.format(method=name)
     glbls = {}
-    exec_(source, glbls)
+    exec(source, glbls)
     method = njit(glbls['method'])
 
     @wraps(func)

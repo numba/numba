@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 import sys
 import platform
 
@@ -61,8 +59,7 @@ class CPUContext(BaseContext):
         rtsys.initialize(self)
 
         # Initialize additional implementations
-        if utils.PY3:
-            import numba.unicode
+        import numba.unicode
 
     def load_additional_registries(self):
         # Add target specific implementations

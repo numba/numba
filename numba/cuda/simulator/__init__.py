@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 from .api import *
 from .reduction import Reduce
 from .cudadrv.devicearray import (device_array, device_array_like, pinned,

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, division, absolute_import
 
 import inspect
 from contextlib import contextmanager
@@ -17,7 +16,6 @@ from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.caching import FunctionCache, NullCache
 from numba.compiler_lock import global_compiler_lock
-from numba.config import PYVERSION
 
 
 class UFuncTargetOptions(TargetOptions):
@@ -262,10 +260,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
             datlist = [None] * len(ptrlist)
 
             if cres is None:
-                if PYVERSION >= (3, 0):
-                    argspec = inspect.getfullargspec(self.py_func)
-                else:
-                    argspec = inspect.getargspec(self.py_func)
+                argspec = inspect.getfullargspec(self.py_func)
                 inct = len(argspec.args)
             else:
                 inct = len(cres.signature.args)

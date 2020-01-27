@@ -1,8 +1,8 @@
+from io import StringIO
+import logging
+
 import numba.unittest_support as unittest
 from numba import tracing
-from numba.utils import StringIO
-from numba.six import with_metaclass
-import logging
 
 logger = logging.getLogger('trace')
 logger.setLevel(logging.INFO)

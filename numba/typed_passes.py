@@ -1,9 +1,8 @@
-from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import warnings
 
 from . import (config,  errors, types, rewrites, typeinfer, funcdesc, lowering,
-               utils, typing, ir)
+               typing, ir)
 
 from .parfor import PreParforPass as _parfor_PreParforPass
 from .parfor import ParforPass as _parfor_ParforPass
@@ -27,9 +26,8 @@ def fallback_context(state, msg):
         if not state.status.can_fallback:
             raise
         else:
-            if utils.PYVERSION >= (3,):
-                # Clear all references attached to the traceback
-                e = e.with_traceback(None)
+            # Clear all references attached to the traceback
+            e = e.with_traceback(None)
             # this emits a warning containing the error message body in the
             # case of fallback from npm to objmode
             loop_lift = '' if state.flags.enable_looplift else 'OUT'

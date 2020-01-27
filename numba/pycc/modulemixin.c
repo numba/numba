@@ -23,29 +23,17 @@
 
 
 /* NOTE: import_array() is macro, not a function.  It returns NULL on
-   failure on py3, but nothing on py2. */
-#if PY_MAJOR_VERSION >= 3
-    static void *
-    wrap_import_array(void) {
-        import_array();
-        return (void *) 1;
-    }
-#else
-    static void
-    wrap_import_array(void) {
-        import_array();
-    }
-#endif
+   failure */
+static void *
+wrap_import_array(void) {
+    import_array();
+    return (void *) 1;
+}
 
 
 static int
 init_numpy(void) {
-    #if PY_MAJOR_VERSION >= 3
-        return wrap_import_array() != NULL;
-    #else
-        wrap_import_array();
-        return 1;   /* always succeed */
-    #endif
+    return wrap_import_array() != NULL;
 }
 
 

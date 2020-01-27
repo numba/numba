@@ -1,11 +1,8 @@
-from __future__ import print_function, division, absolute_import
-
 import atexit
-import collections
+import builtins
 import functools
-import io
-import itertools
 import os
+import operator
 import threading
 import timeit
 import math
@@ -13,156 +10,94 @@ import sys
 import traceback
 import weakref
 from types import ModuleType
+from collections.abc import Mapping
 import numpy as np
 
-from .six import *
-from .errors import UnsupportedError
-try:
-    # preferred over pure-python StringIO due to threadsafety
-    # note: parallel write to StringIO could cause data to go missing
-    from cStringIO import StringIO
-except ImportError:
-    from io import StringIO
-from numba.config import PYVERSION, MACHINE_BITS, DEVELOPER_MODE
+from inspect import signature as pysignature # noqa: F401
+from inspect import Signature as pySignature # noqa: F401
+from inspect import Parameter as pyParameter # noqa: F401
+
+from numba.config import PYVERSION, MACHINE_BITS, DEVELOPER_MODE # noqa: F401
 
 
-IS_PY3 = PYVERSION >= (3, 0)
+INT_TYPES = (int,)
+longint = int
+get_ident = threading.get_ident
+intern = sys.intern
+file_replace = os.replace
+asbyteint = int
 
-if IS_PY3:
-    import builtins
-    INT_TYPES = (int,)
-    longint = int
-    get_ident = threading.get_ident
-    intern = sys.intern
-    file_replace = os.replace
-    asbyteint = int
+# ------------------------------------------------------------------------------
+# Start: Originally from `numba.six` under the following license
 
-    def erase_traceback(exc_value):
-        """
-        Erase the traceback and hanging locals from the given exception instance.
-        """
-        if exc_value.__traceback__ is not None:
-            traceback.clear_frames(exc_value.__traceback__)
-        return exc_value.with_traceback(None)
+"""Utilities for writing code that runs on Python 2 and 3"""
 
-else:
-    import thread
-    import __builtin__ as builtins
-    INT_TYPES = (int, long)
-    longint = long
-    get_ident = thread.get_ident
-    intern = intern
-    def asbyteint(x):
-        # convert 1-char str into int
-        return ord(x)
+# Copyright (c) 2010-2015 Benjamin Peterson
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 
-    if sys.platform == 'win32':
-        def file_replace(src, dest):
-            # Best-effort emulation of os.replace()
-            try:
-                os.rename(src, dest)
-            except OSError:
-                os.unlink(dest)
-                os.rename(src, dest)
-    else:
-        file_replace = os.rename
 
-    def erase_traceback(exc_value):
-        """
-        Erase the traceback and hanging locals from the given exception instance.
-        """
-        return exc_value
+def add_metaclass(metaclass):
+    """Class decorator for creating a class with a metaclass."""
+    def wrapper(cls):
+        orig_vars = cls.__dict__.copy()
+        slots = orig_vars.get('__slots__')
+        if slots is not None:
+            if isinstance(slots, str):
+                slots = [slots]
+            for slots_var in slots:
+                orig_vars.pop(slots_var)
+        orig_vars.pop('__dict__', None)
+        orig_vars.pop('__weakref__', None)
+        return metaclass(cls.__name__, cls.__bases__, orig_vars)
+    return wrapper
 
-try:
-    from inspect import signature as pysignature
-    from inspect import Signature as pySignature
-    from inspect import Parameter as pyParameter
-except ImportError:
-    try:
-        from funcsigs import signature as _pysignature
-        from funcsigs import Signature as pySignature
-        from funcsigs import Parameter as pyParameter
-        from funcsigs import BoundArguments
 
-        def pysignature(*args, **kwargs):
-            try:
-                return _pysignature(*args, **kwargs)
-            except ValueError as e:
-                msg = ("Cannot obtain a signature for: %s. The error message "
-                       "from funcsigs was: '%s'." % (args,  e.message))
-                raise UnsupportedError(msg)
+def reraise(tp, value, tb=None):
+    if value is None:
+        value = tp()
+    if value.__traceback__ is not tb:
+        raise value.with_traceback(tb)
+    raise value
 
-        # monkey patch `apply_defaults` onto `BoundArguments` cf inspect in py3
-        # This patch is from https://github.com/aliles/funcsigs/pull/30/files
-        # with minor modifications, and thanks!
-        # See LICENSES.third-party.
-        def apply_defaults(self):
-            arguments = self.arguments
 
-            # Creating a new one and not modifying in-place for thread safety.
-            new_arguments = []
+def iteritems(d, **kw):
+    return iter(d.items(**kw))
 
-            for name, param in self._signature.parameters.items():
-                try:
-                    new_arguments.append((name, arguments[name]))
-                except KeyError:
-                    if param.default is not param.empty:
-                        val = param.default
-                    elif param.kind is _VAR_POSITIONAL:
-                        val = ()
-                    elif param.kind is _VAR_KEYWORD:
-                        val = {}
-                    else:
-                        # BoundArguments was likely created by bind_partial
-                        continue
-                    new_arguments.append((name, val))
 
-            self.arguments = collections.OrderedDict(new_arguments)
-        BoundArguments.apply_defaults = apply_defaults
-    except ImportError:
-        raise ImportError("please install the 'funcsigs' package "
-                          "('pip install funcsigs')")
+def itervalues(d, **kw):
+    return iter(d.values(**kw))
 
-try:
-    from functools import singledispatch
-except ImportError:
-    try:
-        import singledispatch
-    except ImportError:
-        raise ImportError("please install the 'singledispatch' package "
-                          "('pip install singledispatch')")
-    else:
-        # Hotfix for https://bitbucket.org/ambv/singledispatch/issues/8/inconsistent-hierarchy-with-enum
-        def _c3_merge(sequences):
-            """Merges MROs in *sequences* to a single MRO using the C3 algorithm.
 
-            Adapted from http://www.python.org/download/releases/2.3/mro/.
+get_function_globals = operator.attrgetter("__globals__")
 
-            """
-            result = []
-            while True:
-                sequences = [s for s in sequences if s]   # purge empty sequences
-                if not sequences:
-                    return result
-                for s1 in sequences:   # find merge candidates among seq heads
-                    candidate = s1[0]
-                    for s2 in sequences:
-                        if candidate in s2[1:]:
-                            candidate = None
-                            break      # reject the current head, it appears later
-                    else:
-                        break
-                if candidate is None:
-                    raise RuntimeError("Inconsistent hierarchy")
-                result.append(candidate)
-                # remove the chosen candidate
-                for seq in sequences:
-                    if seq[0] == candidate:
-                        del seq[0]
+# End: Originally from `numba.six` under the following license
+# ------------------------------------------------------------------------------
 
-        singledispatch._c3_merge = _c3_merge
 
-        singledispatch = singledispatch.singledispatch
+def erase_traceback(exc_value):
+    """
+    Erase the traceback and hanging locals from the given exception instance.
+    """
+    if exc_value.__traceback__ is not None:
+        traceback.clear_frames(exc_value.__traceback__)
+    return exc_value.with_traceback(None)
 
 
 # Mapping between operator module functions and the corresponding built-in
@@ -259,19 +194,12 @@ OPERATORS_TO_BUILTINS = {
     operator.truth: 'is_true',
 }
 
-HAS_MATMUL_OPERATOR = sys.version_info >= (3, 5)
-
-if not IS_PY3:
-    BINOPS_TO_OPERATORS['/?'] = operator.div
-    INPLACE_BINOPS_TO_OPERATORS['/?='] = operator.idiv
-    OPERATORS_TO_BUILTINS[operator.div] = '/?'
-    OPERATORS_TO_BUILTINS[operator.idiv] = '/?'
-if HAS_MATMUL_OPERATOR:
-    BINOPS_TO_OPERATORS['@'] = operator.matmul
-    INPLACE_BINOPS_TO_OPERATORS['@='] = operator.imatmul
+BINOPS_TO_OPERATORS['@'] = operator.matmul
+INPLACE_BINOPS_TO_OPERATORS['@='] = operator.imatmul
 
 
 _shutting_down = False
+
 
 def _at_shutdown():
     global _shutting_down
@@ -340,7 +268,8 @@ class ConfigOptions(object):
         return copy
 
     def __eq__(self, other):
-        return isinstance(other, ConfigOptions) and other._values == self._values
+        return (isinstance(other, ConfigOptions) and
+                other._values == self._values)
 
     def __ne__(self, other):
         return not self == other
@@ -379,7 +308,7 @@ class UniqueDict(dict):
 
 
 # Django's cached_property
-# see https://docs.djangoproject.com/en/dev/ref/utils/#django.utils.functional.cached_property
+# see https://docs.djangoproject.com/en/dev/ref/utils/#django.utils.functional.cached_property    # noqa: E501
 
 class cached_property(object):
     """
@@ -489,13 +418,6 @@ def benchmark(func, maxsec=1):
 
 
 RANGE_ITER_OBJECTS = (builtins.range,)
-if PYVERSION < (3, 0):
-    RANGE_ITER_OBJECTS += (builtins.xrange,)
-    try:
-        from future.types.newrange import newrange
-        RANGE_ITER_OBJECTS += (newrange,)
-    except ImportError:
-        pass
 
 
 def logger_hasHandlers(logger):
@@ -516,7 +438,7 @@ def logger_hasHandlers(logger):
 # A dummy module for dynamically-generated functions
 _dynamic_modname = '<dynamic>'
 _dynamic_module = ModuleType(_dynamic_modname)
-_dynamic_module.__builtins__ = moves.builtins
+_dynamic_module.__builtins__ = builtins
 
 
 def chain_exception(new_exc, old_exc):

@@ -2,7 +2,6 @@
 Dynamically generate the NRT module
 """
 
-from __future__ import print_function, absolute_import, division
 
 from numba.config import MACHINE_BITS
 from numba import cgutils, types

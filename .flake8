@@ -35,6 +35,7 @@ exclude =
     numba/inline_closurecall.py
     numba/ir_utils.py
     numba/pylowering.py
+    numba/python_utils.py
     numba/io_support.py
     numba/parfor.py
     numba/numba_entry.py
@@ -48,7 +49,6 @@ exclude =
     numba/cffi_support.py
     numba/interpreter.py
     numba/caching.py
-    numba/utils.py
     numba/debuginfo.py
     numba/pretty_annotate.py
     numba/six.py

@@ -1,6 +1,5 @@
 # A port of https://github.com/python/cpython/blob/e42b7051/Lib/heapq.py
 
-from __future__ import print_function, absolute_import, division
 
 import heapq as hq
 

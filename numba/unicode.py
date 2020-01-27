@@ -19,8 +19,7 @@ from numba.extending import (
 from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
                                     iternext_impl, impl_ret_new_ref, RefType)
 from numba.datamodel import register_default, StructModel
-from numba import cgutils
-from numba import types
+from numba import cgutils, utils, types
 from numba.pythonapi import (
     PY_UNICODE_1BYTE_KIND,
     PY_UNICODE_2BYTE_KIND,
@@ -50,7 +49,7 @@ from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM,
                               _PyUnicode_IsDecimalDigit)
 
 
-_py38_or_later = sys.version_info[:2] >= (3, 8)
+_py38_or_later = utils.PYVERSION >= (3, 8)
 
 # DATA MODEL
 
@@ -1841,7 +1840,7 @@ def unicode_isupper(a):
     return impl
 
 
-if sys.version_info[:2] >= (3, 7):
+if utils.PYVERSION >= (3, 7):
     @overload_method(types.UnicodeType, 'isascii')
     def unicode_isascii(data):
         """Implements UnicodeType.isascii()"""

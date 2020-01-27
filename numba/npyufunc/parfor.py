@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import ast
 import copy
 from collections import OrderedDict
@@ -12,7 +10,7 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.ir.values as liv
 
 import numba
-from .. import compiler, ir, types, six, cgutils, sigutils, lowering, parfor
+from .. import compiler, ir, types, cgutils, sigutils, lowering, parfor
 from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
                             rename_labels, get_name_var_table, visit_vars_inner,
@@ -25,7 +23,6 @@ from numba.analysis import (compute_use_defs, compute_live_map,
 from ..typing import signature
 from numba import config
 from numba.targets.cpu import ParallelOptions
-from numba.six import exec_
 from numba.parfor import print_wrapped, ensure_parallel_support
 import types as pytypes
 import operator
@@ -1005,7 +1002,7 @@ def _create_gufunc_for_parfor_body(
     # Force gufunc outline into existence.
     globls = {"np": np}
     locls = {}
-    exec_(gufunc_txt, globls, locls)
+    exec(gufunc_txt, globls, locls)
     gufunc_func = locls[gufunc_name]
 
     if config.DEBUG_ARRAY_OPT:

@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 import operator
 
 from numba import types, cgutils, typing

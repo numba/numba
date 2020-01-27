@@ -2,11 +2,10 @@
 Implement slices and various slice computations.
 """
 
-import itertools
+from itertools import zip_longest
 
 from llvmlite import ir
 
-from numba.six.moves import zip_longest
 from numba import cgutils, types, typing, utils
 from .imputils import (lower_builtin, lower_getattr,
                        iternext_impl, impl_ret_borrowed,
@@ -216,13 +215,11 @@ def slice_indices(context, builder, sig, args):
     length = args[1]
     sli = context.make_helper(builder, sig.args[0], args[0])
 
-    if utils.IS_PY3:
-        # Negative values allowed in python2.7, see changelog for python 3.4
-        with builder.if_then(cgutils.is_neg_int(builder, length), likely=False):
-            context.call_conv.return_user_exc(
-                builder, ValueError,
-                ("length should not be negative",)
-            )
+    with builder.if_then(cgutils.is_neg_int(builder, length), likely=False):
+        context.call_conv.return_user_exc(
+            builder, ValueError,
+            ("length should not be negative",)
+        )
     with builder.if_then(cgutils.is_scalar_zero(builder, sli.step), likely=False):
         context.call_conv.return_user_exc(
             builder, ValueError,

@@ -1,7 +1,6 @@
 """
 Support for lowering generators.
 """
-from __future__ import print_function, division, absolute_import
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
 

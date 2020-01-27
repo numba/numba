@@ -1,7 +1,6 @@
 """
 Helper classes / mixins for defining types.
 """
-from __future__ import print_function, division, absolute_import
 
 from .abstract import ArrayCompatible, Dummy, IterableType, IteratorType
 

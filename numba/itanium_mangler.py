@@ -28,7 +28,6 @@ values like the '1' in the array type shown earlier.  There is special encoding
 scheme for them to avoid leading digits.
 """
 
-from __future__ import print_function, absolute_import
 
 import re
 

@@ -1,4 +1,3 @@
-from __future__ import absolute_import, print_function, division
 import tokenize
 import string
 from numba import utils

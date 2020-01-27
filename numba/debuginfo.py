@@ -2,14 +2,13 @@
 Implements helpers to build LLVM debuginfo.
 """
 
-from __future__ import absolute_import
 
 import abc
 import os.path
 
 from llvmlite import ir
 
-from .six import add_metaclass
+from numba.utils import add_metaclass
 
 
 @add_metaclass(abc.ABCMeta)

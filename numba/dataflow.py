@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import collections
 from pprint import pprint
 import sys
@@ -188,12 +186,8 @@ class DataFlowAnalysis(object):
 
     def op_LIST_APPEND(self, info, inst):
         value = info.pop()
-        # Python 2.7+ added an argument to LIST_APPEND.
-        if sys.version_info[:2] == (2, 6):
-            target = info.pop()
-        else:
-            index = inst.arg
-            target = info.peek(index)
+        index = inst.arg
+        target = info.peek(index)
         appendvar = info.make_temp()
         res = info.make_temp()
         info.append(inst, target=target, value=value, appendvar=appendvar, res=res)
@@ -202,11 +196,10 @@ class DataFlowAnalysis(object):
         dct = info.make_temp()
         count = inst.arg
         items = []
-        if sys.version_info >= (3, 5):
-            # In 3.5+, BUILD_MAP takes <count> pairs from the stack
-            for i in range(count):
-                v, k = info.pop(), info.pop()
-                items.append((k, v))
+        # BUILD_MAP takes <count> pairs from the stack
+        for i in range(count):
+            v, k = info.pop(), info.pop()
+            items.append((k, v))
         info.append(inst, items=items[::-1], size=count, res=dct)
         info.push(dct)
 
@@ -308,62 +301,34 @@ class DataFlowAnalysis(object):
             info.pop()
         self.edge_process[(info.block.offset, inst.get_jump_target())] = pop_info
 
-    if utils.PYVERSION < (3, 6):
+    def op_CALL_FUNCTION(self, info, inst):
+        narg = inst.arg
+        args = list(reversed([info.pop() for _ in range(narg)]))
+        func = info.pop()
 
-        def _op_call_function(self, info, inst, has_vararg):
-            narg = inst.arg & 0xff
-            nkws = (inst.arg >> 8) & 0xff
+        res = info.make_temp()
+        info.append(inst, func=func, args=args, res=res)
+        info.push(res)
 
-            def pop_kws():
-                val = info.pop()
-                key = info.pop()
-                return key, val
+    def op_CALL_FUNCTION_KW(self, info, inst):
+        narg = inst.arg
+        names = info.pop()  # tuple of names
+        args = list(reversed([info.pop() for _ in range(narg)]))
+        func = info.pop()
 
-            vararg = info.pop() if has_vararg else None
-            kws = list(reversed([pop_kws() for _ in range(nkws)]))
-            args = list(reversed([info.pop() for _ in range(narg)]))
-            func = info.pop()
+        res = info.make_temp()
+        info.append(inst, func=func, args=args, names=names, res=res)
+        info.push(res)
 
-            res = info.make_temp()
-            info.append(inst, func=func, args=args, kws=kws, res=res,
-                        vararg=vararg)
-            info.push(res)
-
-        def op_CALL_FUNCTION(self, info, inst):
-            self._op_call_function(info, inst, has_vararg=False)
-
-        def op_CALL_FUNCTION_VAR(self, info, inst):
-            self._op_call_function(info, inst, has_vararg=True)
-
-    else:
-        def op_CALL_FUNCTION(self, info, inst):
-            narg = inst.arg
-            args = list(reversed([info.pop() for _ in range(narg)]))
-            func = info.pop()
-
-            res = info.make_temp()
-            info.append(inst, func=func, args=args, res=res)
-            info.push(res)
-
-        def op_CALL_FUNCTION_KW(self, info, inst):
-            narg = inst.arg
-            names = info.pop()  # tuple of names
-            args = list(reversed([info.pop() for _ in range(narg)]))
-            func = info.pop()
-
-            res = info.make_temp()
-            info.append(inst, func=func, args=args, names=names, res=res)
-            info.push(res)
-
-        def op_CALL_FUNCTION_EX(self, info, inst):
-            if inst.arg & 1:
-                errmsg = 'CALL_FUNCTION_EX with **kwargs not supported'
-                raise NotImplementedError(errmsg)
-            vararg = info.pop()
-            func = info.pop()
-            res = info.make_temp()
-            info.append(inst, func=func, vararg=vararg, res=res)
-            info.push(res)
+    def op_CALL_FUNCTION_EX(self, info, inst):
+        if inst.arg & 1:
+            errmsg = 'CALL_FUNCTION_EX with **kwargs not supported'
+            raise NotImplementedError(errmsg)
+        vararg = info.pop()
+        func = info.pop()
+        res = info.make_temp()
+        info.append(inst, func=func, vararg=vararg, res=res)
+        info.push(res)
 
     def _build_tuple_unpack(self, info, inst):
         # Builds tuple from other tuples on the stack
@@ -722,50 +687,17 @@ class DataFlowAnalysis(object):
         info.append(inst, exc=exc)
 
     def op_MAKE_FUNCTION(self, info, inst, MAKE_CLOSURE=False):
-        if utils.PYVERSION == (2, 7):
-            name = None
-        else:
-            name = info.pop()
+        name = info.pop()
         code = info.pop()
         closure = annotations = kwdefaults = defaults = None
-        if utils.PYVERSION < (3, 0):
-            if MAKE_CLOSURE:
-                closure = info.pop()
-            num_posdefaults = inst.arg
-            if num_posdefaults > 0:
-                defaults = []
-                for i in range(num_posdefaults):
-                    defaults.append(info.pop())
-                defaults = tuple(reversed(defaults))
-        elif utils.PYVERSION >= (3, 0) and utils.PYVERSION < (3, 6):
-            num_posdefaults = inst.arg & 0xff
-            num_kwdefaults = (inst.arg >> 8) & 0xff
-            num_annotations = (inst.arg >> 16) & 0x7fff
-            if MAKE_CLOSURE:
-                closure = info.pop()
-            if num_annotations > 0:
-                annotations = info.pop()
-            if num_kwdefaults > 0:
-                kwdefaults = []
-                for i in range(num_kwdefaults):
-                    v = info.pop()
-                    k = info.pop()
-                    kwdefaults.append((k,v))
-                kwdefaults = tuple(kwdefaults)
-            if num_posdefaults:
-                defaults = []
-                for i in range(num_posdefaults):
-                    defaults.append(info.pop())
-                defaults = tuple(reversed(defaults))
-        else:
-            if inst.arg & 0x8:
-                closure = info.pop()
-            if inst.arg & 0x4:
-                annotations = info.pop()
-            if inst.arg & 0x2:
-                kwdefaults = info.pop()
-            if inst.arg & 0x1:
-                defaults = info.pop()
+        if inst.arg & 0x8:
+            closure = info.pop()
+        if inst.arg & 0x4:
+            annotations = info.pop()
+        if inst.arg & 0x2:
+            kwdefaults = info.pop()
+        if inst.arg & 0x1:
+            defaults = info.pop()
         res = info.make_temp()
         info.append(inst, name=name, code=code, closure=closure, annotations=annotations,
                     kwdefaults=kwdefaults, defaults=defaults, res=res)

@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import numpy as np
 
 from numba.cuda.testing import unittest, SerialMixin

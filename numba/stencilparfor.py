@@ -19,7 +19,6 @@ from numba import ir_utils, ir, utils, config, typing
 from numba.ir_utils import (get_call_table, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
                             find_callname, require, find_const, GuardException)
-from numba.six import exec_
 from numba.utils import OPERATORS_TO_BUILTINS
 
 
@@ -625,7 +624,7 @@ class StencilPass(object):
                 return slice({} + offset, {} + offset)
             """.format(slice_var.start, slice_var.stop)
             loc = {}
-            exec_(f_text, {}, loc)
+            exec(f_text, {}, loc)
             f = loc['f']
             args = [offset_var]
             arg_typs = (types.intp,)

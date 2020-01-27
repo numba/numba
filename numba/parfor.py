@@ -12,7 +12,6 @@ This is similar to ParallelAccelerator package in Julia:
 https://github.com/IntelLabs/ParallelAccelerator.jl
 'Parallelizing Julia with a Non-invasive DSL', T. Anderson et al., ECOOP'17.
 """
-from __future__ import print_function, division, absolute_import
 import types as pytypes  # avoid confusion with numba.types
 import sys, math
 import os
@@ -4176,13 +4175,7 @@ class ReduceInfer(AbstractTemplate):
 def ensure_parallel_support():
     """Check if the platform supports parallel=True and raise if it does not.
     """
-    is_win32 = config.IS_WIN32
-    is_py2 = not utils.IS_PY3
-    is_32bit = config.IS_32BITS
-    uns1 = is_win32 and is_py2
-    uns2 = is_32bit
-    if uns1 or uns2:
-        msg = ("The 'parallel' target is not currently supported on "
-            "Windows operating systems when using Python 2.7, or "
-            "on 32 bit hardware.")
+    if config.IS_32BITS:
+        msg = ("The 'parallel' target is not currently supported on 32 bit "
+               "hardware.")
         raise errors.UnsupportedParforsError(msg)

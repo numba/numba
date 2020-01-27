@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import ast
 from collections import defaultdict, OrderedDict
 import contextlib
@@ -8,7 +6,7 @@ import sys
 import numpy as np
 import operator
 
-from .. import compiler, ir, types, rewrites, six, utils
+from .. import compiler, ir, types, rewrites, utils
 from ..typing import npydecl
 from .dufunc import DUFunc
 
@@ -250,9 +248,6 @@ _binops = {
     operator.floordiv: ast.FloorDiv,
 }
 
-if not utils.IS_PY3:
-    _binops[operator.div] = ast.Div
-
 
 _cmpops = {
     operator.eq: ast.Eq,
@@ -292,10 +287,7 @@ def _arr_expr_to_ast(expr):
                 hex(hash(op)).replace("-", "_"))
             fn_ast_name = ast.Name(fn_name, ast.Load())
             env[fn_name] = op # Stash the ufunc or DUFunc in the environment
-            if sys.version_info >= (3, 5):
-                ast_call = ast.Call(fn_ast_name, ast_args, [])
-            else:
-                ast_call = ast.Call(fn_ast_name, ast_args, [], None, None)
+            ast_call = ast.Call(fn_ast_name, ast_args, [])
             return ast_call, env
     elif isinstance(expr, ir.Var):
         return ast.Name(expr.name, ast.Load(),
@@ -368,7 +360,7 @@ def _lower_array_expr(lowerer, expr):
 
     # 2. Compile the AST module and extract the Python function.
     code_obj = compile(ast_module, expr_filename, 'exec')
-    six.exec_(code_obj, namespace)
+    exec(code_obj, namespace)
     impl = namespace[expr_name]
 
     # 3. Now compile a ufunc using the Python function as kernel.

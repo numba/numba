@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import, division
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types

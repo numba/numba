@@ -33,7 +33,6 @@ class NotebookTest(TestCase):
 """
 
 
-    
     IGNORE_TYPES = ["execute_request", "execute_input", "status", "pyin"]
     STRIP_KEYS = ["execution_count", "traceback", "prompt_number", "source"]
     NBFORMAT_VERSION = 4

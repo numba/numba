@@ -2,7 +2,6 @@
 Implementation of linear algebra operations.
 """
 
-from __future__ import print_function, absolute_import, division
 
 import contextlib
 
@@ -17,12 +16,10 @@ from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
 from numba.extending import overload, register_jitable
-from numba.numpy_support import version as numpy_version
 from numba import types
 from numba import numpy_support as np_support
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from ..errors import TypingError
-from ..utils import HAS_MATMUL_OPERATOR
 
 ll_char = ir.IntType(8)
 ll_char_p = ll_char.as_pointer()
@@ -540,8 +537,8 @@ def dot_2(context, builder, sig, args):
         else:
             assert 0
 
-if HAS_MATMUL_OPERATOR:
-    lower_builtin(operator.matmul, types.Array, types.Array)(dot_2)
+
+lower_builtin(operator.matmul, types.Array, types.Array)(dot_2)
 
 
 @lower_builtin(np.vdot, types.Array, types.Array)
@@ -846,479 +843,478 @@ def _check_linalg_1_or_2d_matrix(a, func_name, la_prefix=True):
         raise TypingError("%s.%s() only supported on "
                           "float and complex arrays." % interp)
 
-if numpy_version >= (1, 8):
 
-    @overload(np.linalg.cholesky)
+@overload(np.linalg.cholesky)
+def cho_impl(a):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "cholesky")
+
+    numba_xxpotrf = _LAPACK().numba_xxpotrf(a.dtype)
+
+    kind = ord(get_blas_kind(a.dtype, "cholesky"))
+    UP = ord('U')
+    LO = ord('L')
+
     def cho_impl(a):
-        ensure_lapack()
+        n = a.shape[-1]
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
 
-        _check_linalg_matrix(a, "cholesky")
+        # The output is allocated in C order
+        out = a.copy()
 
-        numba_xxpotrf = _LAPACK().numba_xxpotrf(a.dtype)
-
-        kind = ord(get_blas_kind(a.dtype, "cholesky"))
-        UP = ord('U')
-        LO = ord('L')
-
-        def cho_impl(a):
-            n = a.shape[-1]
-            if a.shape[-2] != n:
-                msg = "Last 2 dimensions of the array must be square."
-                raise np.linalg.LinAlgError(msg)
-
-            # The output is allocated in C order
-            out = a.copy()
-
-            if n == 0:
-                return out
-
-            # Pass UP since xxpotrf() operates in F order
-            # The semantics ensure this works fine
-            # (out is really its Hermitian in F order, but UP instructs
-            #  xxpotrf to compute the Hermitian of the upper triangle
-            #  => they cancel each other)
-            r = numba_xxpotrf(kind, UP, n, out.ctypes, n)
-            if r != 0:
-                if r < 0:
-                    fatal_error_func()
-                    assert 0   # unreachable
-                if r > 0:
-                    raise np.linalg.LinAlgError(
-                        "Matrix is not positive definite.")
-            # Zero out upper triangle, in F order
-            for col in range(n):
-                out[:col, col] = 0
+        if n == 0:
             return out
 
-        return cho_impl
+        # Pass UP since xxpotrf() operates in F order
+        # The semantics ensure this works fine
+        # (out is really its Hermitian in F order, but UP instructs
+        #  xxpotrf to compute the Hermitian of the upper triangle
+        #  => they cancel each other)
+        r = numba_xxpotrf(kind, UP, n, out.ctypes, n)
+        if r != 0:
+            if r < 0:
+                fatal_error_func()
+                assert 0   # unreachable
+            if r > 0:
+                raise np.linalg.LinAlgError(
+                    "Matrix is not positive definite.")
+        # Zero out upper triangle, in F order
+        for col in range(n):
+            out[:col, col] = 0
+        return out
 
-    @overload(np.linalg.eig)
-    def eig_impl(a):
-        ensure_lapack()
+    return cho_impl
 
-        _check_linalg_matrix(a, "eig")
+@overload(np.linalg.eig)
+def eig_impl(a):
+    ensure_lapack()
 
-        numba_ez_rgeev = _LAPACK().numba_ez_rgeev(a.dtype)
-        numba_ez_cgeev = _LAPACK().numba_ez_cgeev(a.dtype)
+    _check_linalg_matrix(a, "eig")
 
-        kind = ord(get_blas_kind(a.dtype, "eig"))
+    numba_ez_rgeev = _LAPACK().numba_ez_rgeev(a.dtype)
+    numba_ez_cgeev = _LAPACK().numba_ez_cgeev(a.dtype)
 
-        JOBVL = ord('N')
-        JOBVR = ord('V')
+    kind = ord(get_blas_kind(a.dtype, "eig"))
 
-        F_layout = a.layout == 'F'
+    JOBVL = ord('N')
+    JOBVR = ord('V')
 
-        def real_eig_impl(a):
-            """
-            eig() implementation for real arrays.
-            """
-            n = a.shape[-1]
-            if a.shape[-2] != n:
-                msg = "Last 2 dimensions of the array must be square."
-                raise np.linalg.LinAlgError(msg)
+    F_layout = a.layout == 'F'
 
-            _check_finite_matrix(a)
+    def real_eig_impl(a):
+        """
+        eig() implementation for real arrays.
+        """
+        n = a.shape[-1]
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
 
-            if F_layout:
-                acpy = np.copy(a)
-            else:
-                acpy = np.asfortranarray(a)
+        _check_finite_matrix(a)
 
-            ldvl = 1
-            ldvr = n
-            wr = np.empty(n, dtype=a.dtype)
-            wi = np.empty(n, dtype=a.dtype)
-            vl = np.empty((n, ldvl), dtype=a.dtype)
-            vr = np.empty((n, ldvr), dtype=a.dtype)
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
 
-            if n == 0:
-                return (wr, vr.T)
+        ldvl = 1
+        ldvr = n
+        wr = np.empty(n, dtype=a.dtype)
+        wi = np.empty(n, dtype=a.dtype)
+        vl = np.empty((n, ldvl), dtype=a.dtype)
+        vr = np.empty((n, ldvr), dtype=a.dtype)
 
-            r = numba_ez_rgeev(kind,
-                               JOBVL,
-                               JOBVR,
-                               n,
-                               acpy.ctypes,
-                               n,
-                               wr.ctypes,
-                               wi.ctypes,
-                               vl.ctypes,
-                               ldvl,
-                               vr.ctypes,
-                               ldvr)
-            _handle_err_maybe_convergence_problem(r)
-
-            # By design numba does not support dynamic return types, however,
-            # Numpy does. Numpy uses this ability in the case of returning
-            # eigenvalues/vectors of a real matrix. The return type of
-            # np.linalg.eig(), when operating on a matrix in real space
-            # depends on the values present in the matrix itself (recalling
-            # that eigenvalues are the roots of the characteristic polynomial
-            # of the system matrix, which will by construction depend on the
-            # values present in the system matrix). As numba cannot handle
-            # the case of a runtime decision based domain change relative to
-            # the input type, if it is required numba raises as below.
-            if np.any(wi):
-                raise ValueError(
-                    "eig() argument must not cause a domain change.")
-
-            # put these in to help with liveness analysis,
-            # `.ctypes` doesn't keep the vars alive
-            _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
+        if n == 0:
             return (wr, vr.T)
 
-        def cmplx_eig_impl(a):
-            """
-            eig() implementation for complex arrays.
-            """
-            n = a.shape[-1]
-            if a.shape[-2] != n:
-                msg = "Last 2 dimensions of the array must be square."
-                raise np.linalg.LinAlgError(msg)
+        r = numba_ez_rgeev(kind,
+                            JOBVL,
+                            JOBVR,
+                            n,
+                            acpy.ctypes,
+                            n,
+                            wr.ctypes,
+                            wi.ctypes,
+                            vl.ctypes,
+                            ldvl,
+                            vr.ctypes,
+                            ldvr)
+        _handle_err_maybe_convergence_problem(r)
 
-            _check_finite_matrix(a)
+        # By design numba does not support dynamic return types, however,
+        # Numpy does. Numpy uses this ability in the case of returning
+        # eigenvalues/vectors of a real matrix. The return type of
+        # np.linalg.eig(), when operating on a matrix in real space
+        # depends on the values present in the matrix itself (recalling
+        # that eigenvalues are the roots of the characteristic polynomial
+        # of the system matrix, which will by construction depend on the
+        # values present in the system matrix). As numba cannot handle
+        # the case of a runtime decision based domain change relative to
+        # the input type, if it is required numba raises as below.
+        if np.any(wi):
+            raise ValueError(
+                "eig() argument must not cause a domain change.")
 
-            if F_layout:
-                acpy = np.copy(a)
-            else:
-                acpy = np.asfortranarray(a)
+        # put these in to help with liveness analysis,
+        # `.ctypes` doesn't keep the vars alive
+        _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
+        return (wr, vr.T)
 
-            ldvl = 1
-            ldvr = n
-            w = np.empty(n, dtype=a.dtype)
-            vl = np.empty((n, ldvl), dtype=a.dtype)
-            vr = np.empty((n, ldvr), dtype=a.dtype)
+    def cmplx_eig_impl(a):
+        """
+        eig() implementation for complex arrays.
+        """
+        n = a.shape[-1]
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
 
-            if n == 0:
-                return (w, vr.T)
+        _check_finite_matrix(a)
 
-            r = numba_ez_cgeev(kind,
-                               JOBVL,
-                               JOBVR,
-                               n,
-                               acpy.ctypes,
-                               n,
-                               w.ctypes,
-                               vl.ctypes,
-                               ldvl,
-                               vr.ctypes,
-                               ldvr)
-            _handle_err_maybe_convergence_problem(r)
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
 
-            # put these in to help with liveness analysis,
-            # `.ctypes` doesn't keep the vars alive
-            _dummy_liveness_func([acpy.size, vl.size, vr.size, w.size])
+        ldvl = 1
+        ldvr = n
+        w = np.empty(n, dtype=a.dtype)
+        vl = np.empty((n, ldvl), dtype=a.dtype)
+        vr = np.empty((n, ldvr), dtype=a.dtype)
+
+        if n == 0:
             return (w, vr.T)
 
-        if isinstance(a.dtype, types.scalars.Complex):
-            return cmplx_eig_impl
+        r = numba_ez_cgeev(kind,
+                            JOBVL,
+                            JOBVR,
+                            n,
+                            acpy.ctypes,
+                            n,
+                            w.ctypes,
+                            vl.ctypes,
+                            ldvl,
+                            vr.ctypes,
+                            ldvr)
+        _handle_err_maybe_convergence_problem(r)
+
+        # put these in to help with liveness analysis,
+        # `.ctypes` doesn't keep the vars alive
+        _dummy_liveness_func([acpy.size, vl.size, vr.size, w.size])
+        return (w, vr.T)
+
+    if isinstance(a.dtype, types.scalars.Complex):
+        return cmplx_eig_impl
+    else:
+        return real_eig_impl
+
+@overload(np.linalg.eigvals)
+def eigvals_impl(a):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "eigvals")
+
+    numba_ez_rgeev = _LAPACK().numba_ez_rgeev(a.dtype)
+    numba_ez_cgeev = _LAPACK().numba_ez_cgeev(a.dtype)
+
+    kind = ord(get_blas_kind(a.dtype, "eigvals"))
+
+    JOBVL = ord('N')
+    JOBVR = ord('N')
+
+    F_layout = a.layout == 'F'
+
+    def real_eigvals_impl(a):
+        """
+        eigvals() implementation for real arrays.
+        """
+        n = a.shape[-1]
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
+
+        _check_finite_matrix(a)
+
+        if F_layout:
+            acpy = np.copy(a)
         else:
-            return real_eig_impl
+            acpy = np.asfortranarray(a)
 
-    @overload(np.linalg.eigvals)
-    def eigvals_impl(a):
-        ensure_lapack()
+        ldvl = 1
+        ldvr = 1
+        wr = np.empty(n, dtype=a.dtype)
 
-        _check_linalg_matrix(a, "eigvals")
-
-        numba_ez_rgeev = _LAPACK().numba_ez_rgeev(a.dtype)
-        numba_ez_cgeev = _LAPACK().numba_ez_cgeev(a.dtype)
-
-        kind = ord(get_blas_kind(a.dtype, "eigvals"))
-
-        JOBVL = ord('N')
-        JOBVR = ord('N')
-
-        F_layout = a.layout == 'F'
-
-        def real_eigvals_impl(a):
-            """
-            eigvals() implementation for real arrays.
-            """
-            n = a.shape[-1]
-            if a.shape[-2] != n:
-                msg = "Last 2 dimensions of the array must be square."
-                raise np.linalg.LinAlgError(msg)
-
-            _check_finite_matrix(a)
-
-            if F_layout:
-                acpy = np.copy(a)
-            else:
-                acpy = np.asfortranarray(a)
-
-            ldvl = 1
-            ldvr = 1
-            wr = np.empty(n, dtype=a.dtype)
-
-            if n == 0:
-                return wr
-
-            wi = np.empty(n, dtype=a.dtype)
-
-            # not referenced but need setting for MKL null check
-            vl = np.empty((1), dtype=a.dtype)
-            vr = np.empty((1), dtype=a.dtype)
-
-            r = numba_ez_rgeev(kind,
-                               JOBVL,
-                               JOBVR,
-                               n,
-                               acpy.ctypes,
-                               n,
-                               wr.ctypes,
-                               wi.ctypes,
-                               vl.ctypes,
-                               ldvl,
-                               vr.ctypes,
-                               ldvr)
-            _handle_err_maybe_convergence_problem(r)
-
-            # By design numba does not support dynamic return types, however,
-            # Numpy does. Numpy uses this ability in the case of returning
-            # eigenvalues/vectors of a real matrix. The return type of
-            # np.linalg.eigvals(), when operating on a matrix in real space
-            # depends on the values present in the matrix itself (recalling
-            # that eigenvalues are the roots of the characteristic polynomial
-            # of the system matrix, which will by construction depend on the
-            # values present in the system matrix). As numba cannot handle
-            # the case of a runtime decision based domain change relative to
-            # the input type, if it is required numba raises as below.
-            if np.any(wi):
-                raise ValueError(
-                    "eigvals() argument must not cause a domain change.")
-
-            # put these in to help with liveness analysis,
-            # `.ctypes` doesn't keep the vars alive
-            _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
+        if n == 0:
             return wr
 
-        def cmplx_eigvals_impl(a):
-            """
-            eigvals() implementation for complex arrays.
-            """
-            n = a.shape[-1]
-            if a.shape[-2] != n:
-                msg = "Last 2 dimensions of the array must be square."
-                raise np.linalg.LinAlgError(msg)
+        wi = np.empty(n, dtype=a.dtype)
 
-            _check_finite_matrix(a)
+        # not referenced but need setting for MKL null check
+        vl = np.empty((1), dtype=a.dtype)
+        vr = np.empty((1), dtype=a.dtype)
 
-            if F_layout:
-                acpy = np.copy(a)
-            else:
-                acpy = np.asfortranarray(a)
+        r = numba_ez_rgeev(kind,
+                            JOBVL,
+                            JOBVR,
+                            n,
+                            acpy.ctypes,
+                            n,
+                            wr.ctypes,
+                            wi.ctypes,
+                            vl.ctypes,
+                            ldvl,
+                            vr.ctypes,
+                            ldvr)
+        _handle_err_maybe_convergence_problem(r)
 
-            ldvl = 1
-            ldvr = 1
-            w = np.empty(n, dtype=a.dtype)
+        # By design numba does not support dynamic return types, however,
+        # Numpy does. Numpy uses this ability in the case of returning
+        # eigenvalues/vectors of a real matrix. The return type of
+        # np.linalg.eigvals(), when operating on a matrix in real space
+        # depends on the values present in the matrix itself (recalling
+        # that eigenvalues are the roots of the characteristic polynomial
+        # of the system matrix, which will by construction depend on the
+        # values present in the system matrix). As numba cannot handle
+        # the case of a runtime decision based domain change relative to
+        # the input type, if it is required numba raises as below.
+        if np.any(wi):
+            raise ValueError(
+                "eigvals() argument must not cause a domain change.")
 
-            if n == 0:
-                return w
+        # put these in to help with liveness analysis,
+        # `.ctypes` doesn't keep the vars alive
+        _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
+        return wr
 
-            vl = np.empty((1), dtype=a.dtype)
-            vr = np.empty((1), dtype=a.dtype)
+    def cmplx_eigvals_impl(a):
+        """
+        eigvals() implementation for complex arrays.
+        """
+        n = a.shape[-1]
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
 
-            r = numba_ez_cgeev(kind,
-                               JOBVL,
-                               JOBVR,
-                               n,
-                               acpy.ctypes,
-                               n,
-                               w.ctypes,
-                               vl.ctypes,
-                               ldvl,
-                               vr.ctypes,
-                               ldvr)
-            _handle_err_maybe_convergence_problem(r)
+        _check_finite_matrix(a)
 
-            # put these in to help with liveness analysis,
-            # `.ctypes` doesn't keep the vars alive
-            _dummy_liveness_func([acpy.size, vl.size, vr.size, w.size])
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
+
+        ldvl = 1
+        ldvr = 1
+        w = np.empty(n, dtype=a.dtype)
+
+        if n == 0:
             return w
 
-        if isinstance(a.dtype, types.scalars.Complex):
-            return cmplx_eigvals_impl
-        else:
-            return real_eigvals_impl
+        vl = np.empty((1), dtype=a.dtype)
+        vr = np.empty((1), dtype=a.dtype)
 
-    @overload(np.linalg.eigh)
+        r = numba_ez_cgeev(kind,
+                            JOBVL,
+                            JOBVR,
+                            n,
+                            acpy.ctypes,
+                            n,
+                            w.ctypes,
+                            vl.ctypes,
+                            ldvl,
+                            vr.ctypes,
+                            ldvr)
+        _handle_err_maybe_convergence_problem(r)
+
+        # put these in to help with liveness analysis,
+        # `.ctypes` doesn't keep the vars alive
+        _dummy_liveness_func([acpy.size, vl.size, vr.size, w.size])
+        return w
+
+    if isinstance(a.dtype, types.scalars.Complex):
+        return cmplx_eigvals_impl
+    else:
+        return real_eigvals_impl
+
+@overload(np.linalg.eigh)
+def eigh_impl(a):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "eigh")
+
+    F_layout = a.layout == 'F'
+
+    # convert typing floats to numpy floats for use in the impl
+    w_type = getattr(a.dtype, "underlying_float", a.dtype)
+    w_dtype = np_support.as_dtype(w_type)
+
+    numba_ez_xxxevd = _LAPACK().numba_ez_xxxevd(a.dtype)
+
+    kind = ord(get_blas_kind(a.dtype, "eigh"))
+
+    JOBZ = ord('V')
+    UPLO = ord('L')
+
     def eigh_impl(a):
-        ensure_lapack()
+        n = a.shape[-1]
 
-        _check_linalg_matrix(a, "eigh")
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
 
-        F_layout = a.layout == 'F'
+        _check_finite_matrix(a)
 
-        # convert typing floats to numpy floats for use in the impl
-        w_type = getattr(a.dtype, "underlying_float", a.dtype)
-        w_dtype = np_support.as_dtype(w_type)
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
 
-        numba_ez_xxxevd = _LAPACK().numba_ez_xxxevd(a.dtype)
+        w = np.empty(n, dtype=w_dtype)
 
-        kind = ord(get_blas_kind(a.dtype, "eigh"))
-
-        JOBZ = ord('V')
-        UPLO = ord('L')
-
-        def eigh_impl(a):
-            n = a.shape[-1]
-
-            if a.shape[-2] != n:
-                msg = "Last 2 dimensions of the array must be square."
-                raise np.linalg.LinAlgError(msg)
-
-            _check_finite_matrix(a)
-
-            if F_layout:
-                acpy = np.copy(a)
-            else:
-                acpy = np.asfortranarray(a)
-
-            w = np.empty(n, dtype=w_dtype)
-
-            if n == 0:
-                return (w, acpy)
-
-            r = numba_ez_xxxevd(kind,  # kind
-                                JOBZ,  # jobz
-                                UPLO,  # uplo
-                                n,  # n
-                                acpy.ctypes,  # a
-                                n,  # lda
-                                w.ctypes  # w
-                                )
-            _handle_err_maybe_convergence_problem(r)
-
-            # help liveness analysis
-            _dummy_liveness_func([acpy.size, w.size])
+        if n == 0:
             return (w, acpy)
 
-        return eigh_impl
+        r = numba_ez_xxxevd(kind,  # kind
+                            JOBZ,  # jobz
+                            UPLO,  # uplo
+                            n,  # n
+                            acpy.ctypes,  # a
+                            n,  # lda
+                            w.ctypes  # w
+                            )
+        _handle_err_maybe_convergence_problem(r)
 
-    @overload(np.linalg.eigvalsh)
+        # help liveness analysis
+        _dummy_liveness_func([acpy.size, w.size])
+        return (w, acpy)
+
+    return eigh_impl
+
+@overload(np.linalg.eigvalsh)
+def eigvalsh_impl(a):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "eigvalsh")
+
+    F_layout = a.layout == 'F'
+
+    # convert typing floats to numpy floats for use in the impl
+    w_type = getattr(a.dtype, "underlying_float", a.dtype)
+    w_dtype = np_support.as_dtype(w_type)
+
+    numba_ez_xxxevd = _LAPACK().numba_ez_xxxevd(a.dtype)
+
+    kind = ord(get_blas_kind(a.dtype, "eigvalsh"))
+
+    JOBZ = ord('N')
+    UPLO = ord('L')
+
     def eigvalsh_impl(a):
-        ensure_lapack()
+        n = a.shape[-1]
 
-        _check_linalg_matrix(a, "eigvalsh")
+        if a.shape[-2] != n:
+            msg = "Last 2 dimensions of the array must be square."
+            raise np.linalg.LinAlgError(msg)
 
-        F_layout = a.layout == 'F'
+        _check_finite_matrix(a)
 
-        # convert typing floats to numpy floats for use in the impl
-        w_type = getattr(a.dtype, "underlying_float", a.dtype)
-        w_dtype = np_support.as_dtype(w_type)
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
 
-        numba_ez_xxxevd = _LAPACK().numba_ez_xxxevd(a.dtype)
+        w = np.empty(n, dtype=w_dtype)
 
-        kind = ord(get_blas_kind(a.dtype, "eigvalsh"))
-
-        JOBZ = ord('N')
-        UPLO = ord('L')
-
-        def eigvalsh_impl(a):
-            n = a.shape[-1]
-
-            if a.shape[-2] != n:
-                msg = "Last 2 dimensions of the array must be square."
-                raise np.linalg.LinAlgError(msg)
-
-            _check_finite_matrix(a)
-
-            if F_layout:
-                acpy = np.copy(a)
-            else:
-                acpy = np.asfortranarray(a)
-
-            w = np.empty(n, dtype=w_dtype)
-
-            if n == 0:
-                return w
-
-            r = numba_ez_xxxevd(kind,  # kind
-                                JOBZ,  # jobz
-                                UPLO,  # uplo
-                                n,  # n
-                                acpy.ctypes,  # a
-                                n,  # lda
-                                w.ctypes  # w
-                                )
-            _handle_err_maybe_convergence_problem(r)
-
-            # help liveness analysis
-            _dummy_liveness_func([acpy.size, w.size])
+        if n == 0:
             return w
 
-        return eigvalsh_impl
+        r = numba_ez_xxxevd(kind,  # kind
+                            JOBZ,  # jobz
+                            UPLO,  # uplo
+                            n,  # n
+                            acpy.ctypes,  # a
+                            n,  # lda
+                            w.ctypes  # w
+                            )
+        _handle_err_maybe_convergence_problem(r)
 
-    @overload(np.linalg.svd)
+        # help liveness analysis
+        _dummy_liveness_func([acpy.size, w.size])
+        return w
+
+    return eigvalsh_impl
+
+@overload(np.linalg.svd)
+def svd_impl(a, full_matrices=1):
+    ensure_lapack()
+
+    _check_linalg_matrix(a, "svd")
+
+    F_layout = a.layout == 'F'
+
+    # convert typing floats to numpy floats for use in the impl
+    s_type = getattr(a.dtype, "underlying_float", a.dtype)
+    s_dtype = np_support.as_dtype(s_type)
+
+    numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
+
+    kind = ord(get_blas_kind(a.dtype, "svd"))
+
+    JOBZ_A = ord('A')
+    JOBZ_S = ord('S')
+
     def svd_impl(a, full_matrices=1):
-        ensure_lapack()
+        n = a.shape[-1]
+        m = a.shape[-2]
 
-        _check_linalg_matrix(a, "svd")
+        if n == 0 or m == 0:
+            raise np.linalg.LinAlgError("Arrays cannot be empty")
 
-        F_layout = a.layout == 'F'
+        _check_finite_matrix(a)
 
-        # convert typing floats to numpy floats for use in the impl
-        s_type = getattr(a.dtype, "underlying_float", a.dtype)
-        s_dtype = np_support.as_dtype(s_type)
+        if F_layout:
+            acpy = np.copy(a)
+        else:
+            acpy = np.asfortranarray(a)
 
-        numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
+        ldu = m
+        minmn = min(m, n)
 
-        kind = ord(get_blas_kind(a.dtype, "svd"))
+        if full_matrices:
+            JOBZ = JOBZ_A
+            ucol = m
+            ldvt = n
+        else:
+            JOBZ = JOBZ_S
+            ucol = minmn
+            ldvt = minmn
 
-        JOBZ_A = ord('A')
-        JOBZ_S = ord('S')
+        u = np.empty((ucol, ldu), dtype=a.dtype)
+        s = np.empty(minmn, dtype=s_dtype)
+        vt = np.empty((n, ldvt), dtype=a.dtype)
 
-        def svd_impl(a, full_matrices=1):
-            n = a.shape[-1]
-            m = a.shape[-2]
+        r = numba_ez_gesdd(
+            kind,  # kind
+            JOBZ,  # jobz
+            m,  # m
+            n,  # n
+            acpy.ctypes,  # a
+            m,  # lda
+            s.ctypes,  # s
+            u.ctypes,  # u
+            ldu,  # ldu
+            vt.ctypes,  # vt
+            ldvt          # ldvt
+        )
+        _handle_err_maybe_convergence_problem(r)
 
-            if n == 0 or m == 0:
-                raise np.linalg.LinAlgError("Arrays cannot be empty")
+        # help liveness analysis
+        _dummy_liveness_func([acpy.size, vt.size, u.size, s.size])
+        return (u.T, s, vt.T)
 
-            _check_finite_matrix(a)
-
-            if F_layout:
-                acpy = np.copy(a)
-            else:
-                acpy = np.asfortranarray(a)
-
-            ldu = m
-            minmn = min(m, n)
-
-            if full_matrices:
-                JOBZ = JOBZ_A
-                ucol = m
-                ldvt = n
-            else:
-                JOBZ = JOBZ_S
-                ucol = minmn
-                ldvt = minmn
-
-            u = np.empty((ucol, ldu), dtype=a.dtype)
-            s = np.empty(minmn, dtype=s_dtype)
-            vt = np.empty((n, ldvt), dtype=a.dtype)
-
-            r = numba_ez_gesdd(
-                kind,  # kind
-                JOBZ,  # jobz
-                m,  # m
-                n,  # n
-                acpy.ctypes,  # a
-                m,  # lda
-                s.ctypes,  # s
-                u.ctypes,  # u
-                ldu,  # ldu
-                vt.ctypes,  # vt
-                ldvt          # ldvt
-            )
-            _handle_err_maybe_convergence_problem(r)
-
-            # help liveness analysis
-            _dummy_liveness_func([acpy.size, vt.size, u.size, s.size])
-            return (u.T, s, vt.T)
-
-        return svd_impl
+    return svd_impl
 
 
 @overload(np.linalg.qr)
@@ -2652,32 +2648,18 @@ def _get_outer_impl(a, b, out):
         return outer_impl
 
 
-if numpy_version >= (1, 9):
-    @overload(np.outer)
+@overload(np.outer)
+def outer_impl(a, b, out=None):
+
+    _check_scalar_or_lt_2d_mat(a, "outer", la_prefix=False)
+    _check_scalar_or_lt_2d_mat(b, "outer", la_prefix=False)
+
+    impl = _get_outer_impl(a, b, out)
+
     def outer_impl(a, b, out=None):
+        return impl(a, b, out)
 
-        _check_scalar_or_lt_2d_mat(a, "outer", la_prefix=False)
-        _check_scalar_or_lt_2d_mat(b, "outer", la_prefix=False)
-
-        impl = _get_outer_impl(a, b, out)
-
-        def outer_impl(a, b, out=None):
-            return impl(a, b, out)
-
-        return outer_impl
-else:
-    @overload(np.outer)
-    def outer_impl(a, b):
-
-        _check_scalar_or_lt_2d_mat(a, "outer", la_prefix=False)
-        _check_scalar_or_lt_2d_mat(b, "outer", la_prefix=False)
-
-        impl = _get_outer_impl(a, b, None)
-
-        def outer_impl(a, b):
-            return impl(a, b, None)
-
-        return outer_impl
+    return outer_impl
 
 
 def _kron_normaliser_impl(x):

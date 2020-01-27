@@ -1,6 +1,5 @@
 # A temporary wrapper to connect to the HLC LLVM binaries.
 # Currently, connect to commandline interface.
-from __future__ import print_function, absolute_import
 import sys
 from subprocess import check_call, check_output
 import subprocess
@@ -27,11 +26,7 @@ def error_pipe():
     if NOISY_CMDLINE:
        yield subprocess.STDOUT
     else:
-        if utils.IS_PY3:
-           yield subprocess.DEVNULL
-        else:
-           with open(os.devnull, 'wb') as devnull:
-               yield devnull
+        yield subprocess.DEVNULL
 
 
 def check_call(*args, **kwargs):

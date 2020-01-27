@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import, division
 from numba import config, sigutils, types
 from warnings import warn
 from .compiler import (compile_kernel, compile_device, declare_device_function,

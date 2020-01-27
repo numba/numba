@@ -1,6 +1,5 @@
-from __future__ import absolute_import, print_function
-
 from collections import OrderedDict
+from collections.abc import Sequence
 import types as pytypes
 import inspect
 import operator
@@ -14,7 +13,6 @@ from numba.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils, utils, errors
-from numba.six import exec_, Sequence
 from . import _box
 
 
@@ -109,7 +107,7 @@ class JitClassType(type):
         cls._ctor_sig = init_sig
         ctor_source = _ctor_template.format(args=', '.join(args))
         glbls = {"__numba_cls_": cls}
-        exec_(ctor_source, glbls)
+        exec(ctor_source, glbls)
         ctor = glbls['ctor']
         cls._ctor = njit(ctor)
 

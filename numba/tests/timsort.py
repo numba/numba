@@ -4,7 +4,6 @@ Timsort implementation.  Mostly adapted from CPython's listobject.c.
 For more information, see listsort.txt in CPython's source tree.
 """
 
-from __future__ import print_function, absolute_import, division
 
 import collections
 

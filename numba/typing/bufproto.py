@@ -3,7 +3,6 @@ Typing support for the buffer protocol (PEP 3118).
 """
 
 import array
-import sys
 
 from numba import types
 
@@ -23,8 +22,7 @@ _type_map = {
     }
 
 _type_map[memoryview] = types.MemoryView
-if sys.version_info >= (3,):
-    _type_map[bytes] = types.Bytes
+_type_map[bytes] = types.Bytes
 
 
 def decode_pep3118_format(fmt, itemsize):
@@ -64,11 +62,6 @@ def infer_layout(val):
     """
     Infer layout of the given memoryview *val*.
     """
-    if sys.version_info >= (3,):
-        return ('C' if val.c_contiguous else
-                'F' if val.f_contiguous else
-                'A')
-    # Python 2: best effort heuristic for 1d arrays
-    if val.ndim == 1 and val.strides[0] == val.itemsize:
-        return 'C'
-    return 'A'
+    return ('C' if val.c_contiguous else
+            'F' if val.f_contiguous else
+            'A')

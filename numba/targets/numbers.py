@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 import math
 import numbers
 
@@ -175,11 +173,6 @@ def int_floordiv_impl(context, builder, sig, args):
     quot, rem = _int_divmod_impl(context, builder, sig, args,
                                  "integer division by zero")
     return builder.load(quot)
-
-
-if not utils.IS_PY3:
-    lower_builtin(operator.div, types.Integer, types.Integer)(int_floordiv_impl)
-    lower_builtin(operator.idiv, types.Integer, types.Integer)(int_floordiv_impl)
 
 
 @lower_builtin(operator.truediv, types.Integer, types.Integer)
@@ -908,11 +901,6 @@ lower_builtin(operator.floordiv, ty, ty)(real_floordiv_impl)
 lower_builtin(operator.ifloordiv, ty, ty)(real_floordiv_impl)
 lower_builtin(operator.truediv, ty, ty)(real_div_impl)
 lower_builtin(operator.itruediv, ty, ty)(real_div_impl)
-
-if not utils.IS_PY3:
-    lower_builtin(operator.div, ty, ty)(real_div_impl)
-    lower_builtin(operator.idiv, ty, ty)(real_div_impl)
-
 lower_builtin(operator.mod, ty, ty)(real_mod_impl)
 lower_builtin(operator.imod, ty, ty)(real_mod_impl)
 lower_builtin(operator.pow, ty, ty)(real_power_impl)
@@ -1165,11 +1153,6 @@ lower_builtin(operator.mul, ty, ty)(complex_mul_impl)
 lower_builtin(operator.imul, ty, ty)(complex_mul_impl)
 lower_builtin(operator.truediv, ty, ty)(complex_div_impl)
 lower_builtin(operator.itruediv, ty, ty)(complex_div_impl)
-
-if not utils.IS_PY3:
-    lower_builtin(operator.div, ty, ty)(complex_div_impl)
-    lower_builtin(operator.idiv, ty, ty)(complex_div_impl)
-
 lower_builtin(operator.neg, ty)(complex_negate_impl)
 lower_builtin(operator.pos, ty)(complex_positive_impl)
 # Complex modulo is deprecated in python3

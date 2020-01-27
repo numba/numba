@@ -26,8 +26,6 @@ Build and Packaging
   fixed and removed from the exception list as time allows.
 - :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
-- :ghfile:`buildscripts/remove_unwanted_files.py` - Helper script to remove
-  files that will not compile under Python 2. Used by build recipes.
 - :ghfile:`buildscripts/condarecipe_clone_icc_rt` - Recipe to build a
   standalone icc_rt package.
 
@@ -218,8 +216,6 @@ with CPython APIs.
 - :ghfile:`numba/mathnames.h` - Macros for defining names of math functions
 - :ghfile:`numba/_pymodule.h` - C macros for Python 2/3 portable naming of C
   API functions
-- :ghfile:`numba/_math_c99.{h,c}` - C99 math compatibility (needed Python
-  2.7 on Windows, compiled with VS2008)
 - :ghfile:`numba/mviewbuf.c` - Handles Python memoryviews
 - :ghfile:`numba/_typeof.{h,c}` - C implementation of type fingerprinting,
   used by dispatcher
@@ -240,10 +236,6 @@ Misc Support
   data structures
 - :ghfile:`numba/cgutils.py` - Utility functions for generating common code
   patterns in LLVM IR
-- :ghfile:`numba/six.py` - Vendored subset of ``six`` package for Python 2 +
-  3 compatibility
-- :ghfile:`numba/io_support.py` - Workaround for various names of StringIO
-  in different Python versions (should this be in six?)
 - :ghfile:`numba/utils.py` - Python 2 backports of Python 3 functionality
   (also imports local copy of ``six``)
 - :ghfile:`numba/appdirs.py` - Vendored package for determining application
@@ -273,8 +265,6 @@ Misc Support
   on the host, but not the data.
 - :ghfile:`numba/callwrapper.py` - Handles argument unboxing and releasing
   the GIL when moving from Python to nopython mode
-- :ghfile:`numba/ctypes_support.py` - Import this instead of ``ctypes`` to
-  workaround portability issue with Python 2.7
 - :ghfile:`numba/cffi_support.py` - Alias of numba.typing.cffi_utils for
   backward compatibility (still needed?)
 - :ghfile:`numba/numpy_support.py` - Helper functions for working with NumPy

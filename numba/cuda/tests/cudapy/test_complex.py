@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 import cmath
 import math
 import itertools
@@ -180,7 +178,6 @@ class TestCMath(BaseComplexTest, TestCase):
     def test_isinf(self):
         self.check_predicate_func(isinf_usecase)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
     def test_isfinite(self):
         self.check_predicate_func(isfinite_usecase)
 

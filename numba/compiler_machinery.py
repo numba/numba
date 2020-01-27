@@ -1,13 +1,11 @@
-from __future__ import print_function, absolute_import
-
 import timeit
 from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
-import traceback
 from numba.compiler_lock import global_compiler_lock
 from numba import errors
-from . import config, utils, transforms, six
+from . import config, transforms
+from numba.utils import add_metaclass
 from .tracing import event
 from .postproc import PostProcessor
 
@@ -28,7 +26,7 @@ class SimpleTimer(object):
         self.elapsed = timeit.default_timer() - self.ts
 
 
-@six.add_metaclass(ABCMeta)
+@add_metaclass(ABCMeta)
 class CompilerPass(object):
     """ The base class for all compiler passes.
     """
@@ -255,15 +253,6 @@ class PassManager(object):
         Patches the error to show the stage that it arose in.
         """
         newmsg = "{desc}\n{exc}".format(desc=desc, exc=exc)
-
-        # For python2, attach the traceback of the previous exception.
-        if not utils.IS_PY3 and config.FULL_TRACEBACKS:
-            # strip the new message to just print the error string and not
-            # the marked up source etc (this is handled already).
-            stripped = _termcolor.errmsg(newmsg.split('\n')[1])
-            fmt = "Caused By:\n{tb}\n{newmsg}"
-            newmsg = fmt.format(tb=traceback.format_exc(), newmsg=stripped)
-
         exc.args = (newmsg,)
         return exc
 

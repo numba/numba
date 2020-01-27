@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from collections import namedtuple
 import contextlib
 import pickle
@@ -8,17 +6,15 @@ from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba.config import PYVERSION
-import numba.ctypes_support as ctypes
+import ctypes
 from numba import config
 from numba import types, utils, cgutils, lowering, _helperlib
 
 
-if PYVERSION >= (3,3):
-    PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
-    PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
-    PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
-    PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
+PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
+PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
+PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
+PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
 
 
 class _Registry(object):
@@ -176,15 +172,11 @@ class PythonAPI(object):
         self.cstring = Type.pointer(Type.int(8))
         self.gil_state = Type.int(_helperlib.py_gil_state_size * 8)
         self.py_buffer_t = ir.ArrayType(ir.IntType(8), _helperlib.py_buffer_size)
-        if PYVERSION >= (3, 0):
-            self.py_hash_t = self.py_ssize_t
-        else:
-            self.py_hash_t = self.long
-        if PYVERSION >= (3,3):
-            self.py_unicode_1byte_kind = _helperlib.py_unicode_1byte_kind
-            self.py_unicode_2byte_kind = _helperlib.py_unicode_2byte_kind
-            self.py_unicode_4byte_kind = _helperlib.py_unicode_4byte_kind
-            self.py_unicode_wchar_kind = _helperlib.py_unicode_wchar_kind
+        self.py_hash_t = self.py_ssize_t
+        self.py_unicode_1byte_kind = _helperlib.py_unicode_1byte_kind
+        self.py_unicode_2byte_kind = _helperlib.py_unicode_2byte_kind
+        self.py_unicode_4byte_kind = _helperlib.py_unicode_4byte_kind
+        self.py_unicode_wchar_kind = _helperlib.py_unicode_wchar_kind
 
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)
@@ -489,41 +481,13 @@ class PythonAPI(object):
         fnty = Type.function(self.pyobj, [native_int_type])
         fn = self._get_function(fnty, name=func_name)
         resptr = cgutils.alloca_once(self.builder, self.pyobj)
-
-        if PYVERSION < (3, 0):
-            # Under Python 2, we try to return a PyInt object whenever
-            # the given number fits in a C long.
-            pyint_fnty = Type.function(self.pyobj, [self.long])
-            pyint_fn = self._get_function(pyint_fnty, name="PyInt_FromLong")
-            long_max = Constant.int(native_int_type, _helperlib.long_max)
-            if signed:
-                long_min = Constant.int(native_int_type, _helperlib.long_min)
-                use_pyint = self.builder.and_(
-                    self.builder.icmp(lc.ICMP_SGE, ival, long_min),
-                    self.builder.icmp(lc.ICMP_SLE, ival, long_max),
-                    )
-            else:
-                use_pyint = self.builder.icmp(lc.ICMP_ULE, ival, long_max)
-
-            with self.builder.if_else(use_pyint) as (then, otherwise):
-                with then:
-                    downcast_ival = self.builder.trunc(ival, self.long)
-                    res = self.builder.call(pyint_fn, [downcast_ival])
-                    self.builder.store(res, resptr)
-                with otherwise:
-                    res = self.builder.call(fn, [ival])
-                    self.builder.store(res, resptr)
-        else:
-            fn = self._get_function(fnty, name=func_name)
-            self.builder.store(self.builder.call(fn, [ival]), resptr)
+        fn = self._get_function(fnty, name=func_name)
+        self.builder.store(self.builder.call(fn, [ival]), resptr)
 
         return self.builder.load(resptr)
 
     def long_from_long(self, ival):
-        if PYVERSION < (3, 0):
-            func_name = "PyInt_FromLong"
-        else:
-            func_name = "PyLong_FromLong"
+        func_name = "PyLong_FromLong"
         fnty = Type.function(self.pyobj, [self.long])
         fn = self._get_function(fnty, name=func_name)
         return self.builder.call(fn, [ival])
@@ -588,10 +552,6 @@ class PythonAPI(object):
     def number_multiply(self, lhs, rhs, inplace=False):
         return self._call_number_operator("Multiply", lhs, rhs, inplace=inplace)
 
-    def number_divide(self, lhs, rhs, inplace=False):
-        assert PYVERSION < (3, 0)
-        return self._call_number_operator("Divide", lhs, rhs, inplace=inplace)
-
     def number_truedivide(self, lhs, rhs, inplace=False):
         return self._call_number_operator("TrueDivide", lhs, rhs, inplace=inplace)
 
@@ -602,7 +562,6 @@ class PythonAPI(object):
         return self._call_number_operator("Remainder", lhs, rhs, inplace=inplace)
 
     def number_matrix_multiply(self, lhs, rhs, inplace=False):
-        assert PYVERSION >= (3, 5)
         return self._call_number_operator("MatrixMultiply", lhs, rhs, inplace=inplace)
 
     def number_lshift(self, lhs, rhs, inplace=False):
@@ -1086,10 +1045,7 @@ class PythonAPI(object):
 
     def string_as_string(self, strobj):
         fnty = Type.function(self.cstring, [self.pyobj])
-        if PYVERSION >= (3, 0):
-            fname = "PyUnicode_AsUTF8"
-        else:
-            fname = "PyString_AsString"
+        fname = "PyUnicode_AsUTF8"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [strobj])
 
@@ -1102,31 +1058,15 @@ class PythonAPI(object):
         """
 
         p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
-        if PYVERSION >= (3, 0):
-            fnty = Type.function(self.cstring, [self.pyobj,
-                                                self.py_ssize_t.as_pointer()])
-            fname = "PyUnicode_AsUTF8AndSize"
-            fn = self._get_function(fnty, name=fname)
+        fnty = Type.function(self.cstring, [self.pyobj,
+                                            self.py_ssize_t.as_pointer()])
+        fname = "PyUnicode_AsUTF8AndSize"
+        fn = self._get_function(fnty, name=fname)
 
-            buffer = self.builder.call(fn, [strobj, p_length])
-            ok = self.builder.icmp_unsigned('!=',
-                                            ir.Constant(buffer.type, None),
-                                            buffer)
-        else:
-            fnty = Type.function(lc.Type.int(), [self.pyobj,
-                                                 self.cstring.as_pointer(),
-                                                 self.py_ssize_t.as_pointer()])
-            fname = "PyString_AsStringAndSize"
-            fn = self._get_function(fnty, name=fname)
-            # Allocate space for the output parameters
-            p_buffer = cgutils.alloca_once(self.builder, self.cstring)
-
-            status = self.builder.call(fn, [strobj, p_buffer, p_length])
-
-            negone = ir.Constant(status.type, -1)
-            ok = self.builder.icmp_signed("!=", status, negone)
-            buffer = self.builder.load(p_buffer)
-
+        buffer = self.builder.call(fn, [strobj, p_length])
+        ok = self.builder.icmp_unsigned('!=',
+                                        ir.Constant(buffer.type, None),
+                                        buffer)
         return (ok, buffer, self.builder.load(p_length))
 
     def string_as_string_size_and_kind(self, strobj):
@@ -1138,61 +1078,48 @@ class PythonAPI(object):
         The ``kind`` is a i32 (int32) of the Unicode kind constant
         The ``hash`` is a long/uint64_t (py_hash_t) of the Unicode constant hash
         """
-        if PYVERSION >= (3, 3):
-            p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
-            p_kind = cgutils.alloca_once(self.builder, Type.int())
-            p_ascii = cgutils.alloca_once(self.builder, Type.int())
-            p_hash = cgutils.alloca_once(self.builder, self.py_hash_t)
-            fnty = Type.function(self.cstring, [self.pyobj,
-                                                self.py_ssize_t.as_pointer(),
-                                                Type.int().as_pointer(),
-                                                Type.int().as_pointer(),
-                                                self.py_hash_t.as_pointer()])
-            fname = "numba_extract_unicode"
-            fn = self._get_function(fnty, name=fname)
+        p_length = cgutils.alloca_once(self.builder, self.py_ssize_t)
+        p_kind = cgutils.alloca_once(self.builder, Type.int())
+        p_ascii = cgutils.alloca_once(self.builder, Type.int())
+        p_hash = cgutils.alloca_once(self.builder, self.py_hash_t)
+        fnty = Type.function(self.cstring, [self.pyobj,
+                                            self.py_ssize_t.as_pointer(),
+                                            Type.int().as_pointer(),
+                                            Type.int().as_pointer(),
+                                            self.py_hash_t.as_pointer()])
+        fname = "numba_extract_unicode"
+        fn = self._get_function(fnty, name=fname)
 
-            buffer = self.builder.call(
-                fn, [strobj, p_length, p_kind, p_ascii, p_hash])
-            ok = self.builder.icmp_unsigned('!=',
-                                            ir.Constant(buffer.type, None),
-                                            buffer)
-            return (ok, buffer, self.builder.load(p_length),
-                    self.builder.load(p_kind), self.builder.load(p_ascii),
-                    self.builder.load(p_hash))
-        else:
-            assert False, 'not supported on Python < 3.3'
+        buffer = self.builder.call(
+            fn, [strobj, p_length, p_kind, p_ascii, p_hash])
+        ok = self.builder.icmp_unsigned('!=',
+                                        ir.Constant(buffer.type, None),
+                                        buffer)
+        return (ok, buffer, self.builder.load(p_length),
+                self.builder.load(p_kind), self.builder.load(p_ascii),
+                self.builder.load(p_hash))
 
     def string_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
-        if PYVERSION >= (3, 0):
-            fname = "PyUnicode_FromStringAndSize"
-        else:
-            fname = "PyString_FromStringAndSize"
+        fname = "PyString_FromStringAndSize"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string, size])
 
     def string_from_string(self, string):
         fnty = Type.function(self.pyobj, [self.cstring])
-        if PYVERSION >= (3, 0):
-            fname = "PyUnicode_FromString"
-        else:
-            fname = "PyString_FromString"
+        fname = "PyUnicode_FromString"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string])
 
     def string_from_kind_and_data(self, kind, string, size):
         fnty = Type.function(self.pyobj, [Type.int(), self.cstring, self.py_ssize_t])
-        assert PYVERSION >= (3, 3), 'unsupported in this python-version'
         fname = "PyUnicode_FromKindAndData"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [kind, string, size])
 
     def bytes_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
-        if PYVERSION >= (3, 0):
-            fname = "PyBytes_FromStringAndSize"
-        else:
-            fname = "PyString_FromStringAndSize"
+        fname = "PyBytes_FromStringAndSize"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string, size])
 
@@ -1217,10 +1144,7 @@ class PythonAPI(object):
 
     def sys_write_stdout(self, fmt, *args):
         fnty = Type.function(Type.void(), [self.cstring], var_arg=True)
-        if PYVERSION >= (3, 2):
-            fn = self._get_function(fnty, name="PySys_FormatStdout")
-        else:
-            fn = self._get_function(fnty, name="PySys_WriteStdout")
+        fn = self._get_function(fnty, name="PySys_FormatStdout")
         return self.builder.call(fn, (fmt,) + args)
 
     def object_dump(self, obj):

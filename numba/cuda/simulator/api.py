@@ -1,7 +1,6 @@
 '''
 Contains CUDA API functions
 '''
-from __future__ import absolute_import
 
 from contextlib import contextmanager
 from .cudadrv.devices import require_context, reset, gpus

@@ -1,7 +1,6 @@
 """
 Testing C implementation of the numba dictionary
 """
-from __future__ import print_function, absolute_import, division
 
 import ctypes
 import random

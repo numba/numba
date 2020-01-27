@@ -1,7 +1,6 @@
 """
 Tests gdb bindings
 """
-from __future__ import print_function
 import os
 import platform
 import subprocess
@@ -14,8 +13,8 @@ from numba import jit
 from numba import unittest_support as unittest
 from numba.targets.gdb_hook import _confirm_gdb
 
-from .support import (TestCase, captured_stdout, tag)
-from .test_parfors import skip_unsupported as parfors_skip_unsupported
+from .support import (TestCase, captured_stdout, tag, skip_parfors_unsupported)
+
 
 _platform = sys.platform
 
@@ -119,19 +118,19 @@ class TestGdbBindImpls(TestCase):
         with captured_stdout():
             _dbg_jit(impl_gdb_call_w_bp)(10)
 
-    @parfors_skip_unsupported
+    @skip_parfors_unsupported
     @needs_gdb_harness
     def test_gdb_split_init_and_break_w_parallel_cpython_impl(self):
         with captured_stdout():
             impl_gdb_split_init_and_break_w_parallel(10)
 
-    @parfors_skip_unsupported
+    @skip_parfors_unsupported
     @needs_gdb_harness
     def test_gdb_split_init_and_break_w_parallel_nopython_impl(self):
         with captured_stdout():
             _dbg_njit(impl_gdb_split_init_and_break_w_parallel)(10)
 
-    @parfors_skip_unsupported
+    @skip_parfors_unsupported
     @needs_gdb_harness
     def test_gdb_split_init_and_break_w_parallel_objmode_impl(self):
         with captured_stdout():

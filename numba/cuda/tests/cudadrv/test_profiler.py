@@ -1,4 +1,3 @@
-from __future__ import absolute_import, print_function
 import numba.unittest_support as unittest
 from numba.cuda.testing import CUDATestCase
 from numba import cuda

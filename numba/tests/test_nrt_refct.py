@@ -2,7 +2,6 @@
 Tests issues or edge cases for producing invalid NRT refct
 """
 
-from __future__ import division, absolute_import, print_function
 
 import gc
 

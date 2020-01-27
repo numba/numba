@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function, division
-
 from numba import serialize
 
 from .. import jit, typeof, utils, types, numpy_support, sigutils

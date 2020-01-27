@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 from numba.tests.support import override_config, TestCase
 from numba.cuda.testing import skip_on_cudasim
 from numba import unittest_support as unittest

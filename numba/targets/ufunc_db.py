@@ -7,7 +7,6 @@ Use the function get_ufunc_info to get the information related to the
 ufunc
 """
 
-from __future__ import print_function, division, absolute_import
 
 import numpy as np
 
@@ -49,9 +48,7 @@ def _fill_ufunc_db(ufunc_db):
     # imports if done at global scope when importing the numba
     # module.
     from . import numbers, npyfuncs, mathimpl, cmathimpl
-    from numba import numpy_support
-
-    v = numpy_support.version
+    from numba.numpy_support import numpy_version
 
     ufunc_db[np.negative] = {
         '?->?': numbers.int_invert_impl,
@@ -272,32 +269,31 @@ def _fill_ufunc_db(ufunc_db):
         'DD->D': npyfuncs.np_complex_power_impl,
     }
 
-    if v >= (1, 15):
-        ufunc_db[np.gcd] = {
-            'bb->b': npyfuncs.np_gcd_impl,
-            'BB->B': npyfuncs.np_gcd_impl,
-            'hh->h': npyfuncs.np_gcd_impl,
-            'HH->H': npyfuncs.np_gcd_impl,
-            'ii->i': npyfuncs.np_gcd_impl,
-            'II->I': npyfuncs.np_gcd_impl,
-            'll->l': npyfuncs.np_gcd_impl,
-            'LL->L': npyfuncs.np_gcd_impl,
-            'qq->q': npyfuncs.np_gcd_impl,
-            'QQ->Q': npyfuncs.np_gcd_impl,
-        }
+    ufunc_db[np.gcd] = {
+        'bb->b': npyfuncs.np_gcd_impl,
+        'BB->B': npyfuncs.np_gcd_impl,
+        'hh->h': npyfuncs.np_gcd_impl,
+        'HH->H': npyfuncs.np_gcd_impl,
+        'ii->i': npyfuncs.np_gcd_impl,
+        'II->I': npyfuncs.np_gcd_impl,
+        'll->l': npyfuncs.np_gcd_impl,
+        'LL->L': npyfuncs.np_gcd_impl,
+        'qq->q': npyfuncs.np_gcd_impl,
+        'QQ->Q': npyfuncs.np_gcd_impl,
+    }
 
-        ufunc_db[np.lcm] = {
-            'bb->b': npyfuncs.np_lcm_impl,
-            'BB->B': npyfuncs.np_lcm_impl,
-            'hh->h': npyfuncs.np_lcm_impl,
-            'HH->H': npyfuncs.np_lcm_impl,
-            'ii->i': npyfuncs.np_lcm_impl,
-            'II->I': npyfuncs.np_lcm_impl,
-            'll->l': npyfuncs.np_lcm_impl,
-            'LL->L': npyfuncs.np_lcm_impl,
-            'qq->q': npyfuncs.np_lcm_impl,
-            'QQ->Q': npyfuncs.np_lcm_impl,
-        }
+    ufunc_db[np.lcm] = {
+        'bb->b': npyfuncs.np_lcm_impl,
+        'BB->B': npyfuncs.np_lcm_impl,
+        'hh->h': npyfuncs.np_lcm_impl,
+        'HH->H': npyfuncs.np_lcm_impl,
+        'ii->i': npyfuncs.np_lcm_impl,
+        'II->I': npyfuncs.np_lcm_impl,
+        'll->l': npyfuncs.np_lcm_impl,
+        'LL->L': npyfuncs.np_lcm_impl,
+        'qq->q': npyfuncs.np_lcm_impl,
+        'QQ->Q': npyfuncs.np_lcm_impl,
+    }
 
     ufunc_db[np.rint] = {
         'f->f': npyfuncs.np_real_rint_impl,
@@ -427,8 +423,7 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_cos_impl,
     }
 
-    tan_impl = cmathimpl.tan_impl if v >= (
-        1, 10) else npyfuncs.np_complex_tan_impl
+    tan_impl = cmathimpl.tan_impl
 
     ufunc_db[np.tan] = {
         'f->f': npyfuncs.np_real_tan_impl,
@@ -437,8 +432,7 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': tan_impl,
     }
 
-    arcsin_impl = cmathimpl.asin_impl if v >= (
-        1, 10) else npyfuncs.np_complex_asin_impl
+    arcsin_impl = cmathimpl.asin_impl
 
     ufunc_db[np.arcsin] = {
         'f->f': npyfuncs.np_real_asin_impl,
@@ -454,8 +448,7 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': cmathimpl.acos_impl,
     }
 
-    arctan_impl = cmathimpl.atan_impl if v >= (
-        1, 10) else npyfuncs.np_complex_atan_impl
+    arctan_impl = cmathimpl.atan_impl
 
     ufunc_db[np.arctan] = {
         'f->f': npyfuncs.np_real_atan_impl,
@@ -495,8 +488,7 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_tanh_impl,
     }
 
-    arcsinh_impl = cmathimpl.asinh_impl if v >= (
-        1, 10) else npyfuncs.np_complex_asinh_impl
+    arcsinh_impl = cmathimpl.asinh_impl
 
     ufunc_db[np.arcsinh] = {
         'f->f': npyfuncs.np_real_asinh_impl,
@@ -512,8 +504,7 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_acosh_impl,
     }
 
-    arctanh_impl = cmathimpl.atanh_impl if v >= (
-        1, 10) else npyfuncs.np_complex_atanh_impl
+    arctanh_impl = cmathimpl.atanh_impl
 
     ufunc_db[np.arctanh] = {
         'f->f': npyfuncs.np_real_atanh_impl,
@@ -1038,7 +1029,7 @@ def _fill_ufunc_db(ufunc_db):
         'md->m': npdatetime.timedelta_over_number,
     })
 
-    if numpy_support.version >= (1, 16):
+    if numpy_version >= (1, 16):
         ufunc_db[np.floor_divide].update({
             'mm->q': npdatetime.timedelta_floor_div_timedelta,
         })
@@ -1086,7 +1077,7 @@ def _fill_ufunc_db(ufunc_db):
         'mm->m': npdatetime.timedelta_min_impl,
     })
 
-    if numpy_support.version >= (1, 16):
+    if numpy_version >= (1, 16):
         ufunc_db[np.remainder].update({
             'mm->m': npdatetime.timedelta_mod_timedelta,
         })

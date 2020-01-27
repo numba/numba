@@ -2,7 +2,6 @@
 Numba-specific errors and warnings.
 """
 
-from __future__ import print_function, division, absolute_import
 
 import abc
 import contextlib
@@ -12,7 +11,7 @@ import warnings
 import numba
 import numpy as np
 from collections import defaultdict
-from numba import six
+from numba.utils import add_metaclass, reraise
 from functools import wraps
 from abc import abstractmethod
 
@@ -74,7 +73,7 @@ class NumbaTypeSafetyWarning(NumbaWarning):
 # These are needed in the color formatting of errors setup
 
 
-@six.add_metaclass(abc.ABCMeta)
+@add_metaclass(abc.ABCMeta)
 class _ColorScheme(object):
 
     @abstractmethod
@@ -722,7 +721,7 @@ def new_error_context(fmt_, *args, **kwargs):
         newerr = errcls(e).add_context(_format_msg(fmt_, args, kwargs))
         from numba import config
         tb = sys.exc_info()[2] if config.FULL_TRACEBACKS else None
-        six.reraise(type(newerr), newerr, tb)
+        reraise(type(newerr), newerr, tb)
 
 
 __all__ += [name for (name, value) in globals().items()
