@@ -16,6 +16,33 @@ function in the threading library that performs the parallel execution is the
 ``parallel_for`` function. The job of this function is to both orchestrate and
 execute the parallel tasks.
 
+The relevant source files referenced in this document are
+
+- ``numba/npyufunc/tbbpool.cpp``
+- ``numba/npyufunc/omppool.cpp``
+- ``numba/npyufunc/workqueue.c``
+
+  These files contain the TBB, OpenMP, and workqueue threadpool
+  implementations, respectively. Each includes the functions
+  ``set_num_threads()``, ``get_num_threads()``, and ``get_thread_id()``, as
+  well as the relevant logic for thread masking in their respective
+  schedulers. Note that the basic thread local variable logic is duplicated in
+  each of these files, and not shared between them.
+
+- ``numba/npyufunc/parallel.py``
+
+  This file contains the Python and JIT compatible wrappers for
+  ``set_num_threads()``, ``get_num_threads()``, and ``get_thread_id()``, as
+  well as the code that loads the above libraries into Python and launches the
+  threadpool.
+
+- ``numba/npyufunc/parfor.py``
+
+  This file contains the main logic for generating code for the parallel
+  backend. The thread mask is accessed in this file in the code that generates
+  scheduler code, and passed to the relevant backend scheduler function (see
+  below).
+
 Thread masking
 --------------
 
