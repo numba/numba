@@ -243,61 +243,18 @@ class DPPyKernel(DPPyKernelBase):
             kernelargs.append(driver.KernelArg(val._ndarray.strides[ax]))
 
 
-    def _unpack_argument(self, ty, val, queue, retr, kernelargs):
+    def _unpack_argument(self, ty, val, device_env, retr, kernelargs):
         """
         Convert arguments to ctypes and append to kernelargs
         """
         # DRD : Check if the val is of type driver.DeviceArray before checking
-        # if ty is of type ndarray. Argtypes retuends ndarray for both
+        # if ty is of type ndarray. Argtypes returns ndarray for both
         # DeviceArray and ndarray. This is a hack to get around the issue,
         # till I understand the typing infrastructure of NUMBA better.
         if isinstance(val, driver.DeviceArray):
             self._unpack_device_array_argument(val, kernelargs)
 
         elif isinstance(ty, types.Array):
-            # DRD: This unpack routine is commented out for the time-being.
-            # NUMBA does not know anything about SmartArrayTypes.
-
-            # if isinstance(ty, types.SmartArrayType):
-            #    devary = val.get('gpu')
-            #    retr.append(lambda: val.mark_changed('gpu'))
-            #    outer_parent = ctypes.c_void_p(0)
-            #    kernelargs.append(outer_parent)
-            # else:
-            #devary, conv = devicearray.auto_device(val, stream=queue)
-            #if conv:
-            #    retr.append(lambda: devary.copy_to_host(val, stream=queue))
-            """
-            c_intp = ctypes.c_ssize_t
-
-            # TA: New version
-            meminfo = ctypes.c_void_p(0)
-            parent = ctypes.c_void_p(0)
-            nitems = c_intp(devary.size)
-            itemsize = c_intp(devary.dtype.itemsize)
-            data = driver.device_pointer(devary)  # @@
-
-            kernelargs.append(driver.runtime.create_kernel_arg(meminfo))
-            kernelargs.append(driver.runtime.create_kernel_arg(parent))
-            kernelargs.append(driver.runtime.create_kernel_arg(nitems))
-            kernelargs.append(driver.runtime.create_kernel_arg(itemsize))
-            kernelargs.append(driver.runtime.create_kernel_arg(data))
-
-            meminfo = ctypes.c_void_p(0)
-            parent = ctypes.c_void_p(0)
-            nitems = c_intp(devary.size)
-            itemsize = c_intp(devary.dtype.itemsize)
-            data = driver.device_pointer(devary)  # @@
-            kernelargs.append(meminfo)
-            kernelargs.append(parent)
-            kernelargs.append(nitems)
-            kernelargs.append(itemsize)
-            kernelargs.append(data)
-            for ax in range(devary.ndim):
-                kernelargs.append(c_intp(devary.shape[ax]))
-            for ax in range(devary.ndim):
-                kernelargs.append(c_intp(devary.strides[ax]))
-            """
             raise NotImplementedError(ty, val)
 
         elif isinstance(ty, types.Integer):
