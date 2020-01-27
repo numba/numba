@@ -4,7 +4,7 @@ Version 0.49.0dev
 In development
 
 
-Version 0.48.0 (Jan 16, 2020)
+Version 0.48.0 (Jan 27, 2020)
 -----------------------------
 
 This release is particularly small as it was present to catch anything that
@@ -72,6 +72,7 @@ General Enhancements:
 
 Fixes:
 
+* PR #5092: Fix #5087, bug in bytecode analysis.
 * PR #4724: Only use lives (and not aliases) to create post parfor live set.
 * PR #4998: Fix more spelling typos
 * PR #5024: Propagate semantic constants ahead of static rewrites.
