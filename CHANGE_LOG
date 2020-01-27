@@ -72,7 +72,6 @@ General Enhancements:
 
 Fixes:
 
-* PR #5092: Fix #5087, bug in bytecode analysis.
 * PR #4724: Only use lives (and not aliases) to create post parfor live set.
 * PR #4998: Fix more spelling typos
 * PR #5024: Propagate semantic constants ahead of static rewrites.
@@ -82,6 +81,7 @@ Fixes:
   multiple consistent defines.
 * PR #5058: Permit mixed int types in wrap_index
 * PR #5078: Catch the use of global typed-list in JITed functions
+* PR #5092: Fix #5087, bug in bytecode analysis.
 
 CUDA Enhancements/Fixes:
 
