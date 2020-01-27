@@ -502,6 +502,7 @@ class ListType(IterableType):
             raise TypingError(fmt.format(itemty))
         # FIXME: _sentry_forbidden_types(itemty)
         self.item_type = itemty
+        self.dtype = itemty
         name = '{}[{}]'.format(
             self.__class__.__name__,
             itemty,
