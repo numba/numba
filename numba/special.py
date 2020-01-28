@@ -1,6 +1,6 @@
 import numpy as np
 
-from .typing.typeof import typeof
+from numba.core.typing.typeof import typeof
 
 
 def pndindex(*args):

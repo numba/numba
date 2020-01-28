@@ -9,10 +9,10 @@ import ctypes
 from functools import partial
 import numpy as np
 
-from numba import types
+from numba.core import types
 from numba import numpy_support
-from numba.errors import TypingError
-from . import templates
+from numba.core.errors import TypingError
+from numba.core.typing import templates
 
 try:
     import cffi

@@ -2,9 +2,9 @@ import collections
 import functools
 import sys
 
-from numba import utils
+from numba.core import utils
 from numba.ir import Loc
-from numba.errors import UnsupportedError
+from numba.core.errors import UnsupportedError
 
 # List of bytecodes creating a new block in the control flow graph
 # (in addition to explicit jump labels).

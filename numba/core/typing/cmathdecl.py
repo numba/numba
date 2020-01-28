@@ -1,7 +1,7 @@
 import cmath
 
-from numba import types, utils
-from numba.typing.templates import (AbstractTemplate, ConcreteTemplate,
+from numba.core import types, utils
+from numba.core.typing.templates import (AbstractTemplate, ConcreteTemplate,
                                     signature, Registry)
 
 registry = Registry()

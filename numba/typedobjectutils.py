@@ -8,11 +8,11 @@ from llvmlite.llvmpy.core import Builder
 
 from numba import cgutils
 from numba import types
-from numba import typing
+from numba.core import typing
 from numba.targets.registry import cpu_target
-from numba.typeconv import Conversion
+from numba.core.typeconv import Conversion
 from numba.extending import intrinsic
-from numba.errors import TypingError, NumbaTypeSafetyWarning
+from numba.core.errors import TypingError, NumbaTypeSafetyWarning
 
 
 def _as_bytes(builder, ptr):

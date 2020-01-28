@@ -5,17 +5,18 @@ import weakref
 import collections
 
 import numba
-from numba import types, config, errors, utils
+from numba.core import types, errors, utils
+from numba import config
 
 # Exported symbols
-from .typing.typeof import typeof_impl
-from .typing.templates import infer, infer_getattr
-from .targets.imputils import (
+from numba.core.typing.typeof import typeof_impl
+from numba.core.typing.templates import infer, infer_getattr
+from numba.targets.imputils import (
     lower_builtin, lower_getattr, lower_getattr_generic,
     lower_setattr, lower_setattr_generic, lower_cast)
-from .datamodel import models, register_default as register_model
-from .pythonapi import box, unbox, reflect, NativeValue
-from ._helperlib import _import_cython_function
+from numba.datamodel import models, register_default as register_model
+from numba.pythonapi import box, unbox, reflect, NativeValue
+from numba._helperlib import _import_cython_function
 
 
 def type_callable(func):
@@ -24,7 +25,8 @@ def type_callable(func):
     *func* can be a callable object (probably a global) or a string
     denoting a built-in operation (such 'getitem' or '__array_wrap__')
     """
-    from .typing.templates import CallableTemplate, infer, infer_global
+    from numba.core.typing.templates import (CallableTemplate, infer,
+                                             infer_global)
     if not callable(func) and not isinstance(func, str):
         raise TypeError("`func` should be a function or string")
     try:
@@ -100,7 +102,7 @@ def overload(func, jit_options={}, strict=True, inline='never'):
       to determine whether to inline, this essentially permitting custom
       inlining rules (typical use might be cost models).
     """
-    from .typing.templates import make_overload_template, infer_global
+    from numba.core.typing.templates import make_overload_template, infer_global
 
     # set default options
     opts = _overload_default_jit_options.copy()
@@ -165,7 +167,7 @@ def overload_attribute(typ, attr, **kwargs):
             return get
     """
     # TODO implement setters
-    from .typing.templates import make_overload_attribute_template
+    from numba.core.typing.templates import make_overload_attribute_template
 
     def decorate(overload_func):
         template = make_overload_attribute_template(
@@ -199,7 +201,7 @@ def overload_method(typ, attr, **kwargs):
                     return res
                 return take_impl
     """
-    from .typing.templates import make_overload_method_template
+    from numba.core.typing.templates import make_overload_method_template
 
     def decorate(overload_func):
         template = make_overload_method_template(
@@ -219,11 +221,11 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
     as a read-only attribute named *python_attr*.
     The given *typeclass*'s model must be a StructModel subclass.
     """
-    from .typing.templates import AttributeTemplate
-    from .datamodel import default_manager
-    from .datamodel.models import StructModel
-    from .targets.imputils import impl_ret_borrowed
-    from . import cgutils
+    from numba.core.typing.templates import AttributeTemplate
+    from numba.datamodel import default_manager
+    from numba.datamodel.models import StructModel
+    from numba.targets.imputils import impl_ret_borrowed
+    from numba import cgutils
 
     if not isinstance(typeclass, type) or not issubclass(typeclass, types.Type):
         raise TypeError("typeclass should be a Type subclass, got %s"
@@ -291,7 +293,8 @@ class _Intrinsic(object):
         self._recent.append(self)
 
     def _register(self):
-        from .typing.templates import make_intrinsic_template, infer_global
+        from numba.core.typing.templates import (make_intrinsic_template,
+                                                 infer_global)
 
         template = make_intrinsic_template(self, self._defn, self._name)
         infer(template)

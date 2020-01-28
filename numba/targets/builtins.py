@@ -13,10 +13,11 @@ from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
                        call_getiter, call_iternext,
                        impl_ret_borrowed, impl_ret_untracked,
                        numba_typeref_ctor)
-from .. import typing, types, cgutils, utils
-from ..extending import overload, intrinsic
-from numba.typeconv import Conversion
-from numba.errors import TypingError
+from numba.core import typing, types, utils
+from numba import cgutils
+from numba.extending import overload, intrinsic
+from numba.core.typeconv import Conversion
+from numba.core.errors import TypingError
 
 
 @overload(operator.truth)
@@ -481,7 +482,7 @@ def lower_get_type_max_value(context, builder, sig, args):
 
 # -----------------------------------------------------------------------------
 
-from numba.typing.builtins import IndexValue, IndexValueType
+from numba.core.typing.builtins import IndexValue, IndexValueType
 from numba.extending import overload, register_jitable
 
 @lower_builtin(IndexValue, types.intp, types.Type)

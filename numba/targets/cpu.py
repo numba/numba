@@ -6,18 +6,20 @@ import llvmlite.llvmpy.core as lc
 
 from numba import _dynfunc, config
 from numba.callwrapper import PyCallWrapper
-from .base import BaseContext, PYOBJECT
-from numba import utils, cgutils, types
-from numba.utils import cached_property
+from numba.targets.base import BaseContext, PYOBJECT
+from numba.core import utils, types
+from numba import cgutils
+from numba.core.utils import cached_property
 from numba.targets import (
     callconv, codegen, externals, intrinsics, listobj, setobj, dictimpl,
 )
-from .options import TargetOptions
+from numba.targets.options import TargetOptions
 from numba.runtime import rtsys
 from numba.compiler_lock import global_compiler_lock
 import numba.entrypoints
-from . import fastmathpass
-from .cpu_options import ParallelOptions, FastMathOptions, InlineOptions
+from numba.targets import fastmathpass
+from numba.targets.cpu_options import (ParallelOptions, FastMathOptions,
+                                       InlineOptions)
 
 
 # Keep those structures in sync with _dynfunc.c.

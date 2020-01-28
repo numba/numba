@@ -10,12 +10,13 @@ it should really quack like the CPython `list`.
 """
 from collections.abc import MutableSequence
 
-from numba.types import ListType, TypeRef
+from numba.core.types import ListType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
 from numba import listobject
 from numba.dispatcher import Dispatcher
 from numba import config
-from numba import njit, types, cgutils, errors, typeof
+from numba.core import types, errors
+from numba import njit, cgutils, typeof
 from numba.extending import (
     overload_method,
     overload,

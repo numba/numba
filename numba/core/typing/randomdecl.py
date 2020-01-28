@@ -2,10 +2,10 @@ import random
 
 import numpy as np
 
-from .. import types
+from numba.core import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         CallableTemplate, Registry, signature)
-from ..numpy_support import numpy_version
+from numba.numpy_support import numpy_version
 
 
 registry = Registry()

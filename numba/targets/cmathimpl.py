@@ -10,8 +10,9 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
 
 from numba.targets.imputils import Registry, impl_ret_untracked
-from numba import types, cgutils
-from numba.typing import signature
+from numba import cgutils
+from numba.core import types
+from numba.core.typing import signature
 from . import builtins, mathimpl
 
 registry = Registry()

@@ -2,9 +2,9 @@
 Typing for enums.
 """
 import operator
-from numba import types
-from numba.typing.templates import (AbstractTemplate, AttributeTemplate,
-                                    signature, Registry)
+from numba.core import types
+from numba.core.typing.templates import (AbstractTemplate, AttributeTemplate,
+                                         signature, Registry)
 
 registry = Registry()
 infer = registry.register

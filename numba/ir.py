@@ -11,9 +11,10 @@ from types import FunctionType, BuiltinFunctionType
 from functools import total_ordering
 
 from numba import config, errors
-from .utils import BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS, UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS
-from .errors import (NotDefinedError, RedefinedError, VerificationError,
-                     ConstantInferenceError)
+from numba.core.utils import (BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS,
+                              UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS)
+from numba.core.errors import (NotDefinedError, RedefinedError,
+                               VerificationError, ConstantInferenceError)
 from io import StringIO
 
 # terminal color markup

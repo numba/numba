@@ -14,7 +14,7 @@ from .config import ROCM_BC_PATH
 from . import TRIPLE
 from datetime import datetime
 from contextlib import contextmanager
-from numba import utils
+from numba.core import utils
 from numba.roc.hsadrv.error import HsaSupportError
 
 _real_check_call = check_call

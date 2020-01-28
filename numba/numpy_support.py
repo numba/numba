@@ -4,7 +4,7 @@ import re
 
 import numpy as np
 
-from . import errors, types, utils
+from numba.core import errors, types, utils
 # re-export
 from numba.cgutils import is_nonelike   # noqa: F401
 

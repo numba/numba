@@ -11,15 +11,16 @@ import uuid
 import weakref
 from copy import deepcopy
 
-from numba import _dispatcher, compiler, utils, types, config, errors
+from numba import _dispatcher, compiler, config
+from numba.core import utils, types, errors, typing
 from numba.compiler_lock import global_compiler_lock
-from numba.typeconv.rules import default_type_manager
-from numba import sigutils, serialize, typing
-from numba.typing.templates import fold_arguments
-from numba.typing.typeof import Purpose, typeof
+from numba.core.typeconv.rules import default_type_manager
+from numba import sigutils, serialize
+from numba.core.typing.templates import fold_arguments
+from numba.core.typing.typeof import Purpose, typeof
 from numba.bytecode import get_code_object
-from numba.utils import reraise
-from .caching import NullCache, FunctionCache
+from numba.core.utils import reraise
+from numba.caching import NullCache, FunctionCache
 
 
 class OmittedArg(object):

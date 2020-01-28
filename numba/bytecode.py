@@ -9,7 +9,7 @@ import inspect
 import itertools
 from types import CodeType, ModuleType
 
-from numba import errors, utils
+from numba.core import errors, utils
 
 
 opcode_info = namedtuple('opcode_info', ['argsize'])

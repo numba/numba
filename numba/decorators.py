@@ -8,10 +8,10 @@ import warnings
 import inspect
 import logging
 
-from . import config, sigutils
-from .errors import DeprecationError, NumbaDeprecationWarning
-from .targets import registry
-from .stencil import stencil
+from numba import config, sigutils
+from numba.core.errors import DeprecationError, NumbaDeprecationWarning
+from numba.targets import registry
+from numba.stencil import stencil
 
 
 _logger = logging.getLogger(__name__)

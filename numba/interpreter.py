@@ -4,9 +4,10 @@ import dis
 import operator
 import logging
 
-from . import config, ir, controlflow, dataflow, errors
-from .errors import NotDefinedError
-from .utils import (
+from numba.core import errors
+from numba import config, ir, controlflow, dataflow
+from numba.core.errors import NotDefinedError
+from numba.core.utils import (
     PYVERSION,
     BINOPS_TO_OPERATORS,
     INPLACE_BINOPS_TO_OPERATORS,

@@ -6,10 +6,11 @@ Typing declarations for np.timedelta64.
 from itertools import product
 import operator
 
-from numba import npdatetime, types
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    AbstractTemplate, infer_global, infer,
-                                    infer_getattr, signature)
+from numba import npdatetime
+from numba.core import types
+from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
+                                         AbstractTemplate, infer_global, infer,
+                                         infer_getattr, signature)
 
 
 # timedelta64-only operations

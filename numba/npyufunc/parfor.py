@@ -10,7 +10,8 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.ir.values as liv
 
 import numba
-from .. import compiler, ir, types, cgutils, sigutils, lowering, parfor
+from numba import compiler, ir, cgutils, sigutils, lowering, parfor
+from numba.core import types
 from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
                             rename_labels, get_name_var_table, visit_vars_inner,
@@ -20,15 +21,15 @@ from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             is_const_call)
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
-from ..typing import signature
+from numba.core.typing import signature
 from numba import config
 from numba.targets.cpu import ParallelOptions
 from numba.parfor import print_wrapped, ensure_parallel_support
+from numba.core.errors import NumbaParallelSafetyWarning
 import types as pytypes
 import operator
 
 import warnings
-from ..errors import NumbaParallelSafetyWarning
 
 
 def _lower_parfor_parallel(lowerer, parfor):

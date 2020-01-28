@@ -13,13 +13,14 @@ import numpy as np
 
 import numba
 from numba import types
-from numba.typing.templates import infer_global, AbstractTemplate
-from numba.typing import signature
-from numba import ir_utils, ir, utils, config, typing
+from numba.core.typing.templates import infer_global, AbstractTemplate
+from numba.core.typing import signature
+from numba.core import  utils, typing
+from numba import ir_utils, ir, config
 from numba.ir_utils import (get_call_table, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
                             find_callname, require, find_const, GuardException)
-from numba.utils import OPERATORS_TO_BUILTINS
+from numba.core.utils import OPERATORS_TO_BUILTINS
 
 
 def _compute_last_ind(dim_size, index_const):

@@ -3,7 +3,8 @@ import sys
 
 from llvmlite import ir
 
-from numba import gdb, gdb_init, gdb_breakpoint, types, utils, cgutils, config
+from numba.core import types, utils
+from numba import gdb, gdb_init, gdb_breakpoint, cgutils, config
 from numba.extending import overload, intrinsic
 
 _path = os.path.dirname(__file__)

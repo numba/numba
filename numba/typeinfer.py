@@ -21,10 +21,12 @@ from pprint import pprint
 from collections import OrderedDict, defaultdict
 from functools import reduce
 
-from numba import ir, types, utils, config, typing
-from .errors import (TypingError, UntypedAttributeError, new_error_context,
-                     termcolor, UnsupportedError, ForceLiteralArg)
-from .funcdesc import qualifying_prefix
+from numba import ir, config
+from numba.core import types, utils, typing
+from numba.core.errors import (TypingError, UntypedAttributeError,
+                               new_error_context, termcolor, UnsupportedError,
+                               ForceLiteralArg)
+from numba.funcdesc import qualifying_prefix
 
 
 _logger = logging.getLogger(__name__)

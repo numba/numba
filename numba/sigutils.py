@@ -1,4 +1,4 @@
-from numba import types, typing
+from numba.core import types, typing
 
 
 def is_signature(sig):

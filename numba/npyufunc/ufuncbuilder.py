@@ -9,11 +9,12 @@ from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba.targets.registry import dispatcher_registry, cpu_target
 from numba.targets.cpu import FastMathOptions
-from numba import utils, compiler, types, sigutils
+from numba import compiler, types, sigutils
+from numba.core import utils
 from numba.numpy_support import as_dtype
-from . import _internal
-from .sigparse import parse_signature
-from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
+from numba.npyufunc import _internal
+from numba.npyufunc.sigparse import parse_signature
+from numba.npyufunc.wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.caching import FunctionCache, NullCache
 from numba.compiler_lock import global_compiler_lock
 

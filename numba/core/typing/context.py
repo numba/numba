@@ -7,12 +7,12 @@ import contextlib
 import operator
 
 import numba
-from numba import types, errors
-from numba.typeconv import Conversion, rules
+from numba.core import types, errors
+from numba.core.typeconv import Conversion, rules
 from . import templates
 from .typeof import typeof, Purpose
 
-from numba import utils
+from numba.core import utils
 
 
 class Rating(object):

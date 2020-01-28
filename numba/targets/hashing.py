@@ -14,7 +14,8 @@ from llvmlite import ir
 
 from numba.extending import (
     overload, overload_method, intrinsic, register_jitable)
-from numba import types, errors, utils
+from numba import errors
+from numba.core import types, utils
 from numba.unsafe.bytes import grab_byte, grab_uint64_t
 
 _py38_or_later = utils.PYVERSION >= (3, 8)

@@ -3,9 +3,9 @@ from pprint import pprint
 import sys
 import warnings
 
-from numba import utils
-from .errors import UnsupportedError
-from .ir import Loc
+from numba.core import utils
+from numba.core.errors import UnsupportedError
+from numba.ir import Loc
 
 
 class DataFlowAnalysis(object):

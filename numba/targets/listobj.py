@@ -7,15 +7,15 @@ import math
 import operator
 
 from llvmlite import ir
-from numba import types, cgutils, typing, errors
+from numba import cgutils
+from numba.core import types, typing, errors, slicing
 from numba.targets.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked,
                                     RefType)
 from numba.extending import overload_method, overload
-from numba.utils import cached_property
+from numba.core.utils import cached_property
 from numba.misc import quicksort
-from numba.np import slicing
 
 
 def get_list_payload(context, builder, list_type, value):

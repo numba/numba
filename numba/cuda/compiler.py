@@ -9,8 +9,9 @@ import warnings
 import numpy as np
 
 from numba import config, compiler, types, sigutils
-from numba.typing.templates import AbstractTemplate, ConcreteTemplate
-from numba import funcdesc, typing, utils, serialize
+from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
+from numba import funcdesc, serialize
+from numba.core import typing, utils
 from numba.compiler_lock import global_compiler_lock
 
 from .cudadrv.autotune import AutoTuner

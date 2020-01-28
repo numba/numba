@@ -19,34 +19,50 @@ from numba.extending import (
 from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
                                     iternext_impl, impl_ret_new_ref, RefType)
 from numba.datamodel import register_default, StructModel
-from numba import cgutils, utils, types
+from numba import cgutils
+from numba.core import utils, types
 from numba.pythonapi import (
     PY_UNICODE_1BYTE_KIND,
     PY_UNICODE_2BYTE_KIND,
     PY_UNICODE_4BYTE_KIND,
     PY_UNICODE_WCHAR_KIND,
 )
-from numba.np import slicing
+from numba.core import slicing
 from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
-from numba.errors import TypingError
-from .unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4, _Py_ISALNUM,
-                              _PyUnicode_ToUpperFull, _PyUnicode_ToLowerFull,
-                              _PyUnicode_ToFoldedFull,
-                              _PyUnicode_ToTitleFull, _PyUnicode_IsPrintable,
-                              _PyUnicode_IsSpace, _Py_ISSPACE,
-                              _PyUnicode_IsXidStart, _PyUnicode_IsXidContinue,
-                              _PyUnicode_IsCased, _PyUnicode_IsCaseIgnorable,
-                              _PyUnicode_IsUppercase, _PyUnicode_IsLowercase,
-                              _PyUnicode_IsLineBreak, _Py_ISLINEBREAK,
-                              _Py_ISLINEFEED, _Py_ISCARRIAGERETURN,
-                              _PyUnicode_IsTitlecase, _Py_ISLOWER, _Py_ISUPPER,
-                              _Py_TAB, _Py_LINEFEED,
-                              _Py_CARRIAGE_RETURN, _Py_SPACE,
-                              _PyUnicode_IsAlpha, _PyUnicode_IsNumeric,
-                              _Py_ISALPHA, _PyUnicode_IsDigit,
-                              _PyUnicode_IsDecimalDigit)
+from numba.core.errors import TypingError
+from numba.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
+                                   _Py_ISALNUM,
+                                   _PyUnicode_ToUpperFull,
+                                   _PyUnicode_ToLowerFull,
+                                   _PyUnicode_ToFoldedFull,
+                                   _PyUnicode_ToTitleFull,
+                                   _PyUnicode_IsPrintable,
+                                   _PyUnicode_IsSpace,
+                                   _Py_ISSPACE,
+                                   _PyUnicode_IsXidStart,
+                                   _PyUnicode_IsXidContinue,
+                                   _PyUnicode_IsCased,
+                                   _PyUnicode_IsCaseIgnorable,
+                                   _PyUnicode_IsUppercase,
+                                   _PyUnicode_IsLowercase,
+                                   _PyUnicode_IsLineBreak,
+                                   _Py_ISLINEBREAK,
+                                   _Py_ISLINEFEED,
+                                   _Py_ISCARRIAGERETURN,
+                                   _PyUnicode_IsTitlecase,
+                                   _Py_ISLOWER,
+                                   _Py_ISUPPER,
+                                   _Py_TAB,
+                                   _Py_LINEFEED,
+                                   _Py_CARRIAGE_RETURN,
+                                   _Py_SPACE,
+                                   _PyUnicode_IsAlpha,
+                                   _PyUnicode_IsNumeric,
+                                   _Py_ISALPHA,
+                                   _PyUnicode_IsDigit,
+                                   _PyUnicode_IsDecimalDigit)
 
 
 _py38_or_later = utils.PYVERSION >= (3, 8)

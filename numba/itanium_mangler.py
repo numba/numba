@@ -31,7 +31,7 @@ scheme for them to avoid leading digits.
 
 import re
 
-from numba import types, utils
+from numba.core import types, utils
 
 
 # According the scheme, valid characters for mangled names are [a-zA-Z0-9_$].

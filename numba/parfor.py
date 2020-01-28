@@ -25,10 +25,11 @@ from contextlib import contextmanager
 import operator
 
 import numba
-from numba import ir, ir_utils, types, typing, rewrites, config, analysis, prange, pndindex
-from numba import array_analysis, postproc, typeinfer, utils, errors
+from numba.core import types, typing, utils, errors
+from numba import ir, ir_utils, rewrites, config, analysis, prange, pndindex
+from numba import array_analysis, postproc, typeinfer
 from numba.numpy_support import as_dtype
-from numba.typing.templates import infer_global, AbstractTemplate
+from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
 from numba.stencilparfor import StencilPass
 from numba.extending import register_jitable
@@ -82,8 +83,8 @@ from numba.ir_utils import (
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from numba.controlflow import CFGraph
-from numba.typing import npydecl, signature
-from numba.types.functions import Function
+from numba.core.typing import npydecl, signature
+from numba.core.types.functions import Function
 from numba.array_analysis import (random_int_args, random_1arg_size,
                                   random_2arg_sizelast, random_3arg_sizelast,
                                   random_calls, assert_equiv)

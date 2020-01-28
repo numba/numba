@@ -1,14 +1,14 @@
 from collections import namedtuple
 import copy
 import warnings
-from .tracing import event
+from numba.tracing import event
 
-from numba import (bytecode, interpreter, postproc, typing,  utils, config,
-                   errors,)
+from numba import (bytecode, interpreter, postproc, config,)
+from numba.core import utils, errors, typing
 from numba.targets import cpu, callconv
 from numba.parfor import ParforDiagnostics
 from numba.inline_closurecall import InlineClosureCallPass
-from numba.errors import CompilerError
+from numba.core.errors import CompilerError
 
 from .compiler_machinery import PassManager
 

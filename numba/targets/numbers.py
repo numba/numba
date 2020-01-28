@@ -8,13 +8,15 @@ from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
-                       lower_cast, lower_constant,
-                       impl_ret_borrowed, impl_ret_untracked)
-from . import optional
-from .. import typing, types, cgutils, utils, errors
-from ..extending import intrinsic, overload_method
-from ..unsafe.numbers import viewer
+from numba.targets.imputils import (lower_builtin, lower_getattr,
+                                    lower_getattr_generic, lower_cast,
+                                    lower_constant, impl_ret_borrowed,
+                                    impl_ret_untracked)
+from numba.targets import optional
+from numba.core import typing, types, utils, errors
+from numba import cgutils
+from numba.extending import intrinsic, overload_method
+from numba.unsafe.numbers import viewer
 
 
 def _int_arith_flags(rettype):

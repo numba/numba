@@ -4,7 +4,8 @@ This scripts specifies all PTX special objects.
 import operator
 import numpy
 import llvmlite.llvmpy.core as lc
-from numba import types, ir, typing, macro
+from numba import ir, macro
+from numba.core import types, typing
 from .cudadrv import nvvm
 
 

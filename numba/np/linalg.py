@@ -14,12 +14,12 @@ from numba import types, cgutils
 
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
-from numba.typing import signature
+from numba.core.typing import signature
 from numba.extending import overload, register_jitable
-from numba import types
+from numba.core import types
+from numba.core.errors import TypingError
 from numba import numpy_support as np_support
 from .arrayobj import make_array, _empty_nd_impl, array_copy
-from ..errors import TypingError
 
 ll_char = ir.IntType(8)
 ll_char_p = ll_char.as_pointer()

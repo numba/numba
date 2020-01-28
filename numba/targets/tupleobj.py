@@ -6,12 +6,13 @@ from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 import operator
 
-from .imputils import (lower_builtin, lower_getattr_generic, lower_cast,
-                       lower_constant,
-                       iternext_impl, impl_ret_borrowed, impl_ret_untracked,
-                       RefType)
-from .. import typing, types, cgutils
-from ..extending import overload_method, overload, intrinsic
+from numba.targets.imputils import (lower_builtin, lower_getattr_generic,
+                                    lower_cast, lower_constant, iternext_impl,
+                                    impl_ret_borrowed, impl_ret_untracked,
+                                    RefType)
+from numba.core import typing, types
+from numba import cgutils
+from numba.extending import overload_method, overload, intrinsic
 
 
 @lower_builtin(types.NamedTupleClass, types.VarArg(types.Any))

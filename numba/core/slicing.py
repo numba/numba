@@ -6,7 +6,8 @@ from itertools import zip_longest
 
 from llvmlite import ir
 
-from numba import cgutils, types, typing, utils
+from numba import cgutils
+from numba.core import types, typing, utils
 from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)

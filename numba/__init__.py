@@ -11,7 +11,8 @@ from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 
-from . import config, errors, _runtests as runtests, types
+from . import config, _runtests as runtests
+from numba.core import types, errors
 
 # Re-export typeof
 from .special import (
@@ -20,10 +21,10 @@ from .special import (
 )
 
 # Re-export error classes
-from .errors import *
+from numba.core.errors import *
 
 # Re-export all type names
-from .types import *
+from numba.core.types import *
 
 # Re-export decorators
 from .decorators import (cfunc, generated_jit, jit, njit, stencil, jit_module)
@@ -110,8 +111,8 @@ def _ensure_critical_deps():
     """
     Make sure Python, NumPy and SciPy have supported versions.
     """
-    from .numpy_support import numpy_version
-    from .utils import PYVERSION
+    from numba.numpy_support import numpy_version
+    from numba.core.utils import PYVERSION
 
     if PYVERSION < (3, 6):
         raise ImportError("Numba needs Python 3.6 or greater")

@@ -7,10 +7,10 @@ import logging
 from collections import namedtuple, defaultdict, deque
 from functools import total_ordering
 
-from numba.utils import UniqueDict, PYVERSION
+from numba.core.utils import UniqueDict, PYVERSION
 from numba.controlflow import NEW_BLOCKERS, CFGraph
 from numba.ir import Loc
-from numba.errors import UnsupportedError
+from numba.core.errors import UnsupportedError
 
 
 _logger = logging.getLogger(__name__)

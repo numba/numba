@@ -27,7 +27,8 @@ try:
 except ImportError:
     scipy = None
 
-from numba import config, errors, typing, utils, numpy_support, testing
+from numba import config, numpy_support, testing
+from numba.core import errors, typing, utils
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest

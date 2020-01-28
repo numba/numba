@@ -1,11 +1,12 @@
 from numba import serialize
 
-from .. import jit, typeof, utils, types, numpy_support, sigutils
-from ..typing import npydecl
-from ..typing.templates import AbstractTemplate, signature
-from . import _internal, ufuncbuilder
-from ..dispatcher import Dispatcher
-from .. import array_analysis
+from numba import jit, typeof, numpy_support, sigutils
+from numba.core import types, utils
+from numba.core.typing import npydecl
+from numba.core.typing.templates import AbstractTemplate, signature
+from numba.npyufunc import _internal, ufuncbuilder
+from numba.dispatcher import Dispatcher
+from numba import array_analysis
 
 
 def make_dufunc_kernel(_dufunc):

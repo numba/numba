@@ -2,12 +2,11 @@
 This file provides internal compiler utilities that support certain special
 operations with numpy.
 """
-from numba import types
-from numba import typing
+from numba.core import types, typing
 from numba.cgutils import unpack_tuple
 from numba.extending import intrinsic
 from numba.targets.imputils import impl_ret_new_ref
-from numba.errors import RequireLiteralValue, TypingError
+from numba.core.errors import RequireLiteralValue, TypingError
 
 from .tuple import tuple_setitem
 

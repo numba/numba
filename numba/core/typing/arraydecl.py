@@ -2,14 +2,14 @@ import numpy as np
 import operator
 from collections import namedtuple
 
-from numba import types, utils
-from numba.typing.templates import (AttributeTemplate, AbstractTemplate, infer,
-                                    infer_global, infer_getattr, signature,
-                                    bound_function)
+from numba.core import types, utils
+from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
+                                         infer, infer_global, infer_getattr,
+                                         signature, bound_function)
 # import time side effect: array operations requires typing support of sequence
 # defined in collections: e.g. array.shape[i]
-from numba.typing import collections
-from numba.errors import TypingError
+from numba.core.typing import collections
+from numba.core.errors import TypingError
 
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 

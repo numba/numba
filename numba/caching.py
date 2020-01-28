@@ -15,12 +15,12 @@ import sys
 import tempfile
 import warnings
 
-from .appdirs import AppDirs
-from numba.utils import add_metaclass, file_replace
+from numba.appdirs import AppDirs
+from numba.core.utils import add_metaclass, file_replace
 
 import numba
-from . import compiler, config
-from .errors import NumbaWarning
+from numba import compiler, config
+from numba.core.errors import NumbaWarning
 from numba.targets.base import BaseContext
 from numba.targets.codegen import CodeLibrary
 from numba.compiler import CompileResult

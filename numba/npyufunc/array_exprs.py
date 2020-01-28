@@ -6,9 +6,10 @@ import sys
 import numpy as np
 import operator
 
-from .. import compiler, ir, types, rewrites, utils
-from ..typing import npydecl
-from .dufunc import DUFunc
+from numba import compiler, ir, rewrites
+from numba.core import types, utils
+from numba.core.typing import npydecl
+from numba.npyufunc.dufunc import DUFunc
 
 
 def _is_ufunc(func):

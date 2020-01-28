@@ -4,8 +4,7 @@ import weakref
 
 import numpy as np
 
-from numba.utils import add_metaclass
-from ..utils import cached_property
+from numba.core.utils import cached_property, add_metaclass
 
 
 # Types are added to a global registry (_typecache) in order to assign

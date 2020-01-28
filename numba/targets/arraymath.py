@@ -12,19 +12,20 @@ import numpy as np
 
 import llvmlite.llvmpy.core as lc
 
-from numba import types, cgutils, generated_jit
+from numba import cgutils, generated_jit
+from numba.core import types
 from numba.extending import overload, overload_method, register_jitable
 from numba.numpy_support import as_dtype, type_can_asarray
 from numba.numpy_support import numpy_version
 from numba.numpy_support import is_nonelike
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
-from numba.typing import signature
+from numba.core.typing import signature
 from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
 from numba.np.linalg import ensure_blas
 
 from numba.extending import intrinsic
-from numba.errors import RequireLiteralValue, TypingError
+from numba.core.errors import RequireLiteralValue, TypingError
 
 
 def _check_blas():

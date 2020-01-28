@@ -8,11 +8,11 @@ import copy
 import numpy as np
 from llvmlite import ir as lir
 
-from numba import (compiler, types, ir_utils, ir, typing, numpy_support, utils,
-                   typed_passes)
+from numba import (compiler, ir_utils, ir, numpy_support, typed_passes)
+from numba.core import types, typing, utils
 from numba import config
-from numba.typing.templates import (CallableTemplate, signature, infer_global,
-                                    AbstractTemplate)
+from numba.core.typing.templates import (CallableTemplate, signature,
+                                         infer_global, AbstractTemplate)
 from numba.targets import registry
 from numba.targets.imputils import lower_builtin
 from numba.extending import register_jitable

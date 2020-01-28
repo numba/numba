@@ -9,14 +9,15 @@ import math
 import operator
 
 from llvmlite import ir
-from numba import types, cgutils, typing
+from numba.core import types, typing
+from numba import cgutils
 from numba.targets.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked,
                                     for_iter, call_len, RefType)
-from numba.utils import cached_property
+from numba.core.utils import cached_property
 from numba.misc import quicksort
-from numba.np import slicing
+from numba.core import slicing
 
 
 def get_payload_struct(context, builder, set_type, ptr):

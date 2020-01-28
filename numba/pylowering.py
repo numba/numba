@@ -9,9 +9,10 @@ import operator
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from . import cgutils, generators, ir, types, utils
-from .errors import ForbiddenConstruct
-from .lowering import BaseLower
+from numba import cgutils, generators, ir
+from numba.core import types, utils
+from numba.core.errors import ForbiddenConstruct
+from numba.lowering import BaseLower
 
 
 # Issue #475: locals() is unsupported as calling it naively would give
@@ -76,7 +77,7 @@ class PyLower(BaseLower):
         super(PyLower, self).pre_lower()
         self.init_pyapi()
         # Pre-computed for later use
-        from .dispatcher import OmittedArg
+        from numba.dispatcher import OmittedArg
         self.omitted_typobj = self.pyapi.unserialize(
             self.pyapi.serialize_object(OmittedArg))
 

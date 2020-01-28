@@ -1,6 +1,7 @@
-from numba import ir, ir_utils, types, errors, sigutils
-from numba.typing.typeof import typeof_impl
-from .transforms import find_region_inout_vars
+from numba import ir, ir_utils, sigutils
+from numba.core import types, errors
+from numba.core.typing.typeof import typeof_impl
+from numba.transforms import find_region_inout_vars
 
 
 class WithContext(object):

@@ -6,14 +6,14 @@ import operator
 
 from llvmlite import ir as llvmir
 
-from numba import types
+from numba.core import types, utils, errors
 from numba.targets.registry import cpu_target
 from numba import njit
-from numba.typing import templates
+from numba.core.typing import templates
 from numba.datamodel import default_manager, models
 from numba.targets import imputils
-from numba import cgutils, utils, errors
-from . import _box
+from numba import cgutils
+from numba.jitclass import _box
 
 
 ##############################################################################

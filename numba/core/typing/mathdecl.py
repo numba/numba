@@ -1,7 +1,7 @@
 import math
-from numba import types, utils
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    signature, Registry)
+from numba.core import types, utils
+from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
+                                         signature, Registry)
 
 registry = Registry()
 infer_global = registry.register_global

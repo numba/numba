@@ -12,7 +12,8 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-from numba import types, utils, cgutils, typing, funcdesc, debuginfo, config
+from numba.core import types, utils, typing
+from numba import cgutils, funcdesc, debuginfo, config
 from numba import _dynfunc, _helperlib
 from numba.compiler_lock import global_compiler_lock
 from numba.pythonapi import PythonAPI

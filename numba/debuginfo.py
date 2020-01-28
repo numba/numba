@@ -8,7 +8,7 @@ import os.path
 
 from llvmlite import ir
 
-from numba.utils import add_metaclass
+from numba.core.utils import add_metaclass
 
 
 @add_metaclass(abc.ABCMeta)

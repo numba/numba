@@ -1,6 +1,6 @@
 import tokenize
 import string
-from numba import utils
+from numba.core import utils
 
 
 def parse_signature(sig):

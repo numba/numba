@@ -3,14 +3,15 @@ import itertools
 import numpy as np
 import operator
 
-from numba import types, prange, errors
+from numba.core import types, errors
+from numba import prange
 from numba.parfor import internal_prange
 
-from numba.utils import RANGE_ITER_OBJECTS
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    AbstractTemplate, infer_global, infer,
-                                    infer_getattr, signature, bound_function,
-                                    make_callable_template)
+from numba.core.utils import RANGE_ITER_OBJECTS
+from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
+                                         AbstractTemplate, infer_global, infer,
+                                         infer_getattr, signature,
+                                         bound_function, make_callable_template)
 
 
 @infer_global(print)

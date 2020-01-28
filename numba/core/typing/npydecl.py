@@ -3,15 +3,16 @@ import warnings
 import numpy as np
 import operator
 
-from .. import types, utils, config
-from .templates import (AttributeTemplate, AbstractTemplate, CallableTemplate,
-                        Registry, signature)
+from numba.core import types, utils
+from numba import config
+from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
+                                         CallableTemplate, Registry, signature)
 
-from ..numpy_support import (ufunc_find_matching_loop,
+from numba.numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
                              from_dtype, as_dtype, resolve_output_type,
                              carray, farray)
-from ..errors import TypingError, NumbaPerformanceWarning
+from numba.core.errors import TypingError, NumbaPerformanceWarning
 from numba import pndindex
 
 registry = Registry()

@@ -17,11 +17,11 @@ from contextlib import contextmanager
 from collections import defaultdict, deque
 from functools import total_ordering
 from numba import mviewbuf
-from numba import utils
+from numba.core import utils
 from numba import config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
 from . import enums, enums_ext, drvapi
-from numba.utils import longint as long
+from numba.core.utils import longint as long
 import numpy as np
 
 

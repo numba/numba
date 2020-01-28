@@ -1,7 +1,7 @@
 import ctypes
 import warnings
 
-from ... import utils
+from numba.core import utils
 
 from . import enums
 from .error import HsaApiError, HsaWarning

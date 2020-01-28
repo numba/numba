@@ -1,18 +1,18 @@
 from contextlib import contextmanager
 import warnings
 
-from . import (config,  errors, types, rewrites, typeinfer, funcdesc, lowering,
-               typing, ir)
+from numba import (config,  rewrites, typeinfer, funcdesc, lowering, ir)
+from numba.core import errors, types, typing
 
-from .parfor import PreParforPass as _parfor_PreParforPass
-from .parfor import ParforPass as _parfor_ParforPass
-from .parfor import Parfor
+from numba.parfor import PreParforPass as _parfor_PreParforPass
+from numba.parfor import ParforPass as _parfor_ParforPass
+from numba.parfor import Parfor
 
-from .compiler_machinery import FunctionPass, LoweringPass, register_pass
-from .annotations import type_annotations
-from .ir_utils import (raise_on_unsupported_feature, warn_deprecated,
-                       check_and_legalize_ir, guard, dead_code_elimination,
-                       simplify_CFG, get_definition)
+from numba.compiler_machinery import FunctionPass, LoweringPass, register_pass
+from numba.annotations import type_annotations
+from numba.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
+                            check_and_legalize_ir, guard, dead_code_elimination,
+                            simplify_CFG, get_definition)
 
 
 @contextmanager

@@ -4,10 +4,10 @@ from collections import namedtuple, OrderedDict
 import inspect
 from numba.compiler_lock import global_compiler_lock
 from numba import errors
-from . import config, transforms
-from numba.utils import add_metaclass
-from .tracing import event
-from .postproc import PostProcessor
+from numba import config, transforms
+from numba.core.utils import add_metaclass
+from numba.tracing import event
+from numba.postproc import PostProcessor
 
 # terminal color markup
 _termcolor = errors.termcolor()

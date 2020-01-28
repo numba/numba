@@ -1,7 +1,7 @@
 import struct
 
 import numpy as np
-from numba import utils
+from numba.core import utils
 
 from .abstract import *
 from .containers import *

@@ -9,8 +9,9 @@ import inspect
 import functools
 from enum import Enum
 
-from .. import typing, cgutils, types, utils
-from .. typing.templates import BaseRegistryLoader
+from numba.core import typing, types, utils
+from numba import cgutils
+from numba.core.typing.templates import BaseRegistryLoader
 
 
 class Registry(object):

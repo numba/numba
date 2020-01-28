@@ -11,9 +11,10 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
 
 from numba.targets.imputils import Registry, impl_ret_untracked
-from numba import types, typeof, cgutils, utils, config
+from numba import typeof, cgutils, config
+from numba.core import types, utils
 from numba.extending import overload
-from numba.typing import signature
+from numba.core.typing import signature
 from numba.unsafe.numbers import trailing_zeros
 
 

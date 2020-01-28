@@ -4,8 +4,9 @@ import numpy as np
 
 from .abstract import Dummy, Hashable, Literal, Number, Type
 from functools import total_ordering
-from .. import npdatetime, utils
-from ..typeconv import Conversion
+from numba import npdatetime
+from numba.core import utils
+from numba.core.typeconv import Conversion
 
 
 class Boolean(Hashable):

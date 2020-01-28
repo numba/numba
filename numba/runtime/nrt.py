@@ -1,13 +1,13 @@
 from collections import namedtuple
 from weakref import finalize as _finalize
 
-from . import nrtdynmod
+from numba.runtime import nrtdynmod
 from llvmlite import binding as ll
 
 from numba.compiler_lock import global_compiler_lock
-from numba.typing.typeof import typeof_impl
-from numba import types
-from . import _nrt_python as _nrt
+from numba.core.typing.typeof import typeof_impl
+from numba.core import types
+from numba.runtime import _nrt_python as _nrt
 
 _nrt_mstats = namedtuple("nrt_mstats", ["alloc", "free", "mi_alloc", "mi_free"])
 

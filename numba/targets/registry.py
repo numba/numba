@@ -1,8 +1,9 @@
 import contextlib
 
-from . import cpu
-from .descriptors import TargetDescriptor
-from .. import dispatcher, utils, typing
+from numba.targets import cpu
+from numba.targets.descriptors import TargetDescriptor
+from numba import dispatcher
+from numba.core import utils, typing
 
 # -----------------------------------------------------------------------------
 # Default CPU target descriptors

@@ -9,7 +9,8 @@ import functools
 
 from llvmlite import ir
 
-from . import utils, config, types
+from numba.core import utils, types
+from numba import config
 
 
 bool_t = ir.IntType(1)

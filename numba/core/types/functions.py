@@ -3,7 +3,7 @@ import traceback
 from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
 from .misc import unliteral
-from numba import errors
+from numba.core import errors
 
 # terminal color markup
 _termcolor = errors.termcolor()

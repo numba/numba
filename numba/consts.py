@@ -2,8 +2,8 @@ from types import ModuleType
 
 import weakref
 
-from . import ir
-from .errors import ConstantInferenceError, NumbaError
+from numba import ir
+from numba.core.errors import ConstantInferenceError, NumbaError
 
 
 class ConstantInference(object):

@@ -9,11 +9,12 @@ from enum import IntEnum
 import numpy as np
 import llvmlite.llvmpy.core as lc
 
-from numba import types, cgutils
+from numba.core import types
+from numba import cgutils
 from numba.targets.imputils import (impl_ret_untracked)
 
 from numba.extending import overload, intrinsic, register_jitable
-from .errors import TypingError
+from numba.core.errors import TypingError
 
 # This is equivalent to the struct `_PyUnicode_TypeRecord defined in CPython's
 # Objects/unicodectype.c

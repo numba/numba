@@ -11,7 +11,7 @@ import warnings
 import numba
 import numpy as np
 from collections import defaultdict
-from numba.utils import add_metaclass, reraise
+from numba.core.utils import add_metaclass, reraise
 from functools import wraps
 from abc import abstractmethod
 
