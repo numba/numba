@@ -8,7 +8,7 @@ from numba import dppy
 from numba.dppy.dppy_driver import driver as ocldrv
 
 
-@dppy.jit
+@dppy.kernel
 def data_parallel_sum(a, b, c):
     i = dppy.get_global_id(0)
     c[i] = a[i] + b[i]
