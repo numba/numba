@@ -8,8 +8,7 @@ from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.errors import TypingError
-from numba.utils import exec_
-from .support import (TestCase, MemoryLeakMixin, override_config,
+from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
                       forbid_codegen, skip_parfors_unsupported)
 
 from numba.unsafe.refcount import get_refcount
@@ -586,7 +585,7 @@ class TestNoneType(MemoryLeakMixin, TestCase):
         """ Test that unsupported operations on List[None] raise. """
         def generate_function(line1, line2):
             context = {}
-            exec_(dedent("""
+            exec(dedent("""
                 from numba.typed import List
                 def bar():
                     lst = List()
