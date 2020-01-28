@@ -293,7 +293,10 @@ class JitDPPyKernel(DPPyKernelBase):
     def __init__(self, func):
         super(JitDPPyKernel, self).__init__()
         self.py_func = func
-        self.definitions = {}
+        # DRD: Caching definitions this way can lead to unexpected consequences
+        # E.g. A kernel compiled for a given device would not get recompiled
+        # and lead to OpenCL runtime errors.
+        #self.definitions = {}
 
         from .descriptor import DPPyTargetDesc
 
@@ -310,9 +313,9 @@ class JitDPPyKernel(DPPyKernelBase):
     def specialize(self, *args):
         argtypes = tuple([self.typingctx.resolve_argument_type(a)
                           for a in args])
-        kernel = self.definitions.get(argtypes)
+        kernel = None #self.definitions.get(argtypes)
 
         if kernel is None:
             kernel = compile_kernel(self.device_env, self.py_func, argtypes)
-            self.definitions[argtypes] = kernel
+            #self.definitions[argtypes] = kernel
         return kernel
