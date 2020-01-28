@@ -220,14 +220,11 @@ class DPPyKernel(DPPyKernelBase):
         for ty, val in zip(self.argument_types, args):
             self._unpack_argument(ty, val, self.device_env, retr, kernelargs)
         
-        # enqueues the kernel
+        # enqueue the kernel
         driver.enqueue_kernel(self.device_env, self.kernel, kernelargs,
                               self.global_size, self.local_size)
 
-        # retrieve auto converted arrays
-        # for wb in retr:
-        #    wb()
-    
+
     def _unpack_device_array_argument(self, val, kernelargs):
         void_ptr_arg = True
         # meminfo 
@@ -306,7 +303,7 @@ class JitDPPyKernel(DPPyKernelBase):
         if self.device_env is None:
             _raise_no_device_found_error()
         kernel = self.specialize(*args)
-        cfg = kernel.configure(self.device_env, self.global_size, 
+        cfg = kernel.configure(self.device_env, self.global_size,
                                self.local_size)
         cfg(*args)
 
