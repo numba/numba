@@ -277,18 +277,14 @@ static int dump_dp_kernel_info (void *obj)
     value = (char*)malloc(size);
     err = clGetKernelInfo(kernel, CL_KERNEL_FUNCTION_NAME, size, value, NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not get kernel function name.");
-#if DEBUG
-    printf("DEBUG: Kernel Function name: %s\n", value);
-#endif
+    printf("Kernel Function name: %s\n", value);
     free(value);
 
     // print the number of kernel args
     err = clGetKernelInfo(kernel, CL_KERNEL_NUM_ARGS, sizeof(numKernelArgs),
             &numKernelArgs, NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not get kernel num args.");
-#if DEBUG
-    printf("DEBUG: Number of kernel arguments : %d\n", numKernelArgs);
-#endif
+    printf("Number of kernel arguments : %d\n", numKernelArgs);
 
     return DP_GLUE_SUCCESS;
 
