@@ -4,7 +4,7 @@ from itertools import product
 import numpy as np
 
 from numba import njit, typed, objmode, prange
-from numba.errors import (
+from numba.core.errors import (
     UnsupportedError, CompilerError, NumbaPerformanceWarning, TypingError,
 )
 from .support import (

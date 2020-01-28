@@ -10,7 +10,7 @@ import numpy
 
 from numba.compiler import compile_isolated
 from numba import types, utils, jit, types
-from numba.errors import TypingError, LoweringError
+from numba.core.errors import TypingError, LoweringError
 from .support import tag, _32bit
 from numba.tests.support import captured_stdout
 

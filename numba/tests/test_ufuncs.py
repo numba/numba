@@ -13,7 +13,7 @@ from numba import types, typing, utils, typeof, numpy_support, njit
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import from_dtype
 from numba import jit, vectorize
-from numba.errors import LoweringError, TypingError
+from numba.core.errors import LoweringError, TypingError
 from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
 from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 

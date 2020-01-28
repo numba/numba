@@ -11,7 +11,7 @@ from numba import unittest_support as unittest
 from numba.compiler import Flags
 from numba import jit, njit, typeof, types
 from numba.numpy_support import numpy_version
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 from numba.config import IS_WIN32, IS_32BITS
 from numba.utils import pysignature
 from numba.targets.arraymath import cross2d

@@ -29,7 +29,7 @@ from numba import unittest_support as unittest
 from numba import jit, generated_jit, types, typeof, errors
 from numba import _dispatcher
 from numba.compiler import compile_isolated
-from numba.errors import NumbaWarning
+from numba.core.errors import NumbaWarning
 from .support import (TestCase, temp_directory, import_dynamic,
                       override_env_config, capture_cache_log, captured_stdout)
 from numba.numpy_support import as_dtype

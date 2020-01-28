@@ -16,7 +16,7 @@ from numba.targets.registry import cpu_target
 from numba.compiler import compile_isolated
 from .support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
-from numba.errors import LoweringError
+from numba.core.errors import LoweringError
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,

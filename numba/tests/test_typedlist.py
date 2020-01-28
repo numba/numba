@@ -7,7 +7,7 @@ from numba import njit
 from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 from .support import (TestCase, MemoryLeakMixin, override_config,
                       forbid_codegen, skip_parfors_unsupported)
 

@@ -5,7 +5,7 @@ from itertools import permutations
 from numba import njit, types, utils
 import numba.unittest_support as unittest
 from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 
 
 _py37_or_later = utils.PYVERSION >= (3, 7)

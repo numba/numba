@@ -3,7 +3,7 @@
 import numpy as np
 
 from numba import njit, types
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 from .support import TestCase
 
 

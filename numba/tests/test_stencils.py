@@ -20,7 +20,7 @@ from numba.compiler import compile_extra, Flags
 from numba.targets import registry
 from numba.targets.cpu import ParallelOptions
 from .support import tag, skip_parfors_unsupported, _32bit
-from numba.errors import LoweringError, TypingError
+from numba.core.errors import LoweringError, TypingError
 
 
 skip_unsupported = skip_parfors_unsupported

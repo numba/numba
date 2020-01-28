@@ -7,7 +7,7 @@ from numba.numpy_support import from_dtype
 from numba import types, njit, typeof
 from .support import (TestCase, CompilationCache, MemoryLeakMixin, tag,
                       skip_parfors_unsupported)
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 
 
 def array_dtype(a):

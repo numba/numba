@@ -14,7 +14,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import config, jit, npdatetime, types, vectorize, numpy_support
 from numba.numpy_support import numpy_version
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 from .support import TestCase, tag
 
 

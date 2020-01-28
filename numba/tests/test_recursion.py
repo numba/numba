@@ -3,7 +3,7 @@ import warnings
 
 from numba import jit
 from numba import unittest_support as unittest
-from numba.errors import TypingError, NumbaWarning
+from numba.core.errors import TypingError, NumbaWarning
 from .support import TestCase
 
 

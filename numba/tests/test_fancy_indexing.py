@@ -4,7 +4,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import types, jit, typeof
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 from .support import MemoryLeakMixin, TestCase, tag
 
 

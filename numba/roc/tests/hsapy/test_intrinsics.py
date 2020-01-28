@@ -2,7 +2,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import roc
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 import operator as oper
 
 _WAVESIZE = roc.get_context().agent.wavefront_size

@@ -13,7 +13,7 @@ assumes that they work.
 
 from numba import njit
 from numba import int32, types
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 from numba import listobject
 from .support import (TestCase, MemoryLeakMixin, override_config,
                       forbid_codegen)

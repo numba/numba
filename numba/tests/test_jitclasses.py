@@ -13,7 +13,7 @@ from numba import jitclass
 from .support import TestCase, MemoryLeakMixin
 from numba.jitclass import _box
 from numba.runtime.nrt import MemInfo
-from numba.errors import LoweringError
+from numba.core.errors import LoweringError
 
 
 class TestClass1(object):

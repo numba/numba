@@ -6,7 +6,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import jit, njit, types, from_dtype, errors, typeof
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 from .support import TestCase, MemoryLeakMixin, CompilationCache, tag
 
 enable_pyobj_flags = Flags()

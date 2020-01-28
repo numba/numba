@@ -2,7 +2,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 from numba import jit, types, typeof
 
 

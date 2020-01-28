@@ -1,7 +1,7 @@
 from numba.extending import overload
 from numba import types
 from numba.special import literally, literal_unroll
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 
 
 @overload(literally)

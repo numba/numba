@@ -6,7 +6,7 @@ import threading
 import gc
 
 from numba import unittest_support as unittest
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 from numba import config
 from numba import njit
 from numba import types

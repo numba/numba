@@ -4,7 +4,7 @@
 import heapq as hq
 
 from numba import types
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 from numba.extending import overload, register_jitable
 
 

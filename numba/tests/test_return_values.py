@@ -8,7 +8,7 @@ import math
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 
 
 enable_pyobj_flags = Flags()
