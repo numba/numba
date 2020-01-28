@@ -1,6 +1,6 @@
 from __future__ import print_function, absolute_import, division
 from numba import sigutils, types
-from .compiler import (compile_kernel, AutoJitDPPyKernel)
+from .compiler import (compile_kernel, JitDPPyKernel)
 
 
 def kernel(signature=None, debug=False):
@@ -35,4 +35,4 @@ def _kernel_jit(signature, debug):
 
 
 def _kernel_autojit(pyfunc):
-    return AutoJitDPPyKernel(pyfunc)
+    return JitDPPyKernel(pyfunc)

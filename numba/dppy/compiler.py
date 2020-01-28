@@ -110,7 +110,7 @@ class DPPyKernelBase(object):
         return copy.copy(self)
 
     def configure(self, device_env, global_size, local_size=None):
-        """Configure the OpenCL kernel local_size can be None
+        """Configure the OpenCL kernel. The local_size can be None
         """
         global_size = _ensure_list(global_size)
 
@@ -135,7 +135,7 @@ class DPPyKernelBase(object):
     def __getitem__(self, args):
         """Mimick CUDA python's square-bracket notation for configuration.
         This assumes the argument to be:
-            `griddim, blockdim, queue`
+            `dppy_driver.device_env, global size, local size`
         The blockdim maps directly to local_size.
         The actual global_size is computed by multiplying the local_size to
         griddim.
@@ -291,10 +291,10 @@ class DPPyKernel(DPPyKernelBase):
             raise NotImplementedError(ty, val)
 
 
-class AutoJitDPPyKernel(DPPyKernelBase):
+class JitDPPyKernel(DPPyKernelBase):
 
     def __init__(self, func):
-        super(AutoJitDPPyKernel, self).__init__()
+        super(JitDPPyKernel, self).__init__()
         self.py_func = func
         self.definitions = {}
 
