@@ -3,8 +3,11 @@ from numba import sigutils, types
 from .compiler import (compile_kernel, AutoJitDPPyKernel)
 
 
-def jit(signature=None, debug=False):
-    """JIT compile a python function conforming using the DPPy backend
+def kernel(signature=None, debug=False):
+    """JIT compile a python function conforming using the DPPy backend.
+    
+    A kernel is equvalent to an OpenCL kernel function, and has the
+    same restrictions as definined by SPIR_KERNEL calling convention.
     """
     if signature is None:
         return autojit(debug=False)
