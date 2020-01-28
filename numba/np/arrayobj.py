@@ -27,7 +27,8 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
                                     RefType)
 from numba.typing import signature
 from numba.extending import register_jitable, overload, overload_method
-from . import quicksort, mergesort, slicing
+from numba.misc import quicksort, mergesort
+from numba.np import slicing
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):

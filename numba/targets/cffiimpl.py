@@ -5,7 +5,7 @@ Implementation of some CFFI functions
 
 from numba.targets.imputils import Registry
 from numba import types
-from . import arrayobj
+from numba.np import arrayobj
 
 registry = Registry()
 

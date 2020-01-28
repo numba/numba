@@ -20,8 +20,8 @@ from numba.numpy_support import is_nonelike
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.typing import signature
-from .arrayobj import make_array, load_item, store_item, _empty_nd_impl
-from .linalg import ensure_blas
+from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
+from numba.np.linalg import ensure_blas
 
 from numba.extending import intrinsic
 from numba.errors import RequireLiteralValue, TypingError

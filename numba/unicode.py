@@ -26,7 +26,7 @@ from numba.pythonapi import (
     PY_UNICODE_4BYTE_KIND,
     PY_UNICODE_WCHAR_KIND,
 )
-from numba.targets import slicing
+from numba.np import slicing
 from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region

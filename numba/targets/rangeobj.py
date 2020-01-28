@@ -8,7 +8,7 @@ import llvmlite.llvmpy.core as lc
 
 from numba import types, cgutils, prange
 from .listobj import ListIterInstance
-from .arrayobj import make_array
+from numba.np.arrayobj import make_array
 from .imputils import (lower_builtin, lower_cast,
                        iterator_impl, impl_ret_untracked)
 from numba.typing import signature

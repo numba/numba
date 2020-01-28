@@ -14,7 +14,8 @@ from numba.targets.imputils import (lower_builtin, lower_cast,
                                     RefType)
 from numba.extending import overload_method, overload
 from numba.utils import cached_property
-from . import quicksort, slicing
+from numba.misc import quicksort
+from numba.np import slicing
 
 
 def get_list_payload(context, builder, list_type, value):
