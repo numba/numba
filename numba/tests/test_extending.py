@@ -33,6 +33,7 @@ from numba.extending import (typeof_impl, type_callable,
                              )
 from numba.typing.templates import (
     ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
+from numba import cgutils
 
 _IS_PY3 = sys.version_info >= (3,)
 
@@ -88,24 +89,25 @@ def unbox_index(typ, obj, c):
 # -----------------------------------------------------------------------
 # Define a second custom type but w/o implicit cast to Number
 
-class MyDummy2(object):
-    pass
+def base_dummy_type_factory(name):
+    class DynType(object):
+        pass
 
-class MyDummyType2(types.Opaque):
-    pass
+    class DynTypeType(types.Opaque):
+        pass
 
-mydummy_type_2 = MyDummyType2('mydummy_2')
-mydummy_2 = MyDummy2()
+    dyn_type_type = DynTypeType(name)
 
-@typeof_impl.register(MyDummy2)
-def typeof_mydummy(val, c):
-    return mydummy_type_2
+    @typeof_impl.register(DynType)
+    def typeof_mydummy(val, c):
+        return dyn_type_type
+
+    register_model(DynTypeType)(models.OpaqueModel)
+    return DynTypeType, DynType, dyn_type_type
 
 
-def get_dummy_2():
-    return mydummy_2
+MyDummyType2, MyDummy2, mydummy_type_2 = base_dummy_type_factory('mydummy2')
 
-register_model(MyDummyType2)(models.OpaqueModel)
 
 @unbox(MyDummyType2)
 def unbox_index(typ, obj, c):
@@ -1442,6 +1444,158 @@ class TestJitOptionsNoNRT(TestCase):
             return x.attr_jit_option_check_no_nrt
 
         self.check_error_no_nrt(udt, mydummy)
+
+
+class TestUnboxer(TestCase):
+    def setUp(self):
+        super().setUp()
+        many = base_dummy_type_factory('mydummy2')
+        self.DynTypeType, self.DynType, self.dyn_type_type = many
+        self.dyn_type = self.DynType()
+
+    def test_unboxer_basic(self):
+        # Implements an unboxer on DynType that calls an intrinsic into the
+        # unboxer code.
+        magic_token = 0xbeefcafe
+        magic_offset = 123
+
+        @intrinsic
+        def my_intrinsic(typingctx, val):
+            # An intrinsic that returns `val + magic_offset`
+            def impl(context, builder, sig, args):
+                [val] = args
+                return builder.add(val, val.type(magic_offset))
+            sig = signature(val, val)
+            return sig, impl
+
+
+        @unbox(self.DynTypeType)
+        def unboxer(typ, obj, c):
+            # The unboxer that calls some jitcode
+            def bridge(x):
+                # proof that this is a jit'ed context by calling jit only
+                # intrinsic
+                return my_intrinsic(x)
+
+            args = [c.context.get_constant(types.intp, magic_token)]
+            sig = signature(types.voidptr, types.intp)
+            is_error, res = c.pyapi.call_jit_code(bridge, sig, args)
+            return NativeValue(res, is_error=is_error)
+
+        @box(self.DynTypeType)
+        def boxer(typ, val, c):
+            # The boxer that returns an integer representation
+            res = c.builder.ptrtoint(val, cgutils.intp_t)
+            return c.pyapi.long_from_ulonglong(res)
+
+        @njit
+        def passthru(x):
+            return x
+
+        out = passthru(self.dyn_type)
+        self.assertEqual(out, magic_token + magic_offset)
+
+    def test_unboxer_raise(self):
+        # Testing exception raising in jitcode called from unboxing.
+        @unbox(self.DynTypeType)
+        def unboxer(typ, obj, c):
+            # The unboxer that calls some jitcode
+            def bridge(x):
+                if x > 0:
+                    raise ValueError('cannot be x > 0')
+                return x
+
+            args = [c.context.get_constant(types.intp, 1)]
+            sig = signature(types.voidptr, types.intp)
+            is_error, res = c.pyapi.call_jit_code(bridge, sig, args)
+            return NativeValue(res, is_error=is_error)
+
+        @box(self.DynTypeType)
+        def boxer(typ, val, c):
+            # The boxer that returns an integer representation
+            res = c.builder.ptrtoint(val, cgutils.intp_t)
+            return c.pyapi.long_from_ulonglong(res)
+
+        @njit
+        def passthru(x):
+            return x
+
+        with self.assertRaises(ValueError) as raises:
+            out = passthru(self.dyn_type)
+        self.assertIn(
+            "cannot be x > 0",
+            str(raises.exception),
+        )
+
+    def test_boxer(self):
+        # Call jitcode inside the boxer
+        magic_token = 0xcafe
+        magic_offset = 312
+
+        @intrinsic
+        def my_intrinsic(typingctx, val):
+            # An intrinsic that returns `val + magic_offset`
+            def impl(context, builder, sig, args):
+                [val] = args
+                return builder.add(val, val.type(magic_offset))
+            sig = signature(val, val)
+            return sig, impl
+
+        @unbox(self.DynTypeType)
+        def unboxer(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        @box(self.DynTypeType)
+        def boxer(typ, val, c):
+            # Note: this doesn't do proper error handling
+            def bridge(x):
+                return my_intrinsic(x)
+
+            args = [c.context.get_constant(types.intp, magic_token)]
+            sig = signature(types.intp, types.intp)
+            is_error, res = c.pyapi.call_jit_code(bridge, sig, args)
+            return c.pyapi.long_from_ulonglong(res)
+
+        @njit
+        def passthru(x):
+            return x
+
+        r = passthru(self.dyn_type)
+        self.assertEqual(r, magic_token + magic_offset)
+
+    def test_boxer_raise(self):
+        # Call jitcode inside the boxer
+        @unbox(self.DynTypeType)
+        def unboxer(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        @box(self.DynTypeType)
+        def boxer(typ, val, c):
+            def bridge(x):
+                if x > 0:
+                    raise ValueError("cannot do x > 0")
+                return x
+
+            args = [c.context.get_constant(types.intp, 1)]
+            sig = signature(types.intp, types.intp)
+            is_error, res = c.pyapi.call_jit_code(bridge, sig, args)
+            # The error handling
+            retval = cgutils.alloca_once(c.builder, c.pyapi.pyobj, zfill=True)
+            with c.builder.if_then(c.builder.not_(is_error)):
+                obj = c.pyapi.long_from_ulonglong(res)
+                c.builder.store(obj, retval)
+            return c.builder.load(retval)
+
+        @njit
+        def passthru(x):
+            return x
+
+        with self.assertRaises(ValueError) as raises:
+            passthru(self.dyn_type)
+        self.assertIn(
+            "cannot do x > 0",
+            str(raises.exception),
+        )
 
 
 if __name__ == '__main__':
