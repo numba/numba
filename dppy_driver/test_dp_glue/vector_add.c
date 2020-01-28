@@ -182,15 +182,6 @@ int main (int argc, char** argv)
 
     printf("\n===================================\n\n");
 
-    printf("\n===================================\n\n");
-
-    //--- Execute on CPU
-    printf("Executing on the first CPU device info: \n");
-    rt->first_cpu_env->dump_fn(rt->first_cpu_env);
-    buildAndExecuteKernel(rt, ON_CPU);
-
-
-
     //--- Cleanup
     destroy_dp_runtime(&rt);
 

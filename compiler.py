@@ -343,7 +343,7 @@ class DPPyKernel(DPPyKernelBase):
 class JitDPPyKernel(DPPyKernelBase):
     def __init__(self, func, access_types):
 
-        super(AutoJitDPPyKernel, self).__init__()
+        super(JitDPPyKernel, self).__init__()
 
         self.py_func = func
         # DRD: Caching definitions this way can lead to unexpected consequences
