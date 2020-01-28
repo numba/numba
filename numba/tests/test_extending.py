@@ -1486,7 +1486,7 @@ class TestUnboxer(TestCase):
         def boxer(typ, val, c):
             # The boxer that returns an integer representation
             res = c.builder.ptrtoint(val, cgutils.intp_t)
-            return c.pyapi.long_from_ulonglong(res)
+            return c.pyapi.long_from_ssize_t(res)
 
         @njit
         def passthru(x):
@@ -1514,7 +1514,7 @@ class TestUnboxer(TestCase):
         def boxer(typ, val, c):
             # The boxer that returns an integer representation
             res = c.builder.ptrtoint(val, cgutils.intp_t)
-            return c.pyapi.long_from_ulonglong(res)
+            return c.pyapi.long_from_ssize_t(res)
 
         @njit
         def passthru(x):
@@ -1554,7 +1554,7 @@ class TestUnboxer(TestCase):
             args = [c.context.get_constant(types.intp, magic_token)]
             sig = signature(types.intp, types.intp)
             is_error, res = c.pyapi.call_jit_code(bridge, sig, args)
-            return c.pyapi.long_from_ulonglong(res)
+            return c.pyapi.long_from_ssize_t(res)
 
         @njit
         def passthru(x):
@@ -1582,7 +1582,7 @@ class TestUnboxer(TestCase):
             # The error handling
             retval = cgutils.alloca_once(c.builder, c.pyapi.pyobj, zfill=True)
             with c.builder.if_then(c.builder.not_(is_error)):
-                obj = c.pyapi.long_from_ulonglong(res)
+                obj = c.pyapi.long_from_ssize_t(res)
                 c.builder.store(obj, retval)
             return c.builder.load(retval)
 
