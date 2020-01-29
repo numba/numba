@@ -15,7 +15,7 @@ from numba.core.utils import (
     OPERATORS_TO_BUILTINS,
     get_function_globals
     )
-from numba.byteflow import Flow, AdaptDFA, AdaptCFA
+from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
 from numba.unsafe import eh
 
 
