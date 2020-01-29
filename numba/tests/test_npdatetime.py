@@ -12,11 +12,12 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import config, jit, npdatetime, vectorize, numpy_support
+from numba import config, jit, vectorize, numpy_support
 from numba.numpy_support import numpy_version
 from numba.core import types
 from numba.core.errors import TypingError
 from .support import TestCase, tag
+from numba.np import npdatetime
 
 
 def value_unit(val):
