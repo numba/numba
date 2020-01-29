@@ -17,7 +17,7 @@ from numba.targets.imputils import (Registry, impl_ret_untracked,
 from numba.core.typing import signature
 from numba import _helperlib, cgutils
 from numba.core import types, utils
-
+from numba.np import arrayobj
 
 POST_PY38 = utils.PYVERSION >= (3, 8)
 
@@ -1288,7 +1288,6 @@ for typing_key, arity in [
 
     @lower(typing_key, *(types.Any,) * arity)
     def random_arr(context, builder, sig, args, typing_key=typing_key):
-        from . import arrayobj
 
         arrty = sig.return_type
         dtype = arrty.dtype

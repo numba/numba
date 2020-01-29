@@ -3,8 +3,9 @@ import numba.unittest_support as unittest
 import math
 import sys
 
-from numba import jit, utils
-from .support import TestCase, tag
+from numba import jit
+from numba.core import utils
+from numba.tests.support import TestCase, tag
 
 
 max_uint64 = 18446744073709551615

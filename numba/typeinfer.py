@@ -23,6 +23,7 @@ from functools import reduce
 
 from numba import ir, config
 from numba.core import types, utils, typing
+from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
                                ForceLiteralArg)
@@ -406,7 +407,6 @@ class TypedGetItemConstraint(object):
             typevars = typeinfer.typevars
             idx_ty = typevars[self.index.name].get()
             ty = typevars[self.value.name].get()
-            from numba.typing.templates import Signature
             self.signature = Signature(self.dtype, ty + idx_ty, None)
             typeinfer.add_type(self.target, self.dtype, loc=self.loc)
 
