@@ -4,9 +4,9 @@ Test function name mangling.
 The mangling affects the ABI of numba compiled binaries.
 """
 
-from numba import types, utils
+from numba.core import types, utils
 from numba.funcdesc import default_mangler
-from .support import unittest, TestCase
+from numba.tests.support import unittest, TestCase
 
 
 class TestMangling(TestCase):

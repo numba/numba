@@ -9,9 +9,10 @@ from itertools import product
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import numpy_support, types
-from .support import TestCase
-from .enum_usecases import Shake, RequestError
+from numba import numpy_support
+from numba.core import types
+from numba.tests.support import TestCase
+from numba.tests.enum_usecases import Shake, RequestError
 
 
 class TestFromDtype(TestCase):

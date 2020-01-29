@@ -10,7 +10,7 @@ from llvmlite import ir
 import numpy as np
 import operator
 
-from numba import types, cgutils
+from numba import cgutils
 
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)

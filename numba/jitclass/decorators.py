@@ -1,4 +1,5 @@
-from numba import config, types
+from numba import config
+from numba.core import types
 from .base import register_class_type, ClassBuilder
 
 

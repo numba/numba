@@ -4,7 +4,8 @@ import numpy as np
 
 from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
 
-from numba import types, cgutils
+from numba import cgutils
+from numba.core import types
 from numba.compiler_lock import global_compiler_lock
 from ..caching import make_library_cache, NullCache
 

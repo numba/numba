@@ -7,7 +7,8 @@ from functools import wraps, partial
 
 from llvmlite import ir
 
-from numba import types, cgutils
+from numba import cgutils
+from numba.core import types
 from numba.pythonapi import box, unbox, NativeValue
 from numba import njit
 from . import _box

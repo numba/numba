@@ -21,7 +21,8 @@ import weakref
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import sigutils, types, typing, errors
+from numba import sigutils
+from numba.core import types, typing, errors
 from numba.core.types.abstract import _typecache
 from numba.typing.templates import make_overload_template
 from numba import jit, njit, numpy_support, typeof

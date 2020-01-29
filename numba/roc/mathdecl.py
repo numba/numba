@@ -1,5 +1,5 @@
 import math
-from numba import types, utils
+from numba.core import types, utils
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     signature, Registry)
 

@@ -1,7 +1,8 @@
 import sys
 
 import numpy as np
-from numba import cuda, numpy_support, types
+from numba import cuda, numpy_support
+from numba.core import types
 from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
 

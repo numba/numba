@@ -3,7 +3,7 @@ from contextlib import contextmanager
 
 import llvmlite.llvmpy.core as lc
 
-from numba import types, typing
+from numba.core import types, typing
 from numba.targets import callconv, cpu
 
 

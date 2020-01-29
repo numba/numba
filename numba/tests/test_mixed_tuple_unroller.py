@@ -2,7 +2,8 @@ import numpy as np
 
 from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  skip_parfors_unsupported)
-from numba import njit, types, typed, ir, errors, literal_unroll, prange
+from numba import njit, typed, ir, literal_unroll, prange
+from numba.core import types, errors
 from numba.testing import unittest
 from numba.extending import overload
 from numba.compiler_machinery import PassManager, register_pass, FunctionPass

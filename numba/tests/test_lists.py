@@ -7,10 +7,11 @@ import ctypes as ct
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types, utils, typeof, jitclass
+from numba import jit, typeof, jitclass
 import numba.unittest_support as unittest
-from numba import testing, errors
-from .support import TestCase, MemoryLeakMixin, tag
+from numba import testing
+from numba.core import types, utils, errors
+from numba.tests.support import TestCase, MemoryLeakMixin, tag
 
 
 enable_pyobj_flags = Flags()

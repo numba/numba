@@ -26,18 +26,20 @@ except ImportError:
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, generated_jit, types, typeof, errors
+from numba import jit, generated_jit, typeof
+from numba.core import types, errors
 from numba import _dispatcher
 from numba.compiler import compile_isolated
 from numba.core.errors import NumbaWarning
-from .support import (TestCase, temp_directory, import_dynamic,
-                      override_env_config, capture_cache_log, captured_stdout)
+from numba.tests.support import (TestCase, temp_directory, import_dynamic,
+                                 override_env_config, capture_cache_log,
+                                 captured_stdout)
 from numba.numpy_support import as_dtype
 from numba.targets import codegen
 from numba.caching import _UserWideCacheLocator
 from numba.dispatcher import Dispatcher
 from numba import parfor
-from .support import skip_parfors_unsupported, needs_lapack
+from numba.tests.support import skip_parfors_unsupported, needs_lapack
 
 import llvmlite.binding as ll
 

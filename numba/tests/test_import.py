@@ -2,7 +2,7 @@ import subprocess
 import sys
 
 from numba import unittest_support as unittest
-from .support import TestCase
+from numba.tests.support import TestCase
 
 
 class TestNumbaImport(TestCase):
@@ -33,7 +33,8 @@ class TestNumbaImport(TestCase):
                 __import__(mod)
 
         code = """if 1:
-            from numba import jit, types, vectorize
+            from numba import jit, vectorize
+            from numba.core import types
             import sys
             print(list(sys.modules))
             """

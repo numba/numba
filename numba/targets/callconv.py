@@ -7,8 +7,9 @@ import itertools
 
 from llvmlite import ir as ir
 
-from numba import cgutils, types
-from .base import PYOBJECT, GENERIC_POINTER
+from numba import cgutils
+from numba.core import types
+from numba.targets.base import PYOBJECT, GENERIC_POINTER
 
 
 TryStatus = namedtuple('TryStatus', ['in_try', 'excinfo'])

@@ -2,7 +2,8 @@
 Exception handling intrinsics.
 """
 
-from numba import types, cgutils, errors
+from numba.core import types, errors
+from numba import cgutils
 from numba.extending import intrinsic
 
 

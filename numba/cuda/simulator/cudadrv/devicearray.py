@@ -7,7 +7,8 @@ from warnings import warn
 
 import numpy as np
 
-from numba import types, numpy_support
+from numba import numpy_support
+from numba.core import types
 
 DeviceRecord = None
 from_record_like = None

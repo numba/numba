@@ -1,7 +1,8 @@
 import sys
 import math
 from llvmlite.llvmpy.core import Type
-from numba import cgutils, types
+from numba import cgutils
+from numba.core import types
 from numba.targets.imputils import Registry
 
 registry = Registry()

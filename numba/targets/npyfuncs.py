@@ -9,9 +9,10 @@ import math
 
 from llvmlite.llvmpy import core as lc
 
-from .imputils import impl_ret_untracked
-from .. import cgutils, typing, types, lowering, errors
-from . import cmathimpl, mathimpl, numbers, npdatetime
+from numba.targets.imputils import impl_ret_untracked
+from numba import cgutils, lowering
+from numba.core import typing, types, errors
+from numba.targets import cmathimpl, mathimpl, numbers, npdatetime
 
 # some NumPy constants. Note that we could generate some of them using
 # the math library, but having the values copied from npy_math seems to

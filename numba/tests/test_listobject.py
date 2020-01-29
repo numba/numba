@@ -12,11 +12,12 @@ assumes that they work.
 """
 
 from numba import njit
-from numba import int32, types
+from numba import int32
+from numba.core import types
 from numba.core.errors import TypingError
 from numba import listobject
-from .support import (TestCase, MemoryLeakMixin, override_config,
-                      forbid_codegen)
+from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
+                                 forbid_codegen)
 
 
 class TestCreateAppendLength(MemoryLeakMixin, TestCase):

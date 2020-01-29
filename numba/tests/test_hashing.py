@@ -10,9 +10,10 @@ from collections import defaultdict
 
 import numpy as np
 
-from numba import jit, types, utils
+from numba import jit
+from numba.core import types, utils
 import numba.unittest_support as unittest
-from .support import TestCase, tag, CompilationCache
+from numba.tests.support import TestCase, tag, CompilationCache
 from numba.targets import hashing
 
 from numba.unicode import compile_time_get_string_data

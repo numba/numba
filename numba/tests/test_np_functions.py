@@ -9,13 +9,15 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import Flags
-from numba import jit, njit, typeof, types
+from numba import jit, njit, typeof
+from numba.core import types
 from numba.numpy_support import numpy_version
 from numba.core.errors import TypingError
 from numba.config import IS_WIN32, IS_32BITS
 from numba.utils import pysignature
 from numba.targets.arraymath import cross2d
-from .support import TestCase, CompilationCache, MemoryLeakMixin, needs_blas
+from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
+                                 needs_blas)
 
 
 no_pyobj_flags = Flags()

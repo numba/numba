@@ -7,7 +7,8 @@ from collections import namedtuple, defaultdict
 
 from numba import ir, errors
 from numba.controlflow import CFGraph
-from numba import types, consts, special
+from numba import consts, special
+from numba.core import types
 
 #
 # Analysis related to variable lifetime

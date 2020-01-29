@@ -11,9 +11,10 @@ import threading
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import jit, _helperlib, types
+from numba import jit, _helperlib
+from numba.core import types
 from numba.compiler import compile_isolated
-from .support import TestCase, compile_function, tag
+from numba.tests.support import TestCase, compile_function, tag
 
 
 # State size of the Mersenne Twister

@@ -1,7 +1,8 @@
 from numba.compiler import Compiler
-from numba import jit, generated_jit, types, objmode
+from numba import jit, generated_jit, objmode
+from numba.core import types
 from numba.ir import FunctionIR
-from .support import TestCase
+from numba.tests.support import TestCase
 
 
 class TestCustomPipeline(TestCase):

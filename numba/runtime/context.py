@@ -1,6 +1,7 @@
 from llvmlite import ir
 
-from numba import cgutils, types
+from numba import cgutils
+from numba.core import types
 
 
 class NRTContext(object):

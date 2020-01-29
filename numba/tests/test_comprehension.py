@@ -1,5 +1,5 @@
 import numba.unittest_support as unittest
-from .support import TestCase
+from numba.tests.support import TestCase
 
 import sys
 import operator
@@ -9,10 +9,10 @@ import numpy as np
 import numpy
 
 from numba.compiler import compile_isolated
-from numba import types, utils, jit, types
+from numba import jit
+from numba.core import types, utils
 from numba.core.errors import TypingError, LoweringError
-from .support import tag, _32bit
-from numba.tests.support import captured_stdout
+from numba.tests.support import tag, _32bit, captured_stdout
 
 PARALLEL_SUPPORTED = not _32bit
 

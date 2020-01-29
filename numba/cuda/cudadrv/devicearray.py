@@ -16,7 +16,8 @@ import numpy as np
 import numba
 from . import driver as _driver
 from . import devices
-from numba import dummyarray, types, numpy_support
+from numba import dummyarray, numpy_support
+from numba.core import types
 from numba.unsafe.ndarray import to_fixed_tuple
 
 try:

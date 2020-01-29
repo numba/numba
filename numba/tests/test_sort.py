@@ -7,14 +7,15 @@ import sys
 import numpy as np
 
 from numba.compiler import compile_isolated, Flags
-from numba import jit, types, utils, njit, errors
+from numba import jit, njit
+from numba.core import types, utils, errors
 import numba.unittest_support as unittest
 from numba import testing
-from .support import TestCase, MemoryLeakMixin, tag
+from numba.tests.support import TestCase, MemoryLeakMixin, tag
 
 from numba.targets.quicksort import make_py_quicksort, make_jit_quicksort
 from numba.targets.mergesort import make_jit_mergesort
-from .timsort import make_py_timsort, make_jit_timsort, MergeRun
+from numba.tests.timsort import make_py_timsort, make_jit_timsort, MergeRun
 
 
 def make_temp_list(keys, n):

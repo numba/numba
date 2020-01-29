@@ -3,9 +3,9 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils
+from numba.core import types, utils
 from numba.tests import usecases
-from .support import TestCase, tag
+from numba.tests.support import TestCase, tag
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")

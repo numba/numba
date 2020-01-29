@@ -4,8 +4,8 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, compile_extra, Flags
-from numba import types, typing
-from .support import TestCase
+from numba.core import types, typing
+from numb.support import TestCase
 
 
 RISKFREE = 0.02

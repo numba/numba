@@ -7,7 +7,8 @@ import re
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import njit, targets, typing, types
+from numba import njit, targets
+from numba.core import typing, types
 from numba.compiler import compile_isolated, Flags
 from numba.runtime import (
     rtsys,

@@ -7,13 +7,14 @@ import ctypes
 
 from llvmlite import ir
 
-from . import utils, compiler
-from .caching import NullCache, FunctionCache
-from .dispatcher import _FunctionCompiler
-from .targets import registry
-from .typing import signature
-from .typing.ctypes_utils import to_ctypes
-from .compiler_lock import global_compiler_lock
+from numba.core import utils
+from numba import compiler
+from numba.caching import NullCache, FunctionCache
+from numba.dispatcher import _FunctionCompiler
+from numba.targets import registry
+from numba.core.typing import signature
+from numba.core.typing.ctypes_utils import to_ctypes
+from numba.compiler_lock import global_compiler_lock
 
 
 class _CFuncCompiler(_FunctionCompiler):

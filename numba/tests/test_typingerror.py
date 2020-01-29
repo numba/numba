@@ -7,9 +7,10 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import jit, types
+from numba import jit
+from numba.core import types
 from numba.core.errors import TypingError
-from .support import TestCase
+from numba.tests.support import TestCase
 
 
 def what():

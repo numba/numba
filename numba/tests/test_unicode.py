@@ -2,9 +2,10 @@
 from itertools import product
 from itertools import permutations
 
-from numba import njit, types, utils
+from numba import njit
+from numba.core import types, utils
 import numba.unittest_support as unittest
-from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
+from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.core.errors import TypingError
 
 

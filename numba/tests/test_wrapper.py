@@ -1,7 +1,8 @@
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import compiler, types, utils
+from numba import compiler
+from numba.core import types, utils
 from numba.targets import registry
 
 

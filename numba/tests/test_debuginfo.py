@@ -1,8 +1,9 @@
 import re
 
-from .support import TestCase, override_config
+from numba.tests.support import TestCase, override_config
 from numba import unittest_support as unittest
-from numba import jit, types
+from numba import jit
+from numba.core import types
 
 
 class TestDebugInfo(TestCase):

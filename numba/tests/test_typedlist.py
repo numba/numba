@@ -4,7 +4,8 @@ from textwrap import dedent
 import numpy as np
 
 from numba import njit
-from numba import int32, float32, types, prange
+from numba import int32, float32, prange
+from numba.core import types
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.core.errors import TypingError

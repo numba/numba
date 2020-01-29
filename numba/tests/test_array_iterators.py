@@ -3,9 +3,10 @@ import itertools
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, typeof, types
+from numba import jit, typeof
+from numba.core import types
 from numba.compiler import compile_isolated
-from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
+from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
 
 
 def array_iter(arr):

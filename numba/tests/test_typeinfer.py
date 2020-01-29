@@ -5,12 +5,12 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import types, typeinfer, typing, jit, errors
-from numba import utils
-from numba.typeconv import Conversion
+from numba import typeinfer, jit
+from numba.core import types, typing, errors, utils
+from numba.core.typeconv import Conversion
 
-from .support import TestCase, tag
-from .test_typeconv import CompatibilityTestMixin
+from numba.tests.support import TestCase, tag
+from numba.tests.test_typeconv import CompatibilityTestMixin
 
 
 i8 = types.int8

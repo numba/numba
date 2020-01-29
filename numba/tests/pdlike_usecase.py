@@ -4,7 +4,8 @@ Implementation of a minimal Pandas-like API.
 
 import numpy as np
 
-from numba import types, cgutils
+from numba.core import types
+from numba import cgutils
 from numba.datamodel import models
 from numba.extending import (
     typeof_impl, type_callable, register_model,

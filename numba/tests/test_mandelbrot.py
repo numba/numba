@@ -1,6 +1,6 @@
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils
+from numba.core import types, utils
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")

@@ -2,7 +2,8 @@ import array
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import jit, cffi_support, types, errors
+from numba import jit, cffi_support
+from numba.core import types, errors
 from numba.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase, tag
 

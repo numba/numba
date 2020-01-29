@@ -5,7 +5,8 @@ Implementation of operations involving polynomials.
 
 import numpy as np
 
-from numba import types, jit
+from numba import jit
+from numba.core import types
 from numba.extending import overload
 from numba import numpy_support as np_support
 

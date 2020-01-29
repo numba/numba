@@ -5,8 +5,9 @@ import sys
 import numpy
 
 from numba.compiler import compile_isolated
-from numba import types, utils, jit, njit
-from .support import tag
+from numba import jit, njit
+from numba.core import types, utils
+from numba.tests.support import tag
 
 
 def loop1(n):

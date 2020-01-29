@@ -5,7 +5,8 @@ operations with bytes and workarounds for limitations enforced in userland.
 
 from numba.extending import intrinsic
 from llvmlite import ir
-from numba import types, cgutils
+from numba.core import types
+from numba import cgutils
 
 
 @intrinsic

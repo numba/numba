@@ -2,9 +2,10 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import jit, types
+from numba import jit
+from numba.core import types
 
-from .support import TestCase, tag
+from numba.tests.support import TestCase, tag
 
 
 def dobool(a):

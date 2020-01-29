@@ -4,9 +4,9 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, typeof, njit
-from numba import lowering
-from .support import TestCase
+from numba import typeof, njit, lowering
+from numba.core import types
+from numba.tests.support import TestCase
 
 
 def return_double_or_none(x):

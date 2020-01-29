@@ -2,8 +2,9 @@ import warnings
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, errors
-from .support import TestCase, CompilationCache, skip_tryexcept_supported
+from numba.core import types, errors
+from numba.tests.support import (TestCase, CompilationCache,
+                                 skip_tryexcept_supported)
 
 
 enable_pyobj_flags = Flags()

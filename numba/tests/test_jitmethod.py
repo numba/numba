@@ -2,7 +2,8 @@ import numba.unittest_support as unittest
 
 import numpy as np
 
-from numba import config, jit, types
+from numba import config, jit
+from numba.core import types
 from numba.compiler import compile_isolated
 from numba.tests.support import override_config
 

@@ -2,7 +2,8 @@ from functools import singledispatch
 
 from llvmlite.llvmpy.core import Type, Constant
 
-from numba import types, typing, cgutils
+from numba import cgutils
+from numba.core import types, typing
 from numba.targets.imputils import Registry
 from . import nvvmutils
 
