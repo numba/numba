@@ -10,7 +10,7 @@ from numba.core import types, utils, errors
 from numba.targets.registry import cpu_target
 from numba import njit
 from numba.core.typing import templates
-from numba.datamodel import default_manager, models
+from numba.core.datamodel import default_manager, models
 from numba.targets import imputils
 from numba import cgutils
 from numba.jitclass import _box

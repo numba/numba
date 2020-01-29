@@ -12,7 +12,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-from numba.core import types, utils, typing
+from numba.core import types, utils, typing, datamodel
 from numba import cgutils, funcdesc, debuginfo, config
 from numba import _dynfunc, _helperlib
 from numba.compiler_lock import global_compiler_lock
@@ -22,7 +22,6 @@ from . import builtins, imputils
 from .imputils import (user_function, user_generator,
                        builtin_registry, impl_ret_borrowed,
                        RegistryLoader)
-from numba import datamodel
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER

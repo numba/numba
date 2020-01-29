@@ -11,6 +11,7 @@ from llvmlite import ir
 
 from numba.core import utils, types
 from numba import config
+import numba.core.datamodel
 
 
 bool_t = ir.IntType(1)
@@ -97,10 +98,10 @@ class _StructProxy(object):
     _fe_type = None
 
     def __init__(self, context, builder, value=None, ref=None):
-        from numba import datamodel   # Avoid circular import
+        from numba.core import datamodel   # Avoid circular import
         self._context = context
         self._datamodel = self._context.data_model_manager[self._fe_type]
-        if not isinstance(self._datamodel, datamodel.StructModel):
+        if not isinstance(self._datamodel, numba.core.datamodel.StructModel):
             raise TypeError(
                 "Not a structure model: {0}".format(self._datamodel))
         self._builder = builder

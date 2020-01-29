@@ -19,7 +19,7 @@ from numba.extending import (
     NativeValue,
     register_jitable,
 )
-from numba.datamodel.models import OpaqueModel
+from numba.core.datamodel.models import OpaqueModel
 from numba.targets.cpu import InlineOptions
 from numba.compiler import DefaultPassBuilder
 from numba.typed_passes import DeadCodeElimination, IRLegalization

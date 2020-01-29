@@ -6,7 +6,7 @@ from numba.tests.support import TestCase
 from numba import njit, cgutils
 from numba.core import types, errors
 from numba.typing import signature
-from numba.datamodel import models
+from numba.core.datamodel import models
 from numba.extending import (
     overload, SentryLiteralArgs, overload_method, register_model, intrinsic,
 )

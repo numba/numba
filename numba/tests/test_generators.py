@@ -7,7 +7,7 @@ from numba import jit, njit
 from numba.core import types
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba import testing
-from numba.datamodel.testing import test_factory
+from numba.core.datamodel.testing import test_factory
 
 
 enable_pyobj_flags = Flags()

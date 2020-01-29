@@ -14,7 +14,7 @@ from numba.core.typing.templates import infer, infer_getattr
 from numba.targets.imputils import (
     lower_builtin, lower_getattr, lower_getattr_generic,
     lower_setattr, lower_setattr_generic, lower_cast)
-from numba.datamodel import models, register_default as register_model
+from numba.core.datamodel import models, register_default as register_model
 from numba.pythonapi import box, unbox, reflect, NativeValue
 from numba._helperlib import _import_cython_function
 
@@ -222,8 +222,8 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
     The given *typeclass*'s model must be a StructModel subclass.
     """
     from numba.core.typing.templates import AttributeTemplate
-    from numba.datamodel import default_manager
-    from numba.datamodel.models import StructModel
+    from numba.core.datamodel import default_manager
+    from numba.core.datamodel.models import StructModel
     from numba.targets.imputils import impl_ret_borrowed
     from numba import cgutils
 
