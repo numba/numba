@@ -566,8 +566,6 @@ class TestNoneType(MemoryLeakMixin, TestCase):
                     {}
                     {}
                 """.format(line1, line2)), context)
-            # FIXME: when _disable_reflected_list becomes available
-            # return njit(context["bar"], _disable_reflected_list=True)
             return njit(context["bar"])
         for line1, line2 in (
                 ("lst.append(None)", "lst.pop()"),
