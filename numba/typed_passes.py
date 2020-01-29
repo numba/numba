@@ -602,7 +602,7 @@ class InlineOverloads(FunctionPass):
 
         do_inline = True
         if not inline_type.is_always_inline:
-            from numba.typing.templates import _inline_info
+            from numba.core.typing.templates import _inline_info
             caller_inline_info = _inline_info(state.func_ir,
                                               state.type_annotation.typemap,
                                               state.type_annotation.calltypes,

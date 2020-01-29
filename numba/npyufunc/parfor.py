@@ -1030,8 +1030,7 @@ def _create_gufunc_for_parfor_body(
         print("gufunc_ir dump after renaming ")
         gufunc_ir.dump()
 
-    gufunc_param_types = [
-        numba.types.npytypes.Array(
+    gufunc_param_types = [types.npytypes.Array(
             index_var_typ, 1, "C")] + param_types
     if config.DEBUG_ARRAY_OPT:
         print(

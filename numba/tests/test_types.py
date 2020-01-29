@@ -22,13 +22,13 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import sigutils, types, typing, errors
-from numba.types.abstract import _typecache
+from numba.core.types.abstract import _typecache
 from numba.typing.templates import make_overload_template
 from numba import jit, njit, numpy_support, typeof
 from numba.extending import (overload, register_model, models, unbox,
                              NativeValue, typeof_impl)
-from .support import TestCase, temp_directory
-from .enum_usecases import Color, Shake, Shape
+from numba.tests.support import TestCase, temp_directory
+from numba.tests.enum_usecases import Color, Shake, Shape
 
 
 Point = namedtuple('Point', ('x', 'y'))

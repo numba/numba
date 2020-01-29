@@ -245,7 +245,7 @@ class StencilPass(object):
 
             so_name = ir_utils.mk_unique_var("stencil_output")
             out_arr = ir.Var(scope, so_name, loc)
-            self.typemap[out_arr.name] = numba.types.npytypes.Array(
+            self.typemap[out_arr.name] = numba.core.types.npytypes.Array(
                                                            return_type.dtype,
                                                            in_arr_typ.ndim,
                                                            in_arr_typ.layout)

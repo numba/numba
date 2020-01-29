@@ -1439,7 +1439,7 @@ class PreParforPass(object):
                             # Get the dtype function from the numpy module.
                             dtype_attr_var = ir.Var(scope, mk_unique_var("$dtype_attr_var"), loc)
                             temp = find_template(numpy.dtype)
-                            tfunc = numba.types.Function(temp)
+                            tfunc = numba.core.types.Function(temp)
                             tfunc.get_call_type(self.typingctx, (self.typemap[typ_var.name],), {})
                             self.typemap[dtype_attr_var.name] = types.functions.Function(temp)
                             dtype_attr_getattr = ir.Expr.getattr(g_np_var, 'dtype', loc)

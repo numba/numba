@@ -3,7 +3,8 @@ import numpy as np
 import numba
 import numba.unittest_support as unittest
 from numba.tests.support import TestCase
-from numba import njit, types, errors, cgutils
+from numba import njit, cgutils
+from numba.core import types, errors
 from numba.typing import signature
 from numba.datamodel import models
 from numba.extending import (
@@ -334,7 +335,7 @@ class TestLiteralDispatchWithCustomType(TestCase):
             def lit(self, a):
                 return a
 
-        class DummyType(numba.types.Type):
+        class DummyType(types.Type):
             def __init__(self):
                 super(DummyType, self).__init__(name="dummy")
 

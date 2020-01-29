@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import cffi_support
 from numba.tests.support import import_dynamic, temp_directory
-from numba.types import complex128
+from numba.core.types import complex128
 
 
 def load_inline_module():

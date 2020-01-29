@@ -187,7 +187,7 @@ class List(MutableSequence):
 
         Parameters
         ----------
-        lsttype : numba.types.ListType; keyword-only
+        lsttype : numba.core.types.ListType; keyword-only
             Used internally for the list type.
         meminfo : MemInfo; keyword-only
             Used internally to pass the MemInfo object when boxing.

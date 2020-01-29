@@ -5,7 +5,8 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils, njit, errors, typeof
+from numba import utils, njit, typeof
+from numba.core import types, errors
 from .support import TestCase, tag
 
 

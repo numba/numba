@@ -436,7 +436,7 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
             kws = dict(call_expr.kws)
         else:
             kws = {}
-        return numba.typing.fold_arguments(
+        return numba.core.typing.fold_arguments(
             pysig, args, kws, normal_handler, default_handler,
             stararg_handler)
     else:

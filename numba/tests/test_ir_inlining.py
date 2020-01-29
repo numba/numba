@@ -25,7 +25,7 @@ from numba.compiler import DefaultPassBuilder
 from numba.typed_passes import DeadCodeElimination, IRLegalization
 from numba.untyped_passes import PreserveIR
 from itertools import product
-from .support import TestCase, unittest, skip_py38_or_later
+from numba.tests.support import TestCase, unittest, skip_py38_or_later
 
 
 class InlineTestPipeline(numba.compiler.CompilerBase):

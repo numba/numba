@@ -107,7 +107,7 @@ class Dict(MutableMapping):
 
         Parameters
         ----------
-        dcttype : numba.types.DictType; keyword-only
+        dcttype : numba.core.types.DictType; keyword-only
             Used internally for the dictionary type.
         meminfo : MemInfo; keyword-only
             Used internally to pass the MemInfo object when boxing.
