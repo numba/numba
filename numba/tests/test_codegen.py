@@ -15,7 +15,7 @@ import llvmlite.binding as ll
 
 import numba.unittest_support as unittest
 from numba.targets.codegen import JITCPUCodegen
-from numba.compiler_lock import global_compiler_lock
+from numba.core.compiler_lock import global_compiler_lock
 from numba.tests.support import TestCase
 
 

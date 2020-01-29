@@ -1,5 +1,5 @@
 import unittest
-from numba.compiler_lock import (
+from numba.core.compiler_lock import (
     global_compiler_lock,
     require_global_compiler_lock,
 )

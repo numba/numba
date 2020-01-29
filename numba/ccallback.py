@@ -14,7 +14,7 @@ from numba.dispatcher import _FunctionCompiler
 from numba.targets import registry
 from numba.core.typing import signature
 from numba.core.typing.ctypes_utils import to_ctypes
-from numba.compiler_lock import global_compiler_lock
+from numba.core.compiler_lock import global_compiler_lock
 
 
 class _CFuncCompiler(_FunctionCompiler):

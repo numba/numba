@@ -15,7 +15,7 @@ import llvmlite.binding as ll
 from numba.core import types, utils, typing, datamodel
 from numba import cgutils, funcdesc, debuginfo, config
 from numba import _dynfunc, _helperlib
-from numba.compiler_lock import global_compiler_lock
+from numba.core.compiler_lock import global_compiler_lock
 from numba.pythonapi import PythonAPI
 from numba.np import arrayobj
 from . import builtins, imputils

@@ -13,7 +13,7 @@ from numba.core import utils
 from numba import config, cgutils
 from numba.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.runtime import rtsys
-from numba.compiler_lock import require_global_compiler_lock
+from numba.core.compiler_lock import require_global_compiler_lock
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])

@@ -4,7 +4,7 @@ from weakref import finalize as _finalize
 from numba.runtime import nrtdynmod
 from llvmlite import binding as ll
 
-from numba.compiler_lock import global_compiler_lock
+from numba.core.compiler_lock import global_compiler_lock
 from numba.core.typing.typeof import typeof_impl
 from numba.core import types
 from numba.runtime import _nrt_python as _nrt

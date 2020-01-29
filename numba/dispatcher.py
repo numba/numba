@@ -13,7 +13,7 @@ from copy import deepcopy
 
 from numba import _dispatcher, compiler, config
 from numba.core import utils, types, errors, typing
-from numba.compiler_lock import global_compiler_lock
+from numba.core.compiler_lock import global_compiler_lock
 from numba.core.typeconv.rules import default_type_manager
 from numba import sigutils, serialize
 from numba.core.typing.templates import fold_arguments

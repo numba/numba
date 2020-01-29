@@ -9,7 +9,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import cgutils
 from numba.core import types, typing
-from numba.compiler_lock import global_compiler_lock
+from numba.core.compiler_lock import global_compiler_lock
 from numba.targets import cpu
 from numba.tests.support import TestCase
 

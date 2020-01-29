@@ -7,7 +7,7 @@ import sys
 import tempfile
 
 from numba import sigutils, typing
-from numba.compiler_lock import global_compiler_lock
+from numba.core.compiler_lock import global_compiler_lock
 from .compiler import ModuleCompiler, ExportEntry
 from .platform import Toolchain
 from numba import cext

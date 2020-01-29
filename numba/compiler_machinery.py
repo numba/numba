@@ -2,7 +2,7 @@ import timeit
 from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
-from numba.compiler_lock import global_compiler_lock
+from numba.core.compiler_lock import global_compiler_lock
 from numba.core import errors
 from numba import config, transforms
 from numba.core.utils import add_metaclass

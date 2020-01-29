@@ -15,7 +15,7 @@ from numba.targets import (
 )
 from numba.targets.options import TargetOptions
 from numba.runtime import rtsys
-from numba.compiler_lock import global_compiler_lock
+from numba.core.compiler_lock import global_compiler_lock
 import numba.entrypoints
 from numba.targets import fastmathpass
 from numba.targets.cpu_options import (ParallelOptions, FastMathOptions,

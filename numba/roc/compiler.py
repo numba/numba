@@ -16,7 +16,7 @@ from numba.roc.hsadrv.driver import hsa, dgpu_present
 from .hsadrv import devicearray
 from numba.core.typing.templates import AbstractTemplate
 from numba import config
-from numba.compiler_lock import global_compiler_lock
+from numba.core.compiler_lock import global_compiler_lock
 
 @global_compiler_lock
 def compile_hsa(pyfunc, return_type, args, debug):
