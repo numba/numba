@@ -7,7 +7,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import jit
 from numba.core.errors import NumbaWarning, deprecated, NumbaDeprecationWarning
-from numba import errors
+from numba.core import errors
 
 
 class TestBuiltins(unittest.TestCase):

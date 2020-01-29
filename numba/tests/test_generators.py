@@ -3,8 +3,9 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import jit, njit, types
-from .support import TestCase, MemoryLeakMixin
+from numba import jit, njit
+from numba.core import types
+from numba.tests.support import TestCase, MemoryLeakMixin
 from numba import testing
 from numba.datamodel.testing import test_factory
 

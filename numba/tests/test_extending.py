@@ -10,7 +10,8 @@ import re
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import njit, jit, types, errors, typing, compiler
+from numba import njit, jit, compiler
+from numba.core import types, errors, typing
 from numba.typed_passes import type_inference_stage
 from numba.targets.registry import cpu_target
 from numba.compiler import compile_isolated

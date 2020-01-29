@@ -6,9 +6,10 @@ from collections import namedtuple
 from io import StringIO
 
 from numba import unittest_support as unittest
-from numba import (njit, typeof, types, typing, typeof, ir, bytecode, jitclass,
+from numba import (njit, typeof, typing, typeof, ir, bytecode, jitclass,
                    prange, postproc)
-from .support import TestCase, tag, skip_parfors_unsupported
+from numba.core import types
+from numba.tests.support import TestCase, tag, skip_parfors_unsupported
 from numba.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Compiler, Flags, PassManager
 from numba.targets import cpu, registry

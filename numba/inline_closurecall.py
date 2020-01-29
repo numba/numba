@@ -423,7 +423,7 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
 
     # handle defaults and kw arguments using pysignature if callee is function
     if isinstance(callee, pytypes.FunctionType):
-        pysig = numba.utils.pysignature(callee)
+        pysig = numba.core.utils.pysignature(callee)
         normal_handler = lambda index, param, default: default
         default_handler = lambda index, param, default: ir.Const(default, loc)
         # Throw error for stararg

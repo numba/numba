@@ -172,7 +172,7 @@ class Type(object):
     # usable as a function signature).
 
     def __call__(self, *args):
-        from ..typing import signature
+        from numba.core.typing import signature
         if len(args) == 1 and not isinstance(args[0], Type):
             return self.cast_python_value(args[0])
         return signature(self, # return_type
@@ -245,7 +245,7 @@ class Number(Hashable):
         """
         Unify the two number types using Numpy's rules.
         """
-        from .. import numpy_support
+        from numba import numpy_support
         if isinstance(other, Number):
             # XXX: this can produce unsafe conversions,
             # e.g. would unify {int64, uint64} to float64
@@ -433,7 +433,7 @@ class Literal(Type):
     @property
     def literal_type(self):
         if self._literal_type_cache is None:
-            from numba import typing
+            from numba.core import typing
             ctx = typing.Context()
             res = ctx.resolve_value_type(self.literal_value)
             self._literal_type_cache = res

@@ -7,7 +7,8 @@ LLVM or low level inlining.
 import numpy as np
 
 import numba
-from numba import njit, ir, types
+from numba import njit, ir
+from numba.core import types
 from numba.extending import (
     overload,
     overload_method,

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
 """
-Alias to numba.typing.cffi_utils for backward compatibility
+Alias to numba.core.typing.cffi_utils for backward compatibility
 """
-from numba.typing.cffi_utils import *
+from numba.core.typing.cffi_utils import *

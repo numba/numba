@@ -2,7 +2,8 @@ import sys
 
 import numpy as np
 import ctypes
-from numba import jit, numpy_support, types
+from numba import jit, numpy_support
+from numba.core import types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba.itanium_mangler import mangle_type

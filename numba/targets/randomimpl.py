@@ -14,8 +14,9 @@ from llvmlite import ir
 from numba.extending import overload, register_jitable
 from numba.targets.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
-from numba.typing import signature
-from numba import _helperlib, cgutils, types, utils
+from numba.core.typing import signature
+from numba import _helperlib, cgutils
+from numba.core import types, utils
 
 
 POST_PY38 = utils.PYVERSION >= (3, 8)

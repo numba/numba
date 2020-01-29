@@ -1,7 +1,8 @@
-from .abstract import Callable, Literal, Type
-from .common import Dummy, IterableType, Opaque, SimpleIteratorType
-from ..typeconv import Conversion
-from ..errors import TypingError, LiteralTypingError
+from numba.core.types.abstract import Callable, Literal, Type
+from numba.core.types.common import (Dummy, IterableType, Opaque,
+                                     SimpleIteratorType)
+from numba.core.typeconv import Conversion
+from numba.core.errors import TypingError, LiteralTypingError
 
 
 
@@ -285,7 +286,7 @@ class ExceptionClass(Callable, Phantom):
         return self.get_call_signatures()[0][0]
 
     def get_call_signatures(self):
-        from .. import typing
+        from numba.core import typing
         return_type = ExceptionInstance(self.exc_class)
         return [typing.signature(return_type)], False
 
@@ -480,7 +481,7 @@ class ContextManager(Callable, Phantom):
         return (), False
 
     def get_call_type(self, context, args, kws):
-        from numba import typing
+        from numba.core import typing
 
         if not self.cm.is_callable:
             msg = "contextmanager {} is not callable".format(self.cm)

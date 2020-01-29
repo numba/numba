@@ -5,7 +5,7 @@ import numba.unittest_support as unittest
 from numba.targets.base import OverloadSelector
 from numba.targets.registry import cpu_target
 from numba.targets.imputils import builtin_registry, RegistryLoader
-from numba import types
+from numba.core import types
 
 
 class TestOverloadSelector(unittest.TestCase):

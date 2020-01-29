@@ -5,7 +5,8 @@ from numba.targets.registry import cpu_target
 from numba.compiler import CompilerBase, Flags
 from numba.compiler_machinery import PassManager
 from numba.targets import registry
-from numba import types, ir_utils, bytecode
+from numba import ir_utils, bytecode
+from numba.core import types
 from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                                   IRProcessing,)
 
@@ -16,7 +17,7 @@ from numba.typed_passes import (NopythonTypeInference, type_inference_stage,
 GLOBAL_B = 11
 
 
-@jitclass([('val', numba.types.List(numba.intp))])
+@jitclass([('val', numba.core.types.List(numba.intp))])
 class Dummy(object):
     def __init__(self, val):
         self.val = val

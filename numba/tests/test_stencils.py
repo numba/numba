@@ -15,11 +15,12 @@ from copy import deepcopy
 
 import numba
 from numba import unittest_support as unittest
-from numba import njit, stencil, types
+from numba import njit, stencil
+from numba.core import types
 from numba.compiler import compile_extra, Flags
 from numba.targets import registry
 from numba.targets.cpu import ParallelOptions
-from .support import tag, skip_parfors_unsupported, _32bit
+from numba.tests.support import tag, skip_parfors_unsupported, _32bit
 from numba.core.errors import LoweringError, TypingError
 
 

@@ -20,7 +20,7 @@ def empty_inferred(typingctx, shape):
     There is special logic in the type-inferencer to handle the "refine"-ing
     of undefined dtype.
     """
-    from numba.targets.arrayobj import _empty_nd_impl
+    from numba.np.arrayobj import _empty_nd_impl
 
     def codegen(context, builder, signature, args):
         # check that the return type is now defined
