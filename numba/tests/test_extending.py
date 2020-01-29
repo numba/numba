@@ -1446,7 +1446,7 @@ class TestJitOptionsNoNRT(TestCase):
         self.check_error_no_nrt(udt, mydummy)
 
 
-class TestUnboxer(TestCase):
+class TestBoxingCallingJIT(TestCase):
     def setUp(self):
         super().setUp()
         many = base_dummy_type_factory('mydummy2')
