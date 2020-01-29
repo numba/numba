@@ -1586,6 +1586,15 @@ class PythonAPI(object):
     def call_jit_code(self, func, sig, args):
         """Calls into Numba jitted code and propagate error using the Python
         calling convention.
+
+        Parameters
+        ----------
+        func : function
+            The Python function to be compiled.
+        sig : numba.typing.Signature
+            The function signature for *func*.
+        args : Sequence[llvmlite.binding.Value]
+            LLVM values to use as arguments.
         """
         builder = self.builder
         cres = self.context.compile_subroutine(builder, func, sig)
