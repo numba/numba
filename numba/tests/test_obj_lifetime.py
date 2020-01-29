@@ -4,7 +4,7 @@ import weakref
 import gc
 
 import numba.unittest_support as unittest
-from numba.controlflow import CFGraph, Loop
+from numba.core.controlflow import CFGraph, Loop
 from numba.compiler import compile_extra, compile_isolated, Flags
 from numba.core import types
 from .support import TestCase

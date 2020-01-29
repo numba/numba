@@ -6,7 +6,7 @@ from functools import reduce
 from collections import namedtuple, defaultdict
 
 from numba import ir, errors
-from numba.controlflow import CFGraph
+from numba.core.controlflow import CFGraph
 from numba import consts, special
 from numba.core import types
 

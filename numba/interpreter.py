@@ -4,8 +4,8 @@ import dis
 import operator
 import logging
 
-from numba.core import errors, dataflow
-from numba import config, ir, controlflow
+from numba.core import errors, dataflow, controlflow
+from numba import config, ir
 from numba.core.errors import NotDefinedError
 from numba.core.utils import (
     PYVERSION,

@@ -8,7 +8,7 @@ from collections import namedtuple, defaultdict, deque
 from functools import total_ordering
 
 from numba.core.utils import UniqueDict, PYVERSION
-from numba.controlflow import NEW_BLOCKERS, CFGraph
+from numba.core.controlflow import NEW_BLOCKERS, CFGraph
 from numba.ir import Loc
 from numba.core.errors import UnsupportedError
 

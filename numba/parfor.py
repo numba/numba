@@ -82,7 +82,7 @@ from numba.ir_utils import (
 
 from numba.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
-from numba.controlflow import CFGraph
+from numba.core.controlflow import CFGraph
 from numba.core.typing import npydecl, signature
 from numba.core.types.functions import Function
 from numba.array_analysis import (random_int_args, random_1arg_size,
