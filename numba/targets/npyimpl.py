@@ -13,15 +13,16 @@ from llvmlite.llvmpy import core as lc
 import numpy as np
 import operator
 
-from . import builtins, callconv, ufunc_db
+from numba.targets import builtins, callconv, ufunc_db
 from numba.np import arrayobj
-from .imputils import Registry, impl_ret_new_ref, force_error_model
-from .. import typing, types, cgutils, numpy_support, utils
-from ..numpy_support import ufunc_find_matching_loop, select_array_wrapper, from_dtype
-from ..typing import npydecl
-from ..extending import overload, intrinsic
+from numba.targets.imputils import Registry, impl_ret_new_ref, force_error_model
+from numba import cgutils, numpy_support
+from numba.core import typing, types, utils
+from numba.numpy_support import ufunc_find_matching_loop, select_array_wrapper, from_dtype
+from numba.core.typing import npydecl
+from numba.extending import overload, intrinsic
 
-from .. import errors
+from numba.core import errors
 
 registry = Registry()
 lower = registry.lower

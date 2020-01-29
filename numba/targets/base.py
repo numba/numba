@@ -273,7 +273,8 @@ class BaseContext(object):
         from . import (arraymath, enumimpl, iterators, numbers,
                        optional, polynomial, rangeobj, tupleobj,
                        gdb_hook, hashing, heapq, literal)
-        from numba.np import slicing, linalg
+        from numba.core import slicing
+        from numba.np import linalg
 
         try:
             from . import npdatetime
