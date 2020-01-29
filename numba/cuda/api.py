@@ -54,7 +54,7 @@ def from_cuda_array_interface(desc, owner=None, sync=True):
     stream = sync and default_stream() or 0
     da = devicearray.DeviceNDArray(shape=shape, strides=strides,
                                    dtype=dtype, gpu_data=data,
-                                   stream=default_stream())
+                                   stream=stream)
     return da
 
 

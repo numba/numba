@@ -126,10 +126,10 @@ class DeviceNDArrayBase(object):
 
         if self.stream:
             # Synchronize the default stream with this array's stream
-            ctx = _driver.devices.get_context()
+            ctx = devices.get_context()
             event = ctx.create_event(timing=False)
             event.record(self.stream)
-            event.wait(_ctx.get_default_stream())
+            event.wait(ctx.get_default_stream())
             # Hold a reference to the event so it is not cleaned up before this
             # array
             self._syncevent = event
