@@ -1030,21 +1030,24 @@ The :func:`numba.gdb` and :func:`numba.gdb_init` functions work by injecting the
 following into the function's LLVM IR:
 
 * At the call site of the function first inject a call to ``getpid(3)`` to get
-  the PID of the executing process and store this for use later, then inject a
-  ``fork(3)`` call:
+  the PID of the executing process and store this for use later, following this
+  create a pipe via an injected ``pipe(3)`` then inject a ``fork(3)`` call:
 
   * In the parent:
 
-    * Inject a call ``sleep(3)`` (hence the pause whilst ``gdb`` loads).
+    * Inject a call ``read(3)`` on the read end of the pipe (this blocks).
     * Inject a call to the ``numba_gdb_breakpoint`` function (only
       :func:`numba.gdb` does this).
 
   * In the child:
 
+    * Inject calls to ``close(3)`` the read and write ends of the pipe, they are
+      not needed in the child.
     * Inject a call to ``execl(3)`` with the arguments
       ``numba.config.GDB_BINARY``, the ``attach`` command and the PID recorded
-      earlier. Numba has a special ``gdb`` command file that contains
-      instructions to break on the symbol ``numba_gdb_breakpoint`` and then
+      earlier, and a call to ``close(3)`` with the write end of the pipe as the
+      argument. Numba has a special ``gdb`` command file that contains
+      instructions to break on the symbol ``numba_gdb_breakpoint``, and then
       ``finish``, this is to make sure that the program stops on the
       breakpoint but the frame it stops in is the compiled Python frame (or
       one ``step`` away from, depending on optimisation). This command file is
@@ -1056,13 +1059,15 @@ special ``numba_gdb_breakpoint`` symbol, which is already registered and
 instrumented as a place to break and ``finish`` immediately.
 
 As a result of this, a e.g. :func:`numba.gdb` call will cause a fork in the
-program, the parent will sleep whilst the child launches ``gdb`` and attaches it
-to the parent and tells the parent to continue. The launched ``gdb`` has the
+program, the parent will block on reading the pipe whilst the child launches
+``gdb`` and attaches it to the parent. The launched ``gdb`` has the
 ``numba_gdb_breakpoint`` symbol registered as a breakpoint and when the parent
-continues and stops sleeping it will immediately call ``numba_gdb_breakpoint``
-on which the child will break. Additional :func:`numba.gdb_breakpoint` calls
-create calls to the registered breakpoint hence the program will also break at
-these locations.
+continues it will immediately call ``numba_gdb_breakpoint`` on which the child
+will break. This behaviour is orchestrated by the blocking read in the parent
+being is unblocked by ``gdb`` issuing a ``close`` call on the write end of the
+pipe, followed immediately by a ``continue``. Further, any additional
+:func:`numba.gdb_breakpoint` calls create calls to the registered breakpoint
+hence the program will also break at these locations.
 
 
 Debugging CUDA Python code

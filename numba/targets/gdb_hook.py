@@ -72,21 +72,32 @@ def init_gdb_codegen(cgctx, builder, signature, args,
                      const_args, do_break=False):
 
     int8_t = ir.IntType(8)
+    void_ptr = ir.PointerType(int8_t)
     int32_t = ir.IntType(32)
+    int32_t_ptr = ir.PointerType(ir.IntType(32))
     intp_t = ir.IntType(utils.MACHINE_BITS)
     char_ptr = ir.PointerType(ir.IntType(8))
     zero_i32t = int32_t(0)
+    one_i32t = int32_t(1)
 
     mod = builder.module
     pid = cgutils.alloca_once(builder, int32_t, size=1)
 
     # 32bit pid, 11 char max + terminator
     pidstr = cgutils.alloca_once(builder, int8_t, size=12)
+    # 32bit pid, 11 char max + cmd + terminator = 11 + 7+, make it 20
+    callclose_str = cgutils.alloca_once(builder, int8_t, size=20)
+    # pointless read buffer, nothing should ever actually be read into it
+    read_buffer = cgutils.alloca_once(builder, int8_t, size=1)
+
+    # pipe file descriptors
+    pipefds = cgutils.alloca_once(builder, int32_t, size=2)
 
     # str consts
     intfmt = cgctx.insert_const_string(mod, '%d')
     gdb_str = cgctx.insert_const_string(mod, config.GDB_BINARY)
     attach_str = cgctx.insert_const_string(mod, 'attach')
+    callclosefmt = cgctx.insert_const_string(mod, 'call close(%d)')
 
     new_args = []
     # add break point command to known location
@@ -94,7 +105,7 @@ def init_gdb_codegen(cgctx, builder, signature, args,
     # requiring an interactive prompt
     # https://sourceware.org/bugzilla/show_bug.cgi?id=10079
     new_args.extend(['-x', os.path.join(_path, 'cmdlang.gdb')])
-    # issue command to continue execution from sleep function
+    # issue command to continue execution after read() unblocks
     new_args.extend(['-ex', 'c'])
     # then run the user defined args if any
     new_args.extend([x.literal_value for x in const_args])
@@ -114,20 +125,28 @@ def init_gdb_codegen(cgctx, builder, signature, args,
     fnty = ir.FunctionType(int32_t, tuple())
     fork = mod.get_or_insert_function(fnty, "fork")
 
+    # insert pipe
+    fnty = ir.FunctionType(int32_t, (int32_t_ptr,))
+    pipe = mod.get_or_insert_function(fnty, "pipe")
+
+    # insert read
+    fnty = ir.FunctionType(int32_t, (int32_t, void_ptr, intp_t))
+    read = mod.get_or_insert_function(fnty, "read")
+
+    # insert close
+    fnty = ir.FunctionType(int32_t, (int32_t,))
+    close = mod.get_or_insert_function(fnty, "close")
+
     # insert execl
     fnty = ir.FunctionType(int32_t, (char_ptr, char_ptr), var_arg=True)
     execl = mod.get_or_insert_function(fnty, "execl")
 
-    # insert sleep
-    fnty = ir.FunctionType(int32_t, (int32_t,))
-    sleep = mod.get_or_insert_function(fnty, "sleep")
-
     # insert break point
     fnty = ir.FunctionType(ir.VoidType(), tuple())
-    breakpoint = mod.get_or_insert_function(fnty,
-                                            "numba_gdb_breakpoint")
+    breakpoint = mod.get_or_insert_function(fnty, "numba_gdb_breakpoint")
 
     # do the work
+    # call getpid
     parent_pid = builder.call(getpid, tuple())
     builder.store(parent_pid, pid)
     pidstr_ptr = builder.gep(pidstr, [zero_i32t], inbounds=True)
@@ -141,6 +160,14 @@ def init_gdb_codegen(cgctx, builder, signature, args,
         msg = "Internal error: `snprintf` buffer would have overflowed."
         cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
+    # call pipe to set up fds
+    pipefds_ptr = builder.gep(pipefds, [zero_i32t], inbounds=True)
+    stat = builder.call(pipe, (pipefds_ptr,))
+    pipe_failed = builder.icmp_signed('==', stat, int32_t(-1))
+    with builder.if_then(pipe_failed, likely=False):
+        msg = "Internal error: `pipe` failed."
+        cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+
     # fork, check pids etc
     child_pid = builder.call(fork, tuple())
     fork_failed = builder.icmp_signed('==', child_pid, int32_t(-1))
@@ -148,27 +175,58 @@ def init_gdb_codegen(cgctx, builder, signature, args,
         msg = "Internal error: `fork` failed."
         cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,))
 
+    # pointers to the read and write end FDs
+    read_end = builder.gep(pipefds, [zero_i32t], inbounds=True)
+    write_end = builder.gep(pipefds, [one_i32t], inbounds=True)
+
+    # this writes a command like "close(write_end_fd)" into the text buffer that
+    # will be one of the const char * that goes into the execl call made to
+    # gdb with view of a command like `-ex "close(write_end_fd)"` being executed
+    stat = builder.call(snprintf, (callclose_str, intp_t(20), callclosefmt,
+                                   builder.load(write_end)))
+    invalid_write = builder.icmp_signed('>', stat, int32_t(20))
+    with builder.if_then(invalid_write, likely=False):
+        msg = "Internal error: `snprintf` buffer would have overflowed."
+        cgctx.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+
     is_child = builder.icmp_signed('==', child_pid, zero_i32t)
     with builder.if_else(is_child) as (then, orelse):
         with then:
             # is child
+
+            # first close the fork-inherited pipe ends, doesn't matter if they
+            # return something
+            builder.call(close, (builder.load(write_end),))
+            builder.call(close, (builder.load(read_end),))
+
+            # stage the gdb call
             nullptr = ir.Constant(char_ptr, None)
             gdb_str_ptr = builder.gep(
                 gdb_str, [zero_i32t], inbounds=True)
             attach_str_ptr = builder.gep(
                 attach_str, [zero_i32t], inbounds=True)
+            callclose_str_ptr = builder.gep(
+                callclose_str, [zero_i32t], inbounds=True)
             cgutils.printf(
                 builder, "Attaching to PID: %s\n", pidstr)
-            buf = (
-                gdb_str_ptr,
-                gdb_str_ptr,
-                attach_str_ptr,
-                pidstr_ptr)
+            buf = (gdb_str_ptr,    # gdb binary w path
+                   gdb_str_ptr,    # gdb binary w path
+                   attach_str_ptr, # the "attach" command
+                   pidstr_ptr,     # PID to attach to (parent, from above)
+                   cgctx.insert_const_string(mod, '-ex'), # str "-ex"
+                   callclose_str_ptr, # the command "close(write_end_fd)"
+                   )
+            cgutils.printf(builder,"%s\n", callclose_str)
             buf = buf + tuple(cmdlang) + (nullptr,)
             builder.call(execl, buf)
         with orelse:
             # is parent
-            builder.call(sleep, (int32_t(10),))
+            # issue a call to read() from the read-end of the pipe, this will
+            # block
+            builder.call(read, (builder.load(read_end), read_buffer, intp_t(1)))
+            # read is done, close read end (gdb closed write end as signal to
+            # unblock), nothing can be done with regards to the return status
+            builder.call(close, (builder.load(read_end),))
             # if breaking is desired, break now
             if do_break is True:
                 builder.call(breakpoint, tuple())

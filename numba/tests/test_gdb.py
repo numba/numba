@@ -2,7 +2,6 @@
 Tests gdb bindings
 """
 import os
-import platform
 import subprocess
 import sys
 import threading
@@ -24,10 +23,6 @@ _unix_like = (_platform.startswith('linux')
 
 unix_only = unittest.skipUnless(_unix_like, "unix-like OS is required")
 not_unix = unittest.skipIf(_unix_like, "non unix-like OS is required")
-
-_arch_name = platform.machine()
-_is_arm = _arch_name in {'aarch64', 'armv7l'}
-not_arm = unittest.skipIf(_is_arm, "testing disabled on ARM")
 
 _gdb_cond = os.environ.get('GDB_TEST', None) == '1'
 needs_gdb_harness = unittest.skipUnless(_gdb_cond, "needs gdb harness")
@@ -75,7 +70,6 @@ def impl_gdb_split_init_and_break_w_parallel(a):
         print(a, b, c, d)
 
 
-@not_arm
 @unix_only
 class TestGdbBindImpls(TestCase):
     """
@@ -137,7 +131,6 @@ class TestGdbBindImpls(TestCase):
             _dbg_jit(impl_gdb_split_init_and_break_w_parallel)(10)
 
 
-@not_arm
 @unix_only
 @needs_gdb
 class TestGdbBinding(TestCase):
@@ -158,13 +151,13 @@ class TestGdbBinding(TestCase):
                                  stderr=subprocess.PIPE,
                                  env=env,
                                  shell=True)
-        # finish in 20s or kill it, there's no work being done
+        # finish in 60s or kill it, there's no work being done
 
         def kill():
             popen.stdout.flush()
             popen.stderr.flush()
             popen.kill()
-        timeout = threading.Timer(20., kill)
+        timeout = threading.Timer(60., kill)
         try:
             timeout.start()
             out, err = popen.communicate()
@@ -199,10 +192,11 @@ class TestGdbBinding(TestCase):
 
         def test_template(self):
             o, e = self.run_test_in_separate_process(injected_method)
-            self.assertIn('GNU gdb', o)
-            self.assertIn('OK', e)
-            self.assertTrue('FAIL' not in e)
-            self.assertTrue('ERROR' not in e)
+            if not 'skipped' in e: # e.g. 32bit ARM will skip parfors
+                self.assertIn('GNU gdb', o)
+                self.assertIn('OK', e)
+                self.assertTrue('FAIL' not in e)
+                self.assertTrue('ERROR' not in e)
         if 'quick' in name:
             setattr(cls, methname, test_template)
         else:
@@ -218,7 +212,6 @@ class TestGdbBinding(TestCase):
 TestGdbBinding.generate()
 
 
-@not_arm
 @unix_only
 @needs_gdb
 class TestGdbMisc(TestCase):
