@@ -14,7 +14,7 @@ from llvmlite import ir
 
 from numba.extending import (
     overload, overload_method, intrinsic, register_jitable)
-from numba import errors
+from numba.core import errors
 from numba.core import types, utils
 from numba.unsafe.bytes import grab_byte, grab_uint64_t
 
