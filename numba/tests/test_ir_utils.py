@@ -1,5 +1,5 @@
 import numba
-from .support import TestCase, unittest
+from numba.tests.support import TestCase, unittest
 from numba import compiler, jitclass, ir
 from numba.targets.registry import cpu_target
 from numba.compiler import CompilerBase, Flags

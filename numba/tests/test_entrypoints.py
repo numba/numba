@@ -3,7 +3,7 @@ import types
 
 import pkg_resources
 
-from .support import TestCase
+from numba.tests.support import TestCase
 
 
 class TestEntrypoints(TestCase):

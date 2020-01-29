@@ -9,7 +9,7 @@ from numba.compiler import CompilerBase, DefaultPassBuilder
 from numba.typed_passes import NopythonTypeInference
 from numba.compiler_machinery import register_pass, FunctionPass
 
-from .support import MemoryLeakMixin, TestCase
+from numba.tests.support import MemoryLeakMixin, TestCase
 
 
 class TestLowering(MemoryLeakMixin, TestCase):

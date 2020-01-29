@@ -16,7 +16,7 @@ class TestCudaSimIssues(SerialMixin, unittest.TestCase):
         When the `cuda` module is referenced in a device function,
         it does not have the kernel API (e.g. cuda.threadIdx, cuda.shared)
         """
-        from .support import cuda_module_in_device_function as inner
+        from numba.tests.support import cuda_module_in_device_function as inner
 
         @cuda.jit
         def outer(out):

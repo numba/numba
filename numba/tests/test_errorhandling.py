@@ -17,7 +17,7 @@ from numba.typed_passes import (NopythonTypeInference, DeadCodeElimination,
 
 from numba.compiler_machinery import FunctionPass, PassManager, register_pass
 
-from .support import skip_parfors_unsupported
+from numba.tests.support import skip_parfors_unsupported
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
 _global_list = [1, 2, 3, 4]

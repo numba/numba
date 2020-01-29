@@ -1,7 +1,7 @@
 import re
 import numpy as np
 
-from .support import (TestCase, override_config, captured_stdout,
+from numba.tests.support import (TestCase, override_config, captured_stdout,
                       skip_parfors_unsupported)
 import numba
 from numba import unittest_support as unittest

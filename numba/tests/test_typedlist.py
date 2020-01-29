@@ -9,7 +9,7 @@ from numba.core import types
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.core.errors import TypingError
-from .support import (TestCase, MemoryLeakMixin, override_config,
+from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
                       forbid_codegen, skip_parfors_unsupported)
 
 from numba.unsafe.refcount import get_refcount

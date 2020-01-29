@@ -6,7 +6,7 @@ Test generic manipulation of objects.
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba.core import types
-from .support import TestCase
+from numba.tests.support import TestCase
 
 
 enable_pyobj_flags = Flags()

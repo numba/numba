@@ -5,7 +5,7 @@ Testing C implementation of the numba dictionary
 import ctypes
 import random
 
-from .support import TestCase
+from numba.tests.support import TestCase
 from numba import _helperlib
 from numba.config import IS_32BITS
 

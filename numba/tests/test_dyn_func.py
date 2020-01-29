@@ -1,7 +1,7 @@
 import numpy as np
 
 import numba
-from .support import TestCase
+from numba.tests.support import TestCase
 
 
 class Issue455(object):

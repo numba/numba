@@ -16,7 +16,7 @@ from numba import config, jit, vectorize, numpy_support
 from numba.numpy_support import numpy_version
 from numba.core import types
 from numba.core.errors import TypingError
-from .support import TestCase, tag
+from numba.tests.support import TestCase, tag
 from numba.np import npdatetime
 
 

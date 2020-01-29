@@ -18,7 +18,7 @@ from numba.typed import Dict
 from numba.typedobjectutils import _sentry_safe_cast
 from numba.core.errors import TypingError
 from numba.core import types
-from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
+from numba.tests.support import (TestCase, MemoryLeakMixin, unittest, override_config,
                       forbid_codegen)
 
 

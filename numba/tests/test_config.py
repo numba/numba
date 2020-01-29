@@ -1,7 +1,7 @@
 import os
 import tempfile
 import unittest
-from .support import TestCase, temp_directory, override_env_config
+from numba.tests.support import TestCase, temp_directory, override_env_config
 from numba import config
 
 try:

@@ -8,7 +8,7 @@ import numpy as np
 
 from numba import jit
 from numba import unittest_support as unittest
-from .support import needs_blas
+from numba.tests.support import needs_blas
 
 
 def dot(a, b):

@@ -7,7 +7,7 @@ from numba import njit, typed, objmode, prange
 from numba.core.errors import (
     UnsupportedError, CompilerError, NumbaPerformanceWarning, TypingError,
 )
-from .support import (
+from numba.tests.support import (
     TestCase, unittest, captured_stdout, skip_tryexcept_unsupported,
     skip_tryexcept_supported, MemoryLeakMixin, skip_parfors_unsupported,
     skip_unless_scipy,

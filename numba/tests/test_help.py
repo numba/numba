@@ -7,7 +7,7 @@ import numpy as np
 
 import builtins
 from numba.core import types
-from .support import TestCase, temp_directory
+from numba.tests.support import TestCase, temp_directory
 from numba.help.inspector import inspect_function, inspect_module
 
 

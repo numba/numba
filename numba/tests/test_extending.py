@@ -15,7 +15,7 @@ from numba.core import types, errors, typing
 from numba.typed_passes import type_inference_stage
 from numba.targets.registry import cpu_target
 from numba.compiler import compile_isolated
-from .support import (TestCase, captured_stdout, tag, temp_directory,
+from numba.tests.support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
 from numba.core.errors import LoweringError
 

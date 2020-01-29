@@ -11,7 +11,7 @@ import numba
 from numba import prange, njit, unittest_support as unittest
 from numba.targets import cpu
 from numba.compiler import compile_isolated, Flags
-from .support import TestCase, tag, override_env_config
+from numba.tests.support import TestCase, tag, override_env_config
 
 needs_svml = unittest.skipUnless(numba.config.USING_SVML,
                                  "SVML tests need SVML to be present")

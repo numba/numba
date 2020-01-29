@@ -16,7 +16,7 @@ import llvmlite.binding as ll
 import numba.unittest_support as unittest
 from numba.targets.codegen import JITCPUCodegen
 from numba.compiler_lock import global_compiler_lock
-from .support import TestCase
+from numba.tests.support import TestCase
 
 
 asm_sum = r"""

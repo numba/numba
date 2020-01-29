@@ -11,7 +11,7 @@ from numba import config
 from numba import unittest_support as unittest
 from numba import jit, vectorize, guvectorize
 
-from .support import temp_directory, override_config
+from numba.tests.support import temp_directory, override_config
 
 
 def foo(n, v):

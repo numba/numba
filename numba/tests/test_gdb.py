@@ -13,7 +13,7 @@ from numba import jit
 from numba import unittest_support as unittest
 from numba.targets.gdb_hook import _confirm_gdb
 
-from .support import (TestCase, captured_stdout, tag, skip_parfors_unsupported)
+from numba.tests.support import (TestCase, captured_stdout, tag, skip_parfors_unsupported)
 
 
 _platform = sys.platform

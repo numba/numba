@@ -2,7 +2,7 @@
 
 
 from numba import njit, cfunc, cgutils
-from .support import TestCase, unittest
+from numba.tests.support import TestCase, unittest
 
 unicode_name1 = u"""
 def unicode_name1(ಠ_ರೃ, ಠਊಠ):

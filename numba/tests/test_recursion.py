@@ -4,7 +4,7 @@ import warnings
 from numba import jit
 from numba import unittest_support as unittest
 from numba.core.errors import TypingError, NumbaWarning
-from .support import TestCase
+from numba.tests.support import TestCase
 
 
 class TestSelfRecursion(TestCase):

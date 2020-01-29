@@ -6,7 +6,7 @@ import warnings
 
 
 from numba.core import types
-from .support import TestCase
+from numba.tests.support import TestCase
 from numba.typedobjectutils import _sentry_safe_cast
 
 

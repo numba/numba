@@ -6,7 +6,7 @@ import warnings
 
 import numpy as np
 
-from .support import (TestCase, override_config, override_env_config,
+from numba.tests.support import (TestCase, override_config, override_env_config,
                       captured_stdout, forbid_codegen, skip_parfors_unsupported,
                       needs_blas)
 from numba import unittest_support as unittest

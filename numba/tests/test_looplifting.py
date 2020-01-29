@@ -4,7 +4,7 @@ import numpy as np
 from numba.core import types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from .support import TestCase, tag, MemoryLeakMixin
+from numba.tests.support import TestCase, tag, MemoryLeakMixin
 
 
 looplift_flags = Flags()

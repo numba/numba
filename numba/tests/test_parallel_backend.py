@@ -18,7 +18,7 @@ from numba import config
 from numba import unittest_support as unittest
 from numba import jit, vectorize, guvectorize
 
-from .support import (temp_directory, override_config, TestCase, tag,
+from numba.tests.support import (temp_directory, override_config, TestCase, tag,
                       skip_parfors_unsupported, linux_only)
 
 import queue as t_queue

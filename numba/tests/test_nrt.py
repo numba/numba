@@ -24,7 +24,7 @@ import llvmlite.binding as llvm
 from numba import cffi_support
 from numba.unsafe.nrt import NRT_get_api
 
-from .support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
+from numba.tests.support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
 
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")

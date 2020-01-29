@@ -5,7 +5,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, typeof
 from numba.compiler import compile_isolated
-from .support import TestCase, MemoryLeakMixin, tag
+from numba.tests.support import TestCase, MemoryLeakMixin, tag
 
 
 def array_all(arr):

@@ -7,7 +7,7 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import utils, njit, typeof
 from numba.core import types, errors
-from .support import TestCase, tag
+from numba.tests.support import TestCase, tag
 
 
 enable_pyobj_flags = Flags()

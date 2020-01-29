@@ -1,7 +1,7 @@
 import numba
 
 from numba import unittest_support as unittest
-from .support import TestCase
+from numba.tests.support import TestCase
 
 
 class TestNumbaModule(TestCase):
