@@ -1,6 +1,6 @@
 import numpy as np
 
-from numba import types
+from numba.core import types
 from numba import unittest_support as unittest
 
 

@@ -5,7 +5,7 @@ Test generic manipulation of objects.
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types
+from numba.core import types
 from .support import TestCase
 
 

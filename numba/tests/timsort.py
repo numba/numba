@@ -7,7 +7,7 @@ For more information, see listsort.txt in CPython's source tree.
 
 import collections
 
-from numba import types
+from numba.core import types
 
 
 TimsortImplementation = collections.namedtuple(

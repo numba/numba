@@ -7,7 +7,7 @@ import numba
 from numba import compiler, typing
 from numba.compiler import compile_isolated, Flags
 from numba.targets import cpu
-from numba import types
+from numba.core import types
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.annotations import type_annotations

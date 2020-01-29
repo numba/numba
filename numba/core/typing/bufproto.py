@@ -4,7 +4,7 @@ Typing support for the buffer protocol (PEP 3118).
 
 import array
 
-from numba import types
+from numba.core import types
 
 
 _pep3118_int_types = set('bBhHiIlLqQnN')

@@ -8,7 +8,7 @@ import llvmlite.binding as ll
 
 from numba.targets.imputils import Registry
 from numba import cgutils
-from numba import types
+from numba.core import types
 from .cudadrv import nvvm
 from . import nvvmutils, stubs
 

@@ -9,7 +9,7 @@ from numba import unittest_support as unittest
 from numba.core.errors import TypingError
 from numba import config
 from numba import njit
-from numba import types
+from numba.core import types
 from numba import utils
 from .support import MemoryLeakMixin, TestCase, tag
 

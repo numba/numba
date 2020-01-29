@@ -1,6 +1,6 @@
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import types
+from numba.core import types
 
 
 def domax3(a, b, c):

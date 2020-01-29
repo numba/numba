@@ -615,7 +615,7 @@ class TestIsInternalTypeMarker(TestCase):
     the `is_internal` attr of a concrete Type class
     """
     source_lines = """
-from numba import types
+from numba.core import types
 
 class FooType(types.Type):
     def __init__(self):

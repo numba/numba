@@ -12,7 +12,7 @@ import operator
 import numpy as np
 
 import numba
-from numba import types
+from numba.core import types
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.core.typing import signature
 from numba.core import  utils, typing

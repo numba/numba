@@ -3,7 +3,7 @@ Helpers to see the refcount information of an object
 """
 from llvmlite import ir
 
-from numba import types
+from numba.core import types
 from numba import cgutils
 from numba.extending import intrinsic
 

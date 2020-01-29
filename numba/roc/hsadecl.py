@@ -1,4 +1,4 @@
-from numba import types
+from numba.core import types
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate,
                                     MacroTemplate, signature, Registry)

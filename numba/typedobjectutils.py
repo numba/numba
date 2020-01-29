@@ -7,7 +7,7 @@ from llvmlite import ir
 from llvmlite.llvmpy.core import Builder
 
 from numba import cgutils
-from numba import types
+from numba.core import types
 from numba.core import typing
 from numba.targets.registry import cpu_target
 from numba.core.typeconv import Conversion

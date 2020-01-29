@@ -5,7 +5,7 @@ import sys
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
-from numba import types
+from numba.core import types
 from .support import TestCase, tag
 from .complex_usecases import *
 

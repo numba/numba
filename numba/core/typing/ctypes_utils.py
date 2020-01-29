@@ -6,7 +6,7 @@ Support for typing ctypes function pointers.
 import ctypes
 import sys
 
-from numba import types
+from numba.core import types
 from . import templates
 from .typeof import typeof_impl
 

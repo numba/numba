@@ -5,7 +5,7 @@ operation.
 
 from llvmlite.ir.transforms import CallVisitor
 
-from numba import types
+from numba.core import types
 
 
 class _MarkNrtCallVisitor(CallVisitor):

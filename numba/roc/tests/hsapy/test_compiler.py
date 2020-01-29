@@ -4,7 +4,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import roc
-from numba import types
+from numba.core import types
 from numba.roc import compiler
 from numba.roc.hsadrv.driver import hsa as hsart
 from numba.roc.hsadrv.driver import BrigModule, Executable, Program

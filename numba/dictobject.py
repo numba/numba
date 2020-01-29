@@ -19,7 +19,7 @@ from numba.extending import (
     lower_builtin,
 )
 from numba.targets.imputils import iternext_impl
-from numba import types
+from numba.core import types
 from numba.core.types import (
     DictType,
     DictItemsIterableType,

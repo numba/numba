@@ -1,6 +1,6 @@
 import weakref
 
-from numba import types
+from numba.core import types
 
 
 class DataModelManager(object):

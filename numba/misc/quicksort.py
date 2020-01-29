@@ -2,7 +2,7 @@ import collections
 
 import numpy as np
 
-from numba import types
+from numba.core import types
 
 
 QuicksortImplementation = collections.namedtuple(

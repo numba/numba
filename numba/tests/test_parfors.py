@@ -23,7 +23,7 @@ from numba import unittest_support as unittest
 from numba import njit, prange, stencil, inline_closurecall, utils
 from numba import compiler, typing, errors, typed_passes
 from numba.targets import cpu
-from numba import types
+from numba.core import types
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.annotations import type_annotations

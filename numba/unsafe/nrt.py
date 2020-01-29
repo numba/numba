@@ -2,7 +2,7 @@
 Contains unsafe intrinsic that calls NRT C API
 """
 
-from numba import types
+from numba.core import types
 from numba.typing import signature
 from numba.extending import intrinsic
 

@@ -1,6 +1,6 @@
 import itertools
 from .typeconv import TypeManager, TypeCastingRules
-from numba import types
+from numba.core import types
 
 
 default_type_manager = TypeManager()
