@@ -3,10 +3,46 @@
 Notes on Inlining
 =================
 
-There are occasions where it is useful to be able to inline a function
-at its call site, at the Numba IR level of representation. The decorators
-:func:`numba.jit` and :func:`numba.extending.overload` both
-support the keyword argument ``inline``, to facilitate this behaviour.
+There are occasions where it is useful to be able to inline a function at its
+call site, at the Numba IR level of representation. The decorators such as
+:func:`numba.jit`, :func:`numba.extending.overload` and
+:func:`register_jitable` support the keyword argument ``inline``, to facilitate
+this behaviour.
+
+When attempting to inline at this level, it is important to understand what
+purpose this serves and what effect this will have. In contrast to the inlining
+performed by LLVM, which is aimed at improving performance, the main reason to
+inline at the Numba IR level is to allow type inference to cross function
+boundaries.
+
+As an example, consider the following snippet:
+
+.. code:: python
+
+    from numba import njit
+
+
+    @njit
+    def bar(a):
+        a.append(10)
+
+
+    @njit
+    def foo():
+        z = []
+        bar(z)
+
+
+    foo()
+
+This will fail to compile and run, because the type of ``z`` can not be inferred
+as it will only be refined within ``bar``. If we now add ``inline=True`` to the
+decorator for ``bar`` the snippet will compile and run. This i because inlining
+the call to ``a.append(10)`` will mean that ``z`` will be refined to hold integers
+and so type inference will succeed.
+
+So, to recap, inlining at the Numba IR level is unlikely to have a performance
+benefit. Whereas inlining at the LLVM level stands a better chance.
 
 The ``inline`` keyword argument can be one of three values:
 
