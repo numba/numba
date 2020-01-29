@@ -1595,6 +1595,12 @@ class PythonAPI(object):
             The function signature for *func*.
         args : Sequence[llvmlite.binding.Value]
             LLVM values to use as arguments.
+
+        Returns
+        -------
+        (is_error, res) :  2-tuple of llvmlite.binding.Value.
+            is_error : true iff *func* raised a nopython exception.
+            res : Returned value from *func* if *is_error* is false.
         """
         builder = self.builder
         cres = self.context.compile_subroutine(builder, func, sig)
