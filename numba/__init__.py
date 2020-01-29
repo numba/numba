@@ -11,7 +11,7 @@ from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 
-from . import config, _runtests as runtests
+from numba import config, _runtests as runtests
 from numba.core import types, errors
 
 # Re-export typeof
@@ -27,16 +27,16 @@ from numba.core.errors import *
 from numba.core.types import *
 
 # Re-export decorators
-from .decorators import (cfunc, generated_jit, jit, njit, stencil, jit_module)
+from numba.decorators import cfunc, generated_jit, jit, njit, stencil, jit_module
 
 # Re-export vectorize decorators and the thread layer querying function
-from .npyufunc import vectorize, guvectorize, threading_layer
+from numba.npyufunc import vectorize, guvectorize, threading_layer
 
 # Re-export Numpy helpers
-from .numpy_support import carray, farray, from_dtype
+from numba.numpy_support import carray, farray, from_dtype
 
 # Re-export jitclass
-from .jitclass import jitclass
+from numba.jitclass import jitclass
 
 # Initialize withcontexts
 import numba.withcontexts
