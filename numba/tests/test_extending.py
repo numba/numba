@@ -1456,7 +1456,7 @@ class TestUnboxer(TestCase):
     def test_unboxer_basic(self):
         # Implements an unboxer on DynType that calls an intrinsic into the
         # unboxer code.
-        magic_token = 0xbeefcafe
+        magic_token = 0xcafe
         magic_offset = 123
 
         @intrinsic
