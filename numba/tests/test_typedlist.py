@@ -8,7 +8,7 @@ from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.errors import TypingError
-from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
+from .support import (TestCase, MemoryLeakMixin, override_config,
                       forbid_codegen, skip_parfors_unsupported)
 
 from numba.unsafe.refcount import get_refcount
@@ -554,32 +554,6 @@ class TestNoneType(MemoryLeakMixin, TestCase):
             return count
 
         self.assertEqual(impl.py_func(), impl())
-
-    @unittest.skip("Works only with _disable_reflected_list")
-    def test_square_bracket_builtin_with_None(self):
-        @njit(_disable_reflected_list=True)
-        def foo():
-            l = [None, None, None]
-            return l
-        expected = List()
-        expected.append(None)
-        expected.append(None)
-        expected.append(None)
-        received = foo()
-        self.assertEqual(expected, received)
-
-    @unittest.skip("Works only with _disable_reflected_list")
-    def test_list_comprehension_with_none(self):
-        @njit(_disable_reflected_list=True)
-        def foo():
-            l = List()
-            # the following construct results in a List[None] that is discarded
-            [l.append(i) for i in (1, 3, 3)]
-            return l
-        expected = List()
-        [expected.append(i) for i in (1, 3, 3)]
-        received = foo()
-        self.assertEqual(expected, received)
 
     def test_none_typed_method_fails(self):
         """ Test that unsupported operations on List[None] raise. """
