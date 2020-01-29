@@ -2,12 +2,10 @@
 From NumbaPro
 
 """
-from __future__ import print_function, division, absolute_import
 
 from collections import namedtuple, OrderedDict
 import dis
 import inspect
-import sys
 import itertools
 from types import CodeType, ModuleType
 
@@ -19,7 +17,7 @@ opcode_info = namedtuple('opcode_info', ['argsize'])
 # The following offset is used as a hack to inject a NOP at the start of the
 # bytecode. So that function starting with `while True` will not have block-0
 # as a jump target. The Lowerer puts argument initialization at block-0.
-_FIXED_OFFSET = 2 if sys.version_info[0] >= 3 else 0
+_FIXED_OFFSET = 2
 
 
 def get_function_object(obj):
@@ -111,15 +109,9 @@ class ByteCodeInst(object):
             return 0
 
 
-if sys.version_info[:2] >= (3, 6):
-    CODE_LEN = 1
-    ARG_LEN = 1
-    NO_ARG_LEN = 1
-else:
-    CODE_LEN = 1
-    ARG_LEN = 2
-    NO_ARG_LEN = 0
-
+CODE_LEN = 1
+ARG_LEN = 1
+NO_ARG_LEN = 1
 
 OPCODE_NOP = dis.opname.index('NOP')
 
@@ -130,9 +122,6 @@ def _unpack_opargs(code):
     Returns a 4-int-tuple of
     (bytecode offset, opcode, argument, offset of next bytecode).
     """
-    if sys.version_info[0] < 3:
-        code = list(map(ord, code))
-
     extended_arg = 0
     n = len(code)
     offset = i = 0

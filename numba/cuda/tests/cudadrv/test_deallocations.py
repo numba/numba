@@ -1,5 +1,3 @@
-from __future__ import division
-
 from contextlib import contextmanager
 
 import numpy as np

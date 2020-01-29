@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from distutils import dir_util, log
 from distutils.command import build_ext
 from distutils.extension import Extension
@@ -27,7 +25,7 @@ class CC(object):
     # NOTE: using ccache can speed up repetitive builds
     # (especially for the mixin modules)
 
-    _mixin_sources = ['modulemixin.c', '../_math_c99.c']  + extension_libs
+    _mixin_sources = ['modulemixin.c',]  + extension_libs
 
     # -flto strips all unused helper functions, which 1) makes the
     # produced output much smaller and 2) can make the linking step faster.

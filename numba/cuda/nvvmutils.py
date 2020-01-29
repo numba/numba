@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import, division
 import itertools
 import llvmlite.llvmpy.core as lc
 from .cudadrv import nvvm

@@ -1,10 +1,7 @@
-from __future__ import print_function
-
 import warnings
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba.utils import PYVERSION
 from numba import types, errors
 from .support import TestCase, CompilationCache, skip_tryexcept_supported
 

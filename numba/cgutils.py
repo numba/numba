@@ -2,7 +2,6 @@
 Generic helpers for LLVM code generation.
 """
 
-from __future__ import print_function, division, absolute_import
 
 import collections
 from contextlib import contextmanager
@@ -1098,20 +1097,13 @@ def snprintf_stackbuffer(builder, bufsz, format, *args):
     return buffer
 
 
-if utils.PY3:
-    def normalize_ir_text(text):
-        """
-        Normalize the given string to latin1 compatible encoding that is
-        suitable for use in LLVM IR.
-        """
-        # Just re-encoding to latin1 is enough
-        return text.encode('utf8').decode('latin1')
-else:
-    def normalize_ir_text(text):
-        """
-        No-op for python2. Assume there won't be unicode names.
-        """
-        return text
+def normalize_ir_text(text):
+    """
+    Normalize the given string to latin1 compatible encoding that is
+    suitable for use in LLVM IR.
+    """
+    # Just re-encoding to latin1 is enough
+    return text.encode('utf8').decode('latin1')
 
 
 def hexdump(builder, ptr, nbytes):

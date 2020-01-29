@@ -2,16 +2,16 @@
 Lowering implementation for object mode.
 """
 
-from __future__ import print_function, division, absolute_import
+
+import builtins
+import operator
 
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
-import operator
 
 from . import cgutils, generators, ir, types, utils
 from .errors import ForbiddenConstruct
 from .lowering import BaseLower
-from .utils import builtins, HAS_MATMUL_OPERATOR, IS_PY3
 
 
 # Issue #475: locals() is unsupported as calling it naively would give
@@ -47,13 +47,8 @@ PYTHON_BINOPMAP = {
     operator.ixor: ("number_xor", True),
 }
 
-if not IS_PY3:
-    PYTHON_BINOPMAP[operator.div] = ("number_divide", False)
-    PYTHON_BINOPMAP[operator.idiv] = ("number_divide", True)
-
-if HAS_MATMUL_OPERATOR:
-    PYTHON_BINOPMAP[operator.matmul] = ("number_matrix_multiply", False)
-    PYTHON_BINOPMAP[operator.imatmul] = ("number_matrix_multiply", True)
+PYTHON_BINOPMAP[operator.matmul] = ("number_matrix_multiply", False)
+PYTHON_BINOPMAP[operator.imatmul] = ("number_matrix_multiply", True)
 
 PYTHON_COMPAREOPMAP = {
     operator.eq: '==',

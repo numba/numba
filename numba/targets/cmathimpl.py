@@ -2,7 +2,6 @@
 Implement the cmath module functions.
 """
 
-from __future__ import print_function, absolute_import, division
 
 import cmath
 import math
@@ -11,7 +10,7 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
 
 from numba.targets.imputils import Registry, impl_ret_untracked
-from numba import types, cgutils, utils
+from numba import types, cgutils
 from numba.typing import signature
 from . import builtins, mathimpl
 
@@ -48,14 +47,13 @@ def isinf_float_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-if utils.PYVERSION >= (3, 2):
-    @lower(cmath.isfinite, types.Complex)
-    def isfinite_float_impl(context, builder, sig, args):
-        [typ] = sig.args
-        [value] = args
-        z = context.make_complex(builder, typ, value=value)
-        res = is_finite(builder, z)
-        return impl_ret_untracked(context, builder, sig.return_type, res)
+@lower(cmath.isfinite, types.Complex)
+def isfinite_float_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [value] = args
+    z = context.make_complex(builder, typ, value=value)
+    res = is_finite(builder, z)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 @lower(cmath.rect, types.Float, types.Float)

@@ -2,7 +2,6 @@
 API that are reported to numba.cuda
 """
 
-from __future__ import print_function, absolute_import
 
 import contextlib
 

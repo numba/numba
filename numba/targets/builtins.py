@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 import math
 from functools import reduce
 
@@ -195,11 +193,8 @@ def min_vararg(context, builder, sig, args):
 
 
 def _round_intrinsic(tp):
-    # round() rounds half to even on Python 3, away from zero on Python 2.
-    if utils.IS_PY3:
-        return "llvm.rint.f%d" % (tp.bitwidth,)
-    else:
-        return "llvm.round.f%d" % (tp.bitwidth,)
+    # round() rounds half to even
+    return "llvm.rint.f%d" % (tp.bitwidth,)
 
 @lower_builtin(round, types.Float)
 def round_impl_unary(context, builder, sig, args):
@@ -209,9 +204,8 @@ def round_impl_unary(context, builder, sig, args):
     fnty = Type.function(llty, [llty])
     fn = module.get_or_insert_function(fnty, name=_round_intrinsic(fltty))
     res = builder.call(fn, args)
-    if utils.IS_PY3:
-        # unary round() returns an int on Python 3
-        res = builder.fptosi(res, context.get_value_type(sig.return_type))
+    # unary round() returns an int
+    res = builder.fptosi(res, context.get_value_type(sig.return_type))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 @lower_builtin(round, types.Float, types.Integer)

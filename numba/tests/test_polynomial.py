@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-
 import gc
 from itertools import product
 
@@ -7,8 +5,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import jit
-from .support import TestCase, tag
-from .test_linalg import needs_lapack
+from .support import TestCase, tag, needs_lapack
 
 
 def roots_fn(p):

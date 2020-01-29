@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import contextlib
 import imp
 import os
@@ -19,6 +17,7 @@ except ImportError:
 import llvmlite.binding as ll
 
 from numba import unittest_support as unittest
+from numba import utils
 from numba.pycc import main
 from numba.pycc.decorators import clear_export_registry
 from numba.pycc.platform import find_shared_ending, find_pyext_ending
@@ -32,8 +31,7 @@ _skip_reason = 'windows only'
 _windows_only = unittest.skipIf(not sys.platform.startswith('win'),
                                 _skip_reason)
 
-from .matmul_usecase import has_blas
-from .support import TestCase, tag, import_dynamic, temp_directory
+from .support import TestCase, tag, import_dynamic, temp_directory, has_blas
 
 
 base_path = os.path.dirname(os.path.abspath(__file__))
@@ -203,8 +201,7 @@ class TestCC(BasePYCCTest):
         self.assertTrue(os.path.basename(f).startswith('pycc_test_simple.'), f)
         if sys.platform.startswith('linux'):
             self.assertTrue(f.endswith('.so'), f)
-            if sys.version_info >= (3,):
-                self.assertIn('.cpython', f)
+            self.assertIn('.cpython', f)
 
     def test_compile(self):
         with self.check_cc_compiled(self._test_module.cc) as lib:
@@ -235,9 +232,8 @@ class TestCC(BasePYCCTest):
         # Compiling for the host CPU should always succeed
         self.check_compile_for_cpu("host")
 
-    @tag('important')
     @unittest.skipIf(sys.platform == 'darwin' and
-                     sys.version_info[:2] == (3, 8),
+                     utils.PYVERSION == (3, 8),
                      'distutils incorrectly using gcc on python 3.8 builds')
     def test_compile_helperlib(self):
         with self.check_cc_compiled(self._test_module.cc_helperlib) as lib:
@@ -271,7 +267,6 @@ class TestCC(BasePYCCTest):
                 """ % {'expected': expected}
             self.check_cc_compiled_in_subprocess(lib, code)
 
-    @tag('important')
     def test_compile_nrt(self):
         with self.check_cc_compiled(self._test_module.cc_nrt) as lib:
             # Sanity check
@@ -359,9 +354,6 @@ class TestDistutilsSupport(TestCase):
         run_python(["-c", code])
 
     def test_setup_py_distutils(self):
-        if sys.version_info < (3,) and sys.platform == "win32":
-            # See e.g. https://stackoverflow.com/questions/28931875/problems-finding-vcvarsall-bat-when-using-distutils
-            self.skipTest("must use setuptools to build extensions for Python 2")
         self.check_setup_py("setup_distutils.py")
 
     @unittest.skipIf(setuptools is None, "test needs setuptools")

@@ -1,12 +1,10 @@
-from __future__ import print_function, division, absolute_import
-
 from abc import ABCMeta, abstractmethod, abstractproperty
 import itertools
 import weakref
 
 import numpy as np
 
-from ..six import add_metaclass
+from numba.utils import add_metaclass
 from ..utils import cached_property
 
 

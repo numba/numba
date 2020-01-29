@@ -1,6 +1,6 @@
-from __future__ import print_function, absolute_import
 import copy
 from collections import namedtuple
+import ctypes
 import re
 
 import numpy as np
@@ -14,7 +14,6 @@ from . import gcn_occupancy
 from numba.roc.hsadrv.driver import hsa, dgpu_present
 from .hsadrv import devicearray
 from numba.typing.templates import AbstractTemplate
-from numba import ctypes_support as ctypes
 from numba import config
 from numba.compiler_lock import global_compiler_lock
 

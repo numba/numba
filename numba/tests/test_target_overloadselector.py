@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 from itertools import product, permutations
 from collections import defaultdict
 

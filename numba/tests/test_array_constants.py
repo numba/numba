@@ -1,12 +1,9 @@
-from __future__ import print_function
-
 import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba.errors import TypingError
 from numba import jit, types, typeof
-from numba.utils import IS_PY3
 
 
 a0 = np.array(42)
@@ -182,7 +179,6 @@ class TestConstantArray(unittest.TestCase):
         test(f_array)
 
 
-@unittest.skipUnless(IS_PY3, "Python 3 only")
 class TestConstantBytes(unittest.TestCase):
     def test_constant_bytes(self):
         pyfunc = bytes_as_const_array

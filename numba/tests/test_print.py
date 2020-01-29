@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import sys
 
 import numpy as np
@@ -46,7 +44,6 @@ def make_print_closure(x):
 
 class TestPrint(TestCase):
 
-    @tag('important')
     def test_print_values(self):
         """
         Test printing a single argument value.
@@ -97,7 +94,6 @@ class TestPrint(TestCase):
             self.assertEqual(sys.stdout.getvalue(),
                              '[0 1 2 3 4 5 6 7 8 9]\n')
 
-    @tag('important')
     def test_print_array_item(self):
         """
         Test printing a Numpy character sequence
@@ -112,7 +108,6 @@ class TestPrint(TestCase):
                 cfunc(arr, i)
                 self.assertEqual(sys.stdout.getvalue(), str(arr[i]['x']) + '\n')
 
-    @tag('important')
     def test_print_multiple_values(self):
         pyfunc = print_values
         cr = compile_isolated(pyfunc, (types.int32,) * 3)
@@ -128,7 +123,6 @@ class TestPrint(TestCase):
             cfunc(1, 2, 3)
             self.assertEqual(sys.stdout.getvalue(), '1 2 3\n')
 
-    @tag('important')
     def test_print_empty(self):
         pyfunc = print_empty
         cr = compile_isolated(pyfunc, ())
@@ -137,7 +131,6 @@ class TestPrint(TestCase):
             cfunc()
             self.assertEqual(sys.stdout.getvalue(), '\n')
 
-    @tag('important')
     def test_print_strings(self):
         pyfunc = print_string
         cr = compile_isolated(pyfunc, (types.int32,))
@@ -189,7 +182,6 @@ class TestPrint(TestCase):
                     "keyword arguments.")
         self.assertIn(raises.exception.msg, expected)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
     def test_print_no_truncation(self):
         ''' See: https://github.com/numba/numba/issues/3811
         '''

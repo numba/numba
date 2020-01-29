@@ -1,7 +1,6 @@
 """
 Expose each GPU device directly
 """
-from __future__ import print_function, absolute_import, division
 import functools
 from numba import servicelib
 from .driver import hsa as driver, Context as _Context

@@ -1,7 +1,6 @@
 """
 LLVM pass that converts intrinsic into other math calls
 """
-from __future__ import print_function, absolute_import
 
 from llvmlite import ir
 
@@ -81,7 +80,6 @@ atan
 atanf
 atan2
 atan2f
-atan2_fixed
 asinh
 asinhf
 acosh

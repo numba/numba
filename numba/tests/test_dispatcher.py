@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import errno
 import multiprocessing
 import os
@@ -13,6 +11,7 @@ import inspect
 import pickle
 import weakref
 from itertools import chain
+from io import StringIO
 
 try:
     import jinja2
@@ -27,19 +26,18 @@ except ImportError:
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba import utils, jit, generated_jit, types, typeof, errors
+from numba import jit, generated_jit, types, typeof, errors
 from numba import _dispatcher
 from numba.compiler import compile_isolated
 from numba.errors import NumbaWarning
-from .support import (TestCase, tag, temp_directory, import_dynamic,
+from .support import (TestCase, temp_directory, import_dynamic,
                       override_env_config, capture_cache_log, captured_stdout)
 from numba.numpy_support import as_dtype
 from numba.targets import codegen
 from numba.caching import _UserWideCacheLocator
 from numba.dispatcher import Dispatcher
 from numba import parfor
-from .test_linalg import needs_lapack
-from .support import skip_parfors_unsupported
+from .support import skip_parfors_unsupported, needs_lapack
 
 import llvmlite.binding as ll
 
@@ -585,7 +583,6 @@ class TestSignatureHandling(BaseTest):
     Test support for various parameter passing styles.
     """
 
-    @tag('important')
     def test_named_args(self):
         """
         Test passing named arguments to a dispatcher.
@@ -673,7 +670,6 @@ class TestGeneratedDispatcher(TestCase):
     Tests for @generated_jit.
     """
 
-    @tag('important')
     def test_generated(self):
         f = generated_jit(nopython=True)(generated_usecase)
         self.assertEqual(f(8), 8 - 5)
@@ -683,7 +679,6 @@ class TestGeneratedDispatcher(TestCase):
         self.assertEqual(f(1j, 42), 42 + 1j)
         self.assertEqual(f(x=1j, y=7), 7 + 1j)
 
-    @tag('important')
     def test_generated_dtype(self):
         f = generated_jit(nopython=True)(dtype_generated_usecase)
         a = np.ones((10,), dtype=np.float32)
@@ -748,7 +743,6 @@ class TestDispatcherMethods(TestCase):
         self.assertPreciseEqual(foo(1), 3)
         self.assertPreciseEqual(foo(1.5), 3)
 
-    @tag('important')
     def test_inspect_llvm(self):
         # Create a jited function
         @jit
@@ -869,7 +863,7 @@ class TestDispatcherMethods(TestCase):
 
         foo(1, 2)
         # Exercise the method
-        foo.inspect_types(utils.StringIO())
+        foo.inspect_types(StringIO())
 
         # Test output
         expected = str(foo.overloads[foo.signatures[0]].type_annotation)
@@ -919,7 +913,7 @@ class TestDispatcherMethods(TestCase):
 
         # check that file+pretty kwarg combo raises
         with self.assertRaises(ValueError) as raises:
-            foo.inspect_types(file=utils.StringIO(), pretty=True)
+            foo.inspect_types(file=StringIO(), pretty=True)
 
         self.assertIn("`file` must be None if `pretty=True`",
                       str(raises.exception))
@@ -992,13 +986,7 @@ class BaseCacheTest(TestCase):
         old = sys.modules.pop(self.modname, None)
         if old is not None:
             # Make sure cached bytecode is removed
-            if sys.version_info >= (3,):
-                cached = [old.__cached__]
-            else:
-                if old.__file__.endswith(('.pyc', '.pyo')):
-                    cached = [old.__file__]
-                else:
-                    cached = [old.__file__ + 'c', old.__file__ + 'o']
+            cached = [old.__cached__]
             for fn in cached:
                 try:
                     os.unlink(fn)
@@ -1081,7 +1069,6 @@ class BaseCacheUsecasesTest(BaseCacheTest):
 
 class TestCache(BaseCacheUsecasesTest):
 
-    @tag('important')
     def test_caching(self):
         self.check_pycache(0)
         mod = self.import_module()
@@ -1116,7 +1103,6 @@ class TestCache(BaseCacheUsecasesTest):
         # Check the code runs ok from another process
         self.run_in_separate_process()
 
-    @tag('important')
     def test_caching_nrt_pruned(self):
         self.check_pycache(0)
         mod = self.import_module()

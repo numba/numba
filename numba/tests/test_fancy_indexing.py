@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import itertools
 
 import numpy as np
@@ -127,7 +125,6 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         foo(arr, 1)
         self.assertEqual(arr[0], arr[1])
 
-    @tag('important')
     def test_getitem_array(self):
         # Test advanced indexing with a single array index
         N = 4

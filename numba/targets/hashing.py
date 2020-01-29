@@ -1,7 +1,6 @@
 """
 Hash implementations for Numba types
 """
-from __future__ import print_function, absolute_import, division
 
 import math
 import numpy as np
@@ -15,46 +14,28 @@ from llvmlite import ir
 
 from numba.extending import (
     overload, overload_method, intrinsic, register_jitable)
-from numba import types, errors
+from numba import types, errors, utils
 from numba.unsafe.bytes import grab_byte, grab_uint64_t
 
-_py34_or_later = sys.version_info[:2] >= (3, 4)
-_py38_or_later = sys.version_info[:2] >= (3, 8)
+_py38_or_later = utils.PYVERSION >= (3, 8)
 
-if _py34_or_later:
-    # This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
-    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96    # noqa: E501
-    _hash_width = sys.hash_info.width
-    _Py_hash_t = getattr(types, 'int%s' % _hash_width)
-    _Py_uhash_t = getattr(types, 'uint%s' % _hash_width)
+# This is Py_hash_t, which is a Py_ssize_t, which has sizeof(size_t):
+# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyport.h#L91-L96    # noqa: E501
+_hash_width = sys.hash_info.width
+_Py_hash_t = getattr(types, 'int%s' % _hash_width)
+_Py_uhash_t = getattr(types, 'uint%s' % _hash_width)
 
-    # Constants from CPython source, obtained by various means:
-    # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyhash.h    # noqa: E501
-    _PyHASH_INF = sys.hash_info.inf
-    _PyHASH_NAN = sys.hash_info.nan
-    _PyHASH_MODULUS = _Py_uhash_t(sys.hash_info.modulus)
-    _PyHASH_BITS = 31 if types.intp.bitwidth == 32 else 61  # mersenne primes
-    _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
-    _PyHASH_IMAG = _PyHASH_MULTIPLIER
-    _PyLong_SHIFT = sys.int_info.bits_per_digit
-    _Py_HASH_CUTOFF = sys.hash_info.cutoff
-    _Py_hashfunc_name = sys.hash_info.algorithm
-else:
-    _hash_width = types.intp.bitwidth
-    _Py_hash_t = getattr(types, 'int%s' % _hash_width)
-    _Py_uhash_t = getattr(types, 'uint%s' % _hash_width)
-
-    # these are largely just copied in from python 3 as reasonable defaults
-    _PyHASH_INF = 314159
-    _PyHASH_NAN = 0
-    _PyHASH_BITS = 31 if types.intp.bitwidth == 32 else 61  # mersenne primes
-    _PyHASH_MODULUS = _Py_uhash_t((1 << _PyHASH_BITS) - 1)
-    _PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
-    _PyHASH_IMAG = _PyHASH_MULTIPLIER
-    _PyLong_SHIFT = 30 if types.intp.bitwidth == 64 else 15
-    _Py_HASH_CUTOFF = 0
-    # set this as siphash24 for py27... TODO: implement py27 string first!
-    _Py_hashfunc_name = "siphash24"
+# Constants from CPython source, obtained by various means:
+# https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Include/pyhash.h    # noqa: E501
+_PyHASH_INF = sys.hash_info.inf
+_PyHASH_NAN = sys.hash_info.nan
+_PyHASH_MODULUS = _Py_uhash_t(sys.hash_info.modulus)
+_PyHASH_BITS = 31 if types.intp.bitwidth == 32 else 61  # mersenne primes
+_PyHASH_MULTIPLIER = 0xf4243  # 1000003UL
+_PyHASH_IMAG = _PyHASH_MULTIPLIER
+_PyLong_SHIFT = sys.int_info.bits_per_digit
+_Py_HASH_CUTOFF = sys.hash_info.cutoff
+_Py_hashfunc_name = sys.hash_info.algorithm
 
 
 # hash(obj) is implemented by calling obj.__hash__()

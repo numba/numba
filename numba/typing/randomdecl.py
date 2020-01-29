@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function
-
 import random
 
 import numpy as np
@@ -7,7 +5,7 @@ import numpy as np
 from .. import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         CallableTemplate, Registry, signature)
-from ..numpy_support import version as np_version
+from ..numpy_support import numpy_version
 
 
 registry = Registry()
@@ -107,7 +105,7 @@ class Random_random(ConcreteRandomTemplate):
             return self.array_typer(size)()
         return typer
 
-if np_version >= (1, 17):
+if numpy_version >= (1, 17):
     infer_global(
         np.random.random_sample,
         typing_key="np.random.random_sample",

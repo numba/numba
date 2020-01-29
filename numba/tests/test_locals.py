@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from numba import compiler, float32
 from numba import unittest_support as unittest
 

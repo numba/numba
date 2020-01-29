@@ -1,7 +1,4 @@
-from __future__ import print_function, division, absolute_import
-
 from collections import namedtuple
-import sys
 import copy
 import warnings
 from .tracing import event
@@ -160,10 +157,9 @@ def compile_result(**kws):
     for k in missing:
         kws[k] = None
     # Avoid keeping alive traceback variables
-    if sys.version_info >= (3,):
-        err = kws['typing_error']
-        if err is not None:
-            kws['typing_error'] = err.with_traceback(None)
+    err = kws['typing_error']
+    if err is not None:
+        kws['typing_error'] = err.with_traceback(None)
     return CompileResult(**kws)
 
 

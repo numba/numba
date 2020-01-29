@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 import numba.unittest_support as unittest
 from numba import roc
 

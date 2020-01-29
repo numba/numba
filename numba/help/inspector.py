@@ -4,7 +4,6 @@ This file contains `__main__` so that it can be run as a commandline tool.
 This file contains functions to inspect Numba's support for a given Python
 module or a Python package.
 """
-from __future__ import print_function
 
 import argparse
 import pkgutil

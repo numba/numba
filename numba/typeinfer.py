@@ -12,7 +12,6 @@ Constraint propagation is precise and does not regret (no backtracing).
 Constraints push types forward following the dataflow.
 """
 
-from __future__ import print_function, division, absolute_import
 
 import logging
 import operator

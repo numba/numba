@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function, division, absolute_import
 
 import collections
 import functools
 import os
 import struct
 import sys
+import types as pytypes
 import uuid
 import weakref
 from copy import deepcopy
@@ -18,7 +18,7 @@ from numba import sigutils, serialize, typing
 from numba.typing.templates import fold_arguments
 from numba.typing.typeof import Purpose, typeof
 from numba.bytecode import get_code_object
-from numba.six import create_bound_method, reraise
+from numba.utils import reraise
 from .caching import NullCache, FunctionCache
 
 
@@ -683,7 +683,7 @@ class Dispatcher(_DispatcherBase):
         if obj is None:  # Unbound method
             return self
         else:  # Bound method
-            return create_bound_method(self, obj)
+            return pytypes.MethodType(self, obj)
 
     def __reduce__(self):
         """

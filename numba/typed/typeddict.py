@@ -1,8 +1,9 @@
 """
 Python wrapper that connects CPython interpreter to the numba dictobject.
 """
+from collections.abc import MutableMapping
+
 from numba import config
-from numba.six import MutableMapping
 from numba.types import DictType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
 from numba import njit, dictobject, types, cgutils, errors, typeof

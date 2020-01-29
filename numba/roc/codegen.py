@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 from llvmlite import binding as ll
 from llvmlite.llvmpy import core as lc
 from numba import utils

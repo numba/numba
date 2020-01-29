@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function, division
-
 import math
 
 import numpy as np
@@ -47,21 +45,18 @@ class BaseVectorizeDecor(object):
         gold = numpy_func(A, *args)
         np.testing.assert_allclose(result, gold, **kwargs)
 
-    @tag('important')
     def test_1(self):
         sig = ['float64(float64)', 'float32(float32)']
         func = self.funcs['func1']
         A = np.arange(100, dtype=np.float64)
         self._run_and_compare(func, sig, A)
 
-    @tag('important')
     def test_2(self):
         sig = [float64(float64), float32(float32)]
         func = self.funcs['func1']
         A = np.arange(100, dtype=np.float64)
         self._run_and_compare(func, sig, A)
 
-    @tag('important')
     def test_3(self):
         sig = ['float64(float64, uint32)']
         func = self.funcs['func2']
@@ -69,7 +64,6 @@ class BaseVectorizeDecor(object):
         scale = np.uint32(3)
         self._run_and_compare(func, sig, A, scale, atol=1e-8)
 
-    @tag('important')
     def test_4(self):
         sig = [
             int32(int32, int32),
@@ -99,7 +93,7 @@ class TestParallelVectorizeDecor(unittest.TestCase, BaseVectorizeDecor):
 
 class TestCPUVectorizeJitted(unittest.TestCase, BaseVectorizeDecor):
     target = 'cpu'
-    wrapper = staticmethod(jit)  # staticmethod required for py27
+    wrapper = jit
 
 
 class BaseVectorizeNopythonArg(unittest.TestCase, CheckWarningsMixin):

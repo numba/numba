@@ -16,7 +16,6 @@ from numba.typing.templates import (CallableTemplate, signature, infer_global,
 from numba.targets import registry
 from numba.targets.imputils import lower_builtin
 from numba.extending import register_jitable
-from numba.six import exec_
 import numba
 
 import operator
@@ -397,7 +396,7 @@ class StencilFunc(object):
         sig = signature(real_ret, *argtys_extra)
         dummy_text = ("def __numba_dummy_stencil({}{}):\n    pass\n".format(
                         ",".join(self.kernel_ir.arg_names), sig_extra))
-        exec_(dummy_text) in globals(), locals()
+        exec(dummy_text) in globals(), locals()
         dummy_func = eval("__numba_dummy_stencil")
         sig.pysig = utils.pysignature(dummy_func)
         self._targetctx.insert_func_defn([(self._lower_me, self, argtys_extra)])
@@ -633,7 +632,7 @@ class StencilFunc(object):
             print(func_text)
 
         # Force the new stencil function into existence.
-        exec_(func_text) in globals(), locals()
+        exec(func_text) in globals(), locals()
         stencil_func = eval(stencil_func_name)
         if sigret is not None:
             pysig = utils.pysignature(stencil_func)

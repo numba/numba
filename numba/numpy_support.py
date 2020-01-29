@@ -1,22 +1,15 @@
-from __future__ import print_function, division, absolute_import
-
 import collections
 import ctypes
 import re
 
 import numpy as np
 
-from . import errors, types, config, utils
+from . import errors, types, utils
 # re-export
 from numba.cgutils import is_nonelike   # noqa: F401
 
 
-version = tuple(map(int, np.__version__.split('.')[:2]))
-int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
-
-# Starting from Numpy 1.10, ufuncs accept argument conversion according
-# to the "same_kind" rule (used to be "unsafe").
-strict_ufunc_typing = version >= (1, 10)
+numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
 
 FROM_DTYPE = {
@@ -414,7 +407,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                                     has_mixed_inputs, 'safe'):
                 found = False
                 break
-        if found and strict_ufunc_typing:
+        if found:
             # Can we cast the inner result to the outer result type?
             for outer, inner in zip(np_output_types, ufunc_outputs):
                 if (outer.char not in 'mM' and not

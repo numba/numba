@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 import sys
 
 import numpy as np
@@ -73,7 +71,6 @@ def guerror(a, b, c):
 
 class TestUfuncBuilding(TestCase):
 
-    @tag('important')
     def test_basic_ufunc(self):
         ufb = UFuncBuilder(add)
         cres = ufb.add("int32(int32, int32)")
@@ -177,7 +174,6 @@ class TestGUfuncBuilding(TestCase):
         self.assertEqual(ufunc.__name__, "guadd")
         self.assertIn("A generalized addition", ufunc.__doc__)
 
-    @tag('important')
     def test_gufunc_struct(self):
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
         cres = gufb.add("void(complex64[:,:], complex64[:,:], complex64[:,:])")
@@ -229,14 +225,12 @@ class TestVectorizeDecor(TestCase):
         b = ufunc(a, a)
         self.assertPreciseEqual(a + a, b)
 
-    @tag('important')
     def test_vectorize_bool_return(self):
         ufunc = vectorize(['bool_(int32, int32)'])(equals)
         a = np.arange(10, dtype='int32')
         r = ufunc(a,a)
         self.assertPreciseEqual(r, np.ones(r.shape, dtype=np.bool_))
 
-    @tag('important')
     def test_vectorize_identity(self):
         sig = 'int32(int32, int32)'
         for identity in self._supported_identities:
@@ -289,7 +283,6 @@ class TestVectorizeDecor(TestCase):
         check(ufunc)  # compiling
         check(ufunc)  # after compiling
 
-    @tag('important')
     def test_guvectorize(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)")(guadd)
@@ -297,7 +290,6 @@ class TestVectorizeDecor(TestCase):
         b = ufunc(a, a)
         self.assertPreciseEqual(a + a, b)
 
-    @tag('important')
     def test_guvectorize_no_output(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y),(x,y)")(guadd)
@@ -330,7 +322,6 @@ class TestVectorizeDecor(TestCase):
         with self.assertRaises(MyException):
             ufunc(a, a)
 
-    @tag('important')
     def test_guvectorize_identity(self):
         args = (['(int32[:,:], int32[:,:], int32[:,:])'], "(x,y),(x,y)->(x,y)")
         for identity in self._supported_identities:

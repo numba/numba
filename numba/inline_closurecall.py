@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 import types as pytypes  # avoid confusion with numba.types
 import ctypes
 import numba

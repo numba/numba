@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim, skip_unless_conda_cudatoolkit
 from numba.findlib import find_lib

@@ -1,7 +1,6 @@
 """
 Test setting/overriding error models
 """
-from __future__ import division
 
 from numba import jit
 from numba import unittest_support as unittest

@@ -9,7 +9,6 @@ Cudatoolkit libraries can be available via either:
 - or can be discovered by the system loader.
 """
 
-from __future__ import print_function
 import os
 import sys
 import ctypes

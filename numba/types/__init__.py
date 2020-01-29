@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import struct
 
 import numpy as np
@@ -25,7 +23,7 @@ Any = Phantom('any')
 undefined = Undefined('undefined')
 py2_string_type = Opaque('str')
 unicode_type = UnicodeType('unicode_type')
-string = unicode_type if utils.PY3 else py2_string_type
+string = unicode_type
 unknown = Dummy('unknown')
 
 code_type = Opaque('code')

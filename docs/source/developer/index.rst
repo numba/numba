@@ -24,4 +24,5 @@ Developer Manual
    caching.rst
    threading_implementation.rst
    literal.rst
+   debugging.rst
    roadmap.rst

@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from numba import njit, errors
 from numba.extending import overload
 import numpy as np

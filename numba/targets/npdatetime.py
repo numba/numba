@@ -10,8 +10,6 @@ import llvmlite.llvmpy.core as lc
 
 from numba import npdatetime, types, cgutils, numpy_support
 from .imputils import lower_builtin, lower_constant, impl_ret_untracked
-from ..utils import IS_PY3
-
 
 # datetime64 and timedelta64 use the same internal representation
 DATETIME64 = TIMEDELTA64 = Type.int(64)
@@ -275,17 +273,6 @@ def timedelta_over_number(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-if not IS_PY3:
-    lower_builtin(operator.div, types.NPTimedelta,
-                  types.Integer)(timedelta_over_number)
-    lower_builtin(operator.idiv, types.NPTimedelta,
-                  types.Integer)(timedelta_over_number)
-    lower_builtin(operator.div, types.NPTimedelta,
-                  types.Float)(timedelta_over_number)
-    lower_builtin(operator.idiv, types.NPTimedelta,
-                  types.Float)(timedelta_over_number)
-
-
 @lower_builtin(operator.truediv, *TIMEDELTA_BINOP_SIG)
 @lower_builtin(operator.itruediv, *TIMEDELTA_BINOP_SIG)
 def timedelta_over_timedelta(context, builder, sig, args):
@@ -304,12 +291,7 @@ def timedelta_over_timedelta(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-if not IS_PY3:
-    lower_builtin(operator.div, *TIMEDELTA_BINOP_SIG)(timedelta_over_timedelta)
-    lower_builtin(operator.idiv, *
-                  TIMEDELTA_BINOP_SIG)(timedelta_over_timedelta)
-
-if numpy_support.version >= (1, 16):
+if numpy_support.numpy_version >= (1, 16):
     # np 1.16 added support for:
     # * np.floor_divide on mm->q
     # * np.remainder on mm->m
@@ -348,10 +330,6 @@ if numpy_support.version >= (1, 16):
                         builder.store(div, ret)
         res = builder.load(ret)
         return impl_ret_untracked(context, builder, sig.return_type, res)
-
-    if not IS_PY3:
-        lower_builtin(operator.idiv, *
-                      TIMEDELTA_BINOP_SIG)(timedelta_floor_div_timedelta)
 
     def timedelta_mod_timedelta(context, builder, sig, args):
         # inspired by https://github.com/numpy/numpy/blob/fe8072a12d65e43bd2e0b0f9ad67ab0108cc54b3/numpy/core/src/umath/loops.c.src#L1424
@@ -406,7 +384,7 @@ def _create_timedelta_comparison_impl(ll_op, default_value):
                 else:
                     builder.store(builder.icmp(ll_op, norm_a, norm_b), ret)
             with otherwise:
-                if numpy_support.version < (1, 16):
+                if numpy_support.numpy_version < (1, 16):
                     # No scaling when comparing NaTs
                     builder.store(builder.icmp(ll_op, va, vb), ret)
                 else:
@@ -433,7 +411,7 @@ def _create_timedelta_ordering_impl(ll_op):
                     context, builder, va, vb, ta, tb)
                 builder.store(builder.icmp(ll_op, norm_a, norm_b), ret)
             with otherwise:
-                if numpy_support.version < (1, 16):
+                if numpy_support.numpy_version < (1, 16):
                     # No scaling when comparing NaT with something else
                     # (i.e. NaT is <= everything else, since it's the smallest
                     #  int64 value)
@@ -696,7 +674,7 @@ def _create_datetime_comparison_impl(ll_op):
                 ret_val = builder.icmp(ll_op, norm_a, norm_b)
                 builder.store(ret_val, ret)
             with otherwise:
-                if numpy_support.version < (1, 16):
+                if numpy_support.numpy_version < (1, 16):
                     # No scaling when comparing NaTs
                     ret_val = builder.icmp(ll_op, va, vb)
                 else:

@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function
-
 from numba import config, types
 from .base import register_class_type, ClassBuilder
 

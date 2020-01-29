@@ -1,8 +1,5 @@
-from __future__ import print_function, division, absolute_import
-
 import weakref
-import time
-from collections import namedtuple, deque
+from collections import namedtuple
 import operator
 from functools import partial
 
@@ -46,20 +43,7 @@ class Environment(_dynfunc.Environment):
         )
 
     def __del__(self):
-        if utils is None or utils.IS_PY3:
-            return
-        if _keepalive is None:
-            return
-        if time is None or time.time is None:
-            return
-        _keepalive.append((time.time(), self))
-        if len(_keepalive) > 10:
-            cur = time.time()
-            while _keepalive and cur - _keepalive[0][0] > 1:
-                _keepalive.popleft()
-
-
-_keepalive = deque()
+        return
 
 
 def _rebuild_env(modname, consts, env_name):

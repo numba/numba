@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function, division
-
 from numba.cuda.compiler import compile_kernel
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.testing import skip_on_cudasim, SerialMixin

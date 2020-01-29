@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 import numpy as np
 from numba import roc
 from numba.roc.hsadrv.error import HsaKernelLaunchError

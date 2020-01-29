@@ -2,7 +2,6 @@
 Tests for @cfunc and friends.
 """
 
-from __future__ import division, print_function, absolute_import
 
 import ctypes
 import os
@@ -108,7 +107,6 @@ carray_voidptr_usecase_sig = types.void(types.voidptr, types.voidptr,
 
 class TestCFunc(TestCase):
 
-    @tag('important')
     def test_basic(self):
         """
         Basic usage and properties of a cfunc.
@@ -131,7 +129,6 @@ class TestCFunc(TestCase):
 
         self.assertPreciseEqual(ct(2.0, 3.5), 5.5)
 
-    @tag('important')
     @skip_cffi_unsupported
     def test_cffi(self):
         from . import cffi_usecases
@@ -148,7 +145,6 @@ class TestCFunc(TestCase):
         f = cfunc(div_sig, locals={'c': types.int64})(div_usecase)
         self.assertPreciseEqual(f.ctypes(8, 3), 2.0)
 
-    @tag('important')
     def test_errors(self):
         f = cfunc(div_sig)(div_usecase)
 
@@ -163,10 +159,7 @@ class TestCFunc(TestCase):
             self.assertPreciseEqual(res, 0.0)
         err = err.getvalue()
         self.assertIn("ZeroDivisionError:", err)
-        if sys.version_info >= (3,):
-            self.assertIn("Exception ignored", err)
-        else:
-            self.assertIn(" ignored", err)
+        self.assertIn("Exception ignored", err)
 
     def test_llvm_ir(self):
         f = cfunc(add_sig)(add_usecase)
@@ -218,7 +211,6 @@ class TestCFuncCache(BaseCacheTest):
     def check_module(self, mod):
         mod.self_test()
 
-    @tag('important')
     def test_caching(self):
         self.check_pycache(0)
         mod = self.import_module()
@@ -308,7 +300,6 @@ class TestCArray(TestCase):
         self.assertIn("mismatching dtype 'int32' for pointer",
                       str(raises.exception))
 
-    @tag('important')
     def test_carray(self):
         """
         Test pure Python carray().
@@ -356,7 +347,6 @@ class TestCArray(TestCase):
             f = cfunc(sig)(pyfunc)
             self.check_carray_usecase(self.make_float32_pointer, pyfunc, f.ctypes)
 
-    @tag('important')
     def test_numba_carray(self):
         """
         Test Numba-compiled carray() against pure Python carray()

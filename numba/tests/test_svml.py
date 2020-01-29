@@ -1,5 +1,3 @@
-from __future__ import division, print_function
-
 import math
 import numpy as np
 import subprocess
@@ -13,7 +11,6 @@ import numba
 from numba import prange, njit, unittest_support as unittest
 from numba.targets import cpu
 from numba.compiler import compile_isolated, Flags
-from numba.six import exec_
 from .support import TestCase, tag, override_env_config
 
 needs_svml = unittest.skipUnless(numba.config.USING_SVML,
@@ -166,7 +163,7 @@ def combo_svml_usecase(dtype, mode, vlen, flags):
     body += " "*8 + "return ret"
     # now compile and return it along with its body in __doc__  and patterns
     ldict = {}
-    exec_(body, globals(), ldict)
+    exec(body, globals(), ldict)
     ldict[name].__doc__ = body
     return ldict[name], contains, avoids
 
@@ -237,10 +234,9 @@ class TestSVMLGeneration(TestCase):
                     for mode in "scalar", "range", "prange", "numpy":
                         cls._inject_test(dtype, mode, vlen, flags)
         # mark important
-        if sys.version_info[0] > 2:
-            for n in ( "test_int32_range4_usecase",  # issue #3016
-                      ):
-                setattr(cls, n, tag("important")(getattr(cls, n)))
+        for n in ( "test_int32_range4_usecase",  # issue #3016
+                    ):
+            setattr(cls, n, tag("important")(getattr(cls, n)))
 
 
 TestSVMLGeneration.autogenerate()
@@ -339,7 +335,6 @@ class TestSVML(TestCase):
         self.check(math_sin_scalar, 7., std_pattern=pat)
         self.check(math_sin_scalar, 7., fast_pattern=pat)
 
-    @tag('important')
     def test_svml(self):
         # loops both with and without fastmath should use SVML.
         # The high accuracy routines are dropped if `fastmath` is set

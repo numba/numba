@@ -194,15 +194,20 @@ class Flow(object):
             """An iterative dataflow algorithm to find the definition
             (the source) of each PHI node.
             """
+            blacklist = defaultdict(set)
+
             while True:
                 changing = False
                 for phi, defsites in sorted(list(phismap.items())):
                     for rhs, state in sorted(list(defsites)):
                         if rhs in phi_set:
-                            old = frozenset(defsites)
                             defsites |= phismap[rhs]
-                            defsites.discard((rhs, state))
-                            changing = old != defsites
+                            blacklist[phi].add((rhs, state))
+                    to_remove = blacklist[phi]
+                    if to_remove & defsites:
+                        defsites -= to_remove
+                        changing = True
+
                 _logger.debug("changing phismap: %s", _lazy_pformat(phismap))
                 if not changing:
                     break
@@ -966,7 +971,7 @@ class TraceRunner(object):
         name = state.pop()
         code = state.pop()
         closure = annotations = kwdefaults = defaults = None
-        if PYVERSION >= (3, 0) and PYVERSION < (3, 6):
+        if PYVERSION < (3, 6):
             num_posdefaults = inst.arg & 0xFF
             num_kwdefaults = (inst.arg >> 8) & 0xFF
             num_annotations = (inst.arg >> 16) & 0x7FFF
@@ -1026,6 +1031,7 @@ class TraceRunner(object):
         self.op_CALL_FUNCTION(state, inst)
 
 
+@total_ordering
 class State(object):
     """State of the trace
     """
@@ -1071,6 +1077,9 @@ class State(object):
 
     def __hash__(self):
         return hash(self.get_identity())
+
+    def __lt__(self, other):
+        return self.get_identity() < other.get_identity()
 
     def __eq__(self, other):
         return self.get_identity() == other.get_identity()

@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 from itertools import product
 
 import numpy as np
@@ -8,16 +6,12 @@ from numba import njit
 from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
-from numba.utils import IS_PY3
 from numba.errors import TypingError
-from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
-                      forbid_codegen)
+from .support import (TestCase, MemoryLeakMixin, override_config,
+                      forbid_codegen, skip_parfors_unsupported)
 
 from numba.unsafe.refcount import get_refcount
 
-from .test_parfors import skip_unsupported as parfors_skip_unsupported
-
-skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
 
 # global typed-list for testing purposes
 global_typed_list = List.empty_list(int32)
@@ -158,7 +152,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(L.pop(ui32_1), 2)
         self.assertEqual(L.pop(ui32_0), 123)
 
-    @parfors_skip_unsupported
+    @skip_parfors_unsupported
     def test_unsigned_prange(self):
         @njit(parallel=True)
         def foo(a):
@@ -729,7 +723,6 @@ class TestListInferred(TestCase):
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
-    @skip_py2
     def test_str_item(self):
         @njit
         def foo():
@@ -752,7 +745,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             l.append(str(i))
             self.assertEqual(l[i], str(i))
 
-    @skip_py2
     def test_str_item_refcount_replace(self):
         @njit
         def foo():
@@ -774,7 +766,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         self.assertEqual(ra, 1)
         self.assertEqual(rz, 2)
 
-    @skip_py2
     def test_dict_as_item_in_list(self):
         @njit
         def foo():
@@ -788,7 +779,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         c = foo()
         self.assertEqual(2, c)
 
-    @skip_py2
     def test_dict_as_item_in_list_multi_refcount(self):
         @njit
         def foo():
@@ -803,7 +793,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         c = foo()
         self.assertEqual(3, c)
 
-    @skip_py2
     def test_list_as_value_in_dict(self):
         @njit
         def foo():
@@ -817,7 +806,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         c = foo()
         self.assertEqual(2, c)
 
-    @skip_py2
     def test_list_as_item_in_list(self):
         nested_type = types.ListType(types.int32)
         @njit
@@ -832,7 +820,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         got = foo()
         self.assertEqual(expected, got)
 
-    @skip_py2
     def test_array_as_item_in_list(self):
         nested_type = types.Array(types.float64, 1, 'C')
         @njit
@@ -847,7 +834,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         # Need to compare the nested arrays
         self.assertTrue(np.all(expected[0] == got[0]))
 
-    @skip_py2
     def test_jitclass_as_item_in_list(self):
 
         spec = [
@@ -888,7 +874,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         [bag_equal(a, b) for a, b in zip(expected, got)]
 
-    @skip_py2
     def test_storage_model_mismatch(self):
         # https://github.com/numba/numba/issues/4520
         # check for storage model mismatch in refcount ops generation
@@ -905,7 +890,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         for i, x in enumerate(ref):
             self.assertEqual(lst[i], ref[i])
 
-    @skip_py2
     def test_equals_on_list_with_dict_for_equal_lists(self):
         # https://github.com/numba/numba/issues/4879
         a, b = List(), Dict()
@@ -918,7 +902,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         self.assertEqual(a, c)
 
-    @skip_py2
     def test_equals_on_list_with_dict_for_unequal_dicts(self):
         # https://github.com/numba/numba/issues/4879
         a, b = List(), Dict()
@@ -931,7 +914,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         self.assertNotEqual(a, c)
 
-    @skip_py2
     def test_equals_on_list_with_dict_for_unequal_lists(self):
         # https://github.com/numba/numba/issues/4879
         a, b = List(), Dict()

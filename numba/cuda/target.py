@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import
 import re
 from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
                        Constant, ICMP_EQ)

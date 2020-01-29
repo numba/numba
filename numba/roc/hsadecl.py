@@ -1,4 +1,3 @@
-from __future__ import print_function, division, absolute_import
 from numba import types
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate,

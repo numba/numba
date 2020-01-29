@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import itertools
 
 import numpy as np
@@ -8,7 +6,7 @@ import operator
 from numba import types, prange, errors
 from numba.parfor import internal_prange
 
-from numba.utils import PYVERSION, RANGE_ITER_OBJECTS, IS_PY3
+from numba.utils import RANGE_ITER_OBJECTS
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, infer_global, infer,
                                     infer_getattr, signature, bound_function,
@@ -207,16 +205,6 @@ class BinOpMul(BinOp):
 @infer_global(operator.imul)
 class BinOpMul(BinOp):
     pass
-
-if not IS_PY3:
-    @infer_global(operator.div)
-    class BinOpDiv(BinOp):
-        pass
-
-
-    @infer_global(operator.idiv)
-    class BinOpDiv(BinOp):
-        pass
 
 
 @infer_global(operator.mod)
@@ -647,15 +635,14 @@ class GenericNotIn(AbstractTemplate):
 class MemoryViewAttribute(AttributeTemplate):
     key = types.MemoryView
 
-    if PYVERSION >= (3,):
-        def resolve_contiguous(self, buf):
-            return types.boolean
+    def resolve_contiguous(self, buf):
+        return types.boolean
 
-        def resolve_c_contiguous(self, buf):
-            return types.boolean
+    def resolve_c_contiguous(self, buf):
+        return types.boolean
 
-        def resolve_f_contiguous(self, buf):
-            return types.boolean
+    def resolve_f_contiguous(self, buf):
+        return types.boolean
 
     def resolve_itemsize(self, buf):
         return types.intp
@@ -850,17 +837,9 @@ class Min(MinMaxBase):
 
 @infer_global(round)
 class Round(ConcreteTemplate):
-    if PYVERSION < (3, 0):
-        cases = [
-            signature(types.float32, types.float32),
-            signature(types.float64, types.float64),
-        ]
-    else:
-        cases = [
-            signature(types.intp, types.float32),
-            signature(types.int64, types.float64),
-        ]
-    cases += [
+    cases = [
+        signature(types.intp, types.float32),
+        signature(types.int64, types.float64),
         signature(types.float32, types.float32, types.intp),
         signature(types.float64, types.float64, types.intp),
     ]

@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 try:
     # This is usually the the first C extension import performed when importing
     # Numba, if it fails to import, provide some feedback

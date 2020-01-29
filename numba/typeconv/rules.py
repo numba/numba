@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import
 import itertools
 from .typeconv import TypeManager, TypeCastingRules
 from numba import types

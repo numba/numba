@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 # Re export
 from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
                     warpsize, syncthreads, syncthreads_count, syncwarp,

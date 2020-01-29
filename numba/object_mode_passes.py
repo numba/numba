@@ -1,8 +1,6 @@
-from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import warnings
-from . import (config, errors, types, funcdesc,  utils, typing, pylowering,
-               transforms)
+from . import (config, errors, types, funcdesc, typing, pylowering, transforms)
 from .compiler_machinery import FunctionPass, LoweringPass, register_pass
 from collections import defaultdict
 
@@ -18,9 +16,8 @@ def giveup_context(state, msg):
         if not state.status.can_giveup:
             raise
         else:
-            if utils.PYVERSION >= (3,):
-                # Clear all references attached to the traceback
-                e = e.with_traceback(None)
+            # Clear all references attached to the traceback
+            e = e.with_traceback(None)
             warnings.warn_explicit('%s: %s' % (msg, e),
                                    errors.NumbaWarning,
                                    state.func_id.filename,

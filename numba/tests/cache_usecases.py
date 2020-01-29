@@ -4,7 +4,6 @@ exercise caching compiled Numba functions.
 
 See test_dispatcher.py.
 """
-from __future__ import division, print_function, absolute_import
 
 import sys
 

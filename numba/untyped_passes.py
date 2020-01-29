@@ -1,10 +1,9 @@
-from __future__ import print_function, division, absolute_import
 from collections import defaultdict, namedtuple
 from copy import deepcopy, copy
 
 from .compiler_machinery import FunctionPass, register_pass
 from . import (config, bytecode, interpreter, postproc, errors, types, rewrites,
-               transforms, ir, utils)
+               transforms, ir)
 from .special import literal_unroll
 import warnings
 from .analysis import (
@@ -36,9 +35,8 @@ def fallback_context(state, msg):
         if not state.status.can_fallback:
             raise
         else:
-            if utils.PYVERSION >= (3,):
-                # Clear all references attached to the traceback
-                e = e.with_traceback(None)
+            # Clear all references attached to the traceback
+            e = e.with_traceback(None)
             # this emits a warning containing the error message body in the
             # case of fallback from npm to objmode
             loop_lift = '' if state.flags.enable_looplift else 'OUT'
@@ -1183,8 +1181,7 @@ class MixedContainerUnroller(FunctionPass):
         blks = state.func_ir.blocks
         orig_lbl = tuple(this_loop_body)
 
-        # python 2 can't star unpack
-        replace, delete = orig_lbl[0], orig_lbl[1:]
+        replace, *delete = orig_lbl
         unroll, header_block = unrolled_body, this_loop.header
         unroll_lbl = [x for x in sorted(unroll.blocks.keys())]
         blks[replace] = unroll.blocks[unroll_lbl[0]]

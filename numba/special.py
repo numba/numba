@@ -1,7 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
-import sys
-
 import numpy as np
 
 from .typing.typeof import typeof
@@ -31,7 +27,7 @@ def _gdb_python_call_gen(func_name, *args):
     defn = """def _gdb_func_injection():\n\t%s(%s)\n
     """ % (func_name, argstr)
     l = {}
-    numba.six.exec_(defn, {func_name: fn}, l)
+    exec(defn, {func_name: fn}, l)
     return numba.njit(l['_gdb_func_injection'])
 
 
@@ -91,9 +87,6 @@ def literally(obj):
 
 
 def literal_unroll(container):
-    from numba.errors import UnsupportedError
-    if sys.version_info[:2] < (3, 6):
-        raise UnsupportedError("literal_unroll is only support in Python > 3.5")
     return container
 
 

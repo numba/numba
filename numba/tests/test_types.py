@@ -2,7 +2,6 @@
 Tests for numba.types.
 """
 
-from __future__ import print_function, absolute_import
 
 from collections import namedtuple
 import contextlib
@@ -22,14 +21,13 @@ import weakref
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba.utils import IS_PY3
 from numba import sigutils, types, typing, errors
 from numba.types.abstract import _typecache
 from numba.typing.templates import make_overload_template
 from numba import jit, njit, numpy_support, typeof
 from numba.extending import (overload, register_model, models, unbox,
                              NativeValue, typeof_impl)
-from .support import TestCase, tag, temp_directory
+from .support import TestCase, temp_directory
 from .enum_usecases import Color, Shake, Shape
 
 
@@ -48,7 +46,6 @@ class Dummy(object):
 
 class TestTypes(TestCase):
 
-    @tag('important')
     def test_equality(self):
         self.assertEqual(types.int32, types.int32)
         self.assertEqual(types.uint32, types.uint32)
@@ -140,7 +137,6 @@ class TestTypes(TestCase):
         self.assertTrue(b != c)
         self.assertTrue(a != z)
 
-    @tag('important')
     def test_interning(self):
         # Test interning and lifetime of dynamic types.
         a = types.Dummy('xyzzyx')
@@ -176,7 +172,6 @@ class TestTypes(TestCase):
         gc.collect()
         self.assertEqual(len(cache), cache_len)
 
-    @tag('important')
     def test_array_notation(self):
         def check(arrty, scalar, ndim, layout):
             self.assertIs(arrty.dtype, scalar)
@@ -202,7 +197,6 @@ class TestTypes(TestCase):
         check(dtyped[:, ::1], scalar, 2, 'C')
         check(dtyped[::1, :], scalar, 2, 'F')
 
-    @tag('important')
     def test_call_notation(self):
         # Function call signature
         i = types.int32
@@ -297,13 +291,12 @@ class TestNumbers(TestCase):
         check_order([types.float32, types.float64])
         check_order([types.complex64, types.complex128])
 
-        if IS_PY3:
-            with self.assertRaises(TypeError):
-                types.int8 <= types.uint32
-            with self.assertRaises(TypeError):
-                types.int8 <= types.float32
-            with self.assertRaises(TypeError):
-                types.float64 <= types.complex128
+        with self.assertRaises(TypeError):
+            types.int8 <= types.uint32
+        with self.assertRaises(TypeError):
+            types.int8 <= types.float32
+        with self.assertRaises(TypeError):
+            types.float64 <= types.complex128
 
 
 class TestNdIter(TestCase):

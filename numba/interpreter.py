@@ -1,18 +1,18 @@
-from __future__ import print_function, division, absolute_import
-
+import builtins
 import collections
 import dis
 import operator
 import logging
 
-from . import config, ir, controlflow, dataflow, utils, errors, six
-from .utils import builtins, PYVERSION
+from . import config, ir, controlflow, dataflow, errors
 from .errors import NotDefinedError
 from .utils import (
+    PYVERSION,
     BINOPS_TO_OPERATORS,
     INPLACE_BINOPS_TO_OPERATORS,
     UNARY_BUITINS_TO_OPERATORS,
     OPERATORS_TO_BUILTINS,
+    get_function_globals
     )
 from numba.byteflow import Flow, AdaptDFA, AdaptCFA
 from numba.unsafe import eh
@@ -320,7 +320,7 @@ class Interpreter(object):
         as a builtins (second).  If both failed, return a ir.UNDEFINED.
         """
         try:
-            return utils.get_function_globals(self.func_id.func)[name]
+            return get_function_globals(self.func_id.func)[name]
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
 
@@ -377,7 +377,7 @@ class Interpreter(object):
 
                 err = errors.NotDefinedError(e.name, loc=loc)
                 if not config.FULL_TRACEBACKS:
-                    six.raise_from(err, None)
+                    raise value from None
                 else:
                     raise err
 

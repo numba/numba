@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import
 import numpy as np
 from numba import cuda, config, int32, int64, float32, float64
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
