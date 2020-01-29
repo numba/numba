@@ -2,8 +2,7 @@ from collections import defaultdict, namedtuple
 from copy import deepcopy, copy
 
 from .compiler_machinery import FunctionPass, register_pass
-from . import (config, bytecode, interpreter, postproc, errors, types, rewrites,
-               transforms, ir)
+from . import config, bytecode, postproc, errors, types, rewrites, transforms, ir
 from .special import literal_unroll
 import warnings
 from .analysis import (
@@ -22,6 +21,7 @@ from .ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                        compile_to_numba_ir, get_definition,
                        find_max_label, rename_labels,
                        )
+import numba.core.interpreter
 
 
 @contextmanager
@@ -83,7 +83,7 @@ class TranslateByteCode(FunctionPass):
         """
         func_id = state['func_id']
         bc = state['bc']
-        interp = interpreter.Interpreter(func_id)
+        interp = numba.core.interpreter.Interpreter(func_id)
         func_ir = interp.interpret(bc)
         state["func_ir"] = func_ir
         return True

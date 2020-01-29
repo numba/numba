@@ -3,8 +3,8 @@ import copy
 import warnings
 from numba.tracing import event
 
-from numba import (bytecode, interpreter, postproc, config,)
-from numba.core import utils, errors, typing
+from numba import bytecode, postproc, config
+from numba.core import utils, errors, typing, interpreter
 from numba.targets import cpu, callconv
 from numba.parfor import ParforDiagnostics
 from numba.inline_closurecall import InlineClosureCallPass
