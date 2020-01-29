@@ -1,5 +1,5 @@
-#include "../_pymodule.h"
-#include "../capsulethunk.h"
+#include "../../_pymodule.h"
+#include "../../capsulethunk.h"
 #include "typeconv.hpp"
 
 extern "C" {

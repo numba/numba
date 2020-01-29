@@ -112,7 +112,7 @@ def get_ext_modules():
                                         'numba/_typeof.c',
                                         'numba/_hashtable.c',
                                         'numba/_dispatcherimpl.cpp',
-                                        'numba/typeconv/typeconv.cpp'],
+                                        'numba/core/typeconv/typeconv.cpp'],
                                depends=["numba/_pymodule.h",
                                         "numba/_dispatcher.h",
                                         "numba/_typeof.h",
@@ -136,9 +136,9 @@ def get_ext_modules():
                                        ],
                               **np_compile_args)
 
-    ext_typeconv = Extension(name="numba.typeconv._typeconv",
-                             sources=["numba/typeconv/typeconv.cpp",
-                                      "numba/typeconv/_typeconv.cpp"],
+    ext_typeconv = Extension(name="numba.core.typeconv._typeconv",
+                             sources=["numba/core/typeconv/typeconv.cpp",
+                                      "numba/core/typeconv/_typeconv.cpp"],
                              depends=["numba/_pymodule.h"],
                              )
 

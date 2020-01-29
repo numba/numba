@@ -1,6 +1,6 @@
 from llvmlite import ir, binding as ll
 
-from numba import types
+from numba.core import types
 from numba import unittest_support as unittest
 from numba import datamodel
 from numba.datamodel.testing import test_factory
