@@ -124,12 +124,22 @@ class DeviceNDArrayBase(object):
         else:
             strides = tuple(self.strides)
 
+        if self.stream:
+            # Synchronize the default stream with this array's stream
+            ctx = _driver.devices.get_context()
+            event = ctx.create_event(timing=False)
+            event.record(self.stream)
+            event.wait(_ctx.get_default_stream())
+            # Hold a reference to the event so it is not cleaned up before this
+            # array
+            self._syncevent = event
+
         return {
             'shape': tuple(self.shape),
             'strides': strides,
             'data': (ptr, False),
             'typestr': self.dtype.str,
-            'version': 2,
+            'version': 3,
         }
 
     def bind(self, stream=0):
