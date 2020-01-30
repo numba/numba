@@ -1,7 +1,7 @@
 from numba.core import types
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    AbstractTemplate,
-                                    MacroTemplate, signature, Registry)
+from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
+                                         AbstractTemplate,
+                                         MacroTemplate, signature, Registry)
 from numba import roc
 
 registry = Registry()

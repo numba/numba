@@ -17,7 +17,7 @@ from numba.runtime import (
     nrt,
 )
 from numba.extending import intrinsic, include_path
-from numba.typing import signature
+from numba.core.typing import signature
 from numba.targets.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm

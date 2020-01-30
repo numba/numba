@@ -30,7 +30,7 @@ from numba.extending import (typeof_impl, type_callable,
                              register_jitable,
                              get_cython_function_address
                              )
-from numba.typing.templates import (
+from numba.core.typing.templates import (
     ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
 
 # Pandas-like API implementation

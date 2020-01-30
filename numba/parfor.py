@@ -1463,7 +1463,7 @@ class PreParforPass(object):
                             break
 
 def find_template(op):
-    for ft in numba.typing.templates.builtin_registry.functions:
+    for ft in numba.core.typing.templates.builtin_registry.functions:
         if ft.key == op:
             return ft
 

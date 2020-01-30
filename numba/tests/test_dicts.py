@@ -39,7 +39,7 @@ class TestCompiledDict(TestCase):
 
     def test_unsupported_dict_usage(self):
         # Test dict(dict())
-        from numba.typing.dictdecl import _message_dict_support
+        from numba.core.typing.dictdecl import _message_dict_support
 
         @njit
         def foo():

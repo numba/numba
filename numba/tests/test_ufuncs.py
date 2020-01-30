@@ -16,7 +16,7 @@ from numba.numpy_support import from_dtype
 from numba import jit, vectorize
 from numba.core.errors import LoweringError, TypingError
 from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
-from numba.typing.npydecl import supported_ufuncs, all_ufuncs
+from numba.core.typing.npydecl import supported_ufuncs, all_ufuncs
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')

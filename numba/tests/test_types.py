@@ -24,7 +24,7 @@ from numba import unittest_support as unittest
 from numba import sigutils
 from numba.core import types, typing, errors
 from numba.core.types.abstract import _typecache
-from numba.typing.templates import make_overload_template
+from numba.core.typing.templates import make_overload_template
 from numba import jit, njit, numpy_support, typeof
 from numba.extending import (overload, register_model, models, unbox,
                              NativeValue, typeof_impl)
@@ -500,8 +500,8 @@ class TestPickling(TestCase):
     # call templates are not picklable
     @unittest.expectedFailure
     def test_external_function_pointers(self):
-        from numba.typing import ctypes_utils
-        from .ctypes_usecases import c_sin, c_cos
+        from numba.core.typing import ctypes_utils
+        from numba.tests.ctypes_usecases import c_sin, c_cos
         for fnptr in (c_sin, c_cos):
             ty = ctypes_utils.make_function_type(fnptr)
             self.assertIsInstance(ty, types.ExternalFunctionPointer)

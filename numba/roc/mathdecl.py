@@ -1,7 +1,7 @@
 import math
 from numba.core import types, utils
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    signature, Registry)
+from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
+                                         signature, Registry)
 
 registry = Registry()
 builtin_attr = registry.register_attr
