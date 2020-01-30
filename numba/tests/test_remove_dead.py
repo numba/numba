@@ -10,7 +10,7 @@ from numba.targets import cpu
 from numba.core import types, typing, ir
 from numba.targets.registry import cpu_target
 from numba import config
-from numba.annotations import type_annotations
+from numba.core.annotations import type_annotations
 from numba.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table, remove_dels, remove_dead,
                             remove_call_handlers, alias_func_extensions)
@@ -159,7 +159,7 @@ class TestRemoveDead(unittest.TestCase):
     @needs_blas
     def test_alias_ctypes(self):
         # use xxnrm2 to test call a C function with ctypes
-        from numba.targets.linalg import _BLAS
+        from numba.np.linalg import _BLAS
         xxnrm2 = _BLAS().numba_xxnrm2(types.float64)
 
         def remove_dead_xxnrm2(rhs, lives, call_list):

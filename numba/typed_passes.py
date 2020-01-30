@@ -9,7 +9,7 @@ from numba.parfor import ParforPass as _parfor_ParforPass
 from numba.parfor import Parfor
 
 from numba.compiler_machinery import FunctionPass, LoweringPass, register_pass
-from numba.annotations import type_annotations
+from numba.core.annotations import type_annotations
 from numba.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                             check_and_legalize_ir, guard, dead_code_elimination,
                             simplify_CFG, get_definition)
