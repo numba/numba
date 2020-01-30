@@ -6,7 +6,7 @@ import numba
 from numba import unittest_support as unittest
 from numba.transforms import find_setupwiths, with_lifting
 from numba.withcontexts import bypass_context, call_context, objmode_context
-from numba.bytecode import FunctionIdentity, ByteCode
+from numba.core.bytecode import FunctionIdentity, ByteCode
 from numba.core.interpreter import Interpreter
 from numba.core import typing, errors
 from numba.targets.registry import cpu_target

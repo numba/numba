@@ -9,7 +9,8 @@ import marshal
 import sys
 from types import FunctionType, ModuleType
 
-from numba import bytecode, compiler
+from numba import compiler
+from numba.core import bytecode
 
 
 #

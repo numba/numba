@@ -2,8 +2,8 @@ from collections import defaultdict, namedtuple
 from copy import deepcopy, copy
 
 from .compiler_machinery import FunctionPass, register_pass
-from numba import config, bytecode, postproc, rewrites, transforms
-from numba.core import errors, types, ir
+from numba import config, postproc, rewrites, transforms
+from numba.core import errors, types, ir, bytecode
 from .special import literal_unroll
 import warnings
 from .analysis import (

@@ -4,7 +4,7 @@ import numba.unittest_support as unittest
 from numba.core.controlflow import CFGraph, ControlFlowAnalysis
 from numba.compiler import compile_isolated, Flags
 from numba.core import types
-from numba.bytecode import FunctionIdentity, ByteCode
+from numba.core.bytecode import FunctionIdentity, ByteCode
 from numba.tests.support import TestCase
 
 enable_pyobj_flags = Flags()

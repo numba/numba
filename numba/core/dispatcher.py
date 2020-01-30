@@ -18,7 +18,7 @@ from numba.core.typeconv.rules import default_type_manager
 from numba import sigutils, serialize
 from numba.core.typing.templates import fold_arguments
 from numba.core.typing.typeof import Purpose, typeof
-from numba.bytecode import get_code_object
+from numba.core.bytecode import get_code_object
 from numba.core.utils import reraise
 from numba.caching import NullCache, FunctionCache
 
