@@ -8,7 +8,7 @@ from numba.extending import intrinsic
 from numba.targets.imputils import impl_ret_new_ref
 from numba.core.errors import RequireLiteralValue, TypingError
 
-from .tuple import tuple_setitem
+from numba.cpython.unsafe.tuple import tuple_setitem
 
 
 @intrinsic

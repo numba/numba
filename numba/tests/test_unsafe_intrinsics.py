@@ -4,7 +4,7 @@ import numpy as np
 from numba.tests.support import TestCase, captured_stdout
 from numba import njit
 from numba.core import types
-from numba.unsafe.tuple import tuple_setitem
+from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.unsafe.ndarray import to_fixed_tuple, empty_inferred
 from numba.unsafe.bytes import memcpy_region
 from numba.unsafe.refcount import dump_refcount
