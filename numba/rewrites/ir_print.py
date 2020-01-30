@@ -1,5 +1,4 @@
-from numba import ir
-from numba.core import errors
+from numba.core import errors, ir
 from numba.rewrites import register_rewrite, Rewrite
 
 

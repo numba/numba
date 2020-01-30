@@ -5,8 +5,8 @@ import numpy as np
 
 from numba import njit, vectorize
 from numba import unittest_support as unittest
-from numba import compiler, typeof, ir
-from numba.core import utils, types, typing
+from numba import compiler, typeof
+from numba.core import utils, types, typing, ir
 from numba.compiler import Compiler, Flags
 from numba.targets import cpu
 from numba.tests.support import MemoryLeakMixin, TestCase

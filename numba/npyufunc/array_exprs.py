@@ -6,8 +6,8 @@ import sys
 import numpy as np
 import operator
 
-from numba import compiler, ir, rewrites
-from numba.core import types, utils
+from numba import compiler, rewrites
+from numba.core import types, utils, ir
 from numba.core.typing import npydecl
 from numba.npyufunc.dufunc import DUFunc
 

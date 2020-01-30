@@ -24,9 +24,9 @@ from collections import defaultdict, OrderedDict, namedtuple
 from contextlib import contextmanager
 import operator
 
-import numba
-from numba.core import types, typing, utils, errors
-from numba import ir, ir_utils, rewrites, config, analysis, prange, pndindex
+import numba.core.ir
+from numba.core import types, typing, utils, errors, ir
+from numba import ir_utils, rewrites, config, analysis, prange, pndindex
 from numba import array_analysis, postproc, typeinfer
 from numba.numpy_support import as_dtype
 from numba.core.typing.templates import infer_global, AbstractTemplate
@@ -4033,13 +4033,13 @@ def repr_arrayexpr(arrayexpr):
         else:
             opr = ' ' + opr + ' '
             return '({})'.format(opr.join([ repr_arrayexpr(x) for x in args ]))
-    elif isinstance(arrayexpr, numba.ir.Var):
+    elif isinstance(arrayexpr, numba.core.ir.Var):
         name = arrayexpr.name
         if name.startswith('$'):
             return '\'%s\' (temporary variable)' % name
         else:
             return name
-    elif isinstance(arrayexpr, numba.ir.Const):
+    elif isinstance(arrayexpr, numba.core.ir.Const):
         return repr(arrayexpr.value)
     else:
         return '_'

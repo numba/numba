@@ -7,7 +7,7 @@ import numba
 from numba import compiler
 from numba.compiler import compile_isolated, Flags
 from numba.targets import cpu
-from numba.core import types, typing
+from numba.core import types, typing, ir
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.annotations import type_annotations
@@ -15,7 +15,6 @@ from numba.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table, remove_dels, remove_dead,
                             remove_call_handlers, alias_func_extensions)
 from numba.typed_passes import type_inference_stage
-from numba import ir
 from numba.compiler_machinery import FunctionPass, register_pass, PassManager
 from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,

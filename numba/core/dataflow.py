@@ -5,7 +5,7 @@ import warnings
 
 from numba.core import utils
 from numba.core.errors import UnsupportedError
-from numba.ir import Loc
+from numba.core.ir import Loc
 
 
 class DataFlowAnalysis(object):

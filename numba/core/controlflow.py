@@ -3,7 +3,7 @@ import functools
 import sys
 
 from numba.core import utils
-from numba.ir import Loc
+from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
 
 # List of bytecodes creating a new block in the control flow graph

@@ -23,14 +23,13 @@ from numba import unittest_support as unittest
 from numba import njit, prange, stencil, inline_closurecall
 from numba import compiler, typed_passes
 from numba.targets import cpu
-from numba.core import types, utils, typing, errors
+from numba.core import types, utils, typing, errors, ir
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.annotations import type_annotations
 from numba.ir_utils import (find_callname, guard, build_definitions,
                             get_definition, is_getitem, is_setitem,
                             index_var_of_get_setitem)
-from numba import ir
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty
 from numba.compiler import compile_isolated, Flags
 from numba.bytecode import ByteCodeIter

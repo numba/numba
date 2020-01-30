@@ -1,5 +1,5 @@
-from numba import ir, macro
-from numba.core import types, typing
+from numba import macro
+from numba.core import types, typing, ir
 
 _stub_error = NotImplementedError("This is a stub.")
 

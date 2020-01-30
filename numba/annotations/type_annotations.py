@@ -9,8 +9,8 @@ import sys
 import textwrap
 from io import StringIO
 
-from numba import ir
 import numba.dispatcher
+from numba.core import ir
 
 
 class SourceLines(Mapping):

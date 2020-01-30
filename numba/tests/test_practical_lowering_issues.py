@@ -3,8 +3,8 @@ Tests for practical lowering specific errors.
 """
 
 import numpy as np
-from numba import njit, ir
-from numba.core import types
+from numba import njit
+from numba.core import types, ir
 from numba.compiler import CompilerBase, DefaultPassBuilder
 from numba.typed_passes import NopythonTypeInference
 from numba.compiler_machinery import register_pass, FunctionPass

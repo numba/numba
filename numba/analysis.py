@@ -5,10 +5,9 @@ import operator
 from functools import reduce
 from collections import namedtuple, defaultdict
 
-from numba import ir
 from numba.core.controlflow import CFGraph
 from numba import consts, special
-from numba.core import types, errors
+from numba.core import types, errors, ir
 
 #
 # Analysis related to variable lifetime

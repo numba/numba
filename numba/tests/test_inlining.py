@@ -5,8 +5,8 @@ from numba.tests.support import (TestCase, override_config, captured_stdout,
                       skip_parfors_unsupported)
 import numba
 from numba import unittest_support as unittest
-from numba import jit, njit, ir, compiler
-from numba.core import types
+from numba import jit, njit, compiler
+from numba.core import types, ir
 from numba.ir_utils import guard, find_callname, find_const, get_definition
 from numba.targets.registry import CPUDispatcher
 from numba.inline_closurecall import inline_closure_call

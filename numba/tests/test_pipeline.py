@@ -1,7 +1,7 @@
 from numba.compiler import Compiler
 from numba import jit, generated_jit, objmode
 from numba.core import types
-from numba.ir import FunctionIR
+from numba.core.ir import FunctionIR
 from numba.tests.support import TestCase
 
 

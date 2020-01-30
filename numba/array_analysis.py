@@ -6,8 +6,8 @@
 import types as pytypes  # avoid confusion with numba.types
 import numpy
 import operator
-from numba import ir, analysis, config, cgutils
-from numba.core import types, typing
+from numba import analysis, config, cgutils
+from numba.core import types, typing, ir
 from numba.ir_utils import (
     mk_unique_var,
     replace_vars_inner,
