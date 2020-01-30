@@ -5,7 +5,7 @@ from numba.core import types, utils
 from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.npyufunc import _internal, ufuncbuilder
-from numba.dispatcher import Dispatcher
+from numba.core.dispatcher import Dispatcher
 from numba import array_analysis
 
 

@@ -13,7 +13,7 @@ from collections.abc import MutableSequence
 from numba.core.types import ListType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
 from numba import listobject
-from numba.dispatcher import Dispatcher
+from numba.core.dispatcher import Dispatcher
 from numba import config
 from numba.core import types, errors
 from numba import njit, cgutils, typeof

@@ -12,7 +12,7 @@ import numba.unittest_support as unittest
 from numba import cffi_support, numpy_support
 from numba.core import types
 from numba.special import typeof
-from numba.dispatcher import OmittedArg
+from numba.core.dispatcher import OmittedArg
 from numba._dispatcher import compute_fingerprint
 
 from numba.tests.support import TestCase, tag

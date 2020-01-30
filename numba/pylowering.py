@@ -77,7 +77,7 @@ class PyLower(BaseLower):
         super(PyLower, self).pre_lower()
         self.init_pyapi()
         # Pre-computed for later use
-        from numba.dispatcher import OmittedArg
+        from numba.core.dispatcher import OmittedArg
         self.omitted_typobj = self.pyapi.unserialize(
             self.pyapi.serialize_object(OmittedArg))
 

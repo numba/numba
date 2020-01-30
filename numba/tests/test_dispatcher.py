@@ -13,16 +13,6 @@ import weakref
 from itertools import chain
 from io import StringIO
 
-try:
-    import jinja2
-except ImportError:
-    jinja2 = None
-
-try:
-    import pygments
-except ImportError:
-    pygments = None
-
 import numpy as np
 
 from numba import unittest_support as unittest
@@ -37,11 +27,21 @@ from numba.tests.support import (TestCase, temp_directory, import_dynamic,
 from numba.numpy_support import as_dtype
 from numba.targets import codegen
 from numba.caching import _UserWideCacheLocator
-from numba.dispatcher import Dispatcher
+from numba.core.dispatcher import Dispatcher
 from numba import parfor
 from numba.tests.support import skip_parfors_unsupported, needs_lapack
 
 import llvmlite.binding as ll
+
+try:
+    import jinja2
+except ImportError:
+    jinja2 = None
+
+try:
+    import pygments
+except ImportError:
+    pygments = None
 
 _is_armv7l = platform.machine() == 'armv7l'
 

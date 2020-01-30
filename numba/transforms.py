@@ -178,7 +178,7 @@ def _loop_lift_modify_blocks(func_ir, loopinfo, blocks,
     Modify the block inplace to call to the lifted-loop.
     Returns a dictionary of blocks of the lifted-loop.
     """
-    from numba.dispatcher import LiftedLoop
+    from numba.core.dispatcher import LiftedLoop
 
     # Copy loop blocks
     loop = loopinfo.loop
@@ -325,7 +325,7 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     from numba import postproc
 
     def dispatcher_factory(func_ir, objectmode=False, **kwargs):
-        from numba.dispatcher import LiftedWith, ObjModeLiftedWith
+        from numba.core.dispatcher import LiftedWith, ObjModeLiftedWith
 
         myflags = flags.copy()
         if objectmode:

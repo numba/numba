@@ -4,8 +4,8 @@ from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba.core import typing, types
-from numba import cgutils, debuginfo, dispatcher
+from numba.core import typing, types, dispatcher
+from numba import cgutils, debuginfo
 from numba.core.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv

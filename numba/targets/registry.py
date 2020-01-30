@@ -2,8 +2,7 @@ import contextlib
 
 from numba.targets import cpu
 from numba.targets.descriptors import TargetDescriptor
-from numba import dispatcher
-from numba.core import utils, typing
+from numba.core import utils, typing, dispatcher
 
 # -----------------------------------------------------------------------------
 # Default CPU target descriptors

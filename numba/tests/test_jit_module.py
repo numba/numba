@@ -10,8 +10,8 @@ import logging
 from io import StringIO
 
 import numba.unittest_support as unittest
-from numba import dispatcher
 from numba.tests.support import temp_directory, SerialMixin
+from numba.core import dispatcher
 
 
 @contextlib.contextmanager

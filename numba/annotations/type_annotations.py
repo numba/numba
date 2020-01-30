@@ -9,7 +9,7 @@ import sys
 import textwrap
 from io import StringIO
 
-import numba.dispatcher
+import numba.core.dispatcher
 from numba.core import ir
 
 
@@ -92,7 +92,7 @@ class TypeAnnotation(object):
                             inst.value.op ==  'call'):
                         atype = self.calltypes[inst.value]
                     elif (isinstance(inst.value, ir.Const) and
-                            isinstance(inst.value.value, numba.dispatcher.LiftedLoop)):
+                            isinstance(inst.value.value, numba.core.dispatcher.LiftedLoop)):
                         atype = 'XXX Lifted Loop XXX'
                         found_lifted_loop = True
                     else:

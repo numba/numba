@@ -10,7 +10,7 @@ from llvmlite import ir
 from numba.core import utils
 from numba import compiler
 from numba.caching import NullCache, FunctionCache
-from numba.dispatcher import _FunctionCompiler
+from numba.core.dispatcher import _FunctionCompiler
 from numba.targets import registry
 from numba.core.typing import signature
 from numba.core.typing.ctypes_utils import to_ctypes
