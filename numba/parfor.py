@@ -25,8 +25,8 @@ from contextlib import contextmanager
 import operator
 
 import numba.core.ir
-from numba.core import types, typing, utils, errors, ir
-from numba import ir_utils, rewrites, config, analysis, prange, pndindex
+from numba.core import types, typing, utils, errors, ir, analysis
+from numba import ir_utils, rewrites, config, prange, pndindex
 from numba import postproc, typeinfer
 from numba.numpy_support import as_dtype
 from numba.core.typing.templates import infer_global, AbstractTemplate
@@ -80,7 +80,7 @@ from numba.ir_utils import (
     find_potential_aliases,
     replace_var_names)
 
-from numba.analysis import (compute_use_defs, compute_live_map,
+from numba.core.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from numba.core.controlflow import CFGraph
 from numba.core.typing import npydecl, signature

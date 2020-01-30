@@ -1,5 +1,5 @@
-from numba import analysis, transforms
-from numba.core import utils, ir
+from numba import transforms
+from numba.core import utils, ir, analysis
 
 
 class YieldPoint(object):

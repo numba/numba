@@ -7,7 +7,7 @@ from numba import rewrites, jit, ir_utils, njit
 from numba.core import types, errors, ir
 from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
 
-from numba.analysis import dead_branch_prune, rewrite_semantic_constants
+from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
 
 _GLOBAL = 123
 

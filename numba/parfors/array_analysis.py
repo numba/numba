@@ -6,8 +6,8 @@
 import types as pytypes
 import numpy
 import operator
-from numba import analysis, config, cgutils
-from numba.core import types, typing, ir
+from numba import config, cgutils
+from numba.core import types, typing, ir, analysis
 from numba.ir_utils import (
     mk_unique_var,
     replace_vars_inner,
@@ -22,7 +22,7 @@ from numba.ir_utils import (
     find_const,
     is_namedtuple_class,
     build_definitions)
-from numba.analysis import (compute_cfg_from_blocks)
+from numba.core.analysis import (compute_cfg_from_blocks)
 from numba.core.typing import npydecl, signature
 import collections
 import copy

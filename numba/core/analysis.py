@@ -5,7 +5,7 @@ import operator
 from functools import reduce
 from collections import namedtuple, defaultdict
 
-from numba.core.controlflow import CFGraph
+from .controlflow import CFGraph
 from numba import consts, special
 from numba.core import types, errors, ir
 
@@ -292,7 +292,7 @@ def dead_branch_prune(func_ir, called_args):
     func_ir is the IR
     called_args are the actual arguments with which the function is called
     """
-    from .ir_utils import get_definition, guard, find_const, GuardException
+    from numba.ir_utils import get_definition, guard, find_const, GuardException
 
     DEBUG = 0
 
@@ -507,7 +507,7 @@ def rewrite_semantic_constants(func_ir, called_args):
                     if isinstance(argty, types.BaseTuple):
                         rewrite_statement(func_ir, stmt, argty.count)
 
-    from .ir_utils import get_definition, guard
+    from numba.ir_utils import get_definition, guard
     for blk in func_ir.blocks.values():
         for stmt in blk.body:
             if isinstance(stmt, ir.Assign):

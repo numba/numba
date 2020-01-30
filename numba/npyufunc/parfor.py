@@ -19,7 +19,7 @@ from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             get_call_table, is_pure, get_np_ufunc_typ,
                             get_unused_var_name, find_potential_aliases,
                             is_const_call)
-from numba.analysis import (compute_use_defs, compute_live_map,
+from numba.core.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from numba.core.typing import signature
 from numba import config

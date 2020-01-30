@@ -6,13 +6,7 @@ from numba import config, postproc, rewrites, transforms
 from numba.core import errors, types, ir, bytecode
 from .special import literal_unroll
 import warnings
-from .analysis import (
-    dead_branch_prune,
-    rewrite_semantic_constants,
-    find_literally_calls,
-    compute_cfg_from_blocks,
-    compute_use_defs,
-)
+from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants, find_literally_calls,compute_cfg_from_blocks, compute_use_defs
 from contextlib import contextmanager
 from .inline_closurecall import InlineClosureCallPass, inline_closure_call
 from .ir_utils import (guard, resolve_func_from_module, simplify_CFG,

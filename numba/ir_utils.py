@@ -13,12 +13,12 @@ import warnings
 from llvmlite import ir as lir
 
 import numba
-from numba.core import types, utils, typing, ir
-from numba import config, analysis, cgutils, rewrites
+from numba.core import types, utils, typing, ir, analysis
+from numba import config, cgutils, rewrites
 from numba.core.typing.templates import (signature, infer_global,
                                          AbstractTemplate)
 from numba.targets.imputils import impl_ret_untracked
-from numba.analysis import (compute_live_map, compute_use_defs,
+from numba.core.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.core.errors import (TypingError, UnsupportedError,
                                NumbaPendingDeprecationWarning, NumbaWarning,

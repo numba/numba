@@ -1,6 +1,6 @@
 import types as pytypes  # avoid confusion with numba.types
 import ctypes
-import numba
+import numba.core.analysis
 from numba.core import utils, types, typing, errors, ir
 from numba import config, ir_utils, prange, rewrites
 from numba.parfor import internal_prange
@@ -26,7 +26,7 @@ from numba.ir_utils import (
     dead_code_elimination,
     )
 
-from numba.analysis import (
+from numba.core.analysis import (
     compute_cfg_from_blocks,
     compute_use_defs,
     compute_live_variables)
@@ -353,7 +353,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
         from numba import typed_passes
         # call branch pruning to simplify IR and avoid inference errors
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
-        numba.analysis.dead_branch_prune(callee_ir, arg_typs)
+        numba.core.analysis.dead_branch_prune(callee_ir, arg_typs)
         try:
             f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
                     typingctx, callee_ir, arg_typs, None)
