@@ -15,7 +15,7 @@ from numba import typeof, cgutils, config
 from numba.core import types, utils
 from numba.extending import overload
 from numba.core.typing import signature
-from numba.unsafe.numbers import trailing_zeros
+from numba.cpython.unsafe.numbers import trailing_zeros
 
 
 registry = Registry()

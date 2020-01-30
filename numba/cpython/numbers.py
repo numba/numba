@@ -16,7 +16,7 @@ from numba.targets import optional
 from numba.core import typing, types, utils, errors
 from numba import cgutils
 from numba.extending import intrinsic, overload_method
-from numba.unsafe.numbers import viewer
+from numba.cpython.unsafe.numbers import viewer
 
 def _int_arith_flags(rettype):
     """
