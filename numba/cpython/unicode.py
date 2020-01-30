@@ -31,7 +31,7 @@ from numba._helperlib import c_helpers
 from numba.cpython.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.core.errors import TypingError
-from numba.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
+from numba.cpython.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                                    _Py_ISALNUM,
                                    _PyUnicode_ToUpperFull,
                                    _PyUnicode_ToLowerFull,
