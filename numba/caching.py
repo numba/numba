@@ -15,7 +15,7 @@ import sys
 import tempfile
 import warnings
 
-from numba.appdirs import AppDirs
+from numba.misc.appdirs import AppDirs
 from numba.core.utils import add_metaclass, file_replace
 
 import numba
