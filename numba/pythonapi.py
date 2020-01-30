@@ -1590,7 +1590,8 @@ class PythonAPI(object):
         Parameters
         ----------
         func : function
-            The Python function to be compiled.
+            The Python function to be compiled. This function is compiled
+            in nopython-mode.
         sig : numba.typing.Signature
             The function signature for *func*.
         args : Sequence[llvmlite.binding.Value]
@@ -1599,9 +1600,14 @@ class PythonAPI(object):
         Returns
         -------
         (is_error, res) :  2-tuple of llvmlite.binding.Value.
-            is_error : true iff *func* raised a nopython exception.
-            res : Returned value from *func* if *is_error* is false.
+            is_error : true iff *func* raised an exception.
+            res : Returned value from *func* iff *is_error* is false.
+
+        If *is_error* is true, this method will adapt the nopython exception
+        into a Python exception. Caller should return NULL to Python to
+        indicate an error.
         """
+        # Compile *func*
         builder = self.builder
         cres = self.context.compile_subroutine(builder, func, sig)
         got_retty = cres.signature.return_type
@@ -1612,18 +1618,23 @@ class PythonAPI(object):
             raise errors.LoweringError(
                 f'mismatching signature {got_retty} != {retty}.\n'
             )
+        # Call into *func*
         status, res = self.context.call_internal_no_propagate(
             builder, cres.fndesc, sig, args,
         )
+        # Post-call handling for *func*
         is_error_ptr = cgutils.alloca_once(builder, cgutils.bool_t, zfill=True)
         res_type = self.context.get_value_type(sig.return_type)
         res_ptr = cgutils.alloca_once(builder, res_type, zfill=True)
 
+        # Handle error and adapt the nopython exception into cpython exception
         with builder.if_else(status.is_error) as (has_err, no_err):
             with has_err:
                 builder.store(status.is_error, is_error_ptr)
+                # Set error state in the Python interpreter
                 self.context.call_conv.raise_error(builder, self, status)
             with no_err:
+                # Handle returned value
                 res = imputils.fix_returning_optional(
                     self.context, builder, sig, status, res,
                 )
