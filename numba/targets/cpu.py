@@ -10,7 +10,7 @@ from numba.targets.base import BaseContext, PYOBJECT
 from numba.core import utils, types
 from numba import cgutils
 from numba.core.utils import cached_property
-from numba.targets import callconv, codegen, externals, intrinsics, listobj, dictimpl
+from numba.targets import callconv, codegen, externals, intrinsics, dictimpl
 from numba.targets.options import TargetOptions
 from numba.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
@@ -18,7 +18,7 @@ import numba.entrypoints
 from numba.targets import fastmathpass
 from numba.targets.cpu_options import (ParallelOptions, FastMathOptions,
                                        InlineOptions)
-from numba.cpython import setobj
+from numba.cpython import setobj, listobj
 
 
 # Keep those structures in sync with _dynfunc.c.

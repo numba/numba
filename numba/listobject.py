@@ -38,7 +38,7 @@ from numba.typedobjectutils import (_as_bytes,
                                     _container_get_data,
                                     _container_get_meminfo,
                                     )
-from numba.targets import listobj
+from numba.cpython import listobj
 
 ll_list_type = cgutils.voidptr_t
 ll_listiter_type = cgutils.voidptr_t
