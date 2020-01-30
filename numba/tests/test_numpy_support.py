@@ -8,11 +8,18 @@ from itertools import product
 
 import numpy as np
 
+<<<<<<< HEAD
 import unittest
 from numba.core import types
 from numba.tests.support import TestCase
 from numba.tests.enum_usecases import Shake, RequestError
 from numba.np import numpy_support
+=======
+import numba.unittest_support as unittest
+from numba import numpy_support, types, njit
+from .support import TestCase
+from .enum_usecases import Shake, RequestError
+>>>>>>> 4b2be7389 (squashed dependencies (PR #5169 and #5173))
 
 
 class TestFromDtype(TestCase):
@@ -422,6 +429,70 @@ class TestUFuncs(TestCase):
         # outer zero dims
         check_arr(arr.reshape((2, 2, 3, 2))[::5, ::2, ::3])
         check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::5])
+
+
+class TestSupportOverloads(TestCase):
+    def test_normalize_axis_index(self):
+        from numpy.core.multiarray import normalize_axis_index
+        from numpy import AxisError
+        from numba import TypingError
+
+        def pyfunc(axis, ndim):
+            return normalize_axis_index(axis, ndim)
+
+        def check(axis, ndim):
+            nbfunc = njit(pyfunc)
+            self.assertEqual(
+                nbfunc(axis, ndim),
+                pyfunc(axis, ndim)
+            )
+
+        # Validate functionality
+
+        check(0, 3)
+        check(1, 3)
+        check(2, 3)
+        check(-1, 3)
+        check(-2, 3)
+        check(-3, 3)
+        check(0, 3)
+
+        with self.assertRaises(AxisError) as raises:
+            check(3, 3)
+        expected = "out of bounds"
+        self.assertIn(expected, str(raises.exception))
+
+        with self.assertRaises(AxisError) as raises:
+            check(-4, 3)
+        expected = "out of bounds"
+        self.assertIn(expected, str(raises.exception))
+
+        test_prefix = 'test_prefix'
+
+        @njit
+        def nb_func(axis, ndim):
+            return normalize_axis_index(axis, ndim, test_prefix)
+
+        with self.assertRaises(AxisError) as raises:
+            nb_func(3, 3)
+        expected = '%s: ' % test_prefix
+        self.assertIn(expected, str(raises.exception))
+
+        # Validate typing checks
+
+        @njit
+        def nb_func(axis, ndim, msg_prefix):
+            return normalize_axis_index(axis, ndim, msg_prefix)
+
+        with self.assertRaises(TypingError) as raises:
+            nb_func(1, 3, test_prefix)
+        expected = "must be a literal string"
+        self.assertIn(expected, str(raises.exception))
+
+        self.assertEqual(
+            nb_func(2, 3, None),
+            normalize_axis_index(2, 3)
+        )
 
 
 if __name__ == '__main__':
