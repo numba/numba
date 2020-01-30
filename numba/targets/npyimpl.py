@@ -18,6 +18,7 @@ from .imputils import Registry, impl_ret_new_ref, force_error_model
 from .. import typing, types, cgutils, numpy_support, utils
 from ..numpy_support import ufunc_find_matching_loop, select_array_wrapper, from_dtype
 from ..typing import npydecl
+from ..errors import RequireLiteralValue
 from ..extending import overload, intrinsic
 
 from .. import errors
@@ -601,3 +602,39 @@ def numpy_dtype(desc):
         return imp
     else:
         raise TypeError('unknown dtype descriptor: {}'.format(desc))
+
+
+@overload(np.core.multiarray.normalize_axis_index)
+def normalize_axis_index_ovl(axis, ndim, msg_prefix=None):
+    if not isinstance(axis, (types.Integer, types.IntegerLiteral)):
+        raise TypeError(
+            "normalize_axis_index: 'axis' argument must be an integer")
+    if not isinstance(axis, (types.Integer, types.IntegerLiteral)):
+        raise TypeError(
+            "normalize_axis_index: 'ndim' argument must be an integer")
+    if not isinstance(msg_prefix, 
+            (types.StringLiteral, types.NoneType, type(None))):
+        raise RequireLiteralValue("normalise_axis_index: 'msg_prefix' argument"
+                                  " must be a literal string")
+
+    if isinstance(msg_prefix, (types.NoneType, type(None))):
+        msg_prefix = ""
+    else:
+        msg_prefix = "%s: " % msg_prefix.literal_value
+    if isinstance(ndim, types.IntegerLiteral):
+        msg_out_of_bounds = \
+            "%sa specified axis is out of bounds for array of dimension %s" \
+            % (msg_prefix, ndim.literal_value)
+    else:
+        msg_out_of_bounds = \
+            "%sa specified axis is out of bounds for the array" \
+            % msg_prefix
+
+    def normalize_axis_index_impl(axis, ndim, msg_prefix=None):
+        if not(-ndim <= axis < ndim):
+            raise np.AxisError(msg_out_of_bounds)
+        elif axis < 0:
+            return axis + ndim
+        else:
+            return axis
+    return normalize_axis_index_impl
