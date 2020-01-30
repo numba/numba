@@ -18,10 +18,11 @@ from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.pythonapi import PythonAPI
 from numba.np import arrayobj
-from numba.targets import builtins, imputils
+from numba.targets import imputils
 from .imputils import (user_function, user_generator,
                        builtin_registry, impl_ret_borrowed,
                        RegistryLoader)
+from numba.cpython import builtins
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
 PYOBJECT = GENERIC_POINTER

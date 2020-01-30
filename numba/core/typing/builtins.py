@@ -1010,7 +1010,7 @@ class DeferredAttribute(AttributeTemplate):
 
 #------------------------------------------------------------------------------
 
-from numba.targets.builtins import get_type_min_value, get_type_max_value
+from numba.cpython.builtins import get_type_min_value, get_type_max_value
 
 @infer_global(get_type_min_value)
 @infer_global(get_type_max_value)

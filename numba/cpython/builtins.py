@@ -8,11 +8,7 @@ from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from .imputils import (lower_builtin, lower_getattr, lower_getattr_generic,
-                       lower_cast, lower_constant, iternext_impl,
-                       call_getiter, call_iternext,
-                       impl_ret_borrowed, impl_ret_untracked,
-                       numba_typeref_ctor)
+from numba.targets.imputils import lower_builtin, lower_getattr, lower_getattr_generic, lower_cast, lower_constant, iternext_impl, call_getiter, call_iternext, impl_ret_borrowed, impl_ret_untracked, numba_typeref_ctor
 from numba.core import typing, types, utils
 from numba import cgutils
 from numba.extending import overload, intrinsic

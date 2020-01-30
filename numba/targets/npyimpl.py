@@ -13,7 +13,7 @@ from llvmlite.llvmpy import core as lc
 import numpy as np
 import operator
 
-from numba.targets import builtins, callconv, ufunc_db
+from numba.targets import callconv, ufunc_db
 from numba.np import arrayobj
 from numba.targets.imputils import Registry, impl_ret_new_ref, force_error_model
 from numba import cgutils, numpy_support
@@ -23,6 +23,7 @@ from numba.core.typing import npydecl
 from numba.extending import overload, intrinsic
 
 from numba.core import errors
+from numba.cpython import builtins
 
 registry = Registry()
 lower = registry.lower
