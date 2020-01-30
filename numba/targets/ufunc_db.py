@@ -47,7 +47,8 @@ def _fill_ufunc_db(ufunc_db):
     # some of these imports would cause a problem of circular
     # imports if done at global scope when importing the numba
     # module.
-    from numba.targets import numbers, npyfuncs, mathimpl, cmathimpl
+    from numba.targets import numbers, npyfuncs, mathimpl
+    from numba.cpython import cmathimpl
     from numba.numpy_support import numpy_version
 
     ufunc_db[np.negative] = {

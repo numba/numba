@@ -9,13 +9,13 @@ from numba import cgutils, debuginfo
 from numba.core.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
-from numba.targets import cmathimpl
 from numba.core.typing import cmathdecl
 
 from numba import itanium_mangler
 from .cudadrv import nvvm
 from numba.cuda import codegen, nvvmutils
 from .decorators import jitdevice
+from numba.cpython import cmathimpl
 
 
 # -----------------------------------------------------------------------------
