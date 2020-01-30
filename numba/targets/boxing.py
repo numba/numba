@@ -8,7 +8,8 @@ from numba import cgutils, numpy_support
 from numba.core import types
 from numba.pythonapi import box, unbox, reflect, NativeValue
 
-from numba.targets import listobj, setobj
+from numba.targets import listobj
+from numba.cpython import setobj
 
 #
 # Scalar types
