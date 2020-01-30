@@ -28,7 +28,7 @@ from numba.pythonapi import (
     PY_UNICODE_WCHAR_KIND,
 )
 from numba._helperlib import c_helpers
-from numba.targets.hashing import _Py_hash_t
+from numba.cpython.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
 from numba.core.errors import TypingError
 from numba.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,

@@ -272,8 +272,8 @@ class BaseContext(object):
         # Populate built-in registry
         from numba.targets import (arraymath, iterators, numbers,
                                    optional, polynomial, rangeobj,
-                                   gdb_hook, hashing, heapq, literal)
-        from numba.cpython import slicing, tupleobj, enumimpl
+                                   gdb_hook, heapq, literal)
+        from numba.cpython import slicing, tupleobj, enumimpl, hashing
         from numba.np import linalg
 
         try:
