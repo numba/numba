@@ -14,7 +14,7 @@ from numba.core.typing import cmathdecl
 
 from numba import itanium_mangler
 from .cudadrv import nvvm
-from . import codegen, nvvmutils
+from numba.cuda import codegen, nvvmutils
 from .decorators import jitdevice
 
 

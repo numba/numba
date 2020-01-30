@@ -9,7 +9,7 @@ from numba.core import typing, types, utils, datamodel
 from numba.core.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
-from . import codegen
+from numba.roc import codegen
 from .hlc import DATALAYOUT
 
 CC_SPIR_KERNEL = "spir_kernel"

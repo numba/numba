@@ -10,7 +10,7 @@ from numba.targets.imputils import Registry
 from numba import cgutils
 from numba.core import types
 from .cudadrv import nvvm
-from . import nvvmutils, stubs
+from numba.cuda import nvvmutils, stubs
 
 registry = Registry()
 lower = registry.lower

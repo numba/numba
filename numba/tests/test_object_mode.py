@@ -9,7 +9,7 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import jit
 from numba.core import utils
-from numba.support import TestCase
+from numba.tests.support import TestCase
 
 
 def complex_constant(n):

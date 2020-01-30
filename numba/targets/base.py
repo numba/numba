@@ -18,7 +18,7 @@ from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.pythonapi import PythonAPI
 from numba.np import arrayobj
-from . import builtins, imputils
+from numba.targets import builtins, imputils
 from .imputils import (user_function, user_generator,
                        builtin_registry, impl_ret_borrowed,
                        RegistryLoader)
@@ -269,14 +269,14 @@ class BaseContext(object):
         Useful for third-party extensions.
         """
         # Populate built-in registry
-        from . import (arraymath, enumimpl, iterators, numbers,
-                       optional, polynomial, rangeobj, tupleobj,
-                       gdb_hook, hashing, heapq, literal)
+        from numba.targets import (arraymath, enumimpl, iterators, numbers,
+                                   optional, polynomial, rangeobj, tupleobj,
+                                   gdb_hook, hashing, heapq, literal)
         from numba.core import slicing
         from numba.np import linalg
 
         try:
-            from . import npdatetime
+            from numba.targets import npdatetime
         except NotImplementedError:
             pass
         self.install_registry(builtin_registry)

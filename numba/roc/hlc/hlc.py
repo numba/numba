@@ -11,7 +11,7 @@ from numba import config
 from numba.roc.hsadrv import devices
 from .common import AMDGCNModule
 from .config import ROCM_BC_PATH
-from . import TRIPLE
+from numba.roc.hlc import TRIPLE
 from datetime import datetime
 from contextlib import contextmanager
 from numba.core import utils

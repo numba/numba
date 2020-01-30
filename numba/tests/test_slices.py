@@ -8,7 +8,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, typeof, TypingError
 from numba.core import utils
-from numba.support import TestCase, MemoryLeakMixin
+from numba.tests.support import TestCase, MemoryLeakMixin
 
 
 def slice_passing(sl):

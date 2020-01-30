@@ -10,10 +10,10 @@ from numba.targets.imputils import Registry
 from numba import cgutils
 from numba.core import types
 from numba.itanium_mangler import mangle_c, mangle, mangle_type
-from . import target
-from . import stubs
-from . import hlc
-from . import enums
+from numba.roc import target
+from numba.roc import stubs
+from numba.roc import hlc
+from numba.roc import enums
 
 registry = Registry()
 lower = registry.lower

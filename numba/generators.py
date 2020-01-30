@@ -4,7 +4,8 @@ Support for lowering generators.
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
-from . import cgutils, types, config
+from numba import cgutils, config
+from numba.core import types
 from .funcdesc import FunctionDescriptor
 
 

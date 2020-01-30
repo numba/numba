@@ -9,7 +9,7 @@ import operator
 import numba
 from numba.core import types, errors
 from numba.core.typeconv import Conversion, rules
-from . import templates
+from numba.core.typing import templates
 from .typeof import typeof, Purpose
 
 from numba.core import utils
@@ -394,8 +394,8 @@ class BaseContext(object):
 
     def _load_builtins(self):
         # Initialize declarations
-        from . import builtins, arraydecl, npdatetime  # noqa: F401
-        from . import ctypes_utils, bufproto           # noqa: F401
+        from numba.core.typing import builtins, arraydecl, npdatetime  # noqa: F401
+        from numba.core.typing import ctypes_utils, bufproto           # noqa: F401
         from numba.unsafe import eh                    # noqa: F401
 
         self.install_registry(templates.builtin_registry)

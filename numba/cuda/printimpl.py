@@ -5,7 +5,7 @@ from llvmlite.llvmpy.core import Type, Constant
 from numba import cgutils
 from numba.core import types, typing
 from numba.targets.imputils import Registry
-from . import nvvmutils
+from numba.cuda import nvvmutils
 
 registry = Registry()
 lower = registry.lower

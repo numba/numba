@@ -1,9 +1,9 @@
 try:
     # This is usually the the first C extension import performed when importing
     # Numba, if it fails to import, provide some feedback
-    from . import _typeconv
+    from numba.core.typeconv import _typeconv
 except ImportError as e:
-    from ..errors import feedback_details as reportme
+    from numba.core.errors import feedback_details as reportme
     import sys
     url = "http://numba.pydata.org/numba-doc/latest/developer/contributing.html"
     dashes = '-' * 80
@@ -16,8 +16,8 @@ except ImportError as e:
            "sys.executable: %s\n")
     raise ImportError(msg % (url, reportme, str(e), sys.executable))
 
-from . import castgraph, Conversion
-from .. import types
+from numba.core.typeconv import castgraph, Conversion
+from numba.core import types
 
 
 class TypeManager(object):

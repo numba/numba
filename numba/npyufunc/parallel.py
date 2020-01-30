@@ -330,18 +330,18 @@ def _launch_threads():
                 lib = None
                 if backend.startswith("tbb"):
                     try:
-                        from . import tbbpool as lib
+                        from numba.npyufunc import tbbpool as lib
                     except ImportError:
                         pass
                 elif backend.startswith("omp"):
                     # TODO: Check that if MKL is present that it is a version
                     # that understands GNU OMP might be present
                     try:
-                        from . import omppool as lib
+                        from numba.npyufunc import omppool as lib
                     except ImportError:
                         pass
                 elif backend.startswith("workqueue"):
-                    from . import workqueue as lib
+                    from numba.npyufunc import workqueue as lib
                 else:
                     msg = "Unknown value specified for threading layer: %s"
                     raise ValueError(msg % backend)

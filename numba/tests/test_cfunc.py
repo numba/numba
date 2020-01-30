@@ -132,7 +132,7 @@ class TestCFunc(TestCase):
 
     @skip_cffi_unsupported
     def test_cffi(self):
-        from . import cffi_usecases
+        from numba.tests import cffi_usecases
         ffi, lib = cffi_usecases.load_inline_module()
 
         f = cfunc(square_sig)(square_usecase)

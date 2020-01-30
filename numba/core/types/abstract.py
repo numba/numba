@@ -182,7 +182,7 @@ class Type(object):
         """
         Return an array of this type.
         """
-        from . import Array
+        from numba.core.types import Array
         ndim, layout = self._determine_array_spec(args)
         return Array(dtype=self, ndim=ndim, layout=layout)
 

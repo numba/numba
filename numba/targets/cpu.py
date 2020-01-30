@@ -65,8 +65,8 @@ class CPUContext(BaseContext):
 
     def load_additional_registries(self):
         # Add target specific implementations
-        from . import (cffiimpl, cmathimpl, mathimpl, npyimpl,
-                       printimpl, randomimpl)
+        from numba.targets import (cffiimpl, cmathimpl, mathimpl, npyimpl,
+                                   printimpl, randomimpl)
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)

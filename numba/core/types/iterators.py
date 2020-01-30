@@ -58,7 +58,7 @@ class EnumerateType(SimpleIteratorType):
     """
 
     def __init__(self, iterable_type):
-        from . import Tuple, intp
+        from numba.core.types import Tuple, intp
         self.source_type = iterable_type.iterator_type
         yield_type = Tuple([intp, self.source_type.yield_type])
         name = 'enumerate(%s)' % (self.source_type)
@@ -76,7 +76,7 @@ class ZipType(SimpleIteratorType):
     """
 
     def __init__(self, iterable_types):
-        from . import Tuple
+        from numba.core.types import Tuple
         self.source_types = tuple(tp.iterator_type for tp in iterable_types)
         yield_type = Tuple([tp.yield_type for tp in self.source_types])
         name = 'zip(%s)' % ', '.join(str(tp) for tp in self.source_types)

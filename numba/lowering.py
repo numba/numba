@@ -12,7 +12,7 @@ from numba.core.errors import (LoweringError, new_error_context, TypingError,
                      LiteralTypingError)
 from .targets import removerefctpass
 from .funcdesc import default_mangler
-from . import debuginfo
+from numba import debuginfo
 
 
 class Environment(_dynfunc.Environment):

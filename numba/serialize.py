@@ -9,7 +9,7 @@ import marshal
 import sys
 from types import FunctionType, ModuleType
 
-from . import bytecode, compiler
+from numba import bytecode, compiler
 
 
 #

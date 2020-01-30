@@ -164,7 +164,7 @@ class TestCC(BasePYCCTest):
 
     def setUp(self):
         super(TestCC, self).setUp()
-        from . import compile_with_pycc
+        from numba.tests import compile_with_pycc
         self._test_module = compile_with_pycc
         imp.reload(self._test_module)
 

@@ -13,7 +13,7 @@ from numba.targets.imputils import Registry, impl_ret_untracked
 from numba import cgutils
 from numba.core import types
 from numba.core.typing import signature
-from . import builtins, mathimpl
+from numba.targets import builtins, mathimpl
 
 registry = Registry()
 lower = registry.lower

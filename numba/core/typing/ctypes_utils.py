@@ -7,7 +7,7 @@ import ctypes
 import sys
 
 from numba.core import types
-from . import templates
+from numba.core.typing import templates
 from .typeof import typeof_impl
 
 

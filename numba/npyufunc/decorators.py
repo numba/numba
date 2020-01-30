@@ -1,6 +1,6 @@
 import inspect
 
-from . import _internal, dufunc
+from numba.npyufunc import _internal, dufunc
 from .ufuncbuilder import GUFuncBuilder
 from .parallel import ParallelUFuncBuilder, ParallelGUFuncBuilder
 

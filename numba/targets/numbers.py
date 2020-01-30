@@ -849,7 +849,7 @@ def real_abs_impl(context, builder, sig, args):
 
 
 def real_negate_impl(context, builder, sig, args):
-    from . import mathimpl
+    from numba.targets import mathimpl
     res = mathimpl.negate_real(builder, args[0])
     return impl_ret_untracked(context, builder, sig.return_type, res)
 

@@ -28,7 +28,7 @@ def main(args=None):
 
     from .compiler import ModuleCompiler
     from .platform import Toolchain, find_shared_ending, find_pyext_ending
-    from . import decorators
+    from numba.pycc import decorators
 
     parser = argparse.ArgumentParser(
         description="DEPRECATED - Compile Python modules to a single shared library")

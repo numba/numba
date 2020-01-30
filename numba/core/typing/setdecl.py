@@ -1,11 +1,11 @@
 import operator
 
-from .. import types
+from numba.core import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         CallableTemplate,  Registry, signature, bound_function,
                         make_callable_template)
 # Ensure set is typed as a collection as well
-from . import collections
+from numba.core.typing import collections
 
 
 registry = Registry()

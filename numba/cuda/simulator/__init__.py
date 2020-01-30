@@ -13,7 +13,7 @@ reduce = Reduce
 from numba import config
 if config.ENABLE_CUDASIM:
     import sys
-    from . import cudadrv
+    from numba.cuda.simulator import cudadrv
     sys.modules['numba.cuda.cudadrv'] = cudadrv
     sys.modules['numba.cuda.cudadrv.devicearray'] = cudadrv.devicearray
     sys.modules['numba.cuda.cudadrv.devices'] = cudadrv.devices

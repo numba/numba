@@ -268,7 +268,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
 
     @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
     def test_cffi(self):
-        from . import cffi_usecases as mod
+        from numba.tests import cffi_usecases as mod
         mod.init()
         ty_cffi_cos = typeof(mod.cffi_cos)
         ty_cffi_sin = typeof(mod.cffi_sin)

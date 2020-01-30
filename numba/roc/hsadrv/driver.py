@@ -20,7 +20,7 @@ from numba import mviewbuf
 from numba.core import utils
 from numba import config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
-from . import enums, enums_ext, drvapi
+from numba.roc.hsadrv import enums, enums_ext, drvapi
 from numba.core.utils import longint as long
 import numpy as np
 

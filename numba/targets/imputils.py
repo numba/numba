@@ -449,7 +449,7 @@ def force_error_model(context, model_name='numpy'):
     """
     Temporarily change the context's error model.
     """
-    from . import callconv
+    from numba.targets import callconv
 
     old_error_model = context.error_model
     context.error_model = callconv.create_error_model(model_name, context)

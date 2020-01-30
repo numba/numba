@@ -312,9 +312,10 @@ class ExternalFunctionPointer(BaseFunction):
     and returning the raw pointer value as an int.
     """
     def __init__(self, sig, get_pointer, cconv=None):
-        from ..typing.templates import (AbstractTemplate, make_concrete_template,
-                                        signature)
-        from . import ffi_forced_object
+        from numba.core.typing.templates import (AbstractTemplate,
+                                                 make_concrete_template,
+                                                 signature)
+        from numba.core.types import ffi_forced_object
         if sig.return_type == ffi_forced_object:
             raise TypeError("Cannot return a pyobject from a external function")
         self.sig = sig
@@ -352,7 +353,7 @@ class ExternalFunction(Function):
     """
 
     def __init__(self, symbol, sig):
-        from .. import typing
+        from numba.core import typing
         self.symbol = symbol
         self.sig = sig
         template = typing.make_concrete_template(symbol, symbol, [sig])

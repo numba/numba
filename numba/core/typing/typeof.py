@@ -45,7 +45,7 @@ def typeof_impl(val, c):
 
     # cffi is handled here as it does not expose a public base class
     # for exported functions or CompiledFFI instances.
-    from . import cffi_utils
+    from numba.core.typing import cffi_utils
     if cffi_utils.SUPPORTED:
         if cffi_utils.is_cffi_func(val):
             return cffi_utils.make_function_type(val)
@@ -56,7 +56,7 @@ def typeof_impl(val, c):
 
 
 def _typeof_buffer(val, c):
-    from . import bufproto
+    from numba.core.typing import bufproto
     try:
         m = memoryview(val)
     except TypeError:

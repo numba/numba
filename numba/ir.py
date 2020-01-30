@@ -1337,7 +1337,7 @@ class FunctionIR(object):
         return '\n'.join(msg)
 
     def _reset_analysis_variables(self):
-        from . import consts
+        from numba import consts
 
         self._consts = consts.ConstantInference(self)
 

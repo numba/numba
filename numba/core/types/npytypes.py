@@ -4,8 +4,8 @@ from llvmlite import ir
 
 from .abstract import DTypeSpec, IteratorType, MutableSequence, Number, Type
 from .common import Buffer, Opaque, SimpleIteratorType
-from ..typeconv import Conversion
-from .. import utils
+from numba.core.typeconv import Conversion
+from numba.core import utils
 from .misc import UnicodeType
 from .containers import Bytes
 

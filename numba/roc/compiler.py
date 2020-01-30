@@ -11,7 +11,7 @@ from numba.core import types
 from .hlc import hlc
 from .hsadrv import devices, driver, enums, drvapi
 from .hsadrv.error import HsaKernelLaunchError
-from . import gcn_occupancy
+from numba.roc import gcn_occupancy
 from numba.roc.hsadrv.driver import hsa, dgpu_present
 from .hsadrv import devicearray
 from numba.core.typing.templates import AbstractTemplate

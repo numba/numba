@@ -47,7 +47,7 @@ def _fill_ufunc_db(ufunc_db):
     # some of these imports would cause a problem of circular
     # imports if done at global scope when importing the numba
     # module.
-    from . import numbers, npyfuncs, mathimpl, cmathimpl
+    from numba.targets import numbers, npyfuncs, mathimpl, cmathimpl
     from numba.numpy_support import numpy_version
 
     ufunc_db[np.negative] = {
@@ -987,7 +987,7 @@ def _fill_ufunc_db(ufunc_db):
     }
 
     # Inject datetime64 support
-    from . import npdatetime
+    from numba.targets import npdatetime
     ufunc_db[np.negative].update({
         'm->m': npdatetime.timedelta_neg_impl,
     })

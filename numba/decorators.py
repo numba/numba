@@ -181,7 +181,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
 
     def wrapper(func):
         if config.ENABLE_CUDASIM and target == 'cuda':
-            from . import cuda
+            from numba import cuda
             return cuda.jit(func)
         if config.DISABLE_JIT and not target == 'npyufunc':
             return func
@@ -193,7 +193,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
         if sigs is not None:
             # Register the Dispatcher to the type inference mechanism,
             # even though the decorator hasn't returned yet.
-            from . import typeinfer
+            from numba import typeinfer
             with typeinfer.register_dispatcher(disp):
                 for sig in sigs:
                     disp.compile(sig)

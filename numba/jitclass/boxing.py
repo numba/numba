@@ -11,7 +11,7 @@ from numba import cgutils
 from numba.core import types
 from numba.pythonapi import box, unbox, NativeValue
 from numba import njit
-from . import _box
+from numba.jitclass import _box
 
 
 _getter_code_template = """
