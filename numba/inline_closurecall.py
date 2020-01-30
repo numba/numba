@@ -31,7 +31,7 @@ from numba.core.analysis import (
     compute_use_defs,
     compute_live_variables)
 
-from numba.targets.rangeobj import range_iter_len
+from numba.cpython.rangeobj import range_iter_len
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
 import operator
