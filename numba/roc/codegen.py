@@ -1,6 +1,6 @@
 from llvmlite import binding as ll
 from llvmlite.llvmpy import core as lc
-from numba import utils
+from numba.core import utils
 from numba.targets.codegen import BaseCPUCodegen, CodeLibrary
 from .hlc import DATALAYOUT, TRIPLE, hlc
 

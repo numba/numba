@@ -11,7 +11,7 @@ import warnings
 import numba
 import numpy as np
 from collections import defaultdict
-from numba.core.utils import add_metaclass, reraise
+from numba.core.utils import add_metaclass, reraise, chain_exception
 from functools import wraps
 from abc import abstractmethod
 
@@ -658,11 +658,9 @@ class ForceLiteralArg(NumbaError):
     def bind_fold_arguments(self, fold_arguments):
         """Bind the fold_arguments function
         """
-        from numba import utils
-
         e = ForceLiteralArg(self.requested_args, fold_arguments,
                             loc=self.loc)
-        return utils.chain_exception(e, self)
+        return chain_exception(e, self)
 
     def combine(self, other):
         """Returns a new instance by or'ing the requested_args.

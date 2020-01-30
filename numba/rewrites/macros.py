@@ -1,5 +1,6 @@
-from numba import ir, errors
-from . import register_rewrite, Rewrite
+from numba import ir
+from numba.core import errors
+from numba.rewrites import register_rewrite, Rewrite
 
 
 class Macro(object):

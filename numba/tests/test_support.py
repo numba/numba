@@ -2,7 +2,8 @@ import itertools
 
 import numpy as np
 
-from numba import jit, utils
+from numba import jit
+from numba.core import utils
 from numba import unittest_support as unittest
 from numba.tests.support import TestCase, forbid_codegen
 from .enum_usecases import *

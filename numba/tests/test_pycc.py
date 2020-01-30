@@ -17,7 +17,7 @@ except ImportError:
 import llvmlite.binding as ll
 
 from numba import unittest_support as unittest
-from numba import utils
+from numba.core import utils
 from numba.pycc import main
 from numba.pycc.decorators import clear_export_registry
 from numba.pycc.platform import find_shared_ending, find_pyext_ending

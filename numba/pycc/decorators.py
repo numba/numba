@@ -1,8 +1,9 @@
 import re
 import warnings
 
-from numba import sigutils, typing
-from .compiler import ExportEntry
+from numba import sigutils
+from numba.core import typing
+from numba.pycc.compiler import ExportEntry
 
 # Registry is okay to be a global because we are using pycc as a standalone
 # commandline tool.

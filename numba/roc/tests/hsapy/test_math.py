@@ -3,7 +3,7 @@ import math
 
 import numba.unittest_support as unittest
 from numba import roc
-from numba import utils
+from numba.core import utils
 
 
 class TestMath(unittest.TestCase):

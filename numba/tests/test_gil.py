@@ -9,7 +9,8 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import errors, jit
+from numba import jit
+from numba.core import errors
 from numba.tests.support import TestCase, tag
 
 

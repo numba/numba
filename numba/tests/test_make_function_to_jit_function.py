@@ -1,4 +1,5 @@
-from numba import njit, errors
+from numba import njit
+from numba.core import errors
 from numba.extending import overload
 import numpy as np
 

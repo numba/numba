@@ -4,7 +4,7 @@ Unspecified error handling tests
 
 from numba import jit, njit, typed, int64
 from numba import unittest_support as unittest
-from numba import errors, utils
+from numba.core import errors, utils
 import numpy as np
 
 

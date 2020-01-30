@@ -6,7 +6,7 @@ import ctypes
 
 import numpy as np
 
-from . import _helperlib
+from numba import _helperlib
 
 
 Extent = namedtuple("Extent", ["begin", "end"])
