@@ -270,9 +270,9 @@ class BaseContext(object):
         """
         # Populate built-in registry
         from numba.targets import (arraymath, enumimpl, iterators, numbers,
-                                   optional, polynomial, rangeobj, tupleobj,
+                                   optional, polynomial, rangeobj,
                                    gdb_hook, hashing, heapq, literal)
-        from numba.cpython import slicing
+        from numba.cpython import slicing, tupleobj
         from numba.np import linalg
 
         try:
