@@ -17,7 +17,7 @@ from numba.targets.imputils import (lower_builtin, lower_cast,
                                     for_iter, call_len, RefType)
 from numba.core.utils import cached_property
 from numba.misc import quicksort
-from numba.core import slicing
+from numba.cpython import slicing
 
 
 def get_payload_struct(context, builder, set_type, ptr):

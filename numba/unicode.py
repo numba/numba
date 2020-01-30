@@ -27,7 +27,6 @@ from numba.pythonapi import (
     PY_UNICODE_4BYTE_KIND,
     PY_UNICODE_WCHAR_KIND,
 )
-from numba.core import slicing
 from numba._helperlib import c_helpers
 from numba.targets.hashing import _Py_hash_t
 from numba.unsafe.bytes import memcpy_region
@@ -63,6 +62,7 @@ from numba.unicode_support import (_Py_TOUPPER, _Py_TOLOWER, _Py_UCS4,
                                    _Py_ISALPHA,
                                    _PyUnicode_IsDigit,
                                    _PyUnicode_IsDecimalDigit)
+from numba.cpython import slicing
 
 
 _py38_or_later = utils.PYVERSION >= (3, 8)

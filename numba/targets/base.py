@@ -272,7 +272,7 @@ class BaseContext(object):
         from numba.targets import (arraymath, enumimpl, iterators, numbers,
                                    optional, polynomial, rangeobj, tupleobj,
                                    gdb_hook, hashing, heapq, literal)
-        from numba.core import slicing
+        from numba.cpython import slicing
         from numba.np import linalg
 
         try:

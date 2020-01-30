@@ -15,7 +15,7 @@ from llvmlite.llvmpy.core import Constant
 import numpy as np
 
 from numba import cgutils, extending, pndindex
-from numba.core import types, utils, typing, errors, slicing
+from numba.core import types, utils, typing, errors
 from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                  is_fortran)
 from numba.numpy_support import type_can_asarray, is_nonelike
@@ -29,6 +29,7 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
 from numba.core.typing import signature
 from numba.extending import register_jitable, overload, overload_method
 from numba.misc import quicksort, mergesort
+from numba.cpython import slicing
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):

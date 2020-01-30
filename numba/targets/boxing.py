@@ -368,7 +368,7 @@ def unbox_slice(typ, obj, c):
     """
     Convert object *obj* to a native slice structure.
     """
-    from numba.core import slicing
+    from numba.cpython import slicing
     ok, start, stop, step = c.pyapi.slice_as_ints(obj)
     sli = c.context.make_helper(c.builder, typ)
     sli.start = start
