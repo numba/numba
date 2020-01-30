@@ -43,7 +43,7 @@ import numba.withcontexts
 from numba.withcontexts import objmode_context as objmode
 
 # Enable bytes/unicode array support
-import numba.charseq
+import numba.cpython.charseq
 
 # Keep this for backward compatibility.
 test = runtests.main
