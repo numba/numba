@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-import types as pytypes  # avoid confusion with numba.types
+import types as pytypes
 import numpy
 import operator
 from numba import analysis, config, cgutils

@@ -27,7 +27,7 @@ import operator
 import numba.core.ir
 from numba.core import types, typing, utils, errors, ir
 from numba import ir_utils, rewrites, config, analysis, prange, pndindex
-from numba import array_analysis, postproc, typeinfer
+from numba import postproc, typeinfer
 from numba.numpy_support import as_dtype
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
@@ -85,13 +85,14 @@ from numba.analysis import (compute_use_defs, compute_live_map,
 from numba.core.controlflow import CFGraph
 from numba.core.typing import npydecl, signature
 from numba.core.types.functions import Function
-from numba.array_analysis import (random_int_args, random_1arg_size,
+from numba.parfors.array_analysis import (random_int_args, random_1arg_size,
                                   random_2arg_sizelast, random_3arg_sizelast,
                                   random_calls, assert_equiv)
 from numba.extending import overload
 import copy
 import numpy
 import numpy as np
+from numba.parfors import array_analysis
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
 
 # wrapped pretty print
@@ -171,9 +172,9 @@ def argmin_parallel_impl(in_arr):
     argmin_checker(len(in_arr))
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_max_value(A.dtype)
-    ival = numba.typing.builtins.IndexValue(0, init_val)
+    ival = typing.builtins.IndexValue(0, init_val)
     for i in numba.parfor.internal_prange(len(A)):
-        curr_ival = numba.typing.builtins.IndexValue(i, A[i])
+        curr_ival = typing.builtins.IndexValue(i, A[i])
         ival = min(ival, curr_ival)
     return ival.index
 
@@ -182,9 +183,9 @@ def argmax_parallel_impl(in_arr):
     argmax_checker(len(in_arr))
     A = in_arr.ravel()
     init_val = numba.targets.builtins.get_type_min_value(A.dtype)
-    ival = numba.typing.builtins.IndexValue(0, init_val)
+    ival = typing.builtins.IndexValue(0, init_val)
     for i in numba.parfor.internal_prange(len(A)):
-        curr_ival = numba.typing.builtins.IndexValue(i, A[i])
+        curr_ival = typing.builtins.IndexValue(i, A[i])
         ival = max(ival, curr_ival)
     return ival.index
 

@@ -6,7 +6,7 @@ from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.npyufunc import _internal, ufuncbuilder
 from numba.core.dispatcher import Dispatcher
-from numba import array_analysis
+from numba.parfors import array_analysis
 
 
 def make_dufunc_kernel(_dufunc):
