@@ -270,10 +270,11 @@ class BaseContext(object):
         Useful for third-party extensions.
         """
         # Populate built-in registry
-        from numba.targets import (arraymath, iterators, numbers,
+        from numba.targets import (arraymath, numbers,
                                    optional, polynomial, rangeobj,
                                    gdb_hook, literal)
-        from numba.cpython import (slicing, tupleobj, enumimpl, hashing, heapq)
+        from numba.cpython import (slicing, tupleobj, enumimpl, hashing, heapq,
+                                   iterators)
         from numba.np import linalg
 
         try:
