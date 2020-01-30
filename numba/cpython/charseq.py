@@ -4,10 +4,11 @@ import numpy as np
 from llvmlite import ir
 
 from numba.core import types
-from numba import cgutils, unicode
+from numba import cgutils
 from numba.extending import (overload, intrinsic, overload_method, lower_cast,
                              register_jitable)
 from numba.cgutils import is_nonelike
+from numba.cpython import unicode
 
 # bytes and str arrays items are of type CharSeq and UnicodeCharSeq,
 # respectively.  See numpy/types/npytypes.py for CharSeq,

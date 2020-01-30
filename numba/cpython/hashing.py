@@ -684,7 +684,7 @@ def _Py_HashBytes(val, _len):
 
 @overload_method(types.UnicodeType, '__hash__')
 def unicode_hash(val):
-    from numba.unicode import _kind_to_byte_width
+    from numba.cpython.unicode import _kind_to_byte_width
 
     def impl(val):
         kindwidth = _kind_to_byte_width(val._kind)

@@ -136,7 +136,7 @@ def gettyperecord_impl(a):
     single character strings and code points.
     """
     if isinstance(a, types.UnicodeType):
-        from numba.unicode import _get_code_point
+        from numba.cpython.unicode import _get_code_point
 
         def impl(a):
             if len(a) > 1:
