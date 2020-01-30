@@ -18,7 +18,6 @@ from numba import cgutils
 from numba.extending import intrinsic, overload_method
 from numba.unsafe.numbers import viewer
 
-
 def _int_arith_flags(rettype):
     """
     Return the modifier flags for integer arithmetic.
@@ -849,7 +848,7 @@ def real_abs_impl(context, builder, sig, args):
 
 
 def real_negate_impl(context, builder, sig, args):
-    from numba.targets import mathimpl
+    from numba.cpython import mathimpl
     res = mathimpl.negate_real(builder, args[0])
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -938,7 +937,7 @@ def complex_imag_impl(context, builder, typ, value):
 
 @lower_builtin("complex.conjugate", types.Complex)
 def complex_conjugate_impl(context, builder, sig, args):
-    from . import mathimpl
+    from numba.cpython import mathimpl
     z = context.make_complex(builder, sig.args[0], args[0])
     z.imag = mathimpl.negate_real(builder, z.imag)
     res = z._getvalue()
@@ -1094,7 +1093,7 @@ def complex_div_impl(context, builder, sig, args):
 
 
 def complex_negate_impl(context, builder, sig, args):
-    from . import mathimpl
+    from numba.cpython import mathimpl
     [typ] = sig.args
     [val] = args
     cmplx = context.make_complex(builder, typ, value=val)
