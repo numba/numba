@@ -7,7 +7,7 @@ from numba.targets import cpu
 from numba.core import types, typing, ir, config, compiler
 from numba.targets.registry import cpu_target
 from numba.core.annotations import type_annotations
-from numba.ir_utils import (copy_propagate, apply_copy_propagate,
+from numba.core.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table)
 from numba.core.typed_passes import type_inference_stage
 from numba import unittest_support as unittest

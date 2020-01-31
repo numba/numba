@@ -4,12 +4,13 @@
 #
 
 import numba
+from numba.core import ir_utils
 from numba.core.compiler import compile_isolated, Flags
 from numba.targets import cpu
 from numba.core import types, typing, ir, config, compiler
 from numba.targets.registry import cpu_target
 from numba.core.annotations import type_annotations
-from numba.ir_utils import (copy_propagate, apply_copy_propagate,
+from numba.core.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table, remove_dels, remove_dead,
                             remove_call_handlers, alias_func_extensions)
 from numba.core.typed_passes import type_inference_stage
@@ -45,7 +46,7 @@ def dummy_aliased_func(A):
     return A
 
 def alias_ext_dummy_func(lhs_name, args, alias_map, arg_aliases):
-    numba.ir_utils._add_alias(lhs_name, args[0].name, alias_map, arg_aliases)
+    ir_utils._add_alias(lhs_name, args[0].name, alias_map, arg_aliases)
 
 def findLhsAssign(func_ir, var):
     for label, block in func_ir.blocks.items():
@@ -214,7 +215,7 @@ class TestRemoveDead(unittest.TestCase):
             self.run_array_index_test(func)
         finally:
             # recover global state
-            numba.ir_utils.alias_func_extensions = old_ext_handlers
+            ir_utils.alias_func_extensions = old_ext_handlers
 
     @skip_parfors_unsupported
     def test_alias_parfor_extension(self):

@@ -1,10 +1,10 @@
 import types as pytypes  # avoid confusion with numba.types
 import ctypes
 import numba.core.analysis
-from numba.core import utils, types, typing, errors, ir, rewrites, config
-from numba import ir_utils, prange
+from numba.core import utils, types, typing, errors, ir, rewrites, config, ir_utils
+from numba import prange
 from numba.parfor import internal_prange
-from numba.ir_utils import (
+from numba.core.ir_utils import (
     mk_unique_var,
     next_label,
     add_offset_to_labels,

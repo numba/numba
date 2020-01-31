@@ -12,7 +12,7 @@ import llvmlite.ir.values as liv
 import numba
 from numba import cgutils, parfor
 from numba.core import types, ir, config, compiler, lowering, sigutils
-from numba.ir_utils import (add_offset_to_labels, replace_var_names,
+from numba.core.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
                             rename_labels, get_name_var_table, visit_vars_inner,
                             get_definition, guard, find_callname,

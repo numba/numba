@@ -13,7 +13,7 @@ from numba.core.untyped_passes import (FixupArgs, TranslateByteCode, IRProcessin
                                   IterLoopCanonicalization, LiteralUnroll)
 from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
                                 NoPythonBackend, PartialTypeInference)
-from numba.ir_utils import (compute_cfg_from_blocks, flatten_labels)
+from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
 
 
 class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):

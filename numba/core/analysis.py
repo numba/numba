@@ -292,7 +292,7 @@ def dead_branch_prune(func_ir, called_args):
     func_ir is the IR
     called_args are the actual arguments with which the function is called
     """
-    from numba.ir_utils import get_definition, guard, find_const, GuardException
+    from numba.core.ir_utils import get_definition, guard, find_const, GuardException
 
     DEBUG = 0
 
@@ -507,7 +507,7 @@ def rewrite_semantic_constants(func_ir, called_args):
                     if isinstance(argty, types.BaseTuple):
                         rewrite_statement(func_ir, stmt, argty.count)
 
-    from numba.ir_utils import get_definition, guard
+    from numba.core.ir_utils import get_definition, guard
     for blk in func_ir.blocks.values():
         for stmt in blk.body:
             if isinstance(stmt, ir.Assign):
@@ -535,7 +535,7 @@ def find_literally_calls(func_ir, argtypes):
     argtypes : Sequence[numba.types.Type]
         The argument types.
     """
-    from numba import ir_utils
+    from numba.core import ir_utils
 
     marked_args = set()
     first_loc = {}

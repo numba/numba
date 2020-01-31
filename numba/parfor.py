@@ -25,8 +25,8 @@ from contextlib import contextmanager
 import operator
 
 import numba.core.ir
-from numba.core import types, typing, utils, errors, ir, analysis, postproc, rewrites, typeinfer, config
-from numba import ir_utils, prange, pndindex
+from numba.core import types, typing, utils, errors, ir, analysis, postproc, rewrites, typeinfer, config, ir_utils
+from numba import prange, pndindex
 from numba.numpy_support import as_dtype
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba import stencilparfor
@@ -34,7 +34,7 @@ from numba.stencilparfor import StencilPass
 from numba.extending import register_jitable
 
 
-from numba.ir_utils import (
+from numba.core.ir_utils import (
     mk_unique_var,
     next_label,
     mk_alloc,

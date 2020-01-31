@@ -6,9 +6,8 @@ LLVM or low level inlining.
 
 import numpy as np
 
-import numba
-from numba import njit
-from numba.core import types, ir
+from numba import njit, typeof
+from numba.core import types, ir, ir_utils
 from numba.extending import (
     overload,
     overload_method,
@@ -104,7 +103,7 @@ class InliningBase(TestCase):
 
         # make sure IR doesn't have branches
         fir = j_func.overloads[j_func.signatures[0]].metadata['preserved_ir']
-        fir.blocks = numba.ir_utils.simplify_CFG(fir.blocks)
+        fir.blocks = ir_utils.simplify_CFG(fir.blocks)
         if self._DEBUG:
             print("FIR".center(80, "-"))
             fir.dump()
@@ -757,7 +756,7 @@ class TestOverloadInlining(InliningBase):
 
         # this is the Python equiv of the overloads below
         def bar(x):
-            if isinstance(numba.typeof(x), types.Float):
+            if isinstance(typeof(x), types.Float):
                 return x + 1234
             else:
                 return x + 1
