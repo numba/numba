@@ -1,7 +1,7 @@
 """
 This file implements the lowering for `dict()`
 """
-from numba.targets.imputils import lower_builtin
+from numba.core.imputils import lower_builtin
 
 
 @lower_builtin(dict)

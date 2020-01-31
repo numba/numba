@@ -10,7 +10,7 @@ import operator
 
 from llvmlite import ir
 from numba.core import types, typing, cgutils
-from numba.targets.imputils import (lower_builtin, lower_cast,
+from numba.core.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked,
                                     for_iter, call_len, RefType)

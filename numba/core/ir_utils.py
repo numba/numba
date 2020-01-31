@@ -16,7 +16,7 @@ import numba
 from numba.core import types, utils, typing, ir, analysis, postproc, rewrites, config, cgutils
 from numba.core.typing.templates import (signature, infer_global,
                                          AbstractTemplate)
-from numba.targets.imputils import impl_ret_untracked
+from numba.core.imputils import impl_ret_untracked
 from numba.core.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.core.errors import (TypingError, UnsupportedError,

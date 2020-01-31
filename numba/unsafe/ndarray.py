@@ -5,7 +5,7 @@ operations with numpy.
 from numba.core import types, typing
 from numba.core.cgutils import unpack_tuple
 from numba.extending import intrinsic
-from numba.targets.imputils import impl_ret_new_ref
+from numba.core.imputils import impl_ret_new_ref
 from numba.core.errors import RequireLiteralValue, TypingError
 
 from numba.cpython.unsafe.tuple import tuple_setitem

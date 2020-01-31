@@ -10,7 +10,7 @@ import numpy as np
 import llvmlite.llvmpy.core as lc
 
 from numba.core import types, cgutils
-from numba.targets.imputils import (impl_ret_untracked)
+from numba.core.imputils import (impl_ret_untracked)
 
 from numba.extending import overload, intrinsic, register_jitable
 from numba.core.errors import TypingError

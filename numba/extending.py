@@ -10,12 +10,14 @@ from numba.core import types, errors, utils, config
 # Exported symbols
 from numba.core.typing.typeof import typeof_impl
 from numba.core.typing.templates import infer, infer_getattr
-from numba.targets.imputils import (
+from numba.core.imputils import (
     lower_builtin, lower_getattr, lower_getattr_generic,
     lower_setattr, lower_setattr_generic, lower_cast)
 from numba.core.datamodel import models, register_default as register_model
 from numba.core.pythonapi import box, unbox, reflect, NativeValue
 from numba._helperlib import _import_cython_function
+
+
 
 
 def type_callable(func):
@@ -223,7 +225,7 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
     from numba.core.typing.templates import AttributeTemplate
     from numba.core.datamodel import default_manager
     from numba.core.datamodel.models import StructModel
-    from numba.targets.imputils import impl_ret_borrowed
+    from numba.core.imputils import impl_ret_borrowed
     from numba.core import cgutils
 
     if not isinstance(typeclass, type) or not issubclass(typeclass, types.Type):

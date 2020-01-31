@@ -18,7 +18,7 @@ from numba.extending import (
     models,
     lower_builtin,
 )
-from numba.targets.imputils import iternext_impl
+from numba.core.imputils import iternext_impl
 from numba.core import types, cgutils
 from numba.core.types import (
     ListType,
@@ -27,7 +27,7 @@ from numba.core.types import (
     Type,
     NoneType,
 )
-from numba.targets.imputils import impl_ret_borrowed, RefType
+from numba.core.imputils import impl_ret_borrowed, RefType
 from numba.core.errors import TypingError
 from numba.core import typing
 from numba.typedobjectutils import (_as_bytes,

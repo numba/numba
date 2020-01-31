@@ -19,7 +19,7 @@ from numba.core import types, utils, typing, errors, cgutils
 from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                  is_fortran)
 from numba.numpy_support import type_can_asarray, is_nonelike
-from numba.targets.imputils import (lower_builtin, lower_getattr,
+from numba.core.imputils import (lower_builtin, lower_getattr,
                                     lower_getattr_generic,
                                     lower_setattr_generic,
                                     lower_cast, lower_constant,

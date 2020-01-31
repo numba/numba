@@ -10,7 +10,7 @@ from numba.extending import (
     typeof_impl, type_callable, register_model,
     lower_builtin, box, unbox, NativeValue,
     overload, overload_attribute, overload_method, make_attribute_wrapper)
-from numba.targets.imputils import impl_ret_borrowed
+from numba.core.imputils import impl_ret_borrowed
 
 
 class Index(object):

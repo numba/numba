@@ -10,7 +10,7 @@ import numpy as np
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type
 
-from numba.targets.imputils import Registry, impl_ret_untracked
+from numba.core.imputils import Registry, impl_ret_untracked
 from numba import typeof
 from numba.core import types, utils, config, cgutils
 from numba.extending import overload

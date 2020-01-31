@@ -16,7 +16,7 @@ from numba.extending import (
     intrinsic,
     register_jitable,
 )
-from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
+from numba.core.imputils import (lower_constant, lower_cast, lower_builtin,
                                     iternext_impl, impl_ret_new_ref, RefType)
 from numba.core.datamodel import register_default, StructModel
 from numba.core import utils, types, cgutils

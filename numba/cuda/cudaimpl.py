@@ -6,7 +6,7 @@ from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba.targets.imputils import Registry
+from numba.core.imputils import Registry
 from numba.core import types, cgutils
 from .cudadrv import nvvm
 from numba.cuda import nvvmutils, stubs

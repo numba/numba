@@ -10,7 +10,7 @@ import llvmlite.llvmpy.core as lc
 
 from numba import numpy_support
 from numba.core import types, cgutils
-from numba.targets.imputils import (lower_builtin, lower_constant,
+from numba.core.imputils import (lower_builtin, lower_constant,
                                     impl_ret_untracked)
 from numba.np import npdatetime
 

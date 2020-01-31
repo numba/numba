@@ -6,7 +6,7 @@ from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 import operator
 
-from numba.targets.imputils import (lower_builtin, lower_getattr_generic,
+from numba.core.imputils import (lower_builtin, lower_getattr_generic,
                                     lower_cast, lower_constant, iternext_impl,
                                     impl_ret_borrowed, impl_ret_untracked,
                                     RefType)

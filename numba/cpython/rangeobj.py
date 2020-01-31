@@ -10,7 +10,7 @@ from numba import prange
 from numba.core import types, cgutils
 from numba.cpython.listobj import ListIterInstance
 from numba.np.arrayobj import make_array
-from numba.targets.imputils import (lower_builtin, lower_cast,
+from numba.core.imputils import (lower_builtin, lower_cast,
                                     iterator_impl, impl_ret_untracked)
 from numba.core.typing import signature
 from numba.extending import intrinsic, overload, overload_attribute, register_jitable

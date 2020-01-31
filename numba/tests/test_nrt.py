@@ -18,7 +18,7 @@ from numba.runtime import (
 )
 from numba.extending import intrinsic, include_path
 from numba.core.typing import signature
-from numba.targets.imputils import impl_ret_untracked
+from numba.core.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm
 from numba import cffi_support

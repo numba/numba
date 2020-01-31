@@ -12,7 +12,7 @@ import numpy as np
 from llvmlite import ir
 
 from numba.extending import overload, register_jitable
-from numba.targets.imputils import (Registry, impl_ret_untracked,
+from numba.core.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
 from numba.core.typing import signature
 from numba import _helperlib

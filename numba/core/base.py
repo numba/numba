@@ -12,13 +12,12 @@ import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.binding as ll
 
-from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc, config, cgutils
+from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc, config, cgutils, imputils
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
 from numba.np import arrayobj
-from numba.targets import imputils
-from numba.targets.imputils import (user_function, user_generator,
+from numba.core.imputils import (user_function, user_generator,
                        builtin_registry, impl_ret_borrowed,
                        RegistryLoader)
 from numba.cpython import builtins
