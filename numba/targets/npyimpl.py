@@ -13,11 +13,11 @@ from llvmlite.llvmpy import core as lc
 import numpy as np
 import operator
 
-from numba.targets import callconv, ufunc_db
+from numba.targets import ufunc_db
 from numba.np import arrayobj
 from numba.targets.imputils import Registry, impl_ret_new_ref, force_error_model
 from numba import numpy_support
-from numba.core import typing, types, utils, cgutils
+from numba.core import typing, types, utils, cgutils, callconv
 from numba.numpy_support import ufunc_find_matching_loop, select_array_wrapper, from_dtype
 from numba.core.typing import npydecl
 from numba.extending import overload, intrinsic
