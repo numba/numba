@@ -10,8 +10,8 @@ import numpy as np
 
 from numba import config, compiler, sigutils
 from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
-from numba import funcdesc, serialize
-from numba.core import types, typing, utils
+from numba import serialize
+from numba.core import types, typing, utils, funcdesc
 from numba.core.compiler_lock import global_compiler_lock
 
 from .cudadrv.autotune import AutoTuner

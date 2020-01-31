@@ -5,7 +5,7 @@ The mangling affects the ABI of numba compiled binaries.
 """
 
 from numba.core import types, utils
-from numba.funcdesc import default_mangler
+from numba.core.funcdesc import default_mangler
 from numba.tests.support import unittest, TestCase
 
 

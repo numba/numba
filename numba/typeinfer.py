@@ -27,7 +27,7 @@ from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
                                ForceLiteralArg)
-from numba.funcdesc import qualifying_prefix
+from numba.core.funcdesc import qualifying_prefix
 
 
 _logger = logging.getLogger(__name__)

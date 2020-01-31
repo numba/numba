@@ -6,7 +6,7 @@ from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from numba import cgutils, config
 from numba.core import types
-from .funcdesc import FunctionDescriptor
+from numba.core.funcdesc import FunctionDescriptor
 
 
 class GeneratorDescriptor(FunctionDescriptor):

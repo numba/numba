@@ -5,12 +5,12 @@ from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
-from numba import _dynfunc, cgutils, config, funcdesc, generators, ir_utils
-from numba.core import typing, utils, types, ir, debuginfo
+from numba import _dynfunc, cgutils, config, generators, ir_utils
+from numba.core import typing, utils, types, ir, debuginfo, funcdesc
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                      LiteralTypingError)
-from .targets import removerefctpass
-from .funcdesc import default_mangler
+from numba.targets import removerefctpass
+from numba.core.funcdesc import default_mangler
 
 
 class Environment(_dynfunc.Environment):
@@ -48,7 +48,7 @@ class Environment(_dynfunc.Environment):
 def _rebuild_env(modname, consts, env_name):
     if env_name in Environment._memo:
         return Environment._memo[env_name]
-    from . import serialize
+    from numba import serialize
     mod = serialize._rebuild_module(modname)
     env = Environment(mod.__dict__)
     env.consts[:] = consts
