@@ -3,14 +3,13 @@
 import inspect
 from contextlib import contextmanager
 
-from numba import serialize
 from numba.decorators import jit
 from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba.targets.registry import dispatcher_registry, cpu_target
 from numba.targets.cpu import FastMathOptions
 from numba import compiler, sigutils
-from numba.core import utils, types
+from numba.core import utils, types, serialize
 from numba.numpy_support import as_dtype
 from numba.npyufunc import _internal
 from numba.npyufunc.sigparse import parse_signature

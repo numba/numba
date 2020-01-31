@@ -311,7 +311,7 @@ class _Intrinsic(object):
         return "<intrinsic {0}>".format(self._name)
 
     def __reduce__(self):
-        from numba import serialize
+        from numba.core import serialize
 
         def reduce_func(fn):
             gs = serialize._get_function_globals_for_reduction(fn)
@@ -323,7 +323,7 @@ class _Intrinsic(object):
 
     @classmethod
     def _rebuild(cls, uuid, name, defn_reduced):
-        from numba import serialize
+        from numba.core import serialize
 
         try:
             return cls._memo[uuid]

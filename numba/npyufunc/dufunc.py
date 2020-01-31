@@ -1,7 +1,5 @@
-from numba import serialize
-
 from numba import jit, typeof, numpy_support, sigutils
-from numba.core import types, utils
+from numba.core import types, utils, serialize
 from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.npyufunc import _internal, ufuncbuilder

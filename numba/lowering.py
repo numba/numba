@@ -48,7 +48,7 @@ class Environment(_dynfunc.Environment):
 def _rebuild_env(modname, consts, env_name):
     if env_name in Environment._memo:
         return Environment._memo[env_name]
-    from numba import serialize
+    from numba.core import serialize
     mod = serialize._rebuild_module(modname)
     env = Environment(mod.__dict__)
     env.consts[:] = consts
