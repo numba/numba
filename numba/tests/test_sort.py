@@ -15,7 +15,7 @@ from numba.tests.support import TestCase, MemoryLeakMixin, tag
 
 from numba.misc.quicksort import make_py_quicksort, make_jit_quicksort
 from numba.misc.mergesort import make_jit_mergesort
-from numba.tests.timsort import make_py_timsort, make_jit_timsort, MergeRun
+from numba.misc.timsort import make_py_timsort, make_jit_timsort, MergeRun
 
 
 def make_temp_list(keys, n):
