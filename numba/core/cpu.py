@@ -7,10 +7,9 @@ import llvmlite.llvmpy.core as lc
 from numba import _dynfunc
 from numba.core.callwrapper import PyCallWrapper
 from numba.core.base import BaseContext, PYOBJECT
-from numba.core import (utils, types, config, cgutils, callconv, codegen,
-                        externals, fastmathpass)
+from numba.core import utils, types, config, cgutils, callconv, codegen, externals, fastmathpass, intrinsics
 from numba.core.utils import cached_property
-from numba.targets import intrinsics, dictimpl
+from numba.targets import dictimpl
 from numba.targets.options import TargetOptions
 from numba.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock

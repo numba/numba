@@ -7,9 +7,8 @@ import sys
 from llvmlite import ir
 import llvmlite.binding as ll
 
-from numba.core import utils
+from numba.core import utils, intrinsics
 from numba import _helperlib
-from numba.targets import intrinsics
 
 
 def _add_missing_symbol(symbol, addr):
