@@ -8,7 +8,7 @@ from numba.core import errors, utils
 import numpy as np
 
 
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                                   IRProcessing,)
 
 from numba.typed_passes import (NopythonTypeInference, DeadCodeElimination,

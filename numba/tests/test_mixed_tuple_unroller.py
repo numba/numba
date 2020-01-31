@@ -8,7 +8,7 @@ from numba.testing import unittest
 from numba.extending import overload
 from numba.compiler_machinery import PassManager, register_pass, FunctionPass
 from numba.compiler import CompilerBase
-from numba.untyped_passes import (FixupArgs, TranslateByteCode, IRProcessing,
+from numba.core.untyped_passes import (FixupArgs, TranslateByteCode, IRProcessing,
                                   InlineClosureLikes, SimplifyCFG,
                                   IterLoopCanonicalization, LiteralUnroll)
 from numba.typed_passes import (NopythonTypeInference, IRLegalization,

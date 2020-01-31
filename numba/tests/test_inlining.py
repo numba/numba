@@ -11,7 +11,7 @@ from numba.ir_utils import guard, find_callname, find_const, get_definition
 from numba.targets.registry import CPUDispatcher
 from numba.inline_closurecall import inline_closure_call
 
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, GenericRewrites,
                              WithLifting, PreserveIR, InlineClosureLikes)

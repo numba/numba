@@ -5,7 +5,7 @@ def ex_compiler_pass():
     from numba.core import ir
     from numba.compiler import CompilerBase, DefaultPassBuilder
     from numba.compiler_machinery import FunctionPass, register_pass
-    from numba.untyped_passes import IRProcessing
+    from numba.core.untyped_passes import IRProcessing
     from numbers import Number
 
     # Register this pass with the compiler framework, declare that it will not

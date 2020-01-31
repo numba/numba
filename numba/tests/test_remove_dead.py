@@ -16,7 +16,7 @@ from numba.ir_utils import (copy_propagate, apply_copy_propagate,
                             remove_call_handlers, alias_func_extensions)
 from numba.typed_passes import type_inference_stage
 from numba.compiler_machinery import FunctionPass, register_pass, PassManager
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, GenericRewrites,
                              WithLifting, PreserveIR, InlineClosureLikes)

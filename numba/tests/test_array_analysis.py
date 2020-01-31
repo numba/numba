@@ -13,7 +13,7 @@ from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
 from numba.compiler import Compiler, Flags, PassManager
 from numba.targets import cpu, registry
 from numba.ir_utils import remove_dead
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, GenericRewrites,
                              WithLifting, PreserveIR, InlineClosureLikes)

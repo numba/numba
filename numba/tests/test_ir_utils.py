@@ -7,7 +7,7 @@ from numba.compiler_machinery import PassManager
 from numba.targets import registry
 from numba import ir_utils
 from numba.core import types, ir, bytecode
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                                   IRProcessing,)
 
 from numba.typed_passes import (NopythonTypeInference, type_inference_stage,

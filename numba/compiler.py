@@ -12,15 +12,16 @@ from numba.core.errors import CompilerError
 
 from numba.compiler_machinery import PassManager
 
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
-                                  IRProcessing, DeadBranchPrune,
-                                  RewriteSemanticConstants, InlineClosureLikes,
-                                  GenericRewrites, WithLifting,
-                                  InlineInlinables, FindLiterallyCalls,
-                                  MakeFunctionToJitFunction,
-                                  CanonicalizeLoopExit, CanonicalizeLoopEntry,
-                                  LiteralUnroll,
-                                 )
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
+                                       FixupArgs, IRProcessing, DeadBranchPrune,
+                                       RewriteSemanticConstants,
+                                       InlineClosureLikes, GenericRewrites,
+                                       WithLifting, InlineInlinables,
+                                       FindLiterallyCalls,
+                                       MakeFunctionToJitFunction,
+                                       CanonicalizeLoopExit,
+                                       CanonicalizeLoopEntry, LiteralUnroll,
+                                      )
 
 from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                 NopythonRewrites, PreParforPass, ParforPass,

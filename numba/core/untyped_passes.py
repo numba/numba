@@ -1,22 +1,16 @@
 from collections import defaultdict, namedtuple
+from contextlib import contextmanager
 from copy import deepcopy, copy
+import warnings
 
-from .compiler_machinery import FunctionPass, register_pass
+from numba.compiler_machinery import FunctionPass, register_pass
 from numba import config, transforms
 from numba.core import errors, types, ir, bytecode, postproc, rewrites
-from .special import literal_unroll
-import warnings
-from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants, find_literally_calls,compute_cfg_from_blocks, compute_use_defs
-from contextlib import contextmanager
-from .inline_closurecall import InlineClosureCallPass, inline_closure_call
-from .ir_utils import (guard, resolve_func_from_module, simplify_CFG,
-                       GuardException,  convert_code_obj_to_function,
-                       mk_unique_var, build_definitions,
-                       replace_var_names, get_name_var_table,
-                       compile_to_numba_ir, get_definition,
-                       find_max_label, rename_labels,
-                       )
-import numba.core.interpreter
+from numba.special import literal_unroll
+from .analysis import dead_branch_prune, rewrite_semantic_constants, find_literally_calls, compute_cfg_from_blocks, compute_use_defs
+from numba.inline_closurecall import InlineClosureCallPass, inline_closure_call
+from numba.ir_utils import guard, resolve_func_from_module, simplify_CFG, GuardException, convert_code_obj_to_function, mk_unique_var, build_definitions, replace_var_names, get_name_var_table, compile_to_numba_ir, get_definition, find_max_label, rename_labels
+from numba.core import interpreter
 
 
 @contextmanager
@@ -78,7 +72,7 @@ class TranslateByteCode(FunctionPass):
         """
         func_id = state['func_id']
         bc = state['bc']
-        interp = numba.core.interpreter.Interpreter(func_id)
+        interp = interpreter.Interpreter(func_id)
         func_ir = interp.interpret(bc)
         state["func_ir"] = func_ir
         return True
