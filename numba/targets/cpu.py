@@ -5,7 +5,7 @@ import llvmlite.binding as ll
 import llvmlite.llvmpy.core as lc
 
 from numba import _dynfunc, config
-from numba.callwrapper import PyCallWrapper
+from numba.core.callwrapper import PyCallWrapper
 from numba.targets.base import BaseContext, PYOBJECT
 from numba.core import utils, types
 from numba import cgutils
