@@ -7,7 +7,7 @@ from numba.core import errors
 from numba import config, transforms
 from numba.core.utils import add_metaclass
 from numba.tracing import event
-from numba.postproc import PostProcessor
+from numba.core.postproc import PostProcessor
 
 # terminal color markup
 _termcolor = errors.termcolor()

@@ -322,7 +322,7 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
     Only the top-level withs are extracted.
     Returns the (the_new_ir, the_lifted_with_ir)
     """
-    from numba import postproc
+    from numba.core import postproc
 
     def dispatcher_factory(func_ir, objectmode=False, **kwargs):
         from numba.core.dispatcher import LiftedWith, ObjModeLiftedWith

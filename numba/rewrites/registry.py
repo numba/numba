@@ -89,7 +89,7 @@ class RewriteRegistry(object):
         # fix-up the IR so that ref counts are valid and optimally placed,
         # see #4093 for context. This has to be run here opposed to in
         # apply() as the CFG needs computing so full IR is needed.
-        from numba import postproc
+        from numba.core import postproc
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run()
 

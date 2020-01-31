@@ -13,7 +13,7 @@ import warnings
 from llvmlite import ir as lir
 
 import numba
-from numba.core import types, utils, typing, ir, analysis
+from numba.core import types, utils, typing, ir, analysis, postproc
 from numba import config, cgutils, rewrites
 from numba.core.typing.templates import (signature, infer_global,
                                          AbstractTemplate)
@@ -519,7 +519,7 @@ def dead_code_elimination(func_ir, typemap=None, alias_map=None,
         do_post_proc = True
 
     if do_post_proc:
-        post_proc = numba.postproc.PostProcessor(func_ir)
+        post_proc = postproc.PostProcessor(func_ir)
         post_proc.run()
 
 
@@ -1663,7 +1663,6 @@ def get_ir_of_code(glbls, fcode):
     inline_pass = numba.inline_closurecall.InlineClosureCallPass(
         ir, numba.targets.cpu.ParallelOptions(False), swapped)
     inline_pass.run()
-    from numba import postproc
     post_proc = postproc.PostProcessor(ir)
     post_proc.run()
     return ir
@@ -2061,7 +2060,7 @@ def check_and_legalize_ir(func_ir):
     This checks that the IR presented is legal, warns and legalizes if not
     """
     orig_ir = func_ir.copy()
-    post_proc = numba.postproc.PostProcessor(func_ir)
+    post_proc = postproc.PostProcessor(func_ir)
     post_proc.run()
     msg = ("\nNumba has detected inconsistencies in its internal "
            "representation of the code at %s. Numba can probably recover from "

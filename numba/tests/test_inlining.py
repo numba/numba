@@ -6,7 +6,7 @@ from numba.tests.support import (TestCase, override_config, captured_stdout,
 import numba
 from numba import unittest_support as unittest
 from numba import jit, njit, compiler
-from numba.core import types, ir
+from numba.core import types, ir, postproc
 from numba.ir_utils import guard, find_callname, find_const, get_definition
 from numba.targets.registry import CPUDispatcher
 from numba.inline_closurecall import inline_closure_call
@@ -59,7 +59,7 @@ class InlineTestPass(FunctionPass):
                     state.type_annotation.calltypes)
                 # also fix up the IR so that ir.Dels appear correctly/in correct
                 # locations
-                post_proc = numba.postproc.PostProcessor(state.func_ir)
+                post_proc = postproc.PostProcessor(state.func_ir)
                 post_proc.run()
                 break
         return True
