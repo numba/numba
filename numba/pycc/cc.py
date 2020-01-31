@@ -246,7 +246,7 @@ class CC(object):
         library_dirs = (kwargs.pop('library_dirs', [])
                         + self._toolchain.get_python_library_dirs())
 
-        ext = _CCExtension(name=self._basename,
+        ext = _CCExtension(name=self._source_module[:self._source_module.rfind('.')+1] + self._basename,
                            sources=self._get_mixin_sources(),
                            depends=depends,
                            define_macros=macros,
@@ -272,7 +272,7 @@ class _CCExtension(Extension):
 
     def _prepare_object_files(self, build_ext):
         cc = self._cc
-        dir_util.mkpath(build_ext.build_temp)
+        dir_util.mkpath(os.path.join(build_ext.build_temp, *self.name.split('.')[:-1]))
         objects, _ = cc._compile_object_files(build_ext.build_temp)
         # Add generated object files for linking
         self.extra_objects = objects
