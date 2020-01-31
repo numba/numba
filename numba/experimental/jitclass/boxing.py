@@ -10,7 +10,7 @@ from llvmlite import ir
 from numba.core import types, cgutils
 from numba.core.pythonapi import box, unbox, NativeValue
 from numba import njit
-from numba.jitclass import _box
+from numba.experimental.jitclass import _box
 
 
 _getter_code_template = """

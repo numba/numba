@@ -12,7 +12,7 @@ from numba import njit
 from numba.core.typing import templates
 from numba.core.datamodel import default_manager, models
 from numba.targets import imputils
-from numba.jitclass import _box
+from numba.experimental.jitclass import _box
 
 
 ##############################################################################

@@ -1,7 +1,7 @@
 /*
 Implements jitclass Box type in python c-api level.
 */
-#include "../_pymodule.h"
+#include "../../_pymodule.h"
 
 typedef struct {
     PyObject_HEAD

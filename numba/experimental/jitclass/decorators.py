@@ -1,5 +1,5 @@
 from numba.core import types, config
-from .base import register_class_type, ClassBuilder
+from numba.experimental.jitclass.base import register_class_type, ClassBuilder
 
 
 def jitclass(spec):

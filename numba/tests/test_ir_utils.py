@@ -1,6 +1,5 @@
 import numba
 from numba.tests.support import TestCase, unittest
-from numba import jitclass
 from numba.targets.registry import cpu_target
 from numba.core.compiler import CompilerBase, Flags
 from numba.core.compiler_machinery import PassManager
@@ -11,6 +10,7 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
 
 from numba.core.typed_passes import (NopythonTypeInference, type_inference_stage,
                                 DeadCodeElimination)
+from numba.experimental import jitclass
 
 # global constant for testing find_const
 GLOBAL_B = 11

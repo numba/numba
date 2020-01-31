@@ -10,9 +10,9 @@ from __future__ import print_function, absolute_import
 import random
 from collections import OrderedDict
 from numba import njit
-from numba import jitclass
 from numba import int32, deferred_type, optional
 from numba.runtime import rtsys
+from numba.experimental import jitclass
 
 node_type = deferred_type()
 

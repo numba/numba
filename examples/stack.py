@@ -11,9 +11,9 @@ underlying linked-list.
 from __future__ import print_function, absolute_import
 from collections import OrderedDict
 from numba import njit
-from numba import jitclass
 from numba import deferred_type, intp, optional
 from numba.runtime import rtsys
+from numba.experimental import jitclass
 
 
 linkednode_spec = OrderedDict()

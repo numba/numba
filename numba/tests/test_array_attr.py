@@ -1,7 +1,6 @@
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import jitclass
 from numba.core.compiler import compile_isolated
 from numba.numpy_support import from_dtype
 from numba import njit, typeof
@@ -9,6 +8,7 @@ from numba.core import types
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
                                  tag, skip_parfors_unsupported)
 from numba.core.errors import TypingError
+from numba.experimental import jitclass
 
 
 def array_dtype(a):

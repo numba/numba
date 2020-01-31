@@ -37,8 +37,8 @@ from numba.npyufunc import vectorize, guvectorize, threading_layer
 # Re-export Numpy helpers
 from numba.numpy_support import carray, farray, from_dtype
 
-# Re-export jitclass
-from numba.jitclass import jitclass
+# Re-export experimental
+from numba import experimental
 
 # Initialize withcontexts
 import numba.core.withcontexts
@@ -56,7 +56,7 @@ __all__ = """
     from_dtype
     guvectorize
     jit
-    jitclass
+    experimental
     njit
     stencil
     jit_module

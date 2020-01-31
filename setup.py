@@ -279,9 +279,9 @@ def get_ext_modules():
                                         'numba/runtime/_nrt_python.c'],
                                **np_compile_args)
 
-    ext_jitclass_box = Extension(name='numba.jitclass._box',
-                                 sources=['numba/jitclass/_box.c'],
-                                 depends=['numba/_pymodule.h'],
+    ext_jitclass_box = Extension(name='numba.experimental.jitclass._box',
+                                 sources=['numba/experimental/jitclass/_box.c'],
+                                 depends=['numba/experimental/_pymodule.h'],
                                  )
 
     ext_cuda_extras = Extension(name='numba.cuda.cudadrv._extras',
