@@ -5,7 +5,7 @@ import numpy as np
 import numba
 from numba import unittest_support as unittest
 from numba.transforms import find_setupwiths, with_lifting
-from numba.withcontexts import bypass_context, call_context, objmode_context
+from numba.core.withcontexts import bypass_context, call_context, objmode_context
 from numba.core.bytecode import FunctionIdentity, ByteCode
 from numba.core.interpreter import Interpreter
 from numba.core import typing, errors

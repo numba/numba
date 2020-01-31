@@ -40,8 +40,8 @@ from numba.numpy_support import carray, farray, from_dtype
 from numba.jitclass import jitclass
 
 # Initialize withcontexts
-import numba.withcontexts
-from numba.withcontexts import objmode_context as objmode
+import numba.core.withcontexts
+from numba.core.withcontexts import objmode_context as objmode
 
 # Enable bytes/unicode array support
 import numba.cpython.charseq
