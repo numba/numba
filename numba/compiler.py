@@ -10,24 +10,25 @@ from numba.parfor import ParforDiagnostics
 from numba.inline_closurecall import InlineClosureCallPass
 from numba.core.errors import CompilerError
 
-from .compiler_machinery import PassManager
+from numba.compiler_machinery import PassManager
 
-from .untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
-                             IRProcessing, DeadBranchPrune,
-                             RewriteSemanticConstants, InlineClosureLikes,
-                             GenericRewrites, WithLifting, InlineInlinables,
-                             FindLiterallyCalls, MakeFunctionToJitFunction,
-                             CanonicalizeLoopExit, CanonicalizeLoopEntry,
-                             LiteralUnroll,
-                             )
+from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+                                  IRProcessing, DeadBranchPrune,
+                                  RewriteSemanticConstants, InlineClosureLikes,
+                                  GenericRewrites, WithLifting,
+                                  InlineInlinables, FindLiterallyCalls,
+                                  MakeFunctionToJitFunction,
+                                  CanonicalizeLoopExit, CanonicalizeLoopEntry,
+                                  LiteralUnroll,
+                                 )
 
-from .typed_passes import (NopythonTypeInference, AnnotateTypes,
-                           NopythonRewrites, PreParforPass, ParforPass,
-                           DumpParforDiagnostics, IRLegalization,
-                           NoPythonBackend, InlineOverloads)
+from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
+                                NopythonRewrites, PreParforPass, ParforPass,
+                                DumpParforDiagnostics, IRLegalization,
+                                NoPythonBackend, InlineOverloads)
 
-from .object_mode_passes import (ObjectModeFrontEnd, ObjectModeBackEnd,
-                                 CompileInterpMode)
+from numba.core.object_mode_passes import (ObjectModeFrontEnd, ObjectModeBackEnd,
+                                           CompileInterpMode)
 
 
 class Flags(utils.ConfigOptions):
