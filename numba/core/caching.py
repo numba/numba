@@ -21,7 +21,7 @@ from numba.core.utils import add_metaclass, file_replace
 import numba
 from numba.core.errors import NumbaWarning
 from numba.targets.base import BaseContext
-from numba.targets.codegen import CodeLibrary
+from numba.core.codegen import CodeLibrary
 from numba.core.compiler import CompileResult
 from numba.core import config, compiler
 

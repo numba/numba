@@ -17,7 +17,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import jit, generated_jit, typeof
-from numba.core import types, errors
+from numba.core import types, errors, codegen
 from numba import _dispatcher
 from numba.core.compiler import compile_isolated
 from numba.core.errors import NumbaWarning
@@ -25,7 +25,6 @@ from numba.tests.support import (TestCase, temp_directory, import_dynamic,
                                  override_env_config, capture_cache_log,
                                  captured_stdout)
 from numba.numpy_support import as_dtype
-from numba.targets import codegen
 from numba.core.caching import _UserWideCacheLocator
 from numba.core.dispatcher import Dispatcher
 from numba import parfor

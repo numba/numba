@@ -705,7 +705,7 @@ def forbid_codegen():
 
     If code generation is invoked, a RuntimeError is raised.
     """
-    from numba.targets import codegen
+    from numba.core import codegen
     patchpoints = ['CodeLibrary._finalize_final_module']
 
     old = {}
@@ -715,7 +715,7 @@ def forbid_codegen():
         # XXX use the mock library instead?
         for name in patchpoints:
             parts = name.split('.')
-            obj = codegen
+            obj = numba.core.codegen
             for attrname in parts[:-1]:
                 obj = getattr(obj, attrname)
             attrname = parts[-1]
