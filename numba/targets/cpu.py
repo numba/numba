@@ -14,7 +14,7 @@ from numba.targets import callconv, codegen, externals, intrinsics, dictimpl
 from numba.targets.options import TargetOptions
 from numba.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
-import numba.entrypoints
+import numba.core.entrypoints
 from numba.targets import fastmathpass
 from numba.targets.cpu_options import (ParallelOptions, FastMathOptions,
                                        InlineOptions)
@@ -74,7 +74,7 @@ class CPUContext(BaseContext):
         self.install_registry(randomimpl.registry)
 
         # load 3rd party extensions
-        numba.entrypoints.init_all()
+        numba.core.entrypoints.init_all()
 
     @property
     def target_data(self):

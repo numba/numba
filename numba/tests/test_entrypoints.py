@@ -42,17 +42,17 @@ class TestEntrypoints(TestCase):
             entrypoints.setdefault('numba_extensions',
                                    {})['init'] = my_entrypoint
 
-            import numba.entrypoints
+            from numba.core import entrypoints
             # Allow reinitialization
-            numba.entrypoints._already_initialized = False
+            entrypoints._already_initialized = False
 
-            numba.entrypoints.init_all()
+            entrypoints.init_all()
 
             # was our init function called?
             self.assertEqual(counters['init'], 1)
 
             # ensure we do not initialize twice
-            numba.entrypoints.init_all()
+            entrypoints.init_all()
             self.assertEqual(counters['init'], 1)
         finally:
             # remove fake module
