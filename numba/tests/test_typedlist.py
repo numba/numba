@@ -1,4 +1,5 @@
 from itertools import product
+from textwrap import dedent
 
 import numpy as np
 
@@ -477,6 +478,116 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             expected_message,
             str(raises.exception),
         )
+
+
+class TestNoneType(MemoryLeakMixin, TestCase):
+
+    def test_append_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            return l
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_len_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            return len(l)
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_getitem_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            return l[0]
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_setitem_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            l[0] = None
+            return l
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_equals_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            m = List()
+            m.append(None)
+            return l == m, l != m, l < m, l <= m, l > m, l >= m
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_not_equals_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            m = List()
+            m.append(1)
+            return l == m, l != m, l < m, l <= m, l > m, l >= m
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_iter_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            l.append(None)
+            l.append(None)
+            count = 0
+            for i in l:
+                count += 1
+            return count
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_none_typed_method_fails(self):
+        """ Test that unsupported operations on List[None] raise. """
+        def generate_function(line1, line2):
+            context = {}
+            exec(dedent("""
+                from numba.typed import List
+                def bar():
+                    lst = List()
+                    {}
+                    {}
+                """.format(line1, line2)), context)
+            return njit(context["bar"])
+        for line1, line2 in (
+                ("lst.append(None)", "lst.pop()"),
+                ("lst.append(None)", "lst.count(None)"),
+                ("lst.append(None)", "lst.index(None)"),
+                ("lst.append(None)", "lst.insert(0, None)"),
+                (""                , "lst.insert(0, None)"),
+                ("lst.append(None)", "lst.clear()"),
+                ("lst.append(None)", "lst.copy()"),
+                ("lst.append(None)", "lst.extend([None])"),
+                ("",                 "lst.extend([None])"),
+                ("lst.append(None)", "lst.remove(None)"),
+                ("lst.append(None)", "lst.reverse()"),
+                ("lst.append(None)", "None in lst"),
+        ):
+            with self.assertRaises(TypingError) as raises:
+                foo = generate_function(line1, line2)
+                foo()
+            self.assertIn(
+                "method support for List[None] is limited",
+                str(raises.exception),
+            )
 
 
 class TestAllocation(MemoryLeakMixin, TestCase):

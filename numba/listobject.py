@@ -26,6 +26,7 @@ from numba.types import (
     ListTypeIterableType,
     ListTypeIteratorType,
     Type,
+    NoneType,
 )
 from numba.targets.imputils import impl_ret_borrowed, RefType
 from numba.errors import TypingError
@@ -92,6 +93,12 @@ def _raise_if_error(context, builder, status, msg):
     with builder.if_then(builder.icmp_signed('!=', status, ok_status),
                          likely=True):
         context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+
+
+def _check_for_none_typed(lst, method):
+    if isinstance(lst.dtype, NoneType):
+        raise TypingError("method support for List[None] is limited, "
+                          "not supported: '{}'.".format(method))
 
 
 @intrinsic
@@ -560,14 +567,18 @@ def _list_pop(typingctx, l, index):
 def _list_getitem_pop_helper(typingctx, l, index, op):
     """Wrap numba_list_getitem and numba_list_pop
 
-    Returns 2-tuple of (intp, ?item_type)
+    Returns 2-tuple of (int32, ?item_type)
 
     This is a helper that is parametrized on the type of operation, which can
     be either 'pop' or 'getitem'. This is because, signature wise, getitem and
     pop and are the same.
     """
     assert(op in ("pop", "getitem"))
-    resty = types.Tuple([types.int32, types.Optional(l.item_type)])
+    IS_NOT_NONE = not isinstance(l.item_type, types.NoneType)
+    resty = types.Tuple([types.int32,
+                         types.Optional(l.item_type
+                                        if IS_NOT_NONE
+                                        else types.int64)])
     sig = resty(l, index)
 
     def codegen(context, builder, sig, args):
@@ -596,15 +607,19 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
         # Load item if output is available
         found = builder.icmp_signed('>=', status,
                                     status.type(int(ListStatus.LIST_OK)))
-
-        out = context.make_optional_none(builder, tl.item_type)
+        out = context.make_optional_none(builder,
+                                         tl.item_type
+                                         if IS_NOT_NONE
+                                         else types.int64)
         pout = cgutils.alloca_once_value(builder, out)
 
         with builder.if_then(found):
-            item = dm_item.load_from_data_pointer(builder, ptr_item)
-            context.nrt.incref(builder, tl.item_type, item)
-            loaded = context.make_optional_value(builder, tl.item_type, item)
-            builder.store(loaded, pout)
+            if IS_NOT_NONE:
+                item = dm_item.load_from_data_pointer(builder, ptr_item)
+                context.nrt.incref(builder, tl.item_type, item)
+                loaded = context.make_optional_value(
+                    builder, tl.item_type, item)
+                builder.store(loaded, pout)
 
         out = builder.load(pout)
         return context.make_tuple(builder, resty, [status, out])
@@ -619,18 +634,24 @@ def impl_getitem(l, index):
 
     indexty = INDEXTY
     itemty = l.item_type
+    IS_NOT_NONE = not isinstance(l.item_type, types.NoneType)
 
     if index in index_types:
-        def integer_impl(l, index):
-            index = handle_index(l, index)
-            castedindex = _cast(index, indexty)
-            status, item = _list_getitem(l, castedindex)
-            if status == ListStatus.LIST_OK:
-                return _nonoptional(item)
-            else:
-                raise AssertionError("internal list error during getitem")
-
-        return integer_impl
+        if IS_NOT_NONE:
+            def integer_non_none_impl(l, index):
+                index = handle_index(l, index)
+                castedindex = _cast(index, indexty)
+                status, item = _list_getitem(l, castedindex)
+                if status == ListStatus.LIST_OK:
+                    return _nonoptional(item)
+                else:
+                    raise AssertionError("internal list error during getitem")
+            return integer_non_none_impl
+        else:
+            def integer_none_impl(l, index):
+                index = handle_index(l, index)
+                return None
+            return integer_none_impl
 
     elif isinstance(index, types.SliceType):
         def slice_impl(l, index):
@@ -759,6 +780,8 @@ def impl_pop(l, index=-1):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_none_typed(l, 'pop')
+
     indexty = INDEXTY
 
     # FIXME: this type check works, but it isn't clear why and if it optimal
@@ -843,6 +866,7 @@ def impl_contains(l, item):
         return
 
     itemty = l.item_type
+    _check_for_none_typed(l, "__contains__")
 
     def impl(l, item):
         casteditem = _cast(item, itemty)
@@ -858,6 +882,8 @@ def impl_contains(l, item):
 def impl_count(l, item):
     if not isinstance(l, types.ListType):
         return
+
+    _check_for_none_typed(l, 'count')
 
     itemty = l.item_type
 
@@ -878,6 +904,8 @@ def impl_extend(l, iterable):
         return
     if not isinstance(iterable, types.IterableType):
         raise TypingError("extend argument must be iterable")
+
+    _check_for_none_typed(l, 'insert')
 
     def select_impl():
         if isinstance(iterable, types.ListType):
@@ -922,6 +950,11 @@ def impl_insert(l, index, item):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_none_typed(l, 'insert')
+    # insert can refine
+    if isinstance(item, NoneType):
+        raise TypingError("method support for List[None] is limited")
+
     if index in index_types:
         def impl(l, index, item):
             # If the index is larger than the size of the list or if the list is
@@ -964,6 +997,8 @@ def impl_remove(l, item):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_none_typed(l, 'remove')
+
     itemty = l.item_type
 
     def impl(l, item):
@@ -995,6 +1030,8 @@ def impl_reverse(l):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_none_typed(l, 'reverse')
+
     def impl(l):
         front = 0
         back = len(l) - 1
@@ -1008,7 +1045,11 @@ def impl_reverse(l):
 
 @overload_method(types.ListType, 'copy')
 def impl_copy(l):
+
+    _check_for_none_typed(l, 'copy')
+
     itemty = l.item_type
+
     if isinstance(l, types.ListType):
         def impl(l):
             newl = new_list(itemty, len(l))
@@ -1023,6 +1064,9 @@ def impl_copy(l):
 def impl_index(l, item, start=None, end=None):
     if not isinstance(l, types.ListType):
         return
+
+    _check_for_none_typed(l, 'index')
+
     itemty = l.item_type
 
     def check_arg(arg, name):
@@ -1091,17 +1135,29 @@ def _equals_helper(this, other, OP):
     if not isinstance(other, types.ListType):
         return lambda this, other: False
 
-    def impl(this, other):
-        def equals(this, other):
-            if len(this) != len(other):
-                return False
-            for i in range(len(this)):
-                if this[i] != other[i]:
+    this_is_none = isinstance(this.dtype, types.NoneType)
+    other_is_none = isinstance(other.dtype, types.NoneType)
+
+    if this_is_none or other_is_none:
+        def impl_some_none(this, other):
+            def equals(this, other):
+                # Equal if both none-typed and have equal length
+                return bool(this_is_none == other_is_none
+                            and len(this) == len(other))
+            return OP(equals(this, other))
+        return impl_some_none
+    else:
+        def impl_not_none(this, other):
+            def equals(this, other):
+                if len(this) != len(other):
                     return False
-            else:
-                return True
-        return OP(equals(this, other))
-    return impl
+                for i in range(len(this)):
+                    if this[i] != other[i]:
+                        return False
+                else:
+                    return True
+            return OP(equals(this, other))
+        return impl_not_none
 
 
 @overload(operator.eq)
@@ -1115,7 +1171,7 @@ def impl_not_equals(this, other):
 
 
 @register_jitable
-def compare(this, other):
+def compare_not_none(this, other):
     """Oldschool (python 2.x) cmp.
 
        if this < other return -1
@@ -1132,14 +1188,39 @@ def compare(this, other):
         return 0
 
 
+@register_jitable
+def compare_some_none(this, other, this_is_none, other_is_none):
+    """Oldschool (python 2.x) cmp for None typed lists.
+
+       if this < other return -1
+       if this = other return 0
+       if this > other return 1
+    """
+    if len(this) != len(other):
+        return -1 if len(this) < len(other) else 1
+    if this_is_none and other_is_none: # both none
+        return 0
+    # to get here there is precisely one none, and if the first is none, by
+    # induction, the second cannot be
+    return -1 if this_is_none else 1
+
+
 def compare_helper(this, other, accepted):
     if not isinstance(this, types.ListType):
         return
     if not isinstance(other, types.ListType):
         return lambda this, other: False
 
-    def impl(this, other):
-        return compare(this, other) in accepted
+    this_is_none = isinstance(this.dtype, types.NoneType)
+    other_is_none = isinstance(other.dtype, types.NoneType)
+
+    if this_is_none or other_is_none:
+        def impl(this, other):
+            return compare_some_none(
+                this, other, this_is_none, other_is_none) in accepted
+    else:
+        def impl(this, other):
+            return compare_not_none(this, other) in accepted
     return impl
 
 
