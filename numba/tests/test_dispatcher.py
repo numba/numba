@@ -26,7 +26,7 @@ from numba.tests.support import (TestCase, temp_directory, import_dynamic,
                                  captured_stdout)
 from numba.numpy_support import as_dtype
 from numba.targets import codegen
-from numba.caching import _UserWideCacheLocator
+from numba.core.caching import _UserWideCacheLocator
 from numba.core.dispatcher import Dispatcher
 from numba import parfor
 from numba.tests.support import skip_parfors_unsupported, needs_lapack

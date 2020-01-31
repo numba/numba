@@ -7,7 +7,7 @@ from llvmlite.llvmpy.core import Type, Builder, ICMP_EQ, Constant
 from numba import cgutils
 from numba.core import types
 from numba.core.compiler_lock import global_compiler_lock
-from ..caching import make_library_cache, NullCache
+from numba.core.caching import make_library_cache, NullCache
 
 
 _wrapper_info = namedtuple('_wrapper_info', ['library', 'env', 'name'])

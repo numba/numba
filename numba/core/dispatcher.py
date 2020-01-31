@@ -20,7 +20,7 @@ from numba.core.typing.templates import fold_arguments
 from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
 from numba.core.utils import reraise
-from numba.caching import NullCache, FunctionCache
+from numba.core.caching import NullCache, FunctionCache
 
 
 class OmittedArg(object):

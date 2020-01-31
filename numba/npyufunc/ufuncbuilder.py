@@ -15,7 +15,7 @@ from numba.numpy_support import as_dtype
 from numba.npyufunc import _internal
 from numba.npyufunc.sigparse import parse_signature
 from numba.npyufunc.wrappers import build_ufunc_wrapper, build_gufunc_wrapper
-from numba.caching import FunctionCache, NullCache
+from numba.core.caching import FunctionCache, NullCache
 from numba.core.compiler_lock import global_compiler_lock
 
 
