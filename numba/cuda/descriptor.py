@@ -1,4 +1,4 @@
-from numba.targets.descriptors import TargetDescriptor
+from numba.core.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from .target import CUDATargetContext, CUDATypingContext
 

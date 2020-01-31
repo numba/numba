@@ -1,7 +1,7 @@
 import contextlib
 
 from numba.targets import cpu
-from numba.targets.descriptors import TargetDescriptor
+from numba.core.descriptors import TargetDescriptor
 from numba.core import utils, typing, dispatcher
 
 # -----------------------------------------------------------------------------

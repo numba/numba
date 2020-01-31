@@ -4,7 +4,7 @@ import inspect
 from contextlib import contextmanager
 
 from numba.decorators import jit
-from numba.targets.descriptors import TargetDescriptor
+from numba.core.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba.targets.registry import dispatcher_registry, cpu_target
 from numba.targets.cpu import FastMathOptions
