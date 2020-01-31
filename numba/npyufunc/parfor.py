@@ -22,7 +22,7 @@ from numba.core.ir_utils import (add_offset_to_labels, replace_var_names,
 from numba.core.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from numba.core.typing import signature
-from numba.targets.cpu import ParallelOptions
+from numba.core.cpu import ParallelOptions
 from numba.parfor import print_wrapped, ensure_parallel_support
 from numba.core.errors import NumbaParallelSafetyWarning
 import types as pytypes

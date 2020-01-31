@@ -21,8 +21,7 @@ from collections import defaultdict
 import numba
 from numba import unittest_support as unittest
 from numba import njit, prange, stencil
-from numba.targets import cpu
-from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall, config, compiler
+from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall, config, compiler, cpu
 from numba.targets.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (find_callname, guard, build_definitions,

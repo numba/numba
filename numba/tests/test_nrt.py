@@ -25,6 +25,7 @@ from numba import cffi_support
 from numba.unsafe.nrt import NRT_get_api
 
 from numba.tests.support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
+from numba.core import cpu
 
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")
@@ -80,7 +81,7 @@ class TestNrtMemInfo(unittest.TestCase):
         # Reset the Dummy class
         Dummy.alive = 0
         # initialize the NRT (in case the tests are run in isolation)
-        targets.cpu.CPUContext(typing.Context())
+        cpu.CPUContext(typing.Context())
 
     def test_meminfo_refct_1(self):
         d = Dummy()

@@ -308,7 +308,7 @@ class InlineInlinables(FunctionPass):
         from numba.core.inline_closurecall import (inline_closure_call,
                                               callee_ir_validator)
         from numba.core.compiler import run_frontend
-        from numba.targets.cpu import InlineOptions
+        from numba.core.cpu import InlineOptions
 
         # try and get a definition for the call, this isn't always possible as
         # it might be a eval(str)/part generated awaiting update etc. (parfors)

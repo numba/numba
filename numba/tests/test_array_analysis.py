@@ -7,11 +7,11 @@ from io import StringIO
 
 from numba import unittest_support as unittest
 from numba import njit, typeof, jitclass, prange
-from numba.core import types, typing, ir, bytecode, postproc
+from numba.core import types, typing, ir, bytecode, postproc, cpu
 from numba.tests.support import TestCase, tag, skip_parfors_unsupported
 from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
 from numba.core.compiler import Compiler, Flags, PassManager
-from numba.targets import cpu, registry
+from numba.targets import registry
 from numba.core.ir_utils import remove_dead
 from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,

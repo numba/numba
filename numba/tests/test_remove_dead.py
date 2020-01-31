@@ -4,9 +4,8 @@
 #
 
 import numba
-from numba.core import ir_utils
+from numba.core import ir_utils, cpu
 from numba.core.compiler import compile_isolated, Flags
-from numba.targets import cpu
 from numba.core import types, typing, ir, config, compiler
 from numba.targets.registry import cpu_target
 from numba.core.annotations import type_annotations

@@ -1660,7 +1660,7 @@ def get_ir_of_code(glbls, fcode):
     # call inline pass to handle cases like stencils and comprehensions
     swapped = {} # TODO: get this from diagnostics store
     inline_pass = numba.core.inline_closurecall.InlineClosureCallPass(
-        ir, numba.targets.cpu.ParallelOptions(False), swapped)
+        ir, numba.core.cpu.ParallelOptions(False), swapped)
     inline_pass.run()
     post_proc = postproc.PostProcessor(ir)
     post_proc.run()

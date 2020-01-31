@@ -3,8 +3,7 @@ from contextlib import contextmanager
 
 import llvmlite.llvmpy.core as lc
 
-from numba.core import types, typing, callconv
-from numba.targets import cpu
+from numba.core import types, typing, callconv, cpu
 
 
 class TestCompileCache(unittest.TestCase):

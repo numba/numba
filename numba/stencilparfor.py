@@ -647,7 +647,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
                                                                     calltypes):
     """get typed IR from stencil bytecode
     """
-    from numba.targets.cpu import CPUContext
+    from numba.core.cpu import CPUContext
     from numba.targets.registry import cpu_target
     from numba.core.annotations import type_annotations
     from numba.core.typed_passes import type_inference_stage

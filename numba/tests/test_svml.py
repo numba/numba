@@ -8,9 +8,8 @@ import re
 from itertools import chain, combinations
 
 import numba
-from numba.core import config
+from numba.core import config, cpu
 from numba import prange, njit, unittest_support as unittest
-from numba.targets import cpu
 from numba.core.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase, tag, override_env_config
 
