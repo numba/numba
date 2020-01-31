@@ -9,7 +9,7 @@ from functools import reduce
 
 import numpy as np
 
-from numba.utils import longint
+from numba.core.utils import longint
 from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder, parse_identity
 from numba.core import types, sigutils
 from numba.core.typing import signature
