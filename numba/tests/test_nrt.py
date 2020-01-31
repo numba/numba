@@ -22,7 +22,7 @@ from numba.core.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm
 from numba import cffi_support
-from numba.unsafe.nrt import NRT_get_api
+from numba.core.unsafe.nrt import NRT_get_api
 
 from numba.tests.support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
 from numba.core import cpu
