@@ -8,7 +8,7 @@ import numpy as np
 import builtins
 from numba.core import types
 from numba.tests.support import TestCase, temp_directory
-from numba.help.inspector import inspect_function, inspect_module
+from numba.misc.help.inspector import inspect_function, inspect_module
 
 
 class TestInspector(TestCase):
