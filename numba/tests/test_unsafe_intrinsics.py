@@ -6,7 +6,7 @@ from numba import njit
 from numba.core import types
 from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.unsafe.ndarray import to_fixed_tuple, empty_inferred
-from numba.unsafe.bytes import memcpy_region
+from numba.core.unsafe.bytes import memcpy_region
 from numba.unsafe.refcount import dump_refcount
 from numba.cpython.unsafe.numbers import trailing_zeros, leading_zeros
 from numba.core.errors import TypingError

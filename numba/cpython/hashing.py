@@ -16,7 +16,7 @@ from numba.extending import (
     overload, overload_method, intrinsic, register_jitable)
 from numba.core import errors
 from numba.core import types, utils
-from numba.unsafe.bytes import grab_byte, grab_uint64_t
+from numba.core.unsafe.bytes import grab_byte, grab_uint64_t
 
 _py38_or_later = utils.PYVERSION >= (3, 8)
 
