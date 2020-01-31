@@ -6,7 +6,7 @@ Test return values
 import math
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
+from numba.core.compiler import compile_isolated, Flags
 from numba.core import types
 from numba.core.errors import TypingError
 

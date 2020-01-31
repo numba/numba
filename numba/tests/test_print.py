@@ -3,7 +3,7 @@ import sys
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
+from numba.core.compiler import compile_isolated, Flags
 from numba import jit
 from numba.core import types, errors, utils
 from numba.tests.support import captured_stdout, tag, TestCase

@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import numpy_support
 from numba.core import types
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
 from numba import unittest_support as unittest
 from numba.tests.support import captured_stdout, tag, TestCase
 

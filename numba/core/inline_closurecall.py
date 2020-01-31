@@ -285,7 +285,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     callee_closure = callee.closure if hasattr(callee, 'closure') else callee.__closure__
     # first, get the IR of the callee
     if isinstance(callee, pytypes.FunctionType):
-        from numba import compiler
+        from numba.core import compiler
         callee_ir = compiler.run_frontend(callee, inline_closures=True)
     else:
         callee_ir = get_ir_of_code(glbls, callee_code)

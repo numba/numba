@@ -56,7 +56,7 @@ class ObjectModeFrontEnd(FunctionPass):
             if config.DEBUG_FRONTEND or config.DEBUG:
                 for loop in loops:
                     print("Lifting loop", loop.get_source_location())
-            from numba.compiler import compile_ir
+            from numba.core.compiler import compile_ir
             cres = compile_ir(state.typingctx, state.targetctx, main,
                               state.args, state.return_type,
                               outer_flags, state.locals,
@@ -65,7 +65,7 @@ class ObjectModeFrontEnd(FunctionPass):
             return cres
 
     def run_pass(self, state):
-        from numba.compiler import _EarlyPipelineCompletion
+        from numba.core.compiler import _EarlyPipelineCompletion
         # NOTE: That so much stuff, including going back into the compiler, is
         # captured in a single pass is not ideal.
         if state.flags.enable_looplift:
@@ -101,7 +101,7 @@ class ObjectModeBackEnd(LoweringPass):
             env = lower.env
             call_helper = lower.call_helper
             del lower
-        from numba.compiler import _LowerResult  # TODO: move this
+        from numba.core.compiler import _LowerResult  # TODO: move this
         if flags.no_compile:
             return _LowerResult(fndesc, call_helper, cfunc=None, env=env)
         else:
@@ -142,7 +142,7 @@ class ObjectModeBackEnd(LoweringPass):
 
         lowered = backend_object_mode()
         signature = typing.signature(state.return_type, *state.args)
-        from numba.compiler import compile_result
+        from numba.core.compiler import compile_result
         state.cr = compile_result(
             typing_context=state.typingctx,
             target_context=state.targetctx,
@@ -207,7 +207,7 @@ class CompileInterpMode(LoweringPass):
         """
         args = [types.pyobject] * len(state.args)
         signature = typing.signature(types.pyobject, *args)
-        from numba.compiler import compile_result
+        from numba.core.compiler import compile_result
         state.cr = compile_result(typing_context=state.typingctx,
                                   target_context=state.targetctx,
                                   entry_point=state.func_id.func,

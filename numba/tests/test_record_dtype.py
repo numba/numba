@@ -5,7 +5,7 @@ import ctypes
 from numba import jit, numpy_support
 from numba.core import types
 from numba import unittest_support as unittest
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
 from numba.core.config import IS_WIN32
 from numba.numpy_support import numpy_version

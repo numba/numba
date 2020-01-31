@@ -7,7 +7,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, typeof
 from numba.core import types
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
 from numba.core.errors import TypingError, LoweringError
 from numba.numpy_support import as_dtype
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeak,

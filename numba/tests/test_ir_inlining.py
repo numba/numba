@@ -21,14 +21,14 @@ from numba.extending import (
 )
 from numba.core.datamodel.models import OpaqueModel
 from numba.targets.cpu import InlineOptions
-from numba.compiler import DefaultPassBuilder
+from numba.core.compiler import DefaultPassBuilder, CompilerBase
 from numba.core.typed_passes import DeadCodeElimination, IRLegalization
 from numba.core.untyped_passes import PreserveIR
 from itertools import product
 from numba.tests.support import TestCase, unittest, skip_py38_or_later
 
 
-class InlineTestPipeline(numba.compiler.CompilerBase):
+class InlineTestPipeline(CompilerBase):
     """ Same as the standard pipeline, but preserves the func_ir into the
     metadata store"""
 

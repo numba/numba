@@ -25,7 +25,7 @@ import numpy as np
 
 from numba import numpy_support, testing
 from numba.core import errors, typing, utils, config
-from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
+from numba.core.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest
 from numba.runtime import rtsys

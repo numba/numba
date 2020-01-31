@@ -1,4 +1,4 @@
-from numba.compiler import Compiler
+from numba.core.compiler import Compiler
 from numba import jit, generated_jit, objmode
 from numba.core import types
 from numba.core.ir import FunctionIR

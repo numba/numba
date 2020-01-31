@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
+from numba.core.compiler import compile_isolated, Flags
 from numba import njit, typeof
 from numba.core import utils, types, errors
 from numba.tests.support import TestCase, tag

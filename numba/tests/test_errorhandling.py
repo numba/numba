@@ -93,8 +93,8 @@ class TestMiscErrorHandling(unittest.TestCase):
 
     def test_use_of_ir_unknown_loc(self):
         # for context see # 3390
-        import numba
-        class TestPipeline(numba.compiler.CompilerBase):
+        from numba.core.compiler import CompilerBase
+        class TestPipeline(CompilerBase):
             def define_pipelines(self):
                 name = 'bad_DCE_pipeline'
                 pm = PassManager(name)

@@ -6,7 +6,7 @@ import numpy as np
 
 
 from numba import unittest_support as unittest
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
 from numba import jit
 from numba.core import types, errors
 from numba.core.typing import ctypes_utils

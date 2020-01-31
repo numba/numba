@@ -6,7 +6,7 @@ import operator
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
 from numba import jit
 from numba.core import types
 from numba.core.errors import TypingError

@@ -1642,7 +1642,7 @@ def get_ir_of_code(glbls, fcode):
     f = _create_function_from_code_obj(fcode, func_env, func_arg, func_clo,
                                        glbls)
 
-    from numba import compiler
+    from numba.core import compiler
     ir = compiler.run_frontend(f)
     # we need to run the before inference rewrite pass to normalize the IR
     # XXX: check rewrite pass flag?

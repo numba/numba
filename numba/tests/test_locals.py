@@ -1,5 +1,6 @@
-from numba import compiler, float32
+from numba import float32
 from numba import unittest_support as unittest
+from numba.core import compiler
 
 def foo():
     x = 123

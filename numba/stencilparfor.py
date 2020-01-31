@@ -732,7 +732,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
 
 class DummyPipeline(object):
     def __init__(self, typingctx, targetctx, args, f_ir):
-        from numba.compiler import StateDict
+        from numba.core.compiler import StateDict
         self.state = StateDict()
         self.state.typingctx = typingctx
         self.state.targetctx = targetctx

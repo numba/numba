@@ -11,7 +11,7 @@ from numba.core.interpreter import Interpreter
 from numba.core import typing, errors
 from numba.targets.registry import cpu_target
 from numba.targets import cpu
-from numba.compiler import compile_ir, DEFAULT_FLAGS
+from numba.core.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof, objmode
 from numba.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,

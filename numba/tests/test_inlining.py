@@ -3,10 +3,9 @@ import numpy as np
 
 from numba.tests.support import (TestCase, override_config, captured_stdout,
                       skip_parfors_unsupported)
-import numba
 from numba import unittest_support as unittest
-from numba import jit, njit, compiler
-from numba.core import types, ir, postproc
+from numba import jit, njit
+from numba.core import types, ir, postproc, compiler
 from numba.ir_utils import guard, find_callname, find_const, get_definition
 from numba.targets.registry import CPUDispatcher
 from numba.core.inline_closurecall import inline_closure_call
@@ -102,7 +101,7 @@ def gen_pipeline(state, test_pass):
         pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         return pm
 
-class InlineTestPipeline(numba.compiler.CompilerBase):
+class InlineTestPipeline(compiler.CompilerBase):
     """compiler pipeline for testing inlining after optimization
     """
     def define_pipelines(self):
@@ -264,7 +263,7 @@ class TestInlining(TestCase):
                         break
                 return True
 
-        class InlineTestPipelinePrune(numba.compiler.CompilerBase):
+        class InlineTestPipelinePrune(compiler.CompilerBase):
 
             def define_pipelines(self):
                 pm = gen_pipeline(self.state, PruningInlineTestPass)

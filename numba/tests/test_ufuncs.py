@@ -11,7 +11,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba import typeof, numpy_support, njit
 from numba.core import types, typing, utils
-from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
+from numba.core.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import from_dtype
 from numba import jit, vectorize
 from numba.core.errors import LoweringError, TypingError

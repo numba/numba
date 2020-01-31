@@ -11,7 +11,7 @@ import numba
 from numba.core import config
 from numba import prange, njit, unittest_support as unittest
 from numba.targets import cpu
-from numba.compiler import compile_isolated, Flags
+from numba.core.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase, tag, override_env_config
 
 needs_svml = unittest.skipUnless(config.USING_SVML,
@@ -367,7 +367,7 @@ class TestSVML(TestCase):
                     from numba import config
                     from numba.targets import cpu
                     from numba.tests.support import override_env_config
-                    from numba.compiler import compile_isolated, Flags
+                    from numba.core.compiler import compile_isolated, Flags
 
                     # compile for overridden CPU, with and without fastmath
                     with override_env_config('NUMBA_CPU_NAME', 'skylake-avx512'), \

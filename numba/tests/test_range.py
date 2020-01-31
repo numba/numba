@@ -4,7 +4,7 @@ import sys
 
 import numpy
 
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
 from numba import jit, njit
 from numba.core import types, utils
 from numba.tests.support import tag

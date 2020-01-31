@@ -2,7 +2,7 @@ import numpy as np
 import sys
 import traceback
 
-from numba.compiler import compile_isolated, Flags
+from numba.core.compiler import compile_isolated, Flags
 from numba import jit, njit
 from numba.core import types, errors
 from numba import unittest_support as unittest

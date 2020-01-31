@@ -1,6 +1,6 @@
 import numpy as np
 
-from numba.compiler import compile_isolated, DEFAULT_FLAGS
+from numba.core.compiler import compile_isolated, DEFAULT_FLAGS
 from numba.cuda.testing import SerialMixin
 from numba import typeof, cuda, njit
 from numba.core.types import float64

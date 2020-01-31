@@ -3,7 +3,7 @@ def ex_compiler_pass():
     # magictoken.ex_compiler_pass.begin
     from numba import njit
     from numba.core import ir
-    from numba.compiler import CompilerBase, DefaultPassBuilder
+    from numba.core.compiler import CompilerBase, DefaultPassBuilder
     from numba.core.compiler_machinery import FunctionPass, register_pass
     from numba.core.untyped_passes import IRProcessing
     from numbers import Number

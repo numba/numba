@@ -244,7 +244,7 @@ class WithLifting(FunctionPass):
             locals=state.locals,
         )
         if withs:
-            from numba.compiler import compile_ir, _EarlyPipelineCompletion
+            from numba.core.compiler import compile_ir, _EarlyPipelineCompletion
             cres = compile_ir(state.typingctx, state.targetctx, main,
                               state.args, state.return_type,
                               state.flags, state.locals,
@@ -307,7 +307,7 @@ class InlineInlinables(FunctionPass):
     def _do_work(self, state, work_list, block, i, expr):
         from numba.core.inline_closurecall import (inline_closure_call,
                                               callee_ir_validator)
-        from numba.compiler import run_frontend
+        from numba.core.compiler import run_frontend
         from numba.targets.cpu import InlineOptions
 
         # try and get a definition for the call, this isn't always possible as

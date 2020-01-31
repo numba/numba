@@ -3,7 +3,7 @@ import math
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, compile_extra, Flags
+from numba.core.compiler import compile_isolated, compile_extra, Flags
 from numba.core import types, typing
 from numba.tests.support import TestCase
 

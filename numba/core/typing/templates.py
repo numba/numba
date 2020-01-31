@@ -455,8 +455,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if not self._inline.is_never_inline:
             # need to run the compiler front end up to type inference to compute
             # a signature
-            from numba import compiler
-            from numba.core import typed_passes
+            from numba.core import typed_passes, compiler
             ir = compiler.run_frontend(disp_type.dispatcher.py_func)
             resolve = disp_type.dispatcher.get_call_template
             template, pysig, folded_args, kws = resolve(new_args, kws)

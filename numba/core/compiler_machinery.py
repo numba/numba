@@ -314,7 +314,7 @@ class PassManager(object):
         """
         Run the defined pipelines on the state.
         """
-        from numba.compiler import _EarlyPipelineCompletion
+        from numba.core.compiler import _EarlyPipelineCompletion
         if not self.finalized:
             raise RuntimeError("Cannot run non-finalised pipeline")
 

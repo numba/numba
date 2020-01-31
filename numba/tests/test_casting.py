@@ -1,6 +1,6 @@
 from numba import unittest_support as unittest
 import numpy as np
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
 from numba import njit
 from numba.core import types
 import struct

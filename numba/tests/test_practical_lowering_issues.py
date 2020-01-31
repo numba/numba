@@ -5,7 +5,7 @@ Tests for practical lowering specific errors.
 import numpy as np
 from numba import njit
 from numba.core import types, ir
-from numba.compiler import CompilerBase, DefaultPassBuilder
+from numba.core.compiler import CompilerBase, DefaultPassBuilder
 from numba.core.typed_passes import NopythonTypeInference
 from numba.core.compiler_machinery import register_pass, FunctionPass
 

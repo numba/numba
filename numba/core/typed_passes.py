@@ -351,7 +351,7 @@ class NativeLowering(LoweringPass):
                 call_helper = lower.call_helper
                 del lower
 
-            from numba.compiler import _LowerResult  # TODO: move this
+            from numba.core.compiler import _LowerResult  # TODO: move this
             if flags.no_compile:
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=None, env=env)
@@ -406,7 +406,7 @@ class NoPythonBackend(FunctionPass):
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 
-        from numba.compiler import compile_result
+        from numba.core.compiler import compile_result
         state.cr = compile_result(
             typing_context=state.typingctx,
             target_context=state.targetctx,

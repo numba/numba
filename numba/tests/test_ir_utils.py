@@ -1,12 +1,12 @@
 import numba
 from numba.tests.support import TestCase, unittest
-from numba import compiler, jitclass
+from numba import jitclass
 from numba.targets.registry import cpu_target
-from numba.compiler import CompilerBase, Flags
+from numba.core.compiler import CompilerBase, Flags
 from numba.core.compiler_machinery import PassManager
 from numba.targets import registry
 from numba import ir_utils
-from numba.core import types, ir, bytecode
+from numba.core import types, ir, bytecode, compiler
 from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                                   IRProcessing,)
 

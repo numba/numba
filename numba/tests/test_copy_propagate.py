@@ -3,9 +3,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-from numba import compiler
 from numba.targets import cpu
-from numba.core import types, typing, ir, config
+from numba.core import types, typing, ir, config, compiler
 from numba.targets.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.ir_utils import (copy_propagate, apply_copy_propagate,

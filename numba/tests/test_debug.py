@@ -11,11 +11,11 @@ from numba.tests.support import (TestCase, override_config, override_env_config,
                       needs_blas)
 from numba import unittest_support as unittest
 from numba import jit, jitclass
-from numba.core import types
-from numba.compiler import compile_isolated, Flags
+from numba.core import types, compiler
+from numba.core.compiler import compile_isolated, Flags
 from numba.targets.cpu import ParallelOptions
 from numba.core.errors import NumbaPerformanceWarning
-from numba import compiler, prange
+from numba import prange
 
 
 def simple_nopython(somearg):

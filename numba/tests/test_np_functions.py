@@ -8,7 +8,7 @@ from functools import partial
 import numpy as np
 
 from numba import unittest_support as unittest
-from numba.compiler import Flags
+from numba.core.compiler import Flags
 from numba import jit, njit, typeof
 from numba.core import types
 from numba.numpy_support import numpy_version

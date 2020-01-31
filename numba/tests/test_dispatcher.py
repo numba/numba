@@ -19,7 +19,7 @@ from numba import unittest_support as unittest
 from numba import jit, generated_jit, typeof
 from numba.core import types, errors
 from numba import _dispatcher
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
 from numba.core.errors import NumbaWarning
 from numba.tests.support import (TestCase, temp_directory, import_dynamic,
                                  override_env_config, capture_cache_log,

@@ -6,8 +6,7 @@ import re
 import numpy as np
 
 from numba.core.typing.templates import ConcreteTemplate
-from numba import compiler
-from numba.core import types, config
+from numba.core import types, config, compiler
 from .hlc import hlc
 from .hsadrv import devices, driver, enums, drvapi
 from .hsadrv.error import HsaKernelLaunchError

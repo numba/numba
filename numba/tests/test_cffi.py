@@ -4,7 +4,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba import jit, cffi_support
 from numba.core import types, errors
-from numba.compiler import compile_isolated, Flags
+from numba.core.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase, tag
 
 import numba.tests.cffi_usecases as mod

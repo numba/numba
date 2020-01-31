@@ -4,10 +4,9 @@
 #
 
 import numba
-from numba import compiler
-from numba.compiler import compile_isolated, Flags
+from numba.core.compiler import compile_isolated, Flags
 from numba.targets import cpu
-from numba.core import types, typing, ir, config
+from numba.core import types, typing, ir, config, compiler
 from numba.targets.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.ir_utils import (copy_propagate, apply_copy_propagate,
@@ -262,7 +261,7 @@ class TestRemoveDead(unittest.TestCase):
                                                 parfor_pass.nested_fusion_info)
                 return True
 
-        class TestPipeline(numba.compiler.Compiler):
+        class TestPipeline(compiler.Compiler):
             """Test pipeline that just converts prange() to parfor and calls
             remove_dead(). Copy propagation can replace B in the example code
             which this pipeline avoids.

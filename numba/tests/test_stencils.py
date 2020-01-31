@@ -17,7 +17,7 @@ import numba
 from numba import unittest_support as unittest
 from numba import njit, stencil
 from numba.core import types
-from numba.compiler import compile_extra, Flags
+from numba.core.compiler import compile_extra, Flags
 from numba.targets import registry
 from numba.targets.cpu import ParallelOptions
 from numba.tests.support import tag, skip_parfors_unsupported, _32bit

@@ -11,8 +11,8 @@ import uuid
 import weakref
 from copy import deepcopy
 
-from numba import _dispatcher, compiler
-from numba.core import utils, types, errors, typing, serialize, config
+from numba import _dispatcher
+from numba.core import utils, types, errors, typing, serialize, config, compiler
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.typeconv.rules import default_type_manager
 from numba import sigutils

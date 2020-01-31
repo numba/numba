@@ -2,7 +2,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import jitclass
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
 from numba.numpy_support import from_dtype
 from numba import njit, typeof
 from numba.core import types

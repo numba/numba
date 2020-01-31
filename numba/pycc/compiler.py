@@ -10,7 +10,7 @@ import llvmlite.llvmpy.core as lc
 
 from numba import cgutils
 from numba.pycc import llvm_types as lt
-from numba.compiler import compile_extra, Flags
+from numba.core.compiler import compile_extra, Flags
 from numba.core.compiler_lock import global_compiler_lock
 
 from numba.targets.registry import cpu_target

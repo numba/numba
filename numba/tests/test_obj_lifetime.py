@@ -5,7 +5,7 @@ import gc
 
 import numba.unittest_support as unittest
 from numba.core.controlflow import CFGraph, Loop
-from numba.compiler import compile_extra, compile_isolated, Flags
+from numba.core.compiler import compile_extra, compile_isolated, Flags
 from numba.core import types
 from numba.tests.support import TestCase
 

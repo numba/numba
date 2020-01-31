@@ -4,7 +4,7 @@ from itertools import permutations
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
+from numba.core.compiler import compile_isolated, Flags
 from numba import jit, njit, from_dtype, typeof
 from numba.core.errors import TypingError
 from numba.core import types, errors

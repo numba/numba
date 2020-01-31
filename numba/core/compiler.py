@@ -172,7 +172,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     context).
     Good for testing.
     """
-    from .targets.registry import cpu_target
+    from numba.targets.registry import cpu_target
     typingctx = typing.Context()
     targetctx = cpu.CPUContext(typingctx)
     # Register the contexts in case for nested @jit or @overload calls

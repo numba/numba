@@ -8,8 +8,8 @@ from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba.targets.registry import dispatcher_registry, cpu_target
 from numba.targets.cpu import FastMathOptions
-from numba import compiler, sigutils
-from numba.core import utils, types, serialize
+from numba import sigutils
+from numba.core import utils, types, serialize, compiler
 from numba.numpy_support import as_dtype
 from numba.npyufunc import _internal
 from numba.npyufunc.sigparse import parse_signature

@@ -8,11 +8,12 @@ import operator
 import numpy as np
 import numpy
 
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
 from numba import jit
 from numba.core import types, utils
 from numba.core.errors import TypingError, LoweringError
 from numba.tests.support import tag, _32bit, captured_stdout
+
 
 PARALLEL_SUPPORTED = not _32bit
 
