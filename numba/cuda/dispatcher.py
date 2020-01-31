@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba.core.descriptors import TargetDescriptor
-from numba.targets.options import TargetOptions
+from numba.core.options import TargetOptions
 from numba import cuda
 from numba.cuda import jit, autojit
 from numba.cuda.cudadrv import devicearray
