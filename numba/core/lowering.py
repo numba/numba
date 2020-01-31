@@ -306,7 +306,7 @@ class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
 
     def pre_block(self, block):
-        from numba.unsafe import eh
+        from numba.core.unsafe import eh
 
         super(Lower, self).pre_block(block)
 

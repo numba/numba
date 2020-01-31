@@ -15,7 +15,7 @@ from numba.core.utils import (
     get_function_globals
     )
 from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
-from numba.unsafe import eh
+from numba.core.unsafe import eh
 
 
 _logger = logging.getLogger(__name__)
