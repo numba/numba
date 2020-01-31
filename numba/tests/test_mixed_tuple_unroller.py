@@ -11,7 +11,7 @@ from numba.compiler import CompilerBase
 from numba.core.untyped_passes import (FixupArgs, TranslateByteCode, IRProcessing,
                                   InlineClosureLikes, SimplifyCFG,
                                   IterLoopCanonicalization, LiteralUnroll)
-from numba.typed_passes import (NopythonTypeInference, IRLegalization,
+from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
                                 NoPythonBackend, PartialTypeInference)
 from numba.ir_utils import (compute_cfg_from_blocks, flatten_labels)
 

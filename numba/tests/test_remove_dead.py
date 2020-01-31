@@ -14,14 +14,14 @@ from numba.core.annotations import type_annotations
 from numba.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table, remove_dels, remove_dead,
                             remove_call_handlers, alias_func_extensions)
-from numba.typed_passes import type_inference_stage
+from numba.core.typed_passes import type_inference_stage
 from numba.compiler_machinery import FunctionPass, register_pass, PassManager
 from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, GenericRewrites,
                              WithLifting, PreserveIR, InlineClosureLikes)
 
-from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
+from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
                            DumpParforDiagnostics, NativeLowering,
                            IRLegalization, NoPythonBackend)

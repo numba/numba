@@ -350,7 +350,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
         _debug_dump(callee_ir)
 
     if typingctx:
-        from numba import typed_passes
+        from numba.core import typed_passes
         # call branch pruning to simplify IR and avoid inference errors
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         numba.core.analysis.dead_branch_prune(callee_ir, arg_typs)

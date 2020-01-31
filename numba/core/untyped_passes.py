@@ -1404,7 +1404,7 @@ class LiteralUnroll(FunctionPass):
 
         # run as subpipeline
         from numba.compiler_machinery import PassManager
-        from numba.typed_passes import PartialTypeInference
+        from numba.core.typed_passes import PartialTypeInference
         pm = PassManager("literal_unroll_subpipeline")
         # get types where possible to help with list->tuple change
         pm.add_pass(PartialTypeInference, "performs partial type inference")

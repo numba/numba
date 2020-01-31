@@ -18,7 +18,7 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
                              RewriteSemanticConstants, GenericRewrites,
                              WithLifting, PreserveIR, InlineClosureLikes)
 
-from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
+from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                 NopythonRewrites, IRLegalization)
 
 from numba.compiler_machinery import FunctionPass, PassManager, register_pass

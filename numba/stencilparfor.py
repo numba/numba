@@ -651,7 +651,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
     from numba.targets.cpu import CPUContext
     from numba.targets.registry import cpu_target
     from numba.core.annotations import type_annotations
-    from numba.typed_passes import type_inference_stage
+    from numba.core.typed_passes import type_inference_stage
 
     # get untyped IR
     stencil_func_ir = sf.kernel_ir.copy()

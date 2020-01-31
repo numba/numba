@@ -10,7 +10,7 @@ from numba.core import types, ir, bytecode
 from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                                   IRProcessing,)
 
-from numba.typed_passes import (NopythonTypeInference, type_inference_stage,
+from numba.core.typed_passes import (NopythonTypeInference, type_inference_stage,
                                 DeadCodeElimination)
 
 # global constant for testing find_const

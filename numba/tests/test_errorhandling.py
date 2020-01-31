@@ -9,11 +9,11 @@ import numpy as np
 
 
 from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
-                                  IRProcessing,)
+                                       IRProcessing,)
 
-from numba.typed_passes import (NopythonTypeInference, DeadCodeElimination,
-                                NativeLowering,
-                                IRLegalization, NoPythonBackend)
+from numba.core.typed_passes import (NopythonTypeInference, DeadCodeElimination,
+                                     NativeLowering, IRLegalization,
+                                     NoPythonBackend)
 
 from numba.compiler_machinery import FunctionPass, PassManager, register_pass
 

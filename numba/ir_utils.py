@@ -1573,7 +1573,7 @@ def compile_to_numba_ir(mk_func, glbls, typingctx=None, arg_typs=None,
     if typingctx and other typing inputs are available and update typemap and
     calltypes.
     """
-    from numba import typed_passes
+    from numba.core import typed_passes
     # mk_func can be actual function or make_function node, or a njit function
     if hasattr(mk_func, 'code'):
         code = mk_func.code

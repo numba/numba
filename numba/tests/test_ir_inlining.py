@@ -22,7 +22,7 @@ from numba.extending import (
 from numba.core.datamodel.models import OpaqueModel
 from numba.targets.cpu import InlineOptions
 from numba.compiler import DefaultPassBuilder
-from numba.typed_passes import DeadCodeElimination, IRLegalization
+from numba.core.typed_passes import DeadCodeElimination, IRLegalization
 from numba.core.untyped_passes import PreserveIR
 from itertools import product
 from numba.tests.support import TestCase, unittest, skip_py38_or_later

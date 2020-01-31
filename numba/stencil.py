@@ -8,8 +8,8 @@ import copy
 import numpy as np
 from llvmlite import ir as lir
 
-from numba import compiler, ir_utils, numpy_support, typed_passes
-from numba.core import types, typing, utils, ir
+from numba import compiler, ir_utils, numpy_support
+from numba.core import types, typing, utils, ir, typed_passes
 from numba import config
 from numba.core.typing.templates import (CallableTemplate, signature,
                                          infer_global, AbstractTemplate)

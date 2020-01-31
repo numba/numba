@@ -23,13 +23,14 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        CanonicalizeLoopEntry, LiteralUnroll,
                                       )
 
-from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
-                                NopythonRewrites, PreParforPass, ParforPass,
-                                DumpParforDiagnostics, IRLegalization,
-                                NoPythonBackend, InlineOverloads)
+from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
+                                     NopythonRewrites, PreParforPass,
+                                     ParforPass, DumpParforDiagnostics,
+                                     IRLegalization, NoPythonBackend,
+                                     InlineOverloads)
 
-from numba.core.object_mode_passes import (ObjectModeFrontEnd, ObjectModeBackEnd,
-                                           CompileInterpMode)
+from numba.core.object_mode_passes import (ObjectModeFrontEnd,
+                                           ObjectModeBackEnd, CompileInterpMode)
 
 
 class Flags(utils.ConfigOptions):
