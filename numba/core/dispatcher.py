@@ -510,7 +510,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         else:
             if file is not None:
                 raise ValueError("`file` must be None if `pretty=True`")
-            from .pretty_annotate import Annotate
+            from numba.core.annotations.pretty_annotate import Annotate
             return Annotate(self, signature=signature, style=style)
 
     def inspect_cfg(self, signature=None, show_wrapper=None):
