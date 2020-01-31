@@ -79,6 +79,7 @@ def transpose_array(a):
 def numpy_transpose_array(a):
     return np.transpose(a)
 
+
 def numpy_transpose_array_axes_kwarg(arr, axes):
     return np.transpose(arr, axes=axes)
 
@@ -102,6 +103,26 @@ def transpose_issue_4708(m, n):
     r_dif = np.transpose(r_dif, (2, 0, 1))
     z = r_dif + 1
     return z
+
+
+def numpy_normalize_axis_list(axis, ndim, argname, allow_duplicate):
+    return normalize_axis_list(axis, ndim)
+
+
+def numpy_normalize_axis_list_argname(axis, ndim, argname, allow_duplicate):
+    return normalize_axis_list(axis, ndim, argname)
+
+
+def numpy_normalize_axis_list_allow_duplicate(axis, ndim, argname, allow_duplicate):
+    return normalize_axis_list(axis, ndim, allow_duplicate=allow_duplicate)
+
+
+def numpy_normalize_axis_list_all_kwarg(axis, ndim, argname, allow_duplicate):
+    return normalize_axis_list(axis, ndim, argname, allow_duplicate)
+
+
+def numpy_moveaxis(a, source, destination):
+    return np.moveaxis(a, source, destination)
 
 
 def squeeze_array(a):
@@ -385,6 +406,147 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             jit(nopython=True)(numpy_transpose_array)((np.array([0, 1]),))
         self.assertIn("np.transpose does not accept tuples",
                         str(e.exception))
+
+    def test_numpy_normalize_axis_list(self):
+        pyfuncs_to_use = [numpy_normalize_axis_list,
+                          numpy_normalize_axis_list_argname,
+                          numpy_normalize_axis_list_allow_duplicate,
+                          numpy_normalize_axis_list_all_kwarg]
+
+        def run(pyfunc, axis, ndim, argname, allow_duplicate):
+            cres = self.ccache.compile(
+                pyfunc,
+                (
+                    typeof(axis), 
+                    typeof(ndim),
+                    typeof(argname),
+                    typeof(allow_duplicate)
+                )
+            )
+            return cres.entry_point(axis, ndim, argname, allow_duplicate)
+
+        def check_py(pyfunc, axis, ndim, argname, allow_duplicate):
+            normalize_axis_tuple = np.core.numeric.normalize_axis_tuple
+            expected = list(normalize_axis_tuple(axis, ndim, argname, allow_duplicate))
+            got = run(pyfunc, axis, ndim, argname, allow_duplicate)
+            self.assertEqual(got, expected)
+
+        check = from_generic(pyfuncs_to_use)(check_py)
+
+        def check_err_invalid_args(pyfunc, axis, ndim, argname, allow_duplicate):
+            with self.assertRaises((TypeError, TypingError)):
+                run(pyfunc, axis, ndim, argname, allow_duplicate)
+
+        params = [
+            (0, 1),
+            (-1, 1),
+            (0, 3),
+            (1, 3),
+            (2, 3),
+            (-1, 3),
+            (-2, 3),
+            (-3, 3),
+            ((0, 1), 2),
+            ((-1, 0), 2),
+            ([1, 0], 2),
+            ([0, -1], 2),
+        ]
+
+        for axis, ndim in params:
+            check(axis, ndim, None, True)
+            check(axis, ndim, None, False)
+
+
+        axis = [0, 0]
+        ndim = 1
+
+        # check allow_duplicates argument
+        check_py(numpy_normalize_axis_list_allow_duplicate, 
+            axis, ndim, None, True)
+        check_py(numpy_normalize_axis_list_all_kwarg, 
+            axis, ndim, None, True)
+
+        check_err_invalid_args(numpy_normalize_axis_list, 1.0, 2, None, True)
+        check_err_invalid_args(numpy_normalize_axis_list, 1, 2.0, None, True)
+        check_err_invalid_args(numpy_normalize_axis_list_argname, 1, 2, 'non literal', True)
+        check_err_invalid_args(numpy_normalize_axis_list_allow_duplicate, 1, 2, None, None)
+
+        # FIXME: Exceptions leak references (#5180)
+        self.disable_leak_check()
+        
+        with self.assertRaises(ValueError) as raises:
+            run(numpy_normalize_axis_list_all_kwarg, 
+                axis, ndim, None, False)
+        self.assertEqual(str(raises.exception),
+                            "repeated axis")
+
+        @njit
+        def check_error_argname(axis, ndim):
+            return normalize_axis_list(axis, ndim, 'test_arg', False)
+
+        with self.assertRaises(ValueError) as raises:
+            check_error_argname(axis, ndim)
+        self.assertEqual(str(raises.exception),
+                            "repeated axis in `test_arg` argument")
+
+    def test_array_moveaxis(self):
+        pyfuncs_to_use = [numpy_moveaxis]
+
+        def run(pyfunc, arr, source, destination):
+            cres = self.ccache.compile(
+                pyfunc, 
+                (typeof(arr), typeof(source), typeof(destination))
+            )
+            return cres.entry_point(arr, source, destination)
+
+        @from_generic(pyfuncs_to_use)
+        def check(pyfunc, arr, source, destination):
+            expected = pyfunc(arr, source, destination)
+            got = run(pyfunc, arr, source, destination)
+            self.assertPreciseEqual(got, expected)
+            self.assertEqual(got.flags.f_contiguous,
+                             expected.flags.f_contiguous)
+            self.assertEqual(got.flags.c_contiguous,
+                             expected.flags.c_contiguous)
+
+        @from_generic(pyfuncs_to_use)
+        def check_err_unequal_length(pyfunc, arr, source, destination):
+            with self.assertRaises(ValueError) as raises:
+                run(pyfunc, arr, source, destination)
+            self.assertEqual(str(raises.exception),
+                             '`source` and `destination` arguments must have '
+                             'the same number of elements')
+
+        @from_generic(pyfuncs_to_use)
+        def check_err_invalid_args(pyfunc, arr, source, destination):
+            with self.assertRaises((TypeError, TypingError)):
+                run(pyfunc, arr, source, destination)
+
+        arr = np.arange(24).reshape(1, 2, 3, 4)
+
+        # run through all permutations with integer arguments
+        for src, dst in [(a, b) for a in range(-4, 4) for b in range(-4, 4)]:
+            check(arr, src, dst)
+
+        # verify list arguments work
+        check(arr, [1, 3], [2, 0])
+
+        # verify tuple arguments work
+        check(arr, (0, 2), (1, 3))
+
+        # check invalid args
+        check_err_invalid_args([[1]], 1, 0)
+        check_err_invalid_args(arr, 1.0, 0)
+        check_err_invalid_args(arr, 0, 1.0)
+        check_err_invalid_args(arr, [1.0], 0)
+        check_err_invalid_args(arr, 0, [1.0])
+        check_err_invalid_args(arr, (1.0), 0)
+        check_err_invalid_args(arr, 0, (1.0))
+
+        # FIXME: Exceptions leak references (#5180)
+        self.disable_leak_check()
+
+        check_err_unequal_length(arr, 1, [1, 2])
 
     def test_expand_dims(self):
         pyfunc = expand_dims
