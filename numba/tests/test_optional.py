@@ -4,8 +4,8 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.core.compiler import compile_isolated, Flags
-from numba import typeof, njit, lowering
-from numba.core import types
+from numba import typeof, njit
+from numba.core import types, lowering
 from numba.tests.support import TestCase
 
 

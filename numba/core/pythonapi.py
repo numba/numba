@@ -7,8 +7,8 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 import ctypes
-from numba import cgutils, lowering, _helperlib
-from numba.core import types, utils, config
+from numba import cgutils, _helperlib
+from numba.core import types, utils, config, lowering
 
 
 PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind

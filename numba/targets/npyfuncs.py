@@ -10,8 +10,8 @@ import math
 from llvmlite.llvmpy import core as lc
 
 from numba.targets.imputils import impl_ret_untracked
-from numba import cgutils, lowering
-from numba.core import typing, types, errors
+from numba import cgutils
+from numba.core import typing, types, errors, lowering
 from numba.targets import npdatetime
 from numba.cpython import cmathimpl, mathimpl, numbers
 

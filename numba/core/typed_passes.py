@@ -1,8 +1,7 @@
 from contextlib import contextmanager
 import warnings
 
-from numba import lowering
-from numba.core import errors, types, typing, ir, funcdesc, rewrites, typeinfer, config
+from numba.core import errors, types, typing, ir, funcdesc, rewrites, typeinfer, config, lowering
 
 from numba.parfor import PreParforPass as _parfor_PreParforPass
 from numba.parfor import ParforPass as _parfor_ParforPass

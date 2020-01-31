@@ -10,8 +10,8 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.ir.values as liv
 
 import numba
-from numba import cgutils, sigutils, lowering, parfor
-from numba.core import types, ir, config, compiler
+from numba import cgutils, sigutils, parfor
+from numba.core import types, ir, config, compiler, lowering
 from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
                             rename_labels, get_name_var_table, visit_vars_inner,

@@ -12,7 +12,7 @@ import llvmlite.llvmpy.core as lc
 from numba import cgutils
 from numba.core import types, utils, ir, generators
 from numba.core.errors import ForbiddenConstruct
-from numba.lowering import BaseLower
+from numba.core.lowering import BaseLower
 
 
 # Issue #475: locals() is unsupported as calling it naively would give
