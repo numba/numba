@@ -4,7 +4,7 @@ import os
 from collections import defaultdict, namedtuple
 
 from numba.core.config import IS_WIN32, IS_OSX
-from numba.findlib import find_lib, find_file
+from numba.misc.findlib import find_lib, find_file
 from numba.cuda.envvars import get_numbapro_envvar
 
 
