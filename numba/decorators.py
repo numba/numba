@@ -193,7 +193,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
         if sigs is not None:
             # Register the Dispatcher to the type inference mechanism,
             # even though the decorator hasn't returned yet.
-            from numba import typeinfer
+            from numba.core import typeinfer
             with typeinfer.register_dispatcher(disp):
                 for sig in sigs:
                     disp.compile(sig)
