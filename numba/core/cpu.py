@@ -8,14 +8,13 @@ from numba import _dynfunc
 from numba.core.callwrapper import PyCallWrapper
 from numba.core.base import BaseContext, PYOBJECT
 from numba.core import (utils, types, config, cgutils, callconv, codegen,
-                        externals)
+                        externals, fastmathpass)
 from numba.core.utils import cached_property
 from numba.targets import intrinsics, dictimpl
 from numba.targets.options import TargetOptions
 from numba.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
 import numba.core.entrypoints
-from numba.targets import fastmathpass
 from numba.core.cpu_options import (ParallelOptions, FastMathOptions,
                                     InlineOptions)
 from numba.cpython import setobj, listobj
