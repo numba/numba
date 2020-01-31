@@ -28,7 +28,8 @@ from numba.core.errors import *
 from numba.core.types import *
 
 # Re-export decorators
-from numba.decorators import cfunc, generated_jit, jit, njit, stencil, jit_module
+from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
+                                   jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
 from numba.npyufunc import vectorize, guvectorize, threading_layer

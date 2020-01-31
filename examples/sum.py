@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 from numba import double
-from numba.decorators import jit as jit
+from numba import jit
 
 def sum2d(arr):
     M, N = arr.shape
