@@ -1,5 +1,4 @@
-from numba import sigutils
-from numba.core import types
+from numba.core import types, sigutils
 from .compiler import (compile_kernel, compile_device, AutoJitHSAKernel,
                        compile_device_template)
 

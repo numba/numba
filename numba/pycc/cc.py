@@ -6,8 +6,7 @@ import shutil
 import sys
 import tempfile
 
-from numba import sigutils
-from numba.core import typing
+from numba.core import typing, sigutils
 from numba.core.compiler_lock import global_compiler_lock
 from numba.pycc.compiler import ModuleCompiler, ExportEntry
 from numba.pycc.platform import Toolchain

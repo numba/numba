@@ -1,5 +1,5 @@
-from numba import ir_utils, sigutils
-from numba.core import types, errors, ir
+from numba import ir_utils
+from numba.core import types, errors, ir, sigutils
 from numba.core.typing.typeof import typeof_impl
 from numba.transforms import find_region_inout_vars
 

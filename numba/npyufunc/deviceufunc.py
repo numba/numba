@@ -11,8 +11,7 @@ import numpy as np
 
 from numba.utils import longint
 from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder, parse_identity
-from numba import sigutils
-from numba.core import types
+from numba.core import types, sigutils
 from numba.core.typing import signature
 from numba.npyufunc.sigparse import parse_signature
 

@@ -12,10 +12,9 @@ import weakref
 from copy import deepcopy
 
 from numba import _dispatcher
-from numba.core import utils, types, errors, typing, serialize, config, compiler
+from numba.core import utils, types, errors, typing, serialize, config, compiler, sigutils
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.typeconv.rules import default_type_manager
-from numba import sigutils
 from numba.core.typing.templates import fold_arguments
 from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
