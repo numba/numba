@@ -714,7 +714,7 @@ def forbid_codegen():
         # XXX use the mock library instead?
         for name in patchpoints:
             parts = name.split('.')
-            obj = numba.core.codegen
+            obj = codegen
             for attrname in parts[:-1]:
                 obj = getattr(obj, attrname)
             attrname = parts[-1]
