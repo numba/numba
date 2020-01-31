@@ -21,7 +21,7 @@ from numba.targets.imputils import (lower_constant, lower_cast, lower_builtin,
 from numba.core.datamodel import register_default, StructModel
 from numba import cgutils
 from numba.core import utils, types
-from numba.pythonapi import (
+from numba.core.pythonapi import (
     PY_UNICODE_1BYTE_KIND,
     PY_UNICODE_2BYTE_KIND,
     PY_UNICODE_4BYTE_KIND,

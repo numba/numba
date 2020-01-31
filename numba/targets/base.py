@@ -16,7 +16,7 @@ from numba.core import types, utils, typing, datamodel, debuginfo, funcdesc
 from numba import cgutils, config
 from numba import _dynfunc, _helperlib
 from numba.core.compiler_lock import global_compiler_lock
-from numba.pythonapi import PythonAPI
+from numba.core.pythonapi import PythonAPI
 from numba.np import arrayobj
 from numba.targets import imputils
 from .imputils import (user_function, user_generator,

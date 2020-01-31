@@ -15,7 +15,7 @@ from numba.targets.imputils import (
     lower_builtin, lower_getattr, lower_getattr_generic,
     lower_setattr, lower_setattr_generic, lower_cast)
 from numba.core.datamodel import models, register_default as register_model
-from numba.pythonapi import box, unbox, reflect, NativeValue
+from numba.core.pythonapi import box, unbox, reflect, NativeValue
 from numba._helperlib import _import_cython_function
 
 
