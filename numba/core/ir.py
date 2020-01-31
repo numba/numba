@@ -9,6 +9,7 @@ import sys
 import operator
 from types import FunctionType, BuiltinFunctionType
 from functools import total_ordering
+from io import StringIO
 
 from numba import config
 from numba.core import errors
@@ -16,7 +17,7 @@ from numba.core.utils import (BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS,
                               UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS)
 from numba.core.errors import (NotDefinedError, RedefinedError,
                                VerificationError, ConstantInferenceError)
-from io import StringIO
+from numba.core import consts
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -1337,7 +1338,6 @@ class FunctionIR(object):
         return '\n'.join(msg)
 
     def _reset_analysis_variables(self):
-        from numba import consts
 
         self._consts = consts.ConstantInference(self)
 

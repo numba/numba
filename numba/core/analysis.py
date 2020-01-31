@@ -6,8 +6,8 @@ from functools import reduce
 from collections import namedtuple, defaultdict
 
 from .controlflow import CFGraph
-from numba import consts, special
-from numba.core import types, errors, ir
+from numba import special
+from numba.core import types, errors, ir, consts
 
 #
 # Analysis related to variable lifetime
