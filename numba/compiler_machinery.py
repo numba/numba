@@ -6,7 +6,7 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.core import errors
 from numba import config, transforms
 from numba.core.utils import add_metaclass
-from numba.tracing import event
+from numba.core.tracing import event
 from numba.core.postproc import PostProcessor
 
 # terminal color markup

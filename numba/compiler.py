@@ -1,7 +1,7 @@
 from collections import namedtuple
 import copy
 import warnings
-from numba.tracing import event
+from numba.core.tracing import event
 
 from numba import config
 from numba.core import utils, errors, typing, interpreter, bytecode, postproc
