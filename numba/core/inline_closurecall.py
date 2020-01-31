@@ -1,8 +1,8 @@
 import types as pytypes  # avoid confusion with numba.types
 import ctypes
 import numba.core.analysis
-from numba.core import utils, types, typing, errors, ir, rewrites
-from numba import config, ir_utils, prange
+from numba.core import utils, types, typing, errors, ir, rewrites, config
+from numba import ir_utils, prange
 from numba.parfor import internal_prange
 from numba.ir_utils import (
     mk_unique_var,

@@ -22,17 +22,19 @@ import warnings
 from contextlib import contextmanager
 
 import numpy as np
-try:
-    import scipy
-except ImportError:
-    scipy = None
 
-from numba import config, numpy_support, testing
-from numba.core import errors, typing, utils
+from numba import numpy_support, testing
+from numba.core import errors, typing, utils, config
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.targets import cpu
 import numba.unittest_support as unittest
 from numba.runtime import rtsys
+
+
+try:
+    import scipy
+except ImportError:
+    scipy = None
 
 
 enable_pyobj_flags = Flags()

@@ -4,8 +4,8 @@ from copy import deepcopy, copy
 import warnings
 
 from numba.core.compiler_machinery import FunctionPass, register_pass
-from numba import config, transforms
-from numba.core import errors, types, ir, bytecode, postproc, rewrites
+from numba import transforms
+from numba.core import errors, types, ir, bytecode, postproc, rewrites, config
 from numba.special import literal_unroll
 from .analysis import dead_branch_prune, rewrite_semantic_constants, find_literally_calls, compute_cfg_from_blocks, compute_use_defs
 from numba.core.inline_closurecall import InlineClosureCallPass, inline_closure_call

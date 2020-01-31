@@ -5,8 +5,7 @@ import weakref
 import collections
 
 import numba
-from numba.core import types, errors, utils
-from numba import config
+from numba.core import types, errors, utils, config
 
 # Exported symbols
 from numba.core.typing.typeof import typeof_impl

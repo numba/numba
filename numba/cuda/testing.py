@@ -1,13 +1,14 @@
 import contextlib
 import sys
 
-from numba import config, unittest_support as unittest
+from numba import unittest_support as unittest
 from numba.tests.support import (
     captured_stdout,
     SerialMixin,
     redirect_c_stdout,
 )
 from numba.cuda.cuda_paths import get_conda_ctk
+from numba.core import config
 
 
 class CUDATestCase(SerialMixin, unittest.TestCase):

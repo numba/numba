@@ -10,7 +10,7 @@ def get_sys_info():
     import platform
     import json
     import multiprocessing
-    from numba import config
+    from numba.core import config
     from numba import cuda as cu
     from numba.cuda import cudadrv
     from numba.cuda.cudadrv.driver import driver as cudriver

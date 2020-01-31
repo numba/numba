@@ -13,7 +13,7 @@ from numba import jit, njit, typeof
 from numba.core import types
 from numba.numpy_support import numpy_version
 from numba.core.errors import TypingError
-from numba.config import IS_WIN32, IS_32BITS
+from numba.core.config import IS_WIN32, IS_32BITS
 from numba.core.utils import pysignature
 from numba.targets.arraymath import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,

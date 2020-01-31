@@ -3,11 +3,10 @@ Python wrapper that connects CPython interpreter to the numba dictobject.
 """
 from collections.abc import MutableMapping
 
-from numba import config
 from numba.core.types import DictType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
 from numba import njit, dictobject, cgutils, typeof
-from numba.core import types, errors
+from numba.core import types, errors, config
 from numba.extending import (
     overload_method,
     overload,

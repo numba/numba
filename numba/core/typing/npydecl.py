@@ -3,8 +3,7 @@ import warnings
 import numpy as np
 import operator
 
-from numba.core import types, utils
-from numba import config
+from numba.core import types, utils, config
 from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
                                          CallableTemplate, Registry, signature)
 

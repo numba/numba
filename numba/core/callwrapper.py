@@ -1,8 +1,8 @@
 from llvmlite.llvmpy.core import Type, Builder, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba.core import types
-from numba import cgutils, config
+from numba.core import types, config
+from numba import cgutils
 
 
 class _ArgManager(object):

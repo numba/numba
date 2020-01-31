@@ -11,7 +11,7 @@ import llvmlite.ir.values as liv
 
 import numba
 from numba import compiler, cgutils, sigutils, lowering, parfor
-from numba.core import types, ir
+from numba.core import types, ir, config
 from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
                             rename_labels, get_name_var_table, visit_vars_inner,
@@ -22,7 +22,6 @@ from numba.ir_utils import (add_offset_to_labels, replace_var_names,
 from numba.core.analysis import (compute_use_defs, compute_live_map,
                             compute_dead_maps, compute_cfg_from_blocks)
 from numba.core.typing import signature
-from numba import config
 from numba.targets.cpu import ParallelOptions
 from numba.parfor import print_wrapped, ensure_parallel_support
 from numba.core.errors import NumbaParallelSafetyWarning

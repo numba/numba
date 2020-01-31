@@ -2,10 +2,11 @@ import numpy as np
 
 from numba.compiler import compile_isolated, DEFAULT_FLAGS
 from numba.cuda.testing import SerialMixin
-from numba import typeof, config, cuda, njit
+from numba import typeof, cuda, njit
 from numba.core.types import float64
 from numba import unittest_support as unittest
 from numba.tests.support import MemoryLeakMixin, override_env_config
+from numba.core import config
 
 BOUNDSCHECK_FLAGS = DEFAULT_FLAGS.copy()
 BOUNDSCHECK_FLAGS.set('boundscheck', True)

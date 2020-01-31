@@ -7,9 +7,8 @@ import numba
 from numba import compiler
 from numba.compiler import compile_isolated, Flags
 from numba.targets import cpu
-from numba.core import types, typing, ir
+from numba.core import types, typing, ir, config
 from numba.targets.registry import cpu_target
-from numba import config
 from numba.core.annotations import type_annotations
 from numba.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table, remove_dels, remove_dead,

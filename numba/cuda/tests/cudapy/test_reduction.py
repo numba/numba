@@ -1,7 +1,7 @@
 import numpy as np
 from numba import cuda
 from numba import unittest_support as unittest
-from numba.config import ENABLE_CUDASIM
+from numba.core.config import ENABLE_CUDASIM
 from numba.cuda.testing import SerialMixin
 
 # Avoid recompilation of the sum_reduce function by keeping it at global scope

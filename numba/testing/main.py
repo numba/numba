@@ -16,7 +16,7 @@ from io import StringIO
 from unittest import result, runner, signals, suite, loader, case
 
 from .loader import TestLoader
-from numba import config
+from numba.core import config
 
 try:
     from multiprocessing import TimeoutError

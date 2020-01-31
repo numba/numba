@@ -8,12 +8,13 @@ import re
 from itertools import chain, combinations
 
 import numba
+from numba.core import config
 from numba import prange, njit, unittest_support as unittest
 from numba.targets import cpu
 from numba.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase, tag, override_env_config
 
-needs_svml = unittest.skipUnless(numba.config.USING_SVML,
+needs_svml = unittest.skipUnless(config.USING_SVML,
                                  "SVML tests need SVML to be present")
 
 # a map of float64 vector lenghs with corresponding CPU architecture
@@ -113,7 +114,7 @@ def func_patterns(func, args, res, dtype, mode, vlen, flags, pad=' '*8):
     v = vlen*2 if is_f32 else vlen
     # general expectations
     prec_suff = '' if getattr(flags, 'fastmath', False) else '_ha'
-    scalar_func = '$_'+f if numba.config.IS_OSX else '$'+f
+    scalar_func = '$_'+f if config.IS_OSX else '$'+f
     svml_func = '__svml_%s%d%s,' % (f, v, prec_suff)
     if mode == "scalar":
         contains = [scalar_func]
@@ -331,7 +332,7 @@ class TestSVML(TestCase):
 
     def test_scalar_context(self):
         # SVML will not be used.
-        pat = '$_sin' if numba.config.IS_OSX else '$sin'
+        pat = '$_sin' if config.IS_OSX else '$sin'
         self.check(math_sin_scalar, 7., std_pattern=pat)
         self.check(math_sin_scalar, 7., fast_pattern=pat)
 

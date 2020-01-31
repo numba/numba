@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from numba import config
+from numba.core import config
 
 
 class Rewrite(object):

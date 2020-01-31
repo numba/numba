@@ -12,11 +12,11 @@ import operator
 import numpy as np
 
 import numba
-from numba.core import types, ir, rewrites
+from numba.core import types, ir, rewrites, config
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.core.typing import signature
 from numba.core import  utils, typing
-from numba import ir_utils, config
+from numba import ir_utils
 from numba.ir_utils import (get_call_table, mk_unique_var,
                             compile_to_numba_ir, replace_arg_nodes, guard,
                             find_callname, require, find_const, GuardException)
@@ -681,7 +681,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
             lifted_from=None,
             args=tp.state.args,
             return_type=tp.state.return_type,
-            html_output=numba.config.HTML)
+            html_output=config.HTML)
 
     # make block labels unique
     stencil_blocks = ir_utils.add_offset_to_labels(stencil_blocks,

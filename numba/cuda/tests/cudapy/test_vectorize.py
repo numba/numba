@@ -5,7 +5,7 @@ from numba import cuda, int32, float32, float64
 from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim
 from numba.cuda.testing import CUDATestCase
-from numba import config
+from numba.core import config
 
 sig = [int32(int32, int32),
        float32(float32, float32),

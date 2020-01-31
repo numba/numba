@@ -8,7 +8,7 @@ import contextlib
 import os
 import sys
 import warnings
-import numba
+import numba.core.config
 import numpy as np
 from collections import defaultdict
 from numba.core.utils import add_metaclass, reraise, chain_exception
@@ -280,7 +280,7 @@ else:
     def termcolor():
         global _termcolor_inst
         if _termcolor_inst is None:
-            scheme = themes[numba.config.COLOR_SCHEME]
+            scheme = themes[numba.core.config.COLOR_SCHEME]
             _termcolor_inst = HighlightColorScheme(scheme)
         return _termcolor_inst
 
@@ -718,7 +718,7 @@ def new_error_context(fmt_, *args, **kwargs):
     except Exception as e:
         newerr = errcls(e).add_context(_format_msg(fmt_, args, kwargs))
         from numba import config
-        tb = sys.exc_info()[2] if config.FULL_TRACEBACKS else None
+        tb = sys.exc_info()[2] if numba.core.config.FULL_TRACEBACKS else None
         reraise(type(newerr), newerr, tb)
 
 

@@ -17,8 +17,7 @@ from contextlib import contextmanager
 from collections import defaultdict, deque
 from functools import total_ordering
 from numba import mviewbuf
-from numba.core import utils
-from numba import config
+from numba.core import utils, config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
 from numba.roc.hsadrv import enums, enums_ext, drvapi
 from numba.core.utils import longint as long

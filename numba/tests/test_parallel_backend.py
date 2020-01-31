@@ -13,8 +13,6 @@ import threading
 
 import numpy as np
 
-from numba import config
-
 from numba import unittest_support as unittest
 from numba import jit, vectorize, guvectorize
 
@@ -23,6 +21,7 @@ from numba.tests.support import (temp_directory, override_config, TestCase, tag,
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
+from numba.core import config
 
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 

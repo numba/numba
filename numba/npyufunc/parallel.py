@@ -24,8 +24,7 @@ import llvmlite.binding as ll
 
 from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
-from numba import config
-from numba.core import types
+from numba.core import types, config
 from numba.npyufunc.wrappers import _wrapper_info
 
 

@@ -2,7 +2,7 @@
 Target Options
 """
 
-from .. import config
+from numba.core import config
 
 class TargetOptions(object):
     OPTIONS = {}

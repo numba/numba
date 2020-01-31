@@ -19,11 +19,12 @@ from numba.misc.appdirs import AppDirs
 from numba.core.utils import add_metaclass, file_replace
 
 import numba
-from numba import compiler, config
+from numba import compiler
 from numba.core.errors import NumbaWarning
 from numba.targets.base import BaseContext
 from numba.targets.codegen import CodeLibrary
 from numba.compiler import CompileResult
+from numba.core import config
 
 
 def _get_codegen(obj):

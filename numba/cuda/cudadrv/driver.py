@@ -28,12 +28,11 @@ import numpy as np
 from collections import namedtuple, deque
 
 from numba import mviewbuf
-from numba.core import utils, errors, serialize
+from numba.core import utils, errors, serialize, config
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size
 from numba.cuda.cudadrv import enums, drvapi, _extras
-from numba import config
 from numba.core.utils import longint as long
 from numba.cuda.envvars import get_numba_envvar
 

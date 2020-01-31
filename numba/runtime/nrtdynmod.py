@@ -3,7 +3,7 @@ Dynamically generate the NRT module
 """
 
 
-from numba.config import MACHINE_BITS
+from numba.core.config import MACHINE_BITS
 from numba import cgutils
 from numba.core import types
 from llvmlite import ir, binding

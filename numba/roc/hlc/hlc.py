@@ -7,14 +7,13 @@ import tempfile
 import os
 import re
 from collections import namedtuple
-from numba import config
 from numba.roc.hsadrv import devices
 from .common import AMDGCNModule
 from .config import ROCM_BC_PATH
 from numba.roc.hlc import TRIPLE
 from datetime import datetime
 from contextlib import contextmanager
-from numba.core import utils
+from numba.core import utils, config
 from numba.roc.hsadrv.error import HsaSupportError
 
 _real_check_call = check_call

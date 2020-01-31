@@ -9,7 +9,7 @@ from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import numpy_support
 from numba.core import utils, types
-from numba.config import IS_WIN32, IS_32BITS
+from numba.core.config import IS_WIN32, IS_32BITS
 from numba.tests.support import TestCase, CompilationCache, tag
 
 enable_pyobj_flags = Flags()

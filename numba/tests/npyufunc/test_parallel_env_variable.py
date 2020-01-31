@@ -1,7 +1,7 @@
 from numba import unittest_support as unittest
 from numba.npyufunc.parallel import get_thread_count
 from os import environ as env
-from numba import config
+from numba.core import config
 
 
 class TestParallelEnvVariable(unittest.TestCase):

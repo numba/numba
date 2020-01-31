@@ -9,8 +9,7 @@ import functools
 
 from llvmlite import ir
 
-from numba.core import utils, types
-from numba import config
+from numba.core import utils, types, config
 import numba.core.datamodel
 
 

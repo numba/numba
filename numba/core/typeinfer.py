@@ -21,8 +21,7 @@ from pprint import pprint
 from collections import OrderedDict, defaultdict
 from functools import reduce
 
-from numba import config
-from numba.core import types, utils, typing, ir
+from numba.core import types, utils, typing, ir, config
 from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,

@@ -11,7 +11,7 @@ from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 
-from numba import config
+from numba.core import config
 from numba.testing import _runtests as runtests
 from numba.core import types, errors
 

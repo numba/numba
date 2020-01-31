@@ -12,9 +12,9 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import config, jit, vectorize, numpy_support
+from numba import jit, vectorize, numpy_support
 from numba.numpy_support import numpy_version
-from numba.core import types
+from numba.core import types, config
 from numba.core.errors import TypingError
 from numba.tests.support import TestCase, tag
 from numba.np import npdatetime

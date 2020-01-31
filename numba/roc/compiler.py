@@ -7,7 +7,7 @@ import numpy as np
 
 from numba.core.typing.templates import ConcreteTemplate
 from numba import compiler
-from numba.core import types
+from numba.core import types, config
 from .hlc import hlc
 from .hsadrv import devices, driver, enums, drvapi
 from .hsadrv.error import HsaKernelLaunchError
@@ -15,7 +15,6 @@ from numba.roc import gcn_occupancy
 from numba.roc.hsadrv.driver import hsa, dgpu_present
 from .hsadrv import devicearray
 from numba.core.typing.templates import AbstractTemplate
-from numba import config
 from numba.core.compiler_lock import global_compiler_lock
 
 @global_compiler_lock

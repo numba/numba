@@ -9,9 +9,9 @@ import threading
 
 from llvmlite import ir
 
-from numba import config
 from .error import NvvmError, NvvmSupportError
 from .libs import get_libdevice, open_libdevice, open_cudalib
+from numba.core import config
 
 
 logger = logging.getLogger(__name__)

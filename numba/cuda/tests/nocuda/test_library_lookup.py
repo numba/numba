@@ -3,7 +3,7 @@ import os
 import multiprocessing as mp
 import warnings
 
-from numba.config import IS_WIN32, IS_OSX
+from numba.core.config import IS_WIN32, IS_OSX
 from numba.core.errors import NumbaWarning
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.testing import (

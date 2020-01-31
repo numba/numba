@@ -4,10 +4,10 @@ import platform
 import llvmlite.binding as ll
 import llvmlite.llvmpy.core as lc
 
-from numba import _dynfunc, config
+from numba import _dynfunc
 from numba.core.callwrapper import PyCallWrapper
 from numba.targets.base import BaseContext, PYOBJECT
-from numba.core import utils, types
+from numba.core import utils, types, config
 from numba import cgutils
 from numba.core.utils import cached_property
 from numba.targets import callconv, codegen, externals, intrinsics, dictimpl

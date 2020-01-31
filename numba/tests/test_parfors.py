@@ -23,9 +23,8 @@ from numba import unittest_support as unittest
 from numba import njit, prange, stencil
 from numba import compiler
 from numba.targets import cpu
-from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall
+from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall, config
 from numba.targets.registry import cpu_target
-from numba import config
 from numba.core.annotations import type_annotations
 from numba.ir_utils import (find_callname, guard, build_definitions,
                             get_definition, is_getitem, is_setitem,
