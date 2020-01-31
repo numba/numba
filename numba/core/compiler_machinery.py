@@ -3,8 +3,7 @@ from abc import abstractmethod, ABCMeta
 from collections import namedtuple, OrderedDict
 import inspect
 from numba.core.compiler_lock import global_compiler_lock
-from numba.core import errors, config
-from numba import transforms
+from numba.core import errors, config, transforms
 from numba.core.utils import add_metaclass
 from numba.core.tracing import event
 from numba.core.postproc import PostProcessor

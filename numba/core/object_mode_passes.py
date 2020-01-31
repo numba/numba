@@ -1,7 +1,6 @@
 from contextlib import contextmanager
 import warnings
-from numba import transforms
-from numba.core import errors, types, typing, funcdesc, config, pylowering
+from numba.core import errors, types, typing, funcdesc, config, pylowering, transforms
 from numba.core.compiler_machinery import FunctionPass, LoweringPass, register_pass
 from collections import defaultdict
 
