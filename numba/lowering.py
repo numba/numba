@@ -6,12 +6,11 @@ from functools import partial
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from numba import _dynfunc, cgutils, config, funcdesc, generators, ir_utils
-from numba.core import typing, utils, types, ir
+from numba.core import typing, utils, types, ir, debuginfo
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                      LiteralTypingError)
 from .targets import removerefctpass
 from .funcdesc import default_mangler
-from numba import debuginfo
 
 
 class Environment(_dynfunc.Environment):
