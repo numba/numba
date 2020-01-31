@@ -4,7 +4,7 @@ NRT specific optimizations
 import re
 from collections import defaultdict, deque
 from llvmlite import binding as ll
-from numba import cgutils
+from numba.core import cgutils
 
 _regex_incref = re.compile(r'\s*(?:tail)?\s*call void @NRT_incref\((.*)\)')
 _regex_decref = re.compile(r'\s*(?:tail)?\s*call void @NRT_decref\((.*)\)')

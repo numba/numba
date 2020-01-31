@@ -4,8 +4,7 @@ from llvmlite.llvmpy import core as lc
 from llvmlite import ir as llvmir
 from llvmlite import binding as ll
 
-from numba import cgutils
-from numba.core import typing, types, utils, datamodel
+from numba.core import typing, types, utils, datamodel, cgutils
 from numba.core.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv

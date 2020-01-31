@@ -8,8 +8,8 @@ import operator
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import cgutils, numpy_support
-from numba.core import types
+from numba import numpy_support
+from numba.core import types, cgutils
 from numba.targets.imputils import (lower_builtin, lower_constant,
                                     impl_ret_untracked)
 from numba.np import npdatetime

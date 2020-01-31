@@ -7,8 +7,7 @@ import itertools
 
 from llvmlite import ir as ir
 
-from numba import cgutils
-from numba.core import types
+from numba.core import types, cgutils
 from numba.targets.base import PYOBJECT, GENERIC_POINTER
 
 

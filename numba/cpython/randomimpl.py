@@ -15,8 +15,8 @@ from numba.extending import overload, register_jitable
 from numba.targets.imputils import (Registry, impl_ret_untracked,
                                     impl_ret_new_ref)
 from numba.core.typing import signature
-from numba import _helperlib, cgutils
-from numba.core import types, utils
+from numba import _helperlib
+from numba.core import types, utils, cgutils
 from numba.np import arrayobj
 
 POST_PY38 = utils.PYVERSION >= (3, 8)

@@ -14,8 +14,8 @@ from numba.core.types import ListType, TypeRef
 from numba.targets.imputils import numba_typeref_ctor
 from numba import listobject
 from numba.core.dispatcher import Dispatcher
-from numba.core import types, errors, config
-from numba import njit, cgutils, typeof
+from numba.core import types, errors, config, cgutils
+from numba import njit, typeof
 from numba.extending import (
     overload_method,
     overload,

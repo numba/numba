@@ -10,13 +10,11 @@ from llvmlite import ir
 import numpy as np
 import operator
 
-from numba import cgutils
-
 from numba.targets.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
 from numba.extending import overload, register_jitable
-from numba.core import types
+from numba.core import types, cgutils
 from numba.core.errors import TypingError
 from numba import numpy_support as np_support
 from .arrayobj import make_array, _empty_nd_impl, array_copy

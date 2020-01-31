@@ -4,8 +4,7 @@ Dynamically generate the NRT module
 
 
 from numba.core.config import MACHINE_BITS
-from numba import cgutils
-from numba.core import types
+from numba.core import types, cgutils
 from llvmlite import ir, binding
 
 # Flag to enable debug print in NRT_incref and NRT_decref

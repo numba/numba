@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 
 
-from numba import njit, cfunc, cgutils
+from numba import njit, cfunc
 from numba.tests.support import TestCase, unittest
+from numba.core import cgutils
 
 unicode_name1 = u"""
 def unicode_name1(ಠ_ರೃ, ಠਊಠ):

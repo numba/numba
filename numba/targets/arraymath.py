@@ -12,8 +12,8 @@ import numpy as np
 
 import llvmlite.llvmpy.core as lc
 
-from numba import cgutils, generated_jit
-from numba.core import types
+from numba import generated_jit
+from numba.core import types, cgutils
 from numba.extending import overload, overload_method, register_jitable
 from numba.numpy_support import as_dtype, type_can_asarray
 from numba.numpy_support import numpy_version

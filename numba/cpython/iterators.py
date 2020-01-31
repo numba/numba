@@ -2,8 +2,7 @@
 Implementation of various iterable and iterator types.
 """
 
-from numba.core import types
-from numba import cgutils
+from numba.core import types, cgutils
 from numba.targets.imputils import (
     lower_builtin, iternext_impl, call_iternext, call_getiter,
     impl_ret_borrowed, impl_ret_new_ref, RefType)

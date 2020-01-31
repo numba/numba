@@ -9,8 +9,7 @@ import operator
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import cgutils
-from numba.core import types, utils, ir, generators
+from numba.core import types, utils, ir, generators, cgutils
 from numba.core.errors import ForbiddenConstruct
 from numba.core.lowering import BaseLower
 

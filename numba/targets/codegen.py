@@ -9,8 +9,7 @@ import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
-from numba.core import utils, config
-from numba import cgutils
+from numba.core import utils, config, cgutils
 from numba.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock

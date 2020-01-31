@@ -5,8 +5,10 @@ import re
 import numpy as np
 
 from numba.core import errors, types, utils
+
+
 # re-export
-from numba.cgutils import is_nonelike   # noqa: F401
+from numba.core.cgutils import is_nonelike   # noqa: F401
 
 
 numpy_version = tuple(map(int, np.__version__.split('.')[:2]))

@@ -4,8 +4,8 @@ Boxing and unboxing of native Numba values to / from CPython objects.
 
 from llvmlite import ir
 
-from numba import cgutils, numpy_support
-from numba.core import types
+from numba import numpy_support
+from numba.core import types, cgutils
 from numba.core.pythonapi import box, unbox, reflect, NativeValue
 
 from numba.cpython import setobj, listobj

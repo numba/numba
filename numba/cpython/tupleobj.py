@@ -10,8 +10,7 @@ from numba.targets.imputils import (lower_builtin, lower_getattr_generic,
                                     lower_cast, lower_constant, iternext_impl,
                                     impl_ret_borrowed, impl_ret_untracked,
                                     RefType)
-from numba.core import typing, types
-from numba import cgutils
+from numba.core import typing, types, cgutils
 from numba.extending import overload_method, overload, intrinsic
 
 

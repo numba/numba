@@ -1,7 +1,6 @@
 from collections import deque
 
-from numba import cgutils
-from numba.core import types
+from numba.core import types, cgutils
 
 
 

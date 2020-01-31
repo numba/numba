@@ -1,7 +1,6 @@
 import operator
 
-from numba.core import types, typing
-from numba import cgutils
+from numba.core import types, typing, cgutils
 
 from numba.targets.imputils import (lower_cast, lower_builtin,
                                     lower_getattr_generic, impl_ret_untracked,

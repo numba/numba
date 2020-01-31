@@ -2,8 +2,7 @@
 This file implements print functionality for the CPU.
 """
 from llvmlite.llvmpy.core import Type
-from numba.core import types, typing
-from numba import cgutils
+from numba.core import types, typing, cgutils
 from numba.targets.imputils import Registry, impl_ret_untracked
 
 registry = Registry()

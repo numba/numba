@@ -7,8 +7,7 @@ import llvmlite.binding as ll
 from llvmlite import ir
 
 from numba.targets.imputils import Registry
-from numba import cgutils
-from numba.core import types
+from numba.core import types, cgutils
 from numba.core.itanium_mangler import mangle_c, mangle, mangle_type
 from numba.roc import target
 from numba.roc import stubs

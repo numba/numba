@@ -6,8 +6,8 @@ import operator
 
 import llvmlite.llvmpy.core as lc
 
-from numba import cgutils, prange
-from numba.core import types
+from numba import prange
+from numba.core import types, cgutils
 from numba.cpython.listobj import ListIterInstance
 from numba.np.arrayobj import make_array
 from numba.targets.imputils import (lower_builtin, lower_cast,

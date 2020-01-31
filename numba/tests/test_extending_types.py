@@ -3,8 +3,7 @@ Test extending types via the numba.extending.* API.
 """
 
 from numba import njit
-from numba.core import types
-from numba import cgutils
+from numba.core import types, cgutils
 from numba.core.errors import TypingError
 from numba.extending import lower_builtin
 from numba.extending import models, register_model

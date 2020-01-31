@@ -14,8 +14,8 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import cgutils, extending, pndindex
-from numba.core import types, utils, typing, errors
+from numba import extending, pndindex
+from numba.core import types, utils, typing, errors, cgutils
 from numba.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                  is_fortran)
 from numba.numpy_support import type_can_asarray, is_nonelike

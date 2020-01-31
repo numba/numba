@@ -7,8 +7,7 @@ import math
 import operator
 
 from llvmlite import ir
-from numba import cgutils
-from numba.core import types, typing, errors
+from numba.core import types, typing, errors, cgutils
 from numba.targets.imputils import (lower_builtin, lower_cast,
                                     iternext_impl, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked,

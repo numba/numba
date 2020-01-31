@@ -224,7 +224,7 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
     from numba.core.datamodel import default_manager
     from numba.core.datamodel.models import StructModel
     from numba.targets.imputils import impl_ret_borrowed
-    from numba import cgutils
+    from numba.core import cgutils
 
     if not isinstance(typeclass, type) or not issubclass(typeclass, types.Type):
         raise TypeError("typeclass should be a Type subclass, got %s"

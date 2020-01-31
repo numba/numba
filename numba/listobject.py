@@ -7,7 +7,6 @@ from enum import IntEnum
 
 from llvmlite import ir
 
-from numba import cgutils
 from numba import _helperlib
 
 from numba.extending import (
@@ -20,7 +19,7 @@ from numba.extending import (
     lower_builtin,
 )
 from numba.targets.imputils import iternext_impl
-from numba.core import types
+from numba.core import types, cgutils
 from numba.core.types import (
     ListType,
     ListTypeIterableType,
