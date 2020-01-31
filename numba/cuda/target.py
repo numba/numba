@@ -6,7 +6,7 @@ import llvmlite.binding as ll
 
 from numba.core import typing, types, dispatcher, debuginfo, itanium_mangler, cgutils
 from numba.core.utils import cached_property
-from numba.targets.base import BaseContext
+from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
 from numba.core.typing import cmathdecl
 

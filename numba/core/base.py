@@ -18,7 +18,7 @@ from numba.core.compiler_lock import global_compiler_lock
 from numba.core.pythonapi import PythonAPI
 from numba.np import arrayobj
 from numba.targets import imputils
-from .imputils import (user_function, user_generator,
+from numba.targets.imputils import (user_function, user_generator,
                        builtin_registry, impl_ret_borrowed,
                        RegistryLoader)
 from numba.cpython import builtins

@@ -2,7 +2,7 @@ from itertools import product, permutations
 from collections import defaultdict
 
 import numba.unittest_support as unittest
-from numba.targets.base import OverloadSelector
+from numba.core.base import OverloadSelector
 from numba.targets.registry import cpu_target
 from numba.targets.imputils import builtin_registry, RegistryLoader
 from numba.core import types
