@@ -13,7 +13,7 @@ from types import MethodType, FunctionType
 import numba
 from numba.core import types, utils
 from numba.core.errors import TypingError, InternalError
-from numba.targets.cpu_options import InlineOptions
+from numba.core.cpu_options import InlineOptions
 
 # info store for inliner callback functions e.g. cost model
 _inline_info = namedtuple('inline_info',

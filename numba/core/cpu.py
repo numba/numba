@@ -15,8 +15,8 @@ from numba.runtime import rtsys
 from numba.core.compiler_lock import global_compiler_lock
 import numba.core.entrypoints
 from numba.targets import fastmathpass
-from numba.targets.cpu_options import (ParallelOptions, FastMathOptions,
-                                       InlineOptions)
+from numba.core.cpu_options import (ParallelOptions, FastMathOptions,
+                                    InlineOptions)
 from numba.cpython import setobj, listobj
 
 
