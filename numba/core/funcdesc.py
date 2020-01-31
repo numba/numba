@@ -5,8 +5,7 @@ Function descriptors.
 from collections import defaultdict
 import sys
 
-from numba import itanium_mangler
-from numba.core import types
+from numba.core import types, itanium_mangler
 from numba.core.utils import _dynamic_modname, _dynamic_module
 
 

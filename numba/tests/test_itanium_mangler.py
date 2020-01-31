@@ -3,9 +3,9 @@
 import re
 
 from numba import unittest_support as unittest
-from numba import itanium_mangler
 from numba import int32, int64, uint32, uint64, float32, float64
 from numba.core.types import range_iter32_type
+from numba.core import itanium_mangler
 
 
 class TestItaniumManager(unittest.TestCase):

@@ -4,14 +4,13 @@ from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba.core import typing, types, dispatcher, debuginfo
+from numba.core import typing, types, dispatcher, debuginfo, itanium_mangler
 from numba import cgutils
 from numba.core.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
 from numba.core.typing import cmathdecl
 
-from numba import itanium_mangler
 from .cudadrv import nvvm
 from numba.cuda import codegen, nvvmutils
 from .decorators import jitdevice
