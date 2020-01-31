@@ -12,7 +12,7 @@ import operator
 import numpy as np
 
 import numba
-from numba.core import types, ir
+from numba.core import types, ir, rewrites
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.core.typing import signature
 from numba.core import  utils, typing
@@ -668,8 +668,7 @@ def get_stencil_ir(sf, typingctx, args, scope, loc, input_dict, typemap,
     with cpu_target.nested_context(typingctx, targetctx):
         tp = DummyPipeline(typingctx, targetctx, args, stencil_func_ir)
 
-        numba.rewrites.rewrite_registry.apply(
-            'before-inference', tp.state)
+        rewrites.rewrite_registry.apply('before-inference', tp.state)
 
         tp.state.typemap, tp.state.return_type, tp.state.calltypes = type_inference_stage(
             tp.state.typingctx, tp.state.func_ir, tp.state.args, None)

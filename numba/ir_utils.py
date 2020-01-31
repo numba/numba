@@ -13,8 +13,8 @@ import warnings
 from llvmlite import ir as lir
 
 import numba
-from numba.core import types, utils, typing, ir, analysis, postproc
-from numba import config, cgutils, rewrites
+from numba.core import types, utils, typing, ir, analysis, postproc, rewrites
+from numba import config, cgutils
 from numba.core.typing.templates import (signature, infer_global,
                                          AbstractTemplate)
 from numba.targets.imputils import impl_ret_untracked

@@ -23,7 +23,7 @@ from numba import unittest_support as unittest
 from numba import njit, prange, stencil, inline_closurecall
 from numba import compiler, typed_passes
 from numba.targets import cpu
-from numba.core import types, utils, typing, errors, ir
+from numba.core import types, utils, typing, errors, ir, rewrites
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.core.annotations import type_annotations
@@ -311,7 +311,7 @@ def get_optimized_numba_ir(test_func, args, **kws):
                                                                typed=True)
         inline_pass.run()
 
-        numba.rewrites.rewrite_registry.apply('before-inference', tp.state)
+        rewrites.rewrite_registry.apply('before-inference', tp.state)
 
         tp.state.typemap, tp.state.return_type, tp.state.calltypes = \
         typed_passes.type_inference_stage(tp.state.typingctx, tp.state.func_ir,
@@ -335,7 +335,7 @@ def get_optimized_numba_ir(test_func, args, **kws):
             swapped=diagnostics.replaced_fns)
         preparfor_pass.run()
 
-        numba.rewrites.rewrite_registry.apply('after-inference', tp.state)
+        rewrites.rewrite_registry.apply('after-inference', tp.state)
 
         flags = compiler.Flags()
         parfor_pass = numba.parfor.ParforPass(

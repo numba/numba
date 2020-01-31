@@ -3,8 +3,8 @@ import collections
 
 import numpy as np
 from numba.compiler import compile_isolated, run_frontend, Flags, StateDict
-from numba import rewrites, jit, ir_utils, njit
-from numba.core import types, errors, ir
+from numba import jit, ir_utils, njit
+from numba.core import types, errors, ir, rewrites
 from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
 
 from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
