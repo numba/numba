@@ -12,7 +12,7 @@ from numba import njit, gdb, gdb_init, gdb_breakpoint, prange
 from numba.core import errors
 from numba import jit
 from numba import unittest_support as unittest
-from numba.targets.gdb_hook import _confirm_gdb
+from numba.misc.gdb_hook import _confirm_gdb
 
 from numba.tests.support import (TestCase, captured_stdout, tag, skip_parfors_unsupported)
 
