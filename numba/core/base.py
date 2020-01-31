@@ -269,12 +269,12 @@ class BaseContext(object):
         Useful for third-party extensions.
         """
         # Populate built-in registry
-        from numba.targets import (arraymath, polynomial)
+        from numba.targets import arraymath
         from numba.cpython import (slicing, tupleobj, enumimpl, hashing, heapq,
                                    iterators, numbers, rangeobj)
         from numba.core import optional
         from numba.misc import gdb_hook, literal
-        from numba.np import linalg
+        from numba.np import linalg, polynomial
 
         try:
             from numba.targets import npdatetime
