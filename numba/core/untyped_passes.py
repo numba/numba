@@ -8,7 +8,7 @@ from numba import config, transforms
 from numba.core import errors, types, ir, bytecode, postproc, rewrites
 from numba.special import literal_unroll
 from .analysis import dead_branch_prune, rewrite_semantic_constants, find_literally_calls, compute_cfg_from_blocks, compute_use_defs
-from numba.inline_closurecall import InlineClosureCallPass, inline_closure_call
+from numba.core.inline_closurecall import InlineClosureCallPass, inline_closure_call
 from numba.ir_utils import guard, resolve_func_from_module, simplify_CFG, GuardException, convert_code_obj_to_function, mk_unique_var, build_definitions, replace_var_names, get_name_var_table, compile_to_numba_ir, get_definition, find_max_label, rename_labels
 from numba.core import interpreter
 
@@ -305,7 +305,7 @@ class InlineInlinables(FunctionPass):
         return True
 
     def _do_work(self, state, work_list, block, i, expr):
-        from numba.inline_closurecall import (inline_closure_call,
+        from numba.core.inline_closurecall import (inline_closure_call,
                                               callee_ir_validator)
         from numba.compiler import run_frontend
         from numba.targets.cpu import InlineOptions

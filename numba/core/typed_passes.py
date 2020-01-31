@@ -597,7 +597,7 @@ class InlineOverloads(FunctionPass):
         self, state, inline_type, sig, template, arg_typs, expr, i, impl, block,
         work_list, is_method,
     ):
-        from numba.inline_closurecall import (inline_closure_call,
+        from numba.core.inline_closurecall import (inline_closure_call,
                                               callee_ir_validator)
 
         do_inline = True

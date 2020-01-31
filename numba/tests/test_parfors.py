@@ -20,10 +20,10 @@ from collections import defaultdict
 
 import numba
 from numba import unittest_support as unittest
-from numba import njit, prange, stencil, inline_closurecall
+from numba import njit, prange, stencil
 from numba import compiler
 from numba.targets import cpu
-from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes
+from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall
 from numba.targets.registry import cpu_target
 from numba import config
 from numba.core.annotations import type_annotations

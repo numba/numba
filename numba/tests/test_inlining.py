@@ -9,7 +9,7 @@ from numba import jit, njit, compiler
 from numba.core import types, ir, postproc
 from numba.ir_utils import guard, find_callname, find_const, get_definition
 from numba.targets.registry import CPUDispatcher
-from numba.inline_closurecall import inline_closure_call
+from numba.core.inline_closurecall import inline_closure_call
 
 from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,

@@ -1346,7 +1346,7 @@ class PreParforPass(object):
         The implementation code is inlined to enable more optimization.
         """
         swapped = self.swapped
-        from numba.inline_closurecall import inline_closure_call
+        from numba.core.inline_closurecall import inline_closure_call
         work_list = list(blocks.items())
         while work_list:
             label, block = work_list.pop()
@@ -2432,7 +2432,7 @@ class ParforPass(object):
         """
         Produce the body blocks for a reduction function indicated by call_name.
         """
-        from numba.inline_closurecall import check_reduce_func
+        from numba.core.inline_closurecall import check_reduce_func
         reduce_func = get_definition(self.func_ir, call_name)
         fcode = check_reduce_func(self.func_ir, reduce_func)
 

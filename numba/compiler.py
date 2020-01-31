@@ -7,7 +7,7 @@ from numba import config
 from numba.core import utils, errors, typing, interpreter, bytecode, postproc
 from numba.targets import cpu, callconv
 from numba.parfor import ParforDiagnostics
-from numba.inline_closurecall import InlineClosureCallPass
+from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.core.errors import CompilerError
 
 from numba.compiler_machinery import PassManager
