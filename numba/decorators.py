@@ -251,7 +251,7 @@ def cfunc(sig, locals={}, cache=False, **options):
     sig = sigutils.normalize_signature(sig)
 
     def wrapper(func):
-        from .ccallback import CFunc
+        from numba.core.ccallback import CFunc
         res = CFunc(func, sig, locals=locals, options=options)
         if cache:
             res.enable_caching()
