@@ -4,7 +4,7 @@ def ex_compiler_pass():
     from numba import njit
     from numba.core import ir
     from numba.compiler import CompilerBase, DefaultPassBuilder
-    from numba.compiler_machinery import FunctionPass, register_pass
+    from numba.core.compiler_machinery import FunctionPass, register_pass
     from numba.core.untyped_passes import IRProcessing
     from numbers import Number
 

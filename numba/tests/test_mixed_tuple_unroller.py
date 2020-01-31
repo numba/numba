@@ -6,7 +6,7 @@ from numba import njit, typed, literal_unroll, prange
 from numba.core import types, errors, ir
 from numba.testing import unittest
 from numba.extending import overload
-from numba.compiler_machinery import PassManager, register_pass, FunctionPass
+from numba.core.compiler_machinery import PassManager, register_pass, FunctionPass
 from numba.compiler import CompilerBase
 from numba.core.untyped_passes import (FixupArgs, TranslateByteCode, IRProcessing,
                                   InlineClosureLikes, SimplifyCFG,

@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from copy import deepcopy, copy
 import warnings
 
-from numba.compiler_machinery import FunctionPass, register_pass
+from numba.core.compiler_machinery import FunctionPass, register_pass
 from numba import config, transforms
 from numba.core import errors, types, ir, bytecode, postproc, rewrites
 from numba.special import literal_unroll
@@ -1403,7 +1403,7 @@ class LiteralUnroll(FunctionPass):
             return False
 
         # run as subpipeline
-        from numba.compiler_machinery import PassManager
+        from numba.core.compiler_machinery import PassManager
         from numba.core.typed_passes import PartialTypeInference
         pm = PassManager("literal_unroll_subpipeline")
         # get types where possible to help with list->tuple change

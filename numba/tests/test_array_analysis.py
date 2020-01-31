@@ -21,7 +21,7 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                 NopythonRewrites, IRLegalization)
 
-from numba.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 
 
 skip_unsupported = skip_parfors_unsupported

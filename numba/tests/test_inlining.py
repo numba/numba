@@ -21,7 +21,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            DumpParforDiagnostics, NativeLowering,
                            IRLegalization, NoPythonBackend)
 
-from numba.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 
 @jit((types.int32,), nopython=True)
 def inner(a):

@@ -10,7 +10,7 @@ from numba.parfor import ParforDiagnostics
 from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.core.errors import CompilerError
 
-from numba.compiler_machinery import PassManager
+from numba.core.compiler_machinery import PassManager
 
 from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        FixupArgs, IRProcessing, DeadBranchPrune,
