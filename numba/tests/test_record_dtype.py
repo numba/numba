@@ -2,7 +2,7 @@ import sys
 
 import numpy as np
 import ctypes
-from numba import jit, numpy_support, types
+from numba import jit, numpy_support, types, literal_unroll, njit
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba.itanium_mangler import mangle_type
@@ -247,6 +247,20 @@ def set_charseq(ary, i, cs):
 
 def get_charseq_tuple(ary, i):
     return ary[i].m, ary[i].n
+
+
+def get_field1(rec):
+    fs = ('e', 'f')
+    f = fs[1]
+    return rec[f]
+
+
+def get_field2(rec):
+    fs = ('e', 'f')
+    out = 0
+    for f in literal_unroll(fs):
+        out += rec[f]
+    return out
 
 
 recordtype = np.dtype([('a', np.float64),
@@ -976,6 +990,23 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
             expected = pyfunc(self.refsample1d, i)
             got = cfunc(self.nbsample1d, i)
             self.assertEqual(expected, got)
+
+
+class TestRecordArrayGetItem(unittest.TestCase):
+    """
+    Test getitem when index is Literal[str]
+    """
+    def test_literal_variable(self):
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = get_field1
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+
+    def test_literal_unroll(self):
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = get_field2
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
 
 
 if __name__ == '__main__':
