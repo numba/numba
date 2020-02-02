@@ -214,12 +214,6 @@ The following methods of Numpy arrays are supported:
   arguments.)
 
   * ``axis`` only supports ``integer`` values.
-  * If the ``axis`` argument is a compile-time constant, all valid values
-    are supported.
-    An out-of-range value will result in a ``LoweringError`` at compile-time.
-  * If the ``axis`` argument is not a compile-time constant, only values
-    from 0 to 3 are supported.
-    An out-of-range value will result in a runtime exception.
   * All numeric ``dtypes`` are supported in the ``dtype`` parameter.
     ``timedelta`` arrays can be used as input arrays but ``timedelta`` is not
     supported as ``dtype`` parameter.
