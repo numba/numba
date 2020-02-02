@@ -69,7 +69,6 @@ def gen_sum_axis_impl(arr, zero):
         """
         function that performs sums over one specific axis
         """
-        ndim = arr.ndim
         axis = normalize_axis_list(axis, arr.ndim, "np.sum: axis")[0]
 
         # Move reduction axis to front to simplify indexing
