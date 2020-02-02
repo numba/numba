@@ -544,6 +544,17 @@ class StaticGetItemRecord(AbstractTemplate):
             assert ret
             return signature(ret, *args)
 
+
+@infer_global(operator.getitem)
+class GetItemRecord(AbstractTemplate):
+    def generic(self, args, kws):
+        # Resolution of members for records
+        record, idx = args
+        if isinstance(record, types.Record) and isinstance(idx, types.StringLiteral):
+            ret = record.typeof(idx.literal_value)
+            assert ret
+            return signature(ret, *args)
+
 @infer
 class StaticSetItemRecord(AbstractTemplate):
     key = "static_setitem"
