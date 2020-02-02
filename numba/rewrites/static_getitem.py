@@ -47,11 +47,11 @@ class RewriteConstGetitems(Rewrite):
 
 
 @register_rewrite('after-inference')
-class RewriteConstGetitemsAfterInf(Rewrite):
+class RewriteLiteralGetitems(Rewrite):
     """
-    Rewrite IR expressions of the kind `getitem(value=arr, index=$constXX)`
-    where `$constXX` is a known constant as
-    `static_getitem(value=arr, index=<constant value>)`.
+    Rewrite IR expressions of the kind `getitem(value=arr, index=$XX)`
+    where `$XX` is a Literal value as
+    `static_getitem(value=arr, index=<literal value>)`.
     """
 
     def match(self, func_ir, block, typemap, calltypes):
@@ -61,10 +61,9 @@ class RewriteConstGetitemsAfterInf(Rewrite):
         # rewritten
         for expr in block.find_exprs(op='getitem'):
             if expr.op == 'getitem':
-                if isinstance(typemap[expr.index.name],
-                                  types.StringLiteral):
-                    getitems[expr] = (expr.index,
-                                      typemap[expr.index.name].literal_value)
+                if isinstance(typemap[expr.index.name], types.StringLiteral):
+                    literal_value = typemap[expr.index.name].literal_value
+                    getitems[expr] = (expr.index, literal_value)
 
         return len(getitems) > 0
 
