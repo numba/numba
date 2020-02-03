@@ -234,9 +234,6 @@ class DPPyKernel(DPPyKernelBase):
         for ty, val, i_dev_arr, access_type in zip(self.argument_types, args,
                 internal_device_arrs, self.ordered_arg_access_types):
             self._pack_argument(ty, val, self.device_env, i_dev_arr, access_type)
-        # retrieve auto converted arrays
-        # for wb in retr:
-        #    wb()
 
     def _pack_argument(self, ty, val, device_env, device_arr, access_type):
         """
