@@ -242,9 +242,9 @@ class DPPyKernel(DPPyKernelBase):
         """
         Copy device data back to host
         """
-        if device_arr and (access_type not in self.correct_access_types or \
-            access_type in self.correct_access_types and \
-            self.correct_access_types[access_type] != _NUMBA_PVC_READ_ONLY):
+        if (device_arr and (access_type not in self.correct_access_types or
+            access_type in self.correct_access_types and
+            self.correct_access_types[access_type] != _NUMBA_PVC_READ_ONLY)):
             # we get the date back to host if have created a device_array or
             # if access_type of this device_array is not of type read_only and read_write
             device_env.copy_array_from_device(device_arr)
@@ -256,13 +256,13 @@ class DPPyKernel(DPPyKernelBase):
         kernelargs.append(driver.KernelArg(None, void_ptr_arg))
         # parent
         kernelargs.append(driver.KernelArg(None, void_ptr_arg))
-        kernelargs.append(driver.KernelArg(ctypes.c_int(val._ndarray.size)))
-        kernelargs.append(driver.KernelArg(ctypes.c_int(val._ndarray.dtype.itemsize)))
+        kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.size)))
+        kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.dtype.itemsize)))
         kernelargs.append(driver.KernelArg(val))
         for ax in range(val._ndarray.ndim):
-            kernelargs.append(driver.KernelArg(ctypes.c_int(val._ndarray.shape[ax])))
+            kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.shape[ax])))
         for ax in range(val._ndarray.ndim):
-            kernelargs.append(driver.KernelArg(ctypes.c_int(val._ndarray.strides[ax])))
+            kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.strides[ax])))
 
 
     def _unpack_argument(self, ty, val, device_env, retr, kernelargs, device_arrs, access_type):
@@ -281,9 +281,9 @@ class DPPyKernel(DPPyKernelBase):
             default_behavior = self.check_and_warn_abt_invalid_access_type(access_type)
             dArr = None
 
-            if default_behavior or \
-            self.correct_access_types[access_type] == _NUMBA_PVC_READ_ONLY or \
-            self.correct_access_types[access_type] == _NUMBA_PVC_READ_WRITE:
+            if (default_behavior or
+                self.correct_access_types[access_type] == _NUMBA_PVC_READ_ONLY or
+                self.correct_access_types[access_type] == _NUMBA_PVC_READ_WRITE):
                 # default, read_only and read_write case
                 dArr = device_env.copy_array_to_device(val)
             elif self.correct_access_types[access_type] == _NUMBA_PVC_WRITE_ONLY:
@@ -295,7 +295,8 @@ class DPPyKernel(DPPyKernelBase):
             self._unpack_device_array_argument(dArr, kernelargs)
 
         elif isinstance(ty, types.Integer):
-            cval = getattr(ctypes, "c_%s" % ty)(val)
+            #cval = getattr(ctypes, "c_%s" % ty)(val)
+            cval = ctypes.c_size_t(val)
             kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.float64:
