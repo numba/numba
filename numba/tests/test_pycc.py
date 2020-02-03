@@ -353,12 +353,51 @@ class TestDistutilsSupport(TestCase):
             """
         run_python(["-c", code])
 
+    def check_setup_nested_py(self, setup_py_file):
+        # Compute PYTHONPATH to ensure the child processes see this Numba
+        import numba
+        numba_path = os.path.abspath(os.path.dirname(
+                                     os.path.dirname(numba.__file__)))
+        env = dict(os.environ)
+        if env.get('PYTHONPATH', ''):
+            env['PYTHONPATH'] = numba_path + os.pathsep + env['PYTHONPATH']
+        else:
+            env['PYTHONPATH'] = numba_path
+
+        def run_python(args):
+            p = subprocess.Popen([sys.executable] + args,
+                                 cwd=self.usecase_dir,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT,
+                                 env=env)
+            out, _ = p.communicate()
+            rc = p.wait()
+            if rc != 0:
+                self.fail("python failed with the following output:\n%s"
+                          % out.decode('utf-8', 'ignore'))
+
+        run_python([setup_py_file, "build_ext", "--inplace"])
+        code = """if 1:
+            import nested.pycc_compiled_module as lib
+            assert lib.get_const() == 42
+            res = lib.ones(3)
+            assert list(res) == [1.0, 1.0, 1.0]
+            """
+        run_python(["-c", code])
+
     def test_setup_py_distutils(self):
         self.check_setup_py("setup_distutils.py")
+
+    def test_setup_py_distutils_nested(self):
+        self.check_setup_nested_py("setup_distutils_nested.py")
 
     @unittest.skipIf(setuptools is None, "test needs setuptools")
     def test_setup_py_setuptools(self):
         self.check_setup_py("setup_setuptools.py")
+
+    @unittest.skipIf(setuptools is None, "test needs setuptools")
+    def test_setup_py_setuptools_nested(self):
+        self.check_setup_nested_py("setup_setuptools_nested.py")
 
 
 if __name__ == "__main__":
