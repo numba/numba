@@ -356,7 +356,8 @@ class JitDPPyKernel(DPPyKernelBase):
 
         self.typingctx = DPPyTargetDesc.typingctx
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
+        assert not kwargs, "Keyword Arguments are not supported"
         if self.device_env is None:
             _raise_no_device_found_error()
         kernel = self.specialize(*args)

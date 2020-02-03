@@ -111,10 +111,10 @@ class DeviceArray:
 
     def get_buffer_size(self):
         return self._buffSize
-    
+
     def get_buffer_ptr(self):
         return self.get_buffer_obj()[0].buffer_ptr
-    
+
     def get_data_ptr(self):
         return ffi.cast("void*", self._ndarray.ctypes.data)
 
