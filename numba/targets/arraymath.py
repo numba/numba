@@ -57,11 +57,6 @@ def array_sum(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-@register_jitable
-def _array_sum_axis_nop(arr, v):
-    return arr
-
-
 def gen_sum_axis_impl(arr, zero):
     result_ndim = arr.ndim - 1
 
