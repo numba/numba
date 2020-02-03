@@ -5,7 +5,7 @@ from collections.abc import MutableMapping
 
 from numba.core.types import DictType, TypeRef
 from numba.core.imputils import numba_typeref_ctor
-from numba import njit, dictobject, typeof
+from numba import njit, typeof
 from numba.core import types, errors, config, cgutils
 from numba.extending import (
     overload_method,
@@ -15,6 +15,7 @@ from numba.extending import (
     NativeValue,
     type_callable,
 )
+from numba.typed import dictobject
 
 
 @njit

@@ -13,8 +13,8 @@ import numpy as np
 
 from numba import njit
 from numba import int32, int64, float32, float64
-from numba import dictobject, typeof
-from numba.typed import Dict
+from numba import typeof
+from numba.typed import Dict, dictobject
 from numba.typed.typedobjectutils import _sentry_safe_cast
 from numba.core.errors import TypingError
 from numba.core import types
