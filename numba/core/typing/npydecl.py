@@ -7,7 +7,7 @@ from numba.core import types, utils, config
 from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
                                          CallableTemplate, Registry, signature)
 
-from numba.numpy_support import (ufunc_find_matching_loop,
+from numba.np.numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
                              from_dtype, as_dtype, resolve_output_type,
                              carray, farray)

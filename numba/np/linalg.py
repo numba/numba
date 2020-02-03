@@ -16,8 +16,8 @@ from numba.core.typing import signature
 from numba.extending import overload, register_jitable
 from numba.core import types, cgutils
 from numba.core.errors import TypingError
-from numba import numpy_support as np_support
 from .arrayobj import make_array, _empty_nd_impl, array_copy
+from numba.np import numpy_support as np_support
 
 ll_char = ir.IntType(8)
 ll_char_p = ll_char.as_pointer()

@@ -10,9 +10,9 @@ from functools import partial
 import numpy as np
 
 from numba.core import types
-from numba import numpy_support
 from numba.core.errors import TypingError
 from numba.core.typing import templates
+from numba.np import numpy_support
 
 try:
     import cffi

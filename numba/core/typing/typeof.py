@@ -5,8 +5,8 @@ import enum
 
 import numpy as np
 
-from numba import numpy_support
 from numba.core import types, utils, errors
+from numba.np import numpy_support
 
 # terminal color markup
 _termcolor = errors.termcolor()

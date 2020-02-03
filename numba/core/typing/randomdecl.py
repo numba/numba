@@ -5,7 +5,7 @@ import numpy as np
 from numba.core import types
 from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
                         CallableTemplate, Registry, signature)
-from numba.numpy_support import numpy_version
+from numba.np.numpy_support import numpy_version
 
 
 registry = Registry()

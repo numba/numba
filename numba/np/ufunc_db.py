@@ -49,7 +49,7 @@ def _fill_ufunc_db(ufunc_db):
     # module.
     from numba.np import npyfuncs
     from numba.cpython import cmathimpl, mathimpl, numbers
-    from numba.numpy_support import numpy_version
+    from numba.np.numpy_support import numpy_version
 
     ufunc_db[np.negative] = {
         '?->?': numbers.int_invert_impl,

@@ -8,7 +8,7 @@ import numpy as np
 from numba import jit
 from numba.core import types
 from numba.extending import overload
-from numba import numpy_support as np_support
+from numba.np import numpy_support as np_support
 
 
 @overload(np.roots)

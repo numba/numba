@@ -19,12 +19,13 @@ import numpy as np
 from numba.core import types, typing, errors, sigutils
 from numba.core.types.abstract import _typecache
 from numba.core.typing.templates import make_overload_template
-from numba import jit, njit, numpy_support, typeof
+from numba import jit, njit, typeof
 from numba.extending import (overload, register_model, models, unbox,
                              NativeValue, typeof_impl)
 from numba.tests.support import TestCase, temp_directory
 from numba.tests.enum_usecases import Color, Shake, Shape
 from numba.testing import unittest_support as unittest
+from numba.np import numpy_support
 
 
 try:

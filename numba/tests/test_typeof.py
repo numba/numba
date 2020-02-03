@@ -9,7 +9,7 @@ import mmap
 import numpy as np
 
 import numba.testing.unittest_support as unittest
-from numba import cffi_support, numpy_support
+from numba import cffi_support
 from numba.core import types
 from numba.special import typeof
 from numba.core.dispatcher import OmittedArg
@@ -19,6 +19,7 @@ from numba.tests.support import TestCase, tag
 from numba.tests.test_numpy_support import ValueTypingTestBase
 from numba.tests.ctypes_usecases import *
 from numba.tests.enum_usecases import *
+from numba.np import numpy_support
 
 
 recordtype = np.dtype([('a', np.float64),

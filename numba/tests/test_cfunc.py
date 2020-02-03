@@ -13,10 +13,11 @@ import numpy as np
 
 from numba import cfunc, carray, farray, njit
 from numba.core import types, typing, utils
-from numba import cffi_support, numpy_support
+from numba import cffi_support
 from numba.tests.support import TestCase, tag, captured_stderr
 from numba.tests.test_dispatcher import BaseCacheTest
 from numba.testing import unittest_support as unittest
+from numba.np import numpy_support
 
 skip_cffi_unsupported = unittest.skipUnless(
     cffi_support.SUPPORTED,

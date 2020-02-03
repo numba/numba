@@ -6,11 +6,11 @@ import warnings
 import numpy as np
 
 from numba.core.compiler import compile_isolated, Flags
-from numba import numpy_support
 from numba.core import utils, types
 from numba.core.config import IS_WIN32, IS_32BITS
 from numba.tests.support import TestCase, CompilationCache, tag
 from numba.testing import unittest_support as unittest
+from numba.np import numpy_support
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")

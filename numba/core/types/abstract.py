@@ -245,7 +245,7 @@ class Number(Hashable):
         """
         Unify the two number types using Numpy's rules.
         """
-        from numba import numpy_support
+        from numba.np import numpy_support
         if isinstance(other, Number):
             # XXX: this can produce unsafe conversions,
             # e.g. would unify {int64, uint64} to float64

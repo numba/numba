@@ -15,9 +15,9 @@ import llvmlite.llvmpy.core as lc
 from numba import generated_jit
 from numba.core import types, cgutils
 from numba.extending import overload, overload_method, register_jitable
-from numba.numpy_support import as_dtype, type_can_asarray
-from numba.numpy_support import numpy_version
-from numba.numpy_support import is_nonelike
+from numba.np.numpy_support import as_dtype, type_can_asarray
+from numba.np.numpy_support import numpy_version
+from numba.np.numpy_support import is_nonelike
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                     impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature

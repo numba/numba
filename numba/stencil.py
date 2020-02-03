@@ -8,7 +8,6 @@ import copy
 import numpy as np
 from llvmlite import ir as lir
 
-from numba import numpy_support
 from numba.core import types, typing, utils, ir, typed_passes, config, compiler, ir_utils
 from numba.core.typing.templates import (CallableTemplate, signature,
                                          infer_global, AbstractTemplate)
@@ -18,6 +17,7 @@ from numba.extending import register_jitable
 import numba
 
 import operator
+from numba.np import numpy_support
 
 class StencilFuncLowerer(object):
     '''Callable class responsible for lowering calls to a specific StencilFunc.

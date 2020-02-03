@@ -22,7 +22,7 @@ import numpy as np
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba.numpy_support import as_dtype
+from numba.np.numpy_support import as_dtype
 from numba.core import types, config
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder

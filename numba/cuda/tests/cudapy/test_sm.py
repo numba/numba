@@ -1,9 +1,9 @@
 from numba import cuda, int32, float64
-from numba import numpy_support as nps
 
 from numba.cuda.testing import unittest, SerialMixin
 
 import numpy as np
+from numba.np import numpy_support as nps
 
 
 recordwith2darray = np.dtype([('i', np.int32),

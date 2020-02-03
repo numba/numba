@@ -9,7 +9,7 @@ from numba.core.options import TargetOptions
 from numba.targets.registry import dispatcher_registry, cpu_target
 from numba.core.cpu import FastMathOptions
 from numba.core import utils, types, serialize, compiler, sigutils
-from numba.numpy_support import as_dtype
+from numba.np.numpy_support import as_dtype
 from numba.np.ufunc import _internal
 from numba.np.ufunc.sigparse import parse_signature
 from numba.np.ufunc.wrappers import build_ufunc_wrapper, build_gufunc_wrapper

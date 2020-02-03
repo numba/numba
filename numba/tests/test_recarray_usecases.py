@@ -2,11 +2,11 @@ import sys
 
 import numpy as np
 
-from numba import numpy_support
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.tests.support import captured_stdout, tag, TestCase
 from numba.testing import unittest_support as unittest
+from numba.np import numpy_support
 
 
 def usecase1(arr1, arr2):

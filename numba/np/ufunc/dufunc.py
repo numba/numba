@@ -1,4 +1,4 @@
-from numba import jit, typeof, numpy_support
+from numba import jit, typeof
 from numba.core import types, utils, serialize, sigutils
 from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
@@ -6,6 +6,7 @@ from numba.np.ufunc import _internal
 from numba.core.dispatcher import Dispatcher
 from numba.parfors import array_analysis
 from numba.np.ufunc import ufuncbuilder
+from numba.np import numpy_support
 
 
 def make_dufunc_kernel(_dufunc):

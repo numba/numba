@@ -10,7 +10,7 @@ import traceback
 
 import numpy as np
 
-from numba import numpy_support
+from numba.np import numpy_support
 
 
 class Dim3(object):

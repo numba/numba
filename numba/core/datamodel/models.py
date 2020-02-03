@@ -2,9 +2,9 @@ from functools import partial
 
 from llvmlite import ir
 
-from numba import numpy_support
 from numba.core.datamodel.registry import register_default
 from numba.core import types, cgutils
+from numba.np import numpy_support
 
 
 class DataModel(object):

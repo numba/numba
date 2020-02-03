@@ -16,10 +16,10 @@ import numpy as np
 import numba
 from numba.cuda.cudadrv import driver as _driver
 from numba.cuda.cudadrv import devices
-from numba import numpy_support
 from numba.core import types
 from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.misc import dummyarray
+from numba.np import numpy_support
 
 try:
     lru_cache = getattr(functools, 'lru_cache')(None)

@@ -8,11 +8,10 @@ import operator
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba import numpy_support
 from numba.core import types, cgutils
 from numba.core.imputils import (lower_builtin, lower_constant,
                                     impl_ret_untracked)
-from numba.np import npdatetime
+from numba.np import npdatetime, numpy_support
 
 # datetime64 and timedelta64 use the same internal representation
 DATETIME64 = TIMEDELTA64 = Type.int(64)

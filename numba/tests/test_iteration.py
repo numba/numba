@@ -3,9 +3,9 @@ import numpy as np
 from numba import njit
 import numba.testing.unittest_support as unittest
 from numba.core.compiler import compile_isolated, Flags
-from numba import numpy_support
 from numba.core import types, errors
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
+from numba.np import numpy_support
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")

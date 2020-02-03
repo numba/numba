@@ -199,7 +199,7 @@ class Record(Type):
 
     @property
     def dtype(self):
-        from numba.numpy_support import as_struct_dtype
+        from numba.np.numpy_support import as_struct_dtype
 
         return as_struct_dtype(self)
 

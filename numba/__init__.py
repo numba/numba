@@ -35,7 +35,7 @@ from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
 from numba.np.ufunc import vectorize, guvectorize, threading_layer
 
 # Re-export Numpy helpers
-from numba.numpy_support import carray, farray, from_dtype
+from numba.np.numpy_support import carray, farray, from_dtype
 
 # Re-export experimental
 from numba import experimental
@@ -113,7 +113,7 @@ def _ensure_critical_deps():
     """
     Make sure Python, NumPy and SciPy have supported versions.
     """
-    from numba.numpy_support import numpy_version
+    from numba.np.numpy_support import numpy_version
     from numba.core.utils import PYVERSION
 
     if PYVERSION < (3, 6):

@@ -23,7 +23,7 @@ from numba.core.errors import NumbaWarning
 from numba.tests.support import (TestCase, temp_directory, import_dynamic,
                                  override_env_config, capture_cache_log,
                                  captured_stdout)
-from numba.numpy_support import as_dtype
+from numba.np.numpy_support import as_dtype
 from numba.core.caching import _UserWideCacheLocator
 from numba.core.dispatcher import Dispatcher
 from numba import parfor
