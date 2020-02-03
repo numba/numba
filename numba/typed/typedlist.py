@@ -12,7 +12,6 @@ from collections.abc import MutableSequence
 
 from numba.core.types import ListType, TypeRef
 from numba.core.imputils import numba_typeref_ctor
-from numba import listobject
 from numba.core.dispatcher import Dispatcher
 from numba.core import types, errors, config, cgutils
 from numba import njit, typeof
@@ -24,6 +23,7 @@ from numba.extending import (
     NativeValue,
     type_callable,
 )
+from numba.typed import listobject
 
 
 @njit
