@@ -648,6 +648,7 @@ def has_no_side_effect(rhs, lives, call_table):
         would prevent re-ordering.
     """
     from numba.parfors import array_analysis
+    from numba.misc.special import prange
     if isinstance(rhs, ir.Expr) and rhs.op == 'call':
         func_name = rhs.func.name
         if func_name not in call_table or call_table[func_name] == []:
@@ -659,7 +660,7 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == ['log', numpy] or
             call_list == ['dtype', numpy] or
             call_list == [array_analysis.wrap_index] or
-            call_list == [numba.special.prange] or
+            call_list == [prange] or
             call_list == [numba.parfor.internal_prange]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and

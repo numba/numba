@@ -11,7 +11,7 @@ import numpy as np
 import numba.testing.unittest_support as unittest
 from numba import cffi_support
 from numba.core import types
-from numba.special import typeof
+from numba.misc.special import typeof
 from numba.core.dispatcher import OmittedArg
 from numba._dispatcher import compute_fingerprint
 

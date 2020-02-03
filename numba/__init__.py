@@ -16,7 +16,7 @@ from numba.testing import _runtests as runtests
 from numba.core import types, errors
 
 # Re-export typeof
-from .special import (
+from numba.misc.special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
     literally, literal_unroll
 )

@@ -10,7 +10,7 @@ from numba.core.datamodel import models
 from numba.extending import (
     overload, SentryLiteralArgs, overload_method, register_model, intrinsic,
 )
-from numba.special import literally
+from numba.misc.special import literally
 
 
 class TestLiteralDispatch(TestCase):

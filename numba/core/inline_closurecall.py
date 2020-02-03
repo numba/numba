@@ -35,6 +35,7 @@ from numba.cpython.rangeobj import range_iter_len
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
 import operator
+import numba.misc.special
 
 """
 Variable enable_inline_arraycall is only used for testing purpose.
@@ -616,7 +617,7 @@ def _find_iter_range(func_ir, range_iter_var, swapped):
     func_def = get_definition(func_ir, func_var)
     debug_print("func_var = ", func_var, " func_def = ", func_def)
     require(isinstance(func_def, ir.Global) and
-            (func_def.value == range or func_def.value == numba.special.prange))
+            (func_def.value == range or func_def.value == numba.misc.special.prange))
     nargs = len(range_def.args)
     swapping = [('"array comprehension"', 'closure of'), range_def.func.loc]
     if nargs == 1:
