@@ -47,6 +47,7 @@
         fprintf(stderr, "Open CL Runtime Error: %d (%s) on Line %d in %s\n",   \
                 retval, "[CL_INVALID_WORK_GROUP_SIZE]",                        \
                 __LINE__, __FILE__);                                           \
+        goto error;                                                            \
     default:                                                                   \
         fprintf(stderr, "Open CL Runtime Error: %d (%s) on Line %d in %s\n",   \
                 retval, M, __LINE__, __FILE__);                                \
