@@ -16,6 +16,7 @@ from numba.extending import (
     typeof_impl,
     unbox,
     NativeValue,
+    register_jitable,
 )
 from numba.datamodel.models import OpaqueModel
 from numba.targets.cpu import InlineOptions
@@ -454,6 +455,20 @@ class TestFunctionInlining(InliningBase):
 
         self.check(impl, inline_expect={'foo': True, 'boz': True,
                                         'fortran': True}, block_count=37)
+
+
+class TestRegisterJitableInlining(InliningBase):
+
+    def test_register_jitable_inlines(self):
+
+        @register_jitable(inline='always')
+        def foo():
+            return 1
+
+        def impl():
+            foo()
+
+        self.check(impl, inline_expect={'foo': True})
 
 
 class TestOverloadInlining(InliningBase):
