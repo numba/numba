@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
 from numba.core.options import TargetOptions
-from numba.targets.registry import dispatcher_registry, cpu_target
+from numba.core.registry import dispatcher_registry, cpu_target
 from numba.core.cpu import FastMathOptions
 from numba.core import utils, types, serialize, compiler, sigutils
 from numba.np.numpy_support import as_dtype

@@ -12,7 +12,7 @@ from numba.pycc import llvm_types as lt
 from numba.core.compiler import compile_extra, Flags
 from numba.core.compiler_lock import global_compiler_lock
 
-from numba.targets.registry import cpu_target
+from numba.core.registry import cpu_target
 from numba.runtime import nrtdynmod
 from numba.core import cgutils
 

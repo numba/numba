@@ -4,7 +4,7 @@ from numba.np.ufunc import _internal
 from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba.np.ufunc.parallel import ParallelUFuncBuilder, ParallelGUFuncBuilder
 
-from numba.targets.registry import TargetRegistry
+from numba.core.registry import TargetRegistry
 from numba.np.ufunc import dufunc
 
 

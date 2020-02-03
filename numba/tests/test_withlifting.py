@@ -8,7 +8,7 @@ from numba.core.withcontexts import bypass_context, call_context, objmode_contex
 from numba.core.bytecode import FunctionIdentity, ByteCode
 from numba.core.interpreter import Interpreter
 from numba.core import typing, errors, cpu
-from numba.targets.registry import cpu_target
+from numba.core.registry import cpu_target
 from numba.core.compiler import compile_ir, DEFAULT_FLAGS
 from numba import njit, typeof, objmode
 from numba.extending import overload

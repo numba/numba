@@ -8,7 +8,7 @@ from llvmlite.llvmpy.core import Builder
 
 from numba.core import types, cgutils
 from numba.core import typing
-from numba.targets.registry import cpu_target
+from numba.core.registry import cpu_target
 from numba.core.typeconv import Conversion
 from numba.extending import intrinsic
 from numba.core.errors import TypingError, NumbaTypeSafetyWarning

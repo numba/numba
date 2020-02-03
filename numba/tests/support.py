@@ -108,7 +108,7 @@ class CompilationCache(object):
         Compile the function or retrieve an already compiled result
         from the cache.
         """
-        from numba.targets.registry import cpu_target
+        from numba.core.registry import cpu_target
 
         cache_key = (func, args, return_type, flags)
         try:

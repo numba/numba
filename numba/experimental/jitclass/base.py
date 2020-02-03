@@ -7,7 +7,7 @@ import operator
 from llvmlite import ir as llvmir
 
 from numba.core import types, utils, errors, cgutils, imputils
-from numba.targets.registry import cpu_target
+from numba.core.registry import cpu_target
 from numba import njit
 from numba.core.typing import templates
 from numba.core.datamodel import default_manager, models

@@ -21,7 +21,7 @@ from collections import defaultdict
 import numba
 from numba import njit, prange, stencil
 from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall, config, compiler, cpu
-from numba.targets.registry import cpu_target
+from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (find_callname, guard, build_definitions,
                             get_definition, is_getitem, is_setitem,

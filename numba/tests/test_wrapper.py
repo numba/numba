@@ -1,8 +1,7 @@
 import numpy as np
 
 import numba.testing.unittest_support as unittest
-from numba.core import types, utils, compiler
-from numba.targets import registry
+from numba.core import types, utils, compiler, registry
 
 
 def overhead(x):

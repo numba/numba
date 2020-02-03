@@ -6,7 +6,7 @@ from numba.tests.support import (TestCase, override_config, captured_stdout,
 from numba import jit, njit
 from numba.core import types, ir, postproc, compiler
 from numba.core.ir_utils import guard, find_callname, find_const, get_definition
-from numba.targets.registry import CPUDispatcher
+from numba.core.registry import CPUDispatcher
 from numba.core.inline_closurecall import inline_closure_call
 
 from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,

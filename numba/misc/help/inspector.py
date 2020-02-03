@@ -12,7 +12,7 @@ import types as pytypes
 
 from numba.core import errors
 from numba._version import get_versions
-from numba.targets.registry import cpu_target
+from numba.core.registry import cpu_target
 from numba.tests.support import captured_stdout
 
 

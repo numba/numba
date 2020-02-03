@@ -3,7 +3,7 @@ from collections import defaultdict
 
 import numba.testing.unittest_support as unittest
 from numba.core.base import OverloadSelector
-from numba.targets.registry import cpu_target
+from numba.core.registry import cpu_target
 from numba.core.imputils import builtin_registry, RegistryLoader
 from numba.core import types
 

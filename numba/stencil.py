@@ -8,10 +8,9 @@ import copy
 import numpy as np
 from llvmlite import ir as lir
 
-from numba.core import types, typing, utils, ir, typed_passes, config, compiler, ir_utils
+from numba.core import types, typing, utils, ir, config, ir_utils, registry
 from numba.core.typing.templates import (CallableTemplate, signature,
                                          infer_global, AbstractTemplate)
-from numba.targets import registry
 from numba.core.imputils import lower_builtin
 from numba.extending import register_jitable
 import numba
@@ -331,6 +330,7 @@ class StencilFunc(object):
             raise ValueError("The first argument to a stencil kernel must "
                              "be the primary input array.")
 
+        from numba.core import typed_passes
         typemap, return_type, calltypes = typed_passes.type_inference_stage(
                 self._typingctx,
                 self.kernel_ir,
@@ -637,6 +637,7 @@ class StencilFunc(object):
             pysig = utils.pysignature(stencil_func)
             sigret.pysig = pysig
         # Get the IR for the newly created stencil function.
+        from numba.core import compiler
         stencil_ir = compiler.run_frontend(stencil_func)
         ir_utils.remove_dels(stencil_ir.blocks)
 
@@ -787,6 +788,7 @@ def _stencil(mode, options):
         raise ValueError("Unsupported mode style " + mode)
 
     def decorated(func):
+        from numba.core import compiler
         kernel_ir = compiler.run_frontend(func)
         return StencilFunc(kernel_ir, mode, options)
 

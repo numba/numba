@@ -9,9 +9,8 @@ import inspect
 import logging
 
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
-from numba.targets import registry
 from numba.stencil import stencil
-from numba.core import config, sigutils
+from numba.core import config, sigutils, registry
 
 
 _logger = logging.getLogger(__name__)

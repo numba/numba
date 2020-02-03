@@ -78,7 +78,7 @@ class Record(Type):
 
         Note: only scalar types are supported currently.
         """
-        from numba.targets.registry import cpu_target
+        from numba.core.registry import cpu_target
 
         ctx = cpu_target.target_context
         offset = 0

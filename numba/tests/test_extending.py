@@ -12,7 +12,7 @@ import numpy as np
 from numba import njit, jit
 from numba.core import types, errors, typing, compiler
 from numba.core.typed_passes import type_inference_stage
-from numba.targets.registry import cpu_target
+from numba.core.registry import cpu_target
 from numba.core.compiler import compile_isolated
 from numba.tests.support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
@@ -32,6 +32,7 @@ from numba.extending import (typeof_impl, type_callable,
                              )
 from numba.core.typing.templates import (
     ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
+
 
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
