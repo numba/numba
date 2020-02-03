@@ -988,7 +988,7 @@ def _fill_ufunc_db(ufunc_db):
     }
 
     # Inject datetime64 support
-    from numba.targets import npdatetime
+    from numba.np import npdatetime
     ufunc_db[np.negative].update({
         'm->m': npdatetime.timedelta_neg_impl,
     })

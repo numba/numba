@@ -276,7 +276,7 @@ class BaseContext(object):
         from numba.np import linalg, polynomial, arraymath
 
         try:
-            from numba.targets import npdatetime
+            from numba.np import npdatetime
         except NotImplementedError:
             pass
         self.install_registry(builtin_registry)

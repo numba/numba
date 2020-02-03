@@ -11,7 +11,7 @@ from llvmlite.llvmpy import core as lc
 
 from numba.core.imputils import impl_ret_untracked
 from numba.core import typing, types, errors, lowering, cgutils
-from numba.targets import npdatetime
+from numba.np import npdatetime
 from numba.cpython import cmathimpl, mathimpl, numbers
 
 # some NumPy constants. Note that we could generate some of them using
