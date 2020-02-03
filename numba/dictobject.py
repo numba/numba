@@ -30,7 +30,7 @@ from numba.core.types import (
 from numba.core.imputils import impl_ret_borrowed, RefType
 from numba.core.errors import TypingError
 from numba.core import typing
-from numba.typedobjectutils import (_as_bytes,
+from numba.typed.typedobjectutils import (_as_bytes,
                                     _cast,
                                     _nonoptional,
                                     _sentry_safe_cast_default,
