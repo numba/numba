@@ -13,8 +13,7 @@ from llvmlite.llvmpy import core as lc
 import numpy as np
 import operator
 
-from numba.targets import ufunc_db
-from numba.np import arrayobj
+from numba.np import arrayobj, ufunc_db
 from numba.core.imputils import Registry, impl_ret_new_ref, force_error_model
 from numba import numpy_support
 from numba.core import typing, types, utils, cgutils, callconv
