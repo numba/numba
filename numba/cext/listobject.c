@@ -234,6 +234,16 @@ numba_list_allocated(NB_List *lp) {
     return lp->allocated;
 }
 
+/* Return the base pointer of the list items
+ *
+ * lp: a list
+ */
+char *
+numba_list_base_ptr(NB_List *lp)
+{
+    return lp->items;
+}
+
 /* Return the mutability status of the list
  *
  * lp: a list
@@ -253,6 +263,7 @@ numba_list_is_mutable(NB_List *lp){
 void
 numba_list_set_is_mutable(NB_List *lp, int is_mutable){
     lp->is_mutable = is_mutable;
+
 }
 
 /* Set an item in a list.

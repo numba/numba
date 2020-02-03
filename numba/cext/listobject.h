@@ -88,6 +88,9 @@ numba_list_length(NB_List *lp);
 NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_list_allocated(NB_List *lp);
 
+NUMBA_EXPORT_FUNC(char *)
+numba_list_base_ptr(NB_List *lp);
+
 NUMBA_EXPORT_FUNC(int)
 numba_list_is_mutable(NB_List *lp);
 
