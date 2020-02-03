@@ -386,7 +386,7 @@ def _lower_array_expr(lowerer, expr):
                                       caching=False)
 
     # Create kernel subclass calling our native function
-    from numba.targets import npyimpl
+    from numba.np import npyimpl
 
     class ExprKernel(npyimpl._Kernel):
         def generate(self, *args):

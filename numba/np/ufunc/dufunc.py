@@ -9,7 +9,7 @@ from numba.np.ufunc import ufuncbuilder
 
 
 def make_dufunc_kernel(_dufunc):
-    from numba.targets import npyimpl
+    from numba.np import npyimpl
 
     class DUFuncKernel(npyimpl._Kernel):
         """
@@ -58,7 +58,7 @@ class DUFuncLowerer(object):
         self.libs = []
 
     def __call__(self, context, builder, sig, args):
-        from numba.targets import npyimpl
+        from numba.np import npyimpl
         explicit_output = len(args) > self.kernel.dufunc.ufunc.nin
         return npyimpl.numpy_ufunc_kernel(context, builder, sig, args,
                                           self.kernel,
