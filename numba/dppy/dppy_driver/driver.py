@@ -49,7 +49,7 @@ def _raise_device_not_found_error(fname):
 
 
 def _raise_unsupported_type_error(fname):
-    e = UnsupportedTypeError("Type needs to be DeviceArray or a numpy.ndarray")
+    e = UnsupportedTypeError("Type needs to be DeviceArray or numpy.ndarray")
     e.fname = fname
     raise e
 
@@ -76,19 +76,22 @@ def _is_supported_ctypes_raw_obj(obj):
 
 class DeviceArray:
 
-    _buffObj = None
-    _ndarray = None
+    _buffObj  = None
+    _ndarray  = None
     _buffSize = None
+    _dataPtr  = None
 
     def __init__(self, env_ptr, arr):
 
+        # We only support device buffers for ndarray and ctypes (for basic types like int, etc)
         if not isinstance(arr, ndarray):
             _raise_unsupported_type_error("DeviceArray constructor")
 
         # create a dp_buffer_t object
-        self._buffObj = _numba_dppy_bindings.ffi.new("buffer_t *")
-        self._ndarray = arr
+        self._buffObj  = _numba_dppy_bindings.ffi.new("buffer_t *")
+        self._ndarray  = arr
         self._buffSize = arr.itemsize * arr.size
+        self._dataPtr  = ffi.cast("void *", arr.ctypes.data)
         retval = (_numba_dppy_bindings
                   .lib
                   .create_dp_rw_mem_buffer(env_ptr,
@@ -116,7 +119,7 @@ class DeviceArray:
         return self.get_buffer_obj()[0].buffer_ptr
 
     def get_data_ptr(self):
-        return ffi.cast("void*", self._ndarray.ctypes.data)
+        return self._dataPtr
 
 ##########################################################################
 # Program class
@@ -230,20 +233,21 @@ class KernelArg():
                               self.kernel_arg_t))
                 if(retval):
                     _raise_driver_error("create_dp_kernel_arg", -1)
-            elif isinstance(arg, int):
-                size_t_arg = ffi.new("size_t *") 
-                size_t_arg[0] = arg
-                retval = (_numba_dppy_bindings
-                          .lib
-                          .create_dp_kernel_arg(
-                              size_t_arg,
-                              ffi.sizeof("size_t"),
-                              self.kernel_arg_t))
-                if(retval):
-                    _raise_driver_error("create_dp_kernel_arg", -1)
             else:
-                print(type(arg))
-                _raise_unsupported_kernel_arg_error("KernelArg init")
+                # it has to be of type ctypes
+                if getattr(arg, '__module__', None) == "ctypes":
+                    self.ptr_to_arg_p = ffi.cast("void *", ctypes.addressof(arg))
+                    retval = (_numba_dppy_bindings
+                              .lib
+                              .create_dp_kernel_arg(
+                                  self.ptr_to_arg_p,
+                                  ctypes.sizeof(arg),
+                                  self.kernel_arg_t))
+                    if(retval):
+                        _raise_driver_error("create_dp_kernel_arg", -1)
+                else:
+                    print(type(arg))
+                    _raise_unsupported_kernel_arg_error("KernelArg init")
 
     def __del__(self):
         retval = (_numba_dppy_bindings
@@ -301,7 +305,7 @@ class DeviceEnv():
                 print("Error Code  : ", retval)
                 _raise_driver_error("write_dp_mem_buffer_to_device", -1)
             return array
-        elif isinstance(array, ndarray):
+        elif isinstance(array, ndarray) or getattr(array, '__module__', None) == "ctypes":
             dArr = DeviceArray(self._env_ptr, array)
             retval = (_numba_dppy_bindings
                       .lib
