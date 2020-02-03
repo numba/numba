@@ -11,11 +11,11 @@ import llvmlite.llvmpy.core as lc
 from numba.core import types, cgutils
 from numba.core.imputils import (lower_builtin, lower_constant,
                                     impl_ret_untracked)
-from numba.np import npdatetime, numpy_support
+from numba.np import npdatetime_helpers, numpy_support
 
 # datetime64 and timedelta64 use the same internal representation
 DATETIME64 = TIMEDELTA64 = Type.int(64)
-NAT = Constant.int(TIMEDELTA64, npdatetime.NAT)
+NAT = Constant.int(TIMEDELTA64, npdatetime_helpers.NAT)
 
 TIMEDELTA_BINOP_SIG = (types.NPTimedelta,) * 2
 
@@ -46,7 +46,7 @@ def scale_timedelta(context, builder, val, srcty, destty):
     Scale the timedelta64 *val* from *srcty* to *destty*
     (both numba.types.NPTimedelta instances)
     """
-    factor = npdatetime.get_timedelta_conversion_factor(
+    factor = npdatetime_helpers.get_timedelta_conversion_factor(
         srcty.unit, destty.unit)
     if factor is None:
         # This can happen when using explicit output in a ufunc.
@@ -60,11 +60,11 @@ def normalize_timedeltas(context, builder, left, right, leftty, rightty):
     Scale either *left* or *right* to the other's unit, in order to have
     homogeneous units.
     """
-    factor = npdatetime.get_timedelta_conversion_factor(
+    factor = npdatetime_helpers.get_timedelta_conversion_factor(
         leftty.unit, rightty.unit)
     if factor is not None:
         return scale_by_constant(builder, left, factor), right
-    factor = npdatetime.get_timedelta_conversion_factor(
+    factor = npdatetime_helpers.get_timedelta_conversion_factor(
         rightty.unit, leftty.unit)
     if factor is not None:
         return left, scale_by_constant(builder, right, factor)
@@ -518,8 +518,8 @@ def year_to_days(builder, year_val):
 
 
 def reduce_datetime_for_unit(builder, dt_val, src_unit, dest_unit):
-    dest_unit_code = npdatetime.DATETIME_UNITS[dest_unit]
-    src_unit_code = npdatetime.DATETIME_UNITS[src_unit]
+    dest_unit_code = npdatetime_helpers.DATETIME_UNITS[dest_unit]
+    src_unit_code = npdatetime_helpers.DATETIME_UNITS[src_unit]
     if dest_unit_code < 2 or src_unit_code >= 2:
         return dt_val, src_unit
     # Need to compute the day ordinal for *dt_val*
@@ -570,7 +570,7 @@ def convert_datetime_for_arith(builder, dt_val, src_unit, dest_unit):
     dt_val, dt_unit = reduce_datetime_for_unit(
         builder, dt_val, src_unit, dest_unit)
     # Then multiply by the remaining constant factor.
-    dt_factor = npdatetime.get_timedelta_conversion_factor(dt_unit, dest_unit)
+    dt_factor = npdatetime_helpers.get_timedelta_conversion_factor(dt_unit, dest_unit)
     if dt_factor is None:
         # This can happen when using explicit output in a ufunc.
         raise NotImplementedError("cannot convert datetime64 from %r to %r"
@@ -585,7 +585,7 @@ def _datetime_timedelta_arith(ll_op_name):
         with cgutils.if_likely(builder, are_not_nat(builder, [dt_arg, td_arg])):
             dt_arg = convert_datetime_for_arith(builder, dt_arg,
                                                 dt_unit, ret_unit)
-            td_factor = npdatetime.get_timedelta_conversion_factor(
+            td_factor = npdatetime_helpers.get_timedelta_conversion_factor(
                 td_unit, ret_unit)
             td_arg = scale_by_constant(builder, td_arg, td_factor)
             ret_val = getattr(builder, ll_op_name)(dt_arg, td_arg)
@@ -665,7 +665,7 @@ def _create_datetime_comparison_impl(ll_op):
         ta, tb = sig.args
         unit_a = ta.unit
         unit_b = tb.unit
-        ret_unit = npdatetime.get_best_unit(unit_a, unit_b)
+        ret_unit = npdatetime_helpers.get_best_unit(unit_a, unit_b)
         ret = alloc_boolean_result(builder)
         with builder.if_else(are_not_nat(builder, [va, vb])) as (then, otherwise):
             with then:

@@ -6,7 +6,7 @@ from .abstract import Dummy, Hashable, Literal, Number, Type
 from functools import total_ordering
 from numba.core import utils
 from numba.core.typeconv import Conversion
-from numba.np import npdatetime
+from numba.np import npdatetime_helpers
 
 
 class Boolean(Hashable):
@@ -140,7 +140,7 @@ class _NPDatetimeBase(Type):
     def __init__(self, unit, *args, **kws):
         name = '%s[%s]' % (self.type_name, unit)
         self.unit = unit
-        self.unit_code = npdatetime.DATETIME_UNITS[self.unit]
+        self.unit_code = npdatetime_helpers.DATETIME_UNITS[self.unit]
         super(_NPDatetimeBase, self).__init__(name, *args, **kws)
 
     def __lt__(self, other):

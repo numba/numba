@@ -17,7 +17,7 @@ from numba.np.numpy_support import numpy_version
 from numba.core import types, config
 from numba.core.errors import TypingError
 from numba.tests.support import TestCase, tag
-from numba.np import npdatetime, numpy_support
+from numba.np import npdatetime_helpers, numpy_support
 
 
 def value_unit(val):
@@ -82,11 +82,11 @@ def make_add_constant(const):
 
 class TestModuleHelpers(TestCase):
     """
-    Test the various helpers in numba.npdatetime.
+    Test the various helpers in numba.npdatetime_helpers.
     """
 
     def test_can_cast_timedelta(self):
-        f = npdatetime.can_cast_timedelta_units
+        f = npdatetime_helpers.can_cast_timedelta_units
         for a, b in itertools.product(date_units, time_units):
             self.assertFalse(f(a, b), (a, b))
             self.assertFalse(f(b, a), (a, b))
@@ -108,7 +108,7 @@ class TestModuleHelpers(TestCase):
         check_units_group(time_units)
 
     def test_timedelta_conversion(self):
-        f = npdatetime.get_timedelta_conversion_factor
+        f = npdatetime_helpers.get_timedelta_conversion_factor
         for unit in all_units + ('',):
             self.assertEqual(f(unit, unit), 1)
         for unit in all_units:
@@ -133,7 +133,7 @@ class TestModuleHelpers(TestCase):
         self.assertEqual(f('W', 'us'), 24 * 7 * 3600 * 1000 * 1000)
 
     def test_datetime_timedelta_scaling(self):
-        f = npdatetime.get_datetime_timedelta_conversion
+        f = npdatetime_helpers.get_datetime_timedelta_conversion
         def check_error(dt_unit, td_unit):
             with self.assertRaises(RuntimeError):
                 f(dt_unit, td_unit)
@@ -172,7 +172,7 @@ class TestModuleHelpers(TestCase):
         self.assertEqual(f('M', 's'), ('s', (97 + 400 * 365) *  24 * 3600, 400 * 12))
 
     def test_combine_datetime_timedelta_units(self):
-        f = npdatetime.combine_datetime_timedelta_units
+        f = npdatetime_helpers.combine_datetime_timedelta_units
         for unit in all_units:
             self.assertEqual(f(unit, unit), unit)
             self.assertEqual(f('', unit), unit)
@@ -184,7 +184,7 @@ class TestModuleHelpers(TestCase):
             self.assertEqual(f(dt_unit, td_unit), td_unit)
 
     def test_same_kind(self):
-        f = npdatetime.same_kind
+        f = npdatetime_helpers.same_kind
         for u in all_units:
             self.assertTrue(f(u, u))
         A = ('Y', 'M', 'W', 'D')
@@ -639,7 +639,7 @@ class TestDatetimeArithmetic(TestCase):
         with self.silence_numpy_warnings():
             dts = self.datetime_samples()
             for a, b in itertools.product(dts, dts):
-                if (not npdatetime.same_kind(value_unit(a), value_unit(b))):
+                if (not npdatetime_helpers.same_kind(value_unit(a), value_unit(b))):
                     continue
                 self.assertPreciseEqual(sub(a, b), a - b, (a, b))
 
@@ -740,8 +740,8 @@ class TestDatetimeArithmetic(TestCase):
             for unit in units:
                 # Force conversion
                 b = a.astype('M8[%s]' % unit)
-                if (not npdatetime.same_kind(value_unit(a),
-                                                 value_unit(b))):
+                if (not npdatetime_helpers.same_kind(value_unit(a),
+                                                     value_unit(b))):
                     continue
                 check_eq(a, b, True)
                 check_lt(a, b + np.timedelta64(1, unit), True)

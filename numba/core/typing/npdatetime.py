@@ -10,7 +10,7 @@ from numba.core import types
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, infer_global, infer,
                                          infer_getattr, signature)
-from numba.np import npdatetime
+from numba.np import npdatetime_helpers
 
 
 # timedelta64-only operations
@@ -36,9 +36,9 @@ class TimedeltaBinOp(AbstractTemplate):
         left, right = args
         if not all(isinstance(tp, types.NPTimedelta) for tp in args):
             return
-        if npdatetime.can_cast_timedelta_units(left.unit, right.unit):
+        if npdatetime_helpers.can_cast_timedelta_units(left.unit, right.unit):
             return signature(right, left, right)
-        elif npdatetime.can_cast_timedelta_units(right.unit, left.unit):
+        elif npdatetime_helpers.can_cast_timedelta_units(right.unit, left.unit):
             return signature(left, left, right)
 
 
@@ -59,8 +59,8 @@ class TimedeltaOrderedCmpOp(AbstractTemplate):
         left, right = args
         if not all(isinstance(tp, types.NPTimedelta) for tp in args):
             return
-        if (npdatetime.can_cast_timedelta_units(left.unit, right.unit) or
-            npdatetime.can_cast_timedelta_units(right.unit, left.unit)):
+        if (npdatetime_helpers.can_cast_timedelta_units(left.unit, right.unit) or
+            npdatetime_helpers.can_cast_timedelta_units(right.unit, left.unit)):
             return signature(types.boolean, left, right)
 
 
@@ -100,8 +100,8 @@ class TimedeltaDivOp(AbstractTemplate):
         if not isinstance(left, types.NPTimedelta):
             return
         if isinstance(right, types.NPTimedelta):
-            if (npdatetime.can_cast_timedelta_units(left.unit, right.unit)
-                or npdatetime.can_cast_timedelta_units(right.unit, left.unit)):
+            if (npdatetime_helpers.can_cast_timedelta_units(left.unit, right.unit)
+                or npdatetime_helpers.can_cast_timedelta_units(right.unit, left.unit)):
                 return signature(types.float64, left, right)
         elif isinstance(right, (types.Float)):
             return signature(left, left, right)
@@ -195,7 +195,8 @@ class DatetimePlusTimedelta(AbstractTemplate):
         else:
             return
         if isinstance(dt, types.NPDatetime):
-            unit = npdatetime.combine_datetime_timedelta_units(dt.unit, td.unit)
+            unit = npdatetime_helpers.combine_datetime_timedelta_units(dt.unit,
+                                                                       td.unit)
             if unit is not None:
                 return signature(types.NPDatetime(unit), left, right)
 
@@ -209,8 +210,10 @@ class DatetimeMinusTimedelta(AbstractTemplate):
             # Guard against unary -
             return
         dt, td = args
-        if isinstance(dt, types.NPDatetime) and isinstance(td, types.NPTimedelta):
-            unit = npdatetime.combine_datetime_timedelta_units(dt.unit, td.unit)
+        if isinstance(dt, types.NPDatetime) and isinstance(td,
+                                                           types.NPTimedelta):
+            unit = npdatetime_helpers.combine_datetime_timedelta_units(dt.unit,
+                                                                       td.unit)
             if unit is not None:
                 return signature(types.NPDatetime(unit), dt, td)
 
@@ -223,9 +226,10 @@ class DatetimeMinusDatetime(AbstractTemplate):
             # Guard against unary -
             return
         left, right = args
-        if isinstance(left, types.NPDatetime) and isinstance(right, types.NPDatetime):
-            # All units compatible! Yoohoo!
-            unit = npdatetime.get_best_unit(left.unit, right.unit)
+        if isinstance(left, types.NPDatetime) and isinstance(right,
+                                                             types.NPDatetime):
+            # All units compatible...
+            unit = npdatetime_helpers.get_best_unit(left.unit, right.unit)
             return signature(types.NPTimedelta(unit), left, right)
 
 
