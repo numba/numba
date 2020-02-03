@@ -9,7 +9,7 @@ import inspect
 import logging
 
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
-from numba.stencil import stencil
+from numba.stencils.stencil import stencil
 from numba.core import config, sigutils, registry
 
 

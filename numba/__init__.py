@@ -65,7 +65,6 @@ __all__ = """
     gdb
     gdb_breakpoint
     gdb_init
-    stencil
     vectorize
     objmode
     literal_unroll

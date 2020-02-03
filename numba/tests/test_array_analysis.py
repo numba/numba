@@ -452,7 +452,7 @@ class TestArrayAnalysis(TestCase):
 
 
     def test_stencilcall(self):
-        from numba import stencil
+        from numba.stencils.stencil import stencil
         @stencil
         def kernel_1(a):
             return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0])

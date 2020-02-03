@@ -1722,7 +1722,7 @@ class ArrayAnalysis(object):
 
 
     def _analyze_op_call(self, scope, equiv_set, expr):
-        from numba.stencil import StencilFunc
+        from numba.stencils.stencil import StencilFunc
 
         callee = expr.func
         callee_def = get_definition(self.func_ir, callee)

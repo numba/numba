@@ -152,7 +152,7 @@ class InlineClosureCallPass(object):
         return True
 
     def _inline_stencil(self, instr, call_name, func_def):
-        from numba.stencil import StencilFunc
+        from numba.stencils.stencil import StencilFunc
         lhs = instr.target
         expr = instr.value
         # We keep the escaping variables of the stencil kernel

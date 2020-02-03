@@ -19,7 +19,7 @@ import operator
 from collections import defaultdict
 
 import numba
-from numba import njit, prange, stencil
+from numba import njit, prange
 from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall, config, compiler, cpu
 from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations

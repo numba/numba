@@ -40,7 +40,7 @@ class StencilPass(object):
     def run(self):
         """ Finds all calls to StencilFuncs in the IR and converts them to parfor.
         """
-        from numba.stencil import StencilFunc
+        from numba.stencils.stencil import StencilFunc
 
         # Get all the calls in the function IR.
         call_table, _ = get_call_table(self.func_ir.blocks)
