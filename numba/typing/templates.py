@@ -7,6 +7,7 @@ import sys
 import inspect
 import os.path
 from collections import namedtuple
+from collections.abc import Sequence
 from types import MethodType, FunctionType
 
 import numba
@@ -147,6 +148,9 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     - default_handler(index, param, default) is called for omitted arguments
     - stararg_handler(index, param, values) is called for a "*args" argument
     """
+    if isinstance(kws, Sequence):
+        # Normalize dict kws
+        kws = dict(kws)
 
     # deal with kwonly args
     params = pysig.parameters
