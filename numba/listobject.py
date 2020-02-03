@@ -103,8 +103,6 @@ class ErrorHandler(object):
                 builder, RuntimeError, (msg,))
 
 
-
-
 def _check_for_none_typed(lst, method):
     if isinstance(lst.dtype, NoneType):
         raise TypingError("method support for List[None] is limited, "
