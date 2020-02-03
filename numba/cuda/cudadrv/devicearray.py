@@ -119,14 +119,20 @@ class DeviceNDArrayBase(object):
         else:
             ptr = 0
 
-        if array_core(self).flags['C_CONTIGUOUS']:
-            strides = None
-        else:
-            strides = tuple(self.strides)
+        # Check if `self` is contiguous. Notice, we do not use `array_core()`
+        # since it calls `require_context()`, which can be quite expensive
+        is_contiguous = True
+        size = self.dtype.itemsize
+        for shape, stride in zip(reversed(self.shape), reversed(self.strides)):
+            if shape > 1:
+                if size != stride:
+                    is_contiguous = False
+                    break
+                size *= shape
 
         return {
             'shape': tuple(self.shape),
-            'strides': strides,
+            'strides': None if is_contiguous else tuple(self.strides),
             'data': (ptr, False),
             'typestr': self.dtype.str,
             'version': 2,
