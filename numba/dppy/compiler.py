@@ -111,7 +111,9 @@ class DPPyKernelBase(object):
         self.device_env = None
 
         # list of supported access types, stored in dict for fast lookup
-        self.correct_access_types = {_NUMBA_PVC_READ_ONLY: _NUMBA_PVC_READ_ONLY, _NUMBA_PVC_WRITE_ONLY: _NUMBA_PVC_WRITE_ONLY, _NUMBA_PVC_READ_WRITE: _NUMBA_PVC_READ_WRITE}
+        self.correct_access_types = {_NUMBA_PVC_READ_ONLY: _NUMBA_PVC_READ_ONLY,
+                _NUMBA_PVC_WRITE_ONLY: _NUMBA_PVC_WRITE_ONLY,
+                _NUMBA_PVC_READ_WRITE: _NUMBA_PVC_READ_WRITE}
 
     def copy(self):
         return copy.copy(self)
@@ -295,7 +297,6 @@ class DPPyKernel(DPPyKernelBase):
             self._unpack_device_array_argument(dArr, kernelargs)
 
         elif isinstance(ty, types.Integer):
-            #cval = getattr(ctypes, "c_%s" % ty)(val)
             cval = ctypes.c_size_t(val)
             kernelargs.append(driver.KernelArg(cval))
 
