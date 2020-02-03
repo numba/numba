@@ -54,6 +54,21 @@ def require_cuda_ndarray(obj):
         raise ValueError('require an cuda ndarray object')
 
 
+def is_contiguous(ary):
+    """
+    Returns True iff `ary` is C-style contiguous.
+    As opposed to array_core(), it does not call require_context(),
+    which can be quite expensive.
+    """
+    size = ary.dtype.itemsize
+    for shape, stride in zip(reversed(ary.shape), reversed(ary.strides)):
+        if shape > 1:
+            if size != stride:
+                return False
+            size *= shape
+    return True
+
+
 class DeviceNDArrayBase(object):
     """A on GPU NDArray representation
     """
@@ -119,20 +134,9 @@ class DeviceNDArrayBase(object):
         else:
             ptr = 0
 
-        # Check if `self` is contiguous. Notice, we do not use `array_core()`
-        # since it calls `require_context()`, which can be quite expensive
-        is_contiguous = True
-        size = self.dtype.itemsize
-        for shape, stride in zip(reversed(self.shape), reversed(self.strides)):
-            if shape > 1:
-                if size != stride:
-                    is_contiguous = False
-                    break
-                size *= shape
-
         return {
             'shape': tuple(self.shape),
-            'strides': None if is_contiguous else tuple(self.strides),
+            'strides': None if is_contiguous(self) else tuple(self.strides),
             'data': (ptr, False),
             'typestr': self.dtype.str,
             'version': 2,
