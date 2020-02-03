@@ -365,7 +365,7 @@ class TestSVML(TestCase):
                     # then to override using `numba.config`
                     import numba
                     from numba import config
-                    from numba.targets import cpu
+                    from numba.core import cpu
                     from numba.tests.support import override_env_config
                     from numba.core.compiler import compile_isolated, Flags
 

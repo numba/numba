@@ -6,7 +6,7 @@ from numba import cuda
 from numba.cuda import jit, autojit
 from numba.cuda.cudadrv import devicearray
 from .descriptor import CUDATargetDesc
-from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
+from numba.np.ufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
                                         GUFuncCallSteps)
 
 

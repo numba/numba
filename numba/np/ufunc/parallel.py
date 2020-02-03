@@ -22,10 +22,10 @@ import numpy as np
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba.npyufunc import ufuncbuilder
 from numba.numpy_support import as_dtype
 from numba.core import types, config
-from numba.npyufunc.wrappers import _wrapper_info
+from numba.np.ufunc.wrappers import _wrapper_info
+from numba.np.ufunc import ufuncbuilder
 
 
 def get_thread_count():
@@ -329,18 +329,18 @@ def _launch_threads():
                 lib = None
                 if backend.startswith("tbb"):
                     try:
-                        from numba.npyufunc import tbbpool as lib
+                        from numba.np.ufunc import tbbpool as lib
                     except ImportError:
                         pass
                 elif backend.startswith("omp"):
                     # TODO: Check that if MKL is present that it is a version
                     # that understands GNU OMP might be present
                     try:
-                        from numba.npyufunc import omppool as lib
+                        from numba.np.ufunc import omppool as lib
                     except ImportError:
                         pass
                 elif backend.startswith("workqueue"):
-                    from numba.npyufunc import workqueue as lib
+                    from numba.np.ufunc import workqueue as lib
                 else:
                     msg = "Unknown value specified for threading layer: %s"
                     raise ValueError(msg % backend)

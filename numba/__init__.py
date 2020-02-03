@@ -32,7 +32,7 @@ from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
                                    jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
-from numba.npyufunc import vectorize, guvectorize, threading_layer
+from numba.np.ufunc import vectorize, guvectorize, threading_layer
 
 # Re-export Numpy helpers
 from numba.numpy_support import carray, farray, from_dtype

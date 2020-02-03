@@ -1,10 +1,11 @@
 import inspect
 
-from numba.npyufunc import _internal, dufunc
-from .ufuncbuilder import GUFuncBuilder
-from .parallel import ParallelUFuncBuilder, ParallelGUFuncBuilder
+from numba.np.ufunc import _internal
+from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
+from numba.np.ufunc.parallel import ParallelUFuncBuilder, ParallelGUFuncBuilder
 
 from numba.targets.registry import TargetRegistry
+from numba.np.ufunc import dufunc
 
 
 class _BaseVectorize(object):

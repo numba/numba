@@ -2,13 +2,14 @@ from numba import jit, typeof, numpy_support
 from numba.core import types, utils, serialize, sigutils
 from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
-from numba.npyufunc import _internal, ufuncbuilder
+from numba.np.ufunc import _internal
 from numba.core.dispatcher import Dispatcher
 from numba.parfors import array_analysis
+from numba.np.ufunc import ufuncbuilder
 
 
 def make_dufunc_kernel(_dufunc):
-    from ..targets import npyimpl
+    from numba.targets import npyimpl
 
     class DUFuncKernel(npyimpl._Kernel):
         """
@@ -57,7 +58,7 @@ class DUFuncLowerer(object):
         self.libs = []
 
     def __call__(self, context, builder, sig, args):
-        from ..targets import npyimpl
+        from numba.targets import npyimpl
         explicit_output = len(args) > self.kernel.dufunc.ufunc.nin
         return npyimpl.numpy_ufunc_kernel(context, builder, sig, args,
                                           self.kernel,

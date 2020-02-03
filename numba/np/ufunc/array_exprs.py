@@ -8,7 +8,7 @@ import operator
 
 from numba.core import types, utils, ir, rewrites, compiler
 from numba.core.typing import npydecl
-from numba.npyufunc.dufunc import DUFunc
+from numba.np.ufunc.dufunc import DUFunc
 
 
 def _is_ufunc(func):
@@ -386,7 +386,7 @@ def _lower_array_expr(lowerer, expr):
                                       caching=False)
 
     # Create kernel subclass calling our native function
-    from ..targets import npyimpl
+    from numba.targets import npyimpl
 
     class ExprKernel(npyimpl._Kernel):
         def generate(self, *args):

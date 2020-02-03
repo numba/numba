@@ -4,7 +4,7 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 
 #define TBB_PREVIEW_WAITING_FOR_WORKERS 1
 /* tbb.h redefines these */
-#include "../_pymodule.h"
+#include "../../_pymodule.h"
 #ifdef _POSIX_C_SOURCE
 #undef _POSIX_C_SOURCE
 #endif

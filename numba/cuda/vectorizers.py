@@ -1,6 +1,6 @@
 from numba import cuda
-from numba.npyufunc import deviceufunc
 from numba.cuda import dispatcher
+from numba.np.ufunc import deviceufunc
 
 vectorizer_stager_source = '''
 def __vectorized_{name}({args}, __out__):

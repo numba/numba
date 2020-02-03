@@ -1,4 +1,4 @@
-from numba.npyufunc.parallel import get_thread_count
+from numba.np.ufunc.parallel import get_thread_count
 from os import environ as env
 from numba.core import config
 from numba.testing import unittest_support as unittest

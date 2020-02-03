@@ -10,10 +10,10 @@ from functools import reduce
 import numpy as np
 
 from numba.core.utils import longint
-from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder, parse_identity
+from numba.np.ufunc.ufuncbuilder import _BaseUFuncBuilder, parse_identity
 from numba.core import types, sigutils
 from numba.core.typing import signature
-from numba.npyufunc.sigparse import parse_signature
+from numba.np.ufunc.sigparse import parse_signature
 
 
 def _broadcast_axis(a, b):

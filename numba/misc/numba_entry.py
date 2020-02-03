@@ -267,7 +267,7 @@ def get_sys_info():
             return "Unknown import problem."
 
         try:
-            from numba.npyufunc import tbbpool
+            from numba.np.ufunc import tbbpool
             print(fmt % ("TBB Threading layer available", True))
         except ImportError as e:
             # might be a missing symbol due to e.g. tbb libraries missing
@@ -276,7 +276,7 @@ def get_sys_info():
                          parse_error(e, 'tbbpool')))
 
         try:
-            from numba.npyufunc import omppool
+            from numba.np.ufunc import omppool
             print(fmt % ("OpenMP Threading layer available", True))
         except ImportError as e:
             print(fmt % ("OpenMP Threading layer available", False))
@@ -284,7 +284,7 @@ def get_sys_info():
                          parse_error(e, 'omppool')))
 
         try:
-            from numba.npyufunc import workqueue
+            from numba.np.ufunc import workqueue
             print(fmt % ("Workqueue Threading layer available", True))
         except ImportError as e:
             print(fmt % ("Workqueue Threading layer available", False))

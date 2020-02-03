@@ -5,6 +5,9 @@ import linecache
 import os
 import sys
 import numpy as np
+import types as pytypes
+import operator
+import warnings
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.ir.values as liv
@@ -12,23 +15,12 @@ import llvmlite.ir.values as liv
 import numba
 from numba import parfor
 from numba.core import types, ir, config, compiler, lowering, sigutils, cgutils
-from numba.core.ir_utils import (add_offset_to_labels, replace_var_names,
-                            remove_dels, legalize_names, mk_unique_var,
-                            rename_labels, get_name_var_table, visit_vars_inner,
-                            get_definition, guard, find_callname,
-                            get_call_table, is_pure, get_np_ufunc_typ,
-                            get_unused_var_name, find_potential_aliases,
-                            is_const_call)
-from numba.core.analysis import (compute_use_defs, compute_live_map,
-                            compute_dead_maps, compute_cfg_from_blocks)
+from numba.core.ir_utils import add_offset_to_labels, replace_var_names, remove_dels, legalize_names, mk_unique_var, rename_labels, get_name_var_table, visit_vars_inner, get_definition, guard, find_callname, get_call_table, is_pure, get_np_ufunc_typ, get_unused_var_name, find_potential_aliases, is_const_call
+from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
 from numba.core.cpu import ParallelOptions
 from numba.parfor import print_wrapped, ensure_parallel_support
 from numba.core.errors import NumbaParallelSafetyWarning
-import types as pytypes
-import operator
-
-import warnings
 
 
 def _lower_parfor_parallel(lowerer, parfor):
@@ -44,7 +36,7 @@ def _lower_parfor_parallel(lowerer, parfor):
        the reduction function across the reduction arrays to produce
        the final reduction values.
     """
-    from .parallel import get_thread_count
+    from numba.np.ufunc.parallel import get_thread_count
 
     ensure_parallel_support()
     typingctx = lowerer.context.typing_context
@@ -1213,7 +1205,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     context = lowerer.context
     builder = lowerer.builder
 
-    from .parallel import (build_gufunc_wrapper,
+    from numba.np.ufunc.parallel import (build_gufunc_wrapper,
                            get_thread_count,
                            _launch_threads)
 

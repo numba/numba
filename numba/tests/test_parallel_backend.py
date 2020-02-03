@@ -29,13 +29,13 @@ _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 # Check which backends are available
 # TODO: Put this in a subprocess so the address space is kept clean
 try:
-    from numba.npyufunc import tbbpool    # noqa: F401
+    from numba.np.ufunc import tbbpool    # noqa: F401
     _HAVE_TBB_POOL = True
 except ImportError:
     _HAVE_TBB_POOL = False
 
 try:
-    from numba.npyufunc import omppool
+    from numba.np.ufunc import omppool
     _HAVE_OMP_POOL = True
 except ImportError:
     _HAVE_OMP_POOL = False
@@ -564,7 +564,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
 
     def test_check_threading_layer_is_gnu(self):
         runme = """if 1:
-            from numba.npyufunc import omppool
+            from numba.np.ufunc import omppool
             assert omppool.openmp_vendor == 'GNU'
             """
         cmdline = [sys.executable, '-c', runme]

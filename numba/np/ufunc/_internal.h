@@ -3,7 +3,7 @@
 #ifndef NUMBA_UFUNC_INTERNAL_H_
 #define NUMBA_UFUNC_INTERNAL_H_
 
-#include "../_pymodule.h"
+#include "../../_pymodule.h"
 #include <structmember.h>
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION

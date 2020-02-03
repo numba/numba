@@ -3,9 +3,9 @@ import pickle
 import numpy as np
 
 from numba import njit, vectorize
-from numba.npyufunc import dufunc
 from ..support import MemoryLeakMixin
 from numba.testing import unittest_support as unittest
+from numba.np.ufunc import dufunc
 
 
 def pyuadd(a0, a1):

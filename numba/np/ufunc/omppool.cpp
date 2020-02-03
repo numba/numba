@@ -2,7 +2,7 @@
 Threading layer on top of OpenMP.
 */
 
-#include "../_pymodule.h"
+#include "../../_pymodule.h"
 #ifdef _POSIX_C_SOURCE
 #undef _POSIX_C_SOURCE
 #endif

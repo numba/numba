@@ -237,7 +237,7 @@ def _reload_parfors():
     """Reloader for cached parfors
     """
     # Re-initialize the parallel backend when load from cache.
-    from numba.npyufunc.parallel import _launch_threads
+    from numba.np.ufunc.parallel import _launch_threads
     _launch_threads()
 
 
