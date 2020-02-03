@@ -12,6 +12,9 @@ from types import FunctionType
 import os
 
 DEBUG=os.environ.get('NUMBA_DPPY_DEBUG', None)
+_NUMBA_PVC_READ_ONLY  = "read_only"
+_NUMBA_PVC_WRITE_ONLY = "write_only"
+_NUMBA_PVC_READ_WRITE = "read_write"
 
 def _raise_no_device_found_error():
     error_message = ("No OpenCL device specified. "
@@ -108,7 +111,7 @@ class DPPyKernelBase(object):
         self.device_env = None
 
         # list of supported access types, stored in dict for fast lookup
-        self.correct_access_types = {"read_only": 0, "write_only": 1, "read_write": 2}
+        self.correct_access_types = {_NUMBA_PVC_READ_ONLY: _NUMBA_PVC_READ_ONLY, _NUMBA_PVC_WRITE_ONLY: _NUMBA_PVC_WRITE_ONLY, _NUMBA_PVC_READ_WRITE: _NUMBA_PVC_READ_WRITE}
 
     def copy(self):
         return copy.copy(self)
@@ -241,24 +244,25 @@ class DPPyKernel(DPPyKernelBase):
         """
         if device_arr and (access_type not in self.correct_access_types or \
             access_type in self.correct_access_types and \
-            self.correct_access_types[access_type] != 0):
+            self.correct_access_types[access_type] != _NUMBA_PVC_READ_ONLY):
             # we get the date back to host if have created a device_array or
             # if access_type of this device_array is not of type read_only and read_write
             device_env.copy_array_from_device(device_arr)
 
     def _unpack_device_array_argument(self, val, kernelargs):
+        # this function only takes DeviceArray created for ndarrays
         void_ptr_arg = True
         # meminfo
         kernelargs.append(driver.KernelArg(None, void_ptr_arg))
         # parent
         kernelargs.append(driver.KernelArg(None, void_ptr_arg))
-        kernelargs.append(driver.KernelArg(val._ndarray.size))
-        kernelargs.append(driver.KernelArg(val._ndarray.dtype.itemsize))
+        kernelargs.append(driver.KernelArg(ctypes.c_int(val._ndarray.size)))
+        kernelargs.append(driver.KernelArg(ctypes.c_int(val._ndarray.dtype.itemsize)))
         kernelargs.append(driver.KernelArg(val))
         for ax in range(val._ndarray.ndim):
-            kernelargs.append(driver.KernelArg(val._ndarray.shape[ax]))
+            kernelargs.append(driver.KernelArg(ctypes.c_int(val._ndarray.shape[ax])))
         for ax in range(val._ndarray.ndim):
-            kernelargs.append(driver.KernelArg(val._ndarray.strides[ax]))
+            kernelargs.append(driver.KernelArg(ctypes.c_int(val._ndarray.strides[ax])))
 
 
     def _unpack_argument(self, ty, val, device_env, retr, kernelargs, device_arrs, access_type):
@@ -269,47 +273,42 @@ class DPPyKernel(DPPyKernelBase):
         # if ty is of type ndarray. Argtypes returns ndarray for both
         # DeviceArray and ndarray. This is a hack to get around the issue,
         # till I understand the typing infrastructure of NUMBA better.
+        device_arrs.append(None)
         if isinstance(val, driver.DeviceArray):
             self._unpack_device_array_argument(val, kernelargs)
-            device_arrs.append(None)
 
         elif isinstance(ty, types.Array):
             default_behavior = self.check_and_warn_abt_invalid_access_type(access_type)
-
             dArr = None
+
             if default_behavior or \
-            self.correct_access_types[access_type] == 0 or \
-            self.correct_access_types[access_type] == 2:
+            self.correct_access_types[access_type] == _NUMBA_PVC_READ_ONLY or \
+            self.correct_access_types[access_type] == _NUMBA_PVC_READ_WRITE:
                 # default, read_only and read_write case
                 dArr = device_env.copy_array_to_device(val)
-            elif self.correct_access_types[access_type] == 1:
+            elif self.correct_access_types[access_type] == _NUMBA_PVC_WRITE_ONLY:
                 # write_only case, we do not copy the host data
-                print("-------Only creating buff not copying from host----")
                 dArr = driver.DeviceArray(device_env.get_env_ptr(), val)
 
             assert (dArr != None), "Problem in allocating device buffer"
-            device_arrs.append(dArr)
+            device_arrs[-1] = dArr
             self._unpack_device_array_argument(dArr, kernelargs)
 
         elif isinstance(ty, types.Integer):
             cval = getattr(ctypes, "c_%s" % ty)(val)
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.float64:
             cval = ctypes.c_double(val)
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.float32:
             cval = ctypes.c_float(val)
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.boolean:
             cval = ctypes.c_uint8(int(val))
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.complex64:
             #kernelargs.append(ctypes.c_float(val.real))
