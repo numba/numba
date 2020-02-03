@@ -2,7 +2,7 @@
 NumPy extensions.
 """
 
-from numba.targets.arraymath import cross2d
+from numba.np.arraymath import cross2d
 
 
 __all__ = [

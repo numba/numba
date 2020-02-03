@@ -14,7 +14,7 @@ from numba.numpy_support import numpy_version
 from numba.core.errors import TypingError
 from numba.core.config import IS_WIN32, IS_32BITS
 from numba.core.utils import pysignature
-from numba.targets.arraymath import cross2d
+from numba.np.arraymath import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
                                  needs_blas)
 from numba.testing import unittest_support as unittest
