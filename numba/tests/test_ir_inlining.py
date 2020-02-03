@@ -44,7 +44,7 @@ class InlineTestPipeline(numba.compiler.CompilerBase):
         return [pipeline]
 
 
-# this global has the same name as the the global in inlining_usecases.py, it
+# this global has the same name as the global in inlining_usecases.py, it
 # is here to check that inlined functions bind to their own globals
 _GLOBAL1 = -50
 
