@@ -29,8 +29,7 @@ from numba.core import types, typing, utils, errors, ir, analysis, postproc, rew
 from numba import prange, pndindex
 from numba.np.numpy_support import as_dtype
 from numba.core.typing.templates import infer_global, AbstractTemplate
-from numba import stencilparfor
-from numba.stencilparfor import StencilPass
+from numba.stencils.stencilparfor import StencilPass
 from numba.extending import register_jitable
 
 
@@ -93,6 +92,7 @@ import numpy
 import numpy as np
 from numba.parfors import array_analysis
 import numba.cpython.builtins
+from numba.stencils import stencilparfor
 # circular dependency: import numba.npyufunc.dufunc.DUFunc
 
 # wrapped pretty print
