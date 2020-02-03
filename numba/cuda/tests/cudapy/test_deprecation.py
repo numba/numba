@@ -3,10 +3,10 @@ from contextlib import contextmanager
 
 from numba.tests.support import override_config, TestCase
 from numba.cuda.testing import skip_on_cudasim
-from numba import unittest_support as unittest
 from numba import cuda
 from numba.core import types
 from numba.cuda.testing import SerialMixin
+from numba.testing import unittest_support as unittest
 
 
 @skip_on_cudasim("Skipped on simulator")

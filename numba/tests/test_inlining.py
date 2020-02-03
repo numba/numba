@@ -3,7 +3,6 @@ import numpy as np
 
 from numba.tests.support import (TestCase, override_config, captured_stdout,
                       skip_parfors_unsupported)
-from numba import unittest_support as unittest
 from numba import jit, njit
 from numba.core import types, ir, postproc, compiler
 from numba.core.ir_utils import guard, find_callname, find_const, get_definition
@@ -21,6 +20,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            IRLegalization, NoPythonBackend)
 
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.testing import unittest_support as unittest
 
 @jit((types.int32,), nopython=True)
 def inner(a):

@@ -1,4 +1,4 @@
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 import itertools
 import numpy as np
 from numba.misc.dummyarray import Array

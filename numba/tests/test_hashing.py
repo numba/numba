@@ -3,7 +3,7 @@
 Test hashing of various supported types.
 """
 
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 
 import sys
 from collections import defaultdict
@@ -12,7 +12,7 @@ import numpy as np
 
 from numba import jit
 from numba.core import types, utils
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.tests.support import TestCase, tag, CompilationCache
 
 from numba.cpython.unicode import compile_time_get_string_data

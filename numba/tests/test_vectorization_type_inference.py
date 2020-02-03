@@ -1,5 +1,5 @@
 from numba import vectorize, jit, bool_, double, int_, float_, typeof, int8
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 import numpy as np
 
 

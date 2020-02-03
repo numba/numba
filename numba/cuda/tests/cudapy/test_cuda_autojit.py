@@ -1,7 +1,7 @@
-from numba import unittest_support as unittest
 from numba import cuda
 import numpy as np
 from numba.cuda.testing import SerialMixin
+from numba.testing import unittest_support as unittest
 
 
 class TestCudaAutojit(SerialMixin, unittest.TestCase):

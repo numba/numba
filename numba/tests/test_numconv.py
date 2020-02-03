@@ -1,5 +1,5 @@
 import itertools
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.core.compiler import compile_isolated
 from numba.core import types
 

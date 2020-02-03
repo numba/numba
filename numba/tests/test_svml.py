@@ -9,9 +9,10 @@ from itertools import chain, combinations
 
 import numba
 from numba.core import config, cpu
-from numba import prange, njit, unittest_support as unittest
+from numba import prange, njit
 from numba.core.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase, tag, override_env_config
+from numba.testing import unittest_support as unittest
 
 needs_svml = unittest.skipUnless(config.USING_SVML,
                                  "SVML tests need SVML to be present")

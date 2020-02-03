@@ -1,4 +1,4 @@
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 
 from collections import namedtuple
 import contextlib
@@ -12,7 +12,7 @@ import numpy as np
 from numba.core.compiler import compile_isolated, Flags
 from numba import jit
 from numba.core import types
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.tests.support import (TestCase, enable_pyobj_flags, MemoryLeakMixin,
                                  tag, compile_function)
 

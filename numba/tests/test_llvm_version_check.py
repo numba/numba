@@ -1,7 +1,7 @@
 import imp
 import sys
 
-from numba import unittest_support as unittest
+from numba.testing import unittest_support as unittest
 
 
 class TestLlvmVersion(unittest.TestCase):

@@ -3,11 +3,11 @@ import itertools
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba.core.compiler import compile_isolated
 from numba import njit, jit
 from numba.core import types, errors, utils
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
+from numba.testing import unittest_support as unittest
 
 
 Rect = collections.namedtuple('Rect', ('width', 'height'))

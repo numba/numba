@@ -5,7 +5,7 @@ import subprocess
 import math
 
 import numba
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 
 class TestLargeCode(unittest.TestCase):
 

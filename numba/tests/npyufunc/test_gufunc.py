@@ -1,10 +1,10 @@
 import numpy as np
 import numpy.core.umath_tests as ut
 
-from numba import unittest_support as unittest
 from numba import void, float32, jit, guvectorize
 from numba.npyufunc import GUVectorize
 from ..support import tag, TestCase
+from numba.testing import unittest_support as unittest
 
 
 def matmulcore(A, B, C):

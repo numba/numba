@@ -1,7 +1,6 @@
 import contextlib
 import sys
 
-from numba import unittest_support as unittest
 from numba.tests.support import (
     captured_stdout,
     SerialMixin,
@@ -9,6 +8,7 @@ from numba.tests.support import (
 )
 from numba.cuda.cuda_paths import get_conda_ctk
 from numba.core import config
+from numba.testing import unittest_support as unittest
 
 
 class CUDATestCase(SerialMixin, unittest.TestCase):

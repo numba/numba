@@ -1,7 +1,7 @@
 import sys
 import numpy as np
 
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.core.compiler import compile_isolated, Flags
 from numba import jit, njit
 from numba.core import types

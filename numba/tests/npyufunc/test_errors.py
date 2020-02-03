@@ -3,10 +3,10 @@ import sys
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import vectorize, guvectorize
 
 from ..support import TestCase, CheckWarningsMixin
+from numba.testing import unittest_support as unittest
 
 
 def sqrt(val):

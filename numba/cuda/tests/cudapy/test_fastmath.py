@@ -1,8 +1,8 @@
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import cuda, float32
 from numba.cuda.testing import SerialMixin
+from numba.testing import unittest_support as unittest
 
 
 class TestFastMathOption(SerialMixin, unittest.TestCase):

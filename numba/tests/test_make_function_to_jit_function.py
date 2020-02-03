@@ -3,7 +3,7 @@ from numba.core import errors
 from numba.extending import overload
 import numpy as np
 
-from numba import unittest_support as unittest
+from numba.testing import unittest_support as unittest
 
 
 @njit

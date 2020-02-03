@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import roc
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.roc.hsadrv.driver import dgpu_present
 
 

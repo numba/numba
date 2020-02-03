@@ -1,4 +1,4 @@
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from unittest import loader, case
 from os.path import isdir, isfile, join, dirname, basename
 

@@ -2,7 +2,7 @@ import warnings
 from numba import jit
 from numba.core.errors import (NumbaDeprecationWarning,
                           NumbaPendingDeprecationWarning, NumbaWarning)
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 
 
 class TestDeprecation(unittest.TestCase):

@@ -5,7 +5,7 @@ import subprocess
 import sys
 import threading
 
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.tests.support import TestCase
 
 

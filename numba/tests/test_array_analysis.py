@@ -5,7 +5,6 @@ import sys
 from collections import namedtuple
 from io import StringIO
 
-from numba import unittest_support as unittest
 from numba import njit, typeof, prange
 from numba.core import types, typing, ir, bytecode, postproc, cpu
 from numba.tests.support import TestCase, tag, skip_parfors_unsupported
@@ -23,6 +22,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
 
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 from numba.experimental import jitclass
+from numba.testing import unittest_support as unittest
 
 
 skip_unsupported = skip_parfors_unsupported

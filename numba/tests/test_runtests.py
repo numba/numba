@@ -1,8 +1,8 @@
 import sys
 import subprocess
 
-from numba import unittest_support as unittest
 from numba import cuda
+from numba.testing import unittest_support as unittest
 
 
 class TestCase(unittest.TestCase):

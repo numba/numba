@@ -1,7 +1,7 @@
 import gc
 
 from numba import jit, int32
-from numba import unittest_support as unittest
+from numba.testing import unittest_support as unittest
 
 
 def foo(a, b):

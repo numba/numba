@@ -2,7 +2,7 @@
 import numpy as np
 import numpy
 
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba import njit, jit, testing
 from numba.core.errors import TypingError, UnsupportedError
 from numba.tests.support import TestCase

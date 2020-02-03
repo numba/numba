@@ -1,9 +1,9 @@
 from timeit import default_timer as timer
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import roc, float32
 from numba.roc.hsadrv.error import HsaKernelLaunchError
+from numba.testing import unittest_support as unittest
 
 
 class TestMatMul(unittest.TestCase):

@@ -1,6 +1,6 @@
 from numba import njit
 from numba.core.errors import TypingError
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.tests.support import TestCase, force_pyobj_flags
 
 

@@ -1,8 +1,8 @@
 from llvmlite import ir
 from llvmlite import binding as ll
 
-from numba import unittest_support as unittest
 from numba.core import datamodel
+from numba.testing import unittest_support as unittest
 
 
 class DataModelTester(unittest.TestCase):

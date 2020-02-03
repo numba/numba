@@ -5,7 +5,7 @@ import numpy as np
 from numba import njit, vectorize
 from numba.npyufunc import dufunc
 from ..support import MemoryLeakMixin
-from numba import unittest_support as unittest
+from numba.testing import unittest_support as unittest
 
 
 def pyuadd(a0, a1):

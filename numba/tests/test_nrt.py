@@ -6,7 +6,6 @@ import re
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import njit, targets
 from numba.core import typing, types
 from numba.core.compiler import compile_isolated, Flags
@@ -26,6 +25,7 @@ from numba.core.unsafe.nrt import NRT_get_api
 
 from numba.tests.support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
 from numba.core import cpu
+from numba.testing import unittest_support as unittest
 
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")

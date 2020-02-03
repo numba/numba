@@ -1,10 +1,10 @@
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import vectorize, cuda
 from numba.tests.npyufunc.test_vectorize_decor import BaseVectorizeDecor, \
     BaseVectorizeNopythonArg, BaseVectorizeUnrecognizedArg
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.testing import unittest_support as unittest
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')

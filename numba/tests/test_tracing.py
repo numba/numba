@@ -1,7 +1,7 @@
 from io import StringIO
 import logging
 
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.core import tracing
 
 logger = logging.getLogger('trace')

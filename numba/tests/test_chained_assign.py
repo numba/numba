@@ -1,5 +1,5 @@
 from numba import jit
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 import numpy as np
 import copy
 from numba.tests.support import MemoryLeakMixin

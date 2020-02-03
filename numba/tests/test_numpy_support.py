@@ -8,7 +8,7 @@ from itertools import product
 
 import numpy as np
 
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba import numpy_support
 from numba.core import types
 from numba.tests.support import TestCase

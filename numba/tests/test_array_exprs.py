@@ -4,11 +4,11 @@ from io import StringIO
 import numpy as np
 
 from numba import njit, vectorize
-from numba import unittest_support as unittest
 from numba import typeof
 from numba.core import utils, types, typing, ir, compiler, cpu
 from numba.core.compiler import Compiler, Flags
 from numba.tests.support import MemoryLeakMixin, TestCase
+from numba.testing import unittest_support as unittest
 
 
 class Namespace(dict):

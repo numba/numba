@@ -6,7 +6,7 @@ import sys
 import llvmlite.llvmpy.core as lc
 import numpy as np
 
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.core import types, typing, cgutils, cpu
 from numba.core.compiler_lock import global_compiler_lock
 from numba.tests.support import TestCase

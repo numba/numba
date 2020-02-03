@@ -1,10 +1,8 @@
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.tests.support import TestCase
 
 import sys
 import operator
-
-# deliberately imported twice for different use cases
 import numpy as np
 import numpy
 
@@ -13,6 +11,9 @@ from numba import jit
 from numba.core import types, utils
 from numba.core.errors import TypingError, LoweringError
 from numba.tests.support import tag, _32bit, captured_stdout
+
+
+# deliberately imported twice for different use cases
 
 
 PARALLEL_SUPPORTED = not _32bit

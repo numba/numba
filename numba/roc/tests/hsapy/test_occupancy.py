@@ -1,5 +1,5 @@
-from numba import unittest_support as unittest
 from numba.roc.gcn_occupancy import get_limiting_factors
+from numba.testing import unittest_support as unittest
 
 
 class TestOccupancy(unittest.TestCase):

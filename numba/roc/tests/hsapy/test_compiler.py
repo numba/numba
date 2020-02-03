@@ -2,7 +2,7 @@ import tempfile
 import os
 import numpy as np
 
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba import roc
 from numba.core import types
 from numba.roc import compiler

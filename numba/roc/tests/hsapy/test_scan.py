@@ -1,7 +1,7 @@
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import roc, intp, int32
+from numba.testing import unittest_support as unittest
 
 
 @roc.jit(device=True)

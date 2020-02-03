@@ -3,7 +3,6 @@ Unspecified error handling tests
 """
 
 from numba import jit, njit, typed, int64
-from numba import unittest_support as unittest
 from numba.core import errors, utils
 import numpy as np
 
@@ -18,6 +17,7 @@ from numba.core.typed_passes import (NopythonTypeInference, DeadCodeElimination,
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 
 from numba.tests.support import skip_parfors_unsupported
+from numba.testing import unittest_support as unittest
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
 _global_list = [1, 2, 3, 4]

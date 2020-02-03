@@ -7,7 +7,6 @@ from functools import partial
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba.core.compiler import Flags
 from numba import jit, njit, typeof
 from numba.core import types
@@ -18,6 +17,7 @@ from numba.core.utils import pysignature
 from numba.targets.arraymath import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
                                  needs_blas)
+from numba.testing import unittest_support as unittest
 
 
 no_pyobj_flags = Flags()

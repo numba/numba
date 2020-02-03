@@ -2,7 +2,7 @@ import numpy as np
 
 import numba
 from numba import roc
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 
 
 def atomic_add(ary):

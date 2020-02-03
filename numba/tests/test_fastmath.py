@@ -1,9 +1,9 @@
 import math
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba.tests.support import captured_stdout, override_config
 from numba import njit, vectorize, guvectorize
+from numba.testing import unittest_support as unittest
 
 
 class TestFastMath(unittest.TestCase):

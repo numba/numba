@@ -1,4 +1,4 @@
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba import objmode
 import numpy as np
 from numba.core import ir, compiler

@@ -2,10 +2,10 @@ import threading
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import cuda
 from numba.cuda.testing import SerialMixin, skip_unless_cudasim
 import numba.cuda.simulator as simulator
+from numba.testing import unittest_support as unittest
 
 
 class TestCudaSimIssues(SerialMixin, unittest.TestCase):

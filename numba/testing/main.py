@@ -1,4 +1,4 @@
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 
 import collections
 import contextlib

@@ -1,10 +1,10 @@
 import numpy as np
 
 from numba import cuda, vectorize, guvectorize
-from numba import unittest_support as unittest
 from numba.numpy_support import from_dtype
 from numba.tests.support import TestCase
 from numba.cuda.testing import SerialMixin, skip_on_cudasim
+from numba.testing import unittest_support as unittest
 
 
 class TestCudaDateTime(SerialMixin, TestCase):

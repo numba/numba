@@ -3,7 +3,7 @@ import sys
 import weakref
 import gc
 
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.core.controlflow import CFGraph, Loop
 from numba.core.compiler import compile_extra, compile_isolated, Flags
 from numba.core import types

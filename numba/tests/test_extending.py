@@ -9,7 +9,6 @@ import re
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import njit, jit
 from numba.core import types, errors, typing, compiler
 from numba.core.typed_passes import type_inference_stage
@@ -18,6 +17,7 @@ from numba.core.compiler import compile_isolated
 from numba.tests.support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
 from numba.core.errors import LoweringError
+from numba.testing import unittest_support as unittest
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,
@@ -35,6 +35,8 @@ from numba.core.typing.templates import (
 
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
+
+
 
 
 try:

@@ -7,11 +7,11 @@ import random
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import jit, vectorize, guvectorize
 
 from numba.tests.support import temp_directory, override_config
 from numba.core import config
+from numba.testing import unittest_support as unittest
 
 
 def foo(n, v):

@@ -8,7 +8,7 @@ import numpy as np
 
 from numba.core.compiler import compile_isolated, Flags
 from numba import jit, typeof
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba import testing
 from numba.core import types, utils, errors
 from numba.tests.support import TestCase, MemoryLeakMixin, tag

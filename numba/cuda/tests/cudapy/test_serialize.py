@@ -2,8 +2,8 @@ import pickle
 import numpy as np
 from numba import cuda, vectorize, numpy_support
 from numba.core import types
-from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.testing import unittest_support as unittest
 
 
 @skip_on_cudasim('pickling not supported in CUDASIM')

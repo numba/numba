@@ -1,7 +1,7 @@
 import numpy as np
 from numba import from_dtype, cuda
-from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.testing import unittest_support as unittest
 
 class TestAlignment(SerialMixin, unittest.TestCase):
     def test_record_alignment(self):

@@ -4,8 +4,8 @@ import multiprocessing as mp
 import numpy as np
 
 from numba import cuda
-from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.testing import unittest_support as unittest
 
 has_mp_get_context = hasattr(mp, 'get_context')
 is_unix = os.name == 'posix'

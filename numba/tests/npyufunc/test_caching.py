@@ -5,11 +5,10 @@ import subprocess
 
 import numpy as np
 
-from numba import unittest_support as unittest
-
 from ..support import capture_cache_log
 from ..test_dispatcher import BaseCacheTest
 from numba.core import config
+from numba.testing import unittest_support as unittest
 
 
 class UfuncCacheTest(BaseCacheTest):

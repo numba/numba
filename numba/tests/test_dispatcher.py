@@ -15,7 +15,6 @@ from io import StringIO
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import jit, generated_jit, typeof
 from numba.core import types, errors, codegen
 from numba import _dispatcher
@@ -31,6 +30,7 @@ from numba import parfor
 from numba.tests.support import skip_parfors_unsupported, needs_lapack
 
 import llvmlite.binding as ll
+from numba.testing import unittest_support as unittest
 
 try:
     import jinja2

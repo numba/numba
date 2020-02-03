@@ -19,7 +19,6 @@ import operator
 from collections import defaultdict
 
 import numba
-from numba import unittest_support as unittest
 from numba import njit, prange, stencil
 from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall, config, compiler, cpu
 from numba.targets.registry import cpu_target
@@ -35,6 +34,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       skip_parfors_unsupported, _32bit, needs_blas,
                       needs_lapack)
 import cmath
+from numba.testing import unittest_support as unittest
 
 
 test_disabled = unittest.skipIf(True, 'Test disabled')

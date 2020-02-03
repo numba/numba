@@ -3,8 +3,8 @@ import numpy as np
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
 from numba.tests.support import (override_config, captured_stderr,
                                  captured_stdout)
-from numba import unittest_support as unittest
 from numba import cuda, float64
+from numba.testing import unittest_support as unittest
 
 
 def simple_cuda(A, B):

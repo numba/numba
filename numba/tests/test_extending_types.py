@@ -12,7 +12,7 @@ from numba.extending import type_callable
 from numba.extending import overload
 from numba.extending import typeof_impl
 
-from numba import unittest_support as unittest
+from numba.testing import unittest_support as unittest
 
 
 class TestExtTypDummy(unittest.TestCase):

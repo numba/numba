@@ -9,7 +9,7 @@ from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table)
 from numba.core.typed_passes import type_inference_stage
-from numba import unittest_support as unittest
+from numba.testing import unittest_support as unittest
 
 def test_will_propagate(b, z, w):
     x = 3

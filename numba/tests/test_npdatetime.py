@@ -11,7 +11,7 @@ import warnings
 
 import numpy as np
 
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba import jit, vectorize, numpy_support
 from numba.numpy_support import numpy_version
 from numba.core import types, config

@@ -6,7 +6,7 @@ from fnmatch import fnmatch
 from os.path import join, isfile, relpath, normpath, splitext
 
 from .main import NumbaTestProgram, SerialSuite, make_tag_decorator
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba.core import config
 
 

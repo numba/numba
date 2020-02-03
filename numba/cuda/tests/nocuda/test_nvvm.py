@@ -1,8 +1,8 @@
 from numba.cuda.compiler import compile_kernel
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
-from numba import unittest_support as unittest
 from numba.core import types, utils
+from numba.testing import unittest_support as unittest
 
 
 @skip_on_cudasim('libNVVM not supported in simulator')

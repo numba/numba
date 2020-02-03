@@ -4,7 +4,7 @@ Tests for enum support.
 
 
 import numpy as np
-import numba.unittest_support as unittest
+import numba.testing.unittest_support as unittest
 from numba import jit, vectorize
 
 from numba.tests.support import TestCase

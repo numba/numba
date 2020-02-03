@@ -3,7 +3,6 @@ import warnings
 import numpy as np
 
 import numba
-from numba import unittest_support as unittest
 from numba.core.transforms import find_setupwiths, with_lifting
 from numba.core.withcontexts import bypass_context, call_context, objmode_context
 from numba.core.bytecode import FunctionIdentity, ByteCode
@@ -15,6 +14,7 @@ from numba import njit, typeof, objmode
 from numba.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
                                  skip_unless_scipy)
+from numba.testing import unittest_support as unittest
 
 
 def get_func_ir(func):

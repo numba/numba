@@ -7,8 +7,8 @@ Usually due to invalid type conversion between function boundaries.
 from numba import int32, int64
 from numba import jit, generated_jit
 from numba.core import types
-from numba import unittest_support as unittest
 from numba.tests.support import TestCase, tag
+from numba.testing import unittest_support as unittest
 
 
 @jit(nopython=True)

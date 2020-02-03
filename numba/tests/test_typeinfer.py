@@ -3,7 +3,6 @@ import itertools
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba.core.compiler import compile_isolated
 from numba import jit
 from numba.core import types, typing, errors, typeinfer, utils
@@ -11,6 +10,7 @@ from numba.core.typeconv import Conversion
 
 from numba.tests.support import TestCase, tag
 from numba.tests.test_typeconv import CompatibilityTestMixin
+from numba.testing import unittest_support as unittest
 
 
 i8 = types.int8
