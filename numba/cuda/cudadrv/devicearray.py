@@ -18,7 +18,7 @@ from numba.cuda.cudadrv import driver as _driver
 from numba.cuda.cudadrv import devices
 from numba import numpy_support
 from numba.core import types
-from numba.unsafe.ndarray import to_fixed_tuple
+from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.misc import dummyarray
 
 try:

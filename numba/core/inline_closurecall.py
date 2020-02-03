@@ -32,7 +32,7 @@ from numba.core.analysis import (
     compute_live_variables)
 
 from numba.cpython.rangeobj import range_iter_len
-from numba.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
+from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
 import operator
 

@@ -27,7 +27,7 @@ from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (find_callname, guard, build_definitions,
                             get_definition, is_getitem, is_setitem,
                             index_var_of_get_setitem)
-from numba.unsafe.ndarray import empty_inferred as unsafe_empty
+from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty
 from numba.core.compiler import compile_isolated, Flags
 from numba.core.bytecode import ByteCodeIter
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
