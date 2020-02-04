@@ -19,17 +19,16 @@ class TestNumbaImport(TestCase):
             'cffi',
             'distutils',
             'numba.cuda',
-            'numba.hsa',
-            'numba.targets.mathimpl',
-            'numba.targets.randomimpl',
+            'numba.cpython.mathimpl',
+            'numba.cpython.randomimpl',
             'numba.tests',
-            'numba.typing.collections',
-            'numba.typing.listdecl',
-            'numba.typing.npdatetime',
+            'numba.core.typing.collections',
+            'numba.core.typing.listdecl',
+            'numba.core.typing.npdatetime',
             ]
         # Sanity check the modules still exist...
         for mod in blacklist:
-            if mod not in ('cffi', 'numba.hsa'):
+            if mod not in ('cffi',):
                 __import__(mod)
 
         code = """if 1:
