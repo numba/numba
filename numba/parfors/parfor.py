@@ -30,7 +30,7 @@ from numba import prange, pndindex
 from numba.np.numpy_support import as_dtype
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.stencils.stencilparfor import StencilPass
-from numba.extending import register_jitable
+from numba.core.extending import register_jitable
 
 
 from numba.core.ir_utils import (
@@ -86,7 +86,7 @@ from numba.core.types.functions import Function
 from numba.parfors.array_analysis import (random_int_args, random_1arg_size,
                                   random_2arg_sizelast, random_3arg_sizelast,
                                   random_calls, assert_equiv)
-from numba.extending import overload
+from numba.core.extending import overload
 import copy
 import numpy
 import numpy as np

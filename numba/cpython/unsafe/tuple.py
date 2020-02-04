@@ -4,7 +4,7 @@ operations with tuple and workarounds for limitations enforced in userland.
 """
 
 from numba.core.cgutils import alloca_once
-from numba.extending import intrinsic
+from numba.core.extending import intrinsic
 
 
 @intrinsic

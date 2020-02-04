@@ -6,7 +6,7 @@ import numpy as np
 
 from numba.core import types, cgutils
 from numba.core.datamodel import models
-from numba.extending import (
+from numba.core.extending import (
     typeof_impl, type_callable, register_model,
     lower_builtin, box, unbox, NativeValue,
     overload, overload_attribute, overload_method, make_attribute_wrapper)

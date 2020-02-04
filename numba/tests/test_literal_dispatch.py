@@ -7,7 +7,7 @@ from numba import njit
 from numba.core import types, errors, cgutils
 from numba.core.typing import signature
 from numba.core.datamodel import models
-from numba.extending import (
+from numba.core.extending import (
     overload, SentryLiteralArgs, overload_method, register_model, intrinsic,
 )
 from numba.misc.special import literally

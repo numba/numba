@@ -12,7 +12,7 @@ from numba.core import types, typing, utils, ir, config, ir_utils, registry
 from numba.core.typing.templates import (CallableTemplate, signature,
                                          infer_global, AbstractTemplate)
 from numba.core.imputils import lower_builtin
-from numba.extending import register_jitable
+from numba.core.extending import register_jitable
 import numba
 
 import operator

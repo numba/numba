@@ -12,7 +12,7 @@ import llvmlite.binding as ll
 import llvmlite.llvmpy.core as lc
 from llvmlite import ir
 
-from numba.extending import (
+from numba.core.extending import (
     overload, overload_method, intrinsic, register_jitable)
 from numba.core import errors
 from numba.core import types, utils

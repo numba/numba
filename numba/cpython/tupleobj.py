@@ -11,7 +11,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr_generic,
                                     impl_ret_borrowed, impl_ret_untracked,
                                     RefType)
 from numba.core import typing, types, cgutils
-from numba.extending import overload_method, overload, intrinsic
+from numba.core.extending import overload_method, overload, intrinsic
 
 
 @lower_builtin(types.NamedTupleClass, types.VarArg(types.Any))

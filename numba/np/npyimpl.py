@@ -18,7 +18,7 @@ from numba.core.imputils import Registry, impl_ret_new_ref, force_error_model
 from numba.core import typing, types, utils, cgutils, callconv
 from numba.np.numpy_support import ufunc_find_matching_loop, select_array_wrapper, from_dtype
 from numba.core.typing import npydecl
-from numba.extending import overload, intrinsic
+from numba.core.extending import overload, intrinsic
 
 from numba.core import errors
 from numba.cpython import builtins

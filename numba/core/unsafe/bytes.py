@@ -3,7 +3,7 @@ This file provides internal compiler utilities that support certain special
 operations with bytes and workarounds for limitations enforced in userland.
 """
 
-from numba.extending import intrinsic
+from numba.core.extending import intrinsic
 from llvmlite import ir
 from numba.core import types, cgutils
 

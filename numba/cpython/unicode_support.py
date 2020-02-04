@@ -12,7 +12,7 @@ import llvmlite.llvmpy.core as lc
 from numba.core import types, cgutils
 from numba.core.imputils import (impl_ret_untracked)
 
-from numba.extending import overload, intrinsic, register_jitable
+from numba.core.extending import overload, intrinsic, register_jitable
 from numba.core.errors import TypingError
 
 # This is equivalent to the struct `_PyUnicode_TypeRecord defined in CPython's

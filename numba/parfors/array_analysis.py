@@ -25,7 +25,7 @@ from numba.core.analysis import (compute_cfg_from_blocks)
 from numba.core.typing import npydecl, signature
 import collections
 import copy
-from numba.extending import intrinsic
+from numba.core.extending import intrinsic
 import llvmlite.llvmpy.core as lc
 import llvmlite
 

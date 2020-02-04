@@ -9,7 +9,7 @@ from llvmlite import ir
 
 from numba import _helperlib
 
-from numba.extending import (
+from numba.core.extending import (
     overload,
     overload_method,
     register_jitable,

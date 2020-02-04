@@ -8,7 +8,7 @@ import numpy as np
 
 from numba import njit, typeof
 from numba.core import types, ir, ir_utils
-from numba.extending import (
+from numba.core.extending import (
     overload,
     overload_method,
     overload_attribute,

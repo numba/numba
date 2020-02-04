@@ -10,7 +10,7 @@ import llvmlite.llvmpy.core as lc
 
 from numba.core.imputils import lower_builtin, lower_getattr, lower_getattr_generic, lower_cast, lower_constant, iternext_impl, call_getiter, call_iternext, impl_ret_borrowed, impl_ret_untracked, numba_typeref_ctor
 from numba.core import typing, types, utils, cgutils
-from numba.extending import overload, intrinsic
+from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
 from numba.core.errors import TypingError
 

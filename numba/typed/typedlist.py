@@ -15,7 +15,7 @@ from numba.core.imputils import numba_typeref_ctor
 from numba.core.dispatcher import Dispatcher
 from numba.core import types, errors, config, cgutils
 from numba import njit, typeof
-from numba.extending import (
+from numba.core.extending import (
     overload_method,
     overload,
     box,

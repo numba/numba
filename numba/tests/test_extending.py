@@ -38,8 +38,6 @@ from numba.core.typing.templates import (
 from .pdlike_usecase import Index, Series
 
 
-
-
 try:
     import scipy
     if LooseVersion(scipy.__version__) < '0.19':
@@ -59,7 +57,7 @@ class MyDummy(object):
 class MyDummyType(types.Opaque):
     def can_convert_to(self, context, toty):
         if isinstance(toty, types.Number):
-            from numba.typeconv import Conversion
+            from numba.core.typeconv import Conversion
             return Conversion.safe
 
 mydummy_type = MyDummyType('mydummy')

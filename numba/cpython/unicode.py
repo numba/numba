@@ -4,7 +4,7 @@ import operator
 import numpy as np
 from llvmlite.ir import IntType, Constant
 
-from numba.extending import (
+from numba.core.extending import (
     models,
     register_model,
     make_attribute_wrapper,

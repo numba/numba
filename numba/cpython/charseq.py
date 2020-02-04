@@ -4,7 +4,7 @@ import numpy as np
 from llvmlite import ir
 
 from numba.core import types, cgutils
-from numba.extending import (overload, intrinsic, overload_method, lower_cast,
+from numba.core.extending import (overload, intrinsic, overload_method, lower_cast,
                              register_jitable)
 from numba.core.cgutils import is_nonelike
 from numba.cpython import unicode

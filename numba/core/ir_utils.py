@@ -13,6 +13,7 @@ import warnings
 from llvmlite import ir as lir
 
 import numba
+from numba.core.extending import _Intrinsic
 from numba.core import types, utils, typing, ir, analysis, postproc, rewrites, config, cgutils
 from numba.core.typing.templates import (signature, infer_global,
                                          AbstractTemplate)
@@ -663,7 +664,7 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == [prange] or
             call_list == [parfor.internal_prange]):
             return True
-        elif (isinstance(call_list[0], numba.extending._Intrinsic) and
+        elif (isinstance(call_list[0], _Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or
                call_list[0]._name == 'unsafe_empty_inferred')):
             return True
@@ -1505,7 +1506,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
             # get the underlying definition of Intrinsic object to be able to
             # find the module effectively.
             # Otherwise, it will return numba.extending
-            if isinstance(def_val, numba.extending._Intrinsic):
+            if isinstance(def_val, _Intrinsic):
                 def_val = def_val._defn
             if hasattr(def_val, '__module__'):
                 mod_name = def_val.__module__

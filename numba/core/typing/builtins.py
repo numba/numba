@@ -15,7 +15,7 @@ from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
 
 from numba.cpython.builtins import get_type_min_value, get_type_max_value
 
-from numba.extending import (
+from numba.core.extending import (
     typeof_impl, type_callable, models, register_model, make_attribute_wrapper,
     )
 

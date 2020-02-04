@@ -7,7 +7,7 @@ from numba.core.types import DictType, TypeRef
 from numba.core.imputils import numba_typeref_ctor
 from numba import njit, typeof
 from numba.core import types, errors, config, cgutils
-from numba.extending import (
+from numba.core.extending import (
     overload_method,
     overload,
     box,

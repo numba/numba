@@ -13,7 +13,7 @@ from llvmlite.llvmpy.core import Type
 from numba.core.imputils import Registry, impl_ret_untracked
 from numba import typeof
 from numba.core import types, utils, config, cgutils
-from numba.extending import overload
+from numba.core.extending import overload
 from numba.core.typing import signature
 from numba.cpython.unsafe.numbers import trailing_zeros
 

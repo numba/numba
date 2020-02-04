@@ -13,7 +13,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                     lower_constant, impl_ret_borrowed,
                                     impl_ret_untracked)
 from numba.core import typing, types, utils, errors, cgutils, optional
-from numba.extending import intrinsic, overload_method
+from numba.core.extending import intrinsic, overload_method
 from numba.cpython.unsafe.numbers import viewer
 
 def _int_arith_flags(rettype):

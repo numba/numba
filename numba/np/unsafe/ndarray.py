@@ -4,7 +4,7 @@ operations with numpy.
 """
 from numba.core import types, typing
 from numba.core.cgutils import unpack_tuple
-from numba.extending import intrinsic
+from numba.core.extending import intrinsic
 from numba.core.imputils import impl_ret_new_ref
 from numba.core.errors import RequireLiteralValue, TypingError
 

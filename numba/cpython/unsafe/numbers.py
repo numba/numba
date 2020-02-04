@@ -1,7 +1,7 @@
 """ This module provides the unsafe things for targets/numbers.py
 """
 from numba.core import types
-from numba.extending import intrinsic
+from numba.core.extending import intrinsic
 
 from llvmlite import ir
 

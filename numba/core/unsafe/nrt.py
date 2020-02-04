@@ -4,7 +4,7 @@ Contains unsafe intrinsic that calls NRT C API
 
 from numba.core import types
 from numba.core.typing import signature
-from numba.extending import intrinsic
+from numba.core.extending import intrinsic
 
 
 @intrinsic

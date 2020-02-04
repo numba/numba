@@ -14,7 +14,7 @@ import llvmlite.llvmpy.core as lc
 
 from numba import generated_jit
 from numba.core import types, cgutils
-from numba.extending import overload, overload_method, register_jitable
+from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import as_dtype, type_can_asarray
 from numba.np.numpy_support import numpy_version
 from numba.np.numpy_support import is_nonelike
@@ -24,7 +24,7 @@ from numba.core.typing import signature
 from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
 from numba.np.linalg import ensure_blas
 
-from numba.extending import intrinsic
+from numba.core.extending import intrinsic
 from numba.core.errors import RequireLiteralValue, TypingError
 
 

@@ -10,7 +10,7 @@ from numba.core import types, cgutils
 from numba.core import typing
 from numba.core.registry import cpu_target
 from numba.core.typeconv import Conversion
-from numba.extending import intrinsic
+from numba.core.extending import intrinsic
 from numba.core.errors import TypingError, NumbaTypeSafetyWarning
 
 
