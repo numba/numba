@@ -12,9 +12,8 @@ def data_parallel_sum(a, b, c):
     i = dppy.get_global_id(0)
     c[i] = a[i] + b[i]
 
-global_size = 50, 1
-local_size = 32, 1, 1
-N = global_size[0] * local_size[0]
+N = 50*32
+global_size = N,
 print("N", N)
 
 # Select a device for executing the kernel
@@ -43,7 +42,7 @@ if cpu_env is not None:
     dB = cpu_env.copy_array_to_device(b)
     dC = ocldrv.DeviceArray(cpu_env.get_env_ptr(), c)
     print("before : ", dC._ndarray)
-    data_parallel_sum[cpu_env,global_size,local_size](dA, dB, dC)
+    data_parallel_sum[cpu_env,global_size](dA, dB, dC)
     cpu_env.copy_array_from_device(dC)
     print("after : ", dC._ndarray)
 
@@ -55,7 +54,7 @@ if gpu_env is not None:
     dBB = gpu_env.copy_array_to_device(bb)
     dCC = ocldrv.DeviceArray(gpu_env.get_env_ptr(), cc)
     print("before : ", dCC._ndarray)
-    data_parallel_sum[gpu_env,global_size,local_size](dAA, dBB, dCC)
+    data_parallel_sum[gpu_env,global_size](dAA, dBB, dCC)
     gpu_env.copy_array_from_device(dCC)
     print("after : ", dCC._ndarray)
 
