@@ -45,7 +45,7 @@ if spirv_tools_home is not None:
 
 if llvm_home is None:
     raise ValueError("FATAL: Correctly set the LLVM_HOME environment variable.")
-    
+
 if llvm_home is not None:
     try:
         os.path.abspath(llvm_home)
