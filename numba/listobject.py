@@ -86,13 +86,21 @@ class ListStatus(IntEnum):
     LIST_ERR_ITER_EXHAUSTED = -4
 
 
-def _raise_if_error(context, builder, status, msg):
-    """Raise an internal error depending on the value of *status*
+class ErrorHandler(object):
+    """ErrorHandler for calling codegen functions from this file.
+
+    Stores the state needed to raise an exception from nopython mode.
     """
-    ok_status = status.type(int(ListStatus.LIST_OK))
-    with builder.if_then(builder.icmp_signed('!=', status, ok_status),
-                         likely=True):
-        context.call_conv.return_user_exc(builder, RuntimeError, (msg,))
+
+    def __init__(self, context):
+        self.context = context
+
+    def __call__(self, builder, status, msg):
+        ok_status = status.type(int(ListStatus.LIST_OK))
+        with builder.if_then(builder.icmp_signed('!=', status, ok_status),
+                             likely=True):
+            self.context.call_conv.return_user_exc(
+                builder, RuntimeError, (msg,))
 
 
 def _check_for_none_typed(lst, method):
@@ -157,6 +165,42 @@ def _from_meminfo(typingctx, mi, listtyperef):
     return sig, codegen
 
 
+def _list_codegen_set_method_table(context, builder, lp, itemty):
+    vtablety = ir.LiteralStructType([
+        ll_voidptr_type,  # item incref
+        ll_voidptr_type,  # item decref
+    ])
+    setmethod_fnty = ir.FunctionType(
+        ir.VoidType(),
+        [ll_list_type, vtablety.as_pointer()]
+    )
+
+    setmethod_fn = builder.module.get_or_insert_function(
+        setmethod_fnty,
+        name='numba_list_set_method_table')
+    vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
+
+    # install item incref/decref
+    item_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
+    item_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
+
+    dm_item = context.data_model_manager[itemty]
+    if dm_item.contains_nrt_meminfo():
+        item_incref, item_decref = _get_incref_decref(
+            context, builder.module, dm_item, "list"
+        )
+        builder.store(
+            builder.bitcast(item_incref, item_incref_ptr.type.pointee),
+            item_incref_ptr,
+        )
+        builder.store(
+            builder.bitcast(item_decref, item_decref_ptr.type.pointee),
+            item_decref_ptr,
+        )
+
+    builder.call(setmethod_fn, [lp, vtable])
+
+
 @intrinsic
 def _list_set_method_table(typingctx, lp, itemty):
     """Wrap numba_list_set_method_table
@@ -165,41 +209,8 @@ def _list_set_method_table(typingctx, lp, itemty):
     sig = resty(lp, itemty)
 
     def codegen(context, builder, sig, args):
-        vtablety = ir.LiteralStructType([
-            ll_voidptr_type,  # item incref
-            ll_voidptr_type,  # item decref
-        ])
-        setmethod_fnty = ir.FunctionType(
-            ir.VoidType(),
-            [ll_list_type, vtablety.as_pointer()]
-        )
-        setmethod_fn = ir.Function(
-            builder.module,
-            setmethod_fnty,
-            name='numba_list_set_method_table',
-        )
-        dp = args[0]
-        vtable = cgutils.alloca_once(builder, vtablety, zfill=True)
-
-        # install item incref/decref
-        item_incref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 0)
-        item_decref_ptr = cgutils.gep_inbounds(builder, vtable, 0, 1)
-
-        dm_item = context.data_model_manager[itemty.instance_type]
-        if dm_item.contains_nrt_meminfo():
-            item_incref, item_decref = _get_incref_decref(
-                context, builder.module, dm_item, "list"
-            )
-            builder.store(
-                builder.bitcast(item_incref, item_incref_ptr.type.pointee),
-                item_incref_ptr,
-            )
-            builder.store(
-                builder.bitcast(item_decref, item_decref_ptr.type.pointee),
-                item_decref_ptr,
-            )
-
-        builder.call(setmethod_fn, [dp, vtable])
+        _list_codegen_set_method_table(
+            context, builder, args[0], itemty.instance_type)
 
     return sig, codegen
 
@@ -265,6 +276,23 @@ def new_list(item, allocated=0):
     return list()
 
 
+def _add_meminfo(context, builder, lstruct):
+    alloc_size = context.get_abi_sizeof(
+        context.get_value_type(types.voidptr),
+    )
+    dtor = _imp_dtor(context, builder.module)
+    meminfo = context.nrt.meminfo_alloc_dtor(
+        builder,
+        context.get_constant(types.uintp, alloc_size),
+        dtor,
+    )
+
+    data_pointer = context.nrt.meminfo_data(builder, meminfo)
+    data_pointer = builder.bitcast(data_pointer, ll_list_type.as_pointer())
+    builder.store(lstruct.data, data_pointer)
+    lstruct.meminfo = meminfo
+
+
 @intrinsic
 def _make_list(typingctx, itemty, ptr):
     """Make a list struct with the given *ptr*
@@ -279,31 +307,39 @@ def _make_list(typingctx, itemty, ptr):
     list_ty = types.ListType(itemty.instance_type)
 
     def codegen(context, builder, signature, args):
-        [_, ptr] = args
+        ptr = args[1]
         ctor = cgutils.create_struct_proxy(list_ty)
         lstruct = ctor(context, builder)
         lstruct.data = ptr
-
-        alloc_size = context.get_abi_sizeof(
-            context.get_value_type(types.voidptr),
-        )
-        dtor = _imp_dtor(context, builder.module)
-        meminfo = context.nrt.meminfo_alloc_dtor(
-            builder,
-            context.get_constant(types.uintp, alloc_size),
-            dtor,
-        )
-
-        data_pointer = context.nrt.meminfo_data(builder, meminfo)
-        data_pointer = builder.bitcast(data_pointer, ll_list_type.as_pointer())
-        builder.store(ptr, data_pointer)
-
-        lstruct.meminfo = meminfo
-
+        _add_meminfo(context, builder, lstruct)
         return lstruct._getvalue()
 
     sig = list_ty(itemty, ptr)
     return sig, codegen
+
+
+def _list_new_codegen(context, builder, itemty, new_size, error_handler):
+    fnty = ir.FunctionType(
+        ll_status,
+        [ll_list_type.as_pointer(), ll_ssize_t, ll_ssize_t],
+    )
+    fn = builder.module.get_or_insert_function(fnty, name='numba_list_new')
+    # Determine sizeof item types
+    ll_item = context.get_data_type(itemty)
+    sz_item = context.get_abi_sizeof(ll_item)
+    reflp = cgutils.alloca_once(builder, ll_list_type, zfill=True)
+    status = builder.call(
+        fn,
+        [reflp, ll_ssize_t(sz_item), new_size],
+    )
+    msg = "Failed to allocate list"
+    error_handler(
+        builder,
+        status,
+        msg,
+    )
+    lp = builder.load(reflp)
+    return lp
 
 
 @intrinsic
@@ -324,25 +360,13 @@ def _list_new(typingctx, itemty, allocated):
     sig = resty(itemty, allocated)
 
     def codegen(context, builder, sig, args):
-        fnty = ir.FunctionType(
-            ll_status,
-            [ll_list_type.as_pointer(), ll_ssize_t, ll_ssize_t],
-        )
-        fn = builder.module.get_or_insert_function(fnty, name='numba_list_new')
-        # Determine sizeof item types
-        ll_item = context.get_data_type(itemty.instance_type)
-        sz_item = context.get_abi_sizeof(ll_item)
-        reflp = cgutils.alloca_once(builder, ll_list_type, zfill=True)
-        status = builder.call(
-            fn,
-            [reflp, ll_ssize_t(sz_item), args[1]],
-        )
-        _raise_if_error(
-            context, builder, status,
-            msg="Failed to allocate list",
-        )
-        lp = builder.load(reflp)
-        return lp
+        error_handler = ErrorHandler(context)
+        return _list_new_codegen(context,
+                                 builder,
+                                 itemty.instance_type,
+                                 args[1],
+                                 error_handler,
+                                 )
 
     return sig, codegen
 
