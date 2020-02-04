@@ -14,7 +14,7 @@ from numba.core.imputils import (lower_builtin, lower_cast,
                                     iterator_impl, impl_ret_untracked)
 from numba.core.typing import signature
 from numba.extending import intrinsic, overload, overload_attribute, register_jitable
-from numba.parfor import internal_prange
+from numba.parfors.parfor import internal_prange
 
 def make_range_iterator(typ):
     """

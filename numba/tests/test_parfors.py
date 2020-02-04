@@ -18,7 +18,7 @@ from numpy.random import randn
 import operator
 from collections import defaultdict
 
-import numba
+import numba.parfors.parfor
 from numba import njit, prange
 from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall, config, compiler, cpu
 from numba.core.registry import cpu_target
@@ -324,9 +324,9 @@ def get_optimized_numba_ir(test_func, args, **kws):
             return_type=tp.state.return_type,
             html_output=config.HTML)
 
-        diagnostics = numba.parfor.ParforDiagnostics()
+        diagnostics = numba.parfors.parfor.ParforDiagnostics()
 
-        preparfor_pass = numba.parfor.PreParforPass(
+        preparfor_pass = numba.parfors.parfor.PreParforPass(
             tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
             tp.state.typingctx, options,
             swapped=diagnostics.replaced_fns)
@@ -335,7 +335,7 @@ def get_optimized_numba_ir(test_func, args, **kws):
         rewrites.rewrite_registry.apply('after-inference', tp.state)
 
         flags = compiler.Flags()
-        parfor_pass = numba.parfor.ParforPass(
+        parfor_pass = numba.parfors.parfor.ParforPass(
             tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
             tp.state.return_type, tp.state.typingctx, options, flags,
             diagnostics=diagnostics)
@@ -350,7 +350,7 @@ def countParfors(test_func, args, **kws):
 
     for label, block in test_ir.blocks.items():
         for i, inst in enumerate(block.body):
-            if isinstance(inst, numba.parfor.Parfor):
+            if isinstance(inst, numba.parfors.parfor.Parfor):
                 ret_count += 1
 
     return ret_count
@@ -368,7 +368,7 @@ def get_init_block_size(test_func, args, **kws):
 
     for label, block in blocks.items():
         for i, inst in enumerate(block.body):
-            if isinstance(inst, numba.parfor.Parfor):
+            if isinstance(inst, numba.parfors.parfor.Parfor):
                 ret_count += len(inst.init_block.body)
 
     return ret_count
@@ -379,7 +379,7 @@ def _count_arrays_inner(blocks, typemap):
 
     for label, block in blocks.items():
         for i, inst in enumerate(block.body):
-            if isinstance(inst, numba.parfor.Parfor):
+            if isinstance(inst, numba.parfors.parfor.Parfor):
                 parfor_blocks = inst.loop_body.copy()
                 parfor_blocks[0] = inst.init_block
                 ret_count += _count_arrays_inner(parfor_blocks, typemap)
@@ -403,7 +403,7 @@ def countArrayAllocs(test_func, args, **kws):
 def _count_array_allocs_inner(func_ir, block):
     ret_count = 0
     for inst in block.body:
-        if isinstance(inst, numba.parfor.Parfor):
+        if isinstance(inst, numba.parfors.parfor.Parfor):
             ret_count += _count_array_allocs_inner(func_ir, inst.init_block)
             for b in inst.loop_body.values():
                 ret_count += _count_array_allocs_inner(func_ir, b)
@@ -429,7 +429,7 @@ def _count_non_parfor_array_accesses_inner(f_ir, blocks, typemap, parfor_indices
 
     for label, block in blocks.items():
         for stmt in block.body:
-            if isinstance(stmt, numba.parfor.Parfor):
+            if isinstance(stmt, numba.parfors.parfor.Parfor):
                 parfor_indices.add(stmt.index_var.name)
                 parfor_blocks = stmt.loop_body.copy()
                 parfor_blocks[0] = stmt.init_block
@@ -1188,7 +1188,7 @@ class TestParfors(TestParforsBase):
         parfor_found = False
         parfor = None
         for stmt in block.body:
-            if isinstance(stmt, numba.parfor.Parfor):
+            if isinstance(stmt, numba.parfors.parfor.Parfor):
                 parfor_found = True
                 parfor = stmt
 
@@ -3063,13 +3063,13 @@ class TestParforsMisc(TestParforsBase):
         A = np.array([np.inf, 0.0])
         cfunc = njit(parallel=True)(test_impl)
         # save global state
-        old_seq_flag = numba.parfor.sequential_parfor_lowering
+        old_seq_flag = numba.parfors.parfor.sequential_parfor_lowering
         try:
-            numba.parfor.sequential_parfor_lowering = True
+            numba.parfors.parfor.sequential_parfor_lowering = True
             np.testing.assert_array_equal(test_impl(A), cfunc(A))
         finally:
             # recover global state
-            numba.parfor.sequential_parfor_lowering = old_seq_flag
+            numba.parfors.parfor.sequential_parfor_lowering = old_seq_flag
 
     @skip_parfors_unsupported
     def test_init_block_dce(self):
@@ -3077,7 +3077,7 @@ class TestParforsMisc(TestParforsBase):
         def test_impl():
             res = 0
             arr = [1,2,3,4,5]
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             dummy = arr
             for i in numba.prange(5):
                 res += arr[i]

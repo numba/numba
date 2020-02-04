@@ -26,11 +26,11 @@ from numba.tests.support import (TestCase, temp_directory, import_dynamic,
 from numba.np.numpy_support import as_dtype
 from numba.core.caching import _UserWideCacheLocator
 from numba.core.dispatcher import Dispatcher
-from numba import parfor
 from numba.tests.support import skip_parfors_unsupported, needs_lapack
 
 import llvmlite.binding as ll
 from numba.testing import unittest_support as unittest
+from numba.parfors import parfor
 
 try:
     import jinja2

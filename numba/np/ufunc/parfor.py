@@ -13,13 +13,13 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.ir.values as liv
 
 import numba
-from numba import parfor
+from numba.parfors import parfor
 from numba.core import types, ir, config, compiler, lowering, sigutils, cgutils
 from numba.core.ir_utils import add_offset_to_labels, replace_var_names, remove_dels, legalize_names, mk_unique_var, rename_labels, get_name_var_table, visit_vars_inner, get_definition, guard, find_callname, get_call_table, is_pure, get_np_ufunc_typ, get_unused_var_name, find_potential_aliases, is_const_call
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
 from numba.core.cpu import ParallelOptions
-from numba.parfor import print_wrapped, ensure_parallel_support
+from numba.parfors.parfor import print_wrapped, ensure_parallel_support
 from numba.core.errors import NumbaParallelSafetyWarning
 
 
@@ -72,7 +72,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     alias_map = {}
     arg_aliases = {}
-    numba.parfor.find_potential_aliases_parfor(parfor, parfor.params, typemap,
+    numba.parfors.parfor.find_potential_aliases_parfor(parfor, parfor.params, typemap,
                                         lowerer.func_ir, alias_map, arg_aliases)
     if config.DEBUG_ARRAY_OPT:
         print("alias_map", alias_map)
@@ -82,9 +82,9 @@ def _lower_parfor_parallel(lowerer, parfor):
     # since Jumps are modified so CFG of loop_body dict will become invalid
     assert parfor.params != None
 
-    parfor_output_arrays = numba.parfor.get_parfor_outputs(
+    parfor_output_arrays = numba.parfors.parfor.get_parfor_outputs(
         parfor, parfor.params)
-    parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
+    parfor_redvars, parfor_reddict = numba.parfors.parfor.get_parfor_reductions(
         lowerer.func_ir, parfor, parfor.params, lowerer.fndesc.calltypes)
 
     # init reduction array allocation here.
@@ -224,11 +224,11 @@ def _lower_parfor_parallel(lowerer, parfor):
     # index variables should have the same type, check rest of indices
     for l in parfor.loop_nests[1:]:
         assert typemap[l.index_variable.name] == index_var_typ
-    numba.parfor.sequential_parfor_lowering = True
+    numba.parfors.parfor.sequential_parfor_lowering = True
     func, func_args, func_sig, redargstartdim, func_arg_types = _create_gufunc_for_parfor_body(
         lowerer, parfor, typemap, typingctx, targetctx, flags, {},
         bool(alias_map), index_var_typ, parfor.races)
-    numba.parfor.sequential_parfor_lowering = False
+    numba.parfors.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
     func_args = ['sched'] + func_args
@@ -801,10 +801,10 @@ def _create_gufunc_for_parfor_body(
     # Get all the parfor params.
     parfor_params = parfor.params
     # Get just the outputs of the parfor.
-    parfor_outputs = numba.parfor.get_parfor_outputs(parfor, parfor_params)
+    parfor_outputs = numba.parfors.parfor.get_parfor_outputs(parfor, parfor_params)
     # Get all parfor reduction vars, and operators.
     typemap = lowerer.fndesc.typemap
-    parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
+    parfor_redvars, parfor_reddict = numba.parfors.parfor.get_parfor_reductions(
         lowerer.func_ir, parfor, parfor_params, lowerer.fndesc.calltypes)
     # Compute just the parfor inputs as a set difference.
     parfor_inputs = sorted(

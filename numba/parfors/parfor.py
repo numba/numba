@@ -129,15 +129,15 @@ def min_parallel_impl(return_type, arg):
             return in_arr[()]
     elif arg.ndim == 1:
         def min_1(in_arr):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             min_checker(len(in_arr))
             val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
-            for i in numba.parfor.internal_prange(len(in_arr)):
+            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                 val = min(val, in_arr[i])
             return val
     else:
         def min_1(in_arr):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             min_checker(len(in_arr))
             val = numba.cpython.builtins.get_type_max_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
@@ -151,15 +151,15 @@ def max_parallel_impl(return_type, arg):
             return in_arr[()]
     elif arg.ndim == 1:
         def max_1(in_arr):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             max_checker(len(in_arr))
             val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
-            for i in numba.parfor.internal_prange(len(in_arr)):
+            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                 val = max(val, in_arr[i])
             return val
     else:
         def max_1(in_arr):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             max_checker(len(in_arr))
             val = numba.cpython.builtins.get_type_min_value(in_arr.dtype)
             for i in numba.pndindex(in_arr.shape):
@@ -168,40 +168,40 @@ def max_parallel_impl(return_type, arg):
     return max_1
 
 def argmin_parallel_impl(in_arr):
-    numba.parfor.init_prange()
+    numba.parfors.parfor.init_prange()
     argmin_checker(len(in_arr))
     A = in_arr.ravel()
     init_val = numba.cpython.builtins.get_type_max_value(A.dtype)
     ival = typing.builtins.IndexValue(0, init_val)
-    for i in numba.parfor.internal_prange(len(A)):
+    for i in numba.parfors.parfor.internal_prange(len(A)):
         curr_ival = typing.builtins.IndexValue(i, A[i])
         ival = min(ival, curr_ival)
     return ival.index
 
 def argmax_parallel_impl(in_arr):
-    numba.parfor.init_prange()
+    numba.parfors.parfor.init_prange()
     argmax_checker(len(in_arr))
     A = in_arr.ravel()
     init_val = numba.cpython.builtins.get_type_min_value(A.dtype)
     ival = typing.builtins.IndexValue(0, init_val)
-    for i in numba.parfor.internal_prange(len(A)):
+    for i in numba.parfors.parfor.internal_prange(len(A)):
         curr_ival = typing.builtins.IndexValue(i, A[i])
         ival = max(ival, curr_ival)
     return ival.index
 
 def dotvv_parallel_impl(a, b):
-    numba.parfor.init_prange()
+    numba.parfors.parfor.init_prange()
     l = a.shape[0]
     m = b.shape[0]
     # TODO: investigate assert_equiv
     #assert_equiv("sizes of l, m do not match", l, m)
     s = 0
-    for i in numba.parfor.internal_prange(l):
+    for i in numba.parfors.parfor.internal_prange(l):
         s += a[i] * b[i]
     return s
 
 def dotvm_parallel_impl(a, b):
-    numba.parfor.init_prange()
+    numba.parfors.parfor.init_prange()
     l = a.shape
     m, n = b.shape
     # TODO: investigate assert_equiv
@@ -213,18 +213,18 @@ def dotvm_parallel_impl(a, b):
     #    for j in range(m):
     #        s += a[j] * b[j, i]
     #    c[i] = s
-    for i in numba.parfor.internal_prange(m):
+    for i in numba.parfors.parfor.internal_prange(m):
         c += a[i] * b[i, :]
     return c
 
 def dotmv_parallel_impl(a, b):
-    numba.parfor.init_prange()
+    numba.parfors.parfor.init_prange()
     m, n = a.shape
     l = b.shape
     # TODO: investigate assert_equiv
     #assert_equiv("sizes of n, l do not match", n, l)
     c = np.empty(m, a.dtype)
-    for i in numba.parfor.internal_prange(m):
+    for i in numba.parfors.parfor.internal_prange(m):
         s = 0
         for j in range(n):
             s += a[i, j] * b[j]
@@ -251,14 +251,14 @@ def sum_parallel_impl(return_type, arg):
             return in_arr[()]
     elif arg.ndim == 1:
         def sum_1(in_arr):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             val = zero
-            for i in numba.parfor.internal_prange(len(in_arr)):
+            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                 val += in_arr[i]
             return val
     else:
         def sum_1(in_arr):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             val = zero
             for i in numba.pndindex(in_arr.shape):
                 val += in_arr[i]
@@ -273,14 +273,14 @@ def prod_parallel_impl(return_type, arg):
             return in_arr[()]
     elif arg.ndim == 1:
         def prod_1(in_arr):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             val = one
-            for i in numba.parfor.internal_prange(len(in_arr)):
+            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                 val *= in_arr[i]
             return val
     else:
         def prod_1(in_arr):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             val = one
             for i in numba.pndindex(in_arr.shape):
                 val *= in_arr[i]
@@ -297,14 +297,14 @@ def mean_parallel_impl(return_type, arg):
             return in_arr[()]
     elif arg.ndim == 1:
         def mean_1(in_arr):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             val = zero
-            for i in numba.parfor.internal_prange(len(in_arr)):
+            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                 val += in_arr[i]
             return val/len(in_arr)
     else:
         def mean_1(in_arr):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             val = zero
             for i in numba.pndindex(in_arr.shape):
                 val += in_arr[i]
@@ -320,9 +320,9 @@ def var_parallel_impl(return_type, arg):
             # Compute the mean
             m = in_arr.mean()
             # Compute the sum of square diffs
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             ssd = 0
-            for i in numba.parfor.internal_prange(len(in_arr)):
+            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                 val = in_arr[i] - m
                 ssd += np.real(val * np.conj(val))
             return ssd / len(in_arr)
@@ -331,7 +331,7 @@ def var_parallel_impl(return_type, arg):
             # Compute the mean
             m = in_arr.mean()
             # Compute the sum of square diffs
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             ssd = 0
             for i in numba.pndindex(in_arr.shape):
                 val = in_arr[i] - m
@@ -358,23 +358,23 @@ def arange_parallel_impl(return_type, *args):
 
     if any(isinstance(a, types.Complex) for a in args):
         def arange_4(start, stop, step, dtype):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             nitems_c = (stop - start) / step
             nitems_r = math.ceil(nitems_c.real)
             nitems_i = math.ceil(nitems_c.imag)
             nitems = int(max(min(nitems_i, nitems_r), 0))
             arr = np.empty(nitems, dtype)
-            for i in numba.parfor.internal_prange(nitems):
+            for i in numba.parfors.parfor.internal_prange(nitems):
                 arr[i] = start + i * step
             return arr
     else:
         def arange_4(start, stop, step, dtype):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             nitems_r = math.ceil((stop - start) / step)
             nitems = int(max(nitems_r, 0))
             arr = np.empty(nitems, dtype)
             val = start
-            for i in numba.parfor.internal_prange(nitems):
+            for i in numba.parfors.parfor.internal_prange(nitems):
                 arr[i] = start + i * step
             return arr
 
@@ -396,12 +396,12 @@ def linspace_parallel_impl(return_type, *args):
         return np.linspace(start, stop, 50)
 
     def linspace_3(start, stop, num):
-        numba.parfor.init_prange()
+        numba.parfors.parfor.init_prange()
         arr = np.empty(num, dtype)
         div = num - 1
         delta = stop - start
         arr[0] = start
-        for i in numba.parfor.internal_prange(num):
+        for i in numba.parfors.parfor.internal_prange(num):
             arr[i] = start + delta * (i / div)
         return arr
 
@@ -436,13 +436,13 @@ def fill_parallel_impl(return_type, arr, val):
     """
     if arr.ndim == 1:
         def fill_1(in_arr, val):
-            numba.parfor.init_prange()
-            for i in numba.parfor.internal_prange(len(in_arr)):
+            numba.parfors.parfor.init_prange()
+            for i in numba.parfors.parfor.internal_prange(len(in_arr)):
                 in_arr[i] = val
             return None
     else:
         def fill_1(in_arr, val):
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             for i in numba.pndindex(in_arr.shape):
                 in_arr[i] = val
             return None
@@ -1600,10 +1600,7 @@ class ParforPass(object):
                                                     self.options.fusion,
                                                     self.nested_fusion_info)
             for p in parfors:
-                numba.parfor.get_parfor_reductions(self.func_ir,
-                                                   p,
-                                                   p.params,
-                                                   self.calltypes)
+                get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
             if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
                 n_parfors = len(parfor_ids)

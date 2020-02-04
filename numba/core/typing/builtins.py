@@ -5,13 +5,19 @@ import operator
 
 from numba.core import types, errors
 from numba import prange
-from numba.parfor import internal_prange
+from numba.parfors.parfor import internal_prange
 
 from numba.core.utils import RANGE_ITER_OBJECTS
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, infer_global, infer,
                                          infer_getattr, signature,
                                          bound_function, make_callable_template)
+
+from numba.cpython.builtins import get_type_min_value, get_type_max_value
+
+from numba.extending import (
+    typeof_impl, type_callable, models, register_model, make_attribute_wrapper,
+    )
 
 
 @infer_global(print)
@@ -1010,8 +1016,6 @@ class DeferredAttribute(AttributeTemplate):
 
 #------------------------------------------------------------------------------
 
-from numba.cpython.builtins import get_type_min_value, get_type_max_value
-
 @infer_global(get_type_min_value)
 @infer_global(get_type_max_value)
 class MinValInfer(AbstractTemplate):
@@ -1023,10 +1027,6 @@ class MinValInfer(AbstractTemplate):
 
 
 #------------------------------------------------------------------------------
-
-from numba.extending import (
-    typeof_impl, type_callable, models, register_model, make_attribute_wrapper,
-    )
 
 
 class IndexValue(object):

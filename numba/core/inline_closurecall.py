@@ -3,7 +3,7 @@ import ctypes
 import numba.core.analysis
 from numba.core import utils, types, typing, errors, ir, rewrites, config, ir_utils
 from numba import prange
-from numba.parfor import internal_prange
+from numba.parfors.parfor import internal_prange
 from numba.core.ir_utils import (
     mk_unique_var,
     next_label,

@@ -647,7 +647,7 @@ def has_no_side_effect(rhs, lives, call_table):
     """ Returns True if this expression has no side effects that
         would prevent re-ordering.
     """
-    from numba.parfors import array_analysis
+    from numba.parfors import array_analysis, parfor
     from numba.misc.special import prange
     if isinstance(rhs, ir.Expr) and rhs.op == 'call':
         func_name = rhs.func.name
@@ -661,7 +661,7 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == ['dtype', numpy] or
             call_list == [array_analysis.wrap_index] or
             call_list == [prange] or
-            call_list == [numba.parfor.internal_prange]):
+            call_list == [parfor.internal_prange]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and
               (call_list[0]._name == 'empty_inferred' or

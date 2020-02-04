@@ -4,6 +4,7 @@
 #
 
 import numba
+import numba.parfors.parfor
 from numba.core import ir_utils, cpu
 from numba.core.compiler import compile_isolated, Flags
 from numba.core import types, typing, ir, config, compiler
@@ -223,7 +224,7 @@ class TestRemoveDead(unittest.TestCase):
         """
         def func():
             n = 11
-            numba.parfor.init_prange()
+            numba.parfors.parfor.init_prange()
             A = np.empty(n)
             B = A  # create alias to A
             for i in numba.prange(n):
@@ -239,7 +240,7 @@ class TestRemoveDead(unittest.TestCase):
                 FunctionPass.__init__(self)
 
             def run_pass(self, state):
-                parfor_pass = numba.parfor.ParforPass(
+                parfor_pass = numba.parfors.parfor.ParforPass(
                     state.func_ir,
                     state.type_annotation.typemap,
                     state.type_annotation.calltypes,
@@ -256,7 +257,7 @@ class TestRemoveDead(unittest.TestCase):
                             state.func_ir.arg_names,
                             state.func_ir,
                             state.type_annotation.typemap)
-                numba.parfor.get_parfor_params(state.func_ir.blocks,
+                numba.parfors.parfor.get_parfor_params(state.func_ir.blocks,
                                                 parfor_pass.options.fusion,
                                                 parfor_pass.nested_fusion_info)
                 return True

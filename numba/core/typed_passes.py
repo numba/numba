@@ -3,9 +3,9 @@ import warnings
 
 from numba.core import errors, types, typing, ir, funcdesc, rewrites, typeinfer, config, lowering
 
-from numba.parfor import PreParforPass as _parfor_PreParforPass
-from numba.parfor import ParforPass as _parfor_ParforPass
-from numba.parfor import Parfor
+from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass
+from numba.parfors.parfor import ParforPass as _parfor_ParforPass
+from numba.parfors.parfor import Parfor
 
 from numba.core.compiler_machinery import FunctionPass, LoweringPass, register_pass
 from numba.core.annotations import type_annotations

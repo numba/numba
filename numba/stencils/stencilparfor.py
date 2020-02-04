@@ -11,7 +11,7 @@ import operator
 
 import numpy as np
 
-import numba
+import numba.parfors.parfor
 from numba.core import types, ir, rewrites, config, ir_utils
 from numba.core.typing.templates import infer_global, AbstractTemplate
 from numba.core.typing import signature
@@ -187,7 +187,7 @@ class StencilPass(object):
             start_ind = self._get_stencil_start_ind(
                                         start_lengths[i], gen_nodes, scope, loc)
             # start from stencil size to avoid invalid array access
-            loopnests.append(numba.parfor.LoopNest(parfor_vars[i],
+            loopnests.append(numba.parfors.parfor.LoopNest(parfor_vars[i],
                                 start_ind, last_ind, 1))
 
         # We have to guarantee that the exit block has maximum label and that
@@ -354,7 +354,7 @@ class StencilPass(object):
             ir_utils.dump_blocks(stencil_blocks)
 
         pattern = ('stencil', [start_lengths, end_lengths])
-        parfor = numba.parfor.Parfor(loopnests, init_block, stencil_blocks,
+        parfor = numba.parfors.parfor.Parfor(loopnests, init_block, stencil_blocks,
                                      loc, parfor_ind_var, equiv_set, pattern, self.flags)
         gen_nodes.append(parfor)
         gen_nodes.append(ir.Assign(out_arr, target, loc))
