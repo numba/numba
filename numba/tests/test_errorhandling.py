@@ -110,7 +110,7 @@ class TestMiscErrorHandling(unittest.TestCase):
                 pm.finalize()
                 return [pm]
 
-        @numba.jit(pipeline_class=TestPipeline)
+        @njit(pipeline_class=TestPipeline)
         def f(a):
             return 0
 
