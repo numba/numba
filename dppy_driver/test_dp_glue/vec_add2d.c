@@ -12,18 +12,18 @@ typedef enum
 void buildAndExecuteKernel (runtime_t rt, execution_ty ex);
 
 // Array sizes
-static size_t X = 64;
-static size_t Y = 64;
-static size_t N = 64*64;
+static int X = 8;
+static int Y = 8;
+static int N = 8*8;
 
 /* OpenCl kernel for element-wise addition of two arrays */
 const char* programSource =
     "__kernel                                                             \n"
-    "void vecadd(__global float *A, __global float *B, __global float *C) \n"
+    "void vecadd(__global float *A, __global float *B, __global float *C, int shape1) \n"
     "{                                                                    \n"
     "   int i   = get_global_id(0);                                       \n"
     "   int j   = get_global_id(1);                                       \n"
-    "   C[i*64 + j] = A[i*64 + j] + B[i*64 +j];                           \n"
+    "   C[i*shape1 + j] = A[i*shape1 + j] + B[i*shape1 +j];               \n"
     "}";
 
 void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
@@ -32,7 +32,7 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     env_t env_t_ptr;
     program_t program_ptr;
     kernel_t kernel_ptr;
-    size_t num_args = 3;
+    size_t num_args = 4;
     kernel_arg_t kernel_args[num_args];
     float *A, *B, *C;
     size_t i;
@@ -93,23 +93,25 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     kernel_ptr->dump_fn(kernel_ptr);
     // Set kernel arguments
     err = create_dp_kernel_arg(&buffers[0]->buffer_ptr,
-                                          buffers[0]->sizeof_buffer_ptr,
-                                          &kernel_args[0]);
+                               buffers[0]->sizeof_buffer_ptr,
+                               &kernel_args[0]);
     err |= create_dp_kernel_arg(&buffers[1]->buffer_ptr,
-                                          buffers[1]->sizeof_buffer_ptr,
-                                          &kernel_args[1]);
+                                buffers[1]->sizeof_buffer_ptr,
+                                &kernel_args[1]);
     err |= create_dp_kernel_arg(&buffers[2]->buffer_ptr,
-                                          buffers[2]->sizeof_buffer_ptr,
-                                          &kernel_args[2]);
-
+                                buffers[2]->sizeof_buffer_ptr,
+                                &kernel_args[2]);
+    err |= create_dp_kernel_arg(&Y,
+                                sizeof(int),
+                                &kernel_args[3]);
     if(err) {
         fprintf(stderr, "Could not create the kernel_args. Abort!\n");
         exit(1);
     }
 
     // There are 'N' work-items
-    indexSpaceSize[0] = X;
-    indexSpaceSize[1] = Y;
+    indexSpaceSize[0] = 8;
+    indexSpaceSize[1] = 8;
 
     // Create a program with source code
     err = set_args_and_enqueue_dp_kernel(env_t_ptr, kernel_ptr,
@@ -135,10 +137,12 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
             printf("%s", "Stop validating and exit...\n");
             exit(1);
         }
+#if 0
         else {
             printf("Right value at C[%ld]. Expected %ld Actual %f\n",
-                    i, (i+1 + 2*(i+1)), C[i]);
+            i, (i+1 + 2*(i+1)), C[i]);
         }
+#endif
     }
     printf("Results Match\n");
 #endif
