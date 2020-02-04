@@ -274,7 +274,7 @@ class TestArrayComprehension(unittest.TestCase):
             l = np.array([i + m for i in range(n)])
             return l
 
-        import numba.inline_closurecall as ic
+        import numba.core.inline_closurecall as ic
         try:
             ic.enable_inline_arraycall = False
             self.check(comp_with_array_noinline, 5, assert_allocate_list=True)
@@ -304,7 +304,7 @@ class TestArrayComprehension(unittest.TestCase):
             l = np.array([[i * j for j in range(n)] for i in range(n)])
             return l
 
-        import numba.inline_closurecall as ic
+        import numba.core.inline_closurecall as ic
         try:
             ic.enable_inline_arraycall = False
             self.check(comp_nest_with_array_noinline, 5,
