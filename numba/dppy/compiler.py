@@ -18,6 +18,11 @@ def _raise_no_device_found_error():
                      "Usage : jit_fn[device, globalsize, localsize](...)")
     raise ValueError(error_message)
 
+def _raise_invalid_kernel_enqueue_args():
+    error_message = ("Incorrect number of arguments for enquing dppy.kernel. "
+                     "Usage: dppy_driver.device_env, global size, local size. "
+                     "The local size argument is optional.")
+    raise ValueError(error_message)
 
 def compile_with_dppy(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the OpenCL backend.
@@ -84,17 +89,32 @@ def compile_kernel_parfor(device, func_ir, args, debug=False):
                          argtypes=cres.signature.args)
     return oclkern
 
-def _ensure_list(val):
+
+def _ensure_valid_work_item_grid(val, device_env):
+
     if not isinstance(val, (tuple, list)):
-        return [val]
-    else:
-        return list(val)
+        error_message = ("Cannot create work item dimension from "
+                         "provided argument")
+        raise ValueError(error_message)
 
+    if len(val) > device_env.get_max_work_item_dims():
+        error_message = ("Unsupported number of work item dimensions ")
+        raise ValueError(error_message)
 
-def _ensure_size_or_append(val, size):
-    n = len(val)
-    for _ in range(n, size):
-        val.append(1)
+    return list(val)
+
+def _ensure_valid_work_group_size(val, work_item_grid):
+
+    if not isinstance(val, (tuple, list)):
+        error_message = ("Cannot create work item dimension from "
+                         "provided argument")
+        raise ValueError(error_message)
+
+    if len(val) != len(work_item_grid):
+        error_message = ("Unsupported number of work item dimensions ")
+        raise ValueError(error_message)
+
+    return list(val)
 
 
 class DPPyKernelBase(object):
@@ -102,9 +122,9 @@ class DPPyKernelBase(object):
     """
 
     def __init__(self):
-        self.global_size = (1,)
-        self.local_size = (1,)
-        self.device_env = None
+        self.global_size = []
+        self.local_size  = []
+        self.device_env  = None
 
     def copy(self):
         return copy.copy(self)
@@ -112,17 +132,9 @@ class DPPyKernelBase(object):
     def configure(self, device_env, global_size, local_size=None):
         """Configure the OpenCL kernel. The local_size can be None
         """
-        global_size = _ensure_list(global_size)
-
-        if local_size is not None:
-            local_size = _ensure_list(local_size)
-            size = max(len(global_size), len(local_size))
-            _ensure_size_or_append(global_size, size)
-            _ensure_size_or_append(local_size, size)
-
         clone = self.copy()
-        clone.global_size = tuple(global_size)
-        clone.local_size = tuple(local_size) if local_size else None
+        clone.global_size = global_size
+        clone.local_size = local_size if local_size else []
         clone.device_env = device_env
 
         return clone
@@ -136,20 +148,20 @@ class DPPyKernelBase(object):
         """Mimick CUDA python's square-bracket notation for configuration.
         This assumes the argument to be:
             `dppy_driver.device_env, global size, local size`
-        The blockdim maps directly to local_size.
-        The actual global_size is computed by multiplying the local_size to
-        griddim.
         """
+        ls = None
+        nargs = len(args)
+        # Check if the kernel enquing arguments are sane
+        if nargs < 2 or nargs > 3:
+            _raise_invalid_kernel_enqueue_args
 
         device_env = args[0]
-        griddim = _ensure_list(args[1])
-        blockdim = _ensure_list(args[2])
-        size = max(len(griddim), len(blockdim))
-        _ensure_size_or_append(griddim, size)
-        _ensure_size_or_append(blockdim, size)
-        # Compute global_size
-        gs = [g * l for g, l in zip(griddim, blockdim)]
-        return self.configure(device_env, gs, blockdim)
+        gs = _ensure_valid_work_item_grid(args[1], device_env)
+        # If the optional local size argument is provided
+        if nargs == 3:
+            ls = _ensure_valid_work_group_size(args[2], gs)
+
+        return self.configure(device_env, gs, ls)
 
 
 #_CacheEntry = namedtuple("_CachedEntry", ['symbol', 'executable',
