@@ -18,7 +18,6 @@ from numba.core import types, ir, config, compiler, lowering, sigutils, cgutils
 from numba.core.ir_utils import add_offset_to_labels, replace_var_names, remove_dels, legalize_names, mk_unique_var, rename_labels, get_name_var_table, visit_vars_inner, get_definition, guard, find_callname, get_call_table, is_pure, get_np_ufunc_typ, get_unused_var_name, find_potential_aliases, is_const_call
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
-from numba.core.cpu import ParallelOptions
 from numba.parfors.parfor import print_wrapped, ensure_parallel_support
 from numba.core.errors import NumbaParallelSafetyWarning
 
