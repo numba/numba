@@ -8,7 +8,7 @@ All functions described here are threadsafe.
 
 #include <stdlib.h>
 #include <stdio.h>
-#include "../_numba_common.h"
+#include "../../_numba_common.h"
 
 #include "nrt_external.h"
 

@@ -11,7 +11,7 @@ from numba import njit, typeof
 from numba.core import types, errors
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.experimental.jitclass import _box
-from numba.runtime.nrt import MemInfo
+from numba.core.runtime.nrt import MemInfo
 from numba.core.errors import LoweringError
 from numba.experimental import jitclass
 import unittest

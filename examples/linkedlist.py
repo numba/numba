@@ -10,7 +10,7 @@ from collections import OrderedDict
 import numpy as np
 from numba import njit
 from numba import int32, deferred_type, optional
-from numba.runtime import rtsys
+from numba.core.runtime import rtsys
 from numba.experimental import jitclass
 
 node_type = deferred_type()

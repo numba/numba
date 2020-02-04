@@ -3,13 +3,13 @@
  * This module is included by _nrt_pythonmod.c and by pycc-compiled modules.
  */
 
-#include "../_pymodule.h"
+#include "../../_pymodule.h"
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
 #include <numpy/arrayscalars.h>
 
-#include "../_arraystruct.h"
+#include "../../_arraystruct.h"
 #include "nrt.h"
 
 

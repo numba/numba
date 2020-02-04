@@ -170,7 +170,7 @@ class NRTContext(object):
         """
         self._require_nrt()
 
-        from numba.runtime.nrtdynmod import meminfo_data_ty
+        from numba.core.runtime.nrtdynmod import meminfo_data_ty
 
         mod = builder.module
         fn = mod.get_or_insert_function(meminfo_data_ty,
@@ -199,7 +199,7 @@ class NRTContext(object):
         """
         self._require_nrt()
 
-        from numba.runtime.nrtdynmod import incref_decref_ty
+        from numba.core.runtime.nrtdynmod import incref_decref_ty
 
         meminfos = self.get_meminfos(builder, typ, value)
         for _, mi in meminfos:

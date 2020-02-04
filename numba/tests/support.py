@@ -27,7 +27,7 @@ from numba import testing
 from numba.core import errors, typing, utils, config, cpu
 from numba.core.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 import unittest
-from numba.runtime import rtsys
+from numba.core.runtime import rtsys
 from numba.np import numpy_support
 
 

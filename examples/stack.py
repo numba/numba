@@ -12,7 +12,7 @@ from __future__ import print_function, absolute_import
 from collections import OrderedDict
 from numba import njit
 from numba import deferred_type, intp, optional
-from numba.runtime import rtsys
+from numba.core.runtime import rtsys
 from numba.experimental import jitclass
 
 

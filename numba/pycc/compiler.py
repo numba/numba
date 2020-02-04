@@ -13,7 +13,7 @@ from numba.core.compiler import compile_extra, Flags
 from numba.core.compiler_lock import global_compiler_lock
 
 from numba.core.registry import cpu_target
-from numba.runtime import nrtdynmod
+from numba.core.runtime import nrtdynmod
 from numba.core import cgutils
 
 

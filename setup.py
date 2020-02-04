@@ -271,12 +271,12 @@ def get_ext_modules():
                              extra_link_args=install_name_tool_fixer,
                              sources=['numba/mviewbuf.c'])
 
-    ext_nrt_python = Extension(name='numba.runtime._nrt_python',
-                               sources=['numba/runtime/_nrt_pythonmod.c',
-                                        'numba/runtime/nrt.c'],
-                               depends=['numba/runtime/nrt.h',
+    ext_nrt_python = Extension(name='numba.core.runtime._nrt_python',
+                               sources=['numba/core/runtime/_nrt_pythonmod.c',
+                                        'numba/core/runtime/nrt.c'],
+                               depends=['numba/core/runtime/nrt.h',
                                         'numba/_pymodule.h',
-                                        'numba/runtime/_nrt_python.c'],
+                                        'numba/core/runtime/_nrt_python.c'],
                                **np_compile_args)
 
     ext_jitclass_box = Extension(name='numba.experimental.jitclass._box',

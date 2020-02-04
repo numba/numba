@@ -9,7 +9,7 @@ import numpy as np
 from numba import njit
 from numba.core import typing, types
 from numba.core.compiler import compile_isolated, Flags
-from numba.runtime import (
+from numba.core.runtime import (
     rtsys,
     nrtopt,
     _nrt_python,
@@ -581,7 +581,7 @@ class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
         name = "{}_test_manage_memory".format(self.__class__.__name__)
         source = r"""
 #include <stdio.h>
-#include "numba/runtime/nrt_external.h"
+#include "numba/core/runtime/nrt_external.h"
 
 int status = 0;
 
@@ -622,7 +622,7 @@ int status;
         name = "{}_test_allocate".format(self.__class__.__name__)
         source = r"""
 #include <stdio.h>
-#include "numba/runtime/nrt_external.h"
+#include "numba/core/runtime/nrt_external.h"
 
 NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt, size_t n) {
     size_t *data = NULL;

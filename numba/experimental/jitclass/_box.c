@@ -9,7 +9,7 @@ typedef struct {
 } BoxObject;
 
 
-/* Store function defined in numba.runtime._nrt_python for use in box_dealloc.
+/* Store function defined in numba.core.runtime._nrt_python for use in box_dealloc.
  * It points to a function is code segment that does not need user deallocation
  * and does not disappear while the process is stil running.
  */
@@ -92,7 +92,7 @@ static PyTypeObject BoxType = {
 };
 
 
-/* Import MemInfo_Release from numba.runtime._nrt_python once for use in
+/* Import MemInfo_Release from numba.core.runtime._nrt_python once for use in
  * Box_dealloc.
  */
 static void *
@@ -101,8 +101,8 @@ import_meminfo_release(void) {
     PyObject *helperdct = NULL;
     PyObject *mi_rel_fn = NULL;
     void *fnptr = NULL;
-    /* from numba.runtime import _nrt_python */
-    nrtmod = PyImport_ImportModule("numba.runtime._nrt_python");
+    /* from numba.core.runtime import _nrt_python */
+    nrtmod = PyImport_ImportModule("numba.core.runtime._nrt_python");
     if (!nrtmod) goto cleanup;
     /* helperdct = _nrt_python.c_helpers */
     helperdct = PyObject_GetAttrString(nrtmod, "c_helpers");

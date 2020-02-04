@@ -337,7 +337,7 @@ class BaseContext(object):
 
     @utils.cached_property
     def nrt(self):
-        from numba.runtime.context import NRTContext
+        from numba.core.runtime.context import NRTContext
         return NRTContext(self, self.enable_nrt)
 
     def subtarget(self, **kws):

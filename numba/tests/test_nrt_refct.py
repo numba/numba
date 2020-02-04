@@ -9,7 +9,7 @@ import numpy as np
 
 import unittest
 from numba import njit
-from numba.runtime import rtsys
+from numba.core.runtime import rtsys
 from numba.tests.support import TestCase
 
 
