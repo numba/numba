@@ -4,7 +4,7 @@ This scripts specifies all PTX special objects.
 import operator
 import numpy
 import llvmlite.llvmpy.core as lc
-from numba import macro
+from numba.core.rewrites.macros import Macro
 from numba.core import types, typing, ir
 from .cudadrv import nvvm
 
@@ -37,9 +37,9 @@ class threadIdx(Stub):
     '''
     _description_ = '<threadIdx.{x,y,z}>'
 
-    x = macro.Macro('tid.x', SREG_SIGNATURE)
-    y = macro.Macro('tid.y', SREG_SIGNATURE)
-    z = macro.Macro('tid.z', SREG_SIGNATURE)
+    x = Macro('tid.x', SREG_SIGNATURE)
+    y = Macro('tid.y', SREG_SIGNATURE)
+    z = Macro('tid.z', SREG_SIGNATURE)
 
 
 class blockIdx(Stub):
@@ -51,9 +51,9 @@ class blockIdx(Stub):
     '''
     _description_ = '<blockIdx.{x,y,z}>'
 
-    x = macro.Macro('ctaid.x', SREG_SIGNATURE)
-    y = macro.Macro('ctaid.y', SREG_SIGNATURE)
-    z = macro.Macro('ctaid.z', SREG_SIGNATURE)
+    x = Macro('ctaid.x', SREG_SIGNATURE)
+    y = Macro('ctaid.y', SREG_SIGNATURE)
+    z = Macro('ctaid.z', SREG_SIGNATURE)
 
 
 class blockDim(Stub):
@@ -62,9 +62,9 @@ class blockDim(Stub):
     kernel.  This value is the same for all threads in a given kernel, even
     if they belong to different blocks (i.e. each block is "full").
     '''
-    x = macro.Macro('ntid.x', SREG_SIGNATURE)
-    y = macro.Macro('ntid.y', SREG_SIGNATURE)
-    z = macro.Macro('ntid.z', SREG_SIGNATURE)
+    x = Macro('ntid.x', SREG_SIGNATURE)
+    y = Macro('ntid.y', SREG_SIGNATURE)
+    z = Macro('ntid.z', SREG_SIGNATURE)
 
 
 class gridDim(Stub):
@@ -73,13 +73,13 @@ class gridDim(Stub):
     ``y``, and ``z``.
     '''
     _description_ = '<gridDim.{x,y,z}>'
-    x = macro.Macro('nctaid.x', SREG_SIGNATURE)
-    y = macro.Macro('nctaid.y', SREG_SIGNATURE)
-    z = macro.Macro('nctaid.z', SREG_SIGNATURE)
+    x = Macro('nctaid.x', SREG_SIGNATURE)
+    y = Macro('nctaid.y', SREG_SIGNATURE)
+    z = Macro('nctaid.z', SREG_SIGNATURE)
 
 
-warpsize = macro.Macro('warpsize', SREG_SIGNATURE)
-laneid = macro.Macro('laneid', SREG_SIGNATURE)
+warpsize = Macro('warpsize', SREG_SIGNATURE)
+laneid = Macro('laneid', SREG_SIGNATURE)
 
 #-------------------------------------------------------------------------------
 # Grid Macro
@@ -121,7 +121,7 @@ def grid_expand(ndim):
     return ir.Intrinsic(fname, typing.signature(restype, types.intp),
                         args=[ndim])
 
-grid = macro.Macro('ptx.grid', grid_expand, callable=True)
+grid = Macro('ptx.grid', grid_expand, callable=True)
 
 #-------------------------------------------------------------------------------
 # Gridsize Macro
@@ -155,7 +155,7 @@ def gridsize_expand(ndim):
                         args=[ndim])
 
 
-gridsize = macro.Macro('ptx.gridsize', gridsize_expand, callable=True)
+gridsize = Macro('ptx.gridsize', gridsize_expand, callable=True)
 
 #-------------------------------------------------------------------------------
 # syncthreads
@@ -306,7 +306,7 @@ class shared(Stub):
     """
     _description_ = '<shared>'
 
-    array = macro.Macro('shared.array', shared_array, callable=True,
+    array = Macro('shared.array', shared_array, callable=True,
                         argnames=['shape', 'dtype'])
     '''
     Allocate a shared array of the given *shape* and *type*. *shape* is either
@@ -338,7 +338,7 @@ class local(Stub):
     '''
     _description_ = '<local>'
 
-    array = macro.Macro('local.array', local_array, callable=True,
+    array = Macro('local.array', local_array, callable=True,
                         argnames=['shape', 'dtype'])
     '''
     Allocate a local array of the given *shape* and *type*. The array is private
@@ -367,7 +367,7 @@ class const(Stub):
     '''
     _description_ = '<const>'
 
-    array_like = macro.Macro('const.array_like', const_array_like,
+    array_like = Macro('const.array_like', const_array_like,
                              callable=True, argnames=['ary'])
     '''
     Create a const array from *ary*. The resulting const array will have the
