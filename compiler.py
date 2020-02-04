@@ -12,6 +12,9 @@ from types import FunctionType
 import os
 
 DEBUG=os.environ.get('NUMBA_DPPY_DEBUG', None)
+_NUMBA_PVC_READ_ONLY  = "read_only"
+_NUMBA_PVC_WRITE_ONLY = "write_only"
+_NUMBA_PVC_READ_WRITE = "read_write"
 
 def _raise_no_device_found_error():
     error_message = ("No OpenCL device specified. "
@@ -64,7 +67,7 @@ def compile_with_dppy(pyfunc, return_type, args, debug):
     return cres
 
 
-def compile_kernel(device, pyfunc, args, debug=False):
+def compile_kernel(device, pyfunc, args, access_types, debug=False):
     if DEBUG:
         print("compile_kernel", args)
     cres = compile_with_dppy(pyfunc, types.void, args, debug=debug)
@@ -73,7 +76,8 @@ def compile_kernel(device, pyfunc, args, debug=False):
     oclkern = DPPyKernel(device_env=device,
                          llvm_module=kernel.module,
                          name=kernel.name,
-                         argtypes=cres.signature.args)
+                         argtypes=cres.signature.args,
+                         ordered_arg_access_types=access_types)
     return oclkern
 
 
@@ -125,6 +129,11 @@ class DPPyKernelBase(object):
         self.global_size = []
         self.local_size  = []
         self.device_env  = None
+
+        # list of supported access types, stored in dict for fast lookup
+        self.correct_access_types = {_NUMBA_PVC_READ_ONLY: _NUMBA_PVC_READ_ONLY,
+                _NUMBA_PVC_WRITE_ONLY: _NUMBA_PVC_WRITE_ONLY,
+                _NUMBA_PVC_READ_WRITE: _NUMBA_PVC_READ_WRITE}
 
     def copy(self):
         return copy.copy(self)
@@ -200,12 +209,13 @@ class DPPyKernel(DPPyKernelBase):
     A OCL kernel object
     """
 
-    def __init__(self, device_env, llvm_module, name, argtypes):
+    def __init__(self, device_env, llvm_module, name, argtypes, ordered_arg_access_types):
         super(DPPyKernel, self).__init__()
         self._llvm_module = llvm_module
         self.assembly = self.binary = llvm_module.__str__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
+        self.ordered_arg_access_types = ordered_arg_access_types
         self._argloc = []
         # cached finalized program
         # self._cacheprog = _CachedProgram(entry_name=self.entry_name,
@@ -229,30 +239,47 @@ class DPPyKernel(DPPyKernelBase):
         # Unpack pyobject values into ctypes scalar values
         retr = []  # hold functors for writeback
         kernelargs = []
-        for ty, val in zip(self.argument_types, args):
-            self._unpack_argument(ty, val, self.device_env, retr, kernelargs)
-        
-        # enqueue the kernel
+        internal_device_arrs = []
+        for ty, val, access_type in zip(self.argument_types, args, self.ordered_arg_access_types):
+            self._unpack_argument(ty, val, self.device_env, retr,
+                    kernelargs, internal_device_arrs, access_type)
+
+        # enqueues the kernel
         driver.enqueue_kernel(self.device_env, self.kernel, kernelargs,
                               self.global_size, self.local_size)
 
+        for ty, val, i_dev_arr, access_type in zip(self.argument_types, args,
+                internal_device_arrs, self.ordered_arg_access_types):
+            self._pack_argument(ty, val, self.device_env, i_dev_arr, access_type)
+
+    def _pack_argument(self, ty, val, device_env, device_arr, access_type):
+        """
+        Copy device data back to host
+        """
+        if (device_arr and (access_type not in self.correct_access_types or
+            access_type in self.correct_access_types and
+            self.correct_access_types[access_type] != _NUMBA_PVC_READ_ONLY)):
+            # we get the date back to host if have created a device_array or
+            # if access_type of this device_array is not of type read_only and read_write
+            device_env.copy_array_from_device(device_arr)
 
     def _unpack_device_array_argument(self, val, kernelargs):
+        # this function only takes DeviceArray created for ndarrays
         void_ptr_arg = True
-        # meminfo 
+        # meminfo
         kernelargs.append(driver.KernelArg(None, void_ptr_arg))
         # parent
         kernelargs.append(driver.KernelArg(None, void_ptr_arg))
-        kernelargs.append(driver.KernelArg(val._ndarray.size))
-        kernelargs.append(driver.KernelArg(val._ndarray.dtype.itemsize))
+        kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.size)))
+        kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.dtype.itemsize)))
         kernelargs.append(driver.KernelArg(val))
         for ax in range(val._ndarray.ndim):
-            kernelargs.append(driver.KernelArg(val._ndarray.shape[ax]))
+            kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.shape[ax])))
         for ax in range(val._ndarray.ndim):
-            kernelargs.append(driver.KernelArg(val._ndarray.strides[ax]))
+            kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.strides[ax])))
 
 
-    def _unpack_argument(self, ty, val, device_env, retr, kernelargs):
+    def _unpack_argument(self, ty, val, device_env, retr, kernelargs, device_arrs, access_type):
         """
         Convert arguments to ctypes and append to kernelargs
         """
@@ -260,31 +287,42 @@ class DPPyKernel(DPPyKernelBase):
         # if ty is of type ndarray. Argtypes returns ndarray for both
         # DeviceArray and ndarray. This is a hack to get around the issue,
         # till I understand the typing infrastructure of NUMBA better.
+        device_arrs.append(None)
         if isinstance(val, driver.DeviceArray):
             self._unpack_device_array_argument(val, kernelargs)
 
         elif isinstance(ty, types.Array):
-            raise NotImplementedError(ty, val)
+            default_behavior = self.check_and_warn_abt_invalid_access_type(access_type)
+            dArr = None
+
+            if (default_behavior or
+                self.correct_access_types[access_type] == _NUMBA_PVC_READ_ONLY or
+                self.correct_access_types[access_type] == _NUMBA_PVC_READ_WRITE):
+                # default, read_only and read_write case
+                dArr = device_env.copy_array_to_device(val)
+            elif self.correct_access_types[access_type] == _NUMBA_PVC_WRITE_ONLY:
+                # write_only case, we do not copy the host data
+                dArr = driver.DeviceArray(device_env.get_env_ptr(), val)
+
+            assert (dArr != None), "Problem in allocating device buffer"
+            device_arrs[-1] = dArr
+            self._unpack_device_array_argument(dArr, kernelargs)
 
         elif isinstance(ty, types.Integer):
-            cval = getattr(ctypes, "c_%s" % ty)(val)
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            cval = ctypes.c_size_t(val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.float64:
             cval = ctypes.c_double(val)
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.float32:
             cval = ctypes.c_float(val)
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.boolean:
             cval = ctypes.c_uint8(int(val))
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.complex64:
             #kernelargs.append(ctypes.c_float(val.real))
@@ -299,22 +337,37 @@ class DPPyKernel(DPPyKernelBase):
         else:
             raise NotImplementedError(ty, val)
 
+    def check_and_warn_abt_invalid_access_type(self, access_type):
+        if access_type not in self.correct_access_types:
+            msg = "[!] %s is not a valid access type. Supported access types are [" % (access_type)
+            for key in self.correct_access_types:
+                msg += " %s |" % (key)
+
+            msg = msg[:-1] + "]"
+            if access_type != None: print(msg)
+            return True
+        else:
+            return False
+
 
 class JitDPPyKernel(DPPyKernelBase):
+    def __init__(self, func, access_types):
 
-    def __init__(self, func):
         super(JitDPPyKernel, self).__init__()
+
         self.py_func = func
         # DRD: Caching definitions this way can lead to unexpected consequences
         # E.g. A kernel compiled for a given device would not get recompiled
         # and lead to OpenCL runtime errors.
         #self.definitions = {}
+        self.access_types = access_types
 
         from .descriptor import DPPyTargetDesc
 
         self.typingctx = DPPyTargetDesc.typingctx
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
+        assert not kwargs, "Keyword Arguments are not supported"
         if self.device_env is None:
             _raise_no_device_found_error()
         kernel = self.specialize(*args)
@@ -328,6 +381,6 @@ class JitDPPyKernel(DPPyKernelBase):
         kernel = None #self.definitions.get(argtypes)
 
         if kernel is None:
-            kernel = compile_kernel(self.device_env, self.py_func, argtypes)
+            kernel = compile_kernel(self.device_env, self.py_func, argtypes, self.access_types)
             #self.definitions[argtypes] = kernel
         return kernel
