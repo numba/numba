@@ -188,6 +188,19 @@ class IterationTest(MemoryLeakMixin, TestCase):
     def test_array_1d_record_mutate(self):
         self.test_array_1d_record_mutate_npm(flags=force_pyobj_flags)
 
+    def test_array_0d_raises(self):
+
+        def foo(x):
+            for i in x:
+                pass
+
+        # 0d is typing error
+        with self.assertRaises(errors.TypingError) as raises:
+            aryty = types.Array(types.int32, 0, 'C')
+            compile_isolated(foo, (aryty,))
+
+        self.assertIn("0-d array", str(raises.exception))
+
     def test_tuple_iter_issue1504(self):
         # The issue is due to `row` being typed as heterogeneous tuple.
         def bar(x, y):
