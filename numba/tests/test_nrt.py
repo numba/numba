@@ -6,7 +6,7 @@ import re
 
 import numpy as np
 
-from numba import njit, targets
+from numba import njit
 from numba.core import typing, types
 from numba.core.compiler import compile_isolated, Flags
 from numba.runtime import (
@@ -20,7 +20,7 @@ from numba.core.typing import signature
 from numba.core.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm
-from numba import cffi_support
+import numba.core.typing.cffi_utils as cffi_support
 from numba.core.unsafe.nrt import NRT_get_api
 
 from numba.tests.support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
