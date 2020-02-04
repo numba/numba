@@ -5,7 +5,8 @@ from numba.tests.support import (TestCase, override_config, captured_stdout,
                       skip_parfors_unsupported)
 from numba import jit, njit
 from numba.core import types, ir, postproc, compiler
-from numba.core.ir_utils import guard, find_callname, find_const, get_definition
+from numba.core.ir_utils import (guard, find_callname, find_const,
+                                 get_definition, simplify_CFG)
 from numba.core.registry import CPUDispatcher
 from numba.core.inline_closurecall import inline_closure_call
 
@@ -203,7 +204,7 @@ class TestInlining(TestCase):
     def test_inline_var_dict_ret(self):
         # make sure inline_closure_call returns the variable replacement dict
         # and it contains the original variable name used in locals
-        @numba.njit(locals={'b': numba.float64})
+        @njit(locals={'b': types.float64})
         def g(a):
             b = a + 1
             return b
@@ -278,7 +279,7 @@ class TestInlining(TestCase):
 
         # make sure IR doesn't have branches
         fir = j_func.overloads[(types.Omitted(None),)].metadata['preserved_ir']
-        fir.blocks = numba.ir_utils.simplify_CFG(fir.blocks)
+        fir.blocks = simplify_CFG(fir.blocks)
         self.assertEqual(len(fir.blocks), 1)
 
 if __name__ == '__main__':
