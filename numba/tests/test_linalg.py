@@ -12,7 +12,7 @@ from numba import jit
 from numba.core import errors
 from numba.tests.support import TestCase, tag, needs_lapack, needs_blas, _is_armv7l
 from .matmul_usecase import matmul_usecase
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def dot2(a, b):

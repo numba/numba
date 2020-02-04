@@ -1,12 +1,12 @@
 import os
 import sys
 import functools
+import unittest
 import traceback
 from fnmatch import fnmatch
 from os.path import join, isfile, relpath, normpath, splitext
 
 from .main import NumbaTestProgram, SerialSuite, make_tag_decorator
-import numba.testing.unittest_support as unittest
 from numba.core import config
 
 

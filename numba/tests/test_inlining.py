@@ -20,7 +20,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            IRLegalization, NoPythonBackend)
 
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
-from numba.testing import unittest_support as unittest
+import unittest
 
 @jit((types.int32,), nopython=True)
 def inner(a):

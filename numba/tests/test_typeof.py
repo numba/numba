@@ -8,7 +8,7 @@ import mmap
 
 import numpy as np
 
-import numba.testing.unittest_support as unittest
+import unittest
 import numba.core.typing.cffi_utils as cffi_support
 from numba.core import types
 from numba.misc.special import typeof

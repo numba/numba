@@ -6,7 +6,7 @@ from numba import jit
 from numba.core import utils
 from numba.tests.support import TestCase, forbid_codegen
 from .enum_usecases import *
-from numba.testing import unittest_support as unittest
+import unittest
 
 DBL_EPSILON = 2**-52
 FLT_EPSILON = 2**-23

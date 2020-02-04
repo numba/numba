@@ -14,7 +14,7 @@ from numba.experimental.jitclass import _box
 from numba.runtime.nrt import MemInfo
 from numba.core.errors import LoweringError
 from numba.experimental import jitclass
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestClass1(object):

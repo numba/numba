@@ -1,7 +1,7 @@
 from numba import njit
 
 from functools import reduce
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestMap(unittest.TestCase):

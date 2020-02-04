@@ -17,7 +17,7 @@ from numba.core.utils import pysignature
 from numba.np.arraymath import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
                                  needs_blas)
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 no_pyobj_flags = Flags()

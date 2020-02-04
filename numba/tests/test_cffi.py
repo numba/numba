@@ -8,7 +8,7 @@ from numba.core.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase, tag
 
 import numba.tests.cffi_usecases as mod
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 enable_pyobj_flags = Flags()

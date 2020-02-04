@@ -3,7 +3,7 @@ import re
 from numba.tests.support import TestCase, override_config
 from numba import jit
 from numba.core import types
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestDebugInfo(TestCase):

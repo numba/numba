@@ -5,7 +5,7 @@ import numpy as np
 
 from numba import jit
 from numba.tests.support import TestCase, tag, needs_lapack
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def roots_fn(p):

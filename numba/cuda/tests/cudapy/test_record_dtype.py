@@ -4,7 +4,7 @@ import numpy as np
 from numba import cuda
 from numba.core import types
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
-from numba.testing import unittest_support as unittest
+import unittest
 from numba.np import numpy_support
 
 

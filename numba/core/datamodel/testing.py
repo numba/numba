@@ -2,7 +2,7 @@ from llvmlite import ir
 from llvmlite import binding as ll
 
 from numba.core import datamodel
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class DataModelTester(unittest.TestCase):

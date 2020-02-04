@@ -1,5 +1,5 @@
 from numba.np.ufunc.deviceufunc import GUFuncEngine
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def template(signature, shapes, expects):

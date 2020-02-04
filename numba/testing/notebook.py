@@ -7,7 +7,7 @@ from nbformat.reader import reads
 import re
 import json
 from copy import copy
-from numba.testing import unittest_support as unittest
+import unittest
 
 try:
     # py3

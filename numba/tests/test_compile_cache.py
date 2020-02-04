@@ -1,4 +1,4 @@
-import numba.testing.unittest_support as unittest
+import unittest
 from contextlib import contextmanager
 
 import llvmlite.llvmpy.core as lc

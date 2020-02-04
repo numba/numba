@@ -20,7 +20,7 @@ from numba.core.compiler import compile_extra, Flags
 from numba.core.cpu import ParallelOptions
 from numba.tests.support import tag, skip_parfors_unsupported, _32bit
 from numba.core.errors import LoweringError, TypingError
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 skip_unsupported = skip_parfors_unsupported

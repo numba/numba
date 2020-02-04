@@ -3,10 +3,11 @@ from os.path import dirname, join
 import multiprocessing
 import sys
 import time
+import unittest
 import warnings
 
 from unittest.suite import TestSuite
-from numba.testing import load_testsuite, unittest_support as unittest
+from numba.testing import load_testsuite
 
 
 try:

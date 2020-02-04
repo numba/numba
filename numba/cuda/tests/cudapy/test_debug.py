@@ -4,7 +4,7 @@ from numba.cuda.testing import skip_on_cudasim, SerialMixin
 from numba.tests.support import (override_config, captured_stderr,
                                  captured_stdout)
 from numba import cuda, float64
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def simple_cuda(A, B):

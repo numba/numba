@@ -8,7 +8,7 @@ from numba.tests.support import (
 )
 from numba.cuda.cuda_paths import get_conda_ctk
 from numba.core import config
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class CUDATestCase(SerialMixin, unittest.TestCase):

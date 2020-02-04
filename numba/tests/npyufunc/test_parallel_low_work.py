@@ -6,7 +6,7 @@ import numpy as np
 
 from numba import float32, float64, int32, uint32
 from numba.np.ufunc import Vectorize
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def vector_add(a, b):

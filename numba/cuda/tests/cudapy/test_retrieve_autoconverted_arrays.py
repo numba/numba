@@ -3,7 +3,7 @@ import numpy as np
 from numba import cuda
 from numba.cuda.args import wrap_arg
 from numba.cuda.testing import SerialMixin
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class DefaultIn(object):

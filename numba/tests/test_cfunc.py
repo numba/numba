@@ -16,7 +16,7 @@ from numba.core import types, typing, utils
 import numba.core.typing.cffi_utils as cffi_support
 from numba.tests.support import TestCase, tag, captured_stderr
 from numba.tests.test_dispatcher import BaseCacheTest
-from numba.testing import unittest_support as unittest
+import unittest
 from numba.np import numpy_support
 
 skip_cffi_unsupported = unittest.skipUnless(

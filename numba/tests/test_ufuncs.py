@@ -8,7 +8,7 @@ import operator
 
 import numpy as np
 
-import numba.testing.unittest_support as unittest
+import unittest
 from numba import typeof, njit
 from numba.core import types, typing, utils
 from numba.core.compiler import compile_isolated, Flags, DEFAULT_FLAGS

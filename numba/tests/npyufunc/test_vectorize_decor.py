@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import int32, uint32, float32, float64, jit, vectorize
 from ..support import tag, CheckWarningsMixin
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 pi = math.pi

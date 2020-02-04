@@ -11,7 +11,7 @@ from numba.core.errors import TypingError, LoweringError
 from numba.np.numpy_support import as_dtype
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeak,
                                  MemoryLeakMixin, tag, needs_blas)
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def np_around_array(arr, decimals, out):

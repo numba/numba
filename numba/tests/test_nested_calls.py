@@ -8,7 +8,7 @@ from numba import int32, int64
 from numba import jit, generated_jit
 from numba.core import types
 from numba.tests.support import TestCase, tag
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 @jit(nopython=True)

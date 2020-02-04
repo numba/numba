@@ -4,7 +4,7 @@ import threading
 
 import numpy as np
 
-import numba.testing.unittest_support as unittest
+import unittest
 from numba.roc.hsadrv.driver import hsa, Queue, Program, Executable,\
                                     BrigModule, Context, dgpu_present
 

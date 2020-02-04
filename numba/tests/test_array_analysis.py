@@ -21,7 +21,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
 
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 from numba.experimental import jitclass
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 skip_unsupported = skip_parfors_unsupported

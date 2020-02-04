@@ -3,7 +3,7 @@ import numpy as np
 
 from numba import roc, float32
 from numba.roc.hsadrv.error import HsaKernelLaunchError
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestMatMul(unittest.TestCase):

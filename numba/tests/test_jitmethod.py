@@ -1,4 +1,4 @@
-import numba.testing.unittest_support as unittest
+import unittest
 
 import numpy as np
 

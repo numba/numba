@@ -3,7 +3,7 @@ import numpy as np
 from numba.core.compiler import compile_isolated
 from numba import typeof
 from numba.tests.support import MemoryLeakMixin
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def array_return(a, i):

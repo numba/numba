@@ -5,7 +5,7 @@ from numba import void, float32, float64
 from numba import guvectorize
 from numba import cuda
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')

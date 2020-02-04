@@ -4,7 +4,7 @@ from io import StringIO
 import numba
 from numba.core.compiler import compile_isolated, Flags
 from numba.core import types
-from numba.testing import unittest_support as unittest
+import unittest
 
 try:
     import jinja2

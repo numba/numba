@@ -34,7 +34,7 @@ from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       skip_parfors_unsupported, _32bit, needs_blas,
                       needs_lapack)
 import cmath
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 test_disabled = unittest.skipIf(True, 'Test disabled')

@@ -3,7 +3,7 @@ from numba import vectorize
 from numba import cuda, float64
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
 from numba.core import config
-from numba.testing import unittest_support as unittest
+import unittest
 
 sig = [float64(float64, float64)]
 

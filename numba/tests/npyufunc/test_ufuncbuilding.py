@@ -8,7 +8,7 @@ from numba.np.ufunc import PyUFunc_One
 from numba.np.ufunc.dufunc import DUFunc as UFuncBuilder
 from ..support import tag, TestCase
 from numba.core import config
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def add(a, b):

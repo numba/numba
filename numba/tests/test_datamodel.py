@@ -2,7 +2,7 @@ from llvmlite import ir, binding as ll
 
 from numba.core import types, datamodel
 from numba.core.datamodel.testing import test_factory
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestBool(test_factory()):

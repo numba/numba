@@ -2,7 +2,7 @@ import subprocess
 import sys
 
 from numba.tests.support import TestCase
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestNumbaImport(TestCase):

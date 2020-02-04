@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import cuda
-import numba.testing.unittest_support as unittest
+import unittest
 from numba.cuda.testing import SerialMixin
 
 

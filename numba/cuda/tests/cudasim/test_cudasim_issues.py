@@ -5,7 +5,7 @@ import numpy as np
 from numba import cuda
 from numba.cuda.testing import SerialMixin, skip_unless_cudasim
 import numba.cuda.simulator as simulator
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestCudaSimIssues(SerialMixin, unittest.TestCase):

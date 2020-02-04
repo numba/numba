@@ -1,6 +1,6 @@
 import numpy as np
 
-import numba.testing.unittest_support as unittest
+import unittest
 from numba.core.compiler import compile_isolated
 from numba.np.numpy_support import from_dtype
 from numba import njit, typeof

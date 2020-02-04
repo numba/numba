@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import njit
 from numba.core import types
-from numba.testing import unittest_support as unittest
+import unittest
 
 class TestMulti3(unittest.TestCase):
     """

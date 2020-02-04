@@ -1,7 +1,7 @@
 import numpy as np
 from numba import cuda
 from numba.cuda.testing import SerialMixin
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def reinterpret_array_type(byte_arr, start, stop, output):

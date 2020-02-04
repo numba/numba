@@ -16,7 +16,7 @@ from numba.core.cpu import ParallelOptions
 from numba.core.errors import NumbaPerformanceWarning
 from numba import prange
 from numba.experimental import jitclass
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def simple_nopython(somearg):

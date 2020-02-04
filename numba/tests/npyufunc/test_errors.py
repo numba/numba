@@ -6,7 +6,7 @@ import numpy as np
 from numba import vectorize, guvectorize
 
 from ..support import TestCase, CheckWarningsMixin
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def sqrt(val):

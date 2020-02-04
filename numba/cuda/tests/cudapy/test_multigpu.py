@@ -2,7 +2,7 @@ from numba import cuda
 import numpy as np
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
 import threading
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestMultiGPUContext(SerialMixin, unittest.TestCase):

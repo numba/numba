@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import njit
-import numba.testing.unittest_support as unittest
+import unittest
 from numba.core.compiler import compile_isolated, Flags
 from numba.core import types, errors
 from numba.tests.support import TestCase, MemoryLeakMixin, tag

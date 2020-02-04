@@ -2,7 +2,7 @@ from numba import vectorize
 from numba import cuda, float32
 import numpy as np
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')

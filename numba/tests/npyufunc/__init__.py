@@ -1,7 +1,8 @@
 from os.path import dirname
+import unittest
 from unittest.suite import TestSuite
 
-from numba.testing import load_testsuite, unittest_support as unittest
+from numba.testing import load_testsuite
 
 def load_tests(loader, tests, pattern):
     suite = TestSuite()

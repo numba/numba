@@ -29,7 +29,7 @@ from numba.core.dispatcher import Dispatcher
 from numba.tests.support import skip_parfors_unsupported, needs_lapack
 
 import llvmlite.binding as ll
-from numba.testing import unittest_support as unittest
+import unittest
 from numba.parfors import parfor
 
 try:

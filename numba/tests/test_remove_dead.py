@@ -26,7 +26,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            IRLegalization, NoPythonBackend)
 import numpy as np
 from numba.tests.support import skip_parfors_unsupported, needs_blas
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def test_will_propagate(b, z, w):

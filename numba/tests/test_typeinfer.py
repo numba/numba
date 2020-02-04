@@ -10,7 +10,7 @@ from numba.core.typeconv import Conversion
 
 from numba.tests.support import TestCase, tag
 from numba.tests.test_typeconv import CompatibilityTestMixin
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 i8 = types.int8

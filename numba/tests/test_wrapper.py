@@ -1,6 +1,6 @@
 import numpy as np
 
-import numba.testing.unittest_support as unittest
+import unittest
 from numba.core import types, utils, compiler, registry
 
 

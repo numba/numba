@@ -1,7 +1,7 @@
 import numpy as np
 
 import numba
-import numba.testing.unittest_support as unittest
+import unittest
 from numba.tests.support import TestCase
 from numba import njit
 from numba.core import types, errors, cgutils

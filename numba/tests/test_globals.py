@@ -1,7 +1,7 @@
 import numpy as np
 from numba import jit
 from numba.tests import usecases
-from numba.testing import unittest_support as unittest
+import unittest
 
 X = np.arange(10)
 

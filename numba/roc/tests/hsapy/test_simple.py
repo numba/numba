@@ -1,7 +1,7 @@
 import numpy as np
 from numba import roc
 from numba.roc.hsadrv.error import HsaKernelLaunchError
-import numba.testing.unittest_support as unittest
+import unittest
 
 
 class TestSimple(unittest.TestCase):

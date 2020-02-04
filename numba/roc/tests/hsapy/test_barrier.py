@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import roc, float32
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestBarrier(unittest.TestCase):

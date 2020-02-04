@@ -6,7 +6,7 @@ from numba import typeof, cuda, njit
 from numba.core.types import float64
 from numba.tests.support import MemoryLeakMixin, override_env_config
 from numba.core import config
-from numba.testing import unittest_support as unittest
+import unittest
 
 BOUNDSCHECK_FLAGS = DEFAULT_FLAGS.copy()
 BOUNDSCHECK_FLAGS.set('boundscheck', True)

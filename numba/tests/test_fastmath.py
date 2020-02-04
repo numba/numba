@@ -3,7 +3,7 @@ import numpy as np
 
 from numba.tests.support import captured_stdout, override_config
 from numba import njit, vectorize, guvectorize
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestFastMath(unittest.TestCase):

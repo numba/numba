@@ -8,7 +8,7 @@ from itertools import product
 
 import numpy as np
 
-import numba.testing.unittest_support as unittest
+import unittest
 from numba.core import types
 from numba.tests.support import TestCase
 from numba.tests.enum_usecases import Shake, RequestError

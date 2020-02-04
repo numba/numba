@@ -9,7 +9,7 @@ import numpy as np
 import logging
 from io import StringIO
 
-import numba.testing.unittest_support as unittest
+import unittest
 from numba.tests.support import temp_directory, SerialMixin
 from numba.core import dispatcher
 

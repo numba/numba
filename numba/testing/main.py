@@ -1,5 +1,3 @@
-import numba.testing.unittest_support as unittest
-
 import collections
 import contextlib
 import cProfile
@@ -10,6 +8,7 @@ import os
 import random
 import sys
 import time
+import unittest
 import warnings
 
 from io import StringIO

@@ -5,7 +5,7 @@ from numba import jit
 from numba.core import types
 
 from numba.tests.support import TestCase, tag
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def dobool(a):

@@ -7,7 +7,7 @@ import sys
 from numba.core.errors import TypingError
 from numba.tests.support import TestCase, tag
 from .serialize_usecases import *
-from numba.testing import unittest_support as unittest
+import unittest
 from numba.core import registry
 
 

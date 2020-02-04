@@ -1,6 +1,6 @@
 import numpy as np
 from numba import roc
-import numba.testing.unittest_support as unittest
+import unittest
 
 
 class TestPositioning(unittest.TestCase):

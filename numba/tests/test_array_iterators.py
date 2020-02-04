@@ -6,7 +6,7 @@ from numba import jit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def array_iter(arr):

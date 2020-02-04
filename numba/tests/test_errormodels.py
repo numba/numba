@@ -3,7 +3,7 @@ Test setting/overriding error models
 """
 
 from numba import jit
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestErrorModel(unittest.TestCase):

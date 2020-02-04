@@ -4,7 +4,7 @@ import sys
 import numpy as np
 
 from numba.core.compiler import compile_isolated
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestAutoConstants(unittest.TestCase):

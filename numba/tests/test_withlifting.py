@@ -14,7 +14,7 @@ from numba import njit, typeof, objmode
 from numba.core.extending import overload
 from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
                                  skip_unless_scipy)
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 def get_func_ir(func):

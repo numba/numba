@@ -6,7 +6,7 @@ from numba.cuda.testing import skip_on_cudasim
 from numba import cuda
 from numba.core import types
 from numba.cuda.testing import SerialMixin
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 @skip_on_cudasim("Skipped on simulator")

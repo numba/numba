@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import njit, vectorize
 from ..support import MemoryLeakMixin
-from numba.testing import unittest_support as unittest
+import unittest
 from numba.np.ufunc import dufunc
 
 

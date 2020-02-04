@@ -24,7 +24,7 @@ from numba.core.extending import (overload, register_model, models, unbox,
                              NativeValue, typeof_impl)
 from numba.tests.support import TestCase, temp_directory
 from numba.tests.enum_usecases import Color, Shake, Shape
-from numba.testing import unittest_support as unittest
+import unittest
 from numba.np import numpy_support
 
 

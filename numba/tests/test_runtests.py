@@ -2,7 +2,7 @@ import sys
 import subprocess
 
 from numba import cuda
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestCase(unittest.TestCase):

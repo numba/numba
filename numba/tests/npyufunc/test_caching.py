@@ -8,7 +8,7 @@ import numpy as np
 from ..support import capture_cache_log
 from ..test_dispatcher import BaseCacheTest
 from numba.core import config
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class UfuncCacheTest(BaseCacheTest):

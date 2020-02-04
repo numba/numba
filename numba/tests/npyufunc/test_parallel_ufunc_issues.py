@@ -5,7 +5,7 @@ import numpy as np
 
 from numba.tests.support import captured_stdout
 from numba import vectorize, guvectorize
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 class TestParUfuncIssues(unittest.TestCase):

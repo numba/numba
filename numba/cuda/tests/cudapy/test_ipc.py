@@ -8,7 +8,7 @@ import numpy as np
 from numba import cuda
 from numba.cuda.cudadrv import drvapi, devicearray
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
-from numba.testing import unittest_support as unittest
+import unittest
 
 
 not_linux = not sys.platform.startswith('linux')
