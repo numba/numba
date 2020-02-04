@@ -57,7 +57,7 @@ class TestInspector(TestCase):
 
     def test_inspect_cli(self):
         # Try CLI on math module
-        cmdbase = [sys.executable, '-m', 'numba.help.inspector']
+        cmdbase = [sys.executable, '-m', 'numba.misc.help.inspector']
 
         dirpath = temp_directory('{}.{}'.format(__name__,
                                                 self.__class__.__name__))
