@@ -778,7 +778,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                 if expr.op == 'call':
                     fname, mod_name = find_callname(
                             func_ir, expr, typemap=self.typemap)
-                    if fname == 'wrap_index' and mod_name == 'numba.array_analysis':
+                    if fname == 'wrap_index' and mod_name == 'numba.parfors.array_analysis':
                         index = tuple(self.obj_to_ind.get(x.name, -1)
                                       for x in expr.args)
                         if -1 in index:
@@ -1779,12 +1779,12 @@ class ArrayAnalysis(object):
         shape = equiv_set._get_shape(var)
         return shape[0], [], shape[0]
 
-    def _analyze_op_call_numba_array_analysis_assert_equiv(self, scope,
+    def _analyze_op_call_numba_parfors_array_analysis_assert_equiv(self, scope,
                                                         equiv_set, args, kws):
         equiv_set.insert_equiv(*args[1:])
         return None
 
-    def _analyze_op_call_numba_array_analysis_wrap_index(self, scope,
+    def _analyze_op_call_numba_parfors_array_analysis_wrap_index(self, scope,
                                                         equiv_set, args, kws):
         """ Analyze wrap_index calls added by a previous run of
             Array Analysis
