@@ -8,6 +8,8 @@ from numba.core.compiler import compile_isolated, Flags
 from numba import njit, typeof
 from numba.core import utils, types, errors
 from numba.tests.support import TestCase, tag
+from numba.core.typing import arraydecl
+from numba.core.types import intp, ellipsis, slice2_type, slice3_type
 
 
 enable_pyobj_flags = Flags()
@@ -1065,8 +1067,6 @@ class TestTyping(TestCase):
         Check an appropriate layout is inferred for the result of array
         indexing.
         """
-        from numba.typing import arraydecl
-        from numba.types import intp, ellipsis, slice2_type, slice3_type
 
         func = arraydecl.get_array_index_type
 
