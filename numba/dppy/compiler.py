@@ -112,10 +112,13 @@ def _ensure_valid_work_item_grid(val, device_env):
 
 def _ensure_valid_work_group_size(val, work_item_grid):
 
-    if not isinstance(val, (tuple, list)):
+    if not isinstance(val, (tuple, list, int)):
         error_message = ("Cannot create work item dimension from "
                          "provided argument")
         raise ValueError(error_message)
+
+    if isinstance(val, int):
+        val = [val]
 
     if len(val) != len(work_item_grid):
         error_message = ("Unsupported number of work item dimensions ")
