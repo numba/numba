@@ -591,6 +591,41 @@ class TestNoneType(MemoryLeakMixin, TestCase):
             )
 
 
+class TestImmutable(MemoryLeakMixin, TestCase):
+
+    def test_mutation_fails(self):
+        """ Test that any attempt to mutate an immutable typed list fails. """
+        def generate_function(line):
+            context = {}
+            exec(dedent("""
+                def bar(lst):
+                    {}
+                """.format(line)), context)
+            return njit(context["bar"])
+        for line in ("lst.append(0)",
+                     "lst[0] = 0",
+                     "lst.pop()",
+                     "del lst[0]",
+                     "lst.extend((0,))",
+                     "lst.insert(0, 0)",
+                     "lst.clear()",
+                     "lst.reverse()",
+                     # FIXME: sort is missing because it's not implemented
+                     ):
+            foo = generate_function(line)
+            l = List()
+            for i in (1, 2, 3):
+                l.append(i)
+            l._make_immutable()
+            for fun in (foo, foo.py_func):
+                with self.assertRaises(TypingError) as raises:
+                    foo(l)
+                self.assertIn(
+                    "unable to mutate immutable typed list",
+                    str(raises.exception),
+                )
+
+
 class TestAllocation(MemoryLeakMixin, TestCase):
 
     def test_allocation(self):
