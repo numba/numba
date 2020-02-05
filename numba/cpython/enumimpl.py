@@ -3,7 +3,9 @@ Implementation of enums.
 """
 import operator
 
-from numba.core.imputils import lower_builtin, lower_getattr, lower_getattr_generic, lower_cast, lower_constant, impl_ret_untracked
+from numba.core.imputils import (lower_builtin, lower_getattr,
+                                 lower_getattr_generic, lower_cast,
+                                 lower_constant, impl_ret_untracked)
 from numba.core import types
 
 

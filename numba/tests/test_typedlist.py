@@ -10,7 +10,7 @@ from numba import typeof
 from numba.typed import List, Dict
 from numba.core.errors import TypingError
 from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
-                      forbid_codegen, skip_parfors_unsupported)
+                                 forbid_codegen, skip_parfors_unsupported)
 
 from numba.core.unsafe.refcount import get_refcount
 from numba.experimental import jitclass

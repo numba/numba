@@ -16,7 +16,7 @@ import numpy as np
 from numba import jit, vectorize, guvectorize
 
 from numba.tests.support import (temp_directory, override_config, TestCase, tag,
-                      skip_parfors_unsupported, linux_only)
+                                 skip_parfors_unsupported, linux_only)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT

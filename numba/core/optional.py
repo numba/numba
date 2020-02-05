@@ -3,8 +3,8 @@ import operator
 from numba.core import types, typing, cgutils
 
 from numba.core.imputils import (lower_cast, lower_builtin,
-                                    lower_getattr_generic, impl_ret_untracked,
-                                    lower_setattr_generic)
+                                 lower_getattr_generic, impl_ret_untracked,
+                                 lower_setattr_generic)
 
 
 def always_return_true_impl(context, builder, sig, args):

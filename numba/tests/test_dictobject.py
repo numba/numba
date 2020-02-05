@@ -18,8 +18,8 @@ from numba.typed import Dict, dictobject
 from numba.typed.typedobjectutils import _sentry_safe_cast
 from numba.core.errors import TypingError
 from numba.core import types
-from numba.tests.support import (TestCase, MemoryLeakMixin, unittest, override_config,
-                      forbid_codegen)
+from numba.tests.support import (TestCase, MemoryLeakMixin, unittest,
+                                 override_config, forbid_codegen)
 from numba.experimental import jitclass
 
 

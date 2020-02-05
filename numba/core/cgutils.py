@@ -97,7 +97,6 @@ class _StructProxy(object):
     _fe_type = None
 
     def __init__(self, context, builder, value=None, ref=None):
-        from numba.core import datamodel   # Avoid circular import
         self._context = context
         self._datamodel = self._context.data_model_manager[self._fe_type]
         if not isinstance(self._datamodel, numba.core.datamodel.StructModel):

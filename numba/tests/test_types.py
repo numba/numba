@@ -21,7 +21,7 @@ from numba.core.types.abstract import _typecache
 from numba.core.typing.templates import make_overload_template
 from numba import jit, njit, typeof
 from numba.core.extending import (overload, register_model, models, unbox,
-                             NativeValue, typeof_impl)
+                                  NativeValue, typeof_impl)
 from numba.tests.support import TestCase, temp_directory
 from numba.tests.enum_usecases import Color, Shake, Shape
 import unittest

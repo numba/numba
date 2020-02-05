@@ -13,7 +13,8 @@ from numba.core import errors
 from numba import jit
 from numba.misc.gdb_hook import _confirm_gdb
 
-from numba.tests.support import (TestCase, captured_stdout, tag, skip_parfors_unsupported)
+from numba.tests.support import (TestCase, captured_stdout, tag,
+                                 skip_parfors_unsupported)
 import unittest
 
 

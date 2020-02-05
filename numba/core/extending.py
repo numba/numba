@@ -1,5 +1,4 @@
 import os
-import inspect
 import uuid
 import weakref
 import collections
@@ -8,16 +7,15 @@ import numba
 from numba.core import types, errors, utils, config
 
 # Exported symbols
-from numba.core.typing.typeof import typeof_impl
-from numba.core.typing.templates import infer, infer_getattr
-from numba.core.imputils import (
-    lower_builtin, lower_getattr, lower_getattr_generic,
-    lower_setattr, lower_setattr_generic, lower_cast)
-from numba.core.datamodel import models, register_default as register_model
-from numba.core.pythonapi import box, unbox, reflect, NativeValue
-from numba._helperlib import _import_cython_function
-
-
+from numba.core.typing.typeof import typeof_impl  # noqa: F401
+from numba.core.typing.templates import infer, infer_getattr  # noqa: F401
+from numba.core.imputils import (  # noqa: F401
+    lower_builtin, lower_getattr, lower_getattr_generic,  # noqa: F401
+    lower_setattr, lower_setattr_generic, lower_cast)  # noqa: F401
+from numba.core.datamodel import models   # noqa: F401
+from numba.core.datamodel import register_default as register_model  # noqa: F401, E501
+from numba.core.pythonapi import box, unbox, reflect, NativeValue  # noqa: F401
+from numba._helperlib import _import_cython_function  # noqa: F401
 
 
 def type_callable(func):
@@ -108,7 +106,6 @@ def overload(func, jit_options={}, strict=True, inline='never'):
     # set default options
     opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
-
 
     def decorate(overload_func):
         template = make_overload_template(func, overload_func, opts, strict,
@@ -440,6 +437,7 @@ def sentry_literal_args(pysig, literal_args, args, kwargs):
     if missing:
         # Yes, there are missing required literal arguments
         e = errors.ForceLiteralArg(request_pos)
+
         # A helper function to fold arguments
         def folded(args, kwargs):
             out = pysig.bind(*args, **kwargs).arguments.values()

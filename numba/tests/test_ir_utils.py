@@ -4,11 +4,11 @@ from numba.core.registry import cpu_target
 from numba.core.compiler import CompilerBase, Flags
 from numba.core.compiler_machinery import PassManager
 from numba.core import types, ir, bytecode, compiler, ir_utils, registry
-from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
-                                  IRProcessing,)
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
+                                       FixupArgs, IRProcessing,)
 
-from numba.core.typed_passes import (NopythonTypeInference, type_inference_stage,
-                                DeadCodeElimination)
+from numba.core.typed_passes import (NopythonTypeInference,
+                                     type_inference_stage, DeadCodeElimination)
 from numba.experimental import jitclass
 
 # global constant for testing find_const

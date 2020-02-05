@@ -6,9 +6,10 @@ from functools import partial
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from numba import _dynfunc
-from numba.core import typing, utils, types, ir, debuginfo, funcdesc, generators, config, ir_utils, cgutils, removerefctpass
+from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
+                        generators, config, ir_utils, cgutils, removerefctpass)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
-                     LiteralTypingError)
+                               LiteralTypingError)
 from numba.core.funcdesc import default_mangler
 
 

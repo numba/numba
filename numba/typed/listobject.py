@@ -30,13 +30,10 @@ from numba.core.types import (
 from numba.core.imputils import impl_ret_borrowed, RefType
 from numba.core.errors import TypingError
 from numba.core import typing
-from numba.typed.typedobjectutils import (_as_bytes,
-                                    _cast,
-                                    _nonoptional,
-                                    _get_incref_decref,
-                                    _container_get_data,
-                                    _container_get_meminfo,
-                                    )
+from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
+                                          _get_incref_decref,
+                                          _container_get_data,
+                                          _container_get_meminfo,)
 from numba.cpython import listobj
 
 ll_list_type = cgutils.voidptr_t

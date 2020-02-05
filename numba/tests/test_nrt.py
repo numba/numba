@@ -23,7 +23,8 @@ import llvmlite.binding as llvm
 import numba.core.typing.cffi_utils as cffi_support
 from numba.core.unsafe.nrt import NRT_get_api
 
-from numba.tests.support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
+from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
+                                 import_dynamic)
 from numba.core import cpu
 import unittest
 

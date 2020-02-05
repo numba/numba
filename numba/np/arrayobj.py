@@ -17,15 +17,15 @@ import numpy as np
 from numba import pndindex
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
-                                 is_fortran)
+                                    is_fortran)
 from numba.np.numpy_support import type_can_asarray, is_nonelike
 from numba.core.imputils import (lower_builtin, lower_getattr,
-                                    lower_getattr_generic,
-                                    lower_setattr_generic,
-                                    lower_cast, lower_constant,
-                                    iternext_impl, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked,
-                                    RefType)
+                                 lower_getattr_generic,
+                                 lower_setattr_generic,
+                                 lower_cast, lower_constant,
+                                 iternext_impl, impl_ret_borrowed,
+                                 impl_ret_new_ref, impl_ret_untracked,
+                                 RefType)
 from numba.core.typing import signature
 from numba.core.extending import register_jitable, overload, overload_method
 from numba.misc import quicksort, mergesort

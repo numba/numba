@@ -292,7 +292,8 @@ def dead_branch_prune(func_ir, called_args):
     func_ir is the IR
     called_args are the actual arguments with which the function is called
     """
-    from numba.core.ir_utils import get_definition, guard, find_const, GuardException
+    from numba.core.ir_utils import (get_definition, guard, find_const,
+                                     GuardException)
 
     DEBUG = 0
 

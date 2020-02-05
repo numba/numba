@@ -19,7 +19,7 @@ from numba.np.numpy_support import as_dtype, type_can_asarray
 from numba.np.numpy_support import numpy_version
 from numba.np.numpy_support import is_nonelike
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked)
+                                 impl_ret_new_ref, impl_ret_untracked)
 from numba.core.typing import signature
 from numba.np.arrayobj import make_array, load_item, store_item, _empty_nd_impl
 from numba.np.linalg import ensure_blas

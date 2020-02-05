@@ -1,17 +1,20 @@
 from contextlib import contextmanager
 import warnings
 
-from numba.core import errors, types, typing, ir, funcdesc, rewrites, typeinfer, config, lowering
+from numba.core import (errors, types, typing, ir, funcdesc, rewrites,
+                        typeinfer, config, lowering)
 
 from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass
 from numba.parfors.parfor import ParforPass as _parfor_ParforPass
 from numba.parfors.parfor import Parfor
 
-from numba.core.compiler_machinery import FunctionPass, LoweringPass, register_pass
+from numba.core.compiler_machinery import (FunctionPass, LoweringPass,
+                                           register_pass)
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
-                            check_and_legalize_ir, guard, dead_code_elimination,
-                            simplify_CFG, get_definition)
+                                 check_and_legalize_ir, guard,
+                                 dead_code_elimination, simplify_CFG,
+                                 get_definition)
 
 
 @contextmanager
@@ -597,7 +600,7 @@ class InlineOverloads(FunctionPass):
         work_list, is_method,
     ):
         from numba.core.inline_closurecall import (inline_closure_call,
-                                              callee_ir_validator)
+                                                   callee_ir_validator)
 
         do_inline = True
         if not inline_type.is_always_inline:
