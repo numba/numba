@@ -13,9 +13,8 @@ def data_parallel_sum(a, b, c):
     i = dppy.get_global_id(0)
     c[i] = a[i] + b[i]
 
-global_size = 50, 1
-local_size = 32, 1, 1
-N = global_size[0] * local_size[0]
+global_size = 10
+N = global_size
 print("N", N)
 
 
@@ -43,8 +42,10 @@ dA = device_env.copy_array_to_device(a)
 dB = device_env.copy_array_to_device(b)
 dC = ocldrv.DeviceArray(device_env.get_env_ptr(), c)
 
+print("before : ", dA._ndarray)
+print("before : ", dB._ndarray)
 print("before : ", dC._ndarray)
-data_parallel_sum[device_env,global_size,local_size](dA, dB, dC)
+data_parallel_sum[device_env,global_size](dA, dB, dC)
 device_env.copy_array_from_device(dC)
 print("after : ", dC._ndarray)
 
