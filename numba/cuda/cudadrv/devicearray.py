@@ -17,7 +17,7 @@ import numba
 from . import driver as _driver
 from . import devices
 from numba import dummyarray, types, numpy_support
-from numba.unsafe.ndarray import to_fixed_tuple
+from numba.targets.tupleobj import make_tuple
 
 try:
     lru_cache = getattr(functools, 'lru_cache')(None)
@@ -432,7 +432,7 @@ def _assign_kernel(ndim):
             idx[1, i] = (location % lhs.shape[i]) * (rhs.shape[i] > 1)
             location //= lhs.shape[i]
 
-        lhs[to_fixed_tuple(idx[0], ndim)] = rhs[to_fixed_tuple(idx[1], ndim)]
+        lhs[make_tuple(ndim, idx[0])] = rhs[make_tuple(ndim, idx[1])]
     return kernel
 
 
