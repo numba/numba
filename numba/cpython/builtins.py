@@ -80,6 +80,8 @@ def const_ne_impl(context, builder, sig, args):
 
 def gen_non_eq(val):
     def none_equality(a, b):
+        if isinstance(a, types.Optional) or isinstance(b, types.Optional):
+            return
         a_none = isinstance(a, types.NoneType)
         b_none = isinstance(b, types.NoneType)
         if a_none and b_none:

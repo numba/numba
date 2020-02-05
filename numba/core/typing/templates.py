@@ -247,7 +247,7 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
 
 
 class FunctionTemplate(object):
-    # Set to true to disable unsafe cast.
+    # Set to true to enable unsafe cast.
     # subclass overide-able
     unsafe_casting = True
     exact_match_required = False
@@ -295,18 +295,6 @@ class AbstractTemplate(FunctionTemplate):
                     "generic() must return a Signature or None. "
                     "{} returned {}".format(generic, type(sig)),
                 )
-
-        # Unpack optional type if no matching signature
-        if not sig and any(isinstance(x, types.Optional) for x in args):
-            def unpack_opt(x):
-                if isinstance(x, types.Optional):
-                    return x.type
-                else:
-                    return x
-
-            args = list(map(unpack_opt, args))
-            assert not kws  # Not supported yet
-            sig = generic(args, kws)
 
         return sig
 

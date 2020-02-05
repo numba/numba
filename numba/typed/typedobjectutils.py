@@ -8,6 +8,7 @@ from llvmlite.llvmpy.core import Builder
 
 from numba.core import types, cgutils
 from numba.core import typing
+from numba.core.decorators import generated_jit
 from numba.core.registry import cpu_target
 from numba.core.typeconv import Conversion
 from numba.core.extending import intrinsic
@@ -99,6 +100,18 @@ def _nonoptional(typingctx, val):
     casted = val.type
     sig = casted(casted)
     return sig, codegen
+
+
+@generated_jit
+def _unpack_optional(val):
+    if isinstance(val, types.Optional):
+        def _unpack_optional_impl_1(val):
+            return _nonoptional(val)
+        return _unpack_optional_impl_1
+    else:
+        def _unpack_optional_impl_2(val):
+            return val
+        return _unpack_optional_impl_2
 
 
 def _container_get_data(context, builder, container_ty, c):

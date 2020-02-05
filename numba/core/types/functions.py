@@ -8,7 +8,7 @@ from os import path, get_terminal_size
 
 from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
-from .misc import unliteral
+from .misc import unliteral, Optional
 from numba.core import errors, utils, types, config
 import numba
 
@@ -278,6 +278,20 @@ class BaseFunction(Callable):
                         else:
                             msg = 'No match.'
                         failures.add_error(temp, True, msg, uselit)
+
+        # Did not find a matching signature, re-try after unpacking optional types.
+        # This might cause TypeError at runtime when the optional is None
+        if any(isinstance(x, Optional) for x in args):
+            def unpack_opt(x):
+                if isinstance(x, Optional):
+                    return x.type
+                else:
+                    return x
+
+            args = list(map(unpack_opt, args))
+            kws = {k: unpack_opt(v) for k, v in kws.items()}
+
+            return self.get_call_type(context, args, kws)
 
         if len(failures) == 0:
             raise AssertionError("Internal Error. "

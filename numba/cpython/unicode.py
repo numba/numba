@@ -451,6 +451,8 @@ def unicode_len(s):
 def unicode_eq(a, b):
     if not (a.is_internal and b.is_internal):
         return
+    if isinstance(a, types.Optional) or isinstance(b, types.Optional):
+        return
     accept = (types.UnicodeType, types.StringLiteral, types.UnicodeCharSeq)
     a_unicode = isinstance(a, accept)
     b_unicode = isinstance(b, accept)
@@ -470,6 +472,8 @@ def unicode_eq(a, b):
 @overload(operator.ne)
 def unicode_ne(a, b):
     if not (a.is_internal and b.is_internal):
+        return
+    if isinstance(a, types.Optional) or isinstance(b, types.Optional):
         return
     accept = (types.UnicodeType, types.StringLiteral, types.UnicodeCharSeq)
     a_unicode = isinstance(a, accept)

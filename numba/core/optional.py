@@ -1,10 +1,11 @@
 import operator
 
 from numba.core import types, typing, cgutils
-
+from numba.core.extending import overload
 from numba.core.imputils import (lower_cast, lower_builtin,
                                  lower_getattr_generic, impl_ret_untracked,
                                  lower_setattr_generic)
+from numba.typed.typedobjectutils import _unpack_optional
 
 
 def always_return_true_impl(context, builder, sig, args):
@@ -119,3 +120,32 @@ def optional_to_any(context, builder, fromty, toty, val):
         context.call_conv.return_user_exc(builder, TypeError, (msg,))
 
     return context.cast(builder, optval.data, fromty.type, toty)
+
+
+def create_two_arg_optional_wrapper(func):
+    """registers overload with safe optional unpacking for 2-arg functions"""
+    @overload(func)
+    def optional_two_arg(a, b):
+        if isinstance(a, types.Optional) or isinstance(b, types.Optional):
+            def optional_two_arg_impl(a, b):
+                if a is not None:
+                    a_val = _unpack_optional(a)
+                    if b is None:
+                        return func(a_val, None)
+                    else:
+                        b_val = _unpack_optional(b)
+                        return func(a_val, b_val)
+                elif b is None:
+                    return func(None, None)
+                else:
+                    b_val = _unpack_optional(b)
+                    return func(None, b_val)
+
+            return optional_two_arg_impl
+
+    return optional_two_arg
+
+
+optional_eq = create_two_arg_optional_wrapper(operator.eq)
+optional_ne = create_two_arg_optional_wrapper(operator.ne)
+optional_contains = create_two_arg_optional_wrapper(operator.contains)
