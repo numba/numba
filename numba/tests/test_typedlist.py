@@ -593,6 +593,18 @@ class TestNoneType(MemoryLeakMixin, TestCase):
 
 class TestImmutable(MemoryLeakMixin, TestCase):
 
+    def test_make_immutable_sets_mutable_attribute(self):
+        l = List()
+        for i in (1, 2, 3):
+            l.append(i)
+        self.assertTrue(l._is_mutable())
+        l._make_immutable()
+        self.assertFalse(l._is_mutable())
+
+    def test_unrefined_is_mutable(self):
+        l = List()
+        self.assertTrue(l._is_mutable())
+
     def test_mutation_fails(self):
         """ Test that any attempt to mutate an immutable typed list fails. """
         def generate_function(line):

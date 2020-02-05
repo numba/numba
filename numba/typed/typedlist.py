@@ -224,6 +224,10 @@ class List(MutableSequence):
         lsttype = types.ListType(typeof(item))
         self._list_type, self._opaque = self._parse_arg(lsttype)
 
+    def _is_mutable(self):
+        # unrefined/imprecise lists are deemed to be True
+        return self._list_type.mutable if self._typed else True
+
     def _make_immutable(self):
         self._list_type = self._list_type.refine(self._list_type.dtype,
                                                  mutable=False)
