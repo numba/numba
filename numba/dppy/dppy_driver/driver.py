@@ -455,7 +455,6 @@ runtime = _Runtime()
 def enqueue_kernel(device_env, kernel, kernelargs, global_work_size,
                    local_work_size):
     l_work_size_array = None
-    print("Work Dims ", len(global_work_size), global_work_size)
     kernel_arg_array = _numba_dppy_bindings.ffi.new(
                         "kernel_arg_t [" + str(len(kernelargs)) + "]")
     g_work_size_array = _numba_dppy_bindings.ffi.new(
