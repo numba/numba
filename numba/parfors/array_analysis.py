@@ -1825,7 +1825,7 @@ class ArrayAnalysis(object):
     def _analyze_op_call_numpy_empty(self, scope, equiv_set, args, kws):
         return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
 
-    def _analyze_op_call_numba_unsafe_ndarray_empty_inferred(self, scope,
+    def _analyze_op_call_numba_np_unsafe_ndarray_empty_inferred(self, scope,
                                                          equiv_set, args, kws):
         return self._analyze_numpy_create_array(scope, equiv_set, args, kws)
 

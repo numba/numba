@@ -412,7 +412,7 @@ def _count_array_allocs_inner(func_ir, block):
                 and inst.value.op == 'call'
                 and (guard(find_callname, func_ir, inst.value) == ('empty', 'numpy')
                 or guard(find_callname, func_ir, inst.value)
-                    == ('empty_inferred', 'numba.unsafe.ndarray'))):
+                    == ('empty_inferred', 'numba.np.unsafe.ndarray'))):
             ret_count += 1
 
     return ret_count
