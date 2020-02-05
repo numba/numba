@@ -517,10 +517,10 @@ class ListType(IterableType):
         return ListTypeIterableType(self).iterator_type
 
     @classmethod
-    def refine(cls, itemty):
+    def refine(cls, itemty, mutable=True):
         """Refine to a precise list type
         """
-        res = cls(itemty)
+        res = cls(itemty, mutable=mutable)
         res.is_precise()
         return res
 

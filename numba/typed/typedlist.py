@@ -224,6 +224,10 @@ class List(MutableSequence):
         lsttype = types.ListType(typeof(item))
         self._list_type, self._opaque = self._parse_arg(lsttype)
 
+    def _make_immutable(self):
+        self._list_type = self._list_type.refine(self._list_type.dtype,
+                                                 mutable=False)
+
     def __len__(self):
         if not self._typed:
             return 0
