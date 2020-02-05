@@ -168,7 +168,7 @@ class InlineClosureCallPass(object):
                 expr.kws = func_def.value.kws
             return True
         # Otherwise we proceed to check if it is a call to numba.stencil
-        require(call_name == ('stencil', 'numba.stencil') or
+        require(call_name == ('stencil', 'numba.stencils.stencil') or
                 call_name == ('stencil', 'numba'))
         require(expr not in self._processed_stencils)
         self._processed_stencils.append(expr)
