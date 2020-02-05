@@ -1133,6 +1133,9 @@ def impl_index(l, item, start=None, end=None):
 
 @overload_method(types.ListType, "sort")
 def ol_list_sort(lst, key=None, reverse=False):
+
+    _check_for_mutable(lst)
+
     # The following is mostly borrowed from listobj.ol_list_sort
     from numba.typed import List
 

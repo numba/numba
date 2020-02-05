@@ -610,7 +610,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
                      "lst.insert(0, 0)",
                      "lst.clear()",
                      "lst.reverse()",
-                     # FIXME: sort is missing because it's not implemented
+                     "lst.sort()",
                      ):
             foo = generate_function(line)
             l = List()
