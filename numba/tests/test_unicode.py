@@ -30,6 +30,20 @@ def eq_usecase(x, y):
     return x == y
 
 
+def optional_eq_usecase(x, y):
+    if x == 'None':
+        # make sure typer cannot make the optional type disappear
+        x = None
+    return x == y
+
+
+def optional_ne_usecase(x, y):
+    if x == 'None':
+        # make sure typer cannot make the optional type disappear
+        x = None
+    return x != y
+
+
 def len_usecase(x):
     return len(x)
 
@@ -440,6 +454,42 @@ class TestUnicode(BaseTest):
                                  cfunc(a, 1), '%s, %s' % (a, 1))
                 self.assertEqual(pyfunc(1, b),
                                  cfunc(1, b), '%s, %s' % (1, b))
+
+    def test_optional_eq(self, flags=no_pyobj_flags):
+        pyfunc = optional_eq_usecase
+        cfunc = njit(pyfunc)
+        for a in ['None'] + UNICODE_EXAMPLES:
+            for b in reversed(UNICODE_EXAMPLES + ['None']):
+                self.assertEqual(pyfunc(a, b),
+                                 cfunc(a, b), '%s, %s' % (a, b))
+                # comparing against something that's not unicode
+                self.assertEqual(pyfunc(a, 1),
+                                 cfunc(a, 1), '%s, %s' % (a, 1))
+                self.assertEqual(pyfunc(1, b),
+                                 cfunc(1, b), '%s, %s' % (1, b))
+                # comparing against None
+                self.assertEqual(pyfunc(a, None),
+                                 cfunc(a, None), '%s, %s' % (a, None))
+                self.assertEqual(pyfunc(None, b),
+                                 cfunc(None, b), '%s, %s' % (None, b))
+
+    def test_optional_ne(self, flags=no_pyobj_flags):
+        pyfunc = optional_ne_usecase
+        cfunc = njit(pyfunc)
+        for a in UNICODE_EXAMPLES + ['None']:
+            for b in reversed(UNICODE_EXAMPLES + ['None']):
+                self.assertEqual(pyfunc(a, b),
+                                 cfunc(a, b), '%s, %s' % (a, b))
+                # comparing against something that's not unicode
+                self.assertEqual(pyfunc(a, 1),
+                                 cfunc(a, 1), '%s, %s' % (a, 1))
+                self.assertEqual(pyfunc(1, b),
+                                 cfunc(1, b), '%s, %s' % (1, b))
+                # comparing against None
+                self.assertEqual(pyfunc(a, None),
+                                 cfunc(a, None), '%s, %s' % (a, None))
+                self.assertEqual(pyfunc(None, b),
+                                 cfunc(None, b), '%s, %s' % (None, b))
 
     def _check_ordering_op(self, usecase):
         pyfunc = usecase
