@@ -492,9 +492,7 @@ class ListType(IterableType):
     """List type
     """
 
-    mutable = True
-
-    def __init__(self, itemty):
+    def __init__(self, itemty, mutable=True):
         assert not isinstance(itemty, TypeRef)
         itemty = unliteral(itemty)
         if isinstance(itemty, Optional):
@@ -503,9 +501,11 @@ class ListType(IterableType):
         # FIXME: _sentry_forbidden_types(itemty)
         self.item_type = itemty
         self.dtype = itemty
-        name = '{}[{}]'.format(
+        self.mutable = mutable
+        name = '{}[{}, mutable={}]'.format(
             self.__class__.__name__,
             itemty,
+            self.mutable,
         )
         super(ListType, self).__init__(name)
 
@@ -532,6 +532,10 @@ class ListType(IterableType):
         if isinstance(other, ListType):
             if not other.is_precise():
                 return self
+            mutable = self.mutable and other.mutable
+            if self.dtype == other.dtype:
+                return ListType(self.dtype, mutable=mutable)
+
 
 
 class ListTypeIterableType(SimpleIterableType):

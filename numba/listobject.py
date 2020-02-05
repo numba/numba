@@ -19,7 +19,7 @@ from numba.extending import (
     models,
     lower_builtin,
 )
-from numba.targets.imputils import iternext_impl
+from numba.targets.imputils import iternext_impl, lower_cast
 from numba import types
 from numba.types import (
     ListType,
@@ -101,6 +101,11 @@ class ErrorHandler(object):
                              likely=True):
             self.context.call_conv.return_user_exc(
                 builder, RuntimeError, (msg,))
+
+
+def _check_for_mutable(lst):
+    if not lst.mutable:
+        raise TypingError("unable to mutate immutable typed list")
 
 
 def _check_for_none_typed(lst, method):
@@ -512,6 +517,8 @@ def impl_append(l, item):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_mutable(l)
+
     itemty = l.item_type
 
     def impl(l, item):
@@ -647,7 +654,6 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
 
         out = builder.load(pout)
         return context.make_tuple(builder, resty, [status, out])
-
     return sig, codegen
 
 
@@ -730,6 +736,8 @@ def impl_setitem(l, index, item):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_mutable(l)
+
     indexty = INDEXTY
     itemty = l.item_type
 
@@ -804,6 +812,7 @@ def impl_pop(l, index=-1):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_mutable(l)
     _check_for_none_typed(l, 'pop')
 
     indexty = INDEXTY
@@ -864,6 +873,8 @@ def _list_delete_slice(typingctx, l, start, stop, step):
 def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
         return
+
+    _check_for_mutable(l)
 
     if index in index_types:
         def integer_impl(l, index):
@@ -926,6 +937,9 @@ def impl_count(l, item):
 def impl_extend(l, iterable):
     if not isinstance(l, types.ListType):
         return
+
+    _check_for_mutable(l)
+
     if not isinstance(iterable, types.IterableType):
         raise TypingError("extend argument must be iterable")
 
@@ -974,6 +988,7 @@ def impl_insert(l, index, item):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_mutable(l)
     _check_for_none_typed(l, 'insert')
     # insert can refine
     if isinstance(item, NoneType):
@@ -1042,6 +1057,8 @@ def impl_clear(l):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_mutable(l)
+
     def impl(l):
         while len(l):
             l.pop()
@@ -1054,6 +1071,7 @@ def impl_reverse(l):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_mutable(l)
     _check_for_none_typed(l, 'reverse')
 
     def impl(l):
@@ -1350,3 +1368,10 @@ def impl_iterator_iternext(context, builder, sig, args, result):
         else:
             # unreachable
             raise AssertionError('unknown type: {}'.format(iter_type.iterable))
+
+
+@lower_cast(types.ListType, types.ListType)
+def list_to_list(context, builder, fromty, toty, val):
+    # Casting from mutable to immutable
+    assert fromty.dtype == toty.dtype
+    return val
