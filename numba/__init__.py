@@ -24,6 +24,9 @@ from numba.misc.special import (
 # Re-export error classes
 from numba.core.errors import *
 
+# Re-export types itself
+import numba.core.types as types
+
 # Re-export all type names
 from numba.core.types import *
 
