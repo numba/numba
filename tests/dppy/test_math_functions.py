@@ -45,9 +45,8 @@ def dppy_tan(a,b):
     i = dppy.get_global_id(0)
     b[i] = math.tan(a[i])
 
-global_size = 50, 1
-local_size = 32, 1, 1
-N = global_size[0] * local_size[0]
+global_size = 128
+N = global_size
 
 a = np.array(np.random.random(N), dtype=np.float32)
 
@@ -73,7 +72,7 @@ def test_driver(input_arr, device_ty, jitfunc):
     # Device buffers
     dA = device_env.copy_array_to_device(a)
     dB = ocldrv.DeviceArray(device_env.get_env_ptr(), out_actual)
-    jitfunc[device_env, global_size, local_size](dA, dB)
+    jitfunc[device_env, global_size](dA, dB)
     device_env.copy_array_from_device(dB)
 
     return out_actual
@@ -132,12 +131,12 @@ class TestDPPYMathFunctions(DPPYTestCase):
         self.assertTrue(np.allclose(b_actual,b_expected))
 
     def test_log_cpu(self):
-        b_actual = test_driver(a, "CPU", dppy_sqrt)
+        b_actual = test_driver(a, "CPU", dppy_log)
         b_expected = np.log(a)
         self.assertTrue(np.allclose(b_actual,b_expected))
 
     def test_log_gpu(self):
-        b_actual = test_driver(a, "GPU", dppy_sqrt)
+        b_actual = test_driver(a, "GPU", dppy_log)
         b_expected = np.log(a)
         self.assertTrue(np.allclose(b_actual,b_expected))
 

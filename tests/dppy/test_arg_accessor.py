@@ -23,12 +23,12 @@ def call_kernel(only_gpu, cpu_device_env, gpu_device_env,
         global_size, local_size, A, B, C, func):
     if not only_gpu:
         if cpu_device_env:
-            func[cpu_device_env, global_size, local_size](A, B, C)
+            func[cpu_device_env, global_size](A, B, C)
         else:
             assert(False, "Could not find CPU device")
 
     if gpu_device_env:
-        func[gpu_device_env, global_size, local_size](A, B, C)
+        func[gpu_device_env, global_size](A, B, C)
     else:
         assert(False, "Could not find GPU device")
 
@@ -39,9 +39,9 @@ class TestDPPYArgAccessor(DPPYTestCase):
     cpu_device_env = None
     gpu_device_env = None
 
-    global_size = 10, 1
-    local_size = 1, 1, 1
-    N = global_size[0] * local_size[0]
+    global_size = 10
+    local_size = 1
+    N = global_size * local_size
 
     try:
         cpu_device_env = ocldrv.runtime.get_cpu_device()

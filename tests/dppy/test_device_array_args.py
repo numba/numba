@@ -15,9 +15,8 @@ def data_parallel_sum(a, b, c):
     c[i] = a[i] + b[i]
 
 class TestDPPYDeviceArrayArgs(DPPYTestCase):
-    global_size = 50, 1
-    local_size = 32, 1, 1
-    N = global_size[0] * local_size[0]
+    global_size = 64
+    N = global_size
 
     a = np.array(np.random.random(N), dtype=np.float32)
     b = np.array(np.random.random(N), dtype=np.float32)
@@ -39,7 +38,7 @@ class TestDPPYDeviceArrayArgs(DPPYTestCase):
         dA = device_env.copy_array_to_device(self.a)
         dB = device_env.copy_array_to_device(self.b)
         dC = ocldrv.DeviceArray(device_env.get_env_ptr(), c)
-        data_parallel_sum[device_env, self.global_size, self.local_size](dA, dB, dC)
+        data_parallel_sum[device_env, self.global_size](dA, dB, dC)
         device_env.copy_array_from_device(dC)
 
         self.assertTrue(np.all(c == self.d))
@@ -61,7 +60,7 @@ class TestDPPYDeviceArrayArgs(DPPYTestCase):
         dA = device_env.copy_array_to_device(self.a)
         dB = device_env.copy_array_to_device(self.b)
         dC = ocldrv.DeviceArray(device_env.get_env_ptr(), c)
-        data_parallel_sum[device_env, self.global_size, self.local_size](dA, dB, dC)
+        data_parallel_sum[device_env, self.global_size](dA, dB, dC)
         device_env.copy_array_from_device(dC)
 
         self.assertTrue(np.all(c == self.d))
