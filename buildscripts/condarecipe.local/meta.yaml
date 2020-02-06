@@ -35,6 +35,7 @@ requirements:
     - llvmlite 0.31.*
     - funcsigs                 # [py27]
     - singledispatch           # [py27]
+    - importlib-metadata       # [py27]
     # TBB devel version is to match TBB libs
     - tbb-devel >=2018.0.5     # [not ((armv6l or armv7l or aarch64) or (win and py27))]
   run:
@@ -45,6 +46,7 @@ requirements:
     - llvmlite 0.31.*
     - funcsigs                 # [py27]
     - singledispatch           # [py27]
+    - importlib-metadata       # [py27]
   run_constrained:
     # If TBB is present it must be at least this version from Anaconda due to
     # build flag issues triggering UB
