@@ -1,6 +1,5 @@
 import sys
 from unittest import mock
-from unittest.mock import Mock
 
 try:
     from importlib import metadata as importlib_metadata
@@ -19,7 +18,7 @@ class TestEntrypoints(TestCase):
         # loosely based on Pandas test from:
         #   https://github.com/pandas-dev/pandas/pull/27488
 
-        mod = Mock(__name__='_test_numba_extension')
+        mod = mock.Mock(__name__='_test_numba_extension')
 
         try:
             # will remove this module at the end of the test
