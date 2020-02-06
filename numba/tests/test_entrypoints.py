@@ -1,7 +1,11 @@
 import sys
-import types
+from unittest import mock
+from unittest.mock import Mock
 
-import pkg_resources
+try:
+    from importlib import metadata as importlib_metadata
+except ImportError:
+    import importlib_metadata
 
 from numba.tests.support import TestCase
 
@@ -15,45 +19,38 @@ class TestEntrypoints(TestCase):
         # loosely based on Pandas test from:
         #   https://github.com/pandas-dev/pandas/pull/27488
 
-        # FIXME: Python 2 workaround because nonlocal doesn't exist
-        counters = {'init': 0}
-
-        def init_function():
-            counters['init'] += 1
-
-        mod = types.ModuleType("_test_numba_extension")
-        mod.init_func = init_function
+        mod = Mock(__name__='_test_numba_extension')
 
         try:
             # will remove this module at the end of the test
             sys.modules[mod.__name__] = mod
 
             # We are registering an entry point using the "numba" package
-            # ("distribution" in pkg_resources-speak) itself, though these are
+            # ("distribution" in importlib-speak) itself, though these are
             # normally registered by other packages.
-            dist = "numba"
-            entrypoints = pkg_resources.get_entry_map(dist)
-            my_entrypoint = pkg_resources.EntryPoint(
-                "init", # name of entry point
-                mod.__name__, # module with entry point object
-                attrs=['init_func'], # name of entry point object
-                dist=pkg_resources.get_distribution(dist)
+            my_entrypoint = importlib_metadata.EntryPoint(
+                'init', '_test_numba_extension:init_func', 'numba_extensions',
             )
-            entrypoints.setdefault('numba_extensions',
-                                   {})['init'] = my_entrypoint
 
-            from numba.core import entrypoints
-            # Allow reinitialization
-            entrypoints._already_initialized = False
+            with mock.patch.object(
+                importlib_metadata,
+                'entry_points',
+                return_value={'numba_extensions': (my_entrypoint,)},
+            ):
 
-            entrypoints.init_all()
+                from numba.core import entrypoints
 
-            # was our init function called?
-            self.assertEqual(counters['init'], 1)
+                # Allow reinitialization
+                entrypoints._already_initialized = False
 
-            # ensure we do not initialize twice
-            entrypoints.init_all()
-            self.assertEqual(counters['init'], 1)
+                entrypoints.init_all()
+
+                # was our init function called?
+                mod.init_func.assert_called_once()
+
+                # ensure we do not initialize twice
+                entrypoints.init_all()
+                mod.init_func.assert_called_once()
         finally:
             # remove fake module
             if mod.__name__ in sys.modules:

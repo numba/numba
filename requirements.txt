@@ -4,3 +4,4 @@ llvmlite>=0.31
 argparse
 funcsigs ; python_version < '3.4'
 singledispatch ; python_version < '3.4'
+importlib-metadata ; python_version < '3.8'
