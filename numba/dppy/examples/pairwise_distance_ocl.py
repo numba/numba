@@ -14,7 +14,7 @@ parser = argparse.ArgumentParser(description='Program to compute pairwise distan
 parser.add_argument('-n', type=int, required=True, help='Number of points')
 parser.add_argument('-d', type=int, default=3, help='Dimensions')
 parser.add_argument('-r', type=int, default=1, help='repeat')
-parser.add_argument('-l', type=int, default=64, help='local_work_size')
+parser.add_argument('-l', type=int, default=1, help='local_work_size')
 
 args = parser.parse_args()
 
