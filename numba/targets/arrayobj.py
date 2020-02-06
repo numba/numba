@@ -28,6 +28,7 @@ from numba.targets.imputils import (lower_builtin, lower_getattr,
 from numba.typing import signature
 from numba.extending import register_jitable, overload, overload_method
 from . import quicksort, mergesort, slicing
+from .tupleobj import make_tuple
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -1544,6 +1545,121 @@ def array_T(context, builder, typ, value):
                        parent=ary.parent)
         res = ret._getvalue()
     return impl_ret_borrowed(context, builder, typ, res)
+
+
+def normalize_axis_list(axis, ndim, argname=None, allow_duplicate=False):
+    # Stub for overload
+    # QUESTION: Should register_jitable be ammended to make this unnecessary
+    # by allowing a use similar to generated_jit?
+    raise NotImplementedError(
+        'normalize_axis_list: this function can only be used in nopython mode')
+
+
+@overload(normalize_axis_list)
+def _normalize_axis_list_ovl(axis, ndim, argname=None, allow_duplicate=False):
+    # This is an alternative to numpy.core.numeric.normalize_axis_tuple
+    # It normalizes to lists instead of tuples as the latter would
+    # limit the use to situations where the length of the tuple is known
+    # at compile time
+    have_list = isinstance(axis, types.List)
+    have_iterable = isinstance(axis, types.IterableType)
+    invalid_axis = False
+    if have_list or have_iterable:
+        if not isinstance(axis.dtype, types.Integer):
+            invalid_axis = True
+    else:
+        if not isinstance(axis, (types.Integer, types.IntegerLiteral)):
+            invalid_axis = True
+    if invalid_axis:
+        raise TypeError(
+            "normalize_axis_list: 'axis' must be an integer or tuple or list "
+            "of integers")
+    if not isinstance(ndim, (types.Integer, types.IntegerLiteral)):
+        raise TypeError("normalize_axis_list: 'ndim' must be an integer")
+    if not isinstance(argname, (types.StringLiteral,
+                                types.Omitted, type(None), types.NoneType)):
+        raise errors.RequireLiteralValue(
+            "normalize_axis_list: 'argname' argument must be a "
+            "literal string"
+        )
+    if not isinstance(allow_duplicate, (types.Boolean, bool)):
+        raise TypeError(
+            "normalize_axis_list: 'allow_duplicates' must be True/False")
+
+    if not isinstance(argname, (types.Omitted, type(None), types.NoneType)):
+        argname_ = argname.literal_value
+    else:
+        argname_ = None
+    if argname_:
+        msg_repeated_axis = 'repeated axis in `{}` argument'.format(argname_)
+    else:
+        msg_repeated_axis = 'repeated axis'
+
+    def normalize_axis_list_impl(axis, ndim, argname=None,
+                                 allow_duplicate=False):
+        if have_list is True:
+            unified_axis = axis
+        elif have_iterable is True:
+            unified_axis = list(iter(axis))
+        else:
+            unified_axis = [axis]
+        normalize_axis_index = np.core.multiarray.normalize_axis_index
+        unified_axis = [normalize_axis_index(ax, ndim, argname_)
+                        for ax in unified_axis]
+
+        if have_list or have_iterable:
+            if allow_duplicate is False:
+                if len(set(unified_axis)) != len(unified_axis):
+                    raise ValueError(msg_repeated_axis)
+        return unified_axis
+
+    return normalize_axis_list_impl
+
+
+@overload(np.core.numeric.normalize_axis_tuple)
+def numpy_normalize_axis_tuple(axis, ndim, argname=None, allow_duplicate=False):
+    raise NotImplementedError(
+        "'numpy.core.numeric.normalize_axis_tuple()' is not implemented in "
+        "numba. Please use 'numba.targets.arrayobj.normalize_axis_list()' "
+        "instead."
+    )
+
+
+@overload(np.moveaxis)
+def numpy_moveaxis(a, source, destination):
+    if not isinstance(a, types.Array):
+        raise TypeError("moveaxis: 'a' must be an array")
+    for arg, arg_name in [(source, 'source'), (destination, 'destination')]:
+        have_sequence = isinstance(arg, types.Sequence)
+        invalid_argument = False
+        if have_sequence:
+            if not isinstance(arg.dtype, types.Integer):
+                invalid_argument = True
+        else:
+            if not isinstance(arg, (types.Integer, types.IntegerLiteral)):
+                invalid_argument = True
+        if invalid_argument:
+            raise TypeError(
+                "moveaxis: '%s' must be an integer or sequence of integers"
+                % arg_name)
+
+    def numpy_moveaxis_impl(a, source, destination):
+        source = normalize_axis_list(source, a.ndim, 'source')
+        destination = normalize_axis_list(destination, a.ndim, 'destination')
+        if len(source) != len(destination):
+            raise ValueError('`source` and `destination` arguments must have '
+                             'the same number of elements')
+
+        order = sorted(set(range(a.ndim)) - set(source))
+
+        for dest, src in sorted(zip(destination, source)):
+            order.insert(dest, src)
+
+        order_tuple = make_tuple(a.ndim, order)
+        result = a.transpose(order_tuple)
+        return result
+
+    return numpy_moveaxis_impl
 
 
 def _attempt_nocopy_reshape(context, builder, aryty, ary,
