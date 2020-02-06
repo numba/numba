@@ -263,6 +263,19 @@ def get_field2(rec):
     return out
 
 
+fs = ('e', 'f')
+def get_field3(rec):
+    f = fs[1]
+    return rec[f]
+
+
+def get_field4(rec):
+    out = 0
+    for f in literal_unroll(fs):
+        out += rec[f]
+    return out
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int16),
                        ('c', np.complex64),
@@ -1005,6 +1018,29 @@ class TestRecordArrayGetItem(unittest.TestCase):
     def test_literal_unroll(self):
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = get_field2
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+
+    def test_literal_variable_global_tuple(self):
+        """
+        this tests the getitem of record array when the indexes come from a
+        global tuple. It tests getitem behaviour but also tests that a global
+        tuple is being typed as a tuple of constants.
+        """
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = get_field3
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+
+    def test_literal_unroll_global_tuple(self):
+        """
+        this tests the getitem of record array when the indexes come from a
+        global tuple and are being unrolled.
+        It tests getitem behaviour but also tests that literal_unroll accepts
+        a global tuple as argument
+        """
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = get_field4
         jitfunc = njit(pyfunc)
         self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
 
