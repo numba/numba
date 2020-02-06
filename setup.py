@@ -325,17 +325,17 @@ metadata = dict(
     ],
     package_data={
         # HTML templates for type annotations
-        "numba.annotations": ["*.html"],
+        "numba.core.annotations": ["*.html"],
         # Various test data
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],
         "numba.pycc": ["*.c", "*.h"],
-        "numba.runtime": ["*.c", "*.h"],
+        "numba.core.runtime": ["*.c", "*.h"],
         "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
-        "numba.targets": ["cmdlang.gdb"],
+        "numba.misc": ["cmdlang.gdb"],
     },
     scripts=["numba/pycc/pycc", "bin/numba"],
     author="Anaconda, Inc.",
