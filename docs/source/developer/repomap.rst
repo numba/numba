@@ -94,26 +94,26 @@ Public API
 
 These define aspects of the public Numba interface.
 
-- :ghfile:`numba/decorators.py` - User-facing decorators for compiling
+- :ghfile:`numba/core/decorators.py` - User-facing decorators for compiling
   regular functions on the CPU
-- :ghfile:`numba/extending.py` - Public decorators for extending Numba
+- :ghfile:`numba/core/extending.py` - Public decorators for extending Numba
   (``overload``, ``intrinsic``, etc)
-- :ghfile:`numba/ccallback.py` - ``@cfunc`` decorator for compiling
+- :ghfile:`numba/core/ccallback.py` - ``@cfunc`` decorator for compiling
   functions to a fixed C signature.  Used to make callbacks.
-- :ghfile:`numba/npyufunc/decorators.py` - ufunc/gufunc compilation
+- :ghfile:`numba/np/ufunc/decorators.py` - ufunc/gufunc compilation
   decorators
-- :ghfile:`numba/config.py` - Numba global config options and environment
+- :ghfile:`numba/core/config.py` - Numba global config options and environment
   variable handling
-- :ghfile:`numba/annotations` - Gathering and printing type annotations of
+- :ghfile:`numba/core/annotations` - Gathering and printing type annotations of
   Numba IR
-- :ghfile:`numba/pretty_annotate.py` - Code highlighting of Numba functions
-  and types (both ANSI terminal and HTML)
+- :ghfile:`numba/core/annotations/pretty_annotate.py` - Code highlighting of
+  Numba functions and types (both ANSI terminal and HTML)
 
 
 Dispatching
 '''''''''''
 
-- :ghfile:`numba/dispatcher.py` - Dispatcher objects are compiled functions
+- :ghfile:`numba/core/dispatcher.py` - Dispatcher objects are compiled functions
   produced by ``@jit``.  A dispatcher has different implementations
   for different type signatures.
 - :ghfile:`numba/_dispatcher.{h,c}` - C interface to C++ dispatcher
@@ -125,72 +125,71 @@ Dispatching
 Compiler Pipeline
 '''''''''''''''''
 
-- :ghfile:`numba/compiler.py` - Compiler pipelines and flags
-- :ghfile:`numba/errors.py` - Numba exception and warning classes
-- :ghfile:`numba/ir.py` - Numba IR data structure objects
-- :ghfile:`numba/bytecode.py` - Bytecode parsing and function identity (??)
-- :ghfile:`numba/interpreter.py` - Translate Python interpreter bytecode to
+- :ghfile:`numba/core/compiler.py` - Compiler pipelines and flags
+- :ghfile:`numba/core/errors.py` - Numba exception and warning classes
+- :ghfile:`numba/core/ir.py` - Numba IR data structure objects
+- :ghfile:`numba/core/bytecode.py` - Bytecode parsing and function identity (??)
+- :ghfile:`numba/core/interpreter.py` - Translate Python interpreter bytecode to
   Numba IR
-- :ghfile:`numba/analysis.py` - Utility functions to analyze Numba IR
+- :ghfile:`numba/core/analysis.py` - Utility functions to analyze Numba IR
   (variable lifetime, prune branches, etc)
-- :ghfile:`numba/dataflow.py` - Dataflow analysis for Python bytecode (used
+- :ghfile:`numba/core/dataflow.py` - Dataflow analysis for Python bytecode (used
   in analysis.py)
-- :ghfile:`numba/controlflow.py` - Control flow analysis of Numba IR and
+- :ghfile:`numba/core/controlflow.py` - Control flow analysis of Numba IR and
   Python bytecode
-- :ghfile:`numba/typeinfer.py` - Type inference algorithm
-- :ghfile:`numba/transforms.py` - Numba IR transformations
-- :ghfile:`numba/rewrites` - Rewrite passes used by compiler
-- :ghfile:`numba/rewrites/__init__.py` - Loads all rewrite passes so they
+- :ghfile:`numba/core/typeinfer.py` - Type inference algorithm
+- :ghfile:`numba/core/transforms.py` - Numba IR transformations
+- :ghfile:`numba/core/rewrites` - Rewrite passes used by compiler
+- :ghfile:`numba/core/rewrites/__init__.py` - Loads all rewrite passes so they
   are put into the registry
-- :ghfile:`numba/rewrites/registry.py` - Registry object for collecting
+- :ghfile:`numba/core/rewrites/registry.py` - Registry object for collecting
   rewrite passes
-- :ghfile:`numba/rewrites/ir_print.py` - Write print() calls into special
+- :ghfile:`numba/core/rewrites/ir_print.py` - Write print() calls into special
   print nodes in the IR
-- :ghfile:`numba/rewrites/static_raise.py` - Converts exceptions with static
-  arguments into a special form that can be lowered
-- :ghfile:`numba/rewrites/macros.py` - Generic support for macro expansion
+- :ghfile:`numba/core/rewrites/static_raise.py` - Converts exceptions with
+  static arguments into a special form that can be lowered
+- :ghfile:`numba/core/rewrites/macros.py` - Generic support for macro expansion
   in the Numba IR
-- :ghfile:`numba/rewrites/static_getitem.py` - Rewrites getitem and setitem
+- :ghfile:`numba/core/rewrites/static_getitem.py` - Rewrites getitem and setitem
   with constant arguments to allow type inference
-- :ghfile:`numba/rewrites/static_binop.py` - Rewrites binary operations
+- :ghfile:`numba/core/rewrites/static_binop.py` - Rewrites binary operations
   (specifically ``**``) with constant arguments so faster code can be
   generated
-- :ghfile:`numba/inline_closurecall.py` - Inlines body of closure functions
+- :ghfile:`numba/core/inline_closurecall.py` - Inlines body of closure functions
   to call site.  Support for array comprehensions, reduction inlining,
   and stencil inlining.
-- :ghfile:`numba/macro.py` - Alias to ``numba.rewrites.macros``
-- :ghfile:`numba/postproc.py` - Postprocessor for Numba IR that computes
+- :ghfile:`numba/core/postproc.py` - Postprocessor for Numba IR that computes
   variable lifetime, inserts del operations, and handles generators
-- :ghfile:`numba/lowering.py` - General implementation of lowering Numba IR
+- :ghfile:`numba/core/lowering.py` - General implementation of lowering Numba IR
   to LLVM
-- :ghfile:`numba/withcontexts.py` - General scaffolding for implementing
+- :ghfile:`numba/core/withcontexts.py` - General scaffolding for implementing
   context managers in nopython mode, and the objectmode context
   manager
-- :ghfile:`numba/pylowering.py` - Lowering of Numba IR in object mode
-- :ghfile:`numba/pythonapi.py` - LLVM IR code generation to interface with
+- :ghfile:`numba/core/pylowering.py` - Lowering of Numba IR in object mode
+- :ghfile:`numba/core/pythonapi.py` - LLVM IR code generation to interface with
   CPython API
 
 
 Type Management
 '''''''''''''''
 
-- :ghfile:`numba/typeconv/` - Implementation of type casting and type
+- :ghfile:`numba/core/typeconv/` - Implementation of type casting and type
   signature matching in both C++ and Python
 - :ghfile:`numba/capsulethunk.h` - Used by typeconv
-- :ghfile:`numba/types/` - definition of the Numba type hierarchy, used
+- :ghfile:`numba/core/types/` - definition of the Numba type hierarchy, used
   everywhere in compiler to select implementations
-- :ghfile:`numba/consts.py` - Constant inference (used to make constant
+- :ghfile:`numba/core/consts.py` - Constant inference (used to make constant
   values available during codegen when possible)
-- :ghfile:`numba/datamodel` - LLVM IR representations of data types in
+- :ghfile:`numba/core/datamodel` - LLVM IR representations of data types in
   different contexts
-- :ghfile:`numba/datamodel/models.py` - Models for most standard types
-- :ghfile:`numba/datamodel/registry.py` - Decorator to register new data
+- :ghfile:`numba/core/datamodel/models.py` - Models for most standard types
+- :ghfile:`numba/core/datamodel/registry.py` - Decorator to register new data
   models
-- :ghfile:`numba/datamodel/packer.py` - Pack typed values into a data
+- :ghfile:`numba/core/datamodel/packer.py` - Pack typed values into a data
   structure
-- :ghfile:`numba/datamodel/testing.py` - Data model tests (this should
+- :ghfile:`numba/core/datamodel/testing.py` - Data model tests (this should
   move??)
-- :ghfile:`numba/datamodel/manager.py` - Map types to data models
+- :ghfile:`numba/core/datamodel/manager.py` - Map types to data models
 
 
 Compiled Extensions
@@ -229,55 +228,50 @@ Misc Support
 ''''''''''''
 
 - :ghfile:`numba/_version.py` - Updated by versioneer
-- :ghfile:`numba/runtime` - Language runtime.  Currently manages
+- :ghfile:`numba/core/runtime` - Language runtime.  Currently manages
   reference-counted memory allocated on the heap by Numba-compiled
   functions
-- :ghfile:`numba/ir_utils.py` - Utility functions for working with Numba IR
+- :ghfile:`numba/core/ir_utils.py` - Utility functions for working with Numba IR
   data structures
-- :ghfile:`numba/cgutils.py` - Utility functions for generating common code
+- :ghfile:`numba/core/cgutils.py` - Utility functions for generating common code
   patterns in LLVM IR
-- :ghfile:`numba/utils.py` - Python 2 backports of Python 3 functionality
+- :ghfile:`numba/core/utils.py` - Python 2 backports of Python 3 functionality
   (also imports local copy of ``six``)
-- :ghfile:`numba/appdirs.py` - Vendored package for determining application
+- :ghfile:`numba/misc/appdirs.py` - Vendored package for determining application
   config directories on every platform
-- :ghfile:`numba/compiler_lock.py` - Global compiler lock because Numba's usage
-  of LLVM is not thread-safe
-- :ghfile:`numba/special.py` - Python stub implementations of special Numba
+- :ghfile:`numba/core/compiler_lock.py` - Global compiler lock because Numba's
+  usage of LLVM is not thread-safe
+- :ghfile:`numba/misc/special.py` - Python stub implementations of special Numba
   functions (prange, gdb*)
-- :ghfile:`numba/servicelib/threadlocal.py` - Thread-local stack used by GPU
-  targets
-- :ghfile:`numba/servicelib/service.py` - Should be removed?
-- :ghfile:`numba/itanium_mangler.py` - Python implementation of Itanium C++
+- :ghfile:`numba/core/itanium_mangler.py` - Python implementation of Itanium C++
   name mangling
-- :ghfile:`numba/findlib.py` - Helper function for locating shared libraries
-  on all platforms
-- :ghfile:`numba/debuginfo.py` - Helper functions to construct LLVM IR debug
+- :ghfile:`numba/misc/findlib.py` - Helper function for locating shared
+  libraries on all platforms
+- :ghfile:`numba/core/debuginfo.py` - Helper functions to construct LLVM IR
+  debug
   info
-- :ghfile:`numba/unsafe` - ``@intrinsic`` helper functions that can be used
-  to implement direct memory/pointer manipulation from nopython mode
-  functions
-- :ghfile:`numba/unsafe/refcount.py` - Read reference count of object
-- :ghfile:`numba/unsafe/tuple.py` - Replace a value in a tuple slot
-- :ghfile:`numba/unsafe/ndarray.py` - NumPy array helpers
-- :ghfile:`numba/unsafe/bytes.py` - Copying and dereferencing data from void
-  pointers
-- :ghfile:`numba/dummyarray.py` - Used by GPU backends to hold array information
-  on the host, but not the data.
-- :ghfile:`numba/callwrapper.py` - Handles argument unboxing and releasing
+- :ghfile:`numba/core/unsafe/refcount.py` - Read reference count of object
+- :ghfile:`numba/core/unsafe/eh.py` - Exception handling helpers
+- :ghfile:`numba/core/unsafe/nrt.py` - Numba runtime (NRT) helpers
+- :ghfile:`numba/cpython/unsafe/tuple.py` - Replace a value in a tuple slot
+- :ghfile:`numba/np/unsafe/ndarray.py` - NumPy array helpers
+- :ghfile:`numba/core/unsafe/bytes.py` - Copying and dereferencing data from
+  void pointers
+- :ghfile:`numba/misc/dummyarray.py` - Used by GPU backends to hold array
+  information on the host, but not the data.
+- :ghfile:`numba/core/callwrapper.py` - Handles argument unboxing and releasing
   the GIL when moving from Python to nopython mode
-- :ghfile:`numba/cffi_support.py` - Alias of numba.typing.cffi_utils for
-  backward compatibility (still needed?)
-- :ghfile:`numba/numpy_support.py` - Helper functions for working with NumPy
+- :ghfile:`numba/np/numpy_support.py` - Helper functions for working with NumPy
   and translating Numba types to and from NumPy dtypes.
-- :ghfile:`numba/tracing.py` - Decorator for tracing Python calls and
+- :ghfile:`numba/core/tracing.py` - Decorator for tracing Python calls and
   emitting log messages
-- :ghfile:`numba/funcdesc.py` - Classes for describing function metadata
+- :ghfile:`numba/core/funcdesc.py` - Classes for describing function metadata
   (used in the compiler)
-- :ghfile:`numba/sigutils.py` - Helper functions for parsing and normalizing
-  Numba type signatures
-- :ghfile:`numba/serialize.py` - Support for pickling compiled functions
-- :ghfile:`numba/caching.py` - Disk cache for compiled functions
-- :ghfile:`numba/npdatetime.py` - Helper functions for implementing NumPy
+- :ghfile:`numba/core/sigutils.py` - Helper functions for parsing and
+  normalizing Numba type signatures
+- :ghfile:`numba/core/serialize.py` - Support for pickling compiled functions
+- :ghfile:`numba/core/caching.py` - Disk cache for compiled functions
+- :ghfile:`numba/np/npdatetime.py` - Helper functions for implementing NumPy
   datetime64 support
 
 
@@ -288,18 +282,19 @@ Core Python Data Types
   implementation
 - :ghfile:`numba/cext/dictobject.{h,c}` - C level implementation of typed
   dictionary
-- :ghfile:`numba/dictobject.py` - Nopython mode wrapper for typed dictionary
+- :ghfile:`numba/typed/dictobject.py` - Nopython mode wrapper for typed
+  dictionary
 - :ghfile:`numba/cext/listobject.{h,c}` - C level implementation of typed list
-- :ghfile:`numba/listobject.py` - Nopython mode wrapper for typed list
-- :ghfile:`numba/typedobjectutils.py` - Common utilities for typed dictionary
-  and list
-- :ghfile:`numba/unicode.py` - Unicode strings (Python 3.5 and later)
+- :ghfile:`numba/typed/listobject.py` - Nopython mode wrapper for typed list
+- :ghfile:`numba/typed/typedobjectutils.py` - Common utilities for typed
+  dictionary and list
+- :ghfile:`numba/cpython/unicode.py` - Unicode strings (Python 3.5 and later)
 - :ghfile:`numba/typed` - Python interfaces to statically typed containers
 - :ghfile:`numba/typed/typeddict.py` - Python interface to typed dictionary
 - :ghfile:`numba/typed/typedlist.py` - Python interface to typed list
-- :ghfile:`numba/jitclass` - Implementation of JIT compilation of Python
-  classes
-- :ghfile:`numba/generators.py` - Support for lowering Python generators
+- :ghfile:`numba/experimental/jitclass` - Implementation of experimental JIT
+  compilation of Python classes
+- :ghfile:`numba/core/generators.py` - Support for lowering Python generators
 
 
 Math
@@ -317,21 +312,30 @@ ParallelAccelerator
 Code transformation passes that extract parallelizable code from
 a function and convert it into multithreaded gufunc calls.
 
-- :ghfile:`numba/parfor.py` - General ParallelAccelerator
-- :ghfile:`numba/stencil.py` - Stencil function decorator (implemented
-  without ParallelAccelerator)
-- :ghfile:`numba/stencilparfor.py` - ParallelAccelerator implementation of
-  stencil
-- :ghfile:`numba/array_analysis.py` - Array analysis passes used in
+- :ghfile:`numba/parfors/parfor.py` - General ParallelAccelerator
+- :ghfile:`numba/parfors/parfor_lowering.py` - gufunc lowering for
   ParallelAccelerator
+- :ghfile:`numba/parfors/array_analysis.py` - Array analysis passes used in
+  ParallelAccelerator
+
+
+Stencil
+'''''''
+
+Implementation of ``@stencil``:
+
+- :ghfile:`numba/stencils/stencil.py` - Stencil function decorator (implemented
+  without ParallelAccelerator)
+- :ghfile:`numba/stencils/stencilparfor.py` - ParallelAccelerator implementation
+  of stencil
 
 
 Debugging Support
 '''''''''''''''''
 
-- :ghfile:`numba/targets/gdb_hook.py` - Hooks to jump into GDB from nopython
+- :ghfile:`numba/misc/gdb_hook.py` - Hooks to jump into GDB from nopython
   mode
-- :ghfile:`numba/targets/cmdlang.gdb` - Commands to setup GDB for setting
+- :ghfile:`numba/misc/cmdlang.gdb` - Commands to setup GDB for setting
   explicit breakpoints from Python
 
 
@@ -343,33 +347,34 @@ declaration of allowed type signatures from the definition of
 implementations.  This package contains registries of type signatures
 that must be matched during type inference.
 
-- :ghfile:`numba/typing` - Type signature module
-- :ghfile:`numba/typing/templates.py` - Base classes for type signature
+- :ghfile:`numba/core/typing` - Type signature module
+- :ghfile:`numba/core/typing/templates.py` - Base classes for type signature
   templates
-- :ghfile:`numba/typing/cmathdecl.py` - Python complex math (``cmath``)
+- :ghfile:`numba/core/typing/cmathdecl.py` - Python complex math (``cmath``)
   module
-- :ghfile:`numba/typing/bufproto.py` - Interpreting objects supporting the
+- :ghfile:`numba/core/typing/bufproto.py` - Interpreting objects supporting the
   buffer protocol
-- :ghfile:`numba/typing/mathdecl.py` - Python ``math`` module
-- :ghfile:`numba/typing/listdecl.py` - Python lists
-- :ghfile:`numba/typing/builtins.py` - Python builtin global functions and
+- :ghfile:`numba/core/typing/mathdecl.py` - Python ``math`` module
+- :ghfile:`numba/core/typing/listdecl.py` - Python lists
+- :ghfile:`numba/core/typing/builtins.py` - Python builtin global functions and
   operators
-- :ghfile:`numba/typing/randomdecl.py` - Python and NumPy ``random`` modules
-- :ghfile:`numba/typing/setdecl.py` - Python sets
-- :ghfile:`numba/typing/npydecl.py` - NumPy ndarray (and operators), NumPy
+- :ghfile:`numba/core/typing/randomdecl.py` - Python and NumPy ``random``
+  modules
+- :ghfile:`numba/core/typing/setdecl.py` - Python sets
+- :ghfile:`numba/core/typing/npydecl.py` - NumPy ndarray (and operators), NumPy
   functions
-- :ghfile:`numba/typing/arraydecl.py` - Python ``array`` module
-- :ghfile:`numba/typing/context.py` - Implementation of typing context
+- :ghfile:`numba/core/typing/arraydecl.py` - Python ``array`` module
+- :ghfile:`numba/core/typing/context.py` - Implementation of typing context
   (class that collects methods used in type inference)
-- :ghfile:`numba/typing/collections.py` - Generic container operations and
+- :ghfile:`numba/core/typing/collections.py` - Generic container operations and
   namedtuples
-- :ghfile:`numba/typing/ctypes_utils.py` - Typing ctypes-wrapped function
+- :ghfile:`numba/core/typing/ctypes_utils.py` - Typing ctypes-wrapped function
   pointers
-- :ghfile:`numba/typing/enumdecl.py` - Enum types
-- :ghfile:`numba/typing/cffi_utils.py` - Typing of CFFI objects
-- :ghfile:`numba/typing/typeof.py` - Implementation of typeof operations
+- :ghfile:`numba/core/typing/enumdecl.py` - Enum types
+- :ghfile:`numba/core/typing/cffi_utils.py` - Typing of CFFI objects
+- :ghfile:`numba/core/typing/typeof.py` - Implementation of typeof operations
   (maps Python object to Numba type)
-- :ghfile:`numba/typing/npdatetime.py` - Datetime dtype support for NumPy
+- :ghfile:`numba/core/typing/npdatetime.py` - Datetime dtype support for NumPy
   arrays
 
 
@@ -382,97 +387,94 @@ Note that some of these modules do not have counterparts in the typing
 package because newer Numba extension APIs (like overload) allow
 typing and implementation to be specified together.
 
-- :ghfile:`numba/targets` - Implementations of compilable operations
-- :ghfile:`numba/targets/cpu.py` - Context for code gen on CPU
-- :ghfile:`numba/targets/base.py` - Base class for all target contexts
-- :ghfile:`numba/targets/codegen.py` - Driver for code generation
-- :ghfile:`numba/targets/boxing.py` - Boxing and unboxing for most data
+- :ghfile:`numba/core/cpu.py` - Context for code gen on CPU
+- :ghfile:`numba/core/base.py` - Base class for all target contexts
+- :ghfile:`numba/core/codegen.py` - Driver for code generation
+- :ghfile:`numba/core/boxing.py` - Boxing and unboxing for most data
   types
-- :ghfile:`numba/targets/intrinsics.py` - Utilities for converting LLVM
+- :ghfile:`numba/core/intrinsics.py` - Utilities for converting LLVM
   intrinsics to other math calls
-- :ghfile:`numba/targets/callconv.py` - Implements different calling
+- :ghfile:`numba/core/callconv.py` - Implements different calling
   conventions for Numba-compiled functions
-- :ghfile:`numba/targets/iterators.py` - Iterable data types and iterators
-- :ghfile:`numba/targets/hashing.py` - Hashing algorithms
-- :ghfile:`numba/targets/ufunc_db.py` - Big table mapping types to ufunc
-  implementations
-- :ghfile:`numba/targets/setobj.py` - Python set type
-- :ghfile:`numba/targets/options.py` - Container for options that control
+- :ghfile:`numba/core/options.py` - Container for options that control
   lowering
-- :ghfile:`numba/targets/printimpl.py` - Print function
-- :ghfile:`numba/targets/cmathimpl.py` - Python complex math module
-- :ghfile:`numba/targets/optional.py` - Special type representing value or
+- :ghfile:`numba/core/optional.py` - Special type representing value or
   ``None``
-- :ghfile:`numba/targets/tupleobj.py` - Tuples (statically typed as
-  immutable struct)
-- :ghfile:`numba/targets/mathimpl.py` - Python ``math`` module
-- :ghfile:`numba/targets/heapq.py` - Python ``heapq`` module
-- :ghfile:`numba/targets/registry.py` - Registry object for collecting
+- :ghfile:`numba/core/registry.py` - Registry object for collecting
   implementations for a specific target
-- :ghfile:`numba/targets/imputils.py` - Helper functions for lowering
-- :ghfile:`numba/targets/builtins.py` - Python builtin functions and
-  operators
-- :ghfile:`numba/targets/externals.py` - Registers external C functions
+- :ghfile:`numba/core/imputils.py` - Helper functions for lowering
+- :ghfile:`numba/core/externals.py` - Registers external C functions
   needed to link generated code
-- :ghfile:`numba/targets/quicksort.py` - Quicksort implementation used with
-  list and array objects
-- :ghfile:`numba/targets/mergesort.py` - Mergesort implementation used with
-  array objects
-- :ghfile:`numba/targets/randomimpl.py` - Python and NumPy ``random``
-  modules
-- :ghfile:`numba/targets/npyimpl.py` - Implementations of most NumPy ufuncs
-- :ghfile:`numba/targets/slicing.py` - Slice objects, and index calculations
-  used in slicing
-- :ghfile:`numba/targets/numbers.py` - Numeric values (int, float, etc)
-- :ghfile:`numba/targets/listobj.py` - Python lists
-- :ghfile:`numba/targets/fastmathpass.py` - Rewrite pass to add fastmath
+- :ghfile:`numba/core/fastmathpass.py` - Rewrite pass to add fastmath
   attributes to function call sites and binary operations
-- :ghfile:`numba/targets/removerefctpass.py` - Rewrite pass to remove
+- :ghfile:`numba/core/removerefctpass.py` - Rewrite pass to remove
   unnecessary incref/decref pairs
-- :ghfile:`numba/targets/cffiimpl.py` - CFFI functions
-- :ghfile:`numba/targets/descriptors.py` - empty base class for all target
+- :ghfile:`numba/core/descriptors.py` - empty base class for all target
   descriptors (is this needed?)
-- :ghfile:`numba/targets/arraymath.py` - Math operations on arrays (both
+- :ghfile:`numba/cpython/builtins.py` - Python builtin functions and
+  operators
+- :ghfile:`numba/cpython/cmathimpl.py` - Python complex math module
+- :ghfile:`numba/cpython/enumimpl.py` - Enum objects
+- :ghfile:`numba/cpython/hashing.py` - Hashing algorithms
+- :ghfile:`numba/cpython/heapq.py` - Python ``heapq`` module
+- :ghfile:`numba/cpython/iterators.py` - Iterable data types and iterators
+- :ghfile:`numba/cpython/listobj.py` - Python lists
+- :ghfile:`numba/cpython/mathimpl.py` - Python ``math`` module
+- :ghfile:`numba/cpython/numbers.py` - Numeric values (int, float, etc)
+- :ghfile:`numba/cpython/printimpl.py` - Print function
+- :ghfile:`numba/cpython/randomimpl.py` - Python and NumPy ``random``
+  modules
+- :ghfile:`numba/cpython/rangeobj.py` - Python `range` objects
+- :ghfile:`numba/cpython/slicing.py` - Slice objects, and index calculations
+  used in slicing
+- :ghfile:`numba/cpython/setobj.py` - Python set type
+- :ghfile:`numba/cpython/tupleobj.py` - Tuples (statically typed as
+  immutable struct)
+- :ghfile:`numba/misc/cffiimpl.py` - CFFI functions
+- :ghfile:`numba/misc/quicksort.py` - Quicksort implementation used with
+  list and array objects
+- :ghfile:`numba/misc/mergesort.py` - Mergesort implementation used with
+  array objects
+- :ghfile:`numba/np/arraymath.py` - Math operations on arrays (both
   Python and NumPy)
-- :ghfile:`numba/targets/linalg.py` - NumPy linear algebra operations
-- :ghfile:`numba/targets/rangeobj.py` - Python `range` objects
-- :ghfile:`numba/targets/npyfuncs.py` - Kernels used in generating some
-  NumPy ufuncs
-- :ghfile:`numba/targets/arrayobj.py` - Array operations (both NumPy and
+- :ghfile:`numba/np/arrayobj.py` - Array operations (both NumPy and
   buffer protocol)
-- :ghfile:`numba/targets/enumimpl.py` - Enum objects
-- :ghfile:`numba/targets/polynomial.py` - ``numpy.roots`` function
-- :ghfile:`numba/targets/npdatetime.py` - NumPy datetime operations
+- :ghfile:`numba/np/linalg.py` - NumPy linear algebra operations
+- :ghfile:`numba/np/npdatetime.py` - NumPy datetime operations
+- :ghfile:`numba/np/npyfuncs.py` - Kernels used in generating some
+  NumPy ufuncs
+- :ghfile:`numba/np/npyimpl.py` - Implementations of most NumPy ufuncs
+- :ghfile:`numba/np/polynomial.py` - ``numpy.roots`` function
+- :ghfile:`numba/np/ufunc_db.py` - Big table mapping types to ufunc
+  implementations
 
 
 Ufunc Compiler and Runtime
 ''''''''''''''''''''''''''
 
-- :ghfile:`numba/npyufunc` - ufunc compiler implementation
-- :ghfile:`numba/npyufunc/_internal.{h,c}` - Python extension module with
+- :ghfile:`numba/np/ufunc` - ufunc compiler implementation
+- :ghfile:`numba/np/ufunc/_internal.{h,c}` - Python extension module with
   helper functions that use CPython & NumPy C API
-- :ghfile:`numba/npyufunc/_ufunc.c` - Used by `_internal.c`
-- :ghfile:`numba/npyufunc/deviceufunc.py` - Custom ufunc dispatch for
+- :ghfile:`numba/np/ufunc/_ufunc.c` - Used by `_internal.c`
+- :ghfile:`numba/np/ufunc/deviceufunc.py` - Custom ufunc dispatch for
   non-CPU targets
-- :ghfile:`numba/npyufunc/gufunc_scheduler.{h,cpp}` - Schedule work chunks
+- :ghfile:`numba/np/ufunc/gufunc_scheduler.{h,cpp}` - Schedule work chunks
   to threads
-- :ghfile:`numba/npyufunc/dufunc.py` - Special ufunc that can compile new
+- :ghfile:`numba/np/ufunc/dufunc.py` - Special ufunc that can compile new
   implementations at call time
-- :ghfile:`numba/npyufunc/ufuncbuilder.py` - Top-level orchestration of
+- :ghfile:`numba/np/ufunc/ufuncbuilder.py` - Top-level orchestration of
   ufunc/gufunc compiler pipeline
-- :ghfile:`numba/npyufunc/sigparse.py` - Parser for generalized ufunc
+- :ghfile:`numba/np/ufunc/sigparse.py` - Parser for generalized ufunc
   indexing signatures
-- :ghfile:`numba/npyufunc/parfor.py` - gufunc lowering for
-  ParallelAccelerator
-- :ghfile:`numba/npyufunc/parallel.py` - Codegen for ``parallel`` target
-- :ghfile:`numba/npyufunc/array_exprs.py` - Rewrite pass for turning array
+- :ghfile:`numba/np/ufunc/parallel.py` - Codegen for ``parallel`` target
+- :ghfile:`numba/np/ufunc/array_exprs.py` - Rewrite pass for turning array
   expressions in regular functions into ufuncs
-- :ghfile:`numba/npyufunc/wrappers.py` - Wrap scalar function kernel with
+- :ghfile:`numba/np/ufunc/wrappers.py` - Wrap scalar function kernel with
   loops
-- :ghfile:`numba/npyufunc/workqueue.{h,c}` - Threading backend based on
+- :ghfile:`numba/np/ufunc/workqueue.{h,c}` - Threading backend based on
   pthreads/Windows threads and queues
-- :ghfile:`numba/npyufunc/omppool.cpp` - Threading backend based on OpenMP
-- :ghfile:`numba/npyufunc/tbbpool.cpp` - Threading backend based on TBB
+- :ghfile:`numba/np/ufunc/omppool.cpp` - Threading backend based on OpenMP
+- :ghfile:`numba/np/ufunc/tbbpool.cpp` - Threading backend based on TBB
 
 
 
@@ -486,7 +488,7 @@ CPU unit tests (GPU target unit tests listed in later sections
 - :ghfile:`run_coverage.py` - Runs test suite with coverage tracking enabled
 - :ghfile:`.coveragerc` - Coverage.py configuration
 - :ghfile:`numba/runtests.py` - Entry point to unittest runner
-- :ghfile:`numba/_runtests.py` - Implementation of custom test runner
+- :ghfile:`numba/testing/_runtests.py` - Implementation of custom test runner
   command line interface
 - :ghfile:`numba/tests/test_*` - Test cases
 - :ghfile:`numba/tests/*_usecases.py` - Python functions compiled by some
@@ -496,8 +498,6 @@ CPU unit tests (GPU target unit tests listed in later sections
 - :ghfile:`numba/tests/dummy_module.py` - Module used in
   ``test_dispatcher.py``
 - :ghfile:`numba/tests/npyufunc` - ufunc / gufunc compiler tests
-- :ghfile:`numba/unittest_support.py` - Import instead of unittest to handle
-  portability issues
 - :ghfile:`numba/testing` - Support code for testing
 - :ghfile:`numba/testing/loader.py` - Find tests on disk
 - :ghfile:`numba/testing/notebook.py` - Support for testing notebooks
@@ -508,7 +508,7 @@ Command Line Utilities
 ''''''''''''''''''''''
 - :ghfile:`bin/numba` - Command line stub, delegates to main in
   ``numba_entry.py``
-- :ghfile:`numba/numba_entry.py` - Main function for ``numba`` command line
+- :ghfile:`numba/misc/numba_entry.py` - Main function for ``numba`` command line
   tool
 - :ghfile:`numba/pycc` - Ahead of time compilation of functions to shared
   library extension
@@ -625,6 +625,9 @@ target was based on the HSA API, so "hsa" appears in many places.
 - :ghfile:`numba/roc/codegen.py` - Codegen subclass for ROCm target
 - :ghfile:`numba/roc/decorators.py` - ``@jit`` decorator for kernels and
   device functions
+- :ghfile:`numba/roc/servicelib/threadlocal.py` - Thread-local stack used by ROC
+  targets
+- :ghfile:`numba/roc/servicelib/service.py` - Should be removed?
 - :ghfile:`numba/roc/tests` - Unit tests for ROCm target
 - :ghfile:`numba/roc/tests/hsapy` - Tests of compiling ROCm kernels written
   in Python syntax

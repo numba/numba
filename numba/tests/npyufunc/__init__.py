@@ -1,6 +1,5 @@
-from numba import unittest_support as unittest
-
 from os.path import dirname
+import unittest
 from unittest.suite import TestSuite
 
 from numba.testing import load_testsuite

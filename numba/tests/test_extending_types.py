@@ -3,17 +3,16 @@ Test extending types via the numba.extending.* API.
 """
 
 from numba import njit
-from numba import types
-from numba import cgutils
-from numba.errors import TypingError
-from numba.extending import lower_builtin
-from numba.extending import models, register_model
-from numba.extending import make_attribute_wrapper
-from numba.extending import type_callable
-from numba.extending import overload
-from numba.extending import typeof_impl
+from numba.core import types, cgutils
+from numba.core.errors import TypingError
+from numba.core.extending import lower_builtin
+from numba.core.extending import models, register_model
+from numba.core.extending import make_attribute_wrapper
+from numba.core.extending import type_callable
+from numba.core.extending import overload
+from numba.core.extending import typeof_impl
 
-from numba import unittest_support as unittest
+import unittest
 
 
 class TestExtTypDummy(unittest.TestCase):

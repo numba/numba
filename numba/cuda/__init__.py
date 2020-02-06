@@ -1,5 +1,5 @@
-from numba import config
 import numba.testing
+from numba.core import config
 
 if config.ENABLE_CUDASIM:
     from .simulator_init import *

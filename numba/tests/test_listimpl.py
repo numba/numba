@@ -5,7 +5,7 @@ Testing C implementation of the numba typed-list
 import ctypes
 import struct
 
-from .support import TestCase
+from numba.tests.support import TestCase
 from numba import _helperlib
 
 

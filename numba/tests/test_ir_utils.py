@@ -1,22 +1,21 @@
 import numba
-from .support import TestCase, unittest
-from numba import compiler, jitclass, ir
-from numba.targets.registry import cpu_target
-from numba.compiler import CompilerBase, Flags
-from numba.compiler_machinery import PassManager
-from numba.targets import registry
-from numba import types, ir_utils, bytecode
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
-                                  IRProcessing,)
+from numba.tests.support import TestCase, unittest
+from numba.core.registry import cpu_target
+from numba.core.compiler import CompilerBase, Flags
+from numba.core.compiler_machinery import PassManager
+from numba.core import types, ir, bytecode, compiler, ir_utils, registry
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
+                                       FixupArgs, IRProcessing,)
 
-from numba.typed_passes import (NopythonTypeInference, type_inference_stage,
-                                DeadCodeElimination)
+from numba.core.typed_passes import (NopythonTypeInference,
+                                     type_inference_stage, DeadCodeElimination)
+from numba.experimental import jitclass
 
 # global constant for testing find_const
 GLOBAL_B = 11
 
 
-@jitclass([('val', numba.types.List(numba.intp))])
+@jitclass([('val', numba.core.types.List(numba.intp))])
 class Dummy(object):
     def __init__(self, val):
         self.val = val

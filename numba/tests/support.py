@@ -22,16 +22,19 @@ import warnings
 from contextlib import contextmanager
 
 import numpy as np
+
+from numba import testing
+from numba.core import errors, typing, utils, config, cpu
+from numba.core.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
+import unittest
+from numba.core.runtime import rtsys
+from numba.np import numpy_support
+
+
 try:
     import scipy
 except ImportError:
     scipy = None
-
-from numba import config, errors, typing, utils, numpy_support, testing
-from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
-from numba.targets import cpu
-import numba.unittest_support as unittest
-from numba.runtime import rtsys
 
 
 enable_pyobj_flags = Flags()
@@ -105,7 +108,7 @@ class CompilationCache(object):
         Compile the function or retrieve an already compiled result
         from the cache.
         """
-        from numba.targets.registry import cpu_target
+        from numba.core.registry import cpu_target
 
         cache_key = (func, args, return_type, flags)
         try:
@@ -702,7 +705,7 @@ def forbid_codegen():
 
     If code generation is invoked, a RuntimeError is raised.
     """
-    from numba.targets import codegen
+    from numba.core import codegen
     patchpoints = ['CodeLibrary._finalize_final_module']
 
     old = {}

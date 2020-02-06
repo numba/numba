@@ -1,5 +1,5 @@
 from numba import njit
-from .support import (
+from numba.tests.support import (
     TestCase,
     SerialMixin,
     run_in_new_process_caching

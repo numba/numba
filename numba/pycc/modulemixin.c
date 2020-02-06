@@ -17,8 +17,8 @@
 #include "../_dynfunc.c"
 
 #if PYCC_USE_NRT
-#include "../runtime/_nrt_python.c"
-#include "../runtime/nrt.h"
+#include "../core/runtime/_nrt_python.c"
+#include "../core/runtime/nrt.h"
 #endif
 
 

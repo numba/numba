@@ -1,4 +1,4 @@
-import numba.unittest_support as unittest
+import unittest
 
 from collections import namedtuple
 import contextlib
@@ -9,11 +9,12 @@ import sys
 
 import numpy as np
 
-from numba.compiler import compile_isolated, Flags
-from numba import jit, types
-import numba.unittest_support as unittest
-from .support import (TestCase, enable_pyobj_flags, MemoryLeakMixin, tag,
-                      compile_function)
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit
+from numba.core import types
+import unittest
+from numba.tests.support import (TestCase, enable_pyobj_flags, MemoryLeakMixin,
+                                 tag, compile_function)
 
 
 Point = namedtuple('Point', ('a', 'b'))

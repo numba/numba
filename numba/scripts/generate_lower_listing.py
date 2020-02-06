@@ -16,7 +16,7 @@ import inspect
 from functools import partial
 
 import numba
-from numba.targets.registry import cpu_target
+from numba.core.registry import cpu_target
 
 
 def git_hash():

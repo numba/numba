@@ -6,9 +6,9 @@ import os.path
 import numpy as np
 
 import builtins
-from numba import types
-from .support import TestCase, temp_directory
-from numba.help.inspector import inspect_function, inspect_module
+from numba.core import types
+from numba.tests.support import TestCase, temp_directory
+from numba.misc.help.inspector import inspect_function, inspect_module
 
 
 class TestInspector(TestCase):
@@ -57,7 +57,7 @@ class TestInspector(TestCase):
 
     def test_inspect_cli(self):
         # Try CLI on math module
-        cmdbase = [sys.executable, '-m', 'numba.help.inspector']
+        cmdbase = [sys.executable, '-m', 'numba.misc.help.inspector']
 
         dirpath = temp_directory('{}.{}'.format(__name__,
                                                 self.__class__.__name__))

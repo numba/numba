@@ -6,10 +6,10 @@ import shutil
 import sys
 import tempfile
 
-from numba import sigutils, typing
-from numba.compiler_lock import global_compiler_lock
-from .compiler import ModuleCompiler, ExportEntry
-from .platform import Toolchain
+from numba.core import typing, sigutils
+from numba.core.compiler_lock import global_compiler_lock
+from numba.pycc.compiler import ModuleCompiler, ExportEntry
+from numba.pycc.platform import Toolchain
 from numba import cext
 
 
@@ -154,7 +154,7 @@ class CC(object):
         here = os.path.dirname(__file__)
         mixin_sources = self._mixin_sources[:]
         if self._use_nrt:
-            mixin_sources.append('../runtime/nrt.c')
+            mixin_sources.append('../core/runtime/nrt.c')
         return [os.path.join(here, f) for f in mixin_sources]
 
     def _get_mixin_defines(self):

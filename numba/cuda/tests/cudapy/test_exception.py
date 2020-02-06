@@ -1,7 +1,8 @@
 import numpy as np
 
-from numba import config, cuda, jit
+from numba import cuda, jit
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.core import config
 
 class TestException(SerialMixin, unittest.TestCase):
     def test_exception(self):

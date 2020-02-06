@@ -1,6 +1,7 @@
-import numba.unittest_support as unittest
-from numba import compiler, ir, objmode
+import unittest
+from numba import objmode
 import numpy as np
+from numba.core import ir, compiler
 
 
 class TestIR(unittest.TestCase):

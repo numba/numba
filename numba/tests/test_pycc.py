@@ -9,19 +9,23 @@ from unittest import skip
 from ctypes import *
 
 import numpy as np
-try:
-    import setuptools
-except ImportError:
-    setuptools = None
 
 import llvmlite.binding as ll
 
-from numba import unittest_support as unittest
-from numba import utils
+from numba.core import utils
 from numba.pycc import main
 from numba.pycc.decorators import clear_export_registry
 from numba.pycc.platform import find_shared_ending, find_pyext_ending
 from numba.pycc.platform import _external_compiler_ok
+
+from numba.tests.support import TestCase, tag, import_dynamic, temp_directory, has_blas
+import unittest
+
+
+try:
+    import setuptools
+except ImportError:
+    setuptools = None
 
 # if suitable compilers are not present then skip.
 _skip_reason = 'AOT compatible compilers missing'
@@ -30,8 +34,6 @@ _skip_missing_compilers = unittest.skipIf(not _external_compiler_ok,
 _skip_reason = 'windows only'
 _windows_only = unittest.skipIf(not sys.platform.startswith('win'),
                                 _skip_reason)
-
-from .support import TestCase, tag, import_dynamic, temp_directory, has_blas
 
 
 base_path = os.path.dirname(os.path.abspath(__file__))
@@ -164,7 +166,7 @@ class TestCC(BasePYCCTest):
 
     def setUp(self):
         super(TestCC, self).setUp()
-        from . import compile_with_pycc
+        from numba.tests import compile_with_pycc
         self._test_module = compile_with_pycc
         imp.reload(self._test_module)
 

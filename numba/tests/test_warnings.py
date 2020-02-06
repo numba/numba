@@ -4,10 +4,10 @@ import sys
 import warnings
 import numpy as np
 
-import numba.unittest_support as unittest
+import unittest
 from numba import jit
-from numba.errors import NumbaWarning, deprecated, NumbaDeprecationWarning
-from numba import errors
+from numba.core.errors import NumbaWarning, deprecated, NumbaDeprecationWarning
+from numba.core import errors
 
 
 class TestBuiltins(unittest.TestCase):

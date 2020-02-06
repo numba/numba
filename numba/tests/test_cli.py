@@ -5,8 +5,8 @@ import subprocess
 import sys
 import threading
 
-import numba.unittest_support as unittest
-from .support import TestCase
+import unittest
+from numba.tests.support import TestCase
 
 
 def run_cmd(cmdline, env=os.environ, timeout=60):

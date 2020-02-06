@@ -6,24 +6,27 @@ import re
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import njit, targets, typing, types
-from numba.compiler import compile_isolated, Flags
-from numba.runtime import (
+from numba import njit
+from numba.core import typing, types
+from numba.core.compiler import compile_isolated, Flags
+from numba.core.runtime import (
     rtsys,
     nrtopt,
     _nrt_python,
     nrt,
 )
-from numba.extending import intrinsic, include_path
-from numba.typing import signature
-from numba.targets.imputils import impl_ret_untracked
+from numba.core.extending import intrinsic, include_path
+from numba.core.typing import signature
+from numba.core.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm
-from numba import cffi_support
-from numba.unsafe.nrt import NRT_get_api
+import numba.core.typing.cffi_utils as cffi_support
+from numba.core.unsafe.nrt import NRT_get_api
 
-from .support import MemoryLeakMixin, TestCase, temp_directory, import_dynamic
+from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
+                                 import_dynamic)
+from numba.core import cpu
+import unittest
 
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")
@@ -79,7 +82,7 @@ class TestNrtMemInfo(unittest.TestCase):
         # Reset the Dummy class
         Dummy.alive = 0
         # initialize the NRT (in case the tests are run in isolation)
-        targets.cpu.CPUContext(typing.Context())
+        cpu.CPUContext(typing.Context())
 
     def test_meminfo_refct_1(self):
         d = Dummy()
@@ -579,7 +582,7 @@ class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
         name = "{}_test_manage_memory".format(self.__class__.__name__)
         source = r"""
 #include <stdio.h>
-#include "numba/runtime/nrt_external.h"
+#include "numba/core/runtime/nrt_external.h"
 
 int status = 0;
 
@@ -620,7 +623,7 @@ int status;
         name = "{}_test_allocate".format(self.__class__.__name__)
         source = r"""
 #include <stdio.h>
-#include "numba/runtime/nrt_external.h"
+#include "numba/core/runtime/nrt_external.h"
 
 NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt, size_t n) {
     size_t *data = NULL;

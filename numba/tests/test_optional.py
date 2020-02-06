@@ -2,11 +2,11 @@ import itertools
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types, typeof, njit
-from numba import lowering
-from .support import TestCase
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import typeof, njit
+from numba.core import types, lowering
+from numba.tests.support import TestCase
 
 
 def return_double_or_none(x):

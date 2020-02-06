@@ -3,11 +3,11 @@ Python wrapper that connects CPython interpreter to the numba dictobject.
 """
 from collections.abc import MutableMapping
 
-from numba import config
-from numba.types import DictType, TypeRef
-from numba.targets.imputils import numba_typeref_ctor
-from numba import njit, dictobject, types, cgutils, errors, typeof
-from numba.extending import (
+from numba.core.types import DictType, TypeRef
+from numba.core.imputils import numba_typeref_ctor
+from numba import njit, typeof
+from numba.core import types, errors, config, cgutils
+from numba.core.extending import (
     overload_method,
     overload,
     box,
@@ -15,6 +15,7 @@ from numba.extending import (
     NativeValue,
     type_callable,
 )
+from numba.typed import dictobject
 
 
 @njit
@@ -106,7 +107,7 @@ class Dict(MutableMapping):
 
         Parameters
         ----------
-        dcttype : numba.types.DictType; keyword-only
+        dcttype : numba.core.types.DictType; keyword-only
             Used internally for the dictionary type.
         meminfo : MemInfo; keyword-only
             Used internally to pass the MemInfo object when boxing.

@@ -2,9 +2,9 @@ import array
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import jit
-from .support import TestCase, compile_function, MemoryLeakMixin
+from numba.tests.support import TestCase, compile_function, MemoryLeakMixin
+import unittest
 
 
 @jit(nopython=True)

@@ -2,9 +2,9 @@ import re
 from io import StringIO
 
 import numba
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import types
+import unittest
 
 try:
     import jinja2

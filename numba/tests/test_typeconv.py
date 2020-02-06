@@ -1,10 +1,10 @@
 import itertools
 
-from numba import unittest_support as unittest
-from numba import types
-from numba.typeconv.typeconv import TypeManager, TypeCastingRules
-from numba.typeconv import rules
-from numba.typeconv import castgraph, Conversion
+from numba.core import types
+from numba.core.typeconv.typeconv import TypeManager, TypeCastingRules
+from numba.core.typeconv import rules
+from numba.core.typeconv import castgraph, Conversion
+import unittest
 
 
 class CompatibilityTestMixin(unittest.TestCase):

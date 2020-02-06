@@ -1,8 +1,9 @@
-from numba import njit, errors
-from numba.extending import overload
+from numba import njit
+from numba.core import errors
+from numba.core.extending import overload
 import numpy as np
 
-from numba import unittest_support as unittest
+import unittest
 
 
 @njit

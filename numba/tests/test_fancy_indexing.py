@@ -2,10 +2,11 @@ import itertools
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba import types, jit, typeof
-from numba.errors import TypingError
-from .support import MemoryLeakMixin, TestCase, tag
+import unittest
+from numba import jit, typeof
+from numba.core import types
+from numba.core.errors import TypingError
+from numba.tests.support import MemoryLeakMixin, TestCase, tag
 
 
 def getitem_usecase(a, b):

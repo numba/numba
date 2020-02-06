@@ -1,8 +1,8 @@
 import re
 
-from numba.compiler import compile_isolated
-from .support import TestCase
-import numba.unittest_support as unittest
+from numba.core.compiler import compile_isolated
+from numba.tests.support import TestCase
+import unittest
 from numba import testing
 
 
