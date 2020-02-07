@@ -520,6 +520,22 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
         r = foo()
         self.assertEqual(r, Rect(width=10, height='somestring'))
 
+    def test_dispatcher_mistreat(self):
+        # Test for issue #5215 that mistreat namedtuple as tuples
+        @jit(nopython=True)
+        def foo(x):
+            return x
+
+        in1 = (1, 2,  3)
+        out1 = foo(in1)
+        self.assertEqual(in1, out1)
+
+        in2 = Point(1, 2, 3)
+        out2 = foo(in2)
+        self.assertEqual(in2, out2)
+
+        self.assertEqual(len(foo.nopython_signatures), 2)
+
 
 class TestTupleNRT(TestCase, MemoryLeakMixin):
     def test_tuple_add(self):
