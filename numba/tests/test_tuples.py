@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 
 from numba.core.compiler import compile_isolated
-from numba import njit, jit
+from numba import njit, jit, typeof
 from numba.core import types, errors, utils
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
 import unittest
@@ -534,7 +534,10 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
         out2 = foo(in2)
         self.assertEqual(in2, out2)
 
+        # Check the signatures
         self.assertEqual(len(foo.nopython_signatures), 2)
+        self.assertEqual(foo.nopython_signatures[0].args[0], typeof(in1))
+        self.assertEqual(foo.nopython_signatures[1].args[0], typeof(in2))
 
 
 class TestTupleNRT(TestCase, MemoryLeakMixin):
