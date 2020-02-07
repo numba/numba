@@ -96,8 +96,8 @@ Whereas the following will not work:
         print(i.view(np.uint64))
 
 Structured scalars support attribute getting and setting, as well as
-member lookup using constant strings. These constant strings are allowed to be stored
-in a local or global tuple.
+member lookup using constant strings. Strings stored in a local or global tuple
+are considered constant strings and can be used for member lookup.
 
 .. code:: pycon
 
@@ -106,14 +106,14 @@ in a local or global tuple.
     >>> import numpy as np
     >>> from numba import njit
     >>> arr = np.array([1, 2], dtype=[('a1', 'f8'), ('a2', 'f8')])
-    >>> @njit
     >>> fields_gl = ('a1', 'a2')
-    >>> def get_field_sum(rec):
-    >>>     fields_lc = ('a1', 'a2')
-    >>>     field_name1 = fields_lc[0]
-    >>>     field_name2 = fields_gl[1]
-    >>>     return rec[field_name1] + rec[field_name2]
-    >>>
+    >>> @njit
+    ... def get_field_sum(rec):
+    ...     fields_lc = ('a1', 'a2')
+    ...     field_name1 = fields_lc[0]
+    ...     field_name2 = fields_gl[1]
+    ...     return rec[field_name1] + rec[field_name2]
+    ...
     >>> get_field_sum(arr[0])
     3
 
@@ -123,14 +123,14 @@ It is also possible to use local or global tuples together with ``literal_unroll
     >>> import numpy as np
     >>> from numba import njit
     >>> arr = np.array([1, 2], dtype=[('a1', 'f8'), ('a2', 'f8')])
-    >>> @njit
     >>> fields_gl = ('a1', 'a2')
-    >>> def get_field_sum(rec):
-    >>>     out = 0
-    >>>     for f in literal_unroll(fields_gl):
-    >>>        out += arr[f]
-    >>>     return out
-    >>>
+    >>> @njit
+    ... def get_field_sum(rec):
+    ...     out = 0
+    ...     for f in literal_unroll(fields_gl):
+    ...        out += arr[f]
+    ...     return out
+    ...
     >>> get_field_sum(arr[0])
     3
 
