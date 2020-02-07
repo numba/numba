@@ -673,7 +673,7 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
                               to_unroll.op == "build_tuple"):
                             # this is fine, do nothing
                             pass
-                        elif (isinstance(to_unroll, ir.Global) and
+                        elif (isinstance(to_unroll, (ir.Global, ir.FreeVar)) and
                               isinstance(to_unroll.value, tuple)):
                             # this is fine, do nothing
                             pass
