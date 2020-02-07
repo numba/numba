@@ -1701,7 +1701,12 @@ class TestUnicode(BaseTest):
             ('  tú quién te crees?   ', None),
             ('大处 着眼，小处着手。大大大处', '大处'),
             (' 大处大处  ', ''),
-            (' 大处大处  ', None)
+            (' 大处大处  ', None),
+            ('\t abcd \t', None),
+            ('\n abcd \n', None),
+            ('\r abcd \r', None),
+            ('\x0b abcd \x0b', None),
+            ('\x0c abcd \x0c', None)
         ]
 
         # form with no parameter
