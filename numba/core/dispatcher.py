@@ -516,7 +516,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         For inspecting the CFG of the function.
 
-        By default the CFG of the user function is showed.  The *show_wrapper*
+        By default the CFG of the user function is shown.  The *show_wrapper*
         option can be set to "python" or "cfunc" to show the python wrapper
         function or the *cfunc* wrapper function, respectively.
         """
@@ -532,6 +532,18 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             return lib.get_function_cfg(fname)
 
         return dict((sig, self.inspect_cfg(sig, show_wrapper=show_wrapper))
+                    for sig in self.signatures)
+
+    def inspect_disasm_cfg(self, signature=None):
+        """
+        For inspecting the CFG of the disassembly of the function.
+        """
+        if signature is not None:
+            cres = self.overloads[signature]
+            lib = cres.library
+            return lib.get_disasm_cfg()
+
+        return dict((sig, self.inspect_disasm_cfg(sig))
                     for sig in self.signatures)
 
     def get_annotation_info(self, signature=None):

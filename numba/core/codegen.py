@@ -324,6 +324,60 @@ class CodeLibrary(object):
         dot = ll.get_function_cfg(fn)
         return _CFG(dot)
 
+    def get_disasm_cfg(self):
+        """
+        Get the CFG of the disassembly of the ELF object
+        """
+        try:
+            import r2pipe
+        except ImportError:
+            raise RuntimeError("r2pipe package needed for disasm CFG")
+
+        class DisasmCFG(object):
+            def __init__(self, terminal_rendering, jupyter_rendering):
+                self.terminal = terminal_rendering
+                # this just makes it read slightly better in jupyter notebooks
+                self.jupyter = jupyter_rendering.replace('fontname="Courier",',
+                                              'fontname="Courier",fontsize=6,')
+
+            def _repr_html_(self):
+                try:
+                    import graphviz
+                except ImportError:
+                    raise RuntimeError("graphviz package needed for disasm CFG")
+                src = graphviz.Source(self.jupyter)
+                mrkup = "<html><head></head><body>%s</body></html>"
+                buf = src.pipe('svg').decode('UTF-8')
+                return mrkup % buf
+
+            def __repr__(self):
+                return self.terminal
+
+        elf = self._get_compiled_object()
+
+        from tempfile import NamedTemporaryFile
+        with NamedTemporaryFile(delete=False) as f:
+            f.write(elf)
+            f.flush() # force write, radare2 needs a binary blob on disk
+
+            # catch if r2pipe can actually talk to radare2
+            try:
+                r = r2pipe.open(f.name, flags=['-e io.cache=true'])
+                jupyter_data = r.cmd('af;agfd')
+                terminal_data = r.cmd('af;agf')
+                r.quit()
+            except Exception as e:
+                if "radare2 in PATH" in str(e):
+                    msg = ("This feature requires 'radare2' to be installed "
+                           "and available on the system see: "
+                           "https://github.com/radareorg/radare2. "
+                           "Cannot find 'radare2' in $PATH.")
+                    raise RuntimeError(msg)
+                else:
+                    raise e
+
+        return DisasmCFG(terminal_data, jupyter_data)
+
     #
     # Object cache hooks and serialization
     #
