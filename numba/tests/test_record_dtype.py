@@ -266,6 +266,8 @@ def get_field2(rec):
 
 
 fs = ('e', 'f')
+
+
 def get_field3(rec):
     f = fs[1]
     return rec[f]
