@@ -19,6 +19,7 @@ from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
 
 x_global = (10, 11)
 
+
 class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):
 
     def check(self, func, var):
@@ -1683,6 +1684,7 @@ class TestMore(TestCase):
             return out
 
         self.assertEqual(foo(), foo.py_func())
+
 
 def capture(real_pass):
     """ Returns a compiler pass that captures the mutation state reported

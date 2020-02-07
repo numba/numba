@@ -1480,7 +1480,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             typ = typ.copy(readonly=True)
 
         if isinstance(typ, types.Tuple):
-            if all(isinstance(ty, (types.Integer, types.UnicodeType)) for ty in typ):
+            if all(isinstance(ty, (types.Integer, types.UnicodeType))
+                   for ty in typ):
                 typ = types.Tuple([types.literal(val) for val in gvar.value])
 
         if isinstance(typ, types.UniTuple):
@@ -1488,7 +1489,6 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             # the test for types.Tuple to prevent double-triggering
             if isinstance(typ.dtype, (types.Integer, types.UnicodeType)):
                 typ = types.Tuple([types.literal(val) for val in gvar.value])
-
 
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled
