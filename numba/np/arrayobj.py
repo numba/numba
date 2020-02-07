@@ -2411,15 +2411,6 @@ def record_getitem(context, builder, sig, args):
     return impl(context, builder, sig.args[0], args[0], args[1])
 
 
-# @lower_builtin(operator.getitem, types.Record, types.StringLiteral)
-# def record_getitem(context, builder, sig, args):
-#     """
-#     Record.__getitem__ redirects to getattr()
-#     """
-#     impl = context.get_getattr(sig.args[0], args[1])
-#     return impl(context, builder, sig.args[0], args[0], args[1])
-
-
 @lower_builtin('static_setitem', types.Record, types.StringLiteral, types.Any)
 def record_setitem(context, builder, sig, args):
     """
