@@ -1388,7 +1388,7 @@ def unicode_zfill(string, width):
 # ------------------------------------------------------------------------------
 @register_jitable
 def unicode_strip_left_bound(string, chars):
-    chars = ' ' if chars is None else chars
+    chars = ' \t\n\r\x0b\x0c' if chars is None else chars
     str_len = len(string)
 
     for i in range(str_len):
@@ -1399,7 +1399,7 @@ def unicode_strip_left_bound(string, chars):
 
 @register_jitable
 def unicode_strip_right_bound(string, chars):
-    chars = ' ' if chars is None else chars
+    chars = ' \t\n\r\x0b\x0c' if chars is None else chars
     str_len = len(string)
 
     for i in range(str_len - 1, -1, -1):
