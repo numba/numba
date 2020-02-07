@@ -1,7 +1,7 @@
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import roc, intp
+import unittest
 
 WAVESIZE = 64
 

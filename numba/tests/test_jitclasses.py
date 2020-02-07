@@ -7,13 +7,14 @@ import numpy as np
 
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
-from numba import njit, typeof, types, errors
-from numba import unittest_support as unittest
-from numba import jitclass
-from .support import TestCase, MemoryLeakMixin
-from numba.jitclass import _box
-from numba.runtime.nrt import MemInfo
-from numba.errors import LoweringError
+from numba import njit, typeof
+from numba.core import types, errors
+from numba.tests.support import TestCase, MemoryLeakMixin
+from numba.experimental.jitclass import _box
+from numba.core.runtime.nrt import MemInfo
+from numba.core.errors import LoweringError
+from numba.experimental import jitclass
+import unittest
 
 
 class TestClass1(object):

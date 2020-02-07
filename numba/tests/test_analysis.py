@@ -2,11 +2,12 @@
 import collections
 
 import numpy as np
-from numba.compiler import compile_isolated, run_frontend, Flags, StateDict
-from numba import types, rewrites, ir, jit, ir_utils, errors, njit
-from .support import TestCase, MemoryLeakMixin, SerialMixin
+from numba.core.compiler import compile_isolated, run_frontend, Flags, StateDict
+from numba import jit, njit
+from numba.core import types, errors, ir, rewrites, ir_utils
+from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
 
-from numba.analysis import dead_branch_prune, rewrite_semantic_constants
+from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
 
 _GLOBAL = 123
 

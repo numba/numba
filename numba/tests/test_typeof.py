@@ -8,16 +8,18 @@ import mmap
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba import cffi_support, numpy_support, types
-from numba.special import typeof
-from numba.dispatcher import OmittedArg
+import unittest
+import numba.core.typing.cffi_utils as cffi_support
+from numba.core import types
+from numba.misc.special import typeof
+from numba.core.dispatcher import OmittedArg
 from numba._dispatcher import compute_fingerprint
 
-from .support import TestCase, tag
-from .test_numpy_support import ValueTypingTestBase
-from .ctypes_usecases import *
-from .enum_usecases import *
+from numba.tests.support import TestCase, tag
+from numba.tests.test_numpy_support import ValueTypingTestBase
+from numba.tests.ctypes_usecases import *
+from numba.tests.enum_usecases import *
+from numba.np import numpy_support
 
 
 recordtype = np.dtype([('a', np.float64),
@@ -267,7 +269,7 @@ class TestTypeof(ValueTypingTestBase, TestCase):
 
     @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
     def test_cffi(self):
-        from . import cffi_usecases as mod
+        from numba.tests import cffi_usecases as mod
         mod.init()
         ty_cffi_cos = typeof(mod.cffi_cos)
         ty_cffi_sin = typeof(mod.cffi_sin)

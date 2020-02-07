@@ -13,7 +13,7 @@ import os
 import sys
 import ctypes
 
-from numba.findlib import find_lib
+from numba.misc.findlib import find_lib
 from numba.cuda.cuda_paths import get_cuda_paths
 
 if sys.platform == 'win32':

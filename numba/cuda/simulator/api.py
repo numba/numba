@@ -5,7 +5,7 @@ Contains CUDA API functions
 from contextlib import contextmanager
 from .cudadrv.devices import require_context, reset, gpus
 from .kernel import FakeCUDAKernel
-from numba.typing import Signature
+from numba.core.typing import Signature
 from warnings import warn
 from ..args import In, Out, InOut
 

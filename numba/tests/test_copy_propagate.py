@@ -3,17 +3,13 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-from numba import compiler, typing
-from numba.targets import cpu
-from numba import types
-from numba.targets.registry import cpu_target
-from numba import config
-from numba.annotations import type_annotations
-from numba.ir_utils import (copy_propagate, apply_copy_propagate,
+from numba.core import types, typing, ir, config, compiler, cpu
+from numba.core.registry import cpu_target
+from numba.core.annotations import type_annotations
+from numba.core.ir_utils import (copy_propagate, apply_copy_propagate,
                             get_name_var_table)
-from numba import ir
-from numba.typed_passes import type_inference_stage
-from numba import unittest_support as unittest
+from numba.core.typed_passes import type_inference_stage
+import unittest
 
 def test_will_propagate(b, z, w):
     x = 3

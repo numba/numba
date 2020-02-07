@@ -1,6 +1,6 @@
 """ Test cases for inlining IR from another module """
 from numba import njit
-from numba.extending import overload
+from numba.core.extending import overload
 
 _GLOBAL1 = 100
 

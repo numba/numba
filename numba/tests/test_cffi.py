@@ -1,12 +1,14 @@
 import array
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import jit, cffi_support, types, errors
-from numba.compiler import compile_isolated, Flags
+from numba import jit
+import numba.core.typing.cffi_utils as cffi_support
+from numba.core import types, errors
+from numba.core.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase, tag
 
 import numba.tests.cffi_usecases as mod
+import unittest
 
 
 enable_pyobj_flags = Flags()

@@ -9,14 +9,15 @@ import re
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import njit, jit, types, errors, typing, compiler
-from numba.typed_passes import type_inference_stage
-from numba.targets.registry import cpu_target
-from numba.compiler import compile_isolated
-from .support import (TestCase, captured_stdout, tag, temp_directory,
+from numba import njit, jit
+from numba.core import types, errors, typing, compiler
+from numba.core.typed_passes import type_inference_stage
+from numba.core.registry import cpu_target
+from numba.core.compiler import compile_isolated
+from numba.tests.support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
-from numba.errors import LoweringError
+from numba.core.errors import LoweringError
+import unittest
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,
@@ -29,11 +30,13 @@ from numba.extending import (typeof_impl, type_callable,
                              register_jitable,
                              get_cython_function_address
                              )
-from numba.typing.templates import (
+from numba.core.typing.templates import (
     ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
+
 
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
+
 
 try:
     import scipy
@@ -54,7 +57,7 @@ class MyDummy(object):
 class MyDummyType(types.Opaque):
     def can_convert_to(self, context, toty):
         if isinstance(toty, types.Number):
-            from numba.typeconv import Conversion
+            from numba.core.typeconv import Conversion
             return Conversion.safe
 
 mydummy_type = MyDummyType('mydummy')

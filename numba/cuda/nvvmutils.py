@@ -2,7 +2,7 @@ import itertools
 import llvmlite.llvmpy.core as lc
 from .cudadrv import nvvm
 from .api import current_context
-from numba import cgutils
+from numba.core import cgutils
 
 
 def declare_atomic_cas_int32(lmod):

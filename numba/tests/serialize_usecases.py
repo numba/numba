@@ -5,7 +5,8 @@ to avoid issues with __main__.
 
 import math
 
-from numba import jit, generated_jit, types
+from numba import jit, generated_jit
+from numba.core import types
 
 
 @jit((types.int32, types.int32))

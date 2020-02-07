@@ -4,14 +4,16 @@ from textwrap import dedent
 import numpy as np
 
 from numba import njit
-from numba import int32, float32, types, prange
-from numba import jitclass, typeof
+from numba import int32, float32, prange
+from numba.core import types
+from numba import typeof
 from numba.typed import List, Dict
-from numba.errors import TypingError
-from .support import (TestCase, MemoryLeakMixin, override_config,
-                      forbid_codegen, skip_parfors_unsupported)
+from numba.core.errors import TypingError
+from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
+                                 forbid_codegen, skip_parfors_unsupported)
 
-from numba.unsafe.refcount import get_refcount
+from numba.core.unsafe.refcount import get_refcount
+from numba.experimental import jitclass
 
 
 # global typed-list for testing purposes

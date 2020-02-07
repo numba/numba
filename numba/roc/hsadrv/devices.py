@@ -2,8 +2,8 @@
 Expose each GPU device directly
 """
 import functools
-from numba import servicelib
 from .driver import hsa as driver, Context as _Context
+from numba.roc import servicelib
 
 
 class _culist(object):

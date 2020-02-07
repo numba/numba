@@ -1,8 +1,8 @@
 import sys
 import math
 from llvmlite.llvmpy.core import Type
-from numba import cgutils, types
-from numba.targets.imputils import Registry
+from numba.core import types, cgutils
+from numba.core.imputils import Registry
 
 registry = Registry()
 lower = registry.lower

@@ -5,12 +5,12 @@ import subprocess
 import math
 
 import numba
-import numba.unittest_support as unittest
+import unittest
 
 class TestLargeCode(unittest.TestCase):
 
     def test_far_jump(self):
-        from . import run_far_branch
+        from numba.roc.tests.hsapy import run_far_branch
 
         pyinterp = sys.executable
         numba_dir = os.path.abspath(os.path.join(os.path.dirname(numba.__file__), os.pardir))

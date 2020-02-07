@@ -1,8 +1,8 @@
 from numba import jit
-import numba.unittest_support as unittest
+import unittest
 import numpy as np
 import copy
-from .support import MemoryLeakMixin
+from numba.tests.support import MemoryLeakMixin
 
 
 try:

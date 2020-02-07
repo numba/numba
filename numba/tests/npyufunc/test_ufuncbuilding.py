@@ -2,12 +2,13 @@ import sys
 
 import numpy as np
 
-from numba import config, unittest_support as unittest
-from numba.npyufunc.ufuncbuilder import GUFuncBuilder
+from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba import vectorize, guvectorize
-from numba.npyufunc import PyUFunc_One
-from numba.npyufunc.dufunc import DUFunc as UFuncBuilder
+from numba.np.ufunc import PyUFunc_One
+from numba.np.ufunc.dufunc import DUFunc as UFuncBuilder
 from ..support import tag, TestCase
+from numba.core import config
+import unittest
 
 
 def add(a, b):

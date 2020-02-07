@@ -1,18 +1,20 @@
-import numba.unittest_support as unittest
-from .support import TestCase
+import unittest
+from numba.tests.support import TestCase
 
 import sys
 import operator
-
-# deliberately imported twice for different use cases
 import numpy as np
 import numpy
 
-from numba.compiler import compile_isolated
-from numba import types, utils, jit, types
-from numba.errors import TypingError, LoweringError
-from .support import tag, _32bit
-from numba.tests.support import captured_stdout
+from numba.core.compiler import compile_isolated
+from numba import jit
+from numba.core import types, utils
+from numba.core.errors import TypingError, LoweringError
+from numba.tests.support import tag, _32bit, captured_stdout
+
+
+# deliberately imported twice for different use cases
+
 
 PARALLEL_SUPPORTED = not _32bit
 
@@ -272,7 +274,7 @@ class TestArrayComprehension(unittest.TestCase):
             l = np.array([i + m for i in range(n)])
             return l
 
-        import numba.inline_closurecall as ic
+        import numba.core.inline_closurecall as ic
         try:
             ic.enable_inline_arraycall = False
             self.check(comp_with_array_noinline, 5, assert_allocate_list=True)
@@ -302,7 +304,7 @@ class TestArrayComprehension(unittest.TestCase):
             l = np.array([[i * j for j in range(n)] for i in range(n)])
             return l
 
-        import numba.inline_closurecall as ic
+        import numba.core.inline_closurecall as ic
         try:
             ic.enable_inline_arraycall = False
             self.check(comp_nest_with_array_noinline, 5,

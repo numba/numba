@@ -2,10 +2,11 @@ import sys
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import jit, types, errors, utils
-from .support import captured_stdout, tag, TestCase
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit
+from numba.core import types, errors, utils
+from numba.tests.support import captured_stdout, tag, TestCase
 
 
 enable_pyobj_flags = Flags()

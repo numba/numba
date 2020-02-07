@@ -1,6 +1,6 @@
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim, skip_unless_conda_cudatoolkit
-from numba.findlib import find_lib
+from numba.misc.findlib import find_lib
 
 
 @skip_on_cudasim('Library detection unsupported in the simulator')

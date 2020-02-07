@@ -1,5 +1,5 @@
-from numba import config, sigutils, types
 from warnings import warn
+from numba.core import types, config, sigutils
 from .compiler import (compile_kernel, compile_device, declare_device_function,
                        AutoJitCUDAKernel, compile_device_template)
 from .simulator.kernel import FakeCUDAKernel

@@ -2,12 +2,14 @@ import sys
 
 import numpy as np
 import ctypes
-from numba import jit, numpy_support, types, literal_unroll, njit
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated
-from numba.itanium_mangler import mangle_type
-from numba.config import IS_WIN32
-from numba.numpy_support import numpy_version
+from numba import jit, literal_unroll, njit
+from numba.core import types
+from numba.core.compiler import compile_isolated
+from numba.core.itanium_mangler import mangle_type
+from numba.core.config import IS_WIN32
+from numba.np.numpy_support import numpy_version
+import unittest
+from numba.np import numpy_support
 
 
 def get_a(ary, i):
