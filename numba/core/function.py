@@ -150,7 +150,7 @@ def unbox_function_type(typ, obj, c):
     # called with two arguments. However, if an exception is raised in
     # the function, then it will be caught and propagated to the
     # caller.
-    modname = c.context.insert_const_string(c.builder.module, 'numba.function')
+    modname = c.context.insert_const_string(c.builder.module, __name__)
     numba_mod = c.pyapi.import_module_noblock(modname)
     numba_func = c.pyapi.object_getattr_string(
         numba_mod, '_get_wrapper_address')
