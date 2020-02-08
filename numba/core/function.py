@@ -8,11 +8,11 @@ from numba import types as nbtypes
 from numba.extending import typeof_impl
 from numba.extending import models, register_model
 from numba.extending import unbox, NativeValue, box
-from numba.targets.imputils import lower_constant
-from numba.ccallback import CFunc
-from numba import cgutils
+from numba.core.imputils import lower_constant
+from numba.core.ccallback import CFunc
+from numba.core import cgutils
 from llvmlite import ir
-from numba.types import (
+from numba.core.types import (
     FunctionType, FunctionPrototype, WrapperAddressProtocol)
 
 

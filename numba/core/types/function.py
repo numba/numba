@@ -25,7 +25,7 @@ class FunctionType(Type):
         super(FunctionType, self).__init__(name)
 
     def signature(self):
-        from numba import typing
+        from numba.core import typing
         ptype = self.ftype
         return typing.signature(ptype.rtype, *ptype.atypes)
 
@@ -34,7 +34,7 @@ class FunctionType(Type):
         return self.name
 
     def cast_python_value(self, value):
-        from numba import typing
+        from numba.core import typing
         if isinstance(value, typing.Signature):
             ptype = FunctionPrototype(value.return_type, value.args)
             return FunctionType(ptype)
@@ -42,7 +42,7 @@ class FunctionType(Type):
             'cast_python_value({}, {})'.format(value, type(value)))
 
     def get_call_type(self, context, args, kws):
-        from numba import typing
+        from numba.core import typing
         from . import Array, Number
         ptype = self.ftype
         if len(args) == len(ptype.atypes):

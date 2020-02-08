@@ -1,11 +1,12 @@
 import types as pytypes
-from numba import jit, function, cfunc, types, int64, float64, float32
+from numba import jit, cfunc, types, int64, float64, float32
 import ctypes
 
 from .support import TestCase
 
 
 def dump(foo):  # FOR DEBUGGING, TO BE REMOVED
+    from numba.core import function
     foo_type = function.fromobject(foo)
     foo_sig = foo_type.signature()
     foo.compile(foo_sig)
