@@ -1,17 +1,15 @@
-from __future__ import print_function, absolute_import, division
-
 import contextlib
 import sys
 import numpy as np
 import random
 import threading
+import gc
 
-from numba import unittest_support as unittest
-from numba.errors import TypingError
+from numba.core.errors import TypingError
 from numba import njit
-from numba import utils
-from numba.numpy_support import version as numpy_version
-from .support import MemoryLeakMixin, TestCase, tag
+from numba.core import types, utils, config
+from numba.tests.support import MemoryLeakMixin, TestCase, tag
+import unittest
 
 
 nrtjit = njit(_nrt=True, nogil=True)
@@ -127,7 +125,6 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
         del got_arr
 
-    @tag('important')
     def test_empty_3d(self):
         def pyfunc(m, n, p):
             arr = np.empty((m, n, p), np.int32)
@@ -153,7 +150,6 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
         del got_arr
 
-    @tag('important')
     def test_empty_2d_sliced(self):
         def pyfunc(m, n, p):
             arr = np.empty((m, n), np.int32)
@@ -178,7 +174,6 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
         del got_arr
 
-    @tag('important')
     def test_return_global_array(self):
         y = np.ones(4, dtype=np.float32)
         initrefct = sys.getrefcount(y)
@@ -197,14 +192,15 @@ class TestDynArray(NrtRefCtTest, TestCase):
         np.testing.assert_equal(out, np.ones(4, dtype=np.float32))
 
         del out
+        gc.collect()
         # out is only referenced by cfunc
         self.assertEqual(initrefct + 1, sys.getrefcount(y))
 
         del cfunc
+        gc.collect()
         # y is no longer referenced by cfunc
         self.assertEqual(initrefct, sys.getrefcount(y))
 
-    @tag('important')
     def test_return_global_array_sliced(self):
         y = np.ones(4, dtype=np.float32)
 
@@ -235,7 +231,6 @@ class TestDynArray(NrtRefCtTest, TestCase):
         self.assertIs(expected, arr)
         self.assertIs(expected, got)
 
-    @tag('important')
     def test_array_pass_through_sliced(self):
         def pyfunc(y):
             return y[y.size // 2:]
@@ -572,6 +567,16 @@ class ConstructorBaseTest(NrtRefCtTest):
             cfunc(2, -1)
         self.assertEqual(str(cm.exception), "negative dimensions not allowed")
 
+    def check_alloc_size(self, pyfunc):
+        """Checks that pyfunc will error, not segfaulting due to array size."""
+        cfunc = nrtjit(pyfunc)
+        with self.assertRaises(ValueError) as e:
+            cfunc()
+        self.assertIn(
+            "array is too big",
+            str(e.exception)
+        )
+
 
 class TestNdZeros(ConstructorBaseTest, TestCase):
 
@@ -614,12 +619,36 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
             return pyfunc((m, n))
         self.check_2d(func)
 
-    @tag('important')
+    def test_2d_shape_dtypes(self):
+        # Test for issue #4575
+        pyfunc = self.pyfunc
+        def func1(m, n):
+            return pyfunc((np.int16(m), np.int32(n)))
+        self.check_2d(func1)
+        # Using a 64-bit value checks that 32 bit systems will downcast to intp
+        def func2(m, n):
+            return pyfunc((np.int64(m), np.int8(n)))
+        self.check_2d(func2)
+        # Make sure an error is thrown if we can't downcast safely
+        if config.IS_32BITS:
+            cfunc = nrtjit(lambda m, n: pyfunc((m, n)))
+            with self.assertRaises(ValueError):
+                cfunc(np.int64(1 << (32 - 1)), 1)
+
     def test_2d_dtype_kwarg(self):
         pyfunc = self.pyfunc
         def func(m, n):
             return pyfunc((m, n), dtype=np.complex64)
         self.check_2d(func)
+
+    def test_alloc_size(self):
+        pyfunc = self.pyfunc
+        width = types.intp.bitwidth
+        def gen_func(shape, dtype):
+            return lambda : pyfunc(shape, dtype)
+        # Under these values numba will segfault, but thats another issue
+        self.check_alloc_size(gen_func(1 << width - 2, np.intp))
+        self.check_alloc_size(gen_func((1 << width - 8, 64), np.intp))
 
 
 class TestNdOnes(TestNdZeros):
@@ -629,7 +658,6 @@ class TestNdOnes(TestNdZeros):
         self.pyfunc = np.ones
 
 
-@unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
 class TestNdFull(ConstructorBaseTest, TestCase):
 
     def check_result_value(self, ret, expected):
@@ -672,8 +700,7 @@ class TestNdFull(ConstructorBaseTest, TestCase):
             return np.full((m, n), np.int32(1))
         self.check_2d(func)
 
-        # tests meta issues from #2862, that np < 1.12 always
-        # returns float64. Complex uses `.real`, imaginary part dropped
+        # Complex uses `.real`, imaginary part dropped
         def func(m, n):
             return np.full((m, n), np.complex128(1))
         self.check_2d(func)
@@ -682,6 +709,29 @@ class TestNdFull(ConstructorBaseTest, TestCase):
         def func(m, n):
             return np.full((m, n), 1, dtype=np.int8)
         self.check_2d(func)
+
+    def test_2d_shape_dtypes(self):
+        # Test for issue #4575
+        def func1(m, n):
+            return np.full((np.int16(m), np.int32(n)), 4.5)
+        self.check_2d(func1)
+        # Using a 64-bit value checks that 32 bit systems will downcast to intp
+        def func2(m, n):
+            return np.full((np.int64(m), np.int8(n)), 4.5)
+        self.check_2d(func2)
+        # Make sure an error is thrown if we can't downcast safely
+        if config.IS_32BITS:
+            cfunc = nrtjit(lambda m, n: np.full((m, n), 4.5))
+            with self.assertRaises(ValueError):
+                cfunc(np.int64(1 << (32 - 1)), 1)
+
+    def test_alloc_size(self):
+        width = types.intp.bitwidth
+        def gen_func(shape, value):
+            return lambda : np.full(shape, value)
+        # Under these values numba will segfault, but thats another issue
+        self.check_alloc_size(gen_func(1 << width - 2, 1))
+        self.check_alloc_size(gen_func((1 << width - 8, 64), 1))
 
 
 class ConstructorLikeBaseTest(object):
@@ -813,7 +863,6 @@ class TestNdOnesLike(TestNdZerosLike):
         super(TestNdOnesLike, self).test_like_dtype_structured()
 
 
-@unittest.skipIf(numpy_version < (1, 8), "test requires Numpy 1.8 or later")
 class TestNdFullLike(ConstructorLikeBaseTest, TestCase):
 
     def check_result_value(self, ret, expected):
@@ -1087,7 +1136,6 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                             ((),),
                             ])
 
-    @tag('important')
     def test_2d(self):
         def pyfunc(arg):
             return np.array(arg)
@@ -1134,12 +1182,12 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                            'homogeneous sequence')):
             cfunc(np.array([1.]))
 
-        with check_raises(('type (int64, reflected list(int64)) does '
+        with check_raises(('type Tuple(int64, reflected list(int64)) does '
                           'not have a regular shape')):
             cfunc((np.int64(1), [np.int64(2)]))
 
         with check_raises(
-                "cannot convert (int64, Record(a[type=int32;offset=0],"
+                "cannot convert Tuple(int64, Record(a[type=int32;offset=0],"
                 "b[type=float32;offset=4];8;False)) to a homogeneous type",
             ):
             st = np.dtype([('a', 'i4'), ('b', 'f4')])
@@ -1167,7 +1215,6 @@ class TestNpConcatenate(MemoryLeakMixin, TestCase):
         self.assertIn("input sizes over dimension %d do not match" % axis,
                       str(raises.exception))
 
-    @tag('important')
     def test_3d(self):
         pyfunc = np_concatenate2
         cfunc = nrtjit(pyfunc)
@@ -1350,7 +1397,6 @@ class TestNpStack(MemoryLeakMixin, TestCase):
             args = next(generate_starargs())
             cfunc(a[:-1], b, c, *args)
 
-    @tag('important')
     def test_3d(self):
         """
         stack(3d arrays, axis)
@@ -1406,7 +1452,6 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         c = np.array(True)
         self.check_stack(pyfunc, cfunc, (a, b, a))
 
-    @tag('important')
     def test_hstack(self):
         pyfunc = np_hstack
         cfunc = nrtjit(pyfunc)
@@ -1421,7 +1466,6 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         b = np.arange(8).reshape((2, 4)) + 100
         self.check_stack(pyfunc, cfunc, (a, b, a))
 
-    @tag('important')
     def test_vstack(self):
         pyfunc = np_vstack
         cfunc = nrtjit(pyfunc)
@@ -1436,7 +1480,6 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         b = np.arange(8).reshape((4, 2)) + 100
         self.check_stack(pyfunc, cfunc, (a, b, b))
 
-    @tag('important')
     def test_dstack(self):
         pyfunc = np_dstack
         cfunc = nrtjit(pyfunc)
@@ -1451,7 +1494,6 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         b = a + 100
         self.check_stack(pyfunc, cfunc, (a, b, b))
 
-    @tag('important')
     def test_column_stack(self):
         pyfunc = np_column_stack
         cfunc = nrtjit(pyfunc)

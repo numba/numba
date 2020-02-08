@@ -217,6 +217,25 @@ well-defined coding style (would it be nice to follow :pep:`7`?).
 Code and documentation should generally fit within 80 columns, for
 maximum readability with all existing tools (such as code review UIs).
 
+Numba uses `Flake8 <http://flake8.pycqa.org/en/latest/>`_ to ensure a consistent
+Python code format throughout the project. ``flake8`` can be installed
+with ``pip`` or ``conda`` and then run from the root of the Numba repository::
+
+    flake8 numba
+
+Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
+to automatically run ``flake8`` when you make a git commit. This can be
+done by installing ``pre-commit``::
+
+    pip install pre-commit
+
+and then running::
+
+    pre-commit install
+
+from the root of the Numba repository. Now ``flake8`` will be run each time
+you commit changes. You can skip this check with ``git commit --no-verify``.
+
 Stability
 '''''''''
 
@@ -259,8 +278,9 @@ Main documentation
 ''''''''''''''''''
 
 This documentation is under the ``docs`` directory of the `Numba repository`_.
-It is built with `Sphinx <http://sphinx-doc.org/>`_, which is available
-using conda or pip.
+It is built with `Sphinx <http://sphinx-doc.org/>`_ and
+`numpydoc <https://numpydoc.readthedocs.io/>`_, which are available using
+conda or pip; i.e. ``conda install sphinx numpydoc``.
 
 To build the documentation, you need the bootstrap theme::
 

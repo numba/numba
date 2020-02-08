@@ -7,7 +7,8 @@ from warnings import warn
 
 import numpy as np
 
-from numba import six, types, numpy_support
+from numba.core import types
+from numba.np import numpy_support
 
 DeviceRecord = None
 from_record_like = None
@@ -30,7 +31,7 @@ class FakeShape(tuple):
     negative indexing)
     '''
     def __getitem__(self, k):
-        if isinstance(k, six.integer_types) and k < 0:
+        if isinstance(k, int) and k < 0:
             raise IndexError('tuple index out of range')
         return super(FakeShape, self).__getitem__(k)
 
@@ -62,8 +63,8 @@ class FakeCUDAArray(object):
             attr = getattr(self._ary, attrname)
             return attr
         except AttributeError as e:
-            six.raise_from(AttributeError("Wrapped array has no attribute '%s'"
-                                          % attrname), e)
+            msg = "Wrapped array has no attribute '%s'" % attrname
+            raise AttributeError(msg) from e
 
     def bind(self, stream=0):
         return FakeCUDAArray(self._ary, stream)
@@ -188,6 +189,7 @@ def check_array_compatibility(ary1, ary2):
 
 
 def to_device(ary, stream=0, copy=True, to=None):
+    ary = np.array(ary, copy=False, subok=True)
     sentry_contiguous(ary)
     if to is None:
         buffer_dtype = np.int64 if ary.dtype.char in 'Mm' else ary.dtype
@@ -218,7 +220,33 @@ def device_array(*args, **kwargs):
 
 
 def device_array_like(ary, stream=0):
-    return FakeCUDAArray(np.empty_like(ary))
+    # Avoid attempting to recompute strides if the default strides will be
+    # sufficient to create a contiguous array.
+    if ary.flags['C_CONTIGUOUS'] or ary.ndim <= 1:
+        return FakeCUDAArray(np.ndarray(shape=ary.shape, dtype=ary.dtype))
+    elif ary.flags['F_CONTIGUOUS']:
+        return FakeCUDAArray(np.ndarray(shape=ary.shape, dtype=ary.dtype,
+                                        order='F'))
+
+    # Otherwise, we need to compute new strides using an algorithm adapted from
+    # NumPy's v1.17.4's PyArray_NewLikeArrayWithShape in
+    # core/src/multiarray/ctors.c. We permute the strides in ascending order
+    # then compute the stride for the dimensions with the same permutation.
+
+    # Stride permuation. E.g. a stride array (4, -2, 12) becomes
+    # [(1, -2), (0, 4), (2, 12)]
+    strideperm = [ x for x in enumerate(ary.strides) ]
+    strideperm.sort(key = lambda x: x[1])
+
+    # Compute new strides using permutation
+    strides = [0] * len(ary.strides)
+    stride = ary.dtype.itemsize
+    for i_perm, _ in strideperm:
+        strides[i_perm] = stride
+        stride *= ary.shape[i_perm]
+    strides = tuple(strides)
+
+    return FakeCUDAArray(np.ndarray(shape=ary.shape, dtype=ary.dtype, strides=strides))
 
 
 def auto_device(ary, stream=0, copy=True):
@@ -251,12 +279,11 @@ def verify_cuda_ndarray_interface(obj):
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
     requires_attr('dtype', np.dtype)
-    requires_attr('size', six.integer_types)
+    requires_attr('size', int)
 
 
 def require_cuda_ndarray(obj):
     "Raises ValueError is is_cuda_ndarray(obj) evaluates False"
     if not is_cuda_ndarray(obj):
         raise ValueError('require an cuda ndarray object')
-
 

@@ -1,6 +1,4 @@
-from __future__ import absolute_import, print_function
-
-
+import ctypes
 import os
 from functools import reduce, wraps
 import operator
@@ -10,11 +8,9 @@ import warnings
 
 import numpy as np
 
-from numba import ctypes_support as ctypes
-from numba import config, compiler, types, sigutils
-from numba.typing.templates import AbstractTemplate, ConcreteTemplate
-from numba import funcdesc, typing, utils, serialize
-from numba.compiler_lock import global_compiler_lock
+from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
+from numba.core import types, typing, utils, funcdesc, serialize, config, compiler, sigutils
+from numba.core.compiler_lock import global_compiler_lock
 
 from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
@@ -37,7 +33,6 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
     if debug:
-        flags.set('boundcheck')
         flags.set('debuginfo')
     if inline:
         flags.set('forceinline')
@@ -253,9 +248,11 @@ class ExternFunction(object):
         self.sig = sig
 
 
-
 class ForAll(object):
     def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
+        if ntasks < 0:
+            raise ValueError("Can't create ForAll with negative task count: %s"
+                             % ntasks)
         self.kernel = kernel
         self.ntasks = ntasks
         self.thread_per_block = tpb
@@ -263,6 +260,9 @@ class ForAll(object):
         self.sharedmem = sharedmem
 
     def __call__(self, *args):
+        if self.ntasks == 0:
+            return
+
         if isinstance(self.kernel, AutoJitCUDAKernel):
             kernel = self.kernel.specialize(*args)
         else:
@@ -285,7 +285,7 @@ class ForAll(object):
             ctx = get_context()
             kwargs = dict(
                 func=kernel._func.get(),
-                b2d_func=lambda tpb: 0,
+                b2d_func=0,     # dynamic-shared memory is constant to blksz
                 memsize=self.sharedmem,
                 blocksizelimit=1024,
             )
@@ -662,13 +662,7 @@ class CUDAKernel(CUDAKernelBase):
                 retr=retr)
 
         if isinstance(ty, types.Array):
-            if isinstance(ty, types.SmartArrayType):
-                devary = val.get('gpu')
-                retr.append(lambda: val.mark_changed('gpu'))
-                outer_parent = ctypes.c_void_p(0)
-                kernelargs.append(outer_parent)
-            else:
-                devary = wrap_arg(val).to_device(retr, stream)
+            devary = wrap_arg(val).to_device(retr, stream)
 
             c_intp = ctypes.c_ssize_t
 

@@ -1,10 +1,10 @@
-from __future__ import print_function, absolute_import, division
+from functools import singledispatch
 
 from llvmlite.llvmpy.core import Type, Constant
 
-from numba import types, typing, cgutils, utils
-from numba.targets.imputils import Registry
-from . import nvvmutils
+from numba.core import types, typing, cgutils
+from numba.core.imputils import Registry
+from numba.cuda import nvvmutils
 
 registry = Registry()
 lower = registry.lower
@@ -14,7 +14,7 @@ voidptr = Type.pointer(Type.int(8))
 
 # NOTE: we don't use @lower here since print_item() doesn't return a LLVM value
 
-@utils.singledispatch
+@singledispatch
 def print_item(ty, context, builder, val):
     """
     Handle printing of a single value of the given Numba type.

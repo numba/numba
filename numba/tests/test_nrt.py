@@ -1,5 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
 import math
 import os
 import platform
@@ -8,18 +6,27 @@ import re
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import njit, targets, typing
-from numba.compiler import compile_isolated, Flags, types
-from numba.runtime import rtsys
-from numba.runtime import nrtopt
-from numba.extending import intrinsic
-from numba.typing import signature
-from numba.targets.imputils import impl_ret_untracked
+from numba import njit
+from numba.core import typing, types
+from numba.core.compiler import compile_isolated, Flags
+from numba.core.runtime import (
+    rtsys,
+    nrtopt,
+    _nrt_python,
+    nrt,
+)
+from numba.core.extending import intrinsic, include_path
+from numba.core.typing import signature
+from numba.core.imputils import impl_ret_untracked
 from llvmlite import ir
 import llvmlite.binding as llvm
+import numba.core.typing.cffi_utils as cffi_support
+from numba.core.unsafe.nrt import NRT_get_api
 
-from .support import MemoryLeakMixin, TestCase
+from numba.tests.support import (MemoryLeakMixin, TestCase, temp_directory,
+                                 import_dynamic)
+from numba.core import cpu
+import unittest
 
 enable_nrt_flags = Flags()
 enable_nrt_flags.set("nrt")
@@ -75,7 +82,7 @@ class TestNrtMemInfo(unittest.TestCase):
         # Reset the Dummy class
         Dummy.alive = 0
         # initialize the NRT (in case the tests are run in isolation)
-        targets.cpu.CPUContext(typing.Context())
+        cpu.CPUContext(typing.Context())
 
     def test_meminfo_refct_1(self):
         d = Dummy()
@@ -113,7 +120,6 @@ class TestNrtMemInfo(unittest.TestCase):
         del mi
         self.assertEqual(Dummy.alive, 0)
 
-    @unittest.skipIf(sys.version_info < (3,), "memoryview not supported")
     def test_fake_memoryview(self):
         d = Dummy()
         self.assertEqual(Dummy.alive, 1)
@@ -136,7 +142,6 @@ class TestNrtMemInfo(unittest.TestCase):
         del mview
         self.assertEqual(Dummy.alive, 0)
 
-    @unittest.skipIf(sys.version_info < (3,), "memoryview not supported")
     def test_memoryview(self):
         from ctypes import c_uint32, c_void_p, POINTER, cast
 
@@ -215,8 +220,6 @@ class TestNrtMemInfo(unittest.TestCase):
         # consumed by another thread.
 
 
-@unittest.skipUnless(sys.version_info >= (3, 4),
-                     "need Python 3.4+ for the tracemalloc module")
 class TestTracemalloc(unittest.TestCase):
     """
     Test NRT-allocated memory can be tracked by tracemalloc.
@@ -544,6 +547,121 @@ br i1 %.294, label %B42, label %B160
             return z
 
         self.assertEqual(foo(10), 22) # expect (10 + 1) * 2 = 22
+
+
+@unittest.skipUnless(cffi_support.SUPPORTED, "cffi required")
+class TestNrtExternalCFFI(MemoryLeakMixin, TestCase):
+    """Testing the use of externally compiled C code that use NRT
+    """
+
+    def compile_cffi_module(self, name, source, cdef):
+        from cffi import FFI
+
+        ffi = FFI()
+        ffi.set_source(name, source, include_dirs=[include_path()])
+        ffi.cdef(cdef)
+        tmpdir = temp_directory("cffi_test_{}".format(name))
+        ffi.compile(tmpdir=tmpdir)
+        sys.path.append(tmpdir)
+        try:
+            mod = import_dynamic(name)
+        finally:
+            sys.path.remove(tmpdir)
+
+        return ffi, mod
+
+    def get_nrt_api_table(self):
+        from cffi import FFI
+
+        ffi = FFI()
+        nrt_get_api = ffi.cast("void* (*)()", _nrt_python.c_helpers['get_api'])
+        table = nrt_get_api()
+        return table
+
+    def test_manage_memory(self):
+        name = "{}_test_manage_memory".format(self.__class__.__name__)
+        source = r"""
+#include <stdio.h>
+#include "numba/core/runtime/nrt_external.h"
+
+int status = 0;
+
+void my_dtor(void *ptr) {
+    free(ptr);
+    status = 0xdead;
+}
+
+NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt) {
+    void * data = malloc(10);
+    NRT_MemInfo *mi = nrt->manage_memory(data, my_dtor);
+    nrt->acquire(mi);
+    nrt->release(mi);
+    status = 0xa110c;
+    return mi;
+}
+        """
+        cdef = """
+void* test_nrt_api(void *nrt);
+int status;
+        """
+
+        ffi, mod = self.compile_cffi_module(name, source, cdef)
+        # Init status is 0
+        self.assertEqual(mod.lib.status, 0)
+        table = self.get_nrt_api_table()
+        out = mod.lib.test_nrt_api(table)
+        # status is now 0xa110c
+        self.assertEqual(mod.lib.status, 0xa110c)
+        mi_addr = int(ffi.cast("size_t", out))
+        mi = nrt.MemInfo(mi_addr)
+        self.assertEqual(mi.refcount, 1)
+        del mi   # force deallocation on mi
+        # status is now 0xdead
+        self.assertEqual(mod.lib.status, 0xdead)
+
+    def test_allocate(self):
+        name = "{}_test_allocate".format(self.__class__.__name__)
+        source = r"""
+#include <stdio.h>
+#include "numba/core/runtime/nrt_external.h"
+
+NRT_MemInfo* test_nrt_api(NRT_api_functions *nrt, size_t n) {
+    size_t *data = NULL;
+    NRT_MemInfo *mi = nrt->allocate(n);
+    data = nrt->get_data(mi);
+    data[0] = 0xded;
+    data[1] = 0xabc;
+    data[2] = 0xdef;
+    return mi;
+}
+        """
+        cdef = "void* test_nrt_api(void *nrt, size_t n);"
+        ffi, mod = self.compile_cffi_module(name, source, cdef)
+
+        table = self.get_nrt_api_table()
+
+        numbytes = 3 * np.dtype(np.intp).itemsize
+        out = mod.lib.test_nrt_api(table, numbytes)
+
+        mi_addr = int(ffi.cast("size_t", out))
+        mi = nrt.MemInfo(mi_addr)
+        self.assertEqual(mi.refcount, 1)
+
+        buffer = ffi.buffer(ffi.cast("char [{}]".format(numbytes), mi.data))
+        arr = np.ndarray(shape=(3,), dtype=np.intp, buffer=buffer)
+        np.testing.assert_equal(arr, [0xded, 0xabc, 0xdef])
+
+    def test_get_api(self):
+        from cffi import FFI
+
+        @njit
+        def test_nrt_api():
+            return NRT_get_api()
+
+        ffi = FFI()
+        expect = int(ffi.cast('size_t', self.get_nrt_api_table()))
+        got = test_nrt_api()
+        self.assertEqual(expect, got)
 
 
 if __name__ == '__main__':

@@ -1,10 +1,8 @@
-from __future__ import print_function, division, absolute_import
-
 import math
 
 import numpy as np
 
-from numba import cuda, config, float32
+from numba import cuda, float32
 from numba.cuda.testing import unittest
 import numba.cuda.random
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
@@ -12,6 +10,7 @@ from numba.cuda.testing import skip_on_cudasim, SerialMixin
 from numba.cuda.random import \
     xoroshiro128p_uniform_float32, xoroshiro128p_normal_float32, \
     xoroshiro128p_uniform_float64, xoroshiro128p_normal_float64
+from numba.core import config
 
 
 # Distributions

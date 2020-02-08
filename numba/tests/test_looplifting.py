@@ -1,11 +1,10 @@
-from __future__ import print_function, division, absolute_import
-
+from io import StringIO
 import numpy as np
 
-from numba import types, utils
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from .support import TestCase, tag, MemoryLeakMixin
+from numba.core import types
+from numba.core.compiler import compile_isolated, Flags
+from numba.tests.support import TestCase, tag, MemoryLeakMixin
+import unittest
 
 
 looplift_flags = Flags()
@@ -37,6 +36,7 @@ def lift2(x):
 
 def lift3(x):
     # Output variable from the loop
+    _ = object()
     a = np.arange(5, dtype=np.int64)
     c = 0
     for i in range(a.shape[0]):
@@ -45,6 +45,7 @@ def lift3(x):
 
 def lift4(x):
     # Output two variables from the loop
+    _ = object()
     a = np.arange(5, dtype=np.int64)
     c = 0
     d = 0
@@ -54,6 +55,7 @@ def lift4(x):
     return c + d
 
 def lift5(x):
+    _ = object()
     a = np.arange(4)
     for i in range(a.shape[0]):
         # Inner has a break statement
@@ -86,13 +88,14 @@ def reject1(x):
 
 
 def reject_gen1(x):
+    _ = object()
     a = np.arange(4)
     for i in range(a.shape[0]):
         # Inner is a generator => cannot loop-lift
         yield a[i]
 
 def reject_gen2(x):
-    # Outer needs object mode because of np.empty()
+    _ = object()
     a = np.arange(3)
     for i in range(a.size):
         # Middle has a yield => cannot loop-lift
@@ -106,8 +109,8 @@ def reject_gen2(x):
 def reject_npm1(x):
     a = np.empty(3, dtype=np.int32)
     for i in range(a.size):
-        # Inner uses np.arange() => cannot loop-lift unless
-        # enable_pyobject_looplift is enabled.
+        # Inner uses object() => cannot loop-lift
+        _ = object()
         a[i] = np.arange(i + 1)[i]
 
     return a
@@ -200,7 +203,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
     def test_lift3(self):
         self.check_lift_ok(lift3, (types.intp,), (123,))
 
-    @tag('important')
     def test_lift4(self):
         self.check_lift_ok(lift4, (types.intp,), (123,))
 
@@ -210,7 +212,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
     def test_lift_issue2561(self):
         self.check_no_lift(lift_issue2561, (), ())
 
-    @tag('important')
     def test_lift_gen1(self):
         self.check_lift_generator_ok(lift_gen1, (types.intp,), (123,))
 
@@ -252,7 +253,7 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, xcopy + 1)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfoo.inspect_types(file=buf)
         annotation = buf.getvalue()
         buf.close()
@@ -289,7 +290,7 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, (xcopy + 1) * 2)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfoo.inspect_types(file=buf)
         annotation = buf.getvalue()
         buf.close()
@@ -484,7 +485,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         """
         https://github.com/numba/numba/issues/2179
 
-        Looplifting transformation is using the wrong verion of variable `h`.
+        Looplifting transformation is using the wrong version of variable `h`.
         """
         from numba import jit
 

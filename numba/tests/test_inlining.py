@@ -1,16 +1,27 @@
-from __future__ import print_function, absolute_import
-
 import re
 import numpy as np
 
-from .support import TestCase, override_config, captured_stdout
-import numba
-from numba import unittest_support as unittest
-from numba import jit, njit, types, ir, compiler
-from numba.ir_utils import guard, find_callname, find_const, get_definition
-from numba.targets.registry import CPUDispatcher
-from numba.inline_closurecall import inline_closure_call
-from .test_parfors import skip_unsupported
+from numba.tests.support import (TestCase, override_config, captured_stdout,
+                      skip_parfors_unsupported)
+from numba import jit, njit
+from numba.core import types, ir, postproc, compiler
+from numba.core.ir_utils import (guard, find_callname, find_const,
+                                 get_definition, simplify_CFG)
+from numba.core.registry import CPUDispatcher
+from numba.core.inline_closurecall import inline_closure_call
+
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+                             IRProcessing, DeadBranchPrune,
+                             RewriteSemanticConstants, GenericRewrites,
+                             WithLifting, PreserveIR, InlineClosureLikes)
+
+from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
+                           NopythonRewrites, PreParforPass, ParforPass,
+                           DumpParforDiagnostics, NativeLowering,
+                           IRLegalization, NoPythonBackend)
+
+from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
+import unittest
 
 @jit((types.int32,), nopython=True)
 def inner(a):
@@ -30,45 +41,74 @@ def outer_multiple(a):
 def __dummy__():
     return
 
-class InlineTestPipeline(numba.compiler.BasePipeline):
-    """compiler pipeline for testing inlining after optimization
-    """
-    def define_pipelines(self, pm):
-        name = 'inline_test'
-        pm.create_pipeline(name)
-        self.add_preprocessing_stage(pm)
-        self.add_with_handling_stage(pm)
-        self.add_pre_typing_stage(pm)
-        self.add_typing_stage(pm)
-        pm.add_stage(self.stage_pre_parfor_pass, "Preprocessing for parfors")
-        if not self.flags.no_rewrites:
-            pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
-        if self.flags.auto_parallel.enabled:
-            pm.add_stage(self.stage_parfor_pass, "convert to parfors")
-        pm.add_stage(self.stage_inline_test_pass, "inline test")
-        pm.add_stage(self.stage_ir_legalization,
-                "ensure IR is legal prior to lowering")
-        self.add_lowering_stage(pm)
-        self.add_cleanup_stage(pm)
-        pm.add_stage(self.stage_preserve_final_ir, "preserve IR")
+@register_pass(analysis_only=False, mutates_CFG=True)
+class InlineTestPass(FunctionPass):
+    _name = "inline_test_pass"
 
-    def stage_preserve_final_ir(self):
-        self.metadata['final_func_ir'] = self.func_ir.copy()
+    def __init__(self):
+        FunctionPass.__init__(self)
 
-    def stage_inline_test_pass(self):
+    def run_pass(self, state):
         # assuming the function has one block with one call inside
-        assert len(self.func_ir.blocks) == 1
-        block = list(self.func_ir.blocks.values())[0]
+        assert len(state.func_ir.blocks) == 1
+        block = list(state.func_ir.blocks.values())[0]
         for i, stmt in enumerate(block.body):
-            if guard(find_callname,self.func_ir, stmt.value) is not None:
-                inline_closure_call(self.func_ir, {}, block, i, lambda: None,
-                    self.typingctx, (), self.typemap, self.calltypes)
+            if guard(find_callname,state.func_ir, stmt.value) is not None:
+                inline_closure_call(state.func_ir, {}, block, i, lambda: None,
+                    state.typingctx, (), state.type_annotation.typemap,
+                    state.type_annotation.calltypes)
                 # also fix up the IR so that ir.Dels appear correctly/in correct
                 # locations
-                post_proc = numba.postproc.PostProcessor(self.func_ir)
+                post_proc = postproc.PostProcessor(state.func_ir)
                 post_proc.run()
                 break
+        return True
 
+
+def gen_pipeline(state, test_pass):
+        name = 'inline_test'
+        pm = PassManager(name)
+        pm.add_pass(TranslateByteCode, "analyzing bytecode")
+        pm.add_pass(FixupArgs, "fix up args")
+        pm.add_pass(IRProcessing, "processing IR")
+        pm.add_pass(WithLifting, "Handle with contexts")
+        # pre typing
+        if not state.flags.no_rewrites:
+            pm.add_pass(GenericRewrites, "nopython rewrites")
+            pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
+            pm.add_pass(DeadBranchPrune, "dead branch pruning")
+        pm.add_pass(InlineClosureLikes,
+                    "inline calls to locally defined closures")
+        # typing
+        pm.add_pass(NopythonTypeInference, "nopython frontend")
+        pm.add_pass(AnnotateTypes, "annotate types")
+
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(PreParforPass, "Preprocessing for parfors")
+        if not state.flags.no_rewrites:
+            pm.add_pass(NopythonRewrites, "nopython rewrites")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(ParforPass, "convert to parfors")
+
+        pm.add_pass(test_pass, "inline test")
+
+        # legalise
+        pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
+
+        pm.add_pass(PreserveIR, "preserve IR")
+
+        # lower
+        pm.add_pass(NoPythonBackend, "nopython mode backend")
+        pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
+        return pm
+
+class InlineTestPipeline(compiler.CompilerBase):
+    """compiler pipeline for testing inlining after optimization
+    """
+    def define_pipelines(self):
+        pm = gen_pipeline(self.state, InlineTestPass)
+        pm.finalize()
+        return [pm]
 
 class TestInlining(TestCase):
     """
@@ -121,7 +161,7 @@ class TestInlining(TestCase):
         self.assert_not_has_pattern('%s.more' % prefix, asm)
         self.assert_not_has_pattern('%s.inner' % prefix, asm)
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_call_after_parfor(self):
         # replace the call to make sure inlining doesn't cause label conflict
         # with parfor body
@@ -133,7 +173,7 @@ class TestInlining(TestCase):
         A = np.arange(10)
         self.assertEqual(test_impl(A), j_func(A))
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_update_target_def(self):
 
         def test_impl(a):
@@ -160,11 +200,11 @@ class TestInlining(TestCase):
 
         self.assertEqual(len(func_ir._definitions['b']), 2)
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_var_dict_ret(self):
         # make sure inline_closure_call returns the variable replacement dict
         # and it contains the original variable name used in locals
-        @numba.njit(locals={'b': numba.float64})
+        @njit(locals={'b': types.float64})
         def g(a):
             b = a + 1
             return b
@@ -189,7 +229,7 @@ class TestInlining(TestCase):
 
         self.assertTrue('b' in var_map)
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_call_branch_pruning(self):
         # branch pruning pass should run properly in inlining to enable
         # functions with type checks
@@ -203,19 +243,33 @@ class TestInlining(TestCase):
         def test_impl(A=None):
             return foo(A)
 
-        class InlineTestPipelinePrune(InlineTestPipeline):
-            def stage_inline_test_pass(self):
+        @register_pass(analysis_only=False, mutates_CFG=True)
+        class PruningInlineTestPass(FunctionPass):
+            _name = "pruning_inline_test_pass"
+
+            def __init__(self):
+                FunctionPass.__init__(self)
+
+            def run_pass(self, state):
                 # assuming the function has one block with one call inside
-                assert len(self.func_ir.blocks) == 1
-                block = list(self.func_ir.blocks.values())[0]
+                assert len(state.func_ir.blocks) == 1
+                block = list(state.func_ir.blocks.values())[0]
                 for i, stmt in enumerate(block.body):
-                    if (guard(find_callname, self.func_ir, stmt.value)
+                    if (guard(find_callname, state.func_ir, stmt.value)
                             is not None):
-                        inline_closure_call(self.func_ir, {}, block, i,
-                            foo.py_func, self.typingctx,
-                            (self.typemap[stmt.value.args[0].name],),
-                            self.typemap, self.calltypes)
+                        inline_closure_call(state.func_ir, {}, block, i,
+                            foo.py_func, state.typingctx,
+                            (state.type_annotation.typemap[stmt.value.args[0].name],),
+                            state.type_annotation.typemap, state.calltypes)
                         break
+                return True
+
+        class InlineTestPipelinePrune(compiler.CompilerBase):
+
+            def define_pipelines(self):
+                pm = gen_pipeline(self.state, PruningInlineTestPass)
+                pm.finalize()
+                return [pm]
 
         # make sure inline_closure_call runs in full pipeline
         j_func = njit(pipeline_class=InlineTestPipelinePrune)(test_impl)
@@ -224,8 +278,8 @@ class TestInlining(TestCase):
         self.assertEqual(test_impl(), j_func())
 
         # make sure IR doesn't have branches
-        fir = j_func.overloads[(types.Omitted(None),)].metadata['final_func_ir']
-        fir.blocks = numba.ir_utils.simplify_CFG(fir.blocks)
+        fir = j_func.overloads[(types.Omitted(None),)].metadata['preserved_ir']
+        fir.blocks = simplify_CFG(fir.blocks)
         self.assertEqual(len(fir.blocks), 1)
 
 if __name__ == '__main__':

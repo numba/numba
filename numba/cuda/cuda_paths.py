@@ -3,8 +3,8 @@ import re
 import os
 from collections import defaultdict, namedtuple
 
-from numba.config import IS_WIN32, IS_OSX
-from numba.findlib import find_lib, find_file
+from numba.core.config import IS_WIN32, IS_OSX
+from numba.misc.findlib import find_lib, find_file
 from numba.cuda.envvars import get_numbapro_envvar
 
 
@@ -14,13 +14,13 @@ _env_path_tuple = namedtuple('_env_path_tuple', ['by', 'info'])
 def _find_valid_path(options):
     """Find valid path from *options*, which is a list of 2-tuple of
     (name, path).  Return first pair where *path* is not None.
-    If no valid path is found, return ('<unavailable>', None)
+    If no valid path is found, return ('<unknown>', None)
     """
     for by, data in options:
         if data is not None:
             return by, data
     else:
-        return '<unavailable>', None
+        return '<unknown>', None
 
 
 def _get_libdevice_path_decision():
@@ -30,6 +30,7 @@ def _get_libdevice_path_decision():
         ('Conda environment', get_conda_ctk()),
         ('CUDA_HOME', get_cuda_home('nvvm', 'libdevice')),
         ('System', get_system_ctk('nvvm', 'libdevice')),
+        ('Debian package', get_debian_pkg_libdevice()),
     ]
     by, libdir = _find_valid_path(options)
     return by, libdir
@@ -129,15 +130,17 @@ def get_cuda_home(*subdirs):
     path.
     """
     cuda_home = os.environ.get('CUDA_HOME')
+    if cuda_home is None:
+        # Try Windows CUDA installation without Anaconda
+        cuda_home = os.environ.get('CUDA_PATH')
     if cuda_home is not None:
         return os.path.join(cuda_home, *subdirs)
 
 
 def _get_nvvm_path():
     by, path = _get_nvvm_path_decision()
-    if by != 'NUMBAPRO_NVVM':
-        candidates = find_lib('nvvm', path)
-        path = max(candidates) if candidates else None
+    candidates = find_lib('nvvm', path)
+    path = max(candidates) if candidates else None
     return _env_path_tuple(by, path)
 
 
@@ -165,3 +168,14 @@ def get_cuda_paths():
         # Cache result
         get_cuda_paths._cached_result = d
         return d
+
+
+def get_debian_pkg_libdevice():
+    """
+    Return the Debian NVIDIA Maintainers-packaged libdevice location, if it
+    exists.
+    """
+    pkg_libdevice_location = '/usr/lib/nvidia-cuda-toolkit/libdevice'
+    if not os.path.exists(pkg_libdevice_location):
+        return None
+    return pkg_libdevice_location

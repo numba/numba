@@ -1,7 +1,6 @@
 """
 Assorted utilities for use in tests.
 """
-from __future__ import print_function
 
 import cmath
 import contextlib
@@ -9,6 +8,7 @@ import enum
 import errno
 import gc
 import math
+import platform
 import os
 import shutil
 import subprocess
@@ -18,16 +18,23 @@ import time
 import io
 import ctypes
 import multiprocessing as mp
+import warnings
 from contextlib import contextmanager
 
 import numpy as np
 
-from numba import config, errors, typing, utils, numpy_support, testing
-from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
-from numba.targets import cpu
-import numba.unittest_support as unittest
-from numba.runtime import rtsys
-from numba.six import PY2
+from numba import testing
+from numba.core import errors, typing, utils, config, cpu
+from numba.core.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
+import unittest
+from numba.core.runtime import rtsys
+from numba.np import numpy_support
+
+
+try:
+    import scipy
+except ImportError:
+    scipy = None
 
 
 enable_pyobj_flags = Flags()
@@ -44,11 +51,45 @@ nrt_flags.set("nrt")
 
 tag = testing.make_tag_decorator(['important', 'long_running'])
 
-_windows_py27 = (sys.platform.startswith('win32') and
-                 sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
-_reason = 'parfors not supported'
-skip_parfors_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+skip_parfors_unsupported = unittest.skipIf(_32bit, 'parfors not supported')
+skip_py38_or_later = unittest.skipIf(
+    utils.PYVERSION >= (3, 8),
+    "unsupported on py3.8 or later"
+)
+skip_tryexcept_unsupported = unittest.skipIf(
+    utils.PYVERSION < (3, 7),
+    "try-except unsupported on py3.6 or earlier"
+)
+skip_tryexcept_supported = unittest.skipIf(
+    utils.PYVERSION >= (3, 7),
+    "try-except supported on py3.7 or later"
+)
+
+_msg = "SciPy needed for test"
+skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
+
+_lnx_reason = 'linux only test'
+linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
+
+_is_armv7l = platform.machine() == 'armv7l'
+
+try:
+    import scipy.linalg.cython_lapack
+    has_lapack = True
+except ImportError:
+    has_lapack = False
+
+needs_lapack = unittest.skipUnless(has_lapack,
+                                   "LAPACK needs SciPy 1.0+")
+
+try:
+    import scipy.linalg.cython_blas
+    has_blas = True
+except ImportError:
+    has_blas = False
+
+needs_blas = unittest.skipUnless(has_blas, "BLAS needs SciPy 1.0+")
 
 
 class CompilationCache(object):
@@ -67,7 +108,7 @@ class CompilationCache(object):
         Compile the function or retrieve an already compiled result
         from the cache.
         """
-        from numba.targets.registry import cpu_target
+        from numba.core.registry import cpu_target
 
         cache_key = (func, args, return_type, flags)
         try:
@@ -151,7 +192,8 @@ class TestCase(unittest.TestCase):
 
 
     _bool_types = (bool, np.bool_)
-    _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,), (utils.text_type), ]
+    _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,),
+                       (bytes, np.bytes_)]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]
     _float_types = (float, np.floating)
@@ -405,7 +447,7 @@ class TestCase(unittest.TestCase):
             _assertNumberEqual(first.imag, second.imag, delta)
         elif isinstance(first, (np.timedelta64, np.datetime64)):
             # Since Np 1.16 NaT == NaT is False, so special comparison needed
-            if numpy_support.version >= (1, 16) and np.isnat(first):
+            if numpy_support.numpy_version >= (1, 16) and np.isnat(first):
                 self.assertEqual(np.isnat(first), np.isnat(second))
             else:
                 _assertNumberEqual(first, second, delta)
@@ -424,14 +466,6 @@ class TestCase(unittest.TestCase):
         got = cfunc()
         self.assertPreciseEqual(got, expected)
         return got, expected
-
-    if PY2:
-        @contextmanager
-        def subTest(self, *args, **kwargs):
-            """A stub TestCase.subTest backport.
-            This implementation is a no-op.
-            """
-            yield
 
 
 class SerialMixin(object):
@@ -501,14 +535,15 @@ def tweak_code(func, codestring=None, consts=None):
         codestring = co.co_code
     if consts is None:
         consts = co.co_consts
-    if sys.version_info >= (3,):
-        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
+    if utils.PYVERSION >= (3, 8):
+        new_code = tp(co.co_argcount, co.co_posonlyargcount,
+                      co.co_kwonlyargcount, co.co_nlocals,
                       co.co_stacksize, co.co_flags, codestring,
                       consts, co.co_names, co.co_varnames,
                       co.co_filename, co.co_name, co.co_firstlineno,
                       co.co_lnotab)
     else:
-        new_code = tp(co.co_argcount, co.co_nlocals,
+        new_code = tp(co.co_argcount, co.co_kwonlyargcount, co.co_nlocals,
                       co.co_stacksize, co.co_flags, codestring,
                       consts, co.co_names, co.co_varnames,
                       co.co_filename, co.co_name, co.co_firstlineno,
@@ -577,9 +612,8 @@ def import_dynamic(modname):
     Import and return a module of the given name.  Care is taken to
     avoid issues due to Python's internal directory caching.
     """
-    if sys.version_info >= (3, 3):
-        import importlib
-        importlib.invalidate_caches()
+    import importlib
+    importlib.invalidate_caches()
     __import__(modname)
     return sys.modules[modname]
 
@@ -591,7 +625,7 @@ def captured_output(stream_name):
     """Return a context manager used by captured_stdout/stdin/stderr
     that temporarily replaces the sys stream *stream_name* with a StringIO."""
     orig_stdout = getattr(sys, stream_name)
-    setattr(sys, stream_name, utils.StringIO())
+    setattr(sys, stream_name, io.StringIO())
     try:
         yield getattr(sys, stream_name)
     finally:
@@ -671,7 +705,7 @@ def forbid_codegen():
 
     If code generation is invoked, a RuntimeError is raised.
     """
-    from numba.targets import codegen
+    from numba.core import codegen
     patchpoints = ['CodeLibrary._finalize_final_module']
 
     old = {}
@@ -780,3 +814,17 @@ def _remote_runner(fn, qout):
         qout.put(stdout.getvalue())
     qout.put(stderr.getvalue())
     sys.exit(exitcode)
+
+class CheckWarningsMixin(object):
+    @contextlib.contextmanager
+    def check_warnings(self, messages, category=RuntimeWarning):
+        with warnings.catch_warnings(record=True) as catch:
+            warnings.simplefilter("always")
+            yield
+        found = 0
+        for w in catch:
+            for m in messages:
+                if m in str(w.message):
+                    self.assertEqual(w.category, category)
+                    found += 1
+        self.assertEqual(found, len(messages))

@@ -3,7 +3,6 @@ Generate documentation for all registered implementation for lowering
 using reStructured text.
 """
 
-from __future__ import print_function
 
 from subprocess import check_output
 
@@ -17,7 +16,7 @@ import inspect
 from functools import partial
 
 import numba
-from numba.targets.registry import cpu_target
+from numba.core.registry import cpu_target
 
 
 def git_hash():
@@ -64,7 +63,8 @@ def format_signature(sig):
     return '`({0})`'.format(', '.join(out))
 
 
-github_url = 'https://github.com/numba/numba/blob/{commit}/{path}#L{firstline}-L{lastline}'
+github_url = ('https://github.com/numba/numba/blob/'
+              '{commit}/{path}#L{firstline}-L{lastline}')
 
 description = """
 This lists all lowering definition registered to the CPU target.

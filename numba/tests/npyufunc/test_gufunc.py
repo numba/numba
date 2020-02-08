@@ -1,12 +1,10 @@
-from __future__ import absolute_import, print_function, division
-
 import numpy as np
 import numpy.core.umath_tests as ut
 
-from numba import unittest_support as unittest
 from numba import void, float32, jit, guvectorize
-from numba.npyufunc import GUVectorize
+from numba.np.ufunc import GUVectorize
 from ..support import tag, TestCase
+import unittest
 
 
 def matmulcore(A, B, C):
@@ -36,7 +34,6 @@ class TestGUFunc(TestCase):
 
         np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
 
-    @tag('important')
     def test_gufunc(self):
         gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
                              target=self.target)
@@ -45,7 +42,6 @@ class TestGUFunc(TestCase):
 
         self.check_matmul_gufunc(gufunc)
 
-    @tag('important')
     def test_guvectorize_decor(self):
         gufunc = guvectorize([void(float32[:,:], float32[:,:], float32[:,:])],
                              '(m,n),(n,p)->(m,p)',
@@ -78,7 +74,6 @@ class TestGUVectorizeScalar(TestCase):
     """
     target = 'cpu'
 
-    @tag('important')
     def test_scalar_output(self):
         """
         Note that scalar output is a 0-dimension array that acts as
@@ -104,7 +99,6 @@ class TestGUVectorizeScalar(TestCase):
         for i in range(inp.shape[0]):
             assert out[i] == inp[i].sum()
 
-    @tag('important')
     def test_scalar_input(self):
 
         @guvectorize(['int32[:], int32[:], int32[:]'], '(n),()->(n)',

@@ -1,5 +1,4 @@
 # Tests numpy methods of <class 'function'>
-from __future__ import print_function, absolute_import, division
 
 import itertools
 import math
@@ -8,14 +7,18 @@ from functools import partial
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba.compiler import Flags
-from numba import jit, njit, typeof, types
-from numba.numpy_support import version as np_version
-from numba.errors import TypingError
-from numba.config import IS_WIN32, IS_32BITS
-from .support import TestCase, CompilationCache, MemoryLeakMixin
-from .matmul_usecase import needs_blas
+from numba.core.compiler import Flags
+from numba import jit, njit, typeof
+from numba.core import types
+from numba.np.numpy_support import numpy_version
+from numba.core.errors import TypingError
+from numba.core.config import IS_WIN32, IS_32BITS
+from numba.core.utils import pysignature
+from numba.np.arraymath import cross2d
+from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
+                                 needs_blas)
+import unittest
+
 
 no_pyobj_flags = Flags()
 no_pyobj_flags.set("nrt")
@@ -31,6 +34,18 @@ def angle1(x):
 
 def angle2(x, deg):
     return np.angle(x, deg)
+
+
+def array_equal(a, b):
+    return np.array_equal(a, b)
+
+
+def append(arr, values, axis):
+    return np.append(arr, values, axis=axis)
+
+
+def count_nonzero(arr, axis):
+    return np.count_nonzero(arr, axis=axis)
 
 
 def delete(arr, obj):
@@ -121,12 +136,60 @@ def tril_m_k(m, k=0):
     return np.tril(m, k)
 
 
+def tril_indices_n(n):
+    return np.tril_indices(n)
+
+
+def tril_indices_n_k(n, k=0):
+    return np.tril_indices(n, k)
+
+
+def tril_indices_n_m(n, m=None):
+    return np.tril_indices(n, m=m)
+
+
+def tril_indices_n_k_m(n, k=0, m=None):
+    return np.tril_indices(n, k, m)
+
+
+def tril_indices_from_arr(arr):
+    return np.tril_indices_from(arr)
+
+
+def tril_indices_from_arr_k(arr, k=0):
+    return np.tril_indices_from(arr, k)
+
+
 def triu_m(m):
     return np.triu(m)
 
 
 def triu_m_k(m, k=0):
     return np.triu(m, k)
+
+
+def triu_indices_n(n):
+    return np.triu_indices(n)
+
+
+def triu_indices_n_k(n, k=0):
+    return np.triu_indices(n, k)
+
+
+def triu_indices_n_m(n, m=None):
+    return np.triu_indices(n, m=m)
+
+
+def triu_indices_n_k_m(n, k=0, m=None):
+    return np.triu_indices(n, k, m)
+
+
+def triu_indices_from_arr(arr):
+    return np.triu_indices_from(arr)
+
+
+def triu_indices_from_arr_k(arr, k=0):
+    return np.triu_indices_from(arr, k)
 
 
 def vander(x, N=None, increasing=False):
@@ -219,6 +282,10 @@ def np_hanning(M):
 
 def np_kaiser(M, beta):
     return np.kaiser(M, beta)
+
+
+def np_cross(a, b):
+    return np.cross(a, b)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -374,6 +441,110 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = np.array(x_values)
         x_types = [types.complex64, types.complex128]
         check(x_types, x_values)
+
+    def test_array_equal(self):
+        def arrays():
+            yield np.array([]), np.array([])
+            yield np.array([1, 2]), np.array([1, 2])
+            yield np.array([]), np.array([1])
+            x = np.arange(10).reshape(5, 2)
+            x[1][1] = 30
+            yield np.arange(10).reshape(5, 2), x
+            yield x, x
+            yield (1, 2, 3), (1, 2, 3)
+            yield 2, 2
+            yield 3, 2
+            yield True, True
+            yield True, False
+            yield True, 2
+            yield True, 1
+            yield False, 0
+
+        pyfunc = array_equal
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, obj in arrays():
+            expected = pyfunc(arr, obj)
+            got = cfunc(arr, obj)
+            self.assertPreciseEqual(expected, got)
+
+    def test_array_equal_exception(self):
+        pyfunc = array_equal
+        cfunc = jit(nopython=True)(pyfunc)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(3 * 4).reshape(3, 4), None)
+        self.assertIn(
+            'Both arguments to "array_equals" must be array-like',
+            str(raises.exception)
+        )
+
+    def test_count_nonzero(self):
+
+        def arrays():
+            yield np.array([]), None
+            yield np.zeros(10), None
+            yield np.arange(10), None
+            yield np.arange(3 * 4 * 5).reshape(3, 4, 5), None
+            yield np.arange(3 * 4).reshape(3, 4), 0
+            yield np.arange(3 * 4).reshape(3, 4), 1
+
+        pyfunc = count_nonzero
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, axis in arrays():
+            expected = pyfunc(arr, axis)
+            got = cfunc(arr, axis)
+            self.assertPreciseEqual(expected, got)
+
+    def test_np_append(self):
+        def arrays():
+            yield 2, 2, None
+            yield np.arange(10), 3, None
+            yield np.arange(10), np.arange(3), None
+            yield np.arange(10).reshape(5, 2), np.arange(3), None
+            yield np.array([[1, 2, 3], [4, 5, 6]]), np.array([[7, 8, 9]]), 0
+            arr = np.array([[1, 2, 3], [4, 5, 6]])
+            yield arr, arr, 1
+
+        pyfunc = append
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, obj, axis in arrays():
+            expected = pyfunc(arr, obj, axis)
+            got = cfunc(arr, obj, axis)
+            self.assertPreciseEqual(expected, got)
+
+    def test_np_append_exceptions(self):
+        pyfunc = append
+        cfunc = jit(nopython=True)(pyfunc)
+        arr = np.array([[1, 2, 3], [4, 5, 6]])
+        values = np.array([[7, 8, 9]])
+        axis = 0
+
+        # first argument must be array-like
+        with self.assertRaises(TypingError) as raises:
+            cfunc(None, values, axis)
+        self.assertIn(
+            'The first argument "arr" must be array-like',
+            str(raises.exception)
+        )
+
+        # second argument must also be array-like
+        with self.assertRaises(TypingError) as raises:
+            cfunc(arr, None, axis)
+        self.assertIn(
+            'The second argument "values" must be array-like',
+            str(raises.exception)
+        )
+
+        # third argument must be either nonelike or an integer
+        with self.assertRaises(TypingError) as raises:
+            cfunc(arr, values, axis=0.0)
+        self.assertIn(
+            'The third argument "axis" must be an integer',
+            str(raises.exception)
+        )
 
     # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
     @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
@@ -636,13 +807,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         bins2 = np.float64([1, 3, 4.5, 8, float('inf'), float('-inf')])
         bins3 = np.float64([1, 3, 4.5, 8, float('inf'), float('-inf')]
                            + [float('nan')] * 10)
-        if np_version >= (1, 10):
-            all_bins = [bins1, bins2, bins3]
-            xs = [values, values.reshape((3, 4))]
-        else:
-            # Numpy < 1.10 had trouble with NaNs and N-d arrays
-            all_bins = [bins1, bins2]
-            xs = [values]
+
+        all_bins = [bins1, bins2, bins3]
+        xs = [values, values.reshape((3, 4))]
 
         # 2-ary digitize()
         for bins in all_bins:
@@ -727,26 +894,24 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_correlate(self):
         self._test_correlate_convolve(correlate)
-        # correlate supports 0 dimension arrays
-        _a = np.ones(shape=(0,))
-        _b = np.arange(5)
-        cfunc = jit(nopython=True)(correlate)
-        for x, y in [(_a, _b), (_b, _a), (_a, _a)]:
-            expected = correlate(x, y)
-            got = cfunc(x, y)
-            self.assertPreciseEqual(expected, got)
+        if numpy_version < (1, 18):
+            # correlate supported 0 dimension arrays until 1.18
+            _a = np.ones(shape=(0,))
+            _b = np.arange(5)
+            cfunc = jit(nopython=True)(correlate)
+            for x, y in [(_a, _b), (_b, _a), (_a, _a)]:
+                expected = correlate(x, y)
+                got = cfunc(x, y)
+                self.assertPreciseEqual(expected, got)
 
-    def test_convolve(self):
-        self._test_correlate_convolve(convolve)
-
-    def test_convolve_exceptions(self):
+    def _test_correlate_convolve_exceptions(self, fn):
         # Exceptions leak references
         self.disable_leak_check()
 
         # convolve raises if either array has a 0 dimension
         _a = np.ones(shape=(0,))
         _b = np.arange(5)
-        cfunc = jit(nopython=True)(convolve)
+        cfunc = jit(nopython=True)(fn)
         for x, y in [(_a, _b), (_b, _a)]:
             with self.assertRaises(ValueError) as raises:
                 cfunc(x, y)
@@ -754,6 +919,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertIn("'a' cannot be empty", str(raises.exception))
             else:
                 self.assertIn("'v' cannot be empty", str(raises.exception))
+
+    @unittest.skipIf(numpy_version < (1, 18), "NumPy > 1.17 required")
+    def test_correlate_exceptions(self):
+        # correlate supported 0 dimension arrays until 1.18
+        self._test_correlate_convolve_exceptions(correlate)
+
+    def test_convolve(self):
+        self._test_correlate_convolve(convolve)
+
+    def test_convolve_exceptions(self):
+        self._test_correlate_convolve_exceptions(convolve)
 
     def _check_output(self, pyfunc, cfunc, params, abs_tol=None):
         expected = pyfunc(**params)
@@ -825,19 +1001,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def _check_n(N):
             with self.assertTypingError() as raises:
                 cfunc(x, N=N)
-            assert "Second argument N must be None or an integer" in str(raises.exception)
+            self.assertIn("Second argument N must be None or an integer",
+                          str(raises.exception))
 
         for N in 1.1, True, np.inf, [1, 2]:
             _check_n(N)
 
         with self.assertRaises(ValueError) as raises:
             cfunc(x, N=-1)
-        assert "Negative dimensions are not allowed" in str(raises.exception)
+        self.assertIn("Negative dimensions are not allowed",
+                      str(raises.exception))
 
         def _check_1d(x):
             with self.assertRaises(ValueError) as raises:
                 cfunc(x)
-            self.assertEqual("x must be a one-dimensional array or sequence.", str(raises.exception))
+            self.assertEqual("x must be a one-dimensional array or sequence.",
+                             str(raises.exception))
 
         x = np.arange(27).reshape((3, 3, 3))
         _check_1d(x)
@@ -867,7 +1046,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             return np.arange(-4, 8)  # number of rows
 
         def m_variations():
-            return itertools.chain.from_iterable(([None], range(-5, 9)))  # number of columns
+            # number of columns
+            return itertools.chain.from_iterable(([None], range(-5, 9)))
 
         # N supplied, M and k defaulted
         for n in n_variations():
@@ -911,7 +1091,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             return np.arange(-4, 8)  # number of rows
 
         def m_variations():
-            return itertools.chain.from_iterable(([None], range(-5, 9)))  # number of columns
+            # number of columns
+            return itertools.chain.from_iterable(([None], range(-5, 9)))
 
         def k_variations():
             return np.arange(-10, 10)  # offset
@@ -1025,7 +1206,108 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         a = np.ones((5, 6))
         with self.assertTypingError() as raises:
             cfunc(a, k=1.5)
-        assert "k must be an integer" in str(raises.exception)
+            self.assertIn("k must be an integer", str(raises.exception))
+
+    def _triangular_indices_tests_base(self, pyfunc, args):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for x in args:
+            expected = pyfunc(*x)
+            got = cfunc(*x)
+            self.assertEqual(type(expected), type(got))
+            self.assertEqual(len(expected), len(got))
+            for e, g in zip(expected, got):
+                np.testing.assert_array_equal(e, g)
+
+    def _triangular_indices_tests_n(self, pyfunc):
+        self._triangular_indices_tests_base(
+            pyfunc,
+            [[n] for n in range(10)]
+        )
+
+    def _triangular_indices_tests_n_k(self, pyfunc):
+        self._triangular_indices_tests_base(
+            pyfunc,
+            [[n, k] for n in range(10) for k in range(-n - 1, n + 2)]
+        )
+
+    def _triangular_indices_tests_n_m(self, pyfunc):
+        self._triangular_indices_tests_base(
+            pyfunc,
+            [[n, m] for n in range(10) for m in range(2 * n)]
+        )
+
+    def _triangular_indices_tests_n_k_m(self, pyfunc):
+        self._triangular_indices_tests_base(
+            pyfunc,
+            [[n, k, m] for n in range(10)
+             for k in range(-n - 1, n + 2)
+             for m in range(2 * n)]
+        )
+
+        # Check jitted version works with default values for kwargs
+        cfunc = jit(nopython=True)(pyfunc)
+        cfunc(1)
+
+    def _triangular_indices_from_tests_arr(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for dtype in [int, float, bool]:
+            for n,m in itertools.product(range(10), range(10)):
+                arr = np.ones((n, m), dtype)
+                expected = pyfunc(arr)
+                got = cfunc(arr)
+                self.assertEqual(type(expected), type(got))
+                self.assertEqual(len(expected), len(got))
+                for e, g in zip(expected, got):
+                    np.testing.assert_array_equal(e, g)
+
+    def _triangular_indices_from_tests_arr_k(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for dtype in [int, float, bool]:
+            for n,m in itertools.product(range(10), range(10)):
+                arr = np.ones((n, m), dtype)
+                for k in range(-10, 10):
+                    expected = pyfunc(arr)
+                    got = cfunc(arr)
+                    self.assertEqual(type(expected), type(got))
+                    self.assertEqual(len(expected), len(got))
+                    for e, g in zip(expected, got):
+                        np.testing.assert_array_equal(e, g)
+
+    def _triangular_indices_exceptions(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        parameters = pysignature(pyfunc).parameters
+
+        with self.assertTypingError() as raises:
+            cfunc(1.0)
+        self.assertIn("n must be an integer", str(raises.exception))
+
+        if 'k' in parameters:
+            with self.assertTypingError() as raises:
+                cfunc(1, k=1.0)
+            self.assertIn("k must be an integer", str(raises.exception))
+
+        if 'm' in parameters:
+            with self.assertTypingError() as raises:
+                cfunc(1, m=1.0)
+            self.assertIn("m must be an integer", str(raises.exception))
+
+    def _triangular_indices_from_exceptions(self, pyfunc, test_k=True):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for ndims in [0, 1, 3]:
+            a = np.ones([5] * ndims)
+            with self.assertTypingError() as raises:
+                cfunc(a)
+            self.assertIn("input array must be 2-d", str(raises.exception))
+
+        if test_k:
+            a = np.ones([5, 5])
+            with self.assertTypingError() as raises:
+                cfunc(a, k=0.5)
+            self.assertIn("k must be an integer", str(raises.exception))
 
     def test_tril_basic(self):
         self._triangular_matrix_tests_m(tril_m)
@@ -1034,6 +1316,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_tril_exceptions(self):
         self._triangular_matrix_exceptions(tril_m_k)
 
+    def test_tril_indices(self):
+        self._triangular_indices_tests_n(tril_indices_n)
+        self._triangular_indices_tests_n_k(tril_indices_n_k)
+        self._triangular_indices_tests_n_m(tril_indices_n_m)
+        self._triangular_indices_tests_n_k_m(tril_indices_n_k_m)
+        self._triangular_indices_exceptions(tril_indices_n)
+        self._triangular_indices_exceptions(tril_indices_n_k)
+        self._triangular_indices_exceptions(tril_indices_n_m)
+        self._triangular_indices_exceptions(tril_indices_n_k_m)
+
+    def test_tril_indices_from(self):
+        self._triangular_indices_from_tests_arr(tril_indices_from_arr)
+        self._triangular_indices_from_tests_arr_k(tril_indices_from_arr_k)
+        self._triangular_indices_from_exceptions(tril_indices_from_arr, False)
+        self._triangular_indices_from_exceptions(tril_indices_from_arr_k, True)
+
     def test_triu_basic(self):
         self._triangular_matrix_tests_m(triu_m)
         self._triangular_matrix_tests_m_k(triu_m_k)
@@ -1041,20 +1339,38 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_triu_exceptions(self):
         self._triangular_matrix_exceptions(triu_m_k)
 
+    def test_triu_indices(self):
+        self._triangular_indices_tests_n(triu_indices_n)
+        self._triangular_indices_tests_n_k(triu_indices_n_k)
+        self._triangular_indices_tests_n_m(triu_indices_n_m)
+        self._triangular_indices_tests_n_k_m(triu_indices_n_k_m)
+        self._triangular_indices_exceptions(triu_indices_n)
+        self._triangular_indices_exceptions(triu_indices_n_k)
+        self._triangular_indices_exceptions(triu_indices_n_m)
+        self._triangular_indices_exceptions(triu_indices_n_k_m)
+
+    def test_triu_indices_from(self):
+        self._triangular_indices_from_tests_arr(triu_indices_from_arr)
+        self._triangular_indices_from_tests_arr_k(triu_indices_from_arr_k)
+        self._triangular_indices_from_exceptions(triu_indices_from_arr, False)
+        self._triangular_indices_from_exceptions(triu_indices_from_arr_k, True)
+
     def partition_sanity_check(self, pyfunc, cfunc, a, kth):
-        # as NumPy uses a different algorithm, we do not expect to match outputs exactly...
+        # as NumPy uses a different algorithm, we do not expect to
+        # match outputs exactly...
         expected = pyfunc(a, kth)
         got = cfunc(a, kth)
 
-        # ... but we do expect the unordered collection of elements up to kth to tie out
+        # but we do expect the unordered collection of elements up to the
+        # kth to tie out
         self.assertPreciseEqual(np.unique(expected[:kth]), np.unique(got[:kth]))
 
-        # ... likewise the unordered collection of elements from kth onwards
+        # likewise the unordered collection of elements from the kth onwards
         self.assertPreciseEqual(np.unique(expected[kth:]), np.unique(got[kth:]))
 
     def test_partition_fuzz(self):
         # inspired by the test of the same name in:
-        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -1064,18 +1380,21 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.rnd.shuffle(d)
                 d = d % self.rnd.randint(2, 30)
                 idx = self.rnd.randint(d.size)
-                kth = [0, idx, i, i + 1, -idx, -i]  # include some negative kth's
+                kth = [0, idx, i, i + 1, -idx, -i]  # include negative kth's
                 tgt = np.sort(d)[kth]
-                self.assertPreciseEqual(cfunc(d, kth)[kth], tgt)  # a -> array
-                self.assertPreciseEqual(cfunc(d.tolist(), kth)[kth], tgt)  # a -> list
-                self.assertPreciseEqual(cfunc(tuple(d.tolist()), kth)[kth], tgt)  # a -> tuple
+                self.assertPreciseEqual(cfunc(d, kth)[kth],
+                                        tgt)  # a -> array
+                self.assertPreciseEqual(cfunc(d.tolist(), kth)[kth],
+                                        tgt)  # a -> list
+                self.assertPreciseEqual(cfunc(tuple(d.tolist()), kth)[kth],
+                                        tgt)  # a -> tuple
 
                 for k in kth:
                     self.partition_sanity_check(pyfunc, cfunc, d, k)
 
     def test_partition_exception_out_of_range(self):
         # inspired by the test of the same name in:
-        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -1096,7 +1415,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_partition_exception_non_integer_kth(self):
         # inspired by the test of the same name in:
-        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -1106,7 +1425,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def _check(a, kth):
             with self.assertTypingError() as raises:
                 cfunc(a, kth)
-            self.assertIn("Partition index must be integer", str(raises.exception))
+            self.assertIn("Partition index must be integer",
+                          str(raises.exception))
 
         a = np.arange(10)
         _check(a, 9.0)
@@ -1123,7 +1443,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def _check(a, kth):
             with self.assertTypingError() as raises:
                 cfunc(a, kth)
-            self.assertIn('The first argument must be an array-like', str(raises.exception))
+            self.assertIn('The first argument must be an array-like',
+                          str(raises.exception))
 
         _check(4, 0)
         _check('Sausages', 0)
@@ -1138,7 +1459,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         def _check(a, kth):
             with self.assertTypingError() as raises:
                 cfunc(a, kth)
-            self.assertIn('The first argument must be at least 1-D (found 0-D)', str(raises.exception))
+            self.assertIn('The first argument must be at least 1-D (found 0-D)',
+                          str(raises.exception))
 
         _check(np.array(1), 0)
 
@@ -1158,7 +1480,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_partition_empty_array(self):
         # inspired by the test of the same name in:
-        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -1177,7 +1499,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_partition_basic(self):
         # inspired by the test of the same name in:
-        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py
+        # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501
         pyfunc = partition
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -1279,8 +1601,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def assert_partitioned(self, pyfunc, cfunc, d, kth):
         prev = 0
         for k in np.sort(kth):
-            np.testing.assert_array_less(d[prev:k], d[k], err_msg='kth %d' % k)
-            assert (d[k:] >= d[k]).all(), "kth %d, %r not greater equal %d" % (k, d[k:], d[k])
+            np.testing.assert_array_less(d[prev:k], d[k],
+                                         err_msg='kth %d' % k)
+            self.assertTrue((d[k:] >= d[k]).all(),
+                            msg=("kth %d, %r not greater equal "
+                                 "%d" % (k, d[k:], d[k])))
             prev = k + 1
             self.partition_sanity_check(pyfunc, cfunc, d, k)
 
@@ -1328,8 +1653,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected[:, :, kth], got[:, :, kth])
 
             for s in np.ndindex(expected.shape[:-1]):
-                self.assertPreciseEqual(np.unique(expected[s][:kth]), np.unique(got[s][:kth]))
-                self.assertPreciseEqual(np.unique(expected[s][kth:]), np.unique(got[s][kth:]))
+                self.assertPreciseEqual(np.unique(expected[s][:kth]),
+                                        np.unique(got[s][:kth]))
+                self.assertPreciseEqual(np.unique(expected[s][kth:]),
+                                        np.unique(got[s][kth:]))
 
         def a_variations(a):
             yield a
@@ -1337,7 +1664,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.asfortranarray(a)
             yield np.full_like(a, fill_value=np.nan)
             yield np.full_like(a, fill_value=np.inf)
-            yield (((1.0, 3.142, -np.inf, 3),),)  # multi-dimensional tuple input
+            # multi-dimensional tuple input
+            yield (((1.0, 3.142, -np.inf, 3),),)
 
         a = np.linspace(1, 10, 48)
         a[4:7] = np.nan
@@ -1357,7 +1685,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for kth in True, False, -1, 0, 1:
                 self.partition_sanity_check(pyfunc, cfunc, d, kth)
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_invalid_ddof(self):
         pyfunc = cov
@@ -1371,12 +1698,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for ddof in np.arange(4), 4j:
             with self.assertTypingError() as raises:
                 cfunc(m, ddof=ddof)
-            self.assertIn('ddof must be a real numerical scalar type', str(raises.exception))
+            self.assertIn('ddof must be a real numerical scalar type',
+                          str(raises.exception))
 
         for ddof in np.nan, np.inf:
             with self.assertRaises(ValueError) as raises:
                 cfunc(m, ddof=ddof)
-            self.assertIn('Cannot convert non-finite ddof to integer', str(raises.exception))
+            self.assertIn('Cannot convert non-finite ddof to integer',
+                          str(raises.exception))
 
         for ddof in 1.1, -0.7:
             with self.assertRaises(ValueError) as raises:
@@ -1419,19 +1748,16 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for input_arr in input_variations():
             _check({first_arg_name: input_arr})
 
-    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
     @needs_blas
     def test_corrcoef_basic(self):
         pyfunc = corrcoef
         self.corr_corrcoef_basic(pyfunc, first_arg_name='x')
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_basic(self):
         pyfunc = cov
         self.corr_corrcoef_basic(pyfunc, first_arg_name='m')
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_explicit_arguments(self):
         pyfunc = cov
@@ -1444,11 +1770,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         bias_choices = False, True
         ddof_choice = None, -1, 0, 1, 3.0, True
 
-        for y, rowvar, bias, ddof in itertools.product(y_choices, rowvar_choices, bias_choices, ddof_choice):
-            params = {'m': m, 'y': y, 'ddof': ddof, 'bias': bias, 'rowvar': rowvar}
+        products = itertools.product(y_choices, rowvar_choices,
+                                     bias_choices, ddof_choice)
+        for y, rowvar, bias, ddof in products:
+            params = {'m': m, 'y': y, 'ddof': ddof,
+                      'bias': bias, 'rowvar': rowvar}
             _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
     @needs_blas
     def test_corrcoef_explicit_arguments(self):
         pyfunc = corrcoef
@@ -1468,9 +1796,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check = partial(self._check_output, pyfunc, cfunc, abs_tol=1e-14)
 
         # some of these examples borrowed from numpy doc string examples:
-        # https://github.com/numpy/numpy/blob/v1.15.0/numpy/lib/function_base.py#L2199-L2231
+        # https://github.com/numpy/numpy/blob/v1.15.0/numpy/lib/function_base.py#L2199-L2231    # noqa: E501
         # some borrowed from TestCov and TestCorrCoef:
-        # https://github.com/numpy/numpy/blob/80d3a7a/numpy/lib/tests/test_function_base.py
+        # https://github.com/numpy/numpy/blob/80d3a7a/numpy/lib/tests/test_function_base.py    # noqa: E501
         m = np.array([-2.1, -1, 4.3])
         y = np.array([3, 1.1, 0.12])
         params = {first_arg_name: m, 'y': y}
@@ -1510,7 +1838,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {first_arg_name: m, 'y': y}
         _check(params)
 
-        # The following tests pass with numpy version >= 1.10, but fail with 1.9
         m = np.array([-2.1, -1, 4.3])
         y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12]])
         params = {first_arg_name: m, 'y': y}
@@ -1521,10 +1848,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             y = np.array([[3, 1.1, 0.12], [3, 1.1, 0.12], [4, 1.1, 0.12]])
             params = {first_arg_name: m, 'y': y, 'rowvar': rowvar}
             _check(params)
-            params = {first_arg_name: y, 'y': m, 'rowvar': rowvar}  # swap m and y
+            # swap m and y
+            params = {first_arg_name: y, 'y': m, 'rowvar': rowvar}
             _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "corrcoef needs Numpy 1.10+")
     @needs_blas
     def test_corrcoef_edge_cases(self):
         pyfunc = corrcoef
@@ -1537,7 +1864,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             params = {'x': x}
             _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 11), "behaviour per Numpy 1.11+")
     @needs_blas
     def test_corrcoef_edge_case_extreme_values(self):
         pyfunc = corrcoef
@@ -1549,19 +1875,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'x': x}
         _check(params)
 
-        # Note
-        # ----
-        # Numpy 1.10 output is:
-        # [[ 0. -0.]
-        #  [-0.  0.]]
-        #
-        # Numpy 1.11+ output is:
-        # [[ 1. -1.]
-        #  [-1.  1.]]
-        #
-        # Numba implementation replicates Numpy 1.11+ behaviour
-
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_edge_cases(self):
         pyfunc = cov
@@ -1575,7 +1888,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'m': m, 'ddof': 5}
         _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "cov needs Numpy 1.10+")
     @needs_blas
     def test_cov_exceptions(self):
         pyfunc = cov
@@ -1615,16 +1927,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y = np.arange(4)
         with self.assertRaises(ValueError) as raises:
             cfunc(m, y=y)
-        self.assertIn('m and y have incompatible dimensions', str(raises.exception))
+        self.assertIn('m and y have incompatible dimensions',
+                      str(raises.exception))
         # Numpy raises ValueError: all the input array dimensions except for the
         # concatenation axis must match exactly.
 
         m = np.array([-2.1, -1, 4.3]).reshape(1, 3)
         with self.assertRaises(RuntimeError) as raises:
             cfunc(m)
-        self.assertIn('2D array containing a single row is unsupported', str(raises.exception))
+        self.assertIn('2D array containing a single row is unsupported',
+                      str(raises.exception))
 
-    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_basic(self):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
@@ -1655,7 +1968,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     params = {'ary': ary, 'to_begin': a, 'to_end': b}
                     _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_edge_cases(self):
         # NOTE: NumPy 1.16 has a variety of behaviours for type conversion, see
         # https://github.com/numpy/numpy/issues/13103, as this is not resolved
@@ -1683,7 +1995,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield [4, 5, 6]
             yield np.array([])
             yield ()
-            if np_version < (1, 16):
+            if numpy_version < (1, 16):
                 yield np.array([np.nan, np.inf, 4, -np.inf, 3.142])
                 parts = np.array([np.nan, 2, np.nan, 4, 5, 6, 7, 8, 9])
                 a = parts + 1j * parts[::-1]
@@ -1701,7 +2013,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         ## fixed here: https://github.com/numpy/numpy/pull/12713 for np 1.16
         to_begin = np.array([1, 2, 3.142, np.nan, 5, 6, 7, -8, np.nan])
         params = {'ary': np.arange(-4, 6), 'to_begin': to_begin}
-        if np_version < (1, 16):
+        if numpy_version < (1, 16):
             _check(params)
         else:
             # np 1.16 raises, cannot cast float64 array to intp array
@@ -1712,7 +2024,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(params)
 
         params = {'ary': 3, 'to_begin': 3.142}
-        if np_version < (1, 16):
+        if numpy_version < (1, 16):
             _check(params)
         else:
             _check_raises_type_error(params, 'to_begin')
@@ -1721,7 +2033,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             _check(params)
 
         params = {'ary': np.arange(-4, 6), 'to_begin': -5, 'to_end': False}
-        if IS_WIN32 and not IS_32BITS and np_version >= (1, 16):
+        if IS_WIN32 and not IS_32BITS and numpy_version >= (1, 16):
             # XFAIL on 64-bits windows + numpy 1.16. See #3898
             with self.assertRaises(TypingError) as raises:
                 _check(params)
@@ -1735,7 +2047,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # params = {'ary': np.array([5, 6], dtype=np.int16), 'to_end': [1e100]}
         # _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 12), "ediff1d needs Numpy 1.12+")
     def test_ediff1d_exceptions(self):
         pyfunc = ediff1d
         cfunc = jit(nopython=True)(pyfunc)
@@ -1766,7 +2077,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield ()
 
         def shift_variations():
-            return itertools.chain.from_iterable(((True, False), range(-10, 10)))
+            return itertools.chain.from_iterable(((True, False),
+                                                  range(-10, 10)))
 
         for a in a_variations():
             for shift in shift_variations():
@@ -2119,7 +2431,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             self.assertIn('y cannot be a scalar', str(e.exception))
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_basic(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2339,7 +2650,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # random_grid
         yield self.rnd.rand(1 + ndata * 2) * 4.0 + 1.3
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2389,7 +2699,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(x, xp, fp)
             self.assertPreciseEqual(expected, got, abs_tol=atol)
 
-    @unittest.skipUnless(np_version >= (1, 12), "complex interp: Numpy 1.12+")
     def test_interp_complex_stress_tests(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2417,7 +2726,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.rnd.shuffle(fp)
             np.testing.assert_allclose(expected, got, equal_nan=True)
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_exceptions(self):
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
@@ -2487,28 +2795,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         self.assertIn(complex_dtype_msg, str(e.exception))
 
-    @unittest.skipUnless((1, 10) <= np_version < (1, 12), 'complex interp: Numpy 1.12+')
-    def test_interp_pre_112_exceptions(self):
-        pyfunc = interp
-        cfunc = jit(nopython=True)(pyfunc)
-
-        # Exceptions leak references
-        self.disable_leak_check()
-
-        x = np.arange(6)
-        xp = np.arange(6)
-        fp = np.arange(6) * 1j
-
-        with self.assertTypingError() as e:
-            cfunc(x, xp, fp)
-
-        complex_dtype_msg = (
-            "Cannot cast array data from complex dtype "
-            "to float64 dtype"
-        )
-        self.assertIn(complex_dtype_msg, str(e.exception))
-
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_non_finite_calibration(self):
         # examples from
         # https://github.com/numpy/numpy/issues/12951
@@ -2528,10 +2814,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         params = {'x': x, 'xp': xp, 'fp': fp}
         _check(params)
 
-    @unittest.skipUnless(np_version >= (1, 10), "interp needs Numpy 1.10+")
     def test_interp_supplemental_tests(self):
         # inspired by class TestInterp
-        # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py
+        # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py    # noqa: E501
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -2570,10 +2855,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         fp = np.sin(xp)
         np.testing.assert_almost_equal(cfunc(np.pi, xp, fp), 0.0)
 
-    @unittest.skipUnless(np_version >= (1, 12), "complex interp: Numpy 1.10+")
     def test_interp_supplemental_complex_tests(self):
         # inspired by class TestInterp
-        # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py
+        # https://github.com/numpy/numpy/blob/f5b6850f231/numpy/lib/tests/test_function_base.py    # noqa: E501
         pyfunc = interp
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -2583,11 +2867,27 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         y0 = x0 + (1 + x0) * 1.0j
         np.testing.assert_almost_equal(cfunc(x0, x, y), y0)
 
+    def test_interp_float_precision_handled_per_numpy(self):
+        # test cases from https://github.com/numba/numba/issues/4890
+        pyfunc = interp
+        cfunc = jit(nopython=True)(pyfunc)
+        dtypes = [np.float32, np.float64, np.int32, np.int64]
+
+        for combo in itertools.combinations_with_replacement(dtypes, 3):
+            xp_dtype, fp_dtype, x_dtype = combo
+            xp = np.arange(10, dtype=xp_dtype)
+            fp = (xp ** 2).astype(fp_dtype)
+            x = np.linspace(2, 3, 10, dtype=x_dtype)
+
+            expected = pyfunc(x, xp, fp)
+            got = cfunc(x, xp, fp)
+            self.assertPreciseEqual(expected, got)
+
     def test_asarray(self):
 
         def input_variations():
             """
-            To quote from: https://docs.scipy.org/doc/numpy/reference/generated/numpy.asarray.html
+            To quote from: https://docs.scipy.org/doc/numpy/reference/generated/numpy.asarray.html    # noqa: E501
             Input data, in any form that can be converted to an array.
             This includes:
             * lists
@@ -2665,7 +2965,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             def check(a, repeats):
                 self.assertPreciseEqual(pyfunc(a, repeats), nbfunc(a, repeats))
 
-            # test array argumens
+            # test array arguments
             target_numpy_values = [
                 np.ones(1),
                 np.arange(1000),
@@ -2697,7 +2997,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 [0, 1, 2],
                 (0, 1, 2),
             ]
-            for i in itertools.chain(target_numpy_inputs, target_non_numpy_inputs):
+            for i in itertools.chain(target_numpy_inputs,
+                                     target_non_numpy_inputs):
                 check(i, repeats=0)
                 check(i, repeats=1)
                 check(i, repeats=2)
@@ -2890,7 +3191,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             for M in [0, 1, 5, 12]:
                 expected = np_pyfunc(M)
                 got = np_nbfunc(M)
-                self.assertPreciseEqual(expected, got)
+                self.assertPreciseEqual(expected, got, prec='double')
 
             for M in ['a', 1.1, 1j]:
                 with self.assertRaises(TypingError) as raises:
@@ -2912,7 +3213,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 got = np_nbfunc(M, beta)
 
                 if IS_32BITS or platform.machine() in ['ppc64le', 'aarch64']:
-                    self.assertPreciseEqual(expected, got, prec='double', ulps=2)
+                    self.assertPreciseEqual(expected,
+                                            got, prec='double', ulps=2)
                 else:
                     self.assertPreciseEqual(expected, got, prec='exact')
 
@@ -2924,7 +3226,202 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for beta in ['a', 1j]:
             with self.assertRaises(TypingError) as raises:
                 np_nbfunc(5, beta)
-            self.assertIn("beta must be an integer or float", str(raises.exception))
+            self.assertIn("beta must be an integer or float",
+                          str(raises.exception))
+
+    def test_cross(self):
+        pyfunc = np_cross
+        cfunc = jit(nopython=True)(pyfunc)
+        pairs = [
+            # 3x3 (n-dims)
+            (
+                np.array([[1, 2, 3], [4, 5, 6]]),
+                np.array([[4, 5, 6], [1, 2, 3]])
+            ),
+            # 2x3 array-like (n-dims)
+            (
+                np.array([[1, 2, 3], [4, 5, 6]]),
+                ((4, 5), (1, 2))
+            ),
+            # 3x3 (1-dim) with type promotion
+            (
+                np.array([1, 2, 3], dtype=np.int64),
+                np.array([4, 5, 6], dtype=np.float64)
+            ),
+            # 3x3 array-like (1-dim)
+            (
+                (1, 2, 3),
+                (4, 5, 6)
+            ),
+            # 2x3 (1-dim)
+            (
+                np.array([1, 2]),
+                np.array([4, 5, 6])
+            ),
+            # 3x3 (with broadcasting 1d x 2d)
+            (
+                np.array([1, 2, 3]),
+                np.array([[4, 5, 6], [1, 2, 3]])
+            ),
+            # 3x3 (with broadcasting 2d x 1d)
+            (
+                np.array([[1, 2, 3], [4, 5, 6]]),
+                np.array([1, 2, 3])
+            ),
+            # 3x2 (with higher order broadcasting)
+            (
+                np.arange(36).reshape(6, 2, 3),
+                np.arange(4).reshape(2, 2)
+            )
+        ]
+
+        for x, y in pairs:
+            expected = pyfunc(x, y)
+            got = cfunc(x, y)
+            self.assertPreciseEqual(expected, got)
+
+    def test_cross_exceptions(self):
+        pyfunc = np_cross
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        # test incompatible dimensions for ndim == 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.arange(4),
+                np.arange(3)
+            )
+        self.assertIn(
+            'Incompatible dimensions for cross product',
+            str(raises.exception)
+        )
+
+        # test 2d cross product error for ndim == 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.array((1, 2)),
+                np.array((3, 4))
+            )
+        self.assertIn(
+            'Dimensions for both inputs is 2',
+            str(raises.exception)
+        )
+
+        # test incompatible dimensions for ndim > 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.arange(8).reshape((2, 4)),
+                np.arange(6)[::-1].reshape((2, 3))
+            )
+        self.assertIn(
+            'Incompatible dimensions for cross product',
+            str(raises.exception)
+        )
+
+        # test 2d cross product error for ndim == 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.arange(8).reshape((4, 2)),
+                np.arange(8)[::-1].reshape((4, 2))
+            )
+        self.assertIn(
+            'Dimensions for both inputs is 2',
+            str(raises.exception)
+        )
+
+        # test non-array-like input
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                set([1, 2, 3]),
+                set([4, 5, 6])
+            )
+        self.assertIn(
+            'Inputs must be array-like.',
+            str(raises.exception)
+        )
+
+    def test_cross2d(self):
+        pyfunc = np_cross
+        cfunc = cross2d
+        pairs = [
+            # 2x2 (n-dims)
+            (
+                np.array([[1, 2], [4, 5]]),
+                np.array([[4, 5], [1, 2]])
+            ),
+            # 2x2 array-like (n-dims)
+            (
+                np.array([[1, 2], [4, 5]]),
+                ((4, 5), (1, 2))
+            ),
+            # 2x2 (1-dim) with type promotion
+            (
+                np.array([1, 2], dtype=np.int64),
+                np.array([4, 5], dtype=np.float64)
+            ),
+            # 2x2 array-like (1-dim)
+            (
+                (1, 2),
+                (4, 5)
+            ),
+            # 2x2 (with broadcasting 1d x 2d)
+            (
+                np.array([1, 2]),
+                np.array([[4, 5], [1, 2]])
+            ),
+            # 2x2 (with broadcasting 2d x 1d)
+            (
+                np.array([[1, 2], [4, 5]]),
+                np.array([1, 2])
+            ),
+            # 2x2 (with higher order broadcasting)
+            (
+                np.arange(36).reshape(6, 3, 2),
+                np.arange(6).reshape(3, 2)
+            )
+        ]
+
+        for x, y in pairs:
+            expected = pyfunc(x, y)
+            got = cfunc(x, y)
+            self.assertPreciseEqual(expected, got)
+
+    def test_cross2d_exceptions(self):
+        cfunc = cross2d
+        self.disable_leak_check()
+
+        # test incompatible dimensions for ndim == 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.array((1, 2, 3)),
+                np.array((4, 5, 6))
+            )
+        self.assertIn(
+            'Incompatible dimensions for 2D cross product',
+            str(raises.exception)
+        )
+
+        # test incompatible dimensions for ndim > 1
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.arange(6).reshape((2, 3)),
+                np.arange(6)[::-1].reshape((2, 3))
+            )
+        self.assertIn(
+            'Incompatible dimensions for 2D cross product',
+            str(raises.exception)
+        )
+
+        # test non-array-like input
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                set([1, 2]),
+                set([4, 5])
+            )
+        self.assertIn(
+            'Inputs must be array-like.',
+            str(raises.exception)
+        )
 
 
 class TestNPMachineParameters(TestCase):
@@ -2935,8 +3432,6 @@ def foo():
     ty = np.%s
     return np.%s(ty)
 '''
-
-    bits = ('bits',) if np_version >= (1, 12) else ()
 
     def check(self, func, attrs, *args):
         pyfunc = func
@@ -2967,9 +3462,8 @@ def foo():
 
     def test_finfo(self):
         types = [np.float32, np.float64, np.complex64, np.complex128]
-        attrs = self.bits + ('eps', 'epsneg', 'iexp', 'machep', 'max',
-                             'maxexp', 'negep', 'nexp', 'nmant', 'precision',
-                             'resolution', 'tiny',)
+        attrs = ('eps', 'epsneg', 'iexp', 'machep', 'max', 'maxexp', 'negep',
+                 'nexp', 'nmant', 'precision', 'resolution', 'tiny', 'bits',)
         for ty in types:
             self.check(finfo, attrs, ty(1))
             hc_func = self.create_harcoded_variant(np.finfo, ty)
@@ -2991,7 +3485,7 @@ def foo():
         # check types and instances of types
         types = [np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16,
                  np.uint32, np.uint64]
-        attrs = ('min', 'max') + self.bits
+        attrs = ('min', 'max', 'bits',)
         for ty in types:
             self.check(iinfo, attrs, ty(1))
             hc_func = self.create_harcoded_variant(np.iinfo, ty)
@@ -3001,3 +3495,7 @@ def foo():
         with self.assertTypingError():
             cfunc = jit(nopython=True)(iinfo)
             cfunc(np.float64(7))
+
+
+if __name__ == '__main__':
+    unittest.main()

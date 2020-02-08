@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 import sys
 import os.path
 import re
@@ -7,11 +5,10 @@ import subprocess
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import config
-
 from ..support import capture_cache_log
 from ..test_dispatcher import BaseCacheTest
+from numba.core import config
+import unittest
 
 
 class UfuncCacheTest(BaseCacheTest):
@@ -204,8 +201,8 @@ class TestCacheSpecificIssue(UfuncCacheTest):
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = popen.communicate()
         if popen.returncode != 0:
-            raise AssertionError("process failed with code %s: stderr follows\n%s\n"
-                                 % (popen.returncode, err.decode()))
+            raise AssertionError("process failed with code %s: stderr follows"
+                                 "\n%s\n" % (popen.returncode, err.decode()))
 
     #
     # The following test issue #2198 that loading cached (g)ufunc first

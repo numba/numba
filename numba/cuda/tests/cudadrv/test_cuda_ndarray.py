@@ -298,6 +298,70 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
             devicearray.errmsg_contiguous_buffer,
             str(e.exception))
 
+    @skip_on_cudasim('Typing not done in the simulator')
+    def test_devicearray_typing_order_simple_c(self):
+        # C-order 1D array
+        a = np.zeros(10, order='C')
+        d = cuda.to_device(a)
+        self.assertEqual(d._numba_type_.layout, 'C')
+
+    @skip_on_cudasim('Typing not done in the simulator')
+    def test_devicearray_typing_order_simple_f(self):
+        # F-order array that is also C layout.
+        a = np.zeros(10, order='F')
+        d = cuda.to_device(a)
+        self.assertEqual(d._numba_type_.layout, 'C')
+
+    @skip_on_cudasim('Typing not done in the simulator')
+    def test_devicearray_typing_order_2d_c(self):
+        # C-order 2D array
+        a = np.zeros((2, 10), order='C')
+        d = cuda.to_device(a)
+        self.assertEqual(d._numba_type_.layout, 'C')
+
+    @skip_on_cudasim('Typing not done in the simulator')
+    def test_devicearray_typing_order_2d_f(self):
+        # F-order array that can only be F layout
+        a = np.zeros((2, 10), order='F')
+        d = cuda.to_device(a)
+        self.assertEqual(d._numba_type_.layout, 'F')
+
+    @skip_on_cudasim('Typing not done in the simulator')
+    def test_devicearray_typing_order_noncontig_slice_c(self):
+        # Non-contiguous slice of C-order array
+        a = np.zeros((5, 5), order='C')
+        d = cuda.to_device(a)[:,2]
+        self.assertEqual(d._numba_type_.layout, 'A')
+
+    @skip_on_cudasim('Typing not done in the simulator')
+    def test_devicearray_typing_order_noncontig_slice_f(self):
+        # Non-contiguous slice of F-order array
+        a = np.zeros((5, 5), order='F')
+        d = cuda.to_device(a)[2,:]
+        self.assertEqual(d._numba_type_.layout, 'A')
+
+    @skip_on_cudasim('Typing not done in the simulator')
+    def test_devicearray_typing_order_contig_slice_c(self):
+        # Contiguous slice of C-order array
+        a = np.zeros((5, 5), order='C')
+        d = cuda.to_device(a)[2,:]
+        self.assertEqual(d._numba_type_.layout, 'C')
+
+    @skip_on_cudasim('Typing not done in the simulator')
+    def test_devicearray_typing_order_contig_slice_f(self):
+        # Contiguous slice of F-order array - is both C- and F-contiguous, so
+        # types as 'C' layout
+        a = np.zeros((5, 5), order='F')
+        d = cuda.to_device(a)[:,2]
+        self.assertEqual(d._numba_type_.layout, 'C')
+
+    @skip_on_cudasim('Typing not done in the simulator')
+    def test_devicearray_typing_order_broadcasted(self):
+        # Broadcasted array, similar to that used for passing scalars to ufuncs
+        a = np.broadcast_to(np.array([1]), (10,))
+        d = cuda.to_device(a)
+        self.assertEqual(d._numba_type_.layout, 'A')
+
 
 class TestRecarray(SerialMixin, unittest.TestCase):
     def test_recarray(self):

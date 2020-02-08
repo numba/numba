@@ -11,7 +11,6 @@ system to freeze in some cases.
 
 """
 
-from __future__ import absolute_import, print_function, division
 import sys
 import os
 import ctypes
@@ -28,14 +27,14 @@ import contextlib
 import numpy as np
 from collections import namedtuple, deque
 
-from numba import utils, mviewbuf
+from numba import mviewbuf
+from numba.core import utils, errors, serialize, config
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size
-from . import enums, drvapi, _extras
-from numba import config, serialize, errors
-from numba.utils import longint as long
-from numba.cuda.envvars import get_numba_envvar, get_numbapro_envvar
+from numba.cuda.cudadrv import enums, drvapi, _extras
+from numba.core.utils import longint as long
+from numba.cuda.envvars import get_numba_envvar
 
 
 VERBOSE_JIT_LOG = int(get_numba_envvar('VERBOSE_CU_JIT_LOG', 1))
@@ -690,7 +689,10 @@ class Context(object):
     def get_max_potential_block_size(self, func, b2d_func, memsize, blocksizelimit, flags=None):
         """Suggest a launch configuration with reasonable occupancy.
         :param func: kernel for which occupancy is calculated
-        :param b2d_func: function that calculates how much per-block dynamic shared memory 'func' uses based on the block size.
+        :param b2d_func: function that calculates how much per-block dynamic
+                         shared memory 'func' uses based on the block size.
+                         Can also be the address of a C function.
+                         Use `0` to pass `NULL` to the underlying CUDA API.
         :param memsize: per-block dynamic shared memory usage intended, in bytes
         :param blocksizelimit: maximum block size the kernel is designed to handle"""
 
@@ -1189,7 +1191,7 @@ class IpcHandle(object):
 
     def open_array(self, context, shape, dtype, strides=None):
         """
-        Simliar to `.open()` but returns an device array.
+        Similar to `.open()` but returns an device array.
         """
         from . import devicearray
 
@@ -1249,7 +1251,7 @@ class MemoryPointer(object):
         self._owner = owner
 
         if finalizer is not None:
-            self._finalizer = utils.finalize(self, finalizer)
+            self._finalizer = weakref.finalize(self, finalizer)
 
     @property
     def owner(self):
@@ -1356,7 +1358,7 @@ class PinnedMemory(mviewbuf.MemAlloc):
         self._bufptr_ = self.host_pointer.value
 
         if finalizer is not None:
-            utils.finalize(self, finalizer)
+            weakref.finalize(self, finalizer)
 
     def own(self):
         return self
@@ -1385,7 +1387,7 @@ class OwnedPointer(object):
                 pass
 
         self._mem.refct += 1
-        utils.finalize(self, deref)
+        weakref.finalize(self, deref)
 
     def __getattr__(self, fname):
         """Proxy MemoryPointer methods
@@ -1402,7 +1404,7 @@ class Stream(object):
         self.context = context
         self.handle = handle
         if finalizer is not None:
-            utils.finalize(self, finalizer)
+            weakref.finalize(self, finalizer)
 
     def __int__(self):
         return self.handle.value
@@ -1432,7 +1434,7 @@ class Event(object):
         self.context = context
         self.handle = handle
         if finalizer is not None:
-            utils.finalize(self, finalizer)
+            weakref.finalize(self, finalizer)
 
     def query(self):
         """
@@ -1494,7 +1496,7 @@ class Module(object):
         self.handle = handle
         self.info_log = info_log
         if finalizer is not None:
-            self._finalizer = utils.finalize(self, finalizer)
+            self._finalizer = weakref.finalize(self, finalizer)
 
     def unload(self):
         self.context.unload_module(self)
@@ -1655,7 +1657,7 @@ class Linker(object):
         driver.cuLinkCreate(len(raw_keys), option_keys, option_vals,
                             byref(self.handle))
 
-        utils.finalize(self, driver.cuLinkDestroy, handle)
+        weakref.finalize(self, driver.cuLinkDestroy, handle)
 
         self.linker_info_buf = linkerinfo
         self.linker_errors_buf = linkererrors
@@ -1746,8 +1748,9 @@ def get_devptr_for_active_ctx(ptr):
     pointer.
     """
     devptr = c_void_p(0)
-    attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
-    driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
+    if ptr != 0:
+        attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
+        driver.cuPointerGetAttribute(byref(devptr), attr, ptr)
     return devptr
 
 

@@ -1,17 +1,15 @@
-from __future__ import print_function, division, absolute_import
-
 import sys
 
 import numpy as np
 import ctypes
-from numba import jit, numpy_support, types
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated
-from numba.itanium_mangler import mangle_type
-from numba.utils import IS_PY3
-from numba.config import IS_WIN32
-from numba.numpy_support import version as numpy_version
-from .support import tag
+from numba import jit
+from numba.core import types
+from numba.core.compiler import compile_isolated
+from numba.core.itanium_mangler import mangle_type
+from numba.core.config import IS_WIN32
+from numba.np.numpy_support import numpy_version
+import unittest
+from numba.np import numpy_support
 
 
 def get_a(ary, i):
@@ -421,10 +419,7 @@ class TestRecordDtype(unittest.TestCase):
         self.assertEqual(rec.typeof('a'), types.float64)
         self.assertEqual(rec.typeof('b'), types.int16)
         self.assertEqual(rec.typeof('c'), types.complex64)
-        if IS_PY3:
-            self.assertEqual(rec.typeof('d'), types.UnicodeCharSeq(5))
-        else:
-            self.assertEqual(rec.typeof('d'), types.CharSeq(5))
+        self.assertEqual(rec.typeof('d'), types.UnicodeCharSeq(5))
         self.assertEqual(rec.offset('a'), recordtype.fields['a'][1])
         self.assertEqual(rec.offset('b'), recordtype.fields['b'][1])
         self.assertEqual(rec.offset('c'), recordtype.fields['c'][1])
@@ -435,9 +430,9 @@ class TestRecordDtype(unittest.TestCase):
         rec = numpy_support.from_dtype(recordtype)
         cfunc = self.get_cfunc(pyfunc, (rec[:], types.intp))
         for i in range(self.refsample1d.size):
-            self.assertEqual(pyfunc(self.refsample1d, i), cfunc(self.nbsample1d, i))
+            self.assertEqual(pyfunc(self.refsample1d, i),
+                             cfunc(self.nbsample1d, i))
 
-    @tag('important')
     def test_get_a(self):
         self._test_get_equal(get_a)
         self._test_get_equal(get_a_subarray)
@@ -504,7 +499,6 @@ class TestRecordDtype(unittest.TestCase):
             # Match the entire array to ensure no memory corruption
             np.testing.assert_equal(expect, got)
 
-    @tag('important')
     def test_set_a(self):
         def check(pyfunc):
             self._test_set_equal(pyfunc, 3.1415, types.float64)
@@ -525,7 +519,6 @@ class TestRecordDtype(unittest.TestCase):
         check(setitem_b)
         check(setitem_b_subarray)
 
-    @tag('important')
     def test_set_c(self):
         def check(pyfunc):
             self._test_set_equal(pyfunc, 43j, types.complex64)
@@ -536,7 +529,6 @@ class TestRecordDtype(unittest.TestCase):
         check(setitem_c)
         check(setitem_c_subarray)
 
-    @tag('important')
     def test_set_record(self):
         pyfunc = set_record
         rec = numpy_support.from_dtype(recordtype)
@@ -660,7 +652,6 @@ class TestRecordDtype(unittest.TestCase):
         expected[0].h[1] = 4.0
         np.testing.assert_equal(expected, nbval)
 
-    @tag('important')
     def test_record_write_2d_array(self):
         '''
         Test writing to a 2D array within a structured type
@@ -692,7 +683,6 @@ class TestRecordDtype(unittest.TestCase):
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].h[1])
 
-    @tag('important')
     def test_record_read_2d_array(self):
         '''
         Test reading from a 2D array within a structured type
@@ -713,7 +703,6 @@ class TestRecordDtype(unittest.TestCase):
         res = cfunc(nbval[0])
         np.testing.assert_equal(res, nbval[0].j[1, 0])
 
-    @tag('important')
     def test_record_return(self):
         """
         Testing scalar record value as return value.
@@ -764,9 +753,9 @@ class TestRecordDtype(unittest.TestCase):
     def test_record_two_arrays(self):
         """
         Tests that comparison of NestedArrays by key is working correctly. If
-        the two NestedArrays in recordwith2arrays compare equal (same length and
-        ndim but different shape) incorrect code will be generated for one of the
-        functions.
+        the two NestedArrays in recordwith2arrays compare equal (same length
+        and ndim but different shape) incorrect code will be generated for one
+        of the functions.
         """
         nbrecord = numpy_support.from_dtype(recordwith2arrays)
         rec = np.recarray(1, dtype=recordwith2arrays)[0]
@@ -861,7 +850,7 @@ class TestRecordDtypeWithStructArrays(TestRecordDtype):
         self.nbsample1d3 = np.zeros(3, dtype=recordtype)
 
 
-class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArrays):
+class TestRecordDtypeWithStructArraysAndDispatcher(TestRecordDtypeWithStructArrays):    # noqa: E501
     '''
     Same as TestRecordDtypeWithStructArrays, stressing the Dispatcher's type
     dispatch mechanism (issue #384) and caching of ndarray typecodes for void
@@ -884,7 +873,7 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
 
         arr[0]['n'] = 'abcde'  # no null-byte
         arr[1]['n'] = 'xyz'  # null-byte
-        arr[2]['n'] = 'u\x00v\x00\x00'  # null-byte at the middle and then at end
+        arr[2]['n'] = 'u\x00v\x00\x00'  # null-byte at the middle and at the end
 
     def setUp(self):
         self._createSampleaArray()
@@ -958,7 +947,8 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
                          recordwithcharseq['n'].itemsize)
 
         cfunc(self.nbsample1d, 0, cs_near_overflow)
-        self.assertEqual(self.nbsample1d[0]['n'].decode('ascii'), cs_near_overflow)
+        self.assertEqual(self.nbsample1d[0]['n'].decode('ascii'),
+                         cs_near_overflow)
         # Check that we didn't overwrite
         np.testing.assert_equal(self.refsample1d[1:], self.nbsample1d[1:])
 

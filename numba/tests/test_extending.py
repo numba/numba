@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import math
 import operator
 import sys
@@ -11,13 +9,15 @@ import re
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import njit, jit, types, errors, typing, compiler
-from numba.targets.registry import cpu_target
-from numba.compiler import compile_isolated
-from .support import (TestCase, captured_stdout, tag, temp_directory,
+from numba import njit, jit
+from numba.core import types, errors, typing, compiler
+from numba.core.typed_passes import type_inference_stage
+from numba.core.registry import cpu_target
+from numba.core.compiler import compile_isolated
+from numba.tests.support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
-from numba.errors import LoweringError
+from numba.core.errors import LoweringError
+import unittest
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,
@@ -30,13 +30,13 @@ from numba.extending import (typeof_impl, type_callable,
                              register_jitable,
                              get_cython_function_address
                              )
-from numba.typing.templates import (
+from numba.core.typing.templates import (
     ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
 
-_IS_PY3 = sys.version_info >= (3,)
 
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
+
 
 try:
     import scipy
@@ -57,7 +57,7 @@ class MyDummy(object):
 class MyDummyType(types.Opaque):
     def can_convert_to(self, context, toty):
         if isinstance(toty, types.Number):
-            from numba.typeconv import Conversion
+            from numba.core.typeconv import Conversion
             return Conversion.safe
 
 mydummy_type = MyDummyType('mydummy')
@@ -118,8 +118,7 @@ def unbox_index(typ, obj, c):
 def func1(x=None):
     raise NotImplementedError
 
-@type_callable(func1)
-def type_func1(context):
+def type_func1_(context):
     def typer(x=None):
         if x in (None, types.none):
             # 0-arg or 1-arg with None
@@ -129,6 +128,10 @@ def type_func1(context):
             return x
 
     return typer
+
+
+type_func1 = type_callable(func1)(type_func1_)
+
 
 @lower_builtin(func1)
 @lower_builtin(func1, types.none)
@@ -448,6 +451,10 @@ class TestLowLevelExtending(TestCase):
         cr = compile_isolated(pyfunc, (types.float64,))
         self.assertPreciseEqual(cr.entry_point(18.0), 6.0)
 
+    def test_type_callable_keeps_function(self):
+        self.assertIs(type_func1, type_func1_)
+        self.assertIsNotNone(type_func1)
+
     def test_cast_mydummy(self):
         pyfunc = get_dummy
         cr = compile_isolated(pyfunc, (), types.float64)
@@ -459,7 +466,7 @@ class TestLowLevelExtending(TestCase):
         test_ir = compiler.run_frontend(mk_func_test_impl)
         typingctx = cpu_target.typing_context
         typingctx.refresh()
-        typemap, _, _ = compiler.type_inference_stage(
+        typemap, _, _ = type_inference_stage(
             typingctx, test_ir, (), None)
         self.assertTrue(any(isinstance(a, types.MakeFunctionLiteral)
                             for a in typemap.values()))
@@ -512,14 +519,12 @@ class TestPandasLike(TestCase):
             got = cfunc(i)
             self.assertEqual(got, expected)
 
-    @tag('important')
     def test_series_len(self):
         i = Index(np.int32([2, 4, 3]))
         s = Series(np.float64([1.5, 4.0, 2.5]), i)
         cfunc = jit(nopython=True)(len_usecase)
         self.assertPreciseEqual(cfunc(s), 3)
 
-    @tag('important')
     def test_series_get_index(self):
         i = Index(np.int32([2, 4, 3]))
         s = Series(np.float64([1.5, 4.0, 2.5]), i)
@@ -541,7 +546,6 @@ class TestPandasLike(TestCase):
         self.assertIs(ss._index._data, i._data)
         self.assertPreciseEqual(ss._values, np.cos(np.sin(s._values)))
 
-    @tag('important')
     def test_series_constructor(self):
         i = Index(np.int32([42, 8, -5]))
         d = np.float64([1.5, 4.0, 2.5])
@@ -552,7 +556,6 @@ class TestPandasLike(TestCase):
         self.assertIs(got._index._data, i._data)
         self.assertIs(got._values, d)
 
-    @tag('important')
     def test_series_clip(self):
         i = Index(np.int32([42, 8, -5]))
         s = Series(np.float64([1.5, 4.0, 2.5]), i)
@@ -569,7 +572,6 @@ class TestHighLevelExtending(TestCase):
     Test the high-level combined API.
     """
 
-    @tag('important')
     def test_where(self):
         """
         Test implementing a function with @overload.
@@ -593,7 +595,6 @@ class TestHighLevelExtending(TestCase):
         self.assertIn("x and y should have the same dtype",
                       str(raises.exception))
 
-    @tag('important')
     def test_len(self):
         """
         Test re-implementing len() for a custom type with @overload.
@@ -753,9 +754,8 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument default values", msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "kw=12">', msg)
-            self.assertIn('<Parameter "kw=None">', msg)
+        self.assertIn('<Parameter "kw=12">', msg)
+        self.assertIn('<Parameter "kw=None">', msg)
 
         # kwarg name is different
         def impl2(a, b, c, kwarg=None):
@@ -769,9 +769,8 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument names", msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "kwarg=None">', msg)
-            self.assertIn('<Parameter "kw=None">', msg)
+        self.assertIn('<Parameter "kwarg=None">', msg)
+        self.assertIn('<Parameter "kw=None">', msg)
 
         # arg name is different
         def impl3(z, b, c, kw=None):
@@ -786,29 +785,26 @@ class TestHighLevelExtending(TestCase):
         self.assertIn(sentinel, msg)
         self.assertIn("argument names", msg)
         self.assertFalse("keyword" in msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "a">', msg)
-            self.assertIn('<Parameter "z">', msg)
+        self.assertIn('<Parameter "a">', msg)
+        self.assertIn('<Parameter "z">', msg)
 
-        # impl4/5 has invalid syntax for python < 3
-        if _IS_PY3:
-            from .overload_usecases import impl4, impl5
-            with self.assertRaises(errors.TypingError) as e:
-                gen_ol(impl4)(1, 2, 3, 4)
-            msg = str(e.exception)
-            self.assertIn(sentinel, msg)
-            self.assertIn("argument names", msg)
-            self.assertFalse("keyword" in msg)
-            self.assertIn("First difference: 'z'", msg)
+        from .overload_usecases import impl4, impl5
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl4)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        self.assertIn("First difference: 'z'", msg)
 
-            with self.assertRaises(errors.TypingError) as e:
-                gen_ol(impl5)(1, 2, 3, 4)
-            msg = str(e.exception)
-            self.assertIn(sentinel, msg)
-            self.assertIn("argument names", msg)
-            self.assertFalse("keyword" in msg)
-            self.assertIn('<Parameter "a">', msg)
-            self.assertIn('<Parameter "z">', msg)
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl5)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        self.assertIn('<Parameter "a">', msg)
+        self.assertIn('<Parameter "z">', msg)
 
         # too many args
         def impl6(a, b, c, d, e, kw=None):
@@ -823,9 +819,8 @@ class TestHighLevelExtending(TestCase):
         self.assertIn(sentinel, msg)
         self.assertIn("argument names", msg)
         self.assertFalse("keyword" in msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "d">', msg)
-            self.assertIn('<Parameter "e">', msg)
+        self.assertIn('<Parameter "d">', msg)
+        self.assertIn('<Parameter "e">', msg)
 
         # too few args
         def impl7(a, b, kw=None):
@@ -840,8 +835,7 @@ class TestHighLevelExtending(TestCase):
         self.assertIn(sentinel, msg)
         self.assertIn("argument names", msg)
         self.assertFalse("keyword" in msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "c">', msg)
+        self.assertIn('<Parameter "c">', msg)
 
         # too many kwargs
         def impl8(a, b, c, kw=None, extra_kwarg=None):
@@ -855,8 +849,7 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument names", msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "extra_kwarg=None">', msg)
+        self.assertIn('<Parameter "extra_kwarg=None">', msg)
 
         # too few kwargs
         def impl9(a, b, c):
@@ -870,10 +863,8 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument names", msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "kw=None">', msg)
+        self.assertIn('<Parameter "kw=None">', msg)
 
-    @unittest.skipUnless(_IS_PY3, "Python 3+ only syntax")
     def test_typing_vs_impl_signature_mismatch_handling_var_positional(self):
         """
         Tests that an overload which has a differing typing and implementing
@@ -984,6 +975,57 @@ class TestHighLevelExtending(TestCase):
             return np.exp(mydummy)
 
         self.assertEqual(test(), 0xdeadbeef)
+
+    def test_overload_method_stararg(self):
+        @overload_method(MyDummyType, "method_stararg")
+        def _ov_method_stararg(obj, val, val2, *args):
+            def get(obj, val, val2, *args):
+                return (val, val2, args)
+
+            return get
+
+        @njit
+        def foo(obj, *args):
+            # Test with expanding stararg
+            return obj.method_stararg(*args)
+
+        obj = MyDummy()
+        self.assertEqual(foo(obj, 1, 2), (1, 2, ()))
+        self.assertEqual(foo(obj, 1, 2, 3), (1, 2, (3,)))
+        self.assertEqual(foo(obj, 1, 2, 3, 4), (1, 2, (3, 4)))
+
+        @njit
+        def bar(obj):
+            # Test with explicit argument
+            return (
+                obj.method_stararg(1, 2),
+                obj.method_stararg(1, 2, 3),
+                obj.method_stararg(1, 2, 3, 4),
+            )
+
+        self.assertEqual(
+            bar(obj),
+            (
+                (1, 2, ()),
+                (1, 2, (3,)),
+                (1, 2, (3, 4))
+            ),
+        )
+
+        # Check cases that put tuple type into stararg
+        # NOTE: the expected result has an extra tuple because of stararg.
+        self.assertEqual(
+            foo(obj, 1, 2, (3,)),
+            (1, 2, ((3,),)),
+        )
+        self.assertEqual(
+            foo(obj, 1, 2, (3, 4)),
+            (1, 2, ((3, 4),)),
+        )
+        self.assertEqual(
+            foo(obj, 1, 2, (3, (4, 5))),
+            (1, 2, ((3, (4, 5)),)),
+        )
 
 
 def _assert_cache_stats(cfunc, expect_hit, expect_misses):
@@ -1289,6 +1331,100 @@ class TestImportCythonFunction(unittest.TestCase):
             addr = get_cython_function_address("scipy.special.cython_special", "foo")
         msg = "No function 'foo' found in __pyx_capi__ of 'scipy.special.cython_special'"
         self.assertEqual(msg, str(raises.exception))
+
+
+@overload_method(MyDummyType, 'method_jit_option_check_nrt',
+                 jit_options={'_nrt': True})
+def ov_method_jit_option_check_nrt(obj):
+    def imp(obj):
+        return np.arange(10)
+    return imp
+
+
+@overload_method(MyDummyType, 'method_jit_option_check_no_nrt',
+                 jit_options={'_nrt': False})
+def ov_method_jit_option_check_no_nrt(obj):
+    def imp(obj):
+        return np.arange(10)
+    return imp
+
+
+
+@overload_attribute(MyDummyType, 'attr_jit_option_check_nrt',
+                    jit_options={'_nrt': True})
+def ov_attr_jit_option_check_nrt(obj):
+    def imp(obj):
+        return np.arange(10)
+    return imp
+
+
+@overload_attribute(MyDummyType, 'attr_jit_option_check_no_nrt',
+                    jit_options={'_nrt': False})
+def ov_attr_jit_option_check_no_nrt(obj):
+    def imp(obj):
+        return np.arange(10)
+    return imp
+
+
+class TestJitOptionsNoNRT(TestCase):
+    # Test overload*(jit_options={...}) by turning off _nrt
+
+    def check_error_no_nrt(self, func, *args, **kwargs):
+        # Check that the compilation fails with a complaint about dynamic array
+        msg = ("Only accept returning of array passed into "
+               "the function as argument")
+        with self.assertRaises(errors.TypingError) as raises:
+            func(*args, **kwargs)
+        self.assertIn(msg, str(raises.exception))
+
+    def no_nrt_overload_check(self, flag):
+        def dummy():
+            return np.arange(10)
+
+        @overload(dummy, jit_options={'_nrt': flag})
+        def ov_dummy():
+            def dummy():
+                return np.arange(10)
+            return dummy
+
+        @njit
+        def foo():
+            return dummy()
+
+        if flag:
+            self.assertPreciseEqual(foo(), np.arange(10))
+        else:
+            self.check_error_no_nrt(foo)
+
+    def test_overload_no_nrt(self):
+        self.no_nrt_overload_check(True)
+        self.no_nrt_overload_check(False)
+
+    def test_overload_method_no_nrt(self):
+        @njit
+        def udt(x):
+            return x.method_jit_option_check_nrt()
+
+        self.assertPreciseEqual(udt(mydummy), np.arange(10))
+
+        @njit
+        def udt(x):
+            return x.method_jit_option_check_no_nrt()
+
+        self.check_error_no_nrt(udt, mydummy)
+
+    def test_overload_attribute_no_nrt(self):
+        @njit
+        def udt(x):
+            return x.attr_jit_option_check_nrt
+
+        self.assertPreciseEqual(udt(mydummy), np.arange(10))
+
+        @njit
+        def udt(x):
+            return x.attr_jit_option_check_no_nrt
+
+        self.check_error_no_nrt(udt, mydummy)
 
 
 if __name__ == '__main__':

@@ -1,10 +1,8 @@
-from __future__ import print_function, absolute_import, division
-
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import cuda, float32
 from numba.cuda.testing import SerialMixin
+import unittest
 
 
 class TestFastMathOption(SerialMixin, unittest.TestCase):

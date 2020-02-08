@@ -2,34 +2,46 @@
 Tests for numba.types.
 """
 
-from __future__ import print_function, absolute_import
 
 from collections import namedtuple
+import contextlib
 import gc
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
+import importlib
+import os
+import operator
+import shutil
+import sys
+import uuid
 import weakref
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba.utils import IS_PY3
-from numba import sigutils, types, typing
-from numba.types.abstract import _typecache
-from numba import jit, numpy_support, typeof
-from numba.numpy_support import version as numpy_version
-from .support import TestCase, tag
-from .enum_usecases import *
+from numba.core import types, typing, errors, sigutils
+from numba.core.types.abstract import _typecache
+from numba.core.typing.templates import make_overload_template
+from numba import jit, njit, typeof
+from numba.core.extending import (overload, register_model, models, unbox,
+                                  NativeValue, typeof_impl)
+from numba.tests.support import TestCase, temp_directory
+from numba.tests.enum_usecases import Color, Shake, Shape
+import unittest
+from numba.np import numpy_support
+
+
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 
 Point = namedtuple('Point', ('x', 'y'))
 
 Rect = namedtuple('Rect', ('width', 'height'))
 
+
 def gen(x):
     yield x + 1
+
 
 class Dummy(object):
     pass
@@ -37,7 +49,6 @@ class Dummy(object):
 
 class TestTypes(TestCase):
 
-    @tag('important')
     def test_equality(self):
         self.assertEqual(types.int32, types.int32)
         self.assertEqual(types.uint32, types.uint32)
@@ -74,6 +85,7 @@ class TestTypes(TestCase):
         class DummyTemplate(object):
             key = "foo"
         a = types.BoundFunction(DummyTemplate, types.int32)
+
         class DummyTemplate(object):
             key = "bar"
         b = types.BoundFunction(DummyTemplate, types.int32)
@@ -128,7 +140,6 @@ class TestTypes(TestCase):
         self.assertTrue(b != c)
         self.assertTrue(a != z)
 
-    @tag('important')
     def test_interning(self):
         # Test interning and lifetime of dynamic types.
         a = types.Dummy('xyzzyx')
@@ -155,7 +166,7 @@ class TestTypes(TestCase):
         cache = _typecache
         gc.collect()
         # Keep strong references to existing types, to avoid spurious failures
-        existing_types = [wr() for wr in cache]
+        existing_types = [wr() for wr in cache]  # noqa: F841
         cache_len = len(cache)
         a = types.Dummy('xyzzyx')
         b = types.Dummy('foox')
@@ -164,7 +175,6 @@ class TestTypes(TestCase):
         gc.collect()
         self.assertEqual(len(cache), cache_len)
 
-    @tag('important')
     def test_array_notation(self):
         def check(arrty, scalar, ndim, layout):
             self.assertIs(arrty.dtype, scalar)
@@ -173,9 +183,9 @@ class TestTypes(TestCase):
         scalar = types.int32
         check(scalar[:], scalar, 1, 'A')
         check(scalar[::1], scalar, 1, 'C')
-        check(scalar[:,:], scalar, 2, 'A')
-        check(scalar[:,::1], scalar, 2, 'C')
-        check(scalar[::1,:], scalar, 2, 'F')
+        check(scalar[:, :], scalar, 2, 'A')
+        check(scalar[:, ::1], scalar, 2, 'C')
+        check(scalar[::1, :], scalar, 2, 'F')
 
     def test_array_notation_for_dtype(self):
         def check(arrty, scalar, ndim, layout):
@@ -186,11 +196,10 @@ class TestTypes(TestCase):
         dtyped = types.DType(scalar)
         check(dtyped[:], scalar, 1, 'A')
         check(dtyped[::1], scalar, 1, 'C')
-        check(dtyped[:,:], scalar, 2, 'A')
-        check(dtyped[:,::1], scalar, 2, 'C')
-        check(dtyped[::1,:], scalar, 2, 'F')
+        check(dtyped[:, :], scalar, 2, 'A')
+        check(dtyped[:, ::1], scalar, 2, 'C')
+        check(dtyped[::1, :], scalar, 2, 'F')
 
-    @tag('important')
     def test_call_notation(self):
         # Function call signature
         i = types.int32
@@ -217,6 +226,24 @@ class TestTypes(TestCase):
             self.assertTrue(isinstance(l_int, types.List))
             self.assertTrue(isinstance(l_int[0], type(listty)))
 
+    def test_function_incompatible_templates(self):
+        # issue 4345
+        def func_stub():
+            pass
+
+        def func_stub2():
+            pass
+
+        def ol():
+            pass
+
+        template1 = make_overload_template(func_stub, ol, {}, True, 'never')
+        template2 = make_overload_template(func_stub2, ol, {}, True, 'never')
+
+        with self.assertRaises(ValueError) as raises:
+            types.Function((template1, template2))
+        self.assertIn("incompatible templates:", str(raises.exception))
+
 
 class TestNumbers(TestCase):
     """
@@ -235,9 +262,9 @@ class TestNumbers(TestCase):
         self.assertEqual(types.int8.minval, -128)
         self.assertEqual(types.uint8.maxval, 255)
         self.assertEqual(types.uint8.minval, 0)
-        self.assertEqual(types.int64.maxval, (1<<63) - 1)
-        self.assertEqual(types.int64.minval, -(1<<63))
-        self.assertEqual(types.uint64.maxval, (1<<64) - 1)
+        self.assertEqual(types.int64.maxval, (1 << 63) - 1)
+        self.assertEqual(types.int64.minval, -(1 << 63))
+        self.assertEqual(types.uint64.maxval, (1 << 64) - 1)
         self.assertEqual(types.uint64.minval, 0)
 
     def test_from_bidwidth(self):
@@ -267,13 +294,12 @@ class TestNumbers(TestCase):
         check_order([types.float32, types.float64])
         check_order([types.complex64, types.complex128])
 
-        if IS_PY3:
-            with self.assertRaises(TypeError):
-                types.int8 <= types.uint32
-            with self.assertRaises(TypeError):
-                types.int8 <= types.float32
-            with self.assertRaises(TypeError):
-                types.float64 <= types.complex128
+        with self.assertRaises(TypeError):
+            types.int8 <= types.uint32
+        with self.assertRaises(TypeError):
+            types.int8 <= types.float32
+        with self.assertRaises(TypeError):
+            types.float64 <= types.complex128
 
 
 class TestNdIter(TestCase):
@@ -285,7 +311,9 @@ class TestNdIter(TestCase):
             self.assertEqual(ty.dtypes, dtypes)
             views = [types.Array(dtype, 0, "C") for dtype in dtypes]
             if len(views) > 1:
-                self.assertEqual(ty.yield_type, types.BaseTuple.from_types(views))
+                self.assertEqual(
+                    ty.yield_type,
+                    types.BaseTuple.from_types(views))
             else:
                 self.assertEqual(ty.yield_type, views[0])
             if indexers is not None:
@@ -325,9 +353,9 @@ class TestNdIter(TestCase):
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, e, e, c64))
         check(ty, (f32, i16, i16, c64), 1, "C",
-              [('flat', 0, 1, [0]), # a
-               ('0d', 0, 0, [1, 2]), # e, e
-               ('scalar', 0, 0, [3]), # c64
+              [('flat', 0, 1, [0]),  # a
+               ('0d', 0, 0, [1, 2]),  # e, e
+               ('scalar', 0, 0, [3]),  # c64
                ])
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, f))
@@ -343,24 +371,26 @@ class TestNdIter(TestCase):
         check(ty, (f32,), 2, "C", [('flat', 0, 2, [0])])
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((b, c))
-        check(ty, (f32, c64), 2, "C", [('flat', 0, 2, [0]), ('indexed', 0, 2, [1])])
+        check(
+            ty, (f32, c64), 2, "C", [
+                ('flat', 0, 2, [0]), ('indexed', 0, 2, [1])])
         self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((d,))
         check(ty, (i16,), 2, "C", [('indexed', 0, 2, [0])])
         self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((b, c, d, d, e))
         check(ty, (f32, c64, i16, i16, i16), 2, "C",
-              [('flat', 0, 2, [0]), # b
-               ('indexed', 0, 2, [1, 2, 3]), # c, d, d
-               ('0d', 0, 0, [4]), # e
+              [('flat', 0, 2, [0]),  # b
+               ('indexed', 0, 2, [1, 2, 3]),  # c, d, d
+               ('0d', 0, 0, [4]),  # e
                ])
         self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((a, b, c, d, d, f))
         check(ty, (f32, f32, c64, i16, i16, f32), 2, "C",
-              [('flat', 1, 2, [0]), # a
-               ('flat', 0, 2, [1]), # b
-               ('indexed', 0, 2, [2, 3, 4]), # c, d, d
-               ('indexed', 1, 2, [5]), # f
+              [('flat', 1, 2, [0]),  # a
+               ('flat', 0, 2, [1]),  # b
+               ('indexed', 0, 2, [2, 3, 4]),  # c, d, d
+               ('indexed', 1, 2, [5]),  # f
                ])
         self.assertTrue(ty.need_shaped_indexing)
 
@@ -370,18 +400,18 @@ class TestNdIter(TestCase):
         self.assertFalse(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((c, b, c, f))
         check(ty, (c64, f32, c64, f32), 2, "F",
-              [('flat', 0, 2, [0, 2]), # c, c
-               ('indexed', 0, 2, [1]), # b
-               ('indexed', 0, 1, [3]), # f
+              [('flat', 0, 2, [0, 2]),  # c, c
+               ('indexed', 0, 2, [1]),  # b
+               ('indexed', 0, 1, [3]),  # f
                ])
         self.assertTrue(ty.need_shaped_indexing)
         ty = types.NumpyNdIterType((b, c, c, d, d, a, e))
         check(ty, (f32, c64, c64, i16, i16, f32, i16), 2, "F",
-              [('indexed', 0, 2, [0, 3, 4]), # b, d, d
-               ('flat', 0, 2, [1, 2]), # c, c
-               ('flat', 0, 1, [5]), # a
-               ('0d', 0, 0, [6]), # e
-              ])
+              [('indexed', 0, 2, [0, 3, 4]),  # b, d, d
+               ('flat', 0, 2, [1, 2]),  # c, c
+               ('flat', 0, 1, [5]),  # a
+               ('0d', 0, 0, [6]),  # e
+               ])
         self.assertTrue(ty.need_shaped_indexing)
 
 
@@ -472,8 +502,8 @@ class TestPickling(TestCase):
     # call templates are not picklable
     @unittest.expectedFailure
     def test_external_function_pointers(self):
-        from numba.typing import ctypes_utils
-        from .ctypes_usecases import c_sin, c_cos
+        from numba.core.typing import ctypes_utils
+        from numba.tests.ctypes_usecases import c_sin, c_cos
         for fnptr in (c_sin, c_cos):
             ty = ctypes_utils.make_function_type(fnptr)
             self.assertIsInstance(ty, types.ExternalFunctionPointer)
@@ -562,11 +592,11 @@ class TestDType(TestCase):
 
     def test_kind(self):
         def tkind(A):
-            return A.dtype.kind=='f'
+            return A.dtype.kind == 'f'
         jit_tkind = jit(nopython=True)(tkind)
         self.assertEqual(tkind(np.ones(3)), jit_tkind(np.ones(3)))
         self.assertEqual(tkind(np.ones(3, dtype=np.intp)),
-                            jit_tkind(np.ones(3, dtype=np.intp)))
+                         jit_tkind(np.ones(3, dtype=np.intp)))
 
     def test_dtype_with_type(self):
         def impl():
@@ -581,6 +611,178 @@ class TestDType(TestCase):
             return a.type(0)
         jit_impl = jit(nopython=True)(impl)
         self.assertEqual(impl(), jit_impl())
+
+
+class TestIsInternalTypeMarker(TestCase):
+    """Tests the use of the Type metaclass init correctly setting the flag on
+    the `is_internal` attr of a concrete Type class
+    """
+    source_lines = """
+from numba.core import types
+
+class FooType(types.Type):
+    def __init__(self):
+        super(FooType, self).__init__(name='Foo')
+"""
+
+    # this is largely copied (with some modifications) from test_jit_module
+    @contextlib.contextmanager
+    def create_temp_module(self, source_lines=None, **jit_options):
+        # Use try/finally so cleanup happens even when an exception is raised
+        try:
+            if source_lines is None:
+                source_lines = self.source_lines
+            tempdir = temp_directory('test_extension_type')
+            # Generate random module name
+            temp_module_name = 'test_extension_type_{}'.format(
+                str(uuid.uuid4()).replace('-', '_'))
+            temp_module_path = os.path.join(tempdir, temp_module_name + '.py')
+
+            with open(temp_module_path, 'w') as f:
+                lines = source_lines.format(jit_options=jit_options)
+                f.write(lines)
+            # Add test_module to sys.path so it can be imported
+            sys.path.insert(0, tempdir)
+            test_module = importlib.import_module(temp_module_name)
+            yield test_module
+        finally:
+            sys.modules.pop(temp_module_name, None)
+            sys.path.remove(tempdir)
+            shutil.rmtree(tempdir)
+
+    def test_create_temp_module(self):
+        sys_path_original = list(sys.path)
+        sys_modules_original = dict(sys.modules)
+        with self.create_temp_module() as test_module:
+            temp_module_dir = os.path.dirname(test_module.__file__)
+            self.assertEqual(temp_module_dir, sys.path[0])
+            self.assertEqual(sys.path[1:], sys_path_original)
+            self.assertTrue(test_module.__name__ in sys.modules)
+        # Test that modifications to sys.path / sys.modules are reverted
+        self.assertEqual(sys.path, sys_path_original)
+        self.assertEqual(sys.modules, sys_modules_original)
+
+    def test_create_temp_module_with_exception(self):
+        try:
+            sys_path_original = list(sys.path)
+            sys_modules_original = dict(sys.modules)
+            with self.create_temp_module():
+                raise ValueError("Something went wrong!")
+        except ValueError:
+            # Test that modifications to sys.path / sys.modules are reverted
+            self.assertEqual(sys.path, sys_path_original)
+            self.assertEqual(sys.modules, sys_modules_original)
+
+    def test_externally_defined_type_is_external(self):
+
+        with self.create_temp_module(self.source_lines) as test_module:
+            FooType = test_module.FooType
+            self.assertFalse(FooType().is_internal)
+
+            # set up an extension type
+            class Foo(object):
+                pass
+
+            register_model(FooType)(models.OpaqueModel)
+
+            @typeof_impl.register(Foo)
+            def _typ_foo(val, c):
+                return FooType()
+
+            @unbox(FooType)
+            def unbox_foo(typ, obj, c):
+                return NativeValue(c.context.get_dummy_value())
+
+            # function to overload
+            def false_if_not_array(a):
+                pass
+
+            # Set up an overload which will accept all types irrespective of
+            # whether they are from Numba's closed type system
+            @overload(false_if_not_array)
+            def ol_false_if_not_array(a):
+                if isinstance(a, types.Array):
+                    return lambda a : True
+                else:
+                    return lambda a : False
+
+            @njit
+            def call_false_if_not_array(a):
+                return false_if_not_array(a)
+
+            self.assertTrue(call_false_if_not_array(np.zeros(10)))
+            self.assertFalse(call_false_if_not_array(10))
+
+            # The extension type was accepted
+            self.assertFalse(call_false_if_not_array(Foo()))
+
+            # Now do the same sort of overload but put in a guard based on the
+            # use of internal types
+
+            def false_if_not_array_closed_system(a):
+                pass
+
+            @overload(false_if_not_array_closed_system)
+            def ol_false_if_not_array_closed_system(a):
+                if a.is_internal:  # guard
+                    if isinstance(a, types.Array):
+                        return lambda a : True
+                    else:
+                        return lambda a : False
+
+            @njit
+            def call_false_if_not_array_closed_system(a):
+                return false_if_not_array_closed_system(a)
+
+            self.assertTrue(call_false_if_not_array_closed_system(np.zeros(10)))
+            self.assertFalse(call_false_if_not_array_closed_system(10))
+
+            with self.assertRaises(errors.TypingError) as raises:
+                call_false_if_not_array_closed_system(Foo())
+            estr = str(raises.exception)
+            self.assertIn("Invalid use of Function", estr)
+            self.assertIn("false_if_not_array_closed_system", estr)
+            self.assertIn("(Foo)", estr)
+
+    def test_mixin_against_real_example(self):
+        # See issue #4970, this checks that unicode eq/ne now ignores extension
+        # types.
+
+        with self.create_temp_module(self.source_lines) as test_module:
+            FooType = test_module.FooType
+            self.assertFalse(FooType().is_internal)
+
+            # set up an extension type
+            class Foo(object):
+                pass
+
+            register_model(FooType)(models.OpaqueModel)
+
+            @typeof_impl.register(Foo)
+            def _typ_foo(val, c):
+                return FooType()
+
+            @unbox(FooType)
+            def unbox_foo(typ, obj, c):
+                return NativeValue(c.context.get_dummy_value())
+
+            @overload(operator.eq)
+            def foo_eq(a, b):
+                if a == FooType():
+                    return lambda a, b: "RAN CUSTOM EQ OVERLOAD"
+
+            @overload(operator.ne)
+            def foo_ne(a, b):
+                if a == FooType():
+                    return lambda a, b: "RAN CUSTOM NE OVERLOAD"
+
+            @njit
+            def f(a):
+                return a == "A", a != "A"
+
+            self.assertEqual(("RAN CUSTOM EQ OVERLOAD",
+                              "RAN CUSTOM NE OVERLOAD"),
+                             f(Foo()))
 
 
 if __name__ == '__main__':

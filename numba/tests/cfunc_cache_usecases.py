@@ -4,7 +4,6 @@ exercise caching compiled C callbacks.
 
 See test_cfunc.py.
 """
-from __future__ import division, print_function, absolute_import
 
 import sys
 

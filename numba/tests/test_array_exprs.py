@@ -1,15 +1,14 @@
-from __future__ import print_function, division, absolute_import
-
 import gc
+from io import StringIO
 
 import numpy as np
 
 from numba import njit, vectorize
-from numba import unittest_support as unittest
-from numba import compiler, typing, typeof, ir, utils, types
-from numba.compiler import Pipeline, _PipelineManager, Flags
-from numba.targets import cpu
-from .support import MemoryLeakMixin, TestCase
+from numba import typeof
+from numba.core import utils, types, typing, ir, compiler, cpu
+from numba.core.compiler import Compiler, Flags
+from numba.tests.support import MemoryLeakMixin, TestCase
+import unittest
 
 
 class Namespace(dict):
@@ -75,7 +74,7 @@ def distance_matrix(vectors):
     return result
 
 
-class RewritesTester(Pipeline):
+class RewritesTester(Compiler):
     @classmethod
     def mk_pipeline(cls, args, return_type=None, flags=None, locals={},
                     library=None, typing_context=None, target_context=None):
@@ -137,9 +136,9 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         np.testing.assert_array_equal(expected, actual)
         np.testing.assert_array_equal(control, actual)
 
-        ir0 = control_pipeline.func_ir.blocks
-        ir1 = test_pipeline.func_ir.blocks
-        ir2 = control_pipeline2.func_ir.blocks
+        ir0 = control_pipeline.state.func_ir.blocks
+        ir1 = test_pipeline.state.func_ir.blocks
+        ir2 = control_pipeline2.state.func_ir.blocks
         self.assertEqual(len(ir0), len(ir1))
         self.assertEqual(len(ir0), len(ir2))
         # The rewritten IR should be smaller than the original.
@@ -282,8 +281,8 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         scalar optimizations such as rewriting `x ** 2`.
         """
         ns = self._test_cube_function()
-        self._assert_total_rewrite(ns.control_pipeline.func_ir.blocks,
-                                   ns.test_pipeline.func_ir.blocks,
+        self._assert_total_rewrite(ns.control_pipeline.state.func_ir.blocks,
+                                   ns.test_pipeline.state.func_ir.blocks,
                                    trivial=True)
 
     def test_complicated_expr(self):
@@ -293,8 +292,8 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         array expressions.
         '''
         ns = self._test_root_function()
-        self._assert_total_rewrite(ns.control_pipeline.func_ir.blocks,
-                                   ns.test_pipeline.func_ir.blocks)
+        self._assert_total_rewrite(ns.control_pipeline.state.func_ir.blocks,
+                                   ns.test_pipeline.state.func_ir.blocks)
 
     def test_common_subexpressions(self, fn=neg_root_common_subexpr):
         '''
@@ -302,8 +301,8 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         subexpressions properly.
         '''
         ns = self._test_root_function(fn)
-        ir0 = ns.control_pipeline.func_ir.blocks
-        ir1 = ns.test_pipeline.func_ir.blocks
+        ir0 = ns.control_pipeline.state.func_ir.blocks
+        ir1 = ns.test_pipeline.state.func_ir.blocks
         self.assertEqual(len(ir0), len(ir1))
         self.assertGreater(len(ir0[0].body), len(ir1[0].body))
         self.assertEqual(len(list(self._get_array_exprs(ir0[0].body))), 0)
@@ -356,24 +355,24 @@ class TestArrayExpressions(MemoryLeakMixin, TestCase):
         np.testing.assert_array_almost_equal(expected, control)
         np.testing.assert_array_almost_equal(expected, actual)
 
-        self._assert_total_rewrite(control_pipeline.func_ir.blocks,
-                                   test_pipeline.func_ir.blocks)
+        self._assert_total_rewrite(control_pipeline.state.func_ir.blocks,
+                                   test_pipeline.state.func_ir.blocks)
 
     def test_cmp_op(self):
         '''
         Verify that comparison operators are supported by the rewriter.
         '''
         ns = self._test_root_function(are_roots_imaginary)
-        self._assert_total_rewrite(ns.control_pipeline.func_ir.blocks,
-                                   ns.test_pipeline.func_ir.blocks)
+        self._assert_total_rewrite(ns.control_pipeline.state.func_ir.blocks,
+                                   ns.test_pipeline.state.func_ir.blocks)
 
     def test_explicit_output(self):
         """
         Check that ufunc calls with explicit outputs are not rewritten.
         """
         ns = self._test_explicit_output_function(explicit_output)
-        self._assert_no_rewrite(ns.control_pipeline.func_ir.blocks,
-                                ns.test_pipeline.func_ir.blocks)
+        self._assert_no_rewrite(ns.control_pipeline.state.func_ir.blocks,
+                                ns.test_pipeline.state.func_ir.blocks)
 
 
 class TestRewriteIssues(MemoryLeakMixin, TestCase):
@@ -462,7 +461,7 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
         a = np.linspace(0, 1, 10)
         cfunc(a, a, a, a)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfunc.inspect_types(buf)
         res = buf.getvalue()
         self.assertIn("#   u.1 = ", res)

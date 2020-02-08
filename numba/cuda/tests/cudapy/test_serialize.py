@@ -1,9 +1,10 @@
-from __future__ import print_function
 import pickle
 import numpy as np
-from numba import cuda, vectorize, numpy_support, types
-from numba import unittest_support as unittest
+from numba import cuda, vectorize
+from numba.core import types
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
+import unittest
+from numba.np import numpy_support
 
 
 @skip_on_cudasim('pickling not supported in CUDASIM')

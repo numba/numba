@@ -1,27 +1,30 @@
-from __future__ import division
-
 import itertools
 
 import numpy as np
 import sys
 from collections import namedtuple
+from io import StringIO
 
-from numba import unittest_support as unittest
-from numba import (njit, typeof, types, typing, typeof, ir, utils, bytecode,
-    jitclass, prange)
-from .support import TestCase, tag
-from numba.array_analysis import EquivSet, ArrayAnalysis
-from numba.compiler import Pipeline, Flags, _PipelineManager
-from numba.targets import cpu, registry
-from numba.numpy_support import version as numpy_version
-from numba.ir_utils import remove_dead
+from numba import njit, typeof, prange
+from numba.core import types, typing, ir, bytecode, postproc, cpu, registry
+from numba.tests.support import TestCase, tag, skip_parfors_unsupported
+from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
+from numba.core.compiler import Compiler, Flags, PassManager
+from numba.core.ir_utils import remove_dead
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+                             IRProcessing, DeadBranchPrune,
+                             RewriteSemanticConstants, GenericRewrites,
+                             WithLifting, PreserveIR, InlineClosureLikes)
 
-# for parallel tests, marking that Windows with Python 2.7 is not supported
-_windows_py27 = (sys.platform.startswith('win32') and
-                 sys.version_info[:2] == (2, 7))
-_32bit = sys.maxsize <= 2 ** 32
-_reason = 'parfors not supported'
-skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
+                                NopythonRewrites, IRLegalization)
+
+from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.experimental import jitclass
+import unittest
+
+
+skip_unsupported = skip_parfors_unsupported
 
 
 # test class for #3700
@@ -37,7 +40,6 @@ class TestEquivSet(TestCase):
     """
     Test array_analysis.EquivSet.
     """
-    @tag('important')
     def test_insert_equiv(self):
         s1 = EquivSet()
         s1.insert_equiv('a', 'b')
@@ -50,7 +52,6 @@ class TestEquivSet(TestCase):
         self.assertTrue(s1.is_equiv('a', 'b', 'c', 'd'))
         self.assertFalse(s1.is_equiv('a', 'e'))
 
-    @tag('important')
     def test_intersect(self):
         s1 = EquivSet()
         s2 = EquivSet()
@@ -73,7 +74,27 @@ class TestEquivSet(TestCase):
         self.assertFalse(r.is_equiv('c', 'd'))
 
 
-class ArrayAnalysisTester(Pipeline):
+@register_pass(analysis_only=False, mutates_CFG=True)
+class ArrayAnalysisPass(FunctionPass):
+    _name = "array_analysis_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        state.array_analysis = ArrayAnalysis(state.typingctx, state.func_ir,
+                                             state.type_annotation.typemap,
+                                             state.type_annotation.calltypes)
+        state.array_analysis.run(state.func_ir.blocks)
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run()
+        state.func_ir_copies.append(state.func_ir.copy())
+        if state.test_idempotence and len(state.func_ir_copies) > 1:
+            state.test_idempotence(state.func_ir_copies)
+        return False
+
+
+class ArrayAnalysisTester(Compiler):
 
     @classmethod
     def mk_pipeline(cls, args, return_type=None, flags=None, locals={},
@@ -92,53 +113,46 @@ class ArrayAnalysisTester(Pipeline):
         """
         Populate and run compiler pipeline
         """
-        self.func_id = bytecode.FunctionIdentity.from_function(func)
+        self.state.func_id = bytecode.FunctionIdentity.from_function(func)
+        ExtractByteCode().run_pass(self.state)
 
-        try:
-            bc = self.extract_bytecode(self.func_id)
-        except Exception as e:
-            raise e
+        self.state.lifted = ()
+        self.state.lifted_from = None
+        state = self.state
+        state.func_ir_copies = []
+        state.test_idempotence = test_idempotence
 
-        self.bc = bc
-        self.lifted = ()
-        self.lifted_from = None
+        name = 'array_analysis_testing'
+        pm = PassManager(name)
+        pm.add_pass(TranslateByteCode, "analyzing bytecode")
+        pm.add_pass(FixupArgs, "fix up args")
+        pm.add_pass(IRProcessing, "processing IR")
+        # pre typing
+        if not state.flags.no_rewrites:
+            pm.add_pass(GenericRewrites, "nopython rewrites")
+            pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
+            pm.add_pass(DeadBranchPrune, "dead branch pruning")
+        pm.add_pass(InlineClosureLikes,
+                    "inline calls to locally defined closures")
+        # typing
+        pm.add_pass(NopythonTypeInference, "nopython frontend")
+        pm.add_pass(AnnotateTypes, "annotate types")
 
-        pm = _PipelineManager()
+        if not state.flags.no_rewrites:
+            pm.add_pass(NopythonRewrites, "nopython rewrites")
 
-        pm.create_pipeline("nopython")
-        if self.func_ir is None:
-            pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
-        pm.add_stage(self.stage_process_ir, "processing IR")
-        if not self.flags.no_rewrites:
-            if self.status.can_fallback:
-                pm.add_stage(
-                    self.stage_preserve_ir, "preserve IR for fallback")
-            pm.add_stage(self.stage_generic_rewrites, "nopython rewrites")
-        pm.add_stage(
-            self.stage_inline_pass, "inline calls to locally defined closures")
-        pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
-        pm.add_stage(self.stage_annotate_type, "annotate type")
-        if not self.flags.no_rewrites:
-            pm.add_stage(self.stage_nopython_rewrites, "nopython rewrites")
-        func_ir_copies = []
-
-        def stage_array_analysis():
-            self.array_analysis = ArrayAnalysis(self.typingctx, self.func_ir,
-                                                self.type_annotation.typemap,
-                                                self.type_annotation.calltypes)
-            self.array_analysis.run(self.func_ir.blocks)
-            func_ir_copies.append(self.func_ir.copy())
-            if test_idempotence and len(func_ir_copies) > 1:
-                test_idempotence(func_ir_copies)
-
-        pm.add_stage(stage_array_analysis, "analyze array equivalences")
+        # Array Analysis pass
+        pm.add_pass(ArrayAnalysisPass, "array analysis")
         if test_idempotence:
             # Do another pass of array analysis to test idempotence
-            pm.add_stage(stage_array_analysis, "analyze array equivalences")
+            pm.add_pass(ArrayAnalysisPass, "idempotence array analysis")
+        # legalise
+        pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
 
+        # partial compile
         pm.finalize()
-        res = pm.run(self.status)
-        return self.array_analysis
+        pm.run(state)
+        return state.array_analysis
 
 
 class TestArrayAnalysis(TestCase):
@@ -147,7 +161,7 @@ class TestArrayAnalysis(TestCase):
         outputs = []
         for func_ir in ir_list:
             remove_dead(func_ir.blocks, func_ir.arg_names, func_ir)
-            output = utils.StringIO()
+            output = StringIO()
             func_ir.dump(file=output)
             outputs.append(output.getvalue())
         self.assertTrue(len(set(outputs)) == 1)  # assert all outputs are equal
@@ -438,7 +452,7 @@ class TestArrayAnalysis(TestCase):
 
 
     def test_stencilcall(self):
-        from numba import stencil
+        from numba.stencils.stencil import stencil
         @stencil
         def kernel_1(a):
             return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0])
@@ -557,7 +571,7 @@ class TestArrayAnalysis(TestCase):
             E = B + C
             return E
         self._compile_and_test(test_7, (types.intp,),
-                               asserts=[self.without_assert('B', 'C')],
+                               asserts=[self.with_assert('B', 'C')],
                                idempotent=False)
 
         def test_8(m):
@@ -585,7 +599,8 @@ class TestArrayAnalysis(TestCase):
                                equivs=[self.without_equiv('B', 'C'),
                                        self.with_equiv('A', 'm'),
                                        self.with_equiv('B', 'D'),
-                                       self.with_equiv('F', 'D'),],)
+                                       self.with_equiv('F', 'D'),],
+                               idempotent=False)
 
     def test_numpy_calls(self):
         def test_zeros(n):
@@ -832,29 +847,28 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('v', (2, 3, 8)),
                                        ])
 
-        if numpy_version >= (1, 10):
-            def test_stack(m, n):
-                a = np.ones(m)
-                b = np.ones(n)
-                c = np.stack((a, b))
-                d = np.ones((m, n))
-                e = np.ones((m, n))
-                f = np.stack((d, e))
-                g = np.stack((d, e), axis=0)
-                h = np.stack((d, e), axis=1)
-                i = np.stack((d, e), axis=2)
-                j = np.stack((d, e), axis=-1)
+        def test_stack(m, n):
+            a = np.ones(m)
+            b = np.ones(n)
+            c = np.stack((a, b))
+            d = np.ones((m, n))
+            e = np.ones((m, n))
+            f = np.stack((d, e))
+            g = np.stack((d, e), axis=0)
+            h = np.stack((d, e), axis=1)
+            i = np.stack((d, e), axis=2)
+            j = np.stack((d, e), axis=-1)
 
-            self._compile_and_test(test_stack, (types.intp, types.intp),
-                                   equivs=[self.with_equiv('m', 'n'),
-                                           self.with_equiv('c', (2, 'm')),
-                                           self.with_equiv(
-                                       'f', 'g', (2, 'm', 'n')),
-                self.with_equiv(
-                                       'h', ('m', 2, 'n')),
-                self.with_equiv(
-                                       'i', 'j', ('m', 'n', 2)),
-            ])
+        self._compile_and_test(test_stack, (types.intp, types.intp),
+                                equivs=[self.with_equiv('m', 'n'),
+                                        self.with_equiv('c', (2, 'm')),
+                                        self.with_equiv(
+                                    'f', 'g', (2, 'm', 'n')),
+            self.with_equiv(
+                                    'h', ('m', 2, 'n')),
+            self.with_equiv(
+                                    'i', 'j', ('m', 'n', 2)),
+        ])
 
         def test_linspace(m, n):
             a = np.linspace(m, n)
@@ -969,6 +983,21 @@ class TestArrayAnalysisParallelRequired(TestCase):
         a = slice(None)
         np.testing.assert_array_equal(
             njit(test_impl2, parallel=True)(A, a), test_impl2(A, a))
+
+    @skip_unsupported
+    def test_slice_dtype_issue_5056(self):
+        # see issue 5056
+
+        @njit(parallel=True)
+        def test_impl(data):
+            N = data.shape[0]
+            sums = np.zeros(N)
+            for i in prange(N):
+                sums[i] = np.sum(data[np.int32(0):np.int32(1)])
+            return sums
+
+        data = np.arange(10.)
+        np.testing.assert_array_equal(test_impl(data), test_impl.py_func(data))
 
 
 if __name__ == '__main__':
