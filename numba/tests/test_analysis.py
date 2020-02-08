@@ -1,13 +1,13 @@
 # Tests numba.analysis functions
-from __future__ import print_function, absolute_import, division
 import collections
 
 import numpy as np
-from numba.compiler import compile_isolated, run_frontend, Flags, StateDict
-from numba import types, rewrites, ir, jit, ir_utils, errors, njit
-from .support import TestCase, MemoryLeakMixin, SerialMixin
+from numba.core.compiler import compile_isolated, run_frontend, Flags, StateDict
+from numba import jit, njit
+from numba.core import types, errors, ir, rewrites, ir_utils
+from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
 
-from numba.analysis import dead_branch_prune, rewrite_semantic_constants
+from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
 
 _GLOBAL = 123
 
@@ -633,3 +633,14 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         FakeArrayType = types.NamedUniTuple(types.int64, 1, FakeArray)
         self.assert_prune(impl, (FakeArrayType,), [None], fa,
                           flags=enable_pyobj_flags)
+
+    def test_semantic_const_propagates_before_static_rewrites(self):
+        # see issue #5015, the ndim needs writing in as a const before
+        # the rewrite passes run to make e.g. getitems static where possible
+        @njit
+        def impl(a, b):
+            return a.shape[:b.ndim]
+
+        args = (np.zeros((5, 4, 3, 2)), np.zeros((1, 1)))
+
+        self.assertPreciseEqual(impl(*args), impl.py_func(*args))

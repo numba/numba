@@ -1,26 +1,37 @@
-from __future__ import absolute_import, print_function, division
-
 from collections import OrderedDict
 import ctypes
 import random
-import sys
 import pickle
 
 import numpy as np
 
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
-from numba import njit, typeof, types, errors
-from numba import unittest_support as unittest
-from numba import jitclass
-from .support import TestCase, MemoryLeakMixin, tag
-from numba.jitclass import _box
-from numba.runtime.nrt import MemInfo
-from numba.errors import LoweringError
+from numba import njit, typeof
+from numba.core import types, errors
+from numba.tests.support import TestCase, MemoryLeakMixin
+from numba.experimental.jitclass import _box
+from numba.core.runtime.nrt import MemInfo
+from numba.core.errors import LoweringError
+from numba.experimental import jitclass
+import unittest
 
-# there are some python 3 specific syntax tests
-if sys.version_info >= (3,):
-    from .jitclass_usecases import TestClass1, TestClass2
+
+class TestClass1(object):
+    def __init__(self, x, y, z=1, *, a=5):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.a = a
+
+
+class TestClass2(object):
+    def __init__(self, x, y, z=1, *args, a=5):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.args = args
+        self.a = a
 
 
 def _get_meminfo(box):
@@ -111,7 +122,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         return Vector2
 
-    @tag('important')
     def test_jit_class_1(self):
         Float2AndArray = self._make_Float2AndArray()
         Vector2 = self._make_Vector2()
@@ -134,7 +144,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(b, 3 + 4)
         self.assertPreciseEqual(c, inp)
 
-    @tag('important')
     def test_jitclass_usage_from_python(self):
         Float2AndArray = self._make_Float2AndArray()
 
@@ -203,7 +212,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertTrue(Foo(True).val)
         self.assertFalse(Foo(False).val)
 
-    @tag('important')
     def test_deferred_type(self):
         node_type = deferred_type()
 
@@ -350,7 +358,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(str(raises.exception),
                          "class members are not yet supported: constant")
 
-    @tag('important')
     def test_user_getter_setter(self):
         @jitclass([('attr', int32)])
         class Foo(object):
@@ -481,7 +488,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         d = create_my_class(np.array([12.3]))
         np.testing.assert_equal(d.value, [12.3])
 
-    @tag('important')
     def test_protected_attrs(self):
         spec = {
             'value': int32,
@@ -570,7 +576,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             access_dunder.py_func(inst)
         self.assertIn('_TestJitClass__value', str(raises.exception))
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
     def test_annotations(self):
         """
         Methods with annotations should compile fine (issue #1911).
@@ -649,7 +654,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.y, 2)
         self.assertEqual(tc.z, 5)
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
     def test_default_args_keyonly(self):
         spec = [('x', int32),
                 ('y', int32),
@@ -682,7 +686,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.z, 1)
         self.assertEqual(tc.a, 5)
 
-    @unittest.skipIf(sys.version_info < (3,), "Python 3-specific test")
     def test_default_args_starargs_and_keyonly(self):
         spec = [('x', int32),
                 ('y', int32),

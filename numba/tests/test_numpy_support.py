@@ -2,22 +2,21 @@
 Test helper functions from numba.numpy_support.
 """
 
-from __future__ import print_function
 
 import sys
 from itertools import product
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba import numpy_support, types
-from .support import TestCase, tag
-from .enum_usecases import Shake, RequestError
+import unittest
+from numba.core import types
+from numba.tests.support import TestCase
+from numba.tests.enum_usecases import Shake, RequestError
+from numba.np import numpy_support
 
 
 class TestFromDtype(TestCase):
 
-    @tag('important')
     def test_number_types(self):
         """
         Test from_dtype() and as_dtype() with the various scalar number types.
@@ -94,21 +93,18 @@ class TestFromDtype(TestCase):
         # Unit-less ("generic") type
         check(np.dtype(letter), nb_class(''), 14)
 
-    @tag('important')
     def test_datetime_types(self):
         """
         Test from_dtype() and as_dtype() with the datetime types.
         """
         self.check_datetime_types('M', types.NPDatetime)
 
-    @tag('important')
     def test_timedelta_types(self):
         """
         Test from_dtype() and as_dtype() with the timedelta types.
         """
         self.check_datetime_types('m', types.NPTimedelta)
 
-    @tag('important')
     def test_struct_types(self):
         def check(dtype, fields, size, aligned):
             tp = numpy_support.from_dtype(dtype)
@@ -137,7 +133,6 @@ class TestFromDtype(TestCase):
                       'n': (types.CharSeq(5), 4, None, None)},
               size=9, aligned=False)
 
-    @tag('important')
     def test_enum_type(self):
 
         def check(base_inst, enum_def, type_class):
@@ -214,14 +209,12 @@ class ValueTypingTestBase(object):
 
 class TestArrayScalars(ValueTypingTestBase, TestCase):
 
-    @tag('important')
     def test_number_values(self):
         """
         Test map_arrayscalar_type() with scalar number values.
         """
         self.check_number_values(numpy_support.map_arrayscalar_type)
 
-    @tag('important')
     def test_datetime_values(self):
         """
         Test map_arrayscalar_type() with np.datetime64 values.
@@ -233,7 +226,6 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
         with self.assertRaises(NotImplementedError):
             f(t)
 
-    @tag('important')
     def test_timedelta_values(self):
         """
         Test map_arrayscalar_type() with np.timedelta64 values.
@@ -412,22 +404,22 @@ class TestUFuncs(TestCase):
         # middle axis is shape 1
         check_arr(arr.reshape((2, 3, 4))[:, ::3])
         check_arr(arr.reshape((2, 3, 4)).T[:, ::3])
-        if numpy_support.version > (1, 11):
-            # leading axis is shape 1
-            check_arr(arr.reshape((2, 3, 4))[::2])
-            check_arr(arr.reshape((2, 3, 4)).T[:, :, ::2])
-            # 2 leading axis are shape 1
-            check_arr(arr.reshape((2, 3, 4))[::2, ::3])
-            check_arr(arr.reshape((2, 3, 4)).T[:, ::3, ::2])
-            # single item slices for all axis
-            check_arr(arr.reshape((2, 3, 4))[::2, ::3, ::4])
-            check_arr(arr.reshape((2, 3, 4)).T[::4, ::3, ::2])
-            # 4D
-            check_arr(arr.reshape((2, 2, 3, 2))[::2, ::2, ::3])
-            check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::2])
-            # outer zero dims
-            check_arr(arr.reshape((2, 2, 3, 2))[::5, ::2, ::3])
-            check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::5])
+
+        # leading axis is shape 1
+        check_arr(arr.reshape((2, 3, 4))[::2])
+        check_arr(arr.reshape((2, 3, 4)).T[:, :, ::2])
+        # 2 leading axis are shape 1
+        check_arr(arr.reshape((2, 3, 4))[::2, ::3])
+        check_arr(arr.reshape((2, 3, 4)).T[:, ::3, ::2])
+        # single item slices for all axis
+        check_arr(arr.reshape((2, 3, 4))[::2, ::3, ::4])
+        check_arr(arr.reshape((2, 3, 4)).T[::4, ::3, ::2])
+        # 4D
+        check_arr(arr.reshape((2, 2, 3, 2))[::2, ::2, ::3])
+        check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::2])
+        # outer zero dims
+        check_arr(arr.reshape((2, 2, 3, 2))[::5, ::2, ::3])
+        check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::5])
 
 
 if __name__ == '__main__':

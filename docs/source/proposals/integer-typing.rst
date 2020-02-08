@@ -125,7 +125,7 @@ easily predictable types.
 
 When using built-in Python ``int``, the user gets acceptable magnitude
 (32 or 64 bits depending on the system's bitness), and the type remains
-the same accross all computations.
+the same across all computations.
 
 When explicitly using smaller bitwidths, intermediate results don't
 suffer from magnitude loss, since their bitwidth is promoted to ``intp``.

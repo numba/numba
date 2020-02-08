@@ -801,28 +801,16 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
 }
 
 
-#if PY_MAJOR_VERSION >= 3
-    static
-    void* wrap_import_array(void) {
-        import_array(); /* import array returns NULL on failure */
-        return (void*)1;
-    }
-#else
-    static
-    void wrap_import_array(void) {
-        import_array();
-    }
-#endif
+static
+void* wrap_import_array(void) {
+    import_array(); /* import array returns NULL on failure */
+    return (void*)1;
+}
 
 
 static
 int init_numpy(void) {
-    #if PY_MAJOR_VERSION >= 3
-        return wrap_import_array() != NULL;
-    #else
-        wrap_import_array();
-        return 1;   /* always succeed */
-    #endif
+    return wrap_import_array() != NULL;
 }
 
 

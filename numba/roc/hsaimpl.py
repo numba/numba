@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 import operator
 from functools import reduce
 
@@ -8,14 +6,13 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 from llvmlite import ir
 
-from numba.targets.imputils import Registry
-from numba import cgutils
-from numba import types
-from numba.itanium_mangler import mangle_c, mangle, mangle_type
-from . import target
-from . import stubs
-from . import hlc
-from . import enums
+from numba.core.imputils import Registry
+from numba.core import types, cgutils
+from numba.core.itanium_mangler import mangle_c, mangle, mangle_type
+from numba.roc import target
+from numba.roc import stubs
+from numba.roc import hlc
+from numba.roc import enums
 
 registry = Registry()
 lower = registry.lower
@@ -232,7 +229,7 @@ def hsail_atomic_add_tuple(context, builder, sig, args):
                         (aryty.ndim, len(indty)))
 
     lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
+    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
 
     return builder.atomic_rmw("add", ptr, val, ordering='monotonic')
 

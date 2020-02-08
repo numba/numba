@@ -35,6 +35,23 @@ for permanent use by adding::
 
     color_scheme: dark_bg
 
+Jit flags
+---------
+
+These variables globally override flags to the :func:`~numba.jit` decorator.
+
+.. envvar:: NUMBA_BOUNDSCHECK
+
+   If set to 0 or 1, globally disable or enable bounds checking, respectively.
+   The default if the variable is not set or set to an empty string is to use
+   the ``boundscheck`` flag passed to the :func:`~numba.jit` decorator for a
+   given function. See the documentation of :ref:`@jit
+   <jit-decorator-boundscheck>` for more information.
+
+   Note, due to limitations in numba, the bounds checking currently produces
+   exception messages that do not match those from NumPy. If you set
+   ``NUMBA_FULL_TRACEBACKS=1``, the full exception message with the axis,
+   index, and shape information will be printed to the terminal.
 
 Debugging
 ---------
@@ -54,8 +71,7 @@ These variables influence what is printed out during compilation of
 
 .. envvar:: NUMBA_SHOW_HELP
 
-    If not set or set to zero, show user level help information.
-    Defaults to the negation of the value set by `NUMBA_DEVELOPER_MODE`.
+    If set to non-zero, show resources for getting help. Default is zero.
 
 .. envvar:: NUMBA_DISABLE_ERROR_MESSAGE_HIGHLIGHTING
 
@@ -74,6 +90,11 @@ These variables influence what is printed out during compilation of
    - ``jupyter_nb`` Suitable for use in Jupyter Notebooks.
 
    *Default value:* ``no_color``. The type of the value is ``string``.
+
+.. envvar:: NUMBA_HIGHLIGHT_DUMPS
+
+   If set to non-zero and ``pygments`` is installed, syntax highlighting is
+   applied to Numba IR, LLVM IR and assembly dumps. Default is zero.
 
 .. envvar:: NUMBA_DISABLE_PERFORMANCE_WARNINGS
 
@@ -363,4 +384,3 @@ Threading Control
    * ``tbb`` - A threading layer backed by Intel TBB.
    * ``omp`` - A threading layer backed by OpenMP.
    * ``workqueue`` - A simple built-in work-sharing task scheduler.
-

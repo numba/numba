@@ -1,13 +1,11 @@
-from __future__ import print_function, absolute_import, division
-
 import pickle
 
 import numpy as np
 
 from numba import njit, vectorize
-from numba.npyufunc import dufunc
 from ..support import MemoryLeakMixin
-from numba import unittest_support as unittest
+import unittest
+from numba.np.ufunc import dufunc
 
 
 def pyuadd(a0, a1):

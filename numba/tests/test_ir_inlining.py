@@ -3,22 +3,31 @@ This tests the inline kwarg to @jit and @overload etc, it has nothing to do with
 LLVM or low level inlining.
 """
 
-from __future__ import print_function, absolute_import
 
 import numpy as np
 
-import numba
-from numba import njit, ir, types
-from numba.extending import overload
-from numba.targets.cpu import InlineOptions
-from numba.compiler import DefaultPassBuilder
-from numba.typed_passes import DeadCodeElimination, IRLegalization
-from numba.untyped_passes import PreserveIR
+from numba import njit, typeof
+from numba.core import types, ir, ir_utils
+from numba.core.extending import (
+    overload,
+    overload_method,
+    overload_attribute,
+    register_model,
+    typeof_impl,
+    unbox,
+    NativeValue,
+    register_jitable,
+)
+from numba.core.datamodel.models import OpaqueModel
+from numba.core.cpu import InlineOptions
+from numba.core.compiler import DefaultPassBuilder, CompilerBase
+from numba.core.typed_passes import DeadCodeElimination, IRLegalization
+from numba.core.untyped_passes import PreserveIR
 from itertools import product
-from .support import TestCase, unittest
+from numba.tests.support import TestCase, unittest, skip_py38_or_later
 
 
-class InlineTestPipeline(numba.compiler.CompilerBase):
+class InlineTestPipeline(CompilerBase):
     """ Same as the standard pipeline, but preserves the func_ir into the
     metadata store"""
 
@@ -36,7 +45,7 @@ class InlineTestPipeline(numba.compiler.CompilerBase):
         return [pipeline]
 
 
-# this global has the same name as the the global in inlining_usecases.py, it
+# this global has the same name as the global in inlining_usecases.py, it
 # is here to check that inlined functions bind to their own globals
 _GLOBAL1 = -50
 
@@ -94,11 +103,12 @@ class InliningBase(TestCase):
 
         # make sure IR doesn't have branches
         fir = j_func.overloads[j_func.signatures[0]].metadata['preserved_ir']
-        fir.blocks = numba.ir_utils.simplify_CFG(fir.blocks)
+        fir.blocks = ir_utils.simplify_CFG(fir.blocks)
         if self._DEBUG:
             print("FIR".center(80, "-"))
             fir.dump()
-        self.assertEqual(len(fir.blocks), block_count)
+        if block_count != 'SKIP':
+            self.assertEqual(len(fir.blocks), block_count)
         block = next(iter(fir.blocks.values()))
 
         # if we don't expect the function to be inlined then make sure there is
@@ -410,6 +420,7 @@ class TestFunctionInlining(InliningBase):
 
         self.check(impl, inline_expect={'foo': True}, block_count=1)
 
+    @skip_py38_or_later
     def test_inline_involved(self):
 
         fortran = njit(inline='always')(_gen_involved())
@@ -444,6 +455,20 @@ class TestFunctionInlining(InliningBase):
 
         self.check(impl, inline_expect={'foo': True, 'boz': True,
                                         'fortran': True}, block_count=37)
+
+
+class TestRegisterJitableInlining(InliningBase):
+
+    def test_register_jitable_inlines(self):
+
+        @register_jitable(inline='always')
+        def foo():
+            return 1
+
+        def impl():
+            foo()
+
+        self.check(impl, inline_expect={'foo': True})
 
 
 class TestOverloadInlining(InliningBase):
@@ -731,7 +756,7 @@ class TestOverloadInlining(InliningBase):
 
         # this is the Python equiv of the overloads below
         def bar(x):
-            if isinstance(numba.typeof(x), types.Float):
+            if isinstance(typeof(x), types.Float):
                 return x + 1234
             else:
                 return x + 1
@@ -782,6 +807,179 @@ class TestOverloadInlining(InliningBase):
             self.assertNotEqual(val.value, 1234)
 
 
+class TestOverloadMethsAttrsInlining(InliningBase):
+    def setUp(self):
+        # Use test_id to makesure no collision is possible.
+        test_id = self.id()
+        DummyType = type('DummyTypeFor{}'.format(test_id), (types.Opaque,), {})
+
+        dummy_type = DummyType("my_dummy")
+        register_model(DummyType)(OpaqueModel)
+
+        class Dummy(object):
+            pass
+
+        @typeof_impl.register(Dummy)
+        def typeof_Dummy(val, c):
+            return dummy_type
+
+        @unbox(DummyType)
+        def unbox_index(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        self.Dummy = Dummy
+        self.DummyType = DummyType
+
+    def check_method(self, test_impl, args, expected, block_count,
+                     expects_inlined=True):
+        j_func = njit(pipeline_class=InlineTestPipeline)(test_impl)
+        # check they produce the same answer first!
+        self.assertEqual(j_func(*args), expected)
+
+        # make sure IR doesn't have branches
+        fir = j_func.overloads[j_func.signatures[0]].metadata['preserved_ir']
+        fir.blocks = fir.blocks
+        self.assertEqual(len(fir.blocks), block_count)
+        if expects_inlined:
+            # assert no calls
+            for block in fir.blocks.values():
+                calls = list(block.find_exprs('call'))
+                self.assertFalse(calls)
+        else:
+            # assert has call
+            allcalls = []
+            for block in fir.blocks.values():
+                allcalls += list(block.find_exprs('call'))
+            self.assertTrue(allcalls)
+
+    def check_getattr(self, test_impl, args, expected, block_count,
+                      expects_inlined=True):
+        j_func = njit(pipeline_class=InlineTestPipeline)(test_impl)
+        # check they produce the same answer first!
+        self.assertEqual(j_func(*args), expected)
+
+        # make sure IR doesn't have branches
+        fir = j_func.overloads[j_func.signatures[0]].metadata['preserved_ir']
+        fir.blocks = fir.blocks
+        self.assertEqual(len(fir.blocks), block_count)
+        if expects_inlined:
+            # assert no getattr
+            for block in fir.blocks.values():
+                getattrs = list(block.find_exprs('getattr'))
+                self.assertFalse(getattrs)
+        else:
+            # assert has getattr
+            allgetattrs = []
+            for block in fir.blocks.values():
+                allgetattrs += list(block.find_exprs('getattr'))
+            self.assertTrue(allgetattrs)
+
+    def test_overload_method_default_args_always(self):
+        @overload_method(self.DummyType, "inline_method", inline='always')
+        def _get_inlined_method(obj, val=None, val2=None):
+            def get(obj, val=None, val2=None):
+                return ("THIS IS INLINED", val, val2)
+            return get
+
+        def foo(obj):
+            return obj.inline_method(123), obj.inline_method(val2=321)
+
+        self.check_method(
+            test_impl=foo,
+            args=[self.Dummy()],
+            expected=(("THIS IS INLINED", 123, None),
+                      ("THIS IS INLINED", None, 321)),
+            block_count=1,
+        )
+
+    def make_overload_method_test(self, costmodel, should_inline):
+        def costmodel(*args):
+            return should_inline
+
+        @overload_method(self.DummyType, "inline_method", inline=costmodel)
+        def _get_inlined_method(obj, val):
+            def get(obj, val):
+                return ("THIS IS INLINED!!!", val)
+            return get
+
+        def foo(obj):
+            return obj.inline_method(123)
+
+        self.check_method(
+            test_impl=foo,
+            args=[self.Dummy()],
+            expected=("THIS IS INLINED!!!", 123),
+            block_count=1,
+            expects_inlined=should_inline,
+        )
+
+    def test_overload_method_cost_driven_always(self):
+        self.make_overload_method_test(
+            costmodel='always',
+            should_inline=True,
+        )
+
+    def test_overload_method_cost_driven_never(self):
+        self.make_overload_method_test(
+            costmodel='never',
+            should_inline=False,
+        )
+
+    def test_overload_method_cost_driven_must_inline(self):
+        self.make_overload_method_test(
+            costmodel=lambda *args: True,
+            should_inline=True,
+        )
+
+    def test_overload_method_cost_driven_no_inline(self):
+        self.make_overload_method_test(
+            costmodel=lambda *args: False,
+            should_inline=False,
+        )
+
+    def make_overload_attribute_test(self, costmodel, should_inline):
+        @overload_attribute(self.DummyType, "inlineme", inline=costmodel)
+        def _get_inlineme(obj):
+            def get(obj):
+                return "MY INLINED ATTRS"
+            return get
+
+        def foo(obj):
+            return obj.inlineme
+
+        self.check_getattr(
+            test_impl=foo,
+            args=[self.Dummy()],
+            expected="MY INLINED ATTRS",
+            block_count=1,
+            expects_inlined=should_inline,
+        )
+
+    def test_overload_attribute_always(self):
+        self.make_overload_attribute_test(
+            costmodel='always',
+            should_inline=True,
+        )
+
+    def test_overload_attribute_never(self):
+        self.make_overload_attribute_test(
+            costmodel='never',
+            should_inline=False,
+        )
+
+    def test_overload_attribute_costmodel_must_inline(self):
+        self.make_overload_attribute_test(
+            costmodel=lambda *args: True,
+            should_inline=True,
+        )
+
+    def test_overload_attribute_costmodel_no_inline(self):
+        self.make_overload_attribute_test(
+            costmodel=lambda *args: False,
+            should_inline=False,
+        )
+
+
 class TestGeneralInlining(InliningBase):
 
     def test_with_inlined_and_noninlined_variants(self):
@@ -826,6 +1024,20 @@ class TestGeneralInlining(InliningBase):
             return bar(a + b, c=19)
 
         self.check(impl, 3, 4, inline_expect={'bar': True})
+
+    def test_inlining_optional_constant(self):
+        # This testcase causes `b` to be a Optional(bool) constant once it is
+        # inlined into foo().
+        @njit(inline='always')
+        def bar(a=None, b=None):
+            if b is None:
+                b = 123     # this changes the type of `b` due to lack of SSA
+            return (a, b)
+
+        def impl():
+            return bar(), bar(123), bar(b=321)
+
+        self.check(impl, block_count='SKIP', inline_expect={'bar': True})
 
 
 class TestInlineOptions(TestCase):

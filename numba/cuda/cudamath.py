@@ -1,7 +1,6 @@
-from __future__ import print_function, absolute_import, division
 import math
-from numba import types, utils
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
+from numba.core import types, utils
+from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     signature, Registry)
 
 registry = Registry()

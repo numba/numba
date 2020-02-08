@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import array
 import gc
 import itertools
@@ -7,10 +5,12 @@ import sys
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types, jit, numpy_support
-from .support import TestCase
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit
+from numba.core import types
+from numba.tests.support import TestCase
+from numba.np import numpy_support
 
 
 def identity(x):

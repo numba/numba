@@ -1,13 +1,10 @@
-from __future__ import print_function, division, absolute_import
-
 import array
-import sys
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import jit
-from .support import TestCase, compile_function, MemoryLeakMixin
+from numba.tests.support import TestCase, compile_function, MemoryLeakMixin
+import unittest
 
 
 @jit(nopython=True)
@@ -57,13 +54,6 @@ ndim_usecase = attrgetter("ndim")
 readonly_usecase = attrgetter("readonly")
 shape_usecase = attrgetter("shape")
 strides_usecase = attrgetter("strides")
-
-# On Python 2, array.array doesn't support the PEP 3118 buffer API
-array_supported = sys.version_info >= (3,)
-# On Python 2, bytes is really the str object
-bytes_supported = sys.version_info >= (3,)
-# On Python 2, indexing a memoryview returns bytes
-memoryview_structured_indexing = sys.version_info >= (3,)
 
 
 class TestBufferProtocol(MemoryLeakMixin, TestCase):
@@ -121,13 +111,11 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
         yield memoryview(arr)
 
     def _readonlies(self):
-        if bytes_supported:
-            yield b"xyz"
-        if memoryview_structured_indexing:
-            yield memoryview(b"abcdefghi")
-            arr = np.arange(5)
-            arr.setflags(write=False)
-            yield memoryview(arr)
+        yield b"xyz"
+        yield memoryview(b"abcdefghi")
+        arr = np.arange(5)
+        arr.setflags(write=False)
+        yield memoryview(arr)
 
     def _check_unary(self, jitfunc, *args):
         pyfunc = jitfunc.py_func
@@ -182,50 +170,40 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
 
     def test_len(self):
         self.check_len(bytearray(5))
-        if bytes_supported:
-            self.check_len(b"xyz")
+        self.check_len(b"xyz")
         for mem in self._memoryviews():
             self.check_len(mem)
-        if array_supported:
-            for arr in self._arrays():
-                self.check_len(arr)
+        for arr in self._arrays():
+            self.check_len(arr)
         for buf in self._readonlies():
             self.check_getitem(buf)
 
     def test_getitem(self):
         self.check_getitem(bytearray(b"abc"))
-        if bytes_supported:
-            self.check_getitem(b"xyz")
-        if memoryview_structured_indexing:
-            for mem in self._memoryviews():
-                self.check_getitem(mem)
-        if array_supported:
-            for arr in self._arrays():
-                self.check_getitem(arr)
+        self.check_getitem(b"xyz")
+        for mem in self._memoryviews():
+            self.check_getitem(mem)
+        for arr in self._arrays():
+            self.check_getitem(arr)
         for buf in self._readonlies():
             self.check_getitem(buf)
 
     def test_getslice(self):
         with self.assertTypingError():
             self.check_getslice(bytearray(b"abcde"))
-        if bytes_supported:
-            self.check_getslice(b"xyzuvw")
-        if memoryview_structured_indexing:
-            self.check_getslice(memoryview(b"xyzuvw"))
-        if array_supported:
-            with self.assertTypingError():
-                self.check_getslice(array.array('i', range(10)))
+        self.check_getslice(b"xyzuvw")
+        self.check_getslice(memoryview(b"xyzuvw"))
+        with self.assertTypingError():
+            self.check_getslice(array.array('i', range(10)))
         for buf in self._readonlies():
             self.check_getitem(buf)
 
     def test_setitem(self):
         self.check_setitem(bytearray(b"abcdefghi"))
-        if array_supported:
-            for arr in self._arrays():
-                self.check_setitem(arr)
-        if memoryview_structured_indexing:
-            for mem in self._memoryviews():
-                self.check_getitem(mem)
+        for arr in self._arrays():
+            self.check_setitem(arr)
+        for mem in self._memoryviews():
+            self.check_getitem(mem)
         # Read-only buffers
         for buf in self._readonlies():
             with self.assertTypingError():
@@ -233,13 +211,10 @@ class TestBufferProtocol(MemoryLeakMixin, TestCase):
 
     def test_iter(self):
         self.check_iter(bytearray(b"abc"))
-        if bytes_supported:
-            self.check_iter(b"xyz")
-        if memoryview_structured_indexing:
-            self.check_iter(memoryview(b"xyz"))
-        if array_supported:
-            for arr in self._arrays():
-                self.check_iter(arr)
+        self.check_iter(b"xyz")
+        self.check_iter(memoryview(b"xyz"))
+        for arr in self._arrays():
+            self.check_iter(arr)
         for buf in self._readonlies():
             self.check_getitem(buf)
 
@@ -296,8 +271,6 @@ class TestMemoryView(MemoryLeakMixin, TestCase):
         m = memoryview(bytearray(b"xyz"))
         self.assertIs(readonly_usecase(m), False)
 
-    @unittest.skipUnless(sys.version_info >= (3,),
-                         "memoryview.*contiguous doesn't exist on 2.7")
     def test_contiguous(self):
         m = memoryview(bytearray(b"xyz"))
         self.assertIs(contiguous_usecase(m), True)

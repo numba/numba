@@ -1,14 +1,14 @@
-from __future__ import print_function
-
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated
-from numba.numpy_support import from_dtype
-from numba import types, njit, typeof, numpy_support
-from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
-from numba.errors import TypingError
-from .test_parfors import skip_unsupported
+import unittest
+from numba.core.compiler import compile_isolated
+from numba.np.numpy_support import from_dtype
+from numba import njit, typeof
+from numba.core import types
+from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
+                                 tag, skip_parfors_unsupported)
+from numba.core.errors import TypingError
+from numba.experimental import jitclass
 
 
 def array_dtype(a):
@@ -103,8 +103,7 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         cfunc = self.get_cfunc(pyfunc, (aryty.copy(layout='A'),))
         self.assertPreciseEqual(cfunc(arr), expected)
 
-    def check_unary_with_arrays(self, pyfunc,
-                                use_reshaped_empty_array=True):
+    def check_unary_with_arrays(self, pyfunc,):
         self.check_unary(pyfunc, self.a)
         self.check_unary(pyfunc, self.a.T)
         self.check_unary(pyfunc, self.a[::2])
@@ -114,14 +113,14 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         # array with an empty dimension
         arr = np.zeros(0)
         self.check_unary(pyfunc, arr)
-        if use_reshaped_empty_array:
-            self.check_unary(pyfunc, arr.reshape((1, 0, 2)))
+
+        # check with reshape
+        self.check_unary(pyfunc, arr.reshape((1, 0, 2)))
 
     def get_cfunc(self, pyfunc, argspec):
         cres = self.ccache.compile(pyfunc, argspec)
         return cres.entry_point
 
-    @tag('important')
     def test_shape(self):
         pyfunc = array_shape
         cfunc = self.get_cfunc(pyfunc, (types.int32[:,:], types.int32))
@@ -167,11 +166,7 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         self.check_unary_with_arrays(array_flags_c_contiguous)
 
     def test_flags_f_contiguous(self):
-        # Numpy 1.12+ is more opportunistic when computing contiguousness
-        # of empty arrays.
-        use_reshaped_empty_array = numpy_support.version > (1, 11)
-        self.check_unary_with_arrays(array_flags_f_contiguous,
-                                     use_reshaped_empty_array=use_reshaped_empty_array)
+        self.check_unary_with_arrays(array_flags_f_contiguous)
 
 
 class TestNestedArrayAttr(MemoryLeakMixin, unittest.TestCase):
@@ -185,7 +180,6 @@ class TestNestedArrayAttr(MemoryLeakMixin, unittest.TestCase):
         cres = compile_isolated(pyfunc, (self.nbrecord,))
         return cres.entry_point
 
-    @tag('important')
     def test_shape(self):
         pyfunc = nested_array_shape
         cfunc = self.get_cfunc(pyfunc)
@@ -239,7 +233,7 @@ class TestArrayCTypes(MemoryLeakMixin, TestCase):
         arr = np.arange(3)
         self.assertEqual(pyfunc(arr), cfunc(arr))
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_array_ctypes_ref_error_in_parallel(self):
         # Issue #2887
         from ctypes import CFUNCTYPE, c_void_p, c_int32, c_double, c_bool
@@ -374,6 +368,22 @@ class TestRealImagAttr(MemoryLeakMixin, TestCase):
         self.assertIn("cannot access .imag of array of Record",
                       str(raises.exception))
 
+class TestJitclassFlagsSegfault(MemoryLeakMixin, TestCase):
+    """Regression test for: https://github.com/numba/numba/issues/4775 """
+
+    def test(self):
+
+        @jitclass(dict())
+        class B(object):
+
+            def __init__(self):
+                pass
+
+            def foo(self, X):
+                X.flags
+
+        Z = B()
+        Z.foo(np.ones(4))
 
 if __name__ == '__main__':
     unittest.main()

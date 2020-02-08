@@ -1,3 +1,374 @@
+Version 0.49.0dev
+-----------------
+
+In development
+
+
+Version 0.48.0 (Jan 27, 2020)
+-----------------------------
+
+This release is particularly small as it was present to catch anything that
+missed the 0.47.0 deadline (the deadline deliberately coincided with the end of
+support for Python 2.7). The next release will be considerably larger.
+
+The core changes in this release are dominated by the start of the clean up
+needed for the end of Python 2.7 support, improvements to the CUDA target and
+support for numerous additional unicode string methods.
+
+Enhancements from user contributed PRs (with thanks!):
+
+* Brian Wignall fixed more spelling typos in #4998.
+* Denis Smirnov added support for string methods ``capitalize`` (#4823),
+  ``casefold`` (#4824), ``swapcase`` (#4825), ``rsplit`` (#4834), ``partition``
+  (#4845) and ``splitlines`` (#4849).
+* Elena Totmenina extended support for string methods ``startswith`` (#4867) and
+  added ``endswith`` (#4868).
+* Eric Wieser made ``type_callable`` return the decorated function itself in
+  #4760
+* Ethan Pronovost added support for ``np.argwhere`` in #4617
+* Graham Markall contributed a large number of CUDA enhancements and fixes,
+  namely:
+
+  * #5068: Remove Python 3.4 backports from utils
+  * #4975: Make ``device_array_like`` create contiguous arrays (Fixes #4832)
+  * #5023: Don't launch ForAll kernels with 0 elements (Fixes #5017)
+  * #5016: Fix various issues in CUDA library search (Fixes #4979)
+  * #5014: Enable use of records and bools for shared memory, remove ddt, add
+    additional transpose tests
+  * #4964: Fix #4628: Add more appropriate typing for CUDA device arrays
+  * #5007: test_consuming_strides: Keep dev array alive
+  * #4997: State that CUDA Toolkit 8.0 required in docs
+
+* James Bourbeau added the Python 3.8 classifier to setup.py in #5027.
+* John Kirkham added a clarification to the ``__cuda_array_interface__``
+  documentation in #5049.
+* Leo Fang Fixed an indexing problem in ``dummyarray`` in #5012.
+* Marcel Bargull fixed a build and test issue for Python 3.8 in #5029.
+* Maria Rubtsov added support for string methods ``isdecimal`` (#4842),
+  ``isdigit`` (#4843), ``isnumeric`` (#4844) and ``replace`` (#4865).
+
+General Enhancements:
+
+* PR #4760: Make type_callable return the decorated function
+* PR #5010: merge string prs
+
+  This merge PR included the following:
+
+  * PR #4823: Implement str.capitalize() based on CPython
+  * PR #4824: Implement str.casefold() based on CPython
+  * PR #4825: Implement str.swapcase() based on CPython
+  * PR #4834: Implement str.rsplit() based on CPython
+  * PR #4842: Implement str.isdecimal
+  * PR #4843: Implement str.isdigit
+  * PR #4844: Implement str.isnumeric
+  * PR #4845: Implement str.partition() based on CPython
+  * PR #4849: Implement str.splitlines() based on CPython
+  * PR #4865: Implement str.replace
+  * PR #4867: Functionality extension str.startswith() based on CPython
+  * PR #4868: Add functionality for str.endswith()
+
+* PR #5039: Disable help messages.
+* PR #4617: Add coverage for ``np.argwhere``
+
+Fixes:
+
+* PR #4724: Only use lives (and not aliases) to create post parfor live set.
+* PR #4998: Fix more spelling typos
+* PR #5024: Propagate semantic constants ahead of static rewrites.
+* PR #5027: Add Python 3.8 classifier to setup.py
+* PR #5046: Update setup.py and buildscripts for dependency requirements
+* PR #5053: Convert from arrays to names in define() and don't invalidate for
+  multiple consistent defines.
+* PR #5058: Permit mixed int types in wrap_index
+* PR #5078: Catch the use of global typed-list in JITed functions
+* PR #5092: Fix #5087, bug in bytecode analysis.
+
+CUDA Enhancements/Fixes:
+
+* PR #4964: Fix #4628: Add more appropriate typing for CUDA device arrays
+* PR #4975: Make ``device_array_like`` create contiguous arrays (Fixes #4832)
+* PR #4997: State that CUDA Toolkit 8.0 required in docs
+* PR #5007: test_consuming_strides: Keep dev array alive
+* PR #5012: Fix IndexError when accessing the "-1" element of dummyarray
+* PR #5014: Enable use of records and bools for shared memory, remove ddt, add
+  additional transpose tests
+* PR #5016: Fix various issues in CUDA library search (Fixes #4979)
+* PR #5023: Don't launch ForAll kernels with 0 elements (Fixes #5017)
+* PR #5068: Remove Python 3.4 backports from utils
+
+Documentation Updates:
+
+* PR #5049: Clarify what dictionary means
+* PR #5062: Update docs for updated version requirements
+* PR #5090: Update deprecation notices for 0.48.0
+
+CI updates:
+
+* PR #5029: Install optional dependencies for Python 3.8 tests
+* PR #5040: Drop Py2.7 and Py3.5 from public CI
+* PR #5048: Fix CI py38
+
+Authors:
+
+* Brian Wignall
+* Denis Smirnov
+* Elena Totmenina
+* Eric Wieser
+* Ethan Pronovost
+* Graham Markall
+* James Bourbeau
+* John Kirkham
+* Leo Fang
+* Marcel Bargull
+* Maria Rubtsov
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+
+
+Version 0.47.0  (Jan 2, 2020)
+-----------------------------
+
+This release expands the capability of Numba in a number of important areas and
+is also significant as it is the last major point release with support for
+Python 2 and Python 3.5 included. The next release (0.48.0) will be for Python
+3.6+ only!  (This follows NumPy's deprecation schedule as specified in
+`NEP 29 <https://numpy.org/neps/nep-0029-deprecation_policy.html>`_.)
+
+Highlights of core feature changes include:
+
+* Full support for Python 3.8 (Siu Kwan Lam)
+* Opt-in bounds checking (Aaron Meurer)
+* Support for ``map``, ``filter`` and ``reduce`` (Stuart Archibald)
+
+Intel also kindly sponsored research and development that lead to some exciting
+new features:
+
+* Initial support for basic ``try``/``except`` use (Siu Kwan Lam)
+* The ability to pass functions created from closures/lambdas as arguments
+  (Stuart Archibald)
+* ``sorted`` and ``list.sort()`` now accept the ``key`` argument (Stuart
+  Archibald and Siu Kwan Lam)
+* A new compiler pass triggered through the use of the function
+  ``numba.literal_unroll`` which permits iteration over heterogeneous tuples
+  and constant lists of constants. (Stuart Archibald)
+
+Enhancements from user contributed PRs (with thanks!):
+
+* Ankit Mahato added a reference to a new talk on Numba at PyCon India 2019 in
+  #4862
+* Brian Wignall kindly fixed some spelling mistakes and typos in #4909
+* Denis Smirnov wrote numerous methods to considerable enhance string support
+  including:
+
+  * ``str.rindex()`` in #4861
+  * ``str.isprintable()`` in #4836
+  * ``str.index()`` in #4860
+  * ``start/end`` parameters for ``str.find()`` in #4866
+  * ``str.isspace()`` in #4835
+  * ``str.isidentifier()`` #4837
+  * ``str.rpartition()`` in #4841
+  * ``str.lower()`` and ``str.islower()`` in #4651
+
+* Elena Totmenina implemented both ``str.isalnum()``, ``str.isalpha()`` and
+  ``str.isascii`` in #4839, #4840 and #4847 respectively.
+* Eric Larson fixed a bug in literal comparison in #4710
+* Ethan Pronovost updated the ``np.arange`` implementation in #4770 to allow
+  the use of the ``dtype`` key word argument and also added ``bool``
+  implementations for several types in #4715.
+* Graham Markall fixed some issues with the CUDA target, namely:
+
+  * #4931: Added physical limits for CC 7.0 / 7.5 to CUDA autotune
+  * #4934: Fixed bugs in TestCudaWarpOperations
+  * #4938: Improved errors / warnings for the CUDA vectorize decorator
+
+* Guilherme Leobas fixed a typo in the ``urem`` implementation in #4667
+* Isaac Virshup contributed a number of patches that fixed bugs, added support
+  for more NumPy functions and enhanced Python feature support. These
+  contributions included:
+
+  * #4729: Allow array construction with mixed type shape tuples
+  * #4904: Implementing ``np.lcm``
+  * #4780: Implement np.gcd and math.gcd
+  * #4779: Make slice constructor more similar to python.
+  * #4707: Added support for slice.indices
+  * #4578: Clarify numba ufunc supported features
+
+* James Bourbeau fixed some issues with tooling, #4794 add ``setuptools`` as a
+  dependency and #4501 add pre-commit hooks for ``flake8`` compliance.
+* Leo Fang made ``numba.dummyarray.Array`` iterable in #4629
+* Marc Garcia fixed the ``numba.jit`` parameter name signature_or_function in
+  #4703
+* Marcelo Duarte Trevisani patched the llvmlite requirement to ``>=0.30.0`` in
+  #4725
+* Matt Cooper fixed a long standing CI problem in #4737 by remove maxParallel
+* Matti Picus fixed an issue with ``collections.abc`` in #4734
+  from Azure Pipelines.
+* Rob Ennis patched a bug in ``np.interp`` ``float32`` handling in #4911
+* VDimir fixed a bug in array transposition layouts in #4777 and re-enabled and
+  fixed some idle tests in #4776.
+* Vyacheslav Smirnov Enable support for `str.istitle()`` in #4645
+
+General Enhancements:
+
+* PR #4432: Bounds checking
+* PR #4501: Add pre-commit hooks
+* PR #4536: Handle kw args in inliner when callee is a function
+* PR #4599: Permits closures to become functions, enables map(), filter()
+* PR #4611: Implement method title() for unicode based on Cpython
+* PR #4645: Enable support for istitle() method for unicode string
+* PR #4651: Implement str.lower() and str.islower()
+* PR #4652: Implement str.rfind()
+* PR #4695: Refactor `overload*` and support `jit_options` and `inline`
+* PR #4707: Added support for slice.indices
+* PR #4715: Add `bool` overload for several types
+* PR #4729: Allow array construction with mixed type shape tuples
+* PR #4755: Python3.8 support
+* PR #4756: Add parfor support for ndarray.fill.
+* PR #4768: Update typeconv error message to ask for sys.executable.
+* PR #4770: Update `np.arange` implementation with `@overload`
+* PR #4779: Make slice constructor more similar to python.
+* PR #4780: Implement np.gcd and math.gcd
+* PR #4794: Add setuptools as a dependency
+* PR #4802: put git hash into build string
+* PR #4803: Better compiler error messages for improperly used reduction
+  variables.
+* PR #4817: Typed list implement and expose allocation
+* PR #4818: Typed list faster copy
+* PR #4835: Implement str.isspace() based on CPython
+* PR #4836: Implement str.isprintable() based on CPython
+* PR #4837: Implement str.isidentifier() based on CPython
+* PR #4839: Implement str.isalnum() based on CPython
+* PR #4840: Implement str.isalpha() based on CPython
+* PR #4841: Implement str.rpartition() based on CPython
+* PR #4847: Implement str.isascii() based on CPython
+* PR #4851: Add graphviz output for FunctionIR
+* PR #4854: Python3.8 looplifting
+* PR #4858: Implement str.expandtabs() based on CPython
+* PR #4860: Implement str.index() based on CPython
+* PR #4861: Implement str.rindex() based on CPython
+* PR #4866: Support params start/end for str.find()
+* PR #4874: Bump to llvmlite 0.31
+* PR #4896: Specialise arange dtype on arch + python version.
+* PR #4902: basic support for try except
+* PR #4904: Implement np.lcm
+* PR #4910: loop canonicalisation and type aware tuple unroller/loop body
+  versioning passes
+* PR #4961: Update hash(tuple) for Python 3.8.
+* PR #4977: Implement sort/sorted with key.
+* PR #4987: Add `is_internal` property to all Type classes.
+
+Fixes:
+
+* PR #4090: Update to LLVM8 memset/memcpy intrinsic
+* PR #4582: Convert sub to add and div to mul when doing the reduction across
+  the per-thread reduction array.
+* PR #4648: Handle 0 correctly as slice parameter.
+* PR #4660: Remove multiply defined variables from all blocks' equivalence sets.
+* PR #4672: Fix pickling of dufunc
+* PR #4710: BUG: Comparison for literal
+* PR #4718: Change get_call_table to support intermediate Vars.
+* PR #4725: Requires  llvmlite >=0.30.0
+* PR #4734: prefer to import from collections.abc
+* PR #4736: fix flake8 errors
+* PR #4776: Fix and enable idle tests from test_array_manipulation
+* PR #4777: Fix transpose output array layout
+* PR #4782: Fix issue with SVML (and knock-on function resolution effects).
+* PR #4785: Treat 0d arrays like scalars.
+* PR #4787: fix missing incref on flags
+* PR #4789: fix typos in numba/targets/base.py
+* PR #4791: fix typos
+* PR #4811: fix spelling in now-failing tests
+* PR #4852: windowing test should check equality only up to double precision
+  errors
+* PR #4881: fix refining list by using extend on an iterator
+* PR #4882: Fix return type in arange and zero step size handling.
+* PR #4885: suppress spurious RuntimeWarning about ufunc sizes
+* PR #4891: skip the xfail test for now.  Py3.8 CFG refactor seems to have
+  changed the test case
+* PR #4892: regex needs to accept singular form of "argument"
+* PR #4901: fix typed list equals
+* PR #4909: Fix some spelling typos
+* PR #4911: np.interp bugfix for float32 handling
+* PR #4920: fix creating list with JIT disabled
+* PR #4921: fix creating dict with JIT disabled
+* PR #4935: Better handling of prange with multiple reductions on the same
+  variable.
+* PR #4946: Improve the error message for `raise <string>`.
+* PR #4955: Move overload of literal_unroll to avoid circular dependency that
+  breaks Python 2.7
+* PR #4962: Fix test error on windows
+* PR #4973: Fixes a bug in the relabelling logic in literal_unroll.
+* PR #4978: Fix overload_method problem with stararg
+* PR #4981: Add ind_to_const to enable fewer equivalence classes.
+* PR #4991: Continuation of #4588 (Let dead code removal handle removing more of
+  the unneeded code after prange conversion to parfor)
+* PR #4994: Remove xfail for test which has since had underlying issue fixed.
+* PR #5018: Fix #5011.
+* PR #5019: skip pycc test on Python 3.8 + macOS because of distutils issue
+
+CUDA Enhancements/Fixes:
+
+* PR #4629: Make numba.dummyarray.Array iterable
+* PR #4675: Bump cuda array interface to version 2
+* PR #4741: Update choosing the "CUDA_PATH" for windows
+* PR #4838: Permit ravel('A') for contig device arrays in CUDA target
+* PR #4931: Add physical limits for CC 7.0 / 7.5 to autotune
+* PR #4934: Fix fails in TestCudaWarpOperations
+* PR #4938: Improve errors / warnings for cuda vectorize decorator
+
+Documentation Updates:
+
+* PR #4418: Directed graph task roadmap
+* PR #4578: Clarify numba ufunc supported features
+* PR #4655: fix sphinx build warning
+* PR #4667: Fix typo on urem implementation
+* PR #4669: Add link to ParallelAccelerator paper.
+* PR #4703: Fix numba.jit parameter name signature_or_function
+* PR #4862: Addition of PyCon India 2019 talk on Numba
+* PR #4947: Document jitclass with numba.typed use.
+* PR #4958: Add docs for `try..except`
+* PR #4993: Update deprecations for 0.47
+
+CI Updates:
+
+* PR #4737: remove maxParallel from Azure Pipelines
+* PR #4767: pin to 2.7.16 for py27 on osx
+* PR #4781: WIP/runtest cf pytest
+
+Authors:
+
+* Aaron Meurer
+* Ankit Mahato
+* Brian Wignall
+* Denis Smirnov
+* Ehsan Totoni (core dev)
+* Elena Totmenina
+* Eric Larson
+* Ethan Pronovost
+* Giovanni Cavallin
+* Graham Markall
+* Guilherme Leobas
+* Isaac Virshup
+* James Bourbeau
+* Leo Fang
+* Marc Garcia
+* Marcelo Duarte Trevisani
+* Matt Cooper
+* Matti Picus
+* Rob Ennis
+* Rujal Desai
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* VDimir
+* Valentin Haenel (core dev)
+* Vyacheslav Smirnov
+
+
 Version 0.46.0
 --------------
 
@@ -2831,7 +3202,7 @@ make it cleaner and more rational:
 * The numba.vectorize namespace is gone. The vectorize decorator will
   be in the main numba namespace.
 * Added a guvectorize decorator in the main numba namespace. It is
-  similiar to numba.vectorize, but takes a dimension signature. It
+  similar to numba.vectorize, but takes a dimension signature. It
   generates gufuncs. This is a replacement for the GUVectorize gufunc
   factory which has been deprecated.
 

@@ -18,15 +18,8 @@ NumPy functions.  Additionally, Numba has support for automatic
 parallelization of loops, generation of GPU-accelerated code, and creation of
 ufuncs and C callbacks.
 
-For more information about Numba, see the Numba homepage: 
+For more information about Numba, see the Numba homepage:
 http://numba.pydata.org
-
-Dependencies
-============
-
-* llvmlite (version 0.30.0 or higher)
-* NumPy (version 1.9 or higher)
-* funcsigs (for Python 2)
 
 Supported Platforms
 ===================
@@ -37,13 +30,22 @@ Supported Platforms
     ARMv8 (64-bit)
   - Windows: x86, x86_64
   - macOS: x86_64
-  
-* Python versions: 2.7, 3.5-3.7
-* NumPy: >= 1.11
-* NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux, Windows,
-  macOS (< 10.14)
-* AMD GPUs via ROCm driver on Linux
-* llvmlite: >= 0.30.0
+
+* (Optional) Accelerators and GPUs:
+  * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux, Windows,
+    macOS (< 10.14)
+  * AMD GPUs via ROCm driver on Linux
+
+Dependencies
+============
+
+* Python versions: 3.6-3.8
+* llvmlite 0.31.*
+* NumPy >=1.15 (can build with 1.11 for ABI compatibility)
+
+Optionally:
+
+* Scipy >=1.0.0 (for ``numpy.linalg`` support)
 
 
 Installing

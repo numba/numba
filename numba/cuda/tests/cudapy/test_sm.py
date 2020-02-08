@@ -3,6 +3,11 @@ from numba import cuda, int32, float64
 from numba.cuda.testing import unittest, SerialMixin
 
 import numpy as np
+from numba.np import numpy_support as nps
+
+
+recordwith2darray = np.dtype([('i', np.int32),
+                              ('j', np.float32, (3, 2))])
 
 
 class TestSharedMemoryIssue(SerialMixin, unittest.TestCase):
@@ -67,6 +72,57 @@ class TestSharedMemoryIssue(SerialMixin, unittest.TestCase):
         costs_func[num_blocks, threads_per_block](d_block_costs)
 
         cuda.synchronize()
+
+
+class TestSharedMemory(SerialMixin, unittest.TestCase):
+    def _test_shared(self, arr):
+        # Use a kernel that copies via shared memory to check loading and
+        # storing different dtypes with shared memory. All threads in a block
+        # collaborate to load in values, then the output values are written
+        # only by the first thread in the block after synchronization.
+
+        nelem = len(arr)
+        nthreads = 16
+        nblocks = int(nelem / nthreads)
+        dt = nps.from_dtype(arr.dtype)
+
+        @cuda.jit
+        def use_sm_chunk_copy(x, y):
+            sm = cuda.shared.array(nthreads, dtype=dt)
+
+            tx = cuda.threadIdx.x
+            bx = cuda.blockIdx.x
+            bd = cuda.blockDim.x
+
+            # Load this block's chunk into shared
+            i = bx * bd + tx
+            if i < len(x):
+                sm[tx] = x[i]
+
+            cuda.syncthreads()
+
+            # One thread per block writes this block's chunk
+            if tx == 0:
+                for j in range(nthreads):
+                    y[bd * bx + j] = sm[j]
+
+        d_result = cuda.device_array_like(arr)
+        use_sm_chunk_copy[nblocks, nthreads](arr, d_result)
+        host_result = d_result.copy_to_host()
+        np.testing.assert_array_equal(arr, host_result)
+
+    def test_shared_recarray(self):
+        arr = np.recarray(128, dtype=recordwith2darray)
+        for x in range(len(arr)):
+            arr[x].i = x
+            j = np.arange(3 * 2, dtype=np.float32)
+            arr[x].j = j.reshape(3, 2) * x
+
+        self._test_shared(arr)
+
+    def test_shared_bool(self):
+        arr = np.random.randint(2, size=(1024,), dtype=np.bool_)
+        self._test_shared(arr)
 
 
 if __name__ == '__main__':

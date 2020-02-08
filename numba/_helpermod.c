@@ -150,6 +150,7 @@ build_c_helpers_dict(void)
     declmethod(list_set_method_table);
     declmethod(list_free);
     declmethod(list_length);
+    declmethod(list_allocated);
     declmethod(list_setitem);
     declmethod(list_getitem);
     declmethod(list_append);
@@ -291,12 +292,10 @@ MOD_INIT(_helperlib) {
     PyModule_AddIntConstant(m, "long_max", LONG_MAX);
     PyModule_AddIntConstant(m, "py_buffer_size", sizeof(Py_buffer));
     PyModule_AddIntConstant(m, "py_gil_state_size", sizeof(PyGILState_STATE));
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 3)
     PyModule_AddIntConstant(m, "py_unicode_1byte_kind", PyUnicode_1BYTE_KIND);
     PyModule_AddIntConstant(m, "py_unicode_2byte_kind", PyUnicode_2BYTE_KIND);
     PyModule_AddIntConstant(m, "py_unicode_4byte_kind", PyUnicode_4BYTE_KIND);
     PyModule_AddIntConstant(m, "py_unicode_wchar_kind", PyUnicode_WCHAR_KIND);
-#endif
     numba_rnd_ensure_global_init();
 
     return MOD_SUCCESS_VAL(m);

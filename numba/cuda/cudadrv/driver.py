@@ -11,7 +11,6 @@ system to freeze in some cases.
 
 """
 
-from __future__ import absolute_import, print_function, division
 import sys
 import os
 import ctypes
@@ -28,13 +27,13 @@ import contextlib
 import numpy as np
 from collections import namedtuple, deque
 
-from numba import utils, mviewbuf
+from numba import mviewbuf
+from numba.core import utils, errors, serialize, config
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size
-from . import enums, drvapi, _extras
-from numba import config, serialize, errors
-from numba.utils import longint as long
+from numba.cuda.cudadrv import enums, drvapi, _extras
+from numba.core.utils import longint as long
 from numba.cuda.envvars import get_numba_envvar
 
 
@@ -1192,7 +1191,7 @@ class IpcHandle(object):
 
     def open_array(self, context, shape, dtype, strides=None):
         """
-        Simliar to `.open()` but returns an device array.
+        Similar to `.open()` but returns an device array.
         """
         from . import devicearray
 
@@ -1252,7 +1251,7 @@ class MemoryPointer(object):
         self._owner = owner
 
         if finalizer is not None:
-            self._finalizer = utils.finalize(self, finalizer)
+            self._finalizer = weakref.finalize(self, finalizer)
 
     @property
     def owner(self):
@@ -1359,7 +1358,7 @@ class PinnedMemory(mviewbuf.MemAlloc):
         self._bufptr_ = self.host_pointer.value
 
         if finalizer is not None:
-            utils.finalize(self, finalizer)
+            weakref.finalize(self, finalizer)
 
     def own(self):
         return self
@@ -1388,7 +1387,7 @@ class OwnedPointer(object):
                 pass
 
         self._mem.refct += 1
-        utils.finalize(self, deref)
+        weakref.finalize(self, deref)
 
     def __getattr__(self, fname):
         """Proxy MemoryPointer methods
@@ -1405,7 +1404,7 @@ class Stream(object):
         self.context = context
         self.handle = handle
         if finalizer is not None:
-            utils.finalize(self, finalizer)
+            weakref.finalize(self, finalizer)
 
     def __int__(self):
         return self.handle.value
@@ -1435,7 +1434,7 @@ class Event(object):
         self.context = context
         self.handle = handle
         if finalizer is not None:
-            utils.finalize(self, finalizer)
+            weakref.finalize(self, finalizer)
 
     def query(self):
         """
@@ -1497,7 +1496,7 @@ class Module(object):
         self.handle = handle
         self.info_log = info_log
         if finalizer is not None:
-            self._finalizer = utils.finalize(self, finalizer)
+            self._finalizer = weakref.finalize(self, finalizer)
 
     def unload(self):
         self.context.unload_module(self)
@@ -1658,7 +1657,7 @@ class Linker(object):
         driver.cuLinkCreate(len(raw_keys), option_keys, option_vals,
                             byref(self.handle))
 
-        utils.finalize(self, driver.cuLinkDestroy, handle)
+        weakref.finalize(self, driver.cuLinkDestroy, handle)
 
         self.linker_info_buf = linkerinfo
         self.linker_errors_buf = linkererrors

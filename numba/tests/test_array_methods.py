@@ -1,18 +1,17 @@
-from __future__ import division
-
 from itertools import product, cycle, permutations
 import sys
+import warnings
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import jit, typeof, types
-from numba.compiler import compile_isolated
-from numba.errors import TypingError, LoweringError
-from numba.numpy_support import (as_dtype, strict_ufunc_typing,
-                                 version as numpy_version)
-from .support import TestCase, CompilationCache, MemoryLeak, MemoryLeakMixin, tag
-from .matmul_usecase import needs_blas
+from numba import jit, typeof
+from numba.core import types
+from numba.core.compiler import compile_isolated
+from numba.core.errors import TypingError, LoweringError
+from numba.np.numpy_support import as_dtype
+from numba.tests.support import (TestCase, CompilationCache, MemoryLeak,
+                                 MemoryLeakMixin, tag, needs_blas)
+import unittest
 
 
 def np_around_array(arr, decimals, out):
@@ -85,6 +84,42 @@ def array_take(arr, indices):
 
 def array_take_kws(arr, indices, axis):
     return arr.take(indices, axis=axis)
+
+def np_arange_1(arg0):
+    return np.arange(arg0)
+
+def np_arange_2(arg0, arg1):
+    return np.arange(arg0, arg1)
+
+def np_arange_3(arg0, arg1, arg2):
+    return np.arange(arg0, arg1, arg2)
+
+def np_arange_4(arg0, arg1, arg2, arg3):
+    return np.arange(arg0, arg1, arg2, arg3)
+
+def np_arange_1_stop(arg0, stop):
+    return np.arange(arg0, stop=stop)
+
+def np_arange_1_step(arg0, step):
+    return np.arange(arg0, step=step)
+
+def np_arange_1_dtype(arg0, dtype):
+    return np.arange(arg0, dtype=dtype)
+
+def np_arange_2_step(arg0, arg1, step):
+    return np.arange(arg0, arg1, step=step)
+
+def np_arange_2_dtype(arg0, arg1, dtype):
+    return np.arange(arg0, arg1, dtype=dtype)
+
+def np_arange_start_stop(start, stop):
+    return np.arange(start=start, stop=stop)
+
+def np_arange_start_stop_step(start, stop, step):
+    return np.arange(start=start, stop=stop, step=step)
+
+def np_arange_start_stop_step_dtype(start, stop, step, dtype):
+    return np.arange(start=start, stop=stop, step=step, dtype=dtype)
 
 def array_fill(arr, val):
     return arr.fill(val)
@@ -291,10 +326,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         values = np.array([-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75])
 
-        if strict_ufunc_typing:
-            argtypes = (types.float64, types.float32)
-        else:
-            argtypes = (types.float64, types.float32, types.int32)
+        argtypes = (types.float64, types.float32)
         check_types(argtypes, argtypes, values)
 
         argtypes = (types.complex64, types.complex128)
@@ -458,9 +490,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         b = bytearray(range(16))
         check(b)
-        if sys.version_info >= (3,):
-            check(bytes(b))
-            check(memoryview(b))
+        check(bytes(b))
+        check(memoryview(b))
         check(np.arange(12))
         b = np.arange(12).reshape((3, 4))
         check(b)
@@ -479,8 +510,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_np_frombuffer_dtype(self):
         self.check_np_frombuffer(np_frombuffer_dtype)
 
-    def check_layout_dependent_func(self, pyfunc, fac=np.arange,
-                                    check_sameness=True):
+    def check_layout_dependent_func(self, pyfunc, fac=np.arange):
         def is_same(a, b):
             return a.ctypes.data == b.ctypes.data
         def check_arr(arr):
@@ -488,8 +518,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             expected = pyfunc(arr)
             got = cres.entry_point(arr)
             self.assertPreciseEqual(expected, got)
-            if check_sameness:
-                self.assertEqual(is_same(expected, arr), is_same(got, arr))
+            self.assertEqual(is_same(expected, arr), is_same(got, arr))
         arr = fac(24)
         check_arr(arr)
         check_arr(arr.reshape((3, 8)))
@@ -504,11 +533,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_array_transpose(self):
         self.check_layout_dependent_func(array_transpose)
 
-    @tag('important')
     def test_array_T(self):
         self.check_layout_dependent_func(array_T)
 
-    @tag('important')
     def test_array_copy(self):
         self.check_layout_dependent_func(array_copy)
 
@@ -516,12 +543,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.check_layout_dependent_func(np_copy)
 
     def test_np_asfortranarray(self):
-        self.check_layout_dependent_func(np_asfortranarray,
-                                         check_sameness=numpy_version >= (1, 8))
+        self.check_layout_dependent_func(np_asfortranarray)
 
     def test_np_ascontiguousarray(self):
-        self.check_layout_dependent_func(np_ascontiguousarray,
-                                         check_sameness=numpy_version > (1, 11))
+        self.check_layout_dependent_func(np_ascontiguousarray)
 
     def check_np_frombuffer_allocated(self, pyfunc):
         def run(shape):
@@ -553,8 +578,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         def check_arr(arr):
             cres = compile_isolated(pyfunc, (typeof(arr),))
             expected = pyfunc(arr)
-            # NOTE: Numpy 1.9 returns readonly arrays for multidimensional
-            # arrays.  Workaround this by copying the results.
             expected = [a.copy() for a in expected]
             self.assertPreciseEqual(cres.entry_point(arr), expected)
 
@@ -574,6 +597,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         for v in (0.0, 1.5, float('nan')):
             arr = np.array([v]).reshape(())
             check_arr(arr)
+
+        arr = np.array(["Hello", "", "world"])
+        check_arr(arr)
 
     def test_array_nonzero(self):
         self.check_nonzero(array_nonzero)
@@ -613,13 +639,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             cres = compile_isolated(pyfunc, (typeof(arr), typeof(x), typeof(y)))
             expected = pyfunc(arr, x, y)
             got = cres.entry_point(arr, x, y)
-            # Contiguity of result varies accross Numpy versions, only
-            # check contents. NumPy 1.11+ seems to stabilize.
-            if numpy_version < (1, 11):
-                self.assertEqual(got.dtype, expected.dtype)
-                np.testing.assert_array_equal(got, expected)
-            else:
-                self.assertPreciseEqual(got, expected)
+            self.assertPreciseEqual(got, expected)
 
         def check_scal(scal):
             x = 4
@@ -721,6 +741,165 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 condition = x > x_mean
                 params = (condition, x, y)
                 check_ok(params)
+
+    def test_arange_1_arg(self):
+
+        all_pyfuncs = (
+            np_arange_1,
+            lambda x: np.arange(x, 10),
+            lambda x: np.arange(7, step=abs(x))
+        )
+
+        for pyfunc in all_pyfuncs:
+            pyfunc = np_arange_1
+            cfunc = jit(nopython=True)(pyfunc)
+
+            def check_ok(arg0):
+                expected = pyfunc(arg0)
+                got = cfunc(arg0)
+                np.testing.assert_allclose(expected, got)
+
+            check_ok(0)
+            check_ok(1)
+            check_ok(4)
+            check_ok(5.5)
+            check_ok(-3)
+            check_ok(np.complex(4, 4))
+            check_ok(np.int8(0))
+
+    def test_arange_2_arg(self):
+        def check_ok(arg0, arg1, pyfunc, cfunc):
+            expected = pyfunc(arg0, arg1)
+            got = cfunc(arg0, arg1)
+            np.testing.assert_allclose(expected, got)
+
+        all_pyfuncs = (
+            np_arange_2,
+            np_arange_start_stop,
+            np_arange_1_stop,
+            np_arange_1_step,
+            lambda x, y: np.arange(x, y, 5),
+            lambda x, y: np.arange(2, y, step=x),
+        )
+
+        for pyfunc in all_pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+
+            check_ok(-1, 5, pyfunc, cfunc)
+            check_ok(-8, -1, pyfunc, cfunc)
+            check_ok(4, 0.5, pyfunc, cfunc)
+            check_ok(0.5, 4, pyfunc, cfunc)
+            check_ok(np.complex(1, 1), np.complex(4, 4), pyfunc, cfunc)
+            check_ok(np.complex(4, 4), np.complex(1, 1), pyfunc, cfunc)
+            check_ok(3, None, pyfunc, cfunc)
+
+        pyfunc = np_arange_1_dtype
+        cfunc = jit(nopython=True)(pyfunc)
+
+        check_ok(5, np.float32, pyfunc, cfunc)
+        check_ok(2.0, np.int32, pyfunc, cfunc)
+        check_ok(10, np.complex128, pyfunc, cfunc)
+        check_ok(np.complex64(10), np.complex128, pyfunc, cfunc)
+        check_ok(7, None, pyfunc, cfunc)
+        check_ok(np.int8(0), None, pyfunc, cfunc)
+
+    def test_arange_3_arg(self):
+        windows64 = sys.platform.startswith('win32') and sys.maxsize > 2 ** 32
+
+        def check_ok(arg0, arg1, arg2, pyfunc, cfunc, check_dtype=False):
+            expected = pyfunc(arg0, arg1, arg2)
+            got = cfunc(arg0, arg1, arg2)
+            np.testing.assert_allclose(expected, got)
+            # windows 64 cannot differentiate between a python int and a
+            # np.int64 which means the result from numba is int64 more often
+            # than in NumPy.
+            if not windows64:
+                self.assertEqual(expected.dtype, got.dtype)
+
+        for pyfunc in (np_arange_3, np_arange_2_step, np_arange_start_stop_step):
+            cfunc = jit(nopython=True)(pyfunc)
+
+            check_ok(0, 5, 1, pyfunc, cfunc)
+            check_ok(-8, -1, 3, pyfunc, cfunc)
+            check_ok(0, -10, -2, pyfunc, cfunc)
+            check_ok(0.5, 4, 2, pyfunc, cfunc)
+            check_ok(0, 1, 0.1, pyfunc, cfunc)
+            check_ok(0, np.complex(4, 4), np.complex(1, 1), pyfunc, cfunc)
+            check_ok(3, 6, None, pyfunc, cfunc)
+            check_ok(3, None, None, pyfunc, cfunc)
+            check_ok(np.int8(0), np.int8(5), np.int8(1), pyfunc, cfunc)
+            check_ok(np.int8(0), np.int16(5), np.int32(1), pyfunc, cfunc)
+            # check upcasting logic, this matters most on windows
+            i8 = np.int8
+            check_ok(i8(0), i8(5), i8(1), pyfunc, cfunc, True) # C int
+            check_ok(np.int64(0), i8(5), i8(1), pyfunc, cfunc, True) # int64
+
+        pyfunc = np_arange_2_dtype
+        cfunc = jit(nopython=True)(pyfunc)
+
+        check_ok(1, 5, np.float32, pyfunc, cfunc)
+        check_ok(2.0, 8, np.int32, pyfunc, cfunc)
+        check_ok(-2, 10, np.complex128, pyfunc, cfunc)
+        check_ok(3, np.complex64(10), np.complex128, pyfunc, cfunc)
+        check_ok(1, 7, None, pyfunc, cfunc)
+        check_ok(np.int8(0), np.int32(5), None, pyfunc, cfunc, True)
+
+    def test_arange_4_arg(self):
+        for pyfunc in (np_arange_4, np_arange_start_stop_step_dtype):
+            cfunc = jit(nopython=True)(pyfunc)
+
+            def check_ok(arg0, arg1, arg2, arg3):
+                expected = pyfunc(arg0, arg1, arg2, arg3)
+                got = cfunc(arg0, arg1, arg2, arg3)
+                np.testing.assert_allclose(expected, got)
+
+            check_ok(0, 5, 1, np.float64)
+            check_ok(-8, -1, 3, np.int32)
+            check_ok(0, -10, -2, np.float32)
+            check_ok(0.5, 4, 2, None)
+            check_ok(0, 1, 0.1, np.complex128)
+            check_ok(0, np.complex(4, 4), np.complex(1, 1), np.complex128)
+            check_ok(3, 6, None, None)
+            check_ok(3, None, None, None)
+
+    def test_arange_throws(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        bad_funcs_1 = [
+            lambda x: np.arange(stop=x),
+            lambda x: np.arange(step=x),
+            lambda x: np.arange(dtype=x),
+        ]
+        bad_funcs_2 = [
+            lambda x, y: np.arange(stop=x, step=y),
+            lambda x, y: np.arange(stop=x, dtype=y),
+        ]
+
+        for pyfunc in bad_funcs_1:
+            with self.assertRaises(TypingError) as raises:
+                cfunc = jit(nopython=True)(pyfunc)
+                cfunc(2)
+        for pyfunc in bad_funcs_2:
+            with self.assertRaises(TypingError) as raises:
+                cfunc = jit(nopython=True)(pyfunc)
+                cfunc(2, 6)
+
+        # check step size = 0, this is nonsense
+        pyfunc = np_arange_3
+        cfunc = jit(nopython=True)(pyfunc)
+        for f in (pyfunc, cfunc,):
+            for inputs in [(1, np.int16(2), 0), (1, 2, 0)]:
+                # there's a different error depending on whether any of the
+                # input values are np scalars
+                permitted_errors = (ZeroDivisionError, ValueError)
+                with self.assertRaises(permitted_errors) as raises:
+                    # this will raise RuntimeWarning's about zero division
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        f(*inputs)
+                    self.assertIn("Maximum allowed size exceeded",
+                                str(raises.exception))
 
     def test_item(self):
         pyfunc = array_item
@@ -1002,8 +1181,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertIn(errmsg, str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             foo.py_func(a)
-        # Numpy 1.13 has a different error message than prior numpy
-        # Just check for the "out of bounds" phrase in it.
         self.assertIn("out of bounds", str(raises.exception))
 
     def test_cumsum(self):

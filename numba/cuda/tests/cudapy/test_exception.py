@@ -1,9 +1,8 @@
-from __future__ import print_function, absolute_import, division
-
 import numpy as np
 
-from numba import config, cuda, jit
+from numba import cuda, jit
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.core import config
 
 class TestException(SerialMixin, unittest.TestCase):
     def test_exception(self):
@@ -91,6 +90,7 @@ class TestException(SerialMixin, unittest.TestCase):
         """
         self.case_raise_causing_warp_diverge(with_debug_mode=False)
 
+    @unittest.skip("python 3.8 CFG refactor makes this test pass")
     @skip_on_cudasim("failing case doesn't happen in CUDASIM")
     @unittest.expectedFailure
     def test_raise_causing_warp_diverge_failing(self):

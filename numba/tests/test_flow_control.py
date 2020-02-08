@@ -1,14 +1,11 @@
-from __future__ import print_function
-
 import itertools
 
-import numba.unittest_support as unittest
-from numba.controlflow import CFGraph, ControlFlowAnalysis
-from numba.compiler import compile_isolated, Flags
-from numba import types, errors
-from numba.bytecode import FunctionIdentity, ByteCode
-from numba.utils import IS_PY3
-from .support import TestCase, tag
+import unittest
+from numba.core.controlflow import CFGraph, ControlFlowAnalysis
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import types
+from numba.core.bytecode import FunctionIdentity, ByteCode
+from numba.tests.support import TestCase
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -251,7 +248,6 @@ class TestFlowControl(TestCase):
     def test_for_loop1(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase1, [-10, 0, 10], [0], flags=flags)
 
-    @tag('important')
     def test_for_loop1_npm(self):
         self.test_for_loop1(flags=no_pyobj_flags)
 
@@ -259,7 +255,6 @@ class TestFlowControl(TestCase):
         self.run_test(for_loop_usecase2, [-10, 0, 10], [-10, 0, 10],
                       flags=flags)
 
-    @tag('important')
     def test_for_loop2_npm(self):
         self.test_for_loop2(flags=no_pyobj_flags)
 
@@ -276,49 +271,42 @@ class TestFlowControl(TestCase):
     def test_for_loop4(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase4, [10], [10], flags=flags)
 
-    @tag('important')
     def test_for_loop4_npm(self):
         self.test_for_loop4(flags=no_pyobj_flags)
 
     def test_for_loop5(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase5, [100], [50], flags=flags)
 
-    @tag('important')
     def test_for_loop5_npm(self):
         self.test_for_loop5(flags=no_pyobj_flags)
 
     def test_for_loop6(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase6, [100], [50], flags=flags)
 
-    @tag('important')
     def test_for_loop6_npm(self):
         self.test_for_loop6(flags=no_pyobj_flags)
 
     def test_for_loop7(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase7, [5], [0], flags=flags)
 
-    @tag('important')
     def test_for_loop7_npm(self):
         self.test_for_loop7(flags=no_pyobj_flags)
 
     def test_for_loop8(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase8, [0, 1], [0, 2, 10], flags=flags)
 
-    @tag('important')
     def test_for_loop8_npm(self):
         self.test_for_loop8(flags=no_pyobj_flags)
 
     def test_for_loop9(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase9, [0, 1], [0, 2, 10], flags=flags)
 
-    @tag('important')
     def test_for_loop9_npm(self):
         self.test_for_loop9(flags=no_pyobj_flags)
 
     def test_for_loop10(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase10, [5], [2, 7], flags=flags)
 
-    @tag('important')
     def test_for_loop10_npm(self):
         self.test_for_loop10(flags=no_pyobj_flags)
 
@@ -337,21 +325,18 @@ class TestFlowControl(TestCase):
     def test_while_loop3(self, flags=enable_pyobj_flags):
         self.run_test(while_loop_usecase3, [10], [10], flags=flags)
 
-    @tag('important')
     def test_while_loop3_npm(self):
         self.test_while_loop3(flags=no_pyobj_flags)
 
     def test_while_loop4(self, flags=enable_pyobj_flags):
         self.run_test(while_loop_usecase4, [10], [0], flags=flags)
 
-    @tag('important')
     def test_while_loop4_npm(self):
         self.test_while_loop4(flags=no_pyobj_flags)
 
     def test_while_loop5(self, flags=enable_pyobj_flags):
         self.run_test(while_loop_usecase5, [0, 5, 10], [0, 5, 10], flags=flags)
 
-    @tag('important')
     def test_while_loop5_npm(self):
         self.test_while_loop5(flags=no_pyobj_flags)
 
@@ -364,21 +349,18 @@ class TestFlowControl(TestCase):
     def test_ifelse2(self, flags=enable_pyobj_flags):
         self.run_test(ifelse_usecase2, [-1, 0, 1], [-1, 0, 1], flags=flags)
 
-    @tag('important')
     def test_ifelse2_npm(self):
         self.test_ifelse2(flags=no_pyobj_flags)
 
     def test_ifelse3(self, flags=enable_pyobj_flags):
         self.run_test(ifelse_usecase3, [-1, 0, 1], [-1, 0, 1], flags=flags)
 
-    @tag('important')
     def test_ifelse3_npm(self):
         self.test_ifelse3(flags=no_pyobj_flags)
 
     def test_ifelse4(self, flags=enable_pyobj_flags):
         self.run_test(ifelse_usecase4, [-1, 0, 1], [-1, 0, 1], flags=flags)
 
-    @tag('important')
     def test_ifelse4_npm(self):
         self.test_ifelse4(flags=no_pyobj_flags)
 
@@ -386,7 +368,6 @@ class TestFlowControl(TestCase):
         self.run_test(ternary_ifelse_usecase1, [-1, 0, 1], [-1, 0, 1],
                       flags=flags)
 
-    @tag('important')
     def test_ternary_ifelse1_npm(self):
         self.test_ternary_ifelse1(flags=no_pyobj_flags)
 
@@ -396,14 +377,6 @@ class TestFlowControl(TestCase):
 
     def test_double_infinite_loop_npm(self):
         self.test_double_infinite_loop(flags=no_pyobj_flags)
-
-    def test_try_except_raises(self):
-        pyfunc = try_except_usecase
-        for f in [no_pyobj_flags, enable_pyobj_flags]:
-            with self.assertRaises(errors.UnsupportedError) as e:
-                compile_isolated(pyfunc, (), flags=f)
-            msg = "Use of unsupported opcode (SETUP_EXCEPT) found"
-            self.assertIn(msg, str(e.exception))
 
 
 class TestCFGraph(TestCase):
@@ -977,6 +950,48 @@ class TestCFGraph(TestCase):
         for node in [7, 10, 23]:
             self.assertEqual(g.in_loops(node), [loop])
 
+    def test_equals(self):
+
+        def get_new():
+            g = self.from_adj_list({0: [18, 12], 12: [21], 18: [21], 21: []})
+            g.set_entry_point(0)
+            g.process()
+            return g
+
+        x = get_new()
+        y = get_new()
+
+        # identical
+        self.assertEqual(x, y)
+
+        # identical but defined in a different order
+        g = self.from_adj_list({0: [12, 18], 18: [21], 21: [], 12: [21]})
+        g.set_entry_point(0)
+        g.process()
+        self.assertEqual(x, g)
+
+        # different entry point
+        z = get_new()
+        z.set_entry_point(18)
+        z.process()
+        self.assertNotEqual(x, z)
+
+        # extra node/edge, same entry point
+        z = self.from_adj_list({0: [18, 12], 12: [21], 18: [21], 21: [22],
+                                22: []})
+        z.set_entry_point(0)
+        z.process()
+        self.assertNotEqual(x, z)
+
+        # same nodes, different edges
+        a = self.from_adj_list({0: [18, 12], 12: [0], 18: []})
+        a.set_entry_point(0)
+        a.process()
+        z = self.from_adj_list({0: [18, 12], 12: [18], 18: []})
+        z.set_entry_point(0)
+        z.process()
+        self.assertNotEqual(a, z)
+
 
 class TestRealCodeDomFront(TestCase):
     """Test IDOM and DOMFRONT computation on real python bytecode.
@@ -1184,25 +1199,19 @@ class TestRealCodeDomFront(TestCase):
                 SET_BLOCK_D                 # noqa: F821
             SET_BLOCK_E                     # noqa: F821
 
-        # Whether infinite loop (i.g. while True) are optimized out.
-        infinite_loop_opt_out = bool(IS_PY3)
-
         cfa, blkpts = self.get_cfa_and_namedblocks(foo)
 
         idoms = cfa.graph.immediate_dominators()
-        if infinite_loop_opt_out:
-            self.assertNotIn(blkpts['E'], idoms)
+        self.assertNotIn(blkpts['E'], idoms)
         self.assertEqual(blkpts['B'], idoms[blkpts['C']])
         self.assertEqual(blkpts['B'], idoms[blkpts['D']])
 
         domfront = cfa.graph.dominance_frontier()
-        if infinite_loop_opt_out:
-            self.assertNotIn(blkpts['E'], domfront)
+        self.assertNotIn(blkpts['E'], domfront)
         self.assertFalse(domfront[blkpts['A']])
         self.assertFalse(domfront[blkpts['C']])
-        if infinite_loop_opt_out:
-            self.assertEqual({blkpts['B']}, domfront[blkpts['B']])
-            self.assertEqual({blkpts['B']}, domfront[blkpts['D']])
+        self.assertEqual({blkpts['B']}, domfront[blkpts['B']])
+        self.assertEqual({blkpts['B']}, domfront[blkpts['D']])
 
 
 if __name__ == '__main__':
