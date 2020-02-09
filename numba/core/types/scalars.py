@@ -15,6 +15,21 @@ class Boolean(Hashable):
         return bool(value)
 
 
+class BooleanLiteral(Literal, Boolean):
+    def __init__(self, value):
+        self._literal_init(value)
+        self.name = 'Literal[bool]({})'.format(value)
+        self.basetype = self.literal_type
+
+    def can_convert_to(self, typingctx, other):
+        conv = typingctx.can_convert(self.literal_type, other)
+        if conv is not None:
+            return max(conv, Conversion.promote)
+
+
+Literal.ctor_map[bool] = BooleanLiteral
+
+
 def parse_integer_bitwidth(name):
     for prefix in ('int', 'uint'):
         if name.startswith(prefix):

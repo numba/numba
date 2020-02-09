@@ -1312,7 +1312,8 @@ def boolean_to_any(context, builder, fromty, toty, val):
 
 
 @lower_cast(types.IntegerLiteral, types.Boolean)
-def literal_int_to_boolean(context, builder, fromty, toty, val):
+@lower_cast(types.BooleanLiteral, types.Boolean)
+def literal_scalar_to_boolean(context, builder, fromty, toty, val):
     lit = context.get_constant_generic(
         builder,
         fromty.literal_type,

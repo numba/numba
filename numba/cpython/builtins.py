@@ -59,6 +59,7 @@ def generic_is(context, builder, sig, args):
 
 @lower_builtin(operator.eq, types.Literal, types.Literal)
 @lower_builtin(operator.eq, types.IntegerLiteral, types.IntegerLiteral)
+@lower_builtin(operator.eq, types.BooleanLiteral, types.BooleanLiteral)
 def const_eq_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
