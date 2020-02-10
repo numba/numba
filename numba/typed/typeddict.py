@@ -16,6 +16,7 @@ from numba.core.extending import (
     type_callable,
 )
 from numba.typed import dictobject
+from numba.core.typing import signature
 
 
 @njit
@@ -252,29 +253,28 @@ def box_dicttype(typ, val, c):
 @unbox(types.DictType)
 def unbox_dicttype(typ, val, c):
     context = c.context
-    builder = c.builder
 
     miptr = c.pyapi.object_getattr_string(val, '_opaque')
 
-    native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
+    mip_type = types.MemInfoPointer(types.voidptr)
+    native = c.unbox(mip_type, miptr)
 
     mi = native.value
-    ctor = cgutils.create_struct_proxy(typ)
-    dstruct = ctor(context, builder)
 
-    data_pointer = context.nrt.meminfo_data(builder, mi)
-    data_pointer = builder.bitcast(
-        data_pointer,
-        dictobject.ll_dict_type.as_pointer(),
-    )
+    argtypes = mip_type, typeof(typ)
 
-    dstruct.data = builder.load(data_pointer)
-    dstruct.meminfo = mi
+    def convert(mi, typ):
+        return dictobject._from_meminfo(mi, typ)
 
-    dctobj = dstruct._getvalue()
+    sig = signature(typ, *argtypes)
+    nil_typeref = context.get_constant_null(argtypes[1])
+    args = (mi, nil_typeref)
+    is_error, dctobj = c.pyapi.call_jit_code(convert , sig, args)
+    # decref here because we are stealing a reference.
+    c.context.nrt.decref(c.builder, typ, dctobj)
+
     c.pyapi.decref(miptr)
-
-    return NativeValue(dctobj)
+    return NativeValue(dctobj, is_error=is_error)
 
 
 #
