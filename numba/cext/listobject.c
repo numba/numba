@@ -76,7 +76,7 @@ typedef enum {
     LIST_ERR_NO_MEMORY = -2,
     LIST_ERR_MUTATED = -3,
     LIST_ERR_ITER_EXHAUSTED = -4,
-    LIST_ERR_IMMUTABLE = -4,
+    LIST_ERR_IMMUTABLE = -5,
 } ListStatus;
 
 /* Copy an item from a list.
@@ -268,6 +268,10 @@ numba_list_set_is_mutable(NB_List *lp, int is_mutable){
 int
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
     char *loc;
+    // check for mutability
+    if (!lp->is_mutable) {
+        return LIST_ERR_IMMUTABLE;
+    }
     // check index is valid
     // FIXME: this can be (and probably is) checked at the compiler level
     if (!valid_index(index, lp->size)) {
@@ -309,6 +313,10 @@ numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out) {
 int
 numba_list_append(NB_List *lp, const char *item) {
     char *loc;
+    // check for mutability
+    if (!lp->is_mutable) {
+        return LIST_ERR_IMMUTABLE;
+    }
     // resize by one, will change list size
     int result = numba_list_resize(lp, lp->size + 1);
     if(result < LIST_OK) {
@@ -331,6 +339,10 @@ int
 numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
     char *loc, *new_loc;
     int result;
+    // check for mutability
+    if (!lp->is_mutable) {
+        return LIST_ERR_IMMUTABLE;
+    }
     Py_ssize_t leftover_bytes;
     // check index is valid
     // FIXME: this can be (and probably is) checked at the compiler level
@@ -387,6 +399,10 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
 int
 numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
     char * items;
+    // check for mutability
+    if (!lp->is_mutable) {
+        return LIST_ERR_IMMUTABLE;
+    }
     size_t new_allocated, num_allocated_bytes;
     /* Bypass realloc() when a previous overallocation is large enough
        to accommodate the newsize.  If the newsize falls lower than half
@@ -446,6 +462,10 @@ numba_list_delete_slice(NB_List *lp,
     int result, i, slicelength, new_length;
     char *loc, *new_loc;
     Py_ssize_t leftover_bytes, cur, lim;
+    // check for mutability
+    if (!lp->is_mutable) {
+        return LIST_ERR_IMMUTABLE;
+    }
     // calculate the slicelength, taken from PySlice_AdjustIndices, see the top
     // of this file for the exact source
     if (step > 0) {
@@ -675,6 +695,27 @@ numba_test_list(void) {
     CHECK(memcmp(got_item, "mno", 4) == 0);
     CHECK(memcmp(lp->items, "def\x00ghi\x00jkl\x00", 12) == 0);
 
+    // flip and check the is_mutable member
+    CHECK(numba_list_is_mutable(lp) == 1);
+    numba_list_set_is_mutable(lp, 0);
+    CHECK(numba_list_is_mutable(lp) == 0);
+
+    // ensure that any attempts to mutate an immutable list fail
+    CHECK(numba_list_setitem(lp, 0, "zzz") == LIST_ERR_IMMUTABLE);
+    CHECK(numba_list_append(lp, "zzz") == LIST_ERR_IMMUTABLE);
+    CHECK(numba_list_pop(lp, 0, got_item) == LIST_ERR_IMMUTABLE);
+    CHECK(numba_list_resize(lp, 23) == LIST_ERR_IMMUTABLE);
+    CHECK(numba_list_delete_slice(lp, 0, 3, 1) == LIST_ERR_IMMUTABLE);
+
+    // ensure that all attempts to query/read from and immutable list succeed
+    CHECK(numba_list_length(lp) == 3);
+    status = numba_list_getitem(lp, 0, got_item);
+    CHECK(status == LIST_OK);
+    CHECK(memcmp(got_item, "def", 4) == 0);
+
+    // flip the is_mutable member back  and check
+    numba_list_set_is_mutable(lp, 1);
+    CHECK(numba_list_is_mutable(lp) == 1);
 
     // test iterator
     CHECK(lp->size > 0);
