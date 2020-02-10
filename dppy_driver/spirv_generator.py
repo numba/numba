@@ -8,9 +8,6 @@ import tempfile
 
 from numba import config
 
-SAVE_DPPY_IR_FILES = 0
-SAVE_DPPY_IR_FILES = environ.get(SAVE_DPPY_IR_FILES)
-
 def _raise_bad_env_path(msg, path, extra=None):
     error_message = msg.format(path)
     if extra is not None:
@@ -77,12 +74,12 @@ class Module(object):
     def __del__(self):
         # Remove all temporary files
         for afile in self._tempfiles:
-            if SAVE_DPPY_IR_FILES == 1:
+            if config.SAVE_DPPY_IR_FILES == 1:
                 print(afile)
             else:
                 os.unlink(afile)
         # Remove directory
-        if SAVE_DPPY_IR_FILES != 1:
+        if config.SAVE_DPPY_IR_FILES != 1:
             os.rmdir(self._tmpdir)
 
     def _create_temp_file(self, name, mode='wb'):
