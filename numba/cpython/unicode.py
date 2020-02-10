@@ -2295,6 +2295,11 @@ def ol_ord(c):
 
 
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L2005-L2028    # noqa: E501
+# This looks a bit different to the cpython implementation but, with the
+# exception of a latin1 fast path is logically the same. It finds the "kind" of
+# the codepoint `ch`, creates a length 1 string of that kind and then injects
+# the code point into the zero position of that string. Cpython does similar but
+# branches for each kind (this is encapsulated in Numba's _set_code_point).
 @register_jitable
 def _unicode_char(ch):
     assert ch <= _MAX_UNICODE
