@@ -43,6 +43,11 @@
                         "associated with command_queue.",                      \
                 __LINE__, __FILE__);                                           \
         goto error;                                                            \
+    case -54:                                                                  \
+        fprintf(stderr, "Open CL Runtime Error: %d (%s) on Line %d in %s\n",   \
+                retval, "[CL_INVALID_WORK_GROUP_SIZE]",                        \
+                __LINE__, __FILE__);                                           \
+        goto error;                                                            \
     default:                                                                   \
         fprintf(stderr, "Open CL Runtime Error: %d (%s) on Line %d in %s\n",   \
                 retval, M, __LINE__, __FILE__);                                \
@@ -277,18 +282,14 @@ static int dump_dp_kernel_info (void *obj)
     value = (char*)malloc(size);
     err = clGetKernelInfo(kernel, CL_KERNEL_FUNCTION_NAME, size, value, NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not get kernel function name.");
-#if DEBUG
-    printf("DEBUG: Kernel Function name: %s\n", value);
-#endif
+    printf("Kernel Function name: %s\n", value);
     free(value);
 
     // print the number of kernel args
     err = clGetKernelInfo(kernel, CL_KERNEL_NUM_ARGS, sizeof(numKernelArgs),
             &numKernelArgs, NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not get kernel num args.");
-#if DEBUG
-    printf("DEBUG: Number of kernel arguments : %d\n", numKernelArgs);
-#endif
+    printf("Number of kernel arguments : %d\n", numKernelArgs);
 
     return DP_GLUE_SUCCESS;
 
@@ -359,6 +360,7 @@ static int create_dp_env_t (cl_platform_id* platforms,
     env->device = NULL;
     env->queue = NULL;
     env->max_work_item_dims = 0;
+    env->max_work_group_size = 0;
     env->dump_fn = NULL;
 
     device = (cl_device_id*)malloc(sizeof(cl_device_id));
@@ -370,6 +372,11 @@ static int create_dp_env_t (cl_platform_id* platforms,
     err = clGetDeviceInfo(*device, CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS,
             sizeof(env->max_work_item_dims), &env->max_work_item_dims, NULL);
     CHECK_OPEN_CL_ERROR(err, "Could not get max work item dims");
+
+    // get the CL_DEVICE_MAX_WORK_GROUP_SIZE for this device
+    err = clGetDeviceInfo(*device, CL_DEVICE_MAX_WORK_GROUP_SIZE,
+            sizeof(env->max_work_group_size), &env->max_work_group_size, NULL);
+    CHECK_OPEN_CL_ERROR(err, "Could not get max work group size");
 
     // Create a context and associate it with device
     env->context = clCreateContext(NULL, 1, device, NULL, NULL, &err);

@@ -22,6 +22,7 @@ struct dp_env
     void *device;
     void *queue;
     unsigned int max_work_item_dims;
+    size_t max_work_group_size;
     int (*dump_fn) (void *);
 };
 

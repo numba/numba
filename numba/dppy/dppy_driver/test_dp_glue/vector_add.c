@@ -1,4 +1,4 @@
-#include <numba_oneapi_glue.h>
+#include <dp_glue.h>
 #include <stdio.h>
 #include <CL/cl.h>  /* OpenCL headers */
 
@@ -17,7 +17,7 @@ static const size_t N = 2048;
 /* OpenCl kernel for element-wise addition of two arrays */
 const char* programSource =
     "__kernel                                                             \n"
-    "void vecadd(__global float *A, __global float *B, __global float *C, __global void *meminfo) \n"
+    "void vecadd(__global float *A, __global float *B, __global float *C) \n"
     "{                                                                    \n"
     "   int idx = get_global_id(0);                                       \n"
     "   C[idx] = A[idx] + B[idx];                                         \n"
@@ -29,7 +29,7 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     env_t env_t_ptr;
     program_t program_ptr;
     kernel_t kernel_ptr;
-    size_t num_args = 4;
+    size_t num_args = 3;
     kernel_arg_t kernel_args[num_args];
     float *A, *B, *C;
     size_t i;
@@ -57,9 +57,9 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
         B[i] = 2*(i+1);
     }
 
-    err =  create_numba_oneapi_rw_mem_buffer(env_t_ptr, datasize, &buffers[0]);
-    err |= create_numba_oneapi_rw_mem_buffer(env_t_ptr, datasize, &buffers[1]);
-    err |= create_numba_oneapi_rw_mem_buffer(env_t_ptr, datasize, &buffers[2]);
+    err =  create_dp_rw_mem_buffer(env_t_ptr, datasize, &buffers[0]);
+    err |= create_dp_rw_mem_buffer(env_t_ptr, datasize, &buffers[1]);
+    err |= create_dp_rw_mem_buffer(env_t_ptr, datasize, &buffers[2]);
 
     if(err) {
         fprintf(stderr, "Buffer creation failed. Abort!\n");
@@ -67,23 +67,23 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     }
 
     // Write data from the input arrays to the buffers
-    err = write_numba_oneapi_mem_buffer_to_device(env_t_ptr, buffers[0], true,
+    err = write_dp_mem_buffer_to_device(env_t_ptr, buffers[0], true,
             0, datasize, A);
-    err |= write_numba_oneapi_mem_buffer_to_device(env_t_ptr, buffers[1], true,
+    err |= write_dp_mem_buffer_to_device(env_t_ptr, buffers[1], true,
             0, datasize, B);
     if(err) {
         fprintf(stderr, "Could not write to buffer. Abort!\n");
         exit(1);
     }
 
-    err = create_numba_oneapi_program_from_source(env_t_ptr, 1,
+    err = create_dp_program_from_source(env_t_ptr, 1,
             (const char **)&programSource, NULL, &program_ptr);
-    err |= build_numba_oneapi_program (env_t_ptr, program_ptr);
+    err |= build_dp_program (env_t_ptr, program_ptr);
     if(err) {
         fprintf(stderr, "Could not create the program. Abort!\n");
         exit(1);
     }
-    err = create_numba_oneapi_kernel(env_t_ptr, program_ptr, "vecadd",
+    err = create_dp_kernel(env_t_ptr, program_ptr, "vecadd",
             &kernel_ptr);
     if(err) {
         fprintf(stderr, "Could not create the kernel. Abort!\n");
@@ -91,17 +91,15 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     }
     kernel_ptr->dump_fn(kernel_ptr);
     // Set kernel arguments
-    err = create_numba_oneapi_kernel_arg(&buffers[0]->buffer_ptr,
+    err = create_dp_kernel_arg(&buffers[0]->buffer_ptr,
                                           buffers[0]->sizeof_buffer_ptr,
                                           &kernel_args[0]);
-    err |= create_numba_oneapi_kernel_arg(&buffers[1]->buffer_ptr,
+    err |= create_dp_kernel_arg(&buffers[1]->buffer_ptr,
                                           buffers[1]->sizeof_buffer_ptr,
                                           &kernel_args[1]);
-    err |= create_numba_oneapi_kernel_arg(&buffers[2]->buffer_ptr,
+    err |= create_dp_kernel_arg(&buffers[2]->buffer_ptr,
                                           buffers[2]->sizeof_buffer_ptr,
                                           &kernel_args[2]);
-    err |=  create_numba_oneapi_kernel_arg(&void_p, sizeof(void_p),
-                                           &kernel_args[3]);
     if(err) {
         fprintf(stderr, "Could not create the kernel_args. Abort!\n");
         exit(1);
@@ -112,7 +110,7 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     workGroupSize[0] = 256;
 
     // Create a program with source code
-    err = set_args_and_enqueue_numba_oneapi_kernel(env_t_ptr, kernel_ptr,
+    err = set_args_and_enqueue_dp_kernel(env_t_ptr, kernel_ptr,
             num_args, kernel_args, 1, NULL, indexSpaceSize, workGroupSize);
 
     if(err) {
@@ -122,7 +120,7 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     }
 
     // Copy the device output buffer to the host output array
-    err = read_numba_oneapi_mem_buffer_from_device(env_t_ptr, buffers[2], true,
+    err = read_dp_mem_buffer_from_device(env_t_ptr, buffers[2], true,
             0, datasize, C);
 
 #if 1
@@ -141,17 +139,17 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
 
     // Cleanup
     // free the kernel args
-    destroy_numba_oneapi_kernel_arg(&kernel_args[0]);
-    destroy_numba_oneapi_kernel_arg(&kernel_args[1]);
-    destroy_numba_oneapi_kernel_arg(&kernel_args[2]);
+    destroy_dp_kernel_arg(&kernel_args[0]);
+    destroy_dp_kernel_arg(&kernel_args[1]);
+    destroy_dp_kernel_arg(&kernel_args[2]);
     // free the kernel
-    destroy_numba_oneapi_kernel(&kernel_ptr);
+    destroy_dp_kernel(&kernel_ptr);
     // free the program
-    destroy_numba_oneapi_program(&program_ptr);
+    destroy_dp_program(&program_ptr);
     // free the buffers
-    destroy_numba_oneapi_rw_mem_buffer(&buffers[0]);
-    destroy_numba_oneapi_rw_mem_buffer(&buffers[1]);
-    destroy_numba_oneapi_rw_mem_buffer(&buffers[2]);
+    destroy_dp_rw_mem_buffer(&buffers[0]);
+    destroy_dp_rw_mem_buffer(&buffers[1]);
+    destroy_dp_rw_mem_buffer(&buffers[2]);
     // free allocated memory for the arrays
     free(A);
     free(B);
@@ -164,17 +162,15 @@ int main (int argc, char** argv)
     runtime_t rt;
     int err;
 
-    err = create_numba_oneapi_runtime(&rt);
-    if(err == NUMBA_ONEAPI_FAILURE) goto error;
+    err = create_dp_runtime(&rt);
+    if(err == DP_GLUE_FAILURE) goto error;
     rt->dump_fn(rt);
 
-#if 0
     printf("\n===================================\n\n");
     //--- Execute on CPU
     printf("Executing on the first CPU device info: \n");
     rt->first_cpu_env->dump_fn(rt->first_cpu_env);
     buildAndExecuteKernel(rt, ON_CPU);
-#endif
 
     printf("\n===================================\n\n");
 
@@ -185,10 +181,10 @@ int main (int argc, char** argv)
     printf("\n===================================\n\n");
 
     //--- Cleanup
-    destroy_numba_oneapi_runtime(&rt);
+    destroy_dp_runtime(&rt);
 
     return 0;
 
 error:
-    return NUMBA_ONEAPI_FAILURE;
+    return DP_GLUE_FAILURE;
 }

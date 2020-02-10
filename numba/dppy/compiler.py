@@ -12,12 +12,20 @@ from types import FunctionType
 import os
 
 DEBUG=os.environ.get('NUMBA_DPPY_DEBUG', None)
+_NUMBA_PVC_READ_ONLY  = "read_only"
+_NUMBA_PVC_WRITE_ONLY = "write_only"
+_NUMBA_PVC_READ_WRITE = "read_write"
 
 def _raise_no_device_found_error():
     error_message = ("No OpenCL device specified. "
                      "Usage : jit_fn[device, globalsize, localsize](...)")
     raise ValueError(error_message)
 
+def _raise_invalid_kernel_enqueue_args():
+    error_message = ("Incorrect number of arguments for enquing dppy.kernel. "
+                     "Usage: dppy_driver.device_env, global size, local size. "
+                     "The local size argument is optional.")
+    raise ValueError(error_message)
 
 def compile_with_dppy(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the OpenCL backend.
@@ -59,7 +67,7 @@ def compile_with_dppy(pyfunc, return_type, args, debug):
     return cres
 
 
-def compile_kernel(device, pyfunc, args, debug=False):
+def compile_kernel(device, pyfunc, args, access_types, debug=False):
     if DEBUG:
         print("compile_kernel", args)
     cres = compile_with_dppy(pyfunc, types.void, args, debug=debug)
@@ -68,7 +76,8 @@ def compile_kernel(device, pyfunc, args, debug=False):
     oclkern = DPPyKernel(device_env=device,
                          llvm_module=kernel.module,
                          name=kernel.name,
-                         argtypes=cres.signature.args)
+                         argtypes=cres.signature.args,
+                         ordered_arg_access_types=access_types)
     return oclkern
 
 
@@ -84,17 +93,38 @@ def compile_kernel_parfor(device, func_ir, args, debug=False):
                          argtypes=cres.signature.args)
     return oclkern
 
-def _ensure_list(val):
-    if not isinstance(val, (tuple, list)):
-        return [val]
-    else:
-        return list(val)
 
+def _ensure_valid_work_item_grid(val, device_env):
 
-def _ensure_size_or_append(val, size):
-    n = len(val)
-    for _ in range(n, size):
-        val.append(1)
+    if not isinstance(val, (tuple, list, int)):
+        error_message = ("Cannot create work item dimension from "
+                         "provided argument")
+        raise ValueError(error_message)
+
+    if isinstance(val, int):
+        val = [val]
+
+    if len(val) > device_env.get_max_work_item_dims():
+        error_message = ("Unsupported number of work item dimensions ")
+        raise ValueError(error_message)
+
+    return list(val)
+
+def _ensure_valid_work_group_size(val, work_item_grid):
+
+    if not isinstance(val, (tuple, list, int)):
+        error_message = ("Cannot create work item dimension from "
+                         "provided argument")
+        raise ValueError(error_message)
+
+    if isinstance(val, int):
+        val = [val]
+
+    if len(val) != len(work_item_grid):
+        error_message = ("Unsupported number of work item dimensions ")
+        raise ValueError(error_message)
+
+    return list(val)
 
 
 class DPPyKernelBase(object):
@@ -102,27 +132,24 @@ class DPPyKernelBase(object):
     """
 
     def __init__(self):
-        self.global_size = (1,)
-        self.local_size = (1,)
-        self.device_env = None
+        self.global_size = []
+        self.local_size  = []
+        self.device_env  = None
+
+        # list of supported access types, stored in dict for fast lookup
+        self.correct_access_types = {_NUMBA_PVC_READ_ONLY: _NUMBA_PVC_READ_ONLY,
+                _NUMBA_PVC_WRITE_ONLY: _NUMBA_PVC_WRITE_ONLY,
+                _NUMBA_PVC_READ_WRITE: _NUMBA_PVC_READ_WRITE}
 
     def copy(self):
         return copy.copy(self)
 
     def configure(self, device_env, global_size, local_size=None):
-        """Configure the OpenCL kernel local_size can be None
+        """Configure the OpenCL kernel. The local_size can be None
         """
-        global_size = _ensure_list(global_size)
-
-        if local_size is not None:
-            local_size = _ensure_list(local_size)
-            size = max(len(global_size), len(local_size))
-            _ensure_size_or_append(global_size, size)
-            _ensure_size_or_append(local_size, size)
-
         clone = self.copy()
-        clone.global_size = tuple(global_size)
-        clone.local_size = tuple(local_size) if local_size else None
+        clone.global_size = global_size
+        clone.local_size = local_size if local_size else []
         clone.device_env = device_env
 
         return clone
@@ -135,21 +162,21 @@ class DPPyKernelBase(object):
     def __getitem__(self, args):
         """Mimick CUDA python's square-bracket notation for configuration.
         This assumes the argument to be:
-            `griddim, blockdim, queue`
-        The blockdim maps directly to local_size.
-        The actual global_size is computed by multiplying the local_size to
-        griddim.
+            `dppy_driver.device_env, global size, local size`
         """
+        ls = None
+        nargs = len(args)
+        # Check if the kernel enquing arguments are sane
+        if nargs < 2 or nargs > 3:
+            _raise_invalid_kernel_enqueue_args
 
         device_env = args[0]
-        griddim = _ensure_list(args[1])
-        blockdim = _ensure_list(args[2])
-        size = max(len(griddim), len(blockdim))
-        _ensure_size_or_append(griddim, size)
-        _ensure_size_or_append(blockdim, size)
-        # Compute global_size
-        gs = [g * l for g, l in zip(griddim, blockdim)]
-        return self.configure(device_env, gs, blockdim)
+        gs = _ensure_valid_work_item_grid(args[1], device_env)
+        # If the optional local size argument is provided
+        if nargs == 3:
+            ls = _ensure_valid_work_group_size(args[2], gs)
+
+        return self.configure(device_env, gs, ls)
 
 
 #_CacheEntry = namedtuple("_CachedEntry", ['symbol', 'executable',
@@ -188,12 +215,13 @@ class DPPyKernel(DPPyKernelBase):
     A OCL kernel object
     """
 
-    def __init__(self, device_env, llvm_module, name, argtypes):
+    def __init__(self, device_env, llvm_module, name, argtypes, ordered_arg_access_types):
         super(DPPyKernel, self).__init__()
         self._llvm_module = llvm_module
         self.assembly = self.binary = llvm_module.__str__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
+        self.ordered_arg_access_types = ordered_arg_access_types
         self._argloc = []
         # cached finalized program
         # self._cacheprog = _CachedProgram(entry_name=self.entry_name,
@@ -217,150 +245,148 @@ class DPPyKernel(DPPyKernelBase):
         # Unpack pyobject values into ctypes scalar values
         retr = []  # hold functors for writeback
         kernelargs = []
-        for ty, val in zip(self.argument_types, args):
-            self._unpack_argument(ty, val, self.device_env, retr, kernelargs)
-        
+        internal_device_arrs = []
+        for ty, val, access_type in zip(self.argument_types, args, self.ordered_arg_access_types):
+            self._unpack_argument(ty, val, self.device_env, retr,
+                    kernelargs, internal_device_arrs, access_type)
+
         # enqueues the kernel
         driver.enqueue_kernel(self.device_env, self.kernel, kernelargs,
                               self.global_size, self.local_size)
 
-        # retrieve auto converted arrays
-        # for wb in retr:
-        #    wb()
-    
+        for ty, val, i_dev_arr, access_type in zip(self.argument_types, args,
+                internal_device_arrs, self.ordered_arg_access_types):
+            self._pack_argument(ty, val, self.device_env, i_dev_arr, access_type)
+
+    def _pack_argument(self, ty, val, device_env, device_arr, access_type):
+        """
+        Copy device data back to host
+        """
+        if (device_arr and (access_type not in self.correct_access_types or
+            access_type in self.correct_access_types and
+            self.correct_access_types[access_type] != _NUMBA_PVC_READ_ONLY)):
+            # we get the date back to host if have created a device_array or
+            # if access_type of this device_array is not of type read_only and read_write
+            device_env.copy_array_from_device(device_arr)
+
     def _unpack_device_array_argument(self, val, kernelargs):
+        # this function only takes DeviceArray created for ndarrays
         void_ptr_arg = True
-        # meminfo 
+        # meminfo
         kernelargs.append(driver.KernelArg(None, void_ptr_arg))
         # parent
         kernelargs.append(driver.KernelArg(None, void_ptr_arg))
-        kernelargs.append(driver.KernelArg(val._ndarray.size))
-        kernelargs.append(driver.KernelArg(val._ndarray.dtype.itemsize))
+        kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.size)))
+        kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.dtype.itemsize)))
         kernelargs.append(driver.KernelArg(val))
         for ax in range(val._ndarray.ndim):
-            kernelargs.append(driver.KernelArg(val._ndarray.shape[ax]))
+            kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.shape[ax])))
         for ax in range(val._ndarray.ndim):
-            kernelargs.append(driver.KernelArg(val._ndarray.strides[ax]))
+            kernelargs.append(driver.KernelArg(ctypes.c_size_t(val._ndarray.strides[ax])))
 
 
-    def _unpack_argument(self, ty, val, queue, retr, kernelargs):
+    def _unpack_argument(self, ty, val, device_env, retr, kernelargs, device_arrs, access_type):
         """
         Convert arguments to ctypes and append to kernelargs
         """
         # DRD : Check if the val is of type driver.DeviceArray before checking
-        # if ty is of type ndarray. Argtypes retuends ndarray for both
+        # if ty is of type ndarray. Argtypes returns ndarray for both
         # DeviceArray and ndarray. This is a hack to get around the issue,
         # till I understand the typing infrastructure of NUMBA better.
+        device_arrs.append(None)
         if isinstance(val, driver.DeviceArray):
             self._unpack_device_array_argument(val, kernelargs)
 
         elif isinstance(ty, types.Array):
-            # DRD: This unpack routine is commented out for the time-being.
-            # NUMBA does not know anything about SmartArrayTypes.
+            default_behavior = self.check_and_warn_abt_invalid_access_type(access_type)
+            dArr = None
 
-            # if isinstance(ty, types.SmartArrayType):
-            #    devary = val.get('gpu')
-            #    retr.append(lambda: val.mark_changed('gpu'))
-            #    outer_parent = ctypes.c_void_p(0)
-            #    kernelargs.append(outer_parent)
-            # else:
-            #devary, conv = devicearray.auto_device(val, stream=queue)
-            #if conv:
-            #    retr.append(lambda: devary.copy_to_host(val, stream=queue))
-            """
-            c_intp = ctypes.c_ssize_t
+            if (default_behavior or
+                self.correct_access_types[access_type] == _NUMBA_PVC_READ_ONLY or
+                self.correct_access_types[access_type] == _NUMBA_PVC_READ_WRITE):
+                # default, read_only and read_write case
+                dArr = device_env.copy_array_to_device(val)
+            elif self.correct_access_types[access_type] == _NUMBA_PVC_WRITE_ONLY:
+                # write_only case, we do not copy the host data
+                dArr = driver.DeviceArray(device_env.get_env_ptr(), val)
 
-            # TA: New version
-            meminfo = ctypes.c_void_p(0)
-            parent = ctypes.c_void_p(0)
-            nitems = c_intp(devary.size)
-            itemsize = c_intp(devary.dtype.itemsize)
-            data = driver.device_pointer(devary)  # @@
-
-            kernelargs.append(driver.runtime.create_kernel_arg(meminfo))
-            kernelargs.append(driver.runtime.create_kernel_arg(parent))
-            kernelargs.append(driver.runtime.create_kernel_arg(nitems))
-            kernelargs.append(driver.runtime.create_kernel_arg(itemsize))
-            kernelargs.append(driver.runtime.create_kernel_arg(data))
-
-            meminfo = ctypes.c_void_p(0)
-            parent = ctypes.c_void_p(0)
-            nitems = c_intp(devary.size)
-            itemsize = c_intp(devary.dtype.itemsize)
-            data = driver.device_pointer(devary)  # @@
-            kernelargs.append(meminfo)
-            kernelargs.append(parent)
-            kernelargs.append(nitems)
-            kernelargs.append(itemsize)
-            kernelargs.append(data)
-            for ax in range(devary.ndim):
-                kernelargs.append(c_intp(devary.shape[ax]))
-            for ax in range(devary.ndim):
-                kernelargs.append(c_intp(devary.strides[ax]))
-            """
-            raise NotImplementedError(ty, val)
+            assert (dArr != None), "Problem in allocating device buffer"
+            device_arrs[-1] = dArr
+            self._unpack_device_array_argument(dArr, kernelargs)
 
         elif isinstance(ty, types.Integer):
-            cval = getattr(ctypes, "c_%s" % ty)(val)
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            cval = ctypes.c_size_t(val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.float64:
             cval = ctypes.c_double(val)
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.float32:
             cval = ctypes.c_float(val)
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.boolean:
             cval = ctypes.c_uint8(int(val))
-            #kernelargs.append(cval)
-            raise NotImplementedError(ty, val)
+            kernelargs.append(driver.KernelArg(cval))
 
         elif ty == types.complex64:
             #kernelargs.append(ctypes.c_float(val.real))
             #kernelargs.append(ctypes.c_float(val.imag))
             raise NotImplementedError(ty, val)
 
-
         elif ty == types.complex128:
             #kernelargs.append(ctypes.c_double(val.real))
             #kernelargs.append(ctypes.c_double(val.imag))
             raise NotImplementedError(ty, val)
 
-
         else:
             raise NotImplementedError(ty, val)
 
+    def check_and_warn_abt_invalid_access_type(self, access_type):
+        if access_type not in self.correct_access_types:
+            msg = "[!] %s is not a valid access type. Supported access types are [" % (access_type)
+            for key in self.correct_access_types:
+                msg += " %s |" % (key)
 
-class AutoJitDPPyKernel(DPPyKernelBase):
-    def __init__(self, func):
+            msg = msg[:-1] + "]"
+            if access_type != None: print(msg)
+            return True
+        else:
+            return False
 
-        super(AutoJitDPPyKernel, self).__init__()
+
+class JitDPPyKernel(DPPyKernelBase):
+    def __init__(self, func, access_types):
+
+        super(JitDPPyKernel, self).__init__()
+
         self.py_func = func
-        self.definitions = {}
+        # DRD: Caching definitions this way can lead to unexpected consequences
+        # E.g. A kernel compiled for a given device would not get recompiled
+        # and lead to OpenCL runtime errors.
+        #self.definitions = {}
+        self.access_types = access_types
 
         from .descriptor import DPPyTargetDesc
 
         self.typingctx = DPPyTargetDesc.typingctx
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
+        assert not kwargs, "Keyword Arguments are not supported"
         if self.device_env is None:
             _raise_no_device_found_error()
         kernel = self.specialize(*args)
-        cfg = kernel.configure(self.device_env, self.global_size, 
+        cfg = kernel.configure(self.device_env, self.global_size,
                                self.local_size)
         cfg(*args)
 
     def specialize(self, *args):
         argtypes = tuple([self.typingctx.resolve_argument_type(a)
                           for a in args])
-        kernel = self.definitions.get(argtypes)
+        kernel = None #self.definitions.get(argtypes)
 
         if kernel is None:
-            kernel = compile_kernel(self.device_env, self.py_func, argtypes)
-            self.definitions[argtypes] = kernel
+            kernel = compile_kernel(self.device_env, self.py_func, argtypes, self.access_types)
+            #self.definitions[argtypes] = kernel
         return kernel
