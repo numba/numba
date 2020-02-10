@@ -5124,3 +5124,16 @@ def as_strided(x, shape=None, strides=None):
         return x
 
     return as_strided_impl
+
+
+@overload(bool)
+def ol_bool(arr):
+    if isinstance(arr, types.Array):
+        def impl(arr):
+            if arr.size == 1:
+                return bool(arr.take(0))
+            else:
+                msg = ("The truth value of an array with more than one element "
+                        "is ambiguous. Use a.any() or a.all()")
+                raise ValueError(msg)
+        return impl

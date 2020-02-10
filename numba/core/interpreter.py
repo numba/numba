@@ -225,9 +225,9 @@ class Interpreter(object):
         self._remove_unused_temporaries()
         self._insert_outgoing_phis()
 
-    def _inject_call(self, func, gv_name, res_name=None):
+    def _inject_call(self, func, gv_name, res_name=None, args=None):
         """A helper function to inject a call to *func* which is a python
-        function.
+        function. Returns the stored value.
 
         Parameters
         ----------
@@ -238,12 +238,14 @@ class Interpreter(object):
         res_name : str; optional
             The variable name to be used to store the call result.
             If ``None``, a name is created automatically.
+        args: iterable of ir.Var; optional
+            Arguments to the call
         """
         gv_fn = ir.Global(gv_name, func, loc=self.loc)
         self.store(value=gv_fn, name=gv_name, redefine=True)
-        callres = ir.Expr.call(self.get(gv_name), (), (), loc=self.loc)
+        callres = ir.Expr.call(self.get(gv_name), tuple(args), (), loc=self.loc)
         res_name = res_name or '$callres_{}'.format(gv_name)
-        self.store(value=callres, name=res_name, redefine=True)
+        return self.store(value=callres, name=res_name, redefine=True)
 
     def _insert_try_block_begin(self):
         """Insert IR-nodes to mark the start of a `try` block.
@@ -1164,7 +1166,9 @@ class Interpreter(object):
         }
         truebr = brs[iftrue]
         falsebr = brs[not iftrue]
-        bra = ir.Branch(cond=self.get(pred), truebr=truebr, falsebr=falsebr,
+        wrapped = self._inject_call(bool, '$bool_cond', '$pred',
+                                    (self.get(pred),))
+        bra = ir.Branch(cond=wrapped, truebr=truebr, falsebr=falsebr,
                         loc=self.loc)
         self.current_block.append(bra)
 
