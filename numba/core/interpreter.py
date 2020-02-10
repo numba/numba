@@ -243,7 +243,8 @@ class Interpreter(object):
         """
         gv_fn = ir.Global(gv_name, func, loc=self.loc)
         self.store(value=gv_fn, name=gv_name, redefine=True)
-        callres = ir.Expr.call(self.get(gv_name), tuple(args), (), loc=self.loc)
+        wargs = tuple(args) if args is not None else ()
+        callres = ir.Expr.call(self.get(gv_name), wargs, (), loc=self.loc)
         res_name = res_name or '$callres_{}'.format(gv_name)
         return self.store(value=callres, name=res_name, redefine=True)
 
