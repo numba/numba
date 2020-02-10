@@ -13,11 +13,13 @@ parser = argparse.ArgumentParser(description='Program to compute pairwise distan
 
 parser.add_argument('-n', type=int, required=True, help='Number of points')
 parser.add_argument('-d', type=int, default=3, help='Dimensions')
+parser.add_argument('-r', type=int, default=1, help='repeat')
+parser.add_argument('-l', type=int, default=1, help='local_work_size')
 
 args = parser.parse_args()
 
-@dppy.jit
-def pairwise_python(X, D):
+@dppy.kernel
+def pairwise_python(X, D, xshape0, xshape1):
     idx = dppy.get_global_id(0)
 
     #for i in range(xshape0):
@@ -29,40 +31,33 @@ def pairwise_python(X, D):
         D[idx, j] = sqrt(d)
 
 def call_ocl():
-    global_size = 50, 1
-    local_size = 32, 1, 1
-    
+    global_size = args.n
+    local_size = args.l
+
     X = np.random.random((args.n, args.d))
     D = np.empty((args.n, args.n))
 
     #measure running time
     device_env = None
-    '''
-    try:
-        device_env = ocldrv.runtime.get_gpu_device()
-        print("Selected GPU device")
-    except:
-        try:
-            device_env = ocldrv.runtime.get_cpu_device()
-            print("Selected CPU device")
-        except:
-            print("No OpenCL devices found on the system")
-            raise SystemExit()
-    '''
     device_env = ocldrv.runtime.get_cpu_device()
     start = time()
+    times = list()
 
     dX = device_env.copy_array_to_device(X)
     dD = ocldrv.DeviceArray(device_env.get_env_ptr(), D)
 
-    #pairwise_python[ceil(args.n/1024), 1024](dX, dD, X.shape[0], X.shape[1])
-    pairwise_python[device_env,global_size,local_size](dX, dD)
+    for repeat in range(args.r):
+        start = time()
+        pairwise_python[device_env,global_size,local_size](dX, dD, X.shape[0], X.shape[1])
+        end = time()
+
+        total_time = end - start
+        times.append(total_time)
 
     device_env.copy_array_from_device(dD)
-    end = time()
-    total_time = end - start
 
-    print("Total time = " + str(total_time))
+    times =  np.asarray(times, dtype=np.float32)
+    print("Average time of %d runs is = %f" % (args.r, times.mean()))
 
 def main():
     call_ocl()
