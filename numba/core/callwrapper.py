@@ -165,31 +165,28 @@ class PyCallWrapper(object):
         # re-aquire the gil if it got released
         gil_manager.emit_cleanup()
 
+        # the remaining clean-up and debug print, will be used in several
+        # places below. make sure not to have more than one in the path
+        def debug_print_and_cleanup():
+            self.debug_print(builder, "# callwrapper: emit_cleanup")
+            cleanup_manager.emit_cleanup()
+            self.debug_print(builder, "# callwrapper: emit_cleanup end")
+
         # Determine return status
         with builder.if_then(status.is_ok, likely=True):
             # Ok => return boxed Python value
             with builder.if_then(status.is_none):
-                # Do clean up
-                self.debug_print(builder, "# callwrapper: emit_cleanup")
-                cleanup_manager.emit_cleanup()
-                self.debug_print(builder, "# callwrapper: emit_cleanup end")
-
+                debug_print_and_cleanup()
                 api.return_none()
 
             retty = self._simplified_return_type()
             obj = api.from_native_return(retty, retval, env_manager)
 
-            # Do clean up
-            self.debug_print(builder, "# callwrapper: emit_cleanup")
-            cleanup_manager.emit_cleanup()
-            self.debug_print(builder, "# callwrapper: emit_cleanup end")
-
+            debug_print_and_cleanup()
             builder.ret(obj)
 
         # Error out but clean up first
-        self.debug_print(builder, "# callwrapper: emit_cleanup")
-        cleanup_manager.emit_cleanup()
-        self.debug_print(builder, "# callwrapper: emit_cleanup end")
+        debug_print_and_cleanup()
 
         self.context.call_conv.raise_error(builder, api, status)
         builder.ret(api.get_null_object())
