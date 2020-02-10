@@ -13,8 +13,11 @@ from numba import types
 from numba.itanium_mangler import mangle_c, mangle, mangle_type
 from numba.dppy import target
 from . import stubs
-from numba.dppy import enums
 from numba.dppy.codegen import SPIR_DATA_LAYOUT
+
+# mem fence
+CLK_LOCAL_MEM_FENCE                           = 0x1
+CLK_GLOBAL_MEM_FENCE                          = 0x2
 
 registry = Registry()
 lower = registry.lower
@@ -137,7 +140,7 @@ def barrier_no_arg_impl(context, builder, sig, args):
     sig = types.void(types.uint32)
     barrier = _declare_function(context, builder, 'barrier', sig,
                                 ['unsigned int'])
-    flags = context.get_constant(types.uint32, enums.CLK_GLOBAL_MEM_FENCE)
+    flags = context.get_constant(types.uint32, CLK_GLOBAL_MEM_FENCE)
     builder.call(barrier, [flags])
     return _void_value
 
@@ -156,7 +159,7 @@ def sub_group_barrier_impl(context, builder, sig, args):
     assert not args
     barrier = _declare_function(context, builder, 'sub_group_barrier', sig,
                                 ['unsigned int'])
-    flags = context.get_constant(types.uint32, enums.CLK_LOCAL_MEM_FENCE)
+    flags = context.get_constant(types.uint32, CLK_LOCAL_MEM_FENCE)
     builder.call(barrier, [flags])
     return _void_value
 
