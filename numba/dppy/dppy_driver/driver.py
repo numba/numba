@@ -83,7 +83,8 @@ class DeviceArray:
 
     def __init__(self, env_ptr, arr):
 
-        # We only support device buffers for ndarray and ctypes (for basic types like int, etc)
+        # We only support device buffers for ndarray and ctypes (for basic
+        # types like int, etc)
         if not isinstance(arr, ndarray):
             _raise_unsupported_type_error("DeviceArray constructor")
 
