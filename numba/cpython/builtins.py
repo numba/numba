@@ -57,6 +57,33 @@ def generic_is(context, builder, sig, args):
         return cgutils.false_bit
 
 
+@lower_builtin(operator.is_, types.Boolean, types.BooleanLiteral)
+@lower_builtin(operator.is_, types.BooleanLiteral, types.Boolean)
+def const_eq_impl(context, builder, sig, args):
+    sig_arg0, arg1 = sig.args
+
+    if isinstance(sig_arg0, types.BooleanLiteral):
+        literal_sig_arg = sig_arg0
+        non_literal_arg = args[1]
+    else:
+        literal_sig_arg = arg1
+        non_literal_arg = args[0]
+
+    
+    # QUESTION: how do I call the already defined casting instead?
+    #           This is just copy-paste from lower_cast
+    lit = context.get_constant_generic(
+        builder,
+        literal_sig_arg.literal_type,
+        literal_sig_arg.literal_value,
+        )
+    cast_literal = context.is_true(builder, literal_sig_arg.literal_type, lit)
+
+    sig_new = typing.signature(types.boolean, types.boolean, types.boolean)
+    eq_impl = context.get_function(operator.eq, sig_new)
+    return eq_impl(builder, (non_literal_arg, cast_literal))
+
+
 @lower_builtin(operator.eq, types.Literal, types.Literal)
 @lower_builtin(operator.eq, types.IntegerLiteral, types.IntegerLiteral)
 @lower_builtin(operator.eq, types.BooleanLiteral, types.BooleanLiteral)
