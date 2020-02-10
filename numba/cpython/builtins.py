@@ -59,7 +59,7 @@ def generic_is(context, builder, sig, args):
 
 @lower_builtin(operator.is_, types.Boolean, types.BooleanLiteral)
 @lower_builtin(operator.is_, types.BooleanLiteral, types.Boolean)
-def const_eq_impl(context, builder, sig, args):
+def boolean_literal_cross_type_is(context, builder, sig, args):
     sig_arg0, arg1 = sig.args
 
     if isinstance(sig_arg0, types.BooleanLiteral):
