@@ -2433,6 +2433,9 @@ class TestUnicodeAuxillary(BaseTest):
             for x in ex:
                 a = ord(x)
                 self.assertPreciseEqual(pyfunc(a), cfunc(a))
+        # test upper/lower bounds
+        for a in (0x0, _MAX_UNICODE):
+            self.assertPreciseEqual(pyfunc(a), cfunc(a))
 
     def test_chr_invalid(self):
         pyfunc = chr_usecase
