@@ -14,6 +14,8 @@ Rect = collections.namedtuple('Rect', ('width', 'height'))
 
 Point = collections.namedtuple('Point', ('x', 'y', 'z'))
 
+Point2 = collections.namedtuple('Point2', ('x', 'y', 'z'))
+
 Empty = collections.namedtuple('Empty', ())
 
 def tuple_return_usecase(a, b):
@@ -538,6 +540,13 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
         self.assertEqual(len(foo.nopython_signatures), 2)
         self.assertEqual(foo.nopython_signatures[0].args[0], typeof(in1))
         self.assertEqual(foo.nopython_signatures[1].args[0], typeof(in2))
+
+        # Differently named
+        in3 = Point2(1, 2, 3)
+        out3 = foo(in3)
+        self.assertEqual(in3, out3)
+        self.assertEqual(len(foo.nopython_signatures), 3)
+        self.assertEqual(foo.nopython_signatures[2].args[0], typeof(in3))
 
 
 class TestTupleNRT(TestCase, MemoryLeakMixin):
