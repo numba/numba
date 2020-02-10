@@ -1166,8 +1166,9 @@ class Interpreter(object):
         }
         truebr = brs[iftrue]
         falsebr = brs[not iftrue]
-        wrapped = self._inject_call(bool, '$bool_cond', '$pred',
-                                    (self.get(pred),))
+        name = "bool"
+        pname = "$%spred" % (inst.offset)
+        wrapped = self._inject_call(bool, name, pname, (self.get(pred),))
         bra = ir.Branch(cond=wrapped, truebr=truebr, falsebr=falsebr,
                         loc=self.loc)
         self.current_block.append(bra)
