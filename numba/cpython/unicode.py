@@ -1388,24 +1388,35 @@ def unicode_zfill(string, width):
 # ------------------------------------------------------------------------------
 @register_jitable
 def unicode_strip_left_bound(string, chars):
-    chars = ' ' if chars is None else chars
     str_len = len(string)
 
-    for i in range(str_len):
-        if string[i] not in chars:
-            return i
+    if chars is not None:
+        for i in range(str_len):
+            if string[i] not in chars:
+                return i
+    else:
+        for i in range(str_len):
+            if not _PyUnicode_IsSpace(string[i]):
+                return i
+
     return str_len
 
 
 @register_jitable
 def unicode_strip_right_bound(string, chars):
-    chars = ' ' if chars is None else chars
     str_len = len(string)
 
-    for i in range(str_len - 1, -1, -1):
-        if string[i] not in chars:
-            i += 1
-            break
+    if chars is not None:
+        for i in range(str_len - 1, -1, -1):
+            if string[i] not in chars:
+                i += 1
+                break
+    else:
+        for i in range(str_len - 1, -1, -1):
+            if not _PyUnicode_IsSpace(string[i]):
+                i += 1
+                break
+
     return i
 
 
