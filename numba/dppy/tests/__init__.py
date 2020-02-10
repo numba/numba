@@ -8,8 +8,8 @@ def load_tests(loader, tests, pattern):
     suite = SerialSuite()
     this_dir = dirname(__file__)
 
-    if ocldrv.has_gpu_device() or ocldrv.has_cpu_device():
-	suite.addTests(load_testsuite(loader, join(this_dir, 'dppy')))
+    if ocldrv.is_available():
+        suite.addTests(load_testsuite(loader, join(this_dir, 'dppy')))
     else:
         print("skipped DPPY tests")
 
