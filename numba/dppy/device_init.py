@@ -16,7 +16,6 @@ from .ocl.stubs import (
 )
 
 from . import initialize
-from .errors import KernelRuntimeError
 
 from .decorators import kernel, autojit
 from .dppy_driver.driver import runtime
