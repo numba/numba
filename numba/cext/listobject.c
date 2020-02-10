@@ -57,6 +57,11 @@
  * - Initialization of iter   numba_list_iter
  * - Get next item from iter  numba_list_iter_next
  *
+ * Two methods are provided to query and set the 'is_mutable':
+ *
+ * - Query                    numba_list_is_mutable
+ * - Set                      numba_list_set_is_mutable
+ *
  * Lastly a set of pure C level tests are provided which come in handy when
  * needing to use valgrind and friends.
  *
@@ -71,6 +76,7 @@ typedef enum {
     LIST_ERR_NO_MEMORY = -2,
     LIST_ERR_MUTATED = -3,
     LIST_ERR_ITER_EXHAUSTED = -4,
+    LIST_ERR_IMMUTABLE = -4,
 } ListStatus;
 
 /* Copy an item from a list.
@@ -166,6 +172,7 @@ numba_list_new(NB_List **out, Py_ssize_t item_size, Py_ssize_t allocated){
     lp->size = 0;
     lp->item_size = item_size;
     lp->allocated = allocated;
+    lp->is_mutable = 1;
     // set method table to zero */
     memset(&lp->methods, 0x00, sizeof(list_type_based_methods_table));
     // allocate memory to hold items, if requested
@@ -225,6 +232,27 @@ numba_list_length(NB_List *lp) {
 Py_ssize_t
 numba_list_allocated(NB_List *lp) {
     return lp->allocated;
+}
+
+/* Return the mutability status of the list
+ *
+ * lp: a list
+ *
+ */
+int
+numba_list_is_mutable(NB_List *lp){
+    return lp->is_mutable;
+}
+
+/* Set the is_mutable attribute
+ *
+ * lp: a list
+ * is_mutable: an int, 0(False) or 1(True)
+ *
+ */
+void
+numba_list_set_is_mutable(NB_List *lp, int is_mutable){
+    lp->is_mutable = is_mutable;
 }
 
 /* Set an item in a list.
@@ -568,6 +596,14 @@ numba_test_list(void) {
     CHECK(lp->item_size == 4);
     CHECK(lp->size == 0);
     CHECK(lp->allocated == 0);
+    CHECK(lp->is_mutable == 1);
+
+    // flip and check the is_mutable bit
+    CHECK(numba_list_is_mutable(lp) == 1);
+    numba_list_set_is_mutable(lp, 0);
+    CHECK(numba_list_is_mutable(lp) == 0);
+    numba_list_set_is_mutable(lp, 1);
+    CHECK(numba_list_is_mutable(lp) == 1);
 
     // append 1st item, this will cause a realloc
     status = numba_list_append(lp, "abc");
