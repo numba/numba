@@ -21,90 +21,83 @@ exclude =
     *.h
     __init__.py
     # Grandfather in existing failing files.  This list should shrink over time
-    numba/dispatcher.py
-    numba/serialize.py
-    numba/funcdesc.py
-    numba/postproc.py
-    numba/stencil.py
-    numba/smartarray.py
-    numba/transforms.py
-    numba/tracing.py
-    numba/ctypes_support.py
-    numba/withcontexts.py
+    numba/core/dispatcher.py
+    numba/core/serialize.py
+    numba/core/funcdesc.py
+    numba/core/postproc.py
+    numba/stencils/stencil.py
+    numba/core/transforms.py
+    numba/core/tracing.py
+    numba/core/withcontexts.py
     numba/_version.py
-    numba/inline_closurecall.py
-    numba/ir_utils.py
-    numba/pylowering.py
-    numba/io_support.py
-    numba/parfor.py
-    numba/numba_entry.py
-    numba/stencilparfor.py
-    numba/ir.py
-    numba/itanium_mangler.py
-    numba/unittest_support.py
-    numba/array_analysis.py
-    numba/generators.py
-    numba/appdirs.py
+    numba/core/inline_closurecall.py
+    numba/core/ir_utils.py
+    numba/core/pylowering.py
+    numba/python_utils.py
+    numba/parfors/parfor.py
+    numba/misc/numba_entry.py
+    numba/stencils/stencilparfor.py
+    numba/core/ir.py
+    numba/core/itanium_mangler.py
+    numba/parfors/array_analysis.py
+    numba/core/generators.py
+    numba/misc/appdirs.py
     numba/cffi_support.py
-    numba/interpreter.py
-    numba/caching.py
-    numba/utils.py
-    numba/debuginfo.py
-    numba/pretty_annotate.py
-    numba/six.py
-    numba/dummyarray.py
-    numba/dataflow.py
-    numba/macro.py
+    numba/core/interpreter.py
+    numba/core/caching.py
+    numba/core/debuginfo.py
+    numba/core/annotations/pretty_annotate.py
+    numba/misc/dummyarray.py
+    numba/core/dataflow.py
     numba/runtests.py
-    numba/pythonapi.py
+    numba/core/pythonapi.py
     numba/extending.py
-    numba/decorators.py
-    numba/typeconv/typeconv.py
-    numba/typeconv/rules.py
-    numba/typeconv/castgraph.py
-    numba/rewrites/registry.py
-    numba/rewrites/macros.py
-    numba/rewrites/static_binop.py
-    numba/rewrites/ir_print.py
-    numba/types/abstract.py
-    numba/types/functions.py
-    numba/types/misc.py
-    numba/types/containers.py
-    numba/types/npytypes.py
-    numba/types/common.py
-    numba/types/iterators.py
-    numba/types/scalars.py
-    numba/targets/fastmathpass.py
-    numba/targets/setobj.py
-    numba/targets/options.py
-    numba/targets/printimpl.py
-    numba/targets/smartarray.py
-    numba/targets/cmathimpl.py
-    numba/targets/tupleobj.py
-    numba/targets/mathimpl.py
-    numba/targets/registry.py
-    numba/targets/imputils.py
-    numba/targets/builtins.py
-    numba/targets/cpu.py
-    numba/targets/quicksort.py
-    numba/targets/callconv.py
-    numba/targets/randomimpl.py
-    numba/targets/npyimpl.py
-    numba/targets/slicing.py
-    numba/targets/numbers.py
-    numba/targets/listobj.py
-    numba/targets/removerefctpass.py
-    numba/targets/boxing.py
-    numba/targets/cffiimpl.py
-    numba/targets/linalg.py
-    numba/targets/rangeobj.py
-    numba/targets/npyfuncs.py
-    numba/targets/iterators.py
-    numba/targets/codegen.py
-    numba/targets/polynomial.py
-    numba/targets/mergesort.py
-    numba/targets/base.py
-    numba/targets/npdatetime.py
+    numba/core/decorators.py
+    numba/core/typeconv/typeconv.py
+    numba/core/typeconv/rules.py
+    numba/core/typeconv/castgraph.py
+    numba/core/rewrites/registry.py
+    numba/core/rewrites/macros.py
+    numba/core/rewrites/static_binop.py
+    numba/core/rewrites/ir_print.py
+    numba/core/types/abstract.py
+    numba/core/types/functions.py
+    numba/core/types/misc.py
+    numba/core/types/containers.py
+    numba/core/types/npytypes.py
+    numba/core/types/common.py
+    numba/core/types/iterators.py
+    numba/core/types/scalars.py
+    numba/core/fastmathpass.py
+    numba/cpython/setobj.py
+    numba/core/options.py
+    numba/cpython/printimpl.py
+    numba/cpython/cmathimpl.py
+    numba/cpython/tupleobj.py
+    numba/cpython/mathimpl.py
+    numba/core/registry.py
+    numba/core/imputils.py
+    numba/cpython/builtins.py
+    numba/core/cpu.py
+    numba/misc/quicksort.py
+    numba/core/callconv.py
+    numba/cpython/randomimpl.py
+    numba/np/npyimpl.py
+    numba/cpython/slicing.py
+    numba/cpython/numbers.py
+    numba/cpython/listobj.py
+    numba/core/removerefctpass.py
+    numba/core/boxing.py
+    numba/misc/cffiimpl.py
+    numba/np/linalg.py
+    numba/cpython/rangeobj.py
+    numba/np/npyfuncs.py
+    numba/cpython/iterators.py
+    numba/core/codegen.py
+    numba/np/polynomial.py
+    numba/misc/mergesort.py
+    numba/core/base.py
+    numba/np/npdatetime.py
     numba/cuda/dispatcher.py
     numba/cuda/printimpl.py
     numba/cuda/libdevice.py
@@ -198,8 +191,8 @@ exclude =
     numba/pycc/llvm_types.py
     numba/pycc/platform.py
     numba/pycc/decorators.py
-    numba/runtime/nrtdynmod.py
-    numba/runtime/context.py
+    numba/core/runtime/nrtdynmod.py
+    numba/core/runtime/context.py
     numba/tests/test_support.py
     numba/tests/test_llvm_version_check.py
     numba/tests/test_builtins.py
@@ -313,7 +306,7 @@ exclude =
     numba/tests/pdlike_usecase.py
     numba/tests/test_range.py
     numba/tests/test_nrt_refct.py
-    numba/tests/timsort.py
+    numba/misc/timsort.py
     numba/tests/test_nested_calls.py
     numba/tests/test_chained_assign.py
     numba/tests/test_withlifting.py
@@ -332,22 +325,22 @@ exclude =
     numba/tests/npyufunc/test_parallel_ufunc_issues.py
     numba/tests/npyufunc/test_parallel_env_variable.py
     numba/tests/npyufunc/test_gufunc.py
-    numba/typing/cmathdecl.py
-    numba/typing/bufproto.py
-    numba/typing/mathdecl.py
-    numba/typing/listdecl.py
-    numba/typing/builtins.py
-    numba/typing/randomdecl.py
-    numba/typing/setdecl.py
-    numba/typing/npydecl.py
-    numba/typing/arraydecl.py
-    numba/typing/collections.py
-    numba/typing/ctypes_utils.py
-    numba/typing/enumdecl.py
-    numba/typing/cffi_utils.py
-    numba/typing/typeof.py
-    numba/typing/npdatetime.py
-    numba/annotations/type_annotations.py
+    numba/core/typing/cmathdecl.py
+    numba/core/typing/bufproto.py
+    numba/core/typing/mathdecl.py
+    numba/core/typing/listdecl.py
+    numba/core/typing/builtins.py
+    numba/core/typing/randomdecl.py
+    numba/core/typing/setdecl.py
+    numba/core/typing/npydecl.py
+    numba/core/typing/arraydecl.py
+    numba/core/typing/collections.py
+    numba/core/typing/ctypes_utils.py
+    numba/core/typing/enumdecl.py
+    numba/core/typing/cffi_utils.py
+    numba/core/typing/typeof.py
+    numba/core/typing/npdatetime.py
+    numba/core/annotations/type_annotations.py
     numba/roc/mathdecl.py
     numba/roc/compiler.py
     numba/roc/hsadecl.py
@@ -388,14 +381,14 @@ exclude =
     numba/testing/loader.py
     numba/testing/notebook.py
     numba/testing/main.py
-    numba/unsafe/ndarray.py
-    numba/npyufunc/deviceufunc.py
-    numba/npyufunc/sigparse.py
-    numba/npyufunc/parfor.py
-    numba/npyufunc/array_exprs.py
-    numba/npyufunc/decorators.py
-    numba/servicelib/service.py
-    numba/datamodel/models.py
-    numba/datamodel/packer.py
-    numba/datamodel/testing.py
-    numba/datamodel/manager.py
+    numba/np/unsafe/ndarray.py
+    numba/np/ufunc/deviceufunc.py
+    numba/np/ufunc/sigparse.py
+    numba/parfors/parfor_lowering.py
+    numba/np/ufunc/array_exprs.py
+    numba/np/ufunc/decorators.py
+    numba/roc/servicelib/service.py
+    numba/core/datamodel/models.py
+    numba/core/datamodel/packer.py
+    numba/core/datamodel/testing.py
+    numba/core/datamodel/manager.py

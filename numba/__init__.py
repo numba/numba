@@ -1,7 +1,6 @@
 """
 Expose top-level symbols that are safe for import *
 """
-from __future__ import print_function, division, absolute_import
 
 import platform
 import re
@@ -12,40 +11,44 @@ from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 
-from . import config, errors, _runtests as runtests, types
+from numba.core import config
+from numba.testing import _runtests as runtests
+from numba.core import types, errors
 
 # Re-export typeof
-from .special import (
+from numba.misc.special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
     literally, literal_unroll
 )
 
 # Re-export error classes
-from .errors import *
+from numba.core.errors import *
+
+# Re-export types itself
+import numba.core.types as types
 
 # Re-export all type names
-from .types import *
+from numba.core.types import *
 
 # Re-export decorators
-from .decorators import (cfunc, generated_jit, jit, njit, stencil, jit_module)
+from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
+                                   jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
-from .npyufunc import vectorize, guvectorize, threading_layer
+from numba.np.ufunc import vectorize, guvectorize, threading_layer
 
 # Re-export Numpy helpers
-from .numpy_support import carray, farray, from_dtype
+from numba.np.numpy_support import carray, farray, from_dtype
 
-# Re-export jitclass
-from .jitclass import jitclass
+# Re-export experimental
+from numba import experimental
 
 # Initialize withcontexts
-import numba.withcontexts
-from numba.withcontexts import objmode_context as objmode
+import numba.core.withcontexts
+from numba.core.withcontexts import objmode_context as objmode
 
-# Enable bytes/unicode array support (Python 3.x only)
-from .utils import IS_PY3
-if IS_PY3:
-    import numba.charseq
+# Enable bytes/unicode array support
+import numba.cpython.charseq
 
 # Keep this for backward compatibility.
 test = runtests.main
@@ -56,7 +59,7 @@ __all__ = """
     from_dtype
     guvectorize
     jit
-    jitclass
+    experimental
     njit
     stencil
     jit_module
@@ -65,7 +68,6 @@ __all__ = """
     gdb
     gdb_breakpoint
     gdb_init
-    stencil
     vectorize
     objmode
     literal_unroll
@@ -109,20 +111,28 @@ def _ensure_llvm():
 
     check_jit_execution()
 
-def _ensure_pynumpy():
+def _ensure_critical_deps():
     """
-    Make sure Python and Numpy have supported versions.
+    Make sure Python, NumPy and SciPy have supported versions.
     """
-    import warnings
-    from . import numpy_support
+    from numba.np.numpy_support import numpy_version
+    from numba.core.utils import PYVERSION
 
-    pyver = sys.version_info[:2]
-    if pyver < (2, 7) or ((3,) <= pyver < (3, 4)):
-        raise ImportError("Numba needs Python 2.7 or greater, or 3.4 or greater")
+    if PYVERSION < (3, 6):
+        raise ImportError("Numba needs Python 3.6 or greater")
 
-    np_version = numpy_support.version[:2]
-    if np_version < (1, 7):
-        raise ImportError("Numba needs Numpy 1.7 or greater")
+    if numpy_version < (1, 15):
+        raise ImportError("Numba needs NumPy 1.15 or greater")
+
+    try:
+        import scipy
+    except ImportError:
+        pass
+    else:
+        sp_version = tuple(map(int, scipy.__version__.split('.')[:2]))
+        if sp_version < (1, 0):
+            raise ImportError("Numba requires SciPy version 1.0 or greater")
+
 
 def _try_enable_svml():
     """
@@ -172,7 +182,7 @@ def _try_enable_svml():
     return False
 
 _ensure_llvm()
-_ensure_pynumpy()
+_ensure_critical_deps()
 
 # we know llvmlite is working as the above tests passed, import it now as SVML
 # needs to mutate runtime options (sets the `-vector-library`).

@@ -7,7 +7,8 @@ from warnings import warn
 
 import numpy as np
 
-from numba import six, types, numpy_support
+from numba.core import types
+from numba.np import numpy_support
 
 DeviceRecord = None
 from_record_like = None
@@ -30,7 +31,7 @@ class FakeShape(tuple):
     negative indexing)
     '''
     def __getitem__(self, k):
-        if isinstance(k, six.integer_types) and k < 0:
+        if isinstance(k, int) and k < 0:
             raise IndexError('tuple index out of range')
         return super(FakeShape, self).__getitem__(k)
 
@@ -62,8 +63,8 @@ class FakeCUDAArray(object):
             attr = getattr(self._ary, attrname)
             return attr
         except AttributeError as e:
-            six.raise_from(AttributeError("Wrapped array has no attribute '%s'"
-                                          % attrname), e)
+            msg = "Wrapped array has no attribute '%s'" % attrname
+            raise AttributeError(msg) from e
 
     def bind(self, stream=0):
         return FakeCUDAArray(self._ary, stream)
@@ -278,7 +279,7 @@ def verify_cuda_ndarray_interface(obj):
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
     requires_attr('dtype', np.dtype)
-    requires_attr('size', six.integer_types)
+    requires_attr('size', int)
 
 
 def require_cuda_ndarray(obj):

@@ -1,16 +1,15 @@
-from __future__ import print_function
-
-import numba.unittest_support as unittest
+import unittest
 
 import sys
 
 import numpy
 
-from numba.compiler import compile_isolated
-from numba import types, utils, jit, njit
-from .support import tag
+from numba.core.compiler import compile_isolated
+from numba import jit, njit
+from numba.core import types, utils
+from numba.tests.support import tag
 
-
+from numba.cpython.rangeobj import range_iter_len
 def loop1(n):
     s = 0
     for i in range(n):
@@ -46,8 +45,6 @@ def range_len2(a, b):
 
 def range_len3(a, b, c):
     return len(range(a, b, c))
-
-from numba.targets.rangeobj import range_iter_len
 def range_iter_len1(a):
     return range_iter_len(iter(range(a)))
 
@@ -72,21 +69,18 @@ def range_contains(val, start, stop, step):
 
 class TestRange(unittest.TestCase):
 
-    @tag('important')
     def test_loop1_int16(self):
         pyfunc = loop1
         cres = compile_isolated(pyfunc, [types.int16])
         cfunc = cres.entry_point
         self.assertTrue(cfunc(5), pyfunc(5))
 
-    @tag('important')
     def test_loop2_int16(self):
         pyfunc = loop2
         cres = compile_isolated(pyfunc, [types.int16, types.int16])
         cfunc = cres.entry_point
         self.assertTrue(cfunc(1, 6), pyfunc(1, 6))
 
-    @tag('important')
     def test_loop3_int32(self):
         pyfunc = loop3
         cres = compile_isolated(pyfunc, [types.int32] * 3)
@@ -100,15 +94,6 @@ class TestRange(unittest.TestCase):
         for args in arglist:
             self.assertEqual(cfunc(*args), pyfunc(*args))
 
-    @tag('important')
-    @unittest.skipIf(sys.version_info >= (3,), "test is Python 2-specific")
-    def test_xrange(self):
-        pyfunc = xrange_usecase
-        cres = compile_isolated(pyfunc, (types.int32,))
-        cfunc = cres.entry_point
-        self.assertEqual(cfunc(5), pyfunc(5))
-
-    @tag('important')
     def test_range_len1(self):
         pyfunc = range_len1
         typelist = [types.int16, types.int32, types.int64]
@@ -119,7 +104,6 @@ class TestRange(unittest.TestCase):
             for arg in arglist:
                 self.assertEqual(cfunc(typ(arg)), pyfunc(typ(arg)))
 
-    @tag('important')
     def test_range_len2(self):
         pyfunc = range_len2
         typelist = [types.int16, types.int32, types.int64]
@@ -131,7 +115,6 @@ class TestRange(unittest.TestCase):
                 args_ = tuple(typ(x) for x in args)
                 self.assertEqual(cfunc(*args_), pyfunc(*args_))
 
-    @tag('important')
     def test_range_len3(self):
         pyfunc = range_len3
         typelist = [types.int16, types.int32, types.int64]
@@ -148,7 +131,6 @@ class TestRange(unittest.TestCase):
                 args_ = tuple(typ(x) for x in args)
                 self.assertEqual(cfunc(*args_), pyfunc(*args_))
 
-    @tag('important')
     def test_range_iter_len1(self):
         range_func = range_len1
         range_iter_func = range_iter_len1
@@ -160,7 +142,6 @@ class TestRange(unittest.TestCase):
             for arg in arglist:
                 self.assertEqual(cfunc(typ(arg)), range_func(typ(arg)))
 
-    @tag('important')
     def test_range_iter_list(self):
         range_iter_func = range_iter_len2
         cres = compile_isolated(range_iter_func, [types.List(types.intp)])
@@ -168,8 +149,6 @@ class TestRange(unittest.TestCase):
         arglist = [1, 2, 3, 4, 5]
         self.assertEqual(cfunc(arglist), len(arglist))
 
-    @tag('important')
-    @unittest.skipUnless(utils.IS_PY3, "range() attrs are Py3 only")
     def test_range_attrs(self):
         pyfunc = range_attrs
         arglist = [(0, 0, 1),
@@ -184,7 +163,6 @@ class TestRange(unittest.TestCase):
         for arg in arglist:
             self.assertEqual(cfunc(*arg), pyfunc(*arg))
 
-    @tag('important')
     def test_range_contains(self):
         pyfunc = range_contains
         arglist = [(0, 0, 1),

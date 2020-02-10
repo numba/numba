@@ -4,7 +4,6 @@ import numpy as np
 
 from numba.cuda.cudadrv import driver, drvapi, devices
 from numba.cuda.testing import unittest, CUDATestCase
-from numba.utils import IS_PY3
 from numba.cuda.testing import skip_on_cudasim
 
 
@@ -37,8 +36,7 @@ class TestCudaMemory(CUDATestCase):
 
     def test_pinned_memory(self):
         ary = np.arange(10)
-        arybuf = ary if IS_PY3 else buffer(ary)
-        devmem = self.context.mempin(arybuf, ary.ctypes.data,
+        devmem = self.context.mempin(ary, ary.ctypes.data,
                                      ary.size * ary.dtype.itemsize,
                                      mapped=True)
         self._template(devmem)

@@ -2,7 +2,7 @@
 HSA driver bridge implementation
 """
 
-from __future__ import absolute_import, print_function, division
+from collections.abc import Sequence
 
 import sys
 import atexit
@@ -17,12 +17,10 @@ from contextlib import contextmanager
 from collections import defaultdict, deque
 from functools import total_ordering
 from numba import mviewbuf
-from numba import utils
-from numba import config
+from numba.core import utils, config
 from .error import HsaSupportError, HsaDriverError, HsaApiError
-from . import enums, enums_ext, drvapi
-from numba.utils import longint as long
-from numba.six import Sequence
+from numba.roc.hsadrv import enums, enums_ext, drvapi
+from numba.core.utils import longint as long
 import numpy as np
 
 

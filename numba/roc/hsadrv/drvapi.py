@@ -1,11 +1,9 @@
-from __future__ import print_function, absolute_import, division
-
 import ctypes
 import warnings
 
-from ... import utils
+from numba.core import utils
 
-from . import enums
+from numba.roc.hsadrv import enums
 from .error import HsaApiError, HsaWarning
 
 _PTR = ctypes.POINTER

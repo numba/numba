@@ -178,4 +178,4 @@ Limitations
 The decorator: ``@jitclass``
 ============================
 
-.. autofunction:: numba.jitclass
+.. autofunction:: numba.experimental.jitclass

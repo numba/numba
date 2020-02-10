@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from distutils.ccompiler import CCompiler, new_compiler
 from distutils.command.build_ext import build_ext
 from distutils.sysconfig import customize_compiler

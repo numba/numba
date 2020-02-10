@@ -339,7 +339,7 @@ The following top-level functions are supported:
   arrays should have ``shape[-1] == 3``)
 
   * If ``shape[-1] == 2`` for both inputs, please replace your
-    :func:`numpy.cross` call with :func:`numba.numpy_extensions.cross2d`.
+    :func:`numpy.cross` call with :func:`numba.np.extensions.cross2d`.
 
 * :func:`numpy.delete` (only the 2 first arguments)
 * :func:`numpy.diag`

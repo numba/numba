@@ -110,7 +110,6 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.acos`
 * :func:`math.asin`
 * :func:`math.atan`
-* :func:`math.arctan`
 * :func:`math.acosh`
 * :func:`math.asinh`
 * :func:`math.atanh`

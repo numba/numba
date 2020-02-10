@@ -1,12 +1,10 @@
-from __future__ import print_function, division, absolute_import
-
 import sys
 
 import numpy as np
 
-from numba import cffi_support
+import numba.core.typing.cffi_utils as cffi_support
 from numba.tests.support import import_dynamic, temp_directory
-from numba.types import complex128
+from numba.core.types import complex128
 
 
 def load_inline_module():

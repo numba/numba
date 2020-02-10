@@ -1,46 +1,41 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, absolute_import
 
 """
 Tests the parallel backend
 """
-import threading
+import faulthandler
 import multiprocessing
-import random
 import os
-import sys
+import random
 import subprocess
+import sys
+import threading
 
 import numpy as np
 
-from numba import config, utils
-
-from numba import unittest_support as unittest
 from numba import jit, vectorize, guvectorize
 
-from .support import temp_directory, override_config, TestCase, tag
+from numba.tests.support import (temp_directory, override_config, TestCase, tag,
+                                 skip_parfors_unsupported, linux_only)
 
-from .test_parfors import skip_unsupported as parfors_skip_unsupported
-from .test_parfors import linux_only
-
-from numba.six.moves import queue as t_queue
+import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
+from numba.core import config
+import unittest
 
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 
-if utils.PYVERSION >= (3, 0):
-    import faulthandler
 
 # Check which backends are available
 # TODO: Put this in a subprocess so the address space is kept clean
 try:
-    from numba.npyufunc import tbbpool    # noqa: F401
+    from numba.np.ufunc import tbbpool    # noqa: F401
     _HAVE_TBB_POOL = True
 except ImportError:
     _HAVE_TBB_POOL = False
 
 try:
-    from numba.npyufunc import omppool
+    from numba.np.ufunc import omppool
     _HAVE_OMP_POOL = True
 except ImportError:
     _HAVE_OMP_POOL = False
@@ -58,15 +53,10 @@ skip_no_tbb = unittest.skipUnless(_HAVE_TBB_POOL, "TBB threadpool required")
 _gnuomp = _HAVE_OMP_POOL and omppool.openmp_vendor == "GNU"
 skip_unless_gnu_omp = unittest.skipUnless(_gnuomp, "GNU OpenMP only tests")
 
-skip_unless_py3 = unittest.skipUnless(utils.PYVERSION >= (3, 0),
-                                      "Test runs on Python 3 only")
-
 _windows = sys.platform.startswith('win')
 _osx = sys.platform.startswith('darwin')
-_windows_py27 = (sys.platform.startswith('win32') and
-                 sys.version_info[:2] == (2, 7))
 _32bit = sys.maxsize <= 2 ** 32
-_parfors_unsupported = _32bit or _windows_py27
+_parfors_unsupported = _32bit
 
 _HAVE_OS_FORK = not _windows
 
@@ -146,8 +136,7 @@ class guvectorize_runner(runnable):
 def chooser(fnlist, **kwargs):
     q = kwargs.get('queue')
     try:
-        if utils.PYVERSION >= (3, 0):
-            faulthandler.enable()
+        faulthandler.enable()
         for _ in range(int(len(fnlist) * 1.5)):
             fn = random.choice(fnlist)
             fn()
@@ -184,23 +173,16 @@ class _proc_class_impl(object):
         self._method = method
 
     def __call__(self, *args, **kwargs):
-        if utils.PYVERSION < (3, 0):
-            return multiprocessing.Process(*args, **kwargs)
-        else:
-            ctx = multiprocessing.get_context(self._method)
-            return ctx.Process(*args, **kwargs)
+        ctx = multiprocessing.get_context(self._method)
+        return ctx.Process(*args, **kwargs)
 
 
 def _get_mp_classes(method):
-    if utils.PYVERSION < (3, 0):
-        proc = _proc_class_impl(method)
-        queue = multiprocessing.Queue
-    else:
-        if method == 'default':
-            method = None
-        ctx = multiprocessing.get_context(method)
-        proc = _proc_class_impl(method)
-        queue = ctx.Queue
+    if method == 'default':
+        method = None
+    ctx = multiprocessing.get_context(method)
+    proc = _proc_class_impl(method)
+    queue = ctx.Queue
     return proc, queue
 
 
@@ -244,13 +226,10 @@ class TestParallelBackendBase(TestCase):
         all_impls.extend(parfor_impls)
 
     parallelism = ['threading', 'random']
-    if utils.PYVERSION > (3, 0):
-        parallelism.append('multiprocessing_spawn')
-        if _HAVE_OS_FORK:
-            parallelism.append('multiprocessing_fork')
-            parallelism.append('multiprocessing_forkserver')
-    else:
-        parallelism.append('multiprocessing_default')
+    parallelism.append('multiprocessing_spawn')
+    if _HAVE_OS_FORK:
+        parallelism.append('multiprocessing_fork')
+        parallelism.append('multiprocessing_forkserver')
 
     runners = {
         'concurrent_jit': [
@@ -281,13 +260,10 @@ class TestParallelBackendBase(TestCase):
             elif parallelism == 'multiprocessing_default':
                 default_proc_impl(fnlist)
             elif parallelism == 'random':
-                if utils.PYVERSION < (3, 0):
-                    ps = [thread_impl, default_proc_impl]
-                else:
-                    ps = [thread_impl, spawn_proc_impl]
-                    if _HAVE_OS_FORK:
-                        ps.append(fork_proc_impl)
-                        ps.append(forkserver_proc_impl)
+                ps = [thread_impl, spawn_proc_impl]
+                if _HAVE_OS_FORK:
+                    ps.append(fork_proc_impl)
+                    ps.append(forkserver_proc_impl)
 
                 random.shuffle(ps)
                 for impl in ps:
@@ -474,7 +450,7 @@ class ThreadLayerTestHelper(TestCase):
         return out.decode(), err.decode()
 
 
-@parfors_skip_unsupported
+@skip_parfors_unsupported
 class TestThreadingLayerSelection(ThreadLayerTestHelper):
     """
     Checks that numba.threading_layer() reports correctly.
@@ -515,8 +491,7 @@ class TestThreadingLayerSelection(ThreadLayerTestHelper):
 TestThreadingLayerSelection.generate()
 
 
-@parfors_skip_unsupported
-@skip_unless_py3
+@skip_parfors_unsupported
 class TestMiscBackendIssues(ThreadLayerTestHelper):
     """
     Checks fixes for the issues with threading backends implementation
@@ -579,7 +554,7 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
 
 
 # 32bit or windows py27 (not that this runs on windows)
-@parfors_skip_unsupported
+@skip_parfors_unsupported
 @skip_unless_gnu_omp
 class TestForkSafetyIssues(ThreadLayerTestHelper):
     """
@@ -589,7 +564,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
 
     def test_check_threading_layer_is_gnu(self):
         runme = """if 1:
-            from numba.npyufunc import omppool
+            from numba.np.ufunc import omppool
             assert omppool.openmp_vendor == 'GNU'
             """
         cmdline = [sys.executable, '-c', runme]
@@ -651,7 +626,6 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             print(out, err)
 
     @linux_only
-    @skip_unless_py3
     def test_par_parent_explicit_mp_fork_par_child(self):
         """
         Explicit use of multiprocessing fork context.
@@ -686,7 +660,6 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
         if self._DEBUG:
             print(out, err)
 
-    @skip_unless_py3
     def test_par_parent_mp_spawn_par_child_par_parent(self):
         """
         Explicit use of multiprocessing spawn, this is safe.
@@ -773,7 +746,6 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             print(out, err)
 
     @linux_only
-    @skip_unless_py3
     def test_serial_parent_explicit_mp_fork_par_child_then_par_parent(self):
         """
         Explicit use of multiprocessing 'fork'.
@@ -815,13 +787,12 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
             print(out, err)
 
 
-@parfors_skip_unsupported
+@skip_parfors_unsupported
 class TestInitSafetyIssues(TestCase):
 
     _DEBUG = False
 
     @linux_only # only linux can leak semaphores
-    @skip_unless_py3 # need multiprocessing.get_context to obtain spawn on linux
     def test_orphaned_semaphore(self):
         # sys path injection and separate usecase module to make sure everything
         # is importable by children of multiprocessing

@@ -1,7 +1,7 @@
 import os
 import warnings
 
-from numba import errors
+from numba.core import errors
 
 
 def get_numbapro_envvar(envvar, default=None):

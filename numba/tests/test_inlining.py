@@ -1,28 +1,27 @@
-from __future__ import print_function, absolute_import
-
 import re
 import numpy as np
 
-from .support import TestCase, override_config, captured_stdout
-import numba
-from numba import unittest_support as unittest
-from numba import jit, njit, types, ir, compiler
-from numba.ir_utils import guard, find_callname, find_const, get_definition
-from numba.targets.registry import CPUDispatcher
-from numba.inline_closurecall import inline_closure_call
-from .test_parfors import skip_unsupported
+from numba.tests.support import (TestCase, override_config, captured_stdout,
+                      skip_parfors_unsupported)
+from numba import jit, njit
+from numba.core import types, ir, postproc, compiler
+from numba.core.ir_utils import (guard, find_callname, find_const,
+                                 get_definition, simplify_CFG)
+from numba.core.registry import CPUDispatcher
+from numba.core.inline_closurecall import inline_closure_call
 
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, GenericRewrites,
                              WithLifting, PreserveIR, InlineClosureLikes)
 
-from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
+from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                            NopythonRewrites, PreParforPass, ParforPass,
                            DumpParforDiagnostics, NativeLowering,
                            IRLegalization, NoPythonBackend)
 
-from numba.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
+import unittest
 
 @jit((types.int32,), nopython=True)
 def inner(a):
@@ -60,7 +59,7 @@ class InlineTestPass(FunctionPass):
                     state.type_annotation.calltypes)
                 # also fix up the IR so that ir.Dels appear correctly/in correct
                 # locations
-                post_proc = numba.postproc.PostProcessor(state.func_ir)
+                post_proc = postproc.PostProcessor(state.func_ir)
                 post_proc.run()
                 break
         return True
@@ -103,7 +102,7 @@ def gen_pipeline(state, test_pass):
         pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         return pm
 
-class InlineTestPipeline(numba.compiler.CompilerBase):
+class InlineTestPipeline(compiler.CompilerBase):
     """compiler pipeline for testing inlining after optimization
     """
     def define_pipelines(self):
@@ -162,7 +161,7 @@ class TestInlining(TestCase):
         self.assert_not_has_pattern('%s.more' % prefix, asm)
         self.assert_not_has_pattern('%s.inner' % prefix, asm)
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_call_after_parfor(self):
         # replace the call to make sure inlining doesn't cause label conflict
         # with parfor body
@@ -174,7 +173,7 @@ class TestInlining(TestCase):
         A = np.arange(10)
         self.assertEqual(test_impl(A), j_func(A))
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_update_target_def(self):
 
         def test_impl(a):
@@ -201,11 +200,11 @@ class TestInlining(TestCase):
 
         self.assertEqual(len(func_ir._definitions['b']), 2)
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_var_dict_ret(self):
         # make sure inline_closure_call returns the variable replacement dict
         # and it contains the original variable name used in locals
-        @numba.njit(locals={'b': numba.float64})
+        @njit(locals={'b': types.float64})
         def g(a):
             b = a + 1
             return b
@@ -230,7 +229,7 @@ class TestInlining(TestCase):
 
         self.assertTrue('b' in var_map)
 
-    @skip_unsupported
+    @skip_parfors_unsupported
     def test_inline_call_branch_pruning(self):
         # branch pruning pass should run properly in inlining to enable
         # functions with type checks
@@ -265,7 +264,7 @@ class TestInlining(TestCase):
                         break
                 return True
 
-        class InlineTestPipelinePrune(numba.compiler.CompilerBase):
+        class InlineTestPipelinePrune(compiler.CompilerBase):
 
             def define_pipelines(self):
                 pm = gen_pipeline(self.state, PruningInlineTestPass)
@@ -280,7 +279,7 @@ class TestInlining(TestCase):
 
         # make sure IR doesn't have branches
         fir = j_func.overloads[(types.Omitted(None),)].metadata['preserved_ir']
-        fir.blocks = numba.ir_utils.simplify_CFG(fir.blocks)
+        fir.blocks = simplify_CFG(fir.blocks)
         self.assertEqual(len(fir.blocks), 1)
 
 if __name__ == '__main__':

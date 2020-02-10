@@ -3,12 +3,11 @@
 See Numpy documentation for detail about gufunc:
     http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
 """
-from __future__ import absolute_import, print_function, division
 import numpy as np
 from numba import guvectorize, cuda
-from numba import unittest_support as unittest
 from numba.tests.support import TestCase
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
+import unittest
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')

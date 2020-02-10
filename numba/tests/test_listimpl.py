@@ -1,14 +1,12 @@
 """
 Testing C implementation of the numba typed-list
 """
-from __future__ import print_function, absolute_import, division
 
 import ctypes
 import struct
 
-from .support import TestCase
+from numba.tests.support import TestCase
 from numba import _helperlib
-from numba.six import b
 
 
 LIST_OK = 0
@@ -408,7 +406,8 @@ class TestListImpl(TestCase):
         l = List(self, item_size, 0)
 
         def make_item(v):
-            return b("{:0{}}".format(nmax - v - 1, item_size)[:item_size])
+            tmp = "{:0{}}".format(nmax - v - 1, item_size).encode("latin-1")
+            return tmp[:item_size]
 
         for i in range(nmax):
             l.append(make_item(i))

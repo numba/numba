@@ -1,13 +1,12 @@
-from __future__ import division
-
 import itertools
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import jit, typeof, types
-from numba.compiler import compile_isolated
-from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
+from numba import jit, typeof
+from numba.core import types
+from numba.core.compiler import compile_isolated
+from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
+import unittest
 
 
 def array_iter(arr):
@@ -164,7 +163,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     def check_array_ndenumerate_sum(self, arr, arrty):
         self.check_array_unary(arr, arrty, array_ndenumerate_sum)
 
-    @tag('important')
     def test_array_iter(self):
         # Test iterating over a 1d array
         arr = np.arange(6)
@@ -186,7 +184,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         arr = np.bool_([1, 0, 0, 1]).reshape((2, 2))
         self.check_array_view_iter(arr, 1)
 
-    @tag('important')
     def test_array_flat_3d(self):
         arr = np.arange(24).reshape(4, 2, 3)
 
@@ -317,7 +314,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.assertTrue(got.sum())
         self.assertPreciseEqual(expect, got)
 
-    @tag('important')
     def test_array_ndenumerate_2d(self):
         arr = np.arange(12).reshape(4, 3)
         arrty = typeof(arr)
@@ -378,7 +374,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(cfunc(0, 3), func(0, 3))
         self.assertPreciseEqual(cfunc(0, 0), func(0, 0))
 
-    @tag('important')
     def test_np_ndindex_array(self):
         func = np_ndindex_array
         arr = np.arange(12, dtype=np.int32) + 10
@@ -394,7 +389,6 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         cfunc = cres.entry_point
         self.assertPreciseEqual(cfunc(), func())
 
-    @tag('important')
     def test_iter_next(self):
         # This also checks memory management with iter() and next()
         func = iter_next
@@ -445,7 +439,6 @@ class TestNdIter(MemoryLeakMixin, TestCase):
             got = cfunc(a)
             self.check_result(got, expected)
 
-    @tag('important')
     def test_nditer2(self):
         pyfunc = np_nditer2
         cfunc = jit(nopython=True)(pyfunc)

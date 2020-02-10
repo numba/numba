@@ -1,8 +1,10 @@
-from numba import unittest_support as unittest
-import numpy as np
-from numba import cuda, types
 import struct
+import numpy as np
+
+from numba import cuda
+from numba.core import types
 from numba.cuda.testing import SerialMixin
+import unittest
 
 
 def float_to_int(x):
