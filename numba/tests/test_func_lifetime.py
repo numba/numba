@@ -1,13 +1,10 @@
-
-from __future__ import print_function, absolute_import
-
 import gc
 import weakref
 
-from numba import unittest_support as unittest
-from numba.utils import IS_PY3
-from numba import jit, types
-from .support import TestCase
+from numba import jit
+from numba.core import types
+from numba.tests.support import TestCase
+import unittest
 
 
 class Dummy(object):
@@ -124,7 +121,6 @@ class TestFuncLifetime(TestCase):
         gc.collect()
         self.assertEqual([w() for w in wrs], [None] * len(wrs))
 
-    @unittest.skipUnless(IS_PY3, "py3 only; known leak in py2")
     def test_inner_function_lifetime(self):
         self.check_inner_function_lifetime(forceobj=True)
 

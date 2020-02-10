@@ -18,7 +18,10 @@ Developer Manual
    listings.rst
    stencil.rst
    custom_pipeline.rst
+   inlining.rst
    environment.rst
    hashing.rst
    caching.rst
+   literal.rst
+   debugging.rst
    roadmap.rst

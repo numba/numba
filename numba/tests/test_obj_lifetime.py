@@ -1,14 +1,13 @@
-from __future__ import print_function
-
 import collections
 import sys
 import weakref
+import gc
 
-import numba.unittest_support as unittest
-from numba.controlflow import CFGraph, Loop
-from numba.compiler import compile_extra, compile_isolated, Flags
-from numba import types
-from .support import TestCase
+import unittest
+from numba.core.controlflow import CFGraph, Loop
+from numba.core.compiler import compile_extra, compile_isolated, Flags
+from numba.core import types
+from numba.tests.support import TestCase
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -334,6 +333,7 @@ class TestObjLifetime(TestCase):
         with self.assertRefCount(rec):
             gen = cfunc(rec)
             del gen
+            gc.collect()
             self.assertFalse(rec.alive)
         # Stop iterating before exhaustion
         rec = RefRecorder()
@@ -342,6 +342,7 @@ class TestObjLifetime(TestCase):
             next(gen)
             self.assertTrue(rec.alive)
             del gen
+            gc.collect()
             self.assertFalse(rec.alive)
 
     def test_generator1(self):

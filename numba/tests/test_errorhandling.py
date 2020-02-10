@@ -1,34 +1,29 @@
 """
 Unspecified error handling tests
 """
-from __future__ import division
 
 from numba import jit, njit, typed, int64
-from numba import unittest_support as unittest
-from numba import errors, utils
+from numba.core import errors, utils
 import numpy as np
 
-from .support import skip_parfors_unsupported
+
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+                                       IRProcessing,)
+
+from numba.core.typed_passes import (NopythonTypeInference, DeadCodeElimination,
+                                     NativeLowering, IRLegalization,
+                                     NoPythonBackend)
+
+from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
+
+from numba.tests.support import skip_parfors_unsupported
+import unittest
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
 _global_list = [1, 2, 3, 4]
 _global_dict = typed.Dict.empty(int64, int64)
 
 class TestErrorHandlingBeforeLowering(unittest.TestCase):
-
-    expected_msg = ("Numba encountered the use of a language feature it does "
-                    "not support in this context: %s")
-
-    def test_unsupported_make_function_lambda(self):
-        def func(x):
-            f = lambda x: x  # requires `make_function`
-
-        for pipeline in jit, njit:
-            with self.assertRaises(errors.UnsupportedError) as raises:
-                pipeline(func)(1)
-
-            expected = self.expected_msg % "<lambda>"
-            self.assertIn(expected, str(raises.exception))
 
     def test_unsupported_make_function_return_inner_func(self):
         def func(x):
@@ -40,11 +35,10 @@ class TestErrorHandlingBeforeLowering(unittest.TestCase):
             return inner
 
         for pipeline in jit, njit:
-            with self.assertRaises(errors.UnsupportedError) as raises:
+            with self.assertRaises(errors.TypingError) as raises:
                 pipeline(func)(1)
 
-            expected = self.expected_msg % \
-                "<creating a function from a closure>"
+            expected = "Cannot capture the non-constant value"
             self.assertIn(expected, str(raises.exception))
 
 
@@ -99,29 +93,24 @@ class TestMiscErrorHandling(unittest.TestCase):
 
     def test_use_of_ir_unknown_loc(self):
         # for context see # 3390
-        import numba
-        class TestPipeline(numba.compiler.BasePipeline):
-            def define_pipelines(self, pm):
-                pm.create_pipeline('test_loc')
-                self.add_preprocessing_stage(pm)
-                self.add_with_handling_stage(pm)
-                self.add_pre_typing_stage(pm)
+        from numba.core.compiler import CompilerBase
+        class TestPipeline(CompilerBase):
+            def define_pipelines(self):
+                name = 'bad_DCE_pipeline'
+                pm = PassManager(name)
+                pm.add_pass(TranslateByteCode, "analyzing bytecode")
+                pm.add_pass(FixupArgs, "fix up args")
+                pm.add_pass(IRProcessing, "processing IR")
                 # remove dead before type inference so that the Arg node is removed
                 # and the location of the arg cannot be found
-                pm.add_stage(self.rm_dead_stage,
-                            "remove dead before type inference for testing")
-                self.add_typing_stage(pm)
-                self.add_optimization_stage(pm)
-                pm.add_stage(self.stage_ir_legalization,
-                            "ensure IR is legal prior to lowering")
-                self.add_lowering_stage(pm)
-                self.add_cleanup_stage(pm)
+                pm.add_pass(DeadCodeElimination, "DCE")
+                # typing
+                pm.add_pass(NopythonTypeInference, "nopython frontend")
+                pm.add_pass(NoPythonBackend, "nopython mode backend")
+                pm.finalize()
+                return [pm]
 
-            def rm_dead_stage(self):
-                numba.ir_utils.remove_dead(
-                    self.func_ir.blocks, self.func_ir.arg_names, self.func_ir)
-
-        @numba.jit(pipeline_class=TestPipeline)
+        @njit(pipeline_class=TestPipeline)
         def f(a):
             return 0
 
@@ -172,11 +161,7 @@ class TestMiscErrorHandling(unittest.TestCase):
         def foo():
             y = (x for x in range(10))
 
-        if utils.IS_PY3:
-            expected = "The use of yield in a closure is unsupported."
-        else:
-            # funcsigs falls over on py27
-            expected = "Cannot obtain a signature for"
+        expected = "The use of yield in a closure is unsupported."
 
         for dec in jit(forceobj=True), njit:
             with self.assertRaises(errors.UnsupportedError) as raises:

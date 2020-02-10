@@ -1,20 +1,16 @@
-from __future__ import print_function, absolute_import
-
 import os
+import unittest
 import signal
 import subprocess
 import sys
 
-from .support import unittest
-
 from numba import errors
-
-
-from numba.compiler_lock import (
+from numba.core.compiler_lock import (
     global_compiler_lock,
     require_global_compiler_lock,
 )
-from .support import TestCase
+
+from numba.tests.support import TestCase
 
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), "linux only")
 
@@ -47,7 +43,7 @@ class TestSignalHandler(TestCase):
         code = """if 1:
             import os
             import signal
-            from numba.compiler_lock import global_compiler_lock
+            from numba.core.compiler_lock import global_compiler_lock
             with global_compiler_lock:
                 os.kill(os.getpid(), signal.SIGABRT)
         """

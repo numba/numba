@@ -1,12 +1,10 @@
-from __future__ import absolute_import, division
-
 import re
+from io import StringIO
 
 import numba
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types, utils
-from numba.io_support import StringIO
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import types
+import unittest
 
 try:
     import jinja2
@@ -17,6 +15,7 @@ try:
     import pygments
 except ImportError:
     pygments = None
+
 
 @unittest.skipIf(jinja2 is None, "please install the 'jinja2' package")
 class TestAnnotation(unittest.TestCase):
@@ -51,6 +50,8 @@ class TestAnnotation(unittest.TestCase):
 
         def foo(x):
             h = 0.
+            for i in range(x): # py 38 needs two loops for one to lift?!
+                h = h + i
             for k in range(x):
                 h = h + k
             if x:
@@ -158,7 +159,7 @@ class TestTypeAnnotation(unittest.TestCase):
 
         foo(1, 2)
         # Exercise the method
-        strbuf = utils.StringIO()
+        strbuf = StringIO()
         foo.inspect_types(strbuf)
         # Ensure deletion show up after their use
         lines = strbuf.getvalue().splitlines()

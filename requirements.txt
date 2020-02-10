@@ -1,5 +1,6 @@
+setuptools
 numpy>=1.10
-llvmlite>=0.29
+llvmlite>=0.31
 argparse
 funcsigs ; python_version < '3.4'
 singledispatch ; python_version < '3.4'

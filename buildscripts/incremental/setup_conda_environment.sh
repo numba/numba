@@ -47,10 +47,18 @@ set +v
 source activate $CONDA_ENV
 set -v
 
+# gitpython needed for CI testing
+$CONDA_INSTALL gitpython
+
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
-    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi scipy jinja2 ipython pygments
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments
+    if [[ "$PYTHON" == "3.8" &&  $(uname) == Darwin ]]; then
+        $PIP_INSTALL scipy
+    else
+        $CONDA_INSTALL ${EXTRA_CHANNELS}  scipy
+    fi
 fi
 
 # Install the compiler toolchain
@@ -68,13 +76,14 @@ fi
 
 # Install latest llvmlite build
 $CONDA_INSTALL -c numba llvmlite
+
 # Install enum34 and singledispatch for Python < 3.4
 if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
 if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
 # Install funcsigs for Python < 3.3
 if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi

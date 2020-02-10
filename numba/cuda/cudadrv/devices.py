@@ -10,7 +10,6 @@ Note:
 - This module must be imported by the main-thread.
 
 """
-from __future__ import print_function, absolute_import, division
 import functools
 import threading
 from contextlib import contextmanager

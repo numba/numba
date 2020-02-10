@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import copy
 import itertools
 import operator
@@ -8,14 +6,13 @@ import warnings
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import jit, types, typeinfer, utils, errors
-from numba.config import PYVERSION
-from .support import TestCase, tag
-from .true_div_usecase import truediv_usecase, itruediv_usecase
-from .matmul_usecase import (matmul_usecase, imatmul_usecase, DumbMatrix,
-                             needs_matmul, needs_blas)
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit
+from numba.core import types, utils, errors, typeinfer
+from numba.tests.support import TestCase, tag, needs_blas
+from numba.tests.matmul_usecase import (matmul_usecase, imatmul_usecase,
+                                        DumbMatrix,)
 
 Noflags = Flags()
 
@@ -59,15 +56,6 @@ class LiteralOperatorImpl(object):
         return x
 
     @staticmethod
-    def div_usecase(x, y):
-        return x / y
-
-    @staticmethod
-    def idiv_usecase(x, y):
-        x /= y
-        return x
-
-    @staticmethod
     def floordiv_usecase(x, y):
         return x // y
 
@@ -76,8 +64,15 @@ class LiteralOperatorImpl(object):
         x //= y
         return x
 
-    truediv_usecase = staticmethod(truediv_usecase)
-    itruediv_usecase = staticmethod(itruediv_usecase)
+    @staticmethod
+    def truediv_usecase(x, y):
+        return x / y
+
+    @staticmethod
+    def itruediv_usecase(x, y):
+        x /= y
+        return x
+
     if matmul_usecase:
         matmul_usecase = staticmethod(matmul_usecase)
         imatmul_usecase = staticmethod(imatmul_usecase)
@@ -223,18 +218,6 @@ class FunctionalOperatorImpl(object):
     @staticmethod
     def imul_usecase(x, y):
         return operator.imul(x, y)
-
-    if PYVERSION >= (3, 0):
-        div_usecase = NotImplemented
-        idiv_usecase = NotImplemented
-    else:
-        @staticmethod
-        def div_usecase(x, y):
-            return operator.div(x, y)
-
-        @staticmethod
-        def idiv_usecase(x, y):
-            return operator.idiv(x, y)
 
     @staticmethod
     def floordiv_usecase(x, y):
@@ -394,8 +377,6 @@ class TestOperators(TestCase):
 
     def run_test_ints(self, pyfunc, x_operands, y_operands, types_list,
                       flags=force_pyobj_flags):
-        if pyfunc is NotImplemented:
-            self.skipTest("test irrelevant on this version of Python")
         for arg_types in types_list:
             cr = compile_isolated(pyfunc, arg_types, flags=flags)
             cfunc = cr.entry_point
@@ -417,8 +398,6 @@ class TestOperators(TestCase):
 
     def run_test_floats(self, pyfunc, x_operands, y_operands, types_list,
                         flags=force_pyobj_flags):
-        if pyfunc is NotImplemented:
-            self.skipTest("test irrelevant on this version of Python")
         for arg_types in types_list:
             cr = compile_isolated(pyfunc, arg_types, flags=flags)
             cfunc = cr.entry_point
@@ -478,42 +457,36 @@ class TestOperators(TestCase):
     def test_lt_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.lt_usecase, flags)
 
-    @tag('important')
     def test_lt_scalar_npm(self):
         self.test_lt_scalar(flags=Noflags)
 
     def test_le_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.le_usecase, flags)
 
-    @tag('important')
     def test_le_scalar_npm(self):
         self.test_le_scalar(flags=Noflags)
 
     def test_gt_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.gt_usecase, flags)
 
-    @tag('important')
     def test_gt_scalar_npm(self):
         self.test_gt_scalar(flags=Noflags)
 
     def test_ge_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.ge_usecase, flags)
 
-    @tag('important')
     def test_ge_scalar_npm(self):
         self.test_ge_scalar(flags=Noflags)
 
     def test_eq_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.eq_usecase, flags, ordered=False)
 
-    @tag('important')
     def test_eq_scalar_npm(self):
         self.test_eq_scalar(flags=Noflags)
 
     def test_ne_scalar(self, flags=force_pyobj_flags):
         self.run_test_scalar_compare(self.op.ne_usecase, flags, ordered=False)
 
-    @tag('important')
     def test_ne_scalar_npm(self):
         self.test_ne_scalar(flags=Noflags)
 
@@ -613,7 +586,7 @@ class TestOperators(TestCase):
                           })
 
     generate_binop_tests(locals(),
-                         ('div', 'idiv', 'truediv', 'itruediv'),
+                         ('truediv', 'itruediv'),
                          {'ints': 'run_binop_ints',
                           'floats': 'run_binop_floats',
                           'complex': 'run_binop_complex',
@@ -629,8 +602,6 @@ class TestOperators(TestCase):
     def check_div_errors(self, usecase_name, msg, flags=force_pyobj_flags,
                          allow_complex=False):
         pyfunc = getattr(self.op, usecase_name)
-        if pyfunc is NotImplemented:
-            self.skipTest("%r not implemented" % (usecase_name,))
         # Signed and unsigned division can take different code paths,
         # test them both.
         arg_types = [types.int32, types.uint32, types.float64]
@@ -657,12 +628,6 @@ class TestOperators(TestCase):
 
     def test_floordiv_errors_npm(self):
         self.test_floordiv_errors(flags=Noflags)
-
-    def test_div_errors(self, flags=force_pyobj_flags):
-        self.check_div_errors("div_usecase", "division by zero", flags=flags)
-
-    def test_div_errors_npm(self):
-        self.test_div_errors(flags=Noflags)
 
     def test_mod_errors(self, flags=force_pyobj_flags):
         self.check_div_errors("mod_usecase", "modulo by zero", flags=flags)
@@ -728,7 +693,6 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
-    @tag('important')
     def test_add_complex_npm(self):
         self.test_add_complex(flags=Noflags)
 
@@ -744,7 +708,6 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
-    @tag('important')
     def test_sub_complex_npm(self):
         self.test_sub_complex(flags=Noflags)
 
@@ -760,25 +723,8 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
-    @tag('important')
     def test_mul_complex_npm(self):
         self.test_mul_complex(flags=Noflags)
-
-    def test_div_complex(self, flags=force_pyobj_flags):
-        pyfunc = self.op.div_usecase
-
-        x_operands = [1+0j, 1j, -1-1j]
-        y_operands = [1, 2, 3]
-
-        types_list = [(types.complex64, types.complex64),
-                      (types.complex128, types.complex128),]
-
-        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
-                             flags=flags)
-
-    @tag('important')
-    def test_div_complex_npm(self):
-        self.test_div_complex(flags=Noflags)
 
     def test_truediv_complex(self, flags=force_pyobj_flags):
         pyfunc = self.op.truediv_usecase
@@ -792,7 +738,6 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
-    @tag('important')
     def test_truediv_complex_npm(self):
         self.test_truediv_complex(flags=Noflags)
 
@@ -801,7 +746,6 @@ class TestOperators(TestCase):
         with self.assertTypingError():
             cres = compile_isolated(pyfunc, (types.complex64, types.complex64))
 
-    @tag('important')
     def test_mod_complex_npm(self):
         self.test_mod_complex(flags=Noflags)
 
@@ -810,10 +754,8 @@ class TestOperators(TestCase):
     # (just check with simple values; computational tests are in test_linalg)
     #
 
-    @needs_matmul
     def check_matmul_objmode(self, pyfunc, inplace):
-        # Use dummy objects, to work with any Numpy / Scipy version
-        # (and because Numpy 1.10 doesn't implement "@=")
+        # Use dummy objects, to work with any NumPy / SciPy version
         cres = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
         cfunc = cres.entry_point
         a = DumbMatrix(3)
@@ -826,16 +768,13 @@ class TestOperators(TestCase):
             self.assertIsNot(got, a)
             self.assertIsNot(got, b)
 
-    @needs_matmul
     def test_matmul(self):
         self.check_matmul_objmode(self.op.matmul_usecase, inplace=False)
 
-    @needs_matmul
     def test_imatmul(self):
         self.check_matmul_objmode(self.op.imatmul_usecase, inplace=True)
 
     @needs_blas
-    @needs_matmul
     def check_matmul_npm(self, pyfunc):
         arrty = types.Array(types.float32, 1, 'C')
         cres = compile_isolated(pyfunc, (arrty, arrty), flags=Noflags)
@@ -848,13 +787,9 @@ class TestOperators(TestCase):
         self.assertIsNot(got, a)
         self.assertIsNot(got, b)
 
-    @tag('important')
-    @needs_matmul
     def test_matmul_npm(self):
         self.check_matmul_npm(self.op.matmul_usecase)
 
-    @tag('important')
-    @needs_matmul
     def test_imatmul_npm(self):
         with self.assertTypingError() as raises:
             self.check_matmul_npm(self.op.imatmul_usecase)
@@ -1032,7 +967,6 @@ class TestOperators(TestCase):
         for val in values:
             self.assertPreciseEqual(pyfunc(val), cfunc(val))
 
-    @tag('important')
     def test_bitwise_not_npm(self):
         self.test_bitwise_not(flags=Noflags)
 
@@ -1086,7 +1020,6 @@ class TestOperators(TestCase):
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
 
-    @tag('important')
     def test_not_npm(self):
         pyfunc = self.op.not_usecase
         # test native mode
@@ -1112,7 +1045,6 @@ class TestOperators(TestCase):
 
     # XXX test_negate should check for negative and positive zeros and infinities
 
-    @tag('important')
     def test_negate_npm(self):
         pyfunc = self.op.negate_usecase
         # test native mode
@@ -1290,9 +1222,6 @@ class TestMixedInts(TestCase):
 
     def run_binary(self, pyfunc, control_func, operands, types,
                    expected_type=utils.INT_TYPES, **assertPreciseEqualArgs):
-        if pyfunc is NotImplemented:
-            self.skipTest("test irrelevant on this version of Python")
-
         for xt, yt in types:
             cr = compile_isolated(pyfunc, (xt, yt), flags=Noflags)
             cfunc = cr.entry_point
@@ -1310,9 +1239,6 @@ class TestMixedInts(TestCase):
 
     def run_unary(self, pyfunc, control_func, operands, types,
                   expected_type=utils.INT_TYPES):
-        if pyfunc is NotImplemented:
-            self.skipTest("test irrelevant on this version of Python")
-
         for xt in types:
             cr = compile_isolated(pyfunc, (xt,), flags=Noflags)
             cfunc = cr.entry_point
@@ -1333,15 +1259,12 @@ class TestMixedInts(TestCase):
         self.run_binary(pyfunc, self.get_control_unsigned(opname),
                         samples, self.unsigned_pairs, expected_type)
 
-    @tag('important')
     def test_add(self):
         self.run_arith_binop(self.op.add_usecase, 'add', self.int_samples)
 
-    @tag('important')
     def test_sub(self):
         self.run_arith_binop(self.op.sub_usecase, 'sub', self.int_samples)
 
-    @tag('important')
     def test_mul(self):
         self.run_arith_binop(self.op.mul_usecase, 'mul', self.int_samples)
 
@@ -1378,8 +1301,9 @@ class TestMixedInts(TestCase):
                         samples, signed_pairs)
 
     def test_truediv(self):
+
         def control(a, b):
-            return truediv_usecase(float(a), float(b))
+            return float(a) / float(b)
         samples = [x for x in self.int_samples if x != 0]
         pyfunc = self.op.truediv_usecase
 

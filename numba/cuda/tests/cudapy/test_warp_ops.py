@@ -1,7 +1,7 @@
-from __future__ import print_function, absolute_import
 import numpy as np
-from numba import cuda, config, int32, int64, float32, float64
+from numba import cuda, int32, int64, float32, float64
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.core import config
 
 
 def useful_syncwarp(ary):
@@ -214,7 +214,7 @@ class TestCudaWarpOperations(SerialMixin, unittest.TestCase):
         nelem = 10
         ary_in = np.arange(nelem, dtype=np.int32) % 2
         ary_out = np.empty(nelem, dtype=np.int32)
-        exp = np.tile((0b1010101010, 0b0101010101), 5)
+        exp = np.tile((0b0101010101, 0b1010101010), 5)
         compiled[1, nelem](ary_in, ary_out)
         self.assertTrue(np.all(ary_out == exp))
 
@@ -234,11 +234,11 @@ class TestCudaWarpOperations(SerialMixin, unittest.TestCase):
     @unittest.skipUnless(_safe_cc_check((7, 0)),
                          "Independent scheduling requires at least Volta Architecture")
     def test_independent_scheduling(self):
-        compiled = cuda.jit("void(int32[:])")(use_independent_scheduling)
-        arr = np.empty(32, dtype=np.int32)
+        compiled = cuda.jit("void(uint32[:])")(use_independent_scheduling)
+        arr = np.empty(32, dtype=np.uint32)
         exp = np.tile((0x11111111, 0x22222222, 0x44444444, 0x88888888), 8)
         compiled[1, 32](arr)
-        self.assertTrue(np.all(ary_out == exp))
+        self.assertTrue(np.all(arr == exp))
 
 
 if __name__ == '__main__':

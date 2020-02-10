@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import errno
 import multiprocessing
 import os
@@ -13,6 +11,26 @@ import inspect
 import pickle
 import weakref
 from itertools import chain
+from io import StringIO
+
+import numpy as np
+
+from numba import jit, generated_jit, typeof
+from numba.core import types, errors, codegen
+from numba import _dispatcher
+from numba.core.compiler import compile_isolated
+from numba.core.errors import NumbaWarning
+from numba.tests.support import (TestCase, temp_directory, import_dynamic,
+                                 override_env_config, capture_cache_log,
+                                 captured_stdout)
+from numba.np.numpy_support import as_dtype
+from numba.core.caching import _UserWideCacheLocator
+from numba.core.dispatcher import Dispatcher
+from numba.tests.support import skip_parfors_unsupported, needs_lapack
+
+import llvmlite.binding as ll
+import unittest
+from numba.parfors import parfor
 
 try:
     import jinja2
@@ -23,25 +41,6 @@ try:
     import pygments
 except ImportError:
     pygments = None
-
-import numpy as np
-
-from numba import unittest_support as unittest
-from numba import utils, jit, generated_jit, types, typeof, errors
-from numba import _dispatcher
-from numba.compiler import compile_isolated
-from numba.errors import NumbaWarning
-from .support import (TestCase, tag, temp_directory, import_dynamic,
-                      override_env_config, capture_cache_log, captured_stdout)
-from numba.numpy_support import as_dtype
-from numba.targets import codegen
-from numba.caching import _UserWideCacheLocator
-from numba.dispatcher import Dispatcher
-from numba import parfor
-from .test_linalg import needs_lapack
-from .support import skip_parfors_unsupported
-
-import llvmlite.binding as ll
 
 _is_armv7l = platform.machine() == 'armv7l'
 
@@ -135,7 +134,8 @@ def check_access_is_preventable():
             f.write('check2')
     except (OSError, IOError) as e:
         # Check that the cause of the exception is due to access/permission
-        # as per https://github.com/conda/conda/blob/4.5.0/conda/gateways/disk/permissions.py#L35-L37
+        # as per
+        # https://github.com/conda/conda/blob/4.5.0/conda/gateways/disk/permissions.py#L35-L37  # noqa: E501
         eno = getattr(e, 'errno', None)
         if eno in (errno.EACCES, errno.EPERM):
             # errno reports access/perm fail so access prevention via
@@ -265,7 +265,8 @@ class TestDispatcher(BaseTest):
         # as the actual argument types.
         self.assertRegexpMatches(
             str(cm.exception),
-            r"Ambiguous overloading for <function add [^>]*> \(float64, float64\):\n"
+            r"Ambiguous overloading for <function add [^>]*> "
+            r"\(float64, float64\):\n"
             r"\(float32, float64\) -> float64\n"
             r"\(float64, float32\) -> float64"
         )
@@ -273,7 +274,8 @@ class TestDispatcher(BaseTest):
         self.assertNotIn("int64", str(cm.exception))
 
     def test_signature_mismatch(self):
-        tmpl = "Signature mismatch: %d argument types given, but function takes 2 arguments"
+        tmpl = ("Signature mismatch: %d argument types given, but function "
+                "takes 2 arguments")
         with self.assertRaises(TypeError) as cm:
             jit("()")(add)
         self.assertIn(tmpl % 0, str(cm.exception))
@@ -397,7 +399,8 @@ class TestDispatcher(BaseTest):
 
         self.assertIs(foo, foo_rebuilt)
 
-        # do we get the same object even if we delete all the explict references?
+        # do we get the same object even if we delete all the explicit
+        # references?
         id_orig = id(foo_rebuilt)
         del foo
         del foo_rebuilt
@@ -581,7 +584,6 @@ class TestSignatureHandling(BaseTest):
     Test support for various parameter passing styles.
     """
 
-    @tag('important')
     def test_named_args(self):
         """
         Test passing named arguments to a dispatcher.
@@ -669,7 +671,6 @@ class TestGeneratedDispatcher(TestCase):
     Tests for @generated_jit.
     """
 
-    @tag('important')
     def test_generated(self):
         f = generated_jit(nopython=True)(generated_usecase)
         self.assertEqual(f(8), 8 - 5)
@@ -679,7 +680,6 @@ class TestGeneratedDispatcher(TestCase):
         self.assertEqual(f(1j, 42), 42 + 1j)
         self.assertEqual(f(x=1j, y=7), 7 + 1j)
 
-    @tag('important')
     def test_generated_dtype(self):
         f = generated_jit(nopython=True)(dtype_generated_usecase)
         a = np.ones((10,), dtype=np.float32)
@@ -697,12 +697,14 @@ class TestGeneratedDispatcher(TestCase):
         # Mismatching # of arguments
         with self.assertRaises(TypeError) as raises:
             f(1j)
-        self.assertIn("should be compatible with signature '(x, y=5)', but has signature '(x)'",
+        self.assertIn("should be compatible with signature '(x, y=5)', "
+                      "but has signature '(x)'",
                       str(raises.exception))
         # Mismatching defaults
         with self.assertRaises(TypeError) as raises:
             f(1)
-        self.assertIn("should be compatible with signature '(x, y=5)', but has signature '(x, y=6)'",
+        self.assertIn("should be compatible with signature '(x, y=5)', "
+                      "but has signature '(x, y=6)'",
                       str(raises.exception))
 
 
@@ -742,7 +744,6 @@ class TestDispatcherMethods(TestCase):
         self.assertPreciseEqual(foo(1), 3)
         self.assertPreciseEqual(foo(1.5), 3)
 
-    @tag('important')
     def test_inspect_llvm(self):
         # Create a jited function
         @jit
@@ -793,7 +794,9 @@ class TestDispatcherMethods(TestCase):
             wrapper = "{}{}".format(len(wrapper), wrapper)
         module_name = __name__.split('.', 1)[0]
         module_len = len(module_name)
-        prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper, module_len, module_name)
+        prefix = r'^digraph "CFG for \'_ZN{}{}{}'.format(wrapper,
+                                                         module_len,
+                                                         module_name)
         self.assertRegexpMatches(str(cfg), prefix)
         # .display() requires an optional dependency on `graphviz`.
         # just test for the attribute without running it.
@@ -861,7 +864,7 @@ class TestDispatcherMethods(TestCase):
 
         foo(1, 2)
         # Exercise the method
-        foo.inspect_types(utils.StringIO())
+        foo.inspect_types(StringIO())
 
         # Test output
         expected = str(foo.overloads[foo.signatures[0]].type_annotation)
@@ -911,7 +914,7 @@ class TestDispatcherMethods(TestCase):
 
         # check that file+pretty kwarg combo raises
         with self.assertRaises(ValueError) as raises:
-            foo.inspect_types(file=utils.StringIO(), pretty=True)
+            foo.inspect_types(file=StringIO(), pretty=True)
 
         self.assertIn("`file` must be None if `pretty=True`",
                       str(raises.exception))
@@ -984,13 +987,7 @@ class BaseCacheTest(TestCase):
         old = sys.modules.pop(self.modname, None)
         if old is not None:
             # Make sure cached bytecode is removed
-            if sys.version_info >= (3,):
-                cached = [old.__cached__]
-            else:
-                if old.__file__.endswith(('.pyc', '.pyo')):
-                    cached = [old.__file__]
-                else:
-                    cached = [old.__file__ + 'c', old.__file__ + 'o']
+            cached = [old.__cached__]
             for fn in cached:
                 try:
                     os.unlink(fn)
@@ -1043,7 +1040,8 @@ class BaseCacheUsecasesTest(BaseCacheTest):
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = popen.communicate()
         if popen.returncode != 0:
-            raise AssertionError("process failed with code %s: stderr follows\n%s\n"
+            raise AssertionError("process failed with code %s: "
+                                 "stderr follows\n%s\n"
                                  % (popen.returncode, err.decode()))
 
     def check_module(self, mod):
@@ -1072,7 +1070,6 @@ class BaseCacheUsecasesTest(BaseCacheTest):
 
 class TestCache(BaseCacheUsecasesTest):
 
-    @tag('important')
     def test_caching(self):
         self.check_pycache(0)
         mod = self.import_module()
@@ -1107,7 +1104,6 @@ class TestCache(BaseCacheUsecasesTest):
         # Check the code runs ok from another process
         self.run_in_separate_process()
 
-    @tag('important')
     def test_caching_nrt_pruned(self):
         self.check_pycache(0)
         mod = self.import_module()
@@ -1312,7 +1308,8 @@ class TestCache(BaseCacheUsecasesTest):
             self.assertIsNone(locator)
 
             sys.frozen = True
-            # returns a cache locator object, only works when executable is frozen
+            # returns a cache locator object, only works when the executable
+            # is frozen
             locator = _UserWideCacheLocator.from_function(function, source)
             self.assertIsInstance(locator, _UserWideCacheLocator)
 
@@ -1328,7 +1325,7 @@ class TestCache(BaseCacheUsecasesTest):
         mod = self.import_module()
         f = mod.add_usecase
         # Remove this function's cache files at the end, to avoid accumulation
-        # accross test calls.
+        # across test calls.
         self.addCleanup(shutil.rmtree, f.stats.cache_path, ignore_errors=True)
 
         self.assertPreciseEqual(f(2, 3), 6)

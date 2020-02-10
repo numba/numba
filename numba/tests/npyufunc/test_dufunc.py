@@ -1,11 +1,11 @@
-from __future__ import print_function, absolute_import, division
-from numba import unittest_support as unittest
+import pickle
 
 import numpy as np
 
-from numba import njit
-from numba.npyufunc import dufunc
+from numba import njit, vectorize
 from ..support import MemoryLeakMixin
+import unittest
+from numba.np.ufunc import dufunc
 
 
 def pyuadd(a0, a1):
@@ -83,6 +83,41 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
         duadd(1, 2)
         self.assertEqual(duadd.ntypes, 1)
         self.assertEqual(duadd.ntypes, len(duadd.types))
+
+
+class TestDUFuncPickling(MemoryLeakMixin, unittest.TestCase):
+    def check(self, ident, result_type):
+        buf = pickle.dumps(ident)
+        rebuilt = pickle.loads(buf)
+
+        # Check reconstructed dufunc
+        r = rebuilt(123)
+        self.assertEqual(123, r)
+        self.assertIsInstance(r, result_type)
+
+        # Try to use reconstructed dufunc in @jit
+        @njit
+        def foo(x):
+            return rebuilt(x)
+
+        r = foo(321)
+        self.assertEqual(321, r)
+        self.assertIsInstance(r, result_type)
+
+    def test_unrestricted(self):
+        @vectorize
+        def ident(x1):
+            return x1
+
+        self.check(ident, result_type=(int, np.integer))
+
+    def test_restricted(self):
+        @vectorize(["float64(float64)"])
+        def ident(x1):
+            return x1
+
+        self.check(ident, result_type=float)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,13 +1,11 @@
-from __future__ import print_function
-
 from contextlib import contextmanager
+from functools import reduce
 import sys
 import threading
 
 import numpy as np
 
-from numba import six
-from numba.six import reraise
+from numba.core.utils import reraise
 from .cudadrv.devicearray import to_device, auto_device
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
@@ -71,7 +69,7 @@ class FakeCUDAKernel(object):
 
             def fake_arg(arg):
                 # map the arguments using any extension you've registered
-                _, arg = six.moves.reduce(
+                _, arg = reduce(
                     lambda ty_val, extension: extension.prepare_args(
                         *ty_val,
                         stream=0,
@@ -115,6 +113,9 @@ class FakeCUDAKernel(object):
         return self
 
     def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
+        if ntasks < 0:
+            raise ValueError("Can't create ForAll with negative task count: %s"
+                             % ntasks)
         return self[ntasks, 1, stream, sharedmem]
 
     @property

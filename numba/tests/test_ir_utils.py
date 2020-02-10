@@ -1,17 +1,21 @@
 import numba
-from .support import TestCase, unittest
-from numba import compiler, jitclass, ir
-from numba.targets.registry import cpu_target
-from numba.compiler import Pipeline, Flags, _PipelineManager
-from numba.targets import registry
-from numba import types, ir_utils, bytecode
+from numba.tests.support import TestCase, unittest
+from numba.core.registry import cpu_target
+from numba.core.compiler import CompilerBase, Flags
+from numba.core.compiler_machinery import PassManager
+from numba.core import types, ir, bytecode, compiler, ir_utils, registry
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
+                                       FixupArgs, IRProcessing,)
 
+from numba.core.typed_passes import (NopythonTypeInference,
+                                     type_inference_stage, DeadCodeElimination)
+from numba.experimental import jitclass
 
 # global constant for testing find_const
 GLOBAL_B = 11
 
 
-@jitclass([('val', numba.types.List(numba.intp))])
+@jitclass([('val', numba.core.types.List(numba.intp))])
 class Dummy(object):
     def __init__(self, val):
         self.val = val
@@ -32,7 +36,7 @@ class TestIrUtils(TestCase):
 
         test_ir = compiler.run_frontend(test_func)
         typingctx = cpu_target.typing_context
-        typemap, _, _ = compiler.type_inference_stage(
+        typemap, _, _ = type_inference_stage(
             typingctx, test_ir, (), None)
         matched_call = ir_utils.find_callname(
             test_ir, test_ir.blocks[0].body[14].value, typemap)
@@ -42,7 +46,7 @@ class TestIrUtils(TestCase):
 
     def test_dead_code_elimination(self):
 
-        class Tester(Pipeline):
+        class Tester(CompilerBase):
 
             @classmethod
             def mk_pipeline(cls, args, return_type=None, flags=None, locals={},
@@ -58,28 +62,26 @@ class TestIrUtils(TestCase):
                 return cls(typing_context, target_context, library, args,
                            return_type, flags, locals)
 
-            def rm_dead_stage(self):
-                ir_utils.dead_code_elimination(
-                    self.func_ir, typemap=self.typemap)
-
             def compile_to_ir(self, func, DCE=False):
                 """
                 Compile and return IR
                 """
-                self.func_id = bytecode.FunctionIdentity.from_function(func)
-                self.bc = self.extract_bytecode(self.func_id)
-                self.lifted = []
+                func_id = bytecode.FunctionIdentity.from_function(func)
+                self.state.func_id = func_id
+                ExtractByteCode().run_pass(self.state)
+                state = self.state
 
-                pm = _PipelineManager()
-                pm.create_pipeline("pipeline")
-                self.add_preprocessing_stage(pm)
-                self.add_pre_typing_stage(pm)
-                self.add_typing_stage(pm)
+                name = "DCE_testing"
+                pm = PassManager(name)
+                pm.add_pass(TranslateByteCode, "analyzing bytecode")
+                pm.add_pass(FixupArgs, "fix up args")
+                pm.add_pass(IRProcessing, "processing IR")
+                pm.add_pass(NopythonTypeInference, "nopython frontend")
                 if DCE is True:
-                    pm.add_stage(self.rm_dead_stage, "DCE after typing")
+                    pm.add_pass(DeadCodeElimination, "DCE after typing")
                 pm.finalize()
-                pm.run(self.status)
-                return self.func_ir
+                pm.run(state)
+                return state.func_ir
 
         def check_initial_ir(the_ir):
             # dead stuff:
@@ -87,7 +89,7 @@ class TestIrUtils(TestCase):
             # an assign of above into to variable `dead`
             # del of both of the above
             # a const int above 0xdeaddead
-            # an assign of said into to variable `deaddead`
+            # an assign of said int to variable `deaddead`
             # del of both of the above
             # this is 8 things to remove
 
@@ -191,6 +193,86 @@ class TestIrUtils(TestCase):
 
         self.assertEqual(const_b, GLOBAL_B)
         self.assertEqual(const_c, FREEVAR_C)
+
+    def test_flatten_labels(self):
+        """ tests flatten_labels """
+        def foo(a):
+            acc = 0
+            if a > 3:
+                acc += 1
+                if a > 19:
+                    return 53
+            elif a < 1000:
+                if a >= 12:
+                    acc += 1
+                for x in range(10):
+                    acc -= 1
+                    if acc < 2:
+                        break
+                else:
+                    acc += 7
+            else:
+                raise ValueError("some string")
+            return acc
+
+        def bar(a):
+            acc = 0
+            z = 12
+            if a > 3:
+                acc += 1
+                z += 12
+                if a > 19:
+                    z += 12
+                    return 53
+            elif a < 1000:
+                if a >= 12:
+                    z += 12
+                    acc += 1
+                for x in range(10):
+                    z += 12
+                    acc -= 1
+                    if acc < 2:
+                        break
+                else:
+                    z += 12
+                    acc += 7
+            else:
+                raise ValueError("some string")
+            return acc
+
+        def baz(a):
+            acc = 0
+            if a > 3:
+                acc += 1
+                if a > 19:
+                    return 53
+                else: # extra control flow in comparison to foo
+                    return 55
+            elif a < 1000:
+                if a >= 12:
+                    acc += 1
+                for x in range(10):
+                    acc -= 1
+                    if acc < 2:
+                        break
+                else:
+                    acc += 7
+            else:
+                raise ValueError("some string")
+            return acc
+
+        def get_flat_cfg(func):
+            func_ir = ir_utils.compile_to_numba_ir(func, dict())
+            flat_blocks = ir_utils.flatten_labels(func_ir.blocks)
+            self.assertEqual(max(flat_blocks.keys()) + 1, len(func_ir.blocks))
+            return ir_utils.compute_cfg_from_blocks(flat_blocks)
+
+        foo_cfg = get_flat_cfg(foo)
+        bar_cfg = get_flat_cfg(bar)
+        baz_cfg = get_flat_cfg(baz)
+
+        self.assertEqual(foo_cfg, bar_cfg)
+        self.assertNotEqual(foo_cfg, baz_cfg)
 
 
 if __name__ == "__main__":

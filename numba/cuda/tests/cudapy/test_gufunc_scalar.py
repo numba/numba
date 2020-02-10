@@ -3,12 +3,11 @@
 See Numpy documentation for detail about gufunc:
     http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
 """
-from __future__ import absolute_import, print_function, division
 import numpy as np
 from numba import guvectorize, cuda
-from numba import unittest_support as unittest
 from numba.tests.support import TestCase
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
+import unittest
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
@@ -16,7 +15,7 @@ class TestGUFuncScalar(SerialMixin, TestCase):
     def test_gufunc_scalar_output(self):
         #    function type:
         #        - has no void return type
-        #        - array argument is one dimenion fewer than the source array
+        #        - array argument is one dimension fewer than the source array
         #        - scalar output is passed as a 1-element array.
         #
         #    signature: (n)->()
@@ -31,8 +30,8 @@ class TestGUFuncScalar(SerialMixin, TestCase):
 
         # inp is (10000, 3)
         # out is (10000)
-        # The outter (leftmost) dimension must match or numpy broadcasting is performed.
-        # But, broadcasting on CUDA arrays is not supported.
+        # The outter (leftmost) dimension must match or numpy broadcasting
+        # is performed. But, broadcasting on CUDA arrays is not supported.
 
         inp = np.arange(300, dtype=np.int32).reshape(100, 3)
 

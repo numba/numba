@@ -1,7 +1,6 @@
 """
 This is a direct translation of nvvm.h
 """
-from __future__ import print_function, absolute_import, division
 import sys, logging, re
 from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
                     c_char)
@@ -10,9 +9,9 @@ import threading
 
 from llvmlite import ir
 
-from numba import config
 from .error import NvvmError, NvvmSupportError
 from .libs import get_libdevice, open_libdevice, open_cudalib
+from numba.core import config
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,7 @@ ADDRSPACE_SHARED = 3
 ADDRSPACE_CONSTANT = 4
 ADDRSPACE_LOCAL = 5
 
-# Opaque handle for comilation unit
+# Opaque handle for compilation unit
 nvvm_program = c_void_p
 
 # Result code
@@ -108,7 +107,7 @@ class NVVM(object):
             if cls.__INSTANCE is None:
                 cls.__INSTANCE = inst = object.__new__(cls)
                 try:
-                    inst.driver = open_cudalib('nvvm', ccc=True)
+                    inst.driver = open_cudalib('nvvm')
                 except OSError as e:
                     cls.__INSTANCE = None
                     errmsg = ("libNVVM cannot be found. Do `conda install "
@@ -164,7 +163,7 @@ class CompilationUnit(object):
         self.driver.check_error(err, 'Failed to add module')
 
     def compile(self, **options):
-        """Perform Compliation
+        """Perform Compilation
 
         The valid compiler options are
 

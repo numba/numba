@@ -1,14 +1,11 @@
-from __future__ import division
-
 from itertools import product, combinations_with_replacement
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import jit, typeof
-from numba.compiler import compile_isolated
-from numba.numpy_support import version as np_version
-from .support import TestCase, MemoryLeakMixin, tag
+from numba.core.compiler import compile_isolated
+from numba.tests.support import TestCase, MemoryLeakMixin, tag
+import unittest
 
 
 def array_all(arr):
@@ -192,7 +189,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         super(TestArrayReductions, self).setUp()
         np.random.seed(42)
 
-    def check_reduction_basic(self, pyfunc, all_nans=True, **kwargs):
+    def check_reduction_basic(self, pyfunc, **kwargs):
         # Basic reduction checks on 1-d float64 arrays
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -212,12 +209,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
         check(arr)
-        if all_nans:
-            # Only NaNs
-            arr = np.float64(['nan', 'nan'])
-            check(arr)
+        # Only NaNs
+        arr = np.float64(['nan', 'nan'])
+        check(arr)
 
-    @tag('important')
     def test_all_basic(self, pyfunc=array_all):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -233,7 +228,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         check(arr[::-1])
 
-    @tag('important')
     def test_any_basic(self, pyfunc=array_any):
         cfunc = jit(nopython=True)(pyfunc)
         def check(arr):
@@ -251,70 +245,48 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         check(arr[::-1])
 
-    @tag('important')
     def test_sum_basic(self):
         self.check_reduction_basic(array_sum)
 
-    @tag('important')
     def test_mean_basic(self):
         self.check_reduction_basic(array_mean)
 
-    @tag('important')
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
 
-    @tag('important')
     def test_std_basic(self):
         self.check_reduction_basic(array_std)
 
-    @tag('important')
     def test_min_basic(self):
         self.check_reduction_basic(array_min)
 
-    @tag('important')
     def test_max_basic(self):
         self.check_reduction_basic(array_max)
 
-    @tag('important')
     def test_argmin_basic(self):
         self.check_reduction_basic(array_argmin)
 
-    @tag('important')
     def test_argmax_basic(self):
         self.check_reduction_basic(array_argmax)
 
-    @tag('important')
     def test_nanmin_basic(self):
         self.check_reduction_basic(array_nanmin)
 
-    @tag('important')
     def test_nanmax_basic(self):
         self.check_reduction_basic(array_nanmax)
 
-    @tag('important')
-    @unittest.skipUnless(np_version >= (1, 8), "nanmean needs Numpy 1.8+")
     def test_nanmean_basic(self):
         self.check_reduction_basic(array_nanmean)
 
-    @tag('important')
     def test_nansum_basic(self):
-        # Note Numpy < 1.9 has different behaviour for all NaNs:
-        # it returns Nan while later Numpy returns 0.
-        self.check_reduction_basic(array_nansum,
-                                   all_nans=np_version >= (1, 9))
+        self.check_reduction_basic(array_nansum)
 
-    @tag('important')
-    @unittest.skipUnless(np_version >= (1, 10), "nanprod needs Numpy 1.10+")
     def test_nanprod_basic(self):
         self.check_reduction_basic(array_nanprod)
 
-    @tag('important')
-    @unittest.skipUnless(np_version >= (1, 8), "nanstd needs Numpy 1.8+")
     def test_nanstd_basic(self):
         self.check_reduction_basic(array_nanstd)
 
-    @tag('important')
-    @unittest.skipUnless(np_version >= (1, 8), "nanvar needs Numpy 1.8+")
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar, prec='double')
 
@@ -358,7 +330,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         a[:] = np.nan
         yield a
 
-    @tag('important')
     def test_median_basic(self):
         pyfunc = array_median_global
 
@@ -531,37 +502,30 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.assertIn('Not supported for complex dtype', str(e.exception))
 
-    @unittest.skipUnless(np_version >= (1, 10), "percentile needs Numpy 1.10+")
     def test_percentile_basic(self):
         pyfunc = array_percentile_global
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=100)
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=100)
         self.check_percentile_exceptions(pyfunc)
 
-    @unittest.skipUnless(np_version >= (1, 11),
-                         "nanpercentile needs Numpy 1.11+")
     def test_nanpercentile_basic(self):
         pyfunc = array_nanpercentile_global
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=100)
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=100)
         self.check_percentile_exceptions(pyfunc)
 
-    @unittest.skipUnless(np_version >= (1, 15), "quantile needs Numpy 1.15+")
     def test_quantile_basic(self):
         pyfunc = array_quantile_global
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=1)
         self.check_quantile_exceptions(pyfunc)
 
-    @unittest.skipUnless(np_version >= (1, 15),
-                         "nanquantile needs Numpy 1.15+")
     def test_nanquantile_basic(self):
         pyfunc = array_nanquantile_global
         self.check_percentile_and_quantile(pyfunc, q_upper_bound=1)
         self.check_percentile_edge_cases(pyfunc, q_upper_bound=1)
         self.check_quantile_exceptions(pyfunc)
 
-    @unittest.skipUnless(np_version >= (1, 9), "nanmedian needs Numpy 1.9+")
     def test_nanmedian_basic(self):
         pyfunc = array_nanmedian_global
         self.check_median_basic(pyfunc, self._array_variations)
@@ -621,14 +585,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         expected, got = run_comparative(pyfunc, arr)
         self.assertPreciseEqual(got, expected)
 
-    @tag('important')
     def test_array_cumsum(self):
         self.check_cumulative(array_cumsum)
 
     def test_array_cumsum_global(self):
         self.check_cumulative(array_cumsum_global)
 
-    @tag('important')
     def test_array_cumprod(self):
         self.check_cumulative(array_cumprod)
 
@@ -662,7 +624,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_aggregation_magnitude(array_cumsum)
         self.check_aggregation_magnitude(array_cumsum_global)
 
-    @unittest.skipUnless(np_version >= (1, 12), "nancumsum needs Numpy 1.12+")
     def test_nancumsum_magnitude(self):
         self.check_aggregation_magnitude(array_nancumsum, is_prod=True)
 
@@ -674,7 +635,6 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_aggregation_magnitude(array_cumprod, is_prod=True)
         self.check_aggregation_magnitude(array_cumprod_global, is_prod=True)
 
-    @unittest.skipUnless(np_version >= (1, 12), "nancumprod needs Numpy 1.12+")
     def test_nancumprod_magnitude(self):
         self.check_aggregation_magnitude(array_nancumprod, is_prod=True)
 
@@ -780,12 +740,10 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         a = a.reshape(3, 3)
         check(a)
 
-    @unittest.skipUnless(np_version >= (1, 12), "nancumprod needs Numpy 1.12+")
     def test_nancumprod_basic(self):
         self.check_cumulative(array_nancumprod)
         self.check_nan_cumulative(array_nancumprod)
 
-    @unittest.skipUnless(np_version >= (1, 12), "nancumsum needs Numpy 1.12+")
     def test_nancumsum_basic(self):
         self.check_cumulative(array_nancumsum)
         self.check_nan_cumulative(array_nancumsum)
@@ -978,10 +936,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         reduction_funcs_rspace = [array_argmin, array_argmin_global,
                                   array_argmax, array_argmax_global]
 
-        if np_version >= (1, 8):
-            reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
-        if np_version >= (1, 10):
-            reduction_funcs += [array_nanprod]
+        reduction_funcs += [array_nanmean, array_nanstd, array_nanvar]
+        reduction_funcs += [array_nanprod]
 
         dtypes_to_test = [np.int32, np.float32, np.bool_, np.complex64]
 

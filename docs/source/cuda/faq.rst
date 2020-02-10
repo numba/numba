@@ -16,5 +16,5 @@ This is quite likely due to the profiling data not being flushed on program
 exit, see the `NVIDIA CUDA documentation
 <http://docs.nvidia.com/cuda/profiler-users-guide/#flush-profile-data>`_ for
 details. To fix this simply add a call to ``numba.cuda.profile_stop()`` prior
-to the exit point in your program (or whereever you want to stop profiling).
+to the exit point in your program (or wherever you want to stop profiling).
 For more on CUDA profiling support in Numba, see :ref:`cuda-profiling`.

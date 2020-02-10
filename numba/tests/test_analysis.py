@@ -1,13 +1,13 @@
 # Tests numba.analysis functions
-from __future__ import print_function, absolute_import, division
 import collections
 
 import numpy as np
-from numba.compiler import compile_isolated, run_frontend, Flags
-from numba import types, rewrites, ir, jit, ir_utils, errors, njit
-from .support import TestCase, MemoryLeakMixin, SerialMixin
+from numba.core.compiler import compile_isolated, run_frontend, Flags, StateDict
+from numba import jit, njit
+from numba.core import types, errors, ir, rewrites, ir_utils
+from numba.tests.support import TestCase, MemoryLeakMixin, SerialMixin
 
-from numba.analysis import dead_branch_prune, rewrite_semantic_constants
+from numba.core.analysis import dead_branch_prune, rewrite_semantic_constants
 
 _GLOBAL = 123
 
@@ -17,19 +17,13 @@ enable_pyobj_flags.set("enable_pyobject")
 
 def compile_to_ir(func):
     func_ir = run_frontend(func)
+    state = StateDict()
+    state.func_ir = func_ir
+    state.typemap = None
+    state.calltypes = None
 
-    class MockPipeline(object):
-        def __init__(self, func_ir):
-            self.typingctx = None
-            self.targetctx = None
-            self.args = None
-            self.func_ir = func_ir
-            self.typemap = None
-            self.return_type = None
-            self.calltypes = None
     # call this to get print etc rewrites
-    rewrites.rewrite_registry.apply('before-inference', MockPipeline(func_ir),
-                                    func_ir)
+    rewrites.rewrite_registry.apply('before-inference', state)
     return func_ir
 
 
@@ -639,3 +633,14 @@ class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):
         FakeArrayType = types.NamedUniTuple(types.int64, 1, FakeArray)
         self.assert_prune(impl, (FakeArrayType,), [None], fa,
                           flags=enable_pyobj_flags)
+
+    def test_semantic_const_propagates_before_static_rewrites(self):
+        # see issue #5015, the ndim needs writing in as a const before
+        # the rewrite passes run to make e.g. getitems static where possible
+        @njit
+        def impl(a, b):
+            return a.shape[:b.ndim]
+
+        args = (np.zeros((5, 4, 3, 2)), np.zeros((1, 1)))
+
+        self.assertPreciseEqual(impl(*args), impl.py_func(*args))

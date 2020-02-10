@@ -1,17 +1,15 @@
-from __future__ import print_function
-
 from functools import partial
 from itertools import permutations
-import numba.unittest_support as unittest
 
-import sys
 import numpy as np
 
-from numba.numpy_support import version as np_version
-from numba.compiler import compile_isolated, Flags
-from numba import jit, types, from_dtype, errors, typeof
-from numba.errors import TypingError
-from .support import TestCase, MemoryLeakMixin, CompilationCache, tag
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit, njit, from_dtype, typeof
+from numba.core.errors import TypingError
+from numba.core import types, errors
+from numba.tests.support import (TestCase, MemoryLeakMixin, CompilationCache,
+                                 tag)
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -37,7 +35,7 @@ def from_generic(pyfuncs_to_use):
     """
     def decorator(func):
         def result(*args, **kwargs):
-            return (func(pyfunc, *args, **kwargs) for pyfunc in pyfuncs_to_use)
+            return [func(pyfunc, *args, **kwargs) for pyfunc in pyfuncs_to_use]
         return result
     return decorator
 
@@ -76,8 +74,27 @@ def numpy_transpose_array(a):
 def numpy_transpose_array_axes_kwarg(arr, axes):
     return np.transpose(arr, axes=axes)
 
+
+def numpy_transpose_array_axes_kwarg_copy(arr, axes):
+    return np.transpose(arr, axes=axes).copy()
+
+
 def array_transpose_axes(arr, axes):
     return arr.transpose(axes)
+
+
+def array_transpose_axes_copy(arr, axes):
+    return arr.transpose(axes).copy()
+
+
+def transpose_issue_4708(m, n):
+    r1 = np.reshape(np.arange(m * n * 3), (m, 3, n))
+    r2 = np.reshape(np.arange(n * 3), (n, 3))
+    r_dif = (r1 - r2.T).T
+    r_dif = np.transpose(r_dif, (2, 0, 1))
+    z = r_dif + 1
+    return z
+
 
 def squeeze_array(a):
     return a.squeeze()
@@ -142,6 +159,10 @@ def numpy_flatnonzero(a):
     return np.flatnonzero(a)
 
 
+def numpy_argwhere(a):
+    return np.argwhere(a)
+
+
 class TestArrayManipulation(MemoryLeakMixin, TestCase):
     """
     Check shape-changing operations on arrays.
@@ -151,7 +172,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         super(TestArrayManipulation, self).setUp()
         self.ccache = CompilationCache()
 
-    @tag('important')
     def test_array_reshape(self):
         pyfuncs_to_use = [array_reshape, numpy_array_reshape]
 
@@ -266,7 +286,9 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_array_transpose_axes(self):
         pyfuncs_to_use = [numpy_transpose_array_axes_kwarg,
-                          array_transpose_axes]
+                          numpy_transpose_array_axes_kwarg_copy,
+                          array_transpose_axes,
+                          array_transpose_axes_copy]
 
         def run(pyfunc, arr, axes):
             cres = self.ccache.compile(pyfunc, (typeof(arr), typeof(axes)))
@@ -317,6 +339,18 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                 check(arrs[i], axes)
                 check(arrs[i], neg_axes)
 
+        @from_generic([transpose_issue_4708])
+        def check_issue_4708(pyfunc, m, n):
+            expected = pyfunc(m, n)
+            got = njit(pyfunc)(m, n)
+            # values in arrays are equals,
+            # but stronger assertions not hold (layout and strides equality)
+            np.testing.assert_equal(got, expected)
+
+        check_issue_4708(3, 2)
+        check_issue_4708(2, 3)
+        check_issue_4708(5, 4)
+
         # Exceptions leak references
         self.disable_leak_check()
 
@@ -344,7 +378,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         self.assertIn("np.transpose does not accept tuples",
                         str(e.exception))
 
-    @tag('important')
     def test_expand_dims(self):
         pyfunc = expand_dims
 
@@ -747,7 +780,6 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
                       str(raises.exception))
 
     def test_flatnonzero_basic(self):
-        # these tests should pass in all numpy versions
         pyfunc = numpy_flatnonzero
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -768,6 +800,29 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
 
+    def test_argwhere_basic(self):
+        pyfunc = numpy_argwhere
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(-5, 5) > 2
+            yield np.full(5, fill_value=0)
+            yield np.full(5, fill_value=1)
+            yield np.array([])
+            yield np.array([-1.0, 0.0, 1.0])
+            a = self.random.randn(100)
+            yield a > 0.2
+            yield a.reshape(5, 5, 4) > 0.5
+            yield a.reshape(50, 2, order='F') > 0.5
+            yield a.reshape(25, 4)[1::2] > 0.5
+            yield a == a - 1
+            yield a > -a
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
     @staticmethod
     def array_like_variations():
         yield ((1.1, 2.2), (3.3, 4.4), (5.5, 6.6))
@@ -778,17 +833,16 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         yield 0
         yield 1
         yield False
+        yield True
         yield (True, False, True)
         yield 2 + 1j
-        # the following are not array-like, but numpy 1.15+ does not raise
+        # the following are not array-like, but NumPy does not raise
         yield None
-        if not sys.version_info < (3,):
-            yield 'a_string'
+        yield 'a_string'
+        yield ''
 
-    @unittest.skipUnless(np_version >= (1, 15),
-                         "flatnonzero array-like handling per 1.15+")
-    def test_flatnonzero_array_like_115_and_on(self):
-        # these tests should pass where numpy version is >= 1.15
+
+    def test_flatnonzero_array_like(self):
         pyfunc = numpy_flatnonzero
         cfunc = jit(nopython=True)(pyfunc)
 
@@ -797,25 +851,13 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
 
-    @unittest.skipUnless(np_version < (1, 15),
-                         "flatnonzero array-like handling pre 1.15")
-    def test_flatnonzero_array_like_pre_115(self):
-        # these tests should pass where numpy version is < 1.15
-        pyfunc = numpy_flatnonzero
+    def test_argwhere_array_like(self):
+        pyfunc = numpy_argwhere
         cfunc = jit(nopython=True)(pyfunc)
-
         for a in self.array_like_variations():
-            with self.assertTypingError() as e:
-                cfunc(a)
-
-            self.assertIn("Argument 'a' must be an array", str(e.exception))
-
-            # numpy raises an Attribute error with:
-            # 'xxx' object has no attribute 'ravel'
-            with self.assertRaises(AttributeError) as e:
-                pyfunc(a)
-
-            self.assertIn("object has no attribute 'ravel'", str(e.exception))
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
 
 
 if __name__ == '__main__':

@@ -1,10 +1,8 @@
-from __future__ import division, print_function
-
 import sys
 import subprocess
 
-from numba import unittest_support as unittest
 from numba import cuda
+import unittest
 
 
 class TestCase(unittest.TestCase):
@@ -30,7 +28,7 @@ class TestCase(unittest.TestCase):
         """
         lines = self.get_testsuite_listing(args)
         last_line = lines[-1]
-        self.assertTrue(last_line.endswith('tests found'))
+        self.assertTrue('tests found' in last_line)
         number = int(last_line.split(' ')[0])
         # There may be some "skipped" messages at the beginning,
         # so do an approximate check.
@@ -67,17 +65,15 @@ class TestCase(unittest.TestCase):
         self.check_listing_prefix('numba.cuda.tests.cudasim')
 
     def test_module(self):
-        self.check_testsuite_size(['numba.tests.test_utils'], 3)
-        self.check_testsuite_size(['numba.tests.test_nested_calls'], 5)
+        self.check_testsuite_size(['numba.tests.test_storeslice'], 2)
+        self.check_testsuite_size(['numba.tests.test_nested_calls'], 10)
         # Several modules
         self.check_testsuite_size(['numba.tests.test_nested_calls',
-                                   'numba.tests.test_utils'], 13)
+                                   'numba.tests.test_storeslice'], 12)
 
     def test_subpackage(self):
         self.check_testsuite_size(['numba.tests.npyufunc'], 50)
 
-    @unittest.skipIf(sys.version_info < (3, 4),
-                     "'--random' only supported on Python 3.4 or higher")
     def test_random(self):
         self.check_testsuite_size(
             ['--random', '0.1', 'numba.tests.npyufunc'], 5)
@@ -103,6 +99,22 @@ class TestCase(unittest.TestCase):
             included = get_count(['--tags=%s' % tag, 'numba.tests'])
             excluded = get_count(['--exclude-tags=%s' % tag, 'numba.tests'])
             self.assertEqual(total, included + excluded)
+
+    def test_check_slice(self):
+        tmp = self.get_testsuite_listing(['-j','0,5,1'])
+        l = [x for x in tmp if x.startswith('numba.')]
+        self.assertEqual(len(l), 5)
+
+    def test_check_slicing_equivalent(self):
+        def filter_test(xs):
+            return [x for x in xs if x.startswith('numba.')]
+        full = filter_test(self.get_testsuite_listing([]))
+        sliced = []
+        for i in range(3):
+            subset = self.get_testsuite_listing(['-j', '{},None,3'.format(i)])
+            sliced.extend(filter_test(subset))
+        # The tests must be equivalent
+        self.assertEqual(sorted(full), sorted(sliced))
 
 
 if __name__ == '__main__':

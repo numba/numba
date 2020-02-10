@@ -1,8 +1,7 @@
-from __future__ import print_function, division, absolute_import
 import numpy as np
 from numba import jit
-from numba import unittest_support as unittest
 from numba.tests import usecases
+import unittest
 
 X = np.arange(10)
 

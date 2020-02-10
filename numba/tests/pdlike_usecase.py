@@ -4,13 +4,13 @@ Implementation of a minimal Pandas-like API.
 
 import numpy as np
 
-from numba import types, cgutils
-from numba.datamodel import models
-from numba.extending import (
+from numba.core import types, cgutils
+from numba.core.datamodel import models
+from numba.core.extending import (
     typeof_impl, type_callable, register_model,
     lower_builtin, box, unbox, NativeValue,
     overload, overload_attribute, overload_method, make_attribute_wrapper)
-from numba.targets.imputils import impl_ret_borrowed
+from numba.core.imputils import impl_ret_borrowed
 
 
 class Index(object):
@@ -261,7 +261,7 @@ def box_series(typ, val, c):
 
 
 @overload_attribute(IndexType, 'is_monotonic_increasing')
-def index_is_monotonic_increasing(typ):
+def index_is_monotonic_increasing(index):
     """
     Index.is_monotonic_increasing
     """

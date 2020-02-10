@@ -2,10 +2,8 @@
 Supported Atomic Operations
 ===========================
 
-Numba provides access to some of the atomic operations supported in CUDA, in the
-:class:`numba.cuda.atomic` class.
-
-Those that are presently implemented are as follows:
+Numba provides access to some of the atomic operations supported in CUDA. Those
+that are presently implemented are as follows:
 
 .. automodule:: numba.cuda
     :members: atomic
@@ -36,7 +34,7 @@ of finding a maximum in this case, but that it serves as an example::
 
     max_example[256,64](result, arr)
     print(result[0]) # Found using cuda.atomic.max
-    print(max(arr))  # Print max(arr) for comparision (should be equal!)
+    print(max(arr))  # Print max(arr) for comparison (should be equal!)
 
 
 Multiple dimension arrays are supported by using a tuple of ints for the index::

@@ -87,12 +87,7 @@ env_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
 
 
 static PyTypeObject EnvironmentType = {
-#if (PY_MAJOR_VERSION < 3)
-    PyObject_HEAD_INIT(NULL)
-    0,                         /*ob_size*/
-#else
     PyVarObject_HEAD_INIT(NULL, 0)
-#endif
     "_dynfunc.Environment",   /*tp_name*/
     sizeof(EnvironmentObject), /*tp_basicsize*/
     0,                         /*tp_itemsize*/
@@ -183,12 +178,7 @@ closure_dealloc(ClosureObject *clo)
 }
 
 static PyTypeObject ClosureType = {
-#if (PY_MAJOR_VERSION < 3)
-    PyObject_HEAD_INIT(NULL)
-    0,                         /*ob_size*/
-#else
     PyVarObject_HEAD_INIT(NULL, 0)
-#endif
     "_dynfunc._Closure",    /*tp_name*/
     sizeof(ClosureObject),     /*tp_basicsize*/
     0,                         /*tp_itemsize*/
@@ -385,12 +375,7 @@ generator_iternext(GeneratorObject *gen)
 }
 
 static PyTypeObject GeneratorType = {
-#if (PY_MAJOR_VERSION < 3)
-    PyObject_HEAD_INIT(NULL)
-    0,                                        /* ob_size*/
-#else
     PyVarObject_HEAD_INIT(NULL, 0)
-#endif
     "_dynfunc._Generator",                    /* tp_name*/
     offsetof(GeneratorObject, state),         /* tp_basicsize*/
     1,                                        /* tp_itemsize*/

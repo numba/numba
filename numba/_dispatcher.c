@@ -217,7 +217,7 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     if (!self->fallbackdef && objectmode){
         self->fallbackdef = cfunc;
     }
-    /* Add interpeter fallback */
+    /* Add interpreter fallback */
     if (!self->interpdef && interpmode) {
         self->interpdef = cfunc;
     }
@@ -608,12 +608,7 @@ static PyMemberDef Dispatcher_members[] = {
 
 
 static PyTypeObject DispatcherType = {
-#if (PY_MAJOR_VERSION < 3)
-    PyObject_HEAD_INIT(NULL)
-    0,                                           /* ob_size */
-#else
     PyVarObject_HEAD_INIT(NULL, 0)
-#endif
     "_dispatcher.Dispatcher",                    /* tp_name */
     sizeof(DispatcherObject),                    /* tp_basicsize */
     0,                                           /* tp_itemsize */
