@@ -333,50 +333,53 @@ class CodeLibrary(object):
         except ImportError:
             raise RuntimeError("r2pipe package needed for disasm CFG")
 
-        class DisasmCFG(object):
-            def __init__(self, terminal_rendering, jupyter_rendering):
-                self.terminal = terminal_rendering
-                # this just makes it read slightly better in jupyter notebooks
-                self.jupyter = jupyter_rendering.replace('fontname="Courier",',
-                                              'fontname="Courier",fontsize=6,')
+        def get_rendering(cmd=None):
+            if cmd is None:
+                raise ValueError("No command given")
+            elf = self._get_compiled_object()
 
-            def _repr_html_(self):
+            from tempfile import NamedTemporaryFile
+            with NamedTemporaryFile(delete=False) as f:
+                f.write(elf)
+                f.flush() # force write, radare2 needs a binary blob on disk
+
+                # catch if r2pipe can actually talk to radare2
+                try:
+                    flags=['-e io.cache=true', # fix relocations in disassembly
+                           '-e scr.color=1', # 16bit ANSI colour terminal
+                          ]
+                    r = r2pipe.open(f.name, flags=flags)
+                    data = r.cmd('af;%s' % cmd)
+                    r.quit()
+                except Exception as e:
+                    if "radare2 in PATH" in str(e):
+                        msg = ("This feature requires 'radare2' to be "
+                            "installed and available on the system see: "
+                            "https://github.com/radareorg/radare2. "
+                            "Cannot find 'radare2' in $PATH.")
+                        raise RuntimeError(msg)
+                    else:
+                        raise e
+            return data
+
+        class DisasmCFG(object):
+
+            def _repr_svg_(self):
                 try:
                     import graphviz
                 except ImportError:
                     raise RuntimeError("graphviz package needed for disasm CFG")
-                src = graphviz.Source(self.jupyter)
-                mrkup = "<html><head></head><body>%s</body></html>"
-                buf = src.pipe('svg').decode('UTF-8')
-                return mrkup % buf
+                jupyter_rendering = get_rendering(cmd='agfd')
+                # this just makes it read slightly better in jupyter notebooks
+                jupyter_rendering.replace('fontname="Courier",',
+                                          'fontname="Courier",fontsize=6,')
+                src = graphviz.Source(jupyter_rendering)
+                return src.pipe('svg').decode('UTF-8')
 
             def __repr__(self):
-                return self.terminal
+                return get_rendering(cmd='agf')
 
-        elf = self._get_compiled_object()
-
-        from tempfile import NamedTemporaryFile
-        with NamedTemporaryFile(delete=False) as f:
-            f.write(elf)
-            f.flush() # force write, radare2 needs a binary blob on disk
-
-            # catch if r2pipe can actually talk to radare2
-            try:
-                r = r2pipe.open(f.name, flags=['-e io.cache=true'])
-                jupyter_data = r.cmd('af;agfd')
-                terminal_data = r.cmd('af;agf')
-                r.quit()
-            except Exception as e:
-                if "radare2 in PATH" in str(e):
-                    msg = ("This feature requires 'radare2' to be installed "
-                           "and available on the system see: "
-                           "https://github.com/radareorg/radare2. "
-                           "Cannot find 'radare2' in $PATH.")
-                    raise RuntimeError(msg)
-                else:
-                    raise e
-
-        return DisasmCFG(terminal_data, jupyter_data)
+        return DisasmCFG()
 
     #
     # Object cache hooks and serialization
