@@ -424,10 +424,10 @@ class _Runtime():
             _raise_driver_error("destroy_dp_runtime", -1)
 
     def has_cpu_device(self):
-        return self._cpu_device is None
+        return self._cpu_device is not None
 
     def has_gpu_device(self):
-        return self._gpu_device is None
+        return self._gpu_device is not None
 
     def get_cpu_device(self):
         if(self._cpu_device is None):
