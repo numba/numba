@@ -200,6 +200,7 @@ vary with target operating system and hardware. The following lists them all
   * ``setuptools``
   * ``numpy``
   * ``llvmlite``
+  * ``importlib_metadata`` (for Python versions < 3.8)
 
 * Optional runtime are:
 
