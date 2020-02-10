@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import copy
 import itertools
 import math
@@ -8,19 +6,16 @@ import sys
 
 import numpy as np
 
-from numba.compiler import compile_isolated, Flags
-from numba import jit, types, utils, njit, errors
-import numba.unittest_support as unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit, njit
+from numba.core import types, utils, errors
+import unittest
 from numba import testing
-from numba.six import PY2
-from .support import TestCase, MemoryLeakMixin, tag
+from numba.tests.support import TestCase, MemoryLeakMixin, tag
 
-from numba.targets.quicksort import make_py_quicksort, make_jit_quicksort
-from numba.targets.mergesort import make_jit_mergesort
-from .timsort import make_py_timsort, make_jit_timsort, MergeRun
-
-
-skip_py_27 = unittest.skipIf(PY2, "Not supported on Python 2")
+from numba.misc.quicksort import make_py_quicksort, make_jit_quicksort
+from numba.misc.mergesort import make_jit_mergesort
+from numba.misc.timsort import make_py_timsort, make_jit_timsort, MergeRun
 
 
 def make_temp_list(keys, n):
@@ -178,7 +173,6 @@ class BaseTimsortTest(BaseSortingTest):
         f = self.timsort.merge_init
         return f(keys)
 
-    @tag('important')
     def test_binarysort(self):
         n = 20
         def check(l, n, start=0):
@@ -264,7 +258,6 @@ class BaseTimsortTest(BaseSortingTest):
         for i in range(len(l) - 1):
             check(l, i, n)
 
-    @tag('important')
     def test_gallop_left(self):
         n = 20
         f = self.timsort.gallop_left
@@ -653,7 +646,6 @@ class BaseQuicksortTest(BaseSortingTest):
         l = self.duprandom_list(n)
         check(l, n)
 
-    @tag('important')
     def test_run_quicksort(self):
         f = self.quicksort.run_quicksort
 
@@ -787,7 +779,6 @@ class TestNumpySort(TestCase):
         for orig in self.int_arrays():
             self.check_sort_inplace(pyfunc, cfunc, orig)
 
-    @tag('important')
     def test_array_sort_float(self):
         pyfunc = sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -832,7 +823,6 @@ class TestNumpySort(TestCase):
         check(argsort_kind_usecase, is_stable=False)
         check(np_argsort_kind_usecase, is_stable=False)
 
-    @tag('important')
     def test_argsort_float(self):
         def check(pyfunc):
             cfunc = jit(nopython=True)(pyfunc)
@@ -842,7 +832,6 @@ class TestNumpySort(TestCase):
         check(argsort_usecase)
         check(np_argsort_usecase)
 
-    @tag('important')
     def test_argsort_float(self):
         def check(pyfunc, is_stable):
             cfunc = jit(nopython=True)(pyfunc)
@@ -858,7 +847,6 @@ class TestNumpySort(TestCase):
 
 class TestPythonSort(TestCase):
 
-    @tag('important')
     def test_list_sort(self):
         pyfunc = list_sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -986,7 +974,6 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
 
         self.assertPreciseEqual(gen(njit)(a[:]), gen(nop_compiler)(a[:]))
 
-    @skip_py_27
     def test_04(self):
 
         a = ['a','b','B','b','C','A']
@@ -1005,7 +992,6 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(foo(a[:], external_key),
                                 foo.py_func(a[:], external_key))
 
-    @skip_py_27
     def test_05(self):
 
         a = ['a','b','B','b','C','A']

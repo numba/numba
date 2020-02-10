@@ -1,6 +1,5 @@
-from __future__ import print_function, absolute_import, division
-from numba import config, sigutils, types
 from warnings import warn
+from numba.core import types, config, sigutils
 from .compiler import (compile_kernel, compile_device, declare_device_function,
                        AutoJitCUDAKernel, compile_device_template)
 from .simulator.kernel import FakeCUDAKernel
@@ -20,16 +19,16 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
-    function to compile. If
+    function to compile.
 
     :param func_or_sig: A function to JIT compile, or a signature of a function
-       to compile. If a function is supplied, then an :class:`AutoJitCUDAKernel`
-       is returned. If a signature is supplied, then a function which takes a
-       function to compile and returns an :class:`AutoJitCUDAKernel` is
-       returned.
+       to compile. If a function is supplied, then a
+       :class:`numba.cuda.compiler.AutoJitCUDAKernel` is returned. If a
+       signature is supplied, then a function is returned. The returned
+       function accepts another function, which it will compile and then return
+       a :class:`numba.cuda.compiler.AutoJitCUDAKernel`.
 
        .. note:: A kernel cannot have any return value.
-    :type func_or_sig: function or numba.typing.Signature
     :param device: Indicates whether this is a device function.
     :type device: bool
     :param bind: Force binding to CUDA context immediately

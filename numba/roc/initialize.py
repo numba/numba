@@ -1,8 +1,6 @@
 #### Additional initialization code ######
-
-
 def _initialize_ufunc():
-    from numba.npyufunc import Vectorize
+    from numba.np.ufunc import Vectorize
 
     def init_vectorize():
         from numba.roc.vectorizers import HsaVectorize
@@ -13,7 +11,7 @@ def _initialize_ufunc():
 
 
 def _initialize_gufunc():
-    from numba.npyufunc import GUVectorize
+    from numba.np.ufunc import GUVectorize
 
     def init_guvectorize():
         from numba.roc.vectorizers import HsaGUFuncVectorize

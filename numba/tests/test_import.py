@@ -1,10 +1,8 @@
-from __future__ import print_function, absolute_import
-
 import subprocess
 import sys
 
-from numba import unittest_support as unittest
-from .support import TestCase
+from numba.tests.support import TestCase
+import unittest
 
 
 class TestNumbaImport(TestCase):
@@ -21,21 +19,21 @@ class TestNumbaImport(TestCase):
             'cffi',
             'distutils',
             'numba.cuda',
-            'numba.hsa',
-            'numba.targets.mathimpl',
-            'numba.targets.randomimpl',
+            'numba.cpython.mathimpl',
+            'numba.cpython.randomimpl',
             'numba.tests',
-            'numba.typing.collections',
-            'numba.typing.listdecl',
-            'numba.typing.npdatetime',
+            'numba.core.typing.collections',
+            'numba.core.typing.listdecl',
+            'numba.core.typing.npdatetime',
             ]
         # Sanity check the modules still exist...
         for mod in blacklist:
-            if mod not in ('cffi', 'numba.hsa'):
+            if mod not in ('cffi',):
                 __import__(mod)
 
         code = """if 1:
-            from numba import jit, types, vectorize
+            from numba import jit, vectorize
+            from numba.core import types
             import sys
             print(list(sys.modules))
             """

@@ -11,7 +11,6 @@ system to freeze in some cases.
 
 """
 
-from __future__ import absolute_import, print_function, division
 import sys
 import os
 import ctypes
@@ -28,13 +27,13 @@ import contextlib
 import numpy as np
 from collections import namedtuple, deque
 
-from numba import utils, mviewbuf
+from numba import mviewbuf
+from numba.core import utils, errors, serialize, config
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size
-from . import enums, drvapi, _extras
-from numba import config, serialize, errors
-from numba.utils import longint as long
+from numba.cuda.cudadrv import enums, drvapi, _extras
+from numba.core.utils import longint as long
 from numba.cuda.envvars import get_numba_envvar
 
 

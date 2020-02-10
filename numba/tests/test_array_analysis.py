@@ -1,36 +1,30 @@
-from __future__ import division
-
 import itertools
 
 import numpy as np
 import sys
 from collections import namedtuple
+from io import StringIO
 
-from numba import unittest_support as unittest
-from numba import (njit, typeof, types, typing, typeof, ir, utils, bytecode,
-    jitclass, prange, postproc)
-from .support import TestCase, tag
-from numba.array_analysis import EquivSet, ArrayAnalysis
-from numba.compiler import Compiler, Flags, PassManager
-from numba.targets import cpu, registry
-from numba.numpy_support import version as numpy_version
-from numba.ir_utils import remove_dead
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+from numba import njit, typeof, prange
+from numba.core import types, typing, ir, bytecode, postproc, cpu, registry
+from numba.tests.support import TestCase, tag, skip_parfors_unsupported
+from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
+from numba.core.compiler import Compiler, Flags, PassManager
+from numba.core.ir_utils import remove_dead
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, GenericRewrites,
                              WithLifting, PreserveIR, InlineClosureLikes)
 
-from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
+from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                 NopythonRewrites, IRLegalization)
 
-from numba.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.experimental import jitclass
+import unittest
 
-# for parallel tests, marking that Windows with Python 2.7 is not supported
-_windows_py27 = (sys.platform.startswith('win32') and
-                 sys.version_info[:2] == (2, 7))
-_32bit = sys.maxsize <= 2 ** 32
-_reason = 'parfors not supported'
-skip_unsupported = unittest.skipIf(_32bit or _windows_py27, _reason)
+
+skip_unsupported = skip_parfors_unsupported
 
 
 # test class for #3700
@@ -46,7 +40,6 @@ class TestEquivSet(TestCase):
     """
     Test array_analysis.EquivSet.
     """
-    @tag('important')
     def test_insert_equiv(self):
         s1 = EquivSet()
         s1.insert_equiv('a', 'b')
@@ -59,7 +52,6 @@ class TestEquivSet(TestCase):
         self.assertTrue(s1.is_equiv('a', 'b', 'c', 'd'))
         self.assertFalse(s1.is_equiv('a', 'e'))
 
-    @tag('important')
     def test_intersect(self):
         s1 = EquivSet()
         s2 = EquivSet()
@@ -169,7 +161,7 @@ class TestArrayAnalysis(TestCase):
         outputs = []
         for func_ir in ir_list:
             remove_dead(func_ir.blocks, func_ir.arg_names, func_ir)
-            output = utils.StringIO()
+            output = StringIO()
             func_ir.dump(file=output)
             outputs.append(output.getvalue())
         self.assertTrue(len(set(outputs)) == 1)  # assert all outputs are equal
@@ -460,7 +452,7 @@ class TestArrayAnalysis(TestCase):
 
 
     def test_stencilcall(self):
-        from numba import stencil
+        from numba.stencils.stencil import stencil
         @stencil
         def kernel_1(a):
             return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0])
@@ -855,29 +847,28 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('v', (2, 3, 8)),
                                        ])
 
-        if numpy_version >= (1, 10):
-            def test_stack(m, n):
-                a = np.ones(m)
-                b = np.ones(n)
-                c = np.stack((a, b))
-                d = np.ones((m, n))
-                e = np.ones((m, n))
-                f = np.stack((d, e))
-                g = np.stack((d, e), axis=0)
-                h = np.stack((d, e), axis=1)
-                i = np.stack((d, e), axis=2)
-                j = np.stack((d, e), axis=-1)
+        def test_stack(m, n):
+            a = np.ones(m)
+            b = np.ones(n)
+            c = np.stack((a, b))
+            d = np.ones((m, n))
+            e = np.ones((m, n))
+            f = np.stack((d, e))
+            g = np.stack((d, e), axis=0)
+            h = np.stack((d, e), axis=1)
+            i = np.stack((d, e), axis=2)
+            j = np.stack((d, e), axis=-1)
 
-            self._compile_and_test(test_stack, (types.intp, types.intp),
-                                   equivs=[self.with_equiv('m', 'n'),
-                                           self.with_equiv('c', (2, 'm')),
-                                           self.with_equiv(
-                                       'f', 'g', (2, 'm', 'n')),
-                self.with_equiv(
-                                       'h', ('m', 2, 'n')),
-                self.with_equiv(
-                                       'i', 'j', ('m', 'n', 2)),
-            ])
+        self._compile_and_test(test_stack, (types.intp, types.intp),
+                                equivs=[self.with_equiv('m', 'n'),
+                                        self.with_equiv('c', (2, 'm')),
+                                        self.with_equiv(
+                                    'f', 'g', (2, 'm', 'n')),
+            self.with_equiv(
+                                    'h', ('m', 2, 'n')),
+            self.with_equiv(
+                                    'i', 'j', ('m', 'n', 2)),
+        ])
 
         def test_linspace(m, n):
             a = np.linspace(m, n)

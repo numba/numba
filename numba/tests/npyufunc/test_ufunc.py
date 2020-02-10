@@ -1,12 +1,10 @@
-from __future__ import absolute_import, print_function, division
-
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import float32, jit
-from numba.npyufunc import Vectorize
-from numba.errors import TypingError
-from ..support import tag, TestCase
+from numba.np.ufunc import Vectorize
+from numba.core.errors import TypingError
+from ..support import TestCase
+import unittest
 
 
 dtype = np.float32
@@ -71,7 +69,6 @@ class TestUFuncs(TestCase):
         info = (cls, a.shape)
         self.assertPreciseEqual(ufunc(a, b, c, d), a + b + c + d, msg=info)
 
-    @tag('important')
     def test_ufunc_attributes(self):
         for v in vectorizers: # 1D
             self._test_ufunc_attributes(v, a[0], b[0])
@@ -81,7 +78,6 @@ class TestUFuncs(TestCase):
             self._test_ufunc_attributes(v, a[:, np.newaxis, :],
                                         b[np.newaxis, :, :])
 
-    @tag('important')
     def test_broadcasting(self):
         for v in vectorizers: # 1D
             self._test_broadcasting(v, a[0], b[0], c[0], d[0])
@@ -91,7 +87,6 @@ class TestUFuncs(TestCase):
             self._test_broadcasting(v, a[:, np.newaxis, :], b[np.newaxis, :, :],
                                     c[:, np.newaxis, :], d[np.newaxis, :, :])
 
-    @tag('important')
     def test_implicit_broadcasting(self):
         for v in vectorizers:
             vectorizer = v(add)

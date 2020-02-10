@@ -1,21 +1,16 @@
 # -*- coding: utf-8 -*-
-
-# This file tests Python 3.4 style unicode strings
-# Tests should be skipped on Python < 3.4
-
-from __future__ import print_function
-
-import sys
 from itertools import product
 from itertools import permutations
 
-from numba import njit, types
-import numba.unittest_support as unittest
-from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
-from numba.errors import TypingError
-from numba.unicode import _MAX_UNICODE
+from numba import njit
+from numba.core import types, utils
+import unittest
+from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
+from numba.core.errors import TypingError
+from numba.cpython.unicode import _MAX_UNICODE
 
-_py37_or_later = sys.version_info[:2] >= (3, 7)
+
+_py37_or_later = utils.PYVERSION >= (3, 7)
 
 
 def isascii(s):

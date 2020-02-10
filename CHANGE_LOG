@@ -4,7 +4,7 @@ Version 0.49.0dev
 In development
 
 
-Version 0.48.0 (Jan 16, 2020)
+Version 0.48.0 (Jan 27, 2020)
 -----------------------------
 
 This release is particularly small as it was present to catch anything that
@@ -81,6 +81,7 @@ Fixes:
   multiple consistent defines.
 * PR #5058: Permit mixed int types in wrap_index
 * PR #5078: Catch the use of global typed-list in JITed functions
+* PR #5092: Fix #5087, bug in bytecode analysis.
 
 CUDA Enhancements/Fixes:
 

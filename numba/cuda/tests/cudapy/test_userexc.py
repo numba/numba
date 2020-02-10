@@ -1,7 +1,6 @@
-from __future__ import print_function, absolute_import, division
-
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
-from numba import cuda, config
+from numba import cuda
+from numba.core import config
 
 
 class MyError(Exception):

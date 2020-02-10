@@ -1,8 +1,7 @@
-from __future__ import absolute_import, print_function, division
-from numba import unittest_support as unittest
-from numba.npyufunc.parallel import get_thread_count
+from numba.np.ufunc.parallel import get_thread_count
 from os import environ as env
-from numba import config
+from numba.core import config
+import unittest
 
 
 class TestParallelEnvVariable(unittest.TestCase):

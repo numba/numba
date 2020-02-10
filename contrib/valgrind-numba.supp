@@ -1,0 +1,21 @@
+{
+   <llvmpy_get_cpu_name_cond>
+   Memcheck:Cond
+   fun:_ZN4llvm3sys14getHostCPUNameEv
+   fun:LLVMPY_GetHostCPUName
+}
+
+{
+   <llvmpy_get_cpu_name_value8>
+   Memcheck:Value8
+   fun:_ZN4llvm3sys14getHostCPUNameEv
+   fun:LLVMPY_GetHostCPUName
+}
+
+{
+   <openmp_init_cond>
+   Memcheck:Cond
+   fun:__intel_sse2_strrchr
+   fun:_ZN67_INTERNAL_45_______src_thirdparty_tbb_omp_dynamic_link_cpp_c306cade5__kmp12init_dl_dataEv
+   fun:__sti__$E
+}

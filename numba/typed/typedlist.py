@@ -1,4 +1,3 @@
-
 """
 Python wrapper that connects CPython interpreter to the Numba typed-list.
 
@@ -9,14 +8,14 @@ and uses `@jit` functions to access it. Since it inherits from MutableSequence
 it should really quack like the CPython `list`.
 
 """
-from numba.six import MutableSequence
-from numba.types import ListType, TypeRef
-from numba.targets.imputils import numba_typeref_ctor
-from numba import listobject
-from numba.dispatcher import Dispatcher
-from numba import config
-from numba import njit, types, cgutils, errors, typeof
-from numba.extending import (
+from collections.abc import MutableSequence
+
+from numba.core.types import ListType, TypeRef
+from numba.core.imputils import numba_typeref_ctor
+from numba.core.dispatcher import Dispatcher
+from numba.core import types, errors, config, cgutils
+from numba import njit, typeof
+from numba.core.extending import (
     overload_method,
     overload,
     box,
@@ -24,6 +23,7 @@ from numba.extending import (
     NativeValue,
     type_callable,
 )
+from numba.typed import listobject
 
 
 @njit
@@ -186,7 +186,7 @@ class List(MutableSequence):
 
         Parameters
         ----------
-        lsttype : numba.types.ListType; keyword-only
+        lsttype : numba.core.types.ListType; keyword-only
             Used internally for the list type.
         meminfo : MemInfo; keyword-only
             Used internally to pass the MemInfo object when boxing.

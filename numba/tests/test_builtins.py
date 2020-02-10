@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import itertools
 import functools
 import sys
@@ -7,11 +5,11 @@ import operator
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import jit, typeof, errors, types, utils, config, njit
-from numba.six import PY2
-from .support import TestCase, tag
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit, typeof, njit
+from numba.core import errors, types, utils, config
+from numba.tests.support import TestCase, tag
 
 
 enable_pyobj_flags = Flags()
@@ -51,12 +49,6 @@ def any_usecase(x, y):
 
 def bool_usecase(x):
     return bool(x)
-
-def chr_usecase(x):
-    return chr(x)
-
-def cmp_usecase(x, y):
-    return cmp(x, y)
 
 def complex_usecase(x, y):
     return complex(x, y)
@@ -145,9 +137,6 @@ def min_usecase4():
 
 def oct_usecase(x):
     return oct(x)
-
-def ord_usecase(x):
-    return ord(x)
 
 def reduce_usecase(reduce_func, x):
     return functools.reduce(reduce_func, x)
@@ -255,7 +244,6 @@ class TestBuiltins(TestCase):
             for x in unsigned_values:
                 self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
-    @tag('important')
     def test_abs_npm(self):
         self.test_abs(flags=no_pyobj_flags)
 
@@ -323,23 +311,6 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_bool_nonnumber(flags=no_pyobj_flags)
 
-    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
-    def test_cmp(self, flags=enable_pyobj_flags):
-        pyfunc = cmp_usecase
-
-        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
-        cfunc = cr.entry_point
-
-        x_operands = [-1, 0, 1]
-        y_operands = [-1, 0, 1]
-        for x, y in itertools.product(x_operands, y_operands):
-            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
-
-    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
-    def test_cmp_npm(self):
-        with self.assertTypingError():
-            self.test_cmp(flags=no_pyobj_flags)
-
     def test_complex(self, flags=enable_pyobj_flags):
         pyfunc = complex_usecase
 
@@ -351,7 +322,6 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
-    @tag('important')
     def test_complex_npm(self):
         self.test_complex(flags=no_pyobj_flags)
 
@@ -382,7 +352,6 @@ class TestBuiltins(TestCase):
             with self.assertRaises(ZeroDivisionError):
                 cfunc(x, 0)
 
-    @tag('important')
     def test_divmod_ints_npm(self):
         self.test_divmod_ints(flags=no_pyobj_flags)
 
@@ -405,7 +374,6 @@ class TestBuiltins(TestCase):
             with self.assertRaises(ZeroDivisionError):
                 cfunc(x, 0.0)
 
-    @tag('important')
     def test_divmod_floats_npm(self):
         self.test_divmod_floats(flags=no_pyobj_flags)
 
@@ -426,11 +394,8 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)
         with self.assertRaises(TypeError) as raises:
             cr.entry_point()
-        if config.PYVERSION == (2, 7):
-            thing = 'index'
-        else:
-            thing = 'integer'
-        msg = "'float' object cannot be interpreted as an %s" % thing
+
+        msg = "'float' object cannot be interpreted as an integer"
         self.assertIn(msg, str(raises.exception))
 
     def test_enumerate_start_invalid_start_type_npm(self):
@@ -474,7 +439,6 @@ class TestBuiltins(TestCase):
         for x in ['-1.1', '0.0', '1.1']:
             self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
-    @tag('important')
     def test_float_npm(self):
         with self.assertTypingError():
             self.test_float(flags=no_pyobj_flags)
@@ -552,7 +516,6 @@ class TestBuiltins(TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
-    @tag('important')
     def test_int_npm(self):
         with self.assertTypingError():
             self.test_int(flags=no_pyobj_flags)
@@ -570,7 +533,6 @@ class TestBuiltins(TestCase):
         with self.assertRaises(StopIteration):
             cfunc((1,))
 
-    @tag('important')
     def test_iter_next_npm(self):
         self.test_iter_next(flags=no_pyobj_flags)
 
@@ -585,23 +547,6 @@ class TestBuiltins(TestCase):
     def test_locals_npm(self):
         with self.assertTypingError():
             self.test_locals(flags=no_pyobj_flags)
-
-    @unittest.skipIf(utils.IS_PY3, "long is not available as global is Py3")
-    def test_long(self, flags=enable_pyobj_flags):
-        pyfunc = long_usecase
-
-        cr = compile_isolated(pyfunc, (types.string, types.int64), flags=flags)
-        cfunc = cr.entry_point
-
-        x_operands = ['-1', '0', '1', '10']
-        y_operands = [2, 8, 10, 16]
-        for x, y in itertools.product(x_operands, y_operands):
-            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
-
-    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
-    def test_long_npm(self):
-        with self.assertTypingError():
-            self.test_long(flags=no_pyobj_flags)
 
     def test_map(self, flags=enable_pyobj_flags):
         pyfunc = map_usecase
@@ -644,11 +589,9 @@ class TestBuiltins(TestCase):
         """
         self.check_minmax_1(min_usecase1, flags)
 
-    @tag('important')
     def test_max_npm_1(self):
         self.test_max_1(flags=no_pyobj_flags)
 
-    @tag('important')
     def test_min_npm_1(self):
         self.test_min_1(flags=no_pyobj_flags)
 
@@ -705,11 +648,9 @@ class TestBuiltins(TestCase):
         """
         self.check_minmax_3(min_usecase3, flags)
 
-    @tag('important')
     def test_max_npm_3(self):
         self.test_max_3(flags=no_pyobj_flags)
 
-    @tag('important')
     def test_min_npm_3(self):
         self.test_min_3(flags=no_pyobj_flags)
 
@@ -720,11 +661,7 @@ class TestBuiltins(TestCase):
         cfunc(1, [1])
 
     def test_max_1_invalid_types(self):
-        # Heterogeneous ordering is valid in Python 2
-        if utils.IS_PY3:
-            with self.assertRaises(TypeError):
-                self.check_min_max_invalid_types(max_usecase1)
-        else:
+        with self.assertRaises(TypeError):
             self.check_min_max_invalid_types(max_usecase1)
 
     def test_max_1_invalid_types_npm(self):
@@ -732,11 +669,7 @@ class TestBuiltins(TestCase):
             self.check_min_max_invalid_types(max_usecase1, flags=no_pyobj_flags)
 
     def test_min_1_invalid_types(self):
-        # Heterogeneous ordering is valid in Python 2
-        if utils.IS_PY3:
-            with self.assertRaises(TypeError):
-                self.check_min_max_invalid_types(min_usecase1)
-        else:
+        with self.assertRaises(TypeError):
             self.check_min_max_invalid_types(min_usecase1)
 
     def test_min_1_invalid_types_npm(self):
@@ -815,10 +748,6 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_reduce(flags=no_pyobj_flags)
 
-    # Under Windows, the LLVM "round" intrinsic (used for Python 2)
-    # mistreats signed zeros.
-    _relax_round = sys.platform == 'win32' and sys.version_info < (3,)
-
     def test_round1(self, flags=enable_pyobj_flags):
         pyfunc = round_usecase1
 
@@ -826,8 +755,7 @@ class TestBuiltins(TestCase):
             cr = compile_isolated(pyfunc, (tp,), flags=flags)
             cfunc = cr.entry_point
             values = [-1.6, -1.5, -1.4, -0.5, 0.0, 0.1, 0.5, 0.6, 1.4, 1.5, 5.0]
-            if not self._relax_round:
-                values += [-0.1, -0.0]
+            values += [-0.1, -0.0]
             for x in values:
                 self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
@@ -847,11 +775,9 @@ class TestBuiltins(TestCase):
                     self.assertPreciseEqual(cfunc(x, n), pyfunc(x, n),
                                             prec=prec)
                     expected = pyfunc(-x, n)
-                    if not (expected == 0.0 and self._relax_round):
-                        self.assertPreciseEqual(cfunc(-x, n), pyfunc(-x, n),
-                                                prec=prec)
+                    self.assertPreciseEqual(cfunc(-x, n), pyfunc(-x, n),
+                                            prec=prec)
 
-    @tag('important')
     def test_round2_npm(self):
         self.test_round2(flags=no_pyobj_flags)
 
@@ -896,38 +822,21 @@ class TestBuiltins(TestCase):
         check(True, 2)
         check(2.5j, False)
 
-    @unittest.skipIf(utils.IS_PY3, "unichr not available as global is Py3")
-    def test_unichr(self, flags=enable_pyobj_flags):
-        pyfunc = unichr_usecase
-
-        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
-        cfunc = cr.entry_point
-        for x in range(0, 1000, 10):
-            self.assertPreciseEqual(cfunc(x), pyfunc(x))
-
-    @unittest.skipIf(utils.IS_PY3, "unichr not available as global is Py3")
-    def test_unichr_npm(self):
-        with self.assertTypingError():
-            self.test_unichr(flags=no_pyobj_flags)
-
     def test_zip(self, flags=forceobj_flags):
         self.run_nullary_func(zip_usecase, flags)
 
-    @tag('important')
     def test_zip_npm(self):
         self.test_zip(flags=no_pyobj_flags)
 
     def test_zip_1(self, flags=forceobj_flags):
         self.run_nullary_func(zip_1_usecase, flags)
 
-    @tag('important')
     def test_zip_1_npm(self):
         self.test_zip_1(flags=no_pyobj_flags)
 
     def test_zip_3(self, flags=forceobj_flags):
         self.run_nullary_func(zip_3_usecase, flags)
 
-    @tag('important')
     def test_zip_3_npm(self):
         self.test_zip_3(flags=no_pyobj_flags)
 
@@ -944,7 +853,6 @@ class TestBuiltins(TestCase):
         """
         self.run_nullary_func(zip_first_exhausted, flags)
 
-    @tag('important')
     def test_zip_first_exhausted_npm(self):
         self.test_zip_first_exhausted(flags=nrt_no_pyobj_flags)
 
@@ -962,7 +870,6 @@ class TestBuiltins(TestCase):
             r = cres.entry_point(x, y)
             self.assertPreciseEqual(r, pow_op_usecase(x, y))
 
-    @tag('important')
     def test_pow_usecase(self):
         args = [
             (2, 3),
@@ -1021,9 +928,7 @@ class TestOperatorMixedTypes(TestCase):
 
             # all these things should evaluate to being equal or not, all should
             # survive typing.
-            things = (1, 0, True, False, 1.0, 2.0, 1.1, 1j, None,)
-            if not PY2:
-                things = things + ("", "1")
+            things = (1, 0, True, False, 1.0, 2.0, 1.1, 1j, None, "", "1")
             for x, y in itertools.product(things, things):
                 self.assertPreciseEqual(func.py_func(x, y), func(x, y))
 

@@ -203,6 +203,49 @@ complicated inputs, depending on their shapes::
    Use it to ensure the generated code does not fallback to
    :term:`object mode`.
 
+.. _overwriting-input-values:
+
+Overwriting input values
+------------------------
+
+In most cases, writing to inputs may also appear to work - however, this
+behaviour cannot be relied on. Consider the following example function::
+
+   @guvectorize([(float64[:], float64[:])], '()->()')
+   def init_values(invals, outvals):
+       invals[0] = 6.5
+       outvals[0] = 4.2
+
+Calling the `init_values` function with an array of `float64` type results in
+visible changes to the input::
+
+   >>> invals = np.zeros(shape=(3, 3), dtype=np.float64)
+   >>> outvals = init_values(invals)
+   >>> invals
+   array([[6.5, 6.5, 6.5],
+          [6.5, 6.5, 6.5],
+          [6.5, 6.5, 6.5]])
+   >>> outvals
+   array([[4.2, 4.2, 4.2],
+       [4.2, 4.2, 4.2],
+       [4.2, 4.2, 4.2]])
+
+This works because NumPy can pass the input data directly into the `init_values`
+function as the data `dtype` matches that of the declared argument.  However, it
+may also create and pass in a temporary array, in which case changes to the
+input are lost. For example, this can occur when casting is required. To
+demonstrate, we can  use an array of `float32` with the `init_values` function::
+
+   >>> invals = np.zeros(shape=(3, 3), dtype=np.float32)
+   >>> outvals = init_values(invals)
+   >>> invals
+   array([[0., 0., 0.],
+          [0., 0., 0.],
+          [0., 0., 0.]], dtype=float32)
+
+In this case, there is no change to the `invals` array because the temporary
+casted array was mutated instead.
+
 .. _dynamic-universal-functions:
 
 Dynamic universal functions

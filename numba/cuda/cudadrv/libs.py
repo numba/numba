@@ -9,12 +9,11 @@ Cudatoolkit libraries can be available via either:
 - or can be discovered by the system loader.
 """
 
-from __future__ import print_function
 import os
 import sys
 import ctypes
 
-from numba.findlib import find_lib
+from numba.misc.findlib import find_lib
 from numba.cuda.cuda_paths import get_cuda_paths
 
 if sys.platform == 'win32':

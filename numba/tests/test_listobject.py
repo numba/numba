@@ -10,17 +10,14 @@ test for getitem assumes makes use of these three operations and therefore
 assumes that they work.
 
 """
-from __future__ import print_function, absolute_import, division
 
 from numba import njit
-from numba import int32, types
-from numba.errors import TypingError
-from numba import listobject
-from numba.utils import IS_PY3
-from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
-                      forbid_codegen)
-
-skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
+from numba import int32
+from numba.core import types
+from numba.core.errors import TypingError
+from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
+                                 forbid_codegen)
+from numba.typed import listobject
 
 
 class TestCreateAppendLength(MemoryLeakMixin, TestCase):
@@ -1428,7 +1425,6 @@ class TestIter(MemoryLeakMixin, TestCase):
 class TestStringItem(MemoryLeakMixin, TestCase):
     """Test list can take strings as items. """
 
-    @skip_py2
     def test_string_item(self):
         @njit
         def foo():
@@ -1479,7 +1475,6 @@ class TestItemCasting(TestCase):
         self.check_good(types.boolean, types.float64)
         self.check_good(types.boolean, types.complex128)
 
-    @skip_py2
     def test_cast_fail_unicode_int(self):
 
         @njit
@@ -1494,7 +1489,6 @@ class TestItemCasting(TestCase):
             str(raises.exception),
         )
 
-    @skip_py2
     def test_cast_fail_int_unicode(self):
 
         @njit

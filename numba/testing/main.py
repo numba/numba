@@ -1,7 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
-import numba.unittest_support as unittest
-
 import collections
 import contextlib
 import cProfile
@@ -12,13 +8,14 @@ import os
 import random
 import sys
 import time
+import unittest
 import warnings
 
+from io import StringIO
 from unittest import result, runner, signals, suite, loader, case
 
 from .loader import TestLoader
-from numba.utils import PYVERSION, StringIO
-from numba import config
+from numba.core import config
 
 try:
     from multiprocessing import TimeoutError
@@ -240,51 +237,6 @@ class NumbaTestProgram(unittest.main):
         if '-l' in argv:
             argv.remove('-l')
             self.list = True
-        if PYVERSION < (3, 4):
-            if '-m' in argv:
-                # We want '-m' to work on all versions, emulate this option.
-                dashm_posn = argv.index('-m')
-                # the default number of processes to use
-                nprocs = multiprocessing.cpu_count()
-                # see what else is in argv
-                # ensure next position is safe for access
-                try:
-                    m_option = argv[dashm_posn + 1]
-                    # see if next arg is "end options"
-                    if m_option != '--':
-                        #try and parse the next arg as an int
-                        try:
-                            nprocs = int(m_option)
-                        except Exception:
-                            msg = ('Expected an integer argument to '
-                                'option `-m`, found "%s"')
-                            raise ValueError(msg % m_option)
-                        # remove the value of the option
-                        argv.remove(m_option)
-                    # else end options, use defaults
-                except IndexError:
-                    # at end of arg list, use defaults
-                    pass
-
-                self.multiprocess = nprocs
-                argv.remove('-m')
-
-            if '-j' in argv:
-                # We want '-s' to work on all versions, emulate this option.
-                dashs_posn = argv.index('-j')
-                j_option = argv[dashs_posn + 1]
-                self.useslice = j_option
-                argv.remove(j_option)
-                argv.remove('-j')
-
-            self.gitdiff = False
-            if '-g' in argv:
-                self.gitdiff = True
-                argv.remove('-g')
-
-            # handle tags
-            self._handle_tags(argv, '--tags')
-            self._handle_tags(argv, '--exclude-tags')
 
         super(NumbaTestProgram, self).parseArgs(argv)
 
@@ -393,8 +345,7 @@ def _choose_gitdiff_tests(tests):
     # normalise the paths as they are unix style from repo.git.diff
     gdiff_paths = [os.path.normpath(x) for x in gdiff_paths]
     selected = []
-    if PYVERSION > (2, 7): # inspect output changes in py3
-        gdiff_paths = [os.path.join(repo.working_dir, x) for x in gdiff_paths]
+    gdiff_paths = [os.path.join(repo.working_dir, x) for x in gdiff_paths]
     for test in _flatten_suite(tests):
         assert isinstance(test, unittest.TestCase)
         fname = inspect.getsourcefile(test.__class__)
