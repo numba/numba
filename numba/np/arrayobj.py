@@ -5130,7 +5130,9 @@ def as_strided(x, shape=None, strides=None):
 def ol_bool(arr):
     if isinstance(arr, types.Array):
         def impl(arr):
-            if arr.size == 1:
+            if arr.size == 0:
+                return False # this is deprecated
+            elif arr.size == 1:
                 return bool(arr.take(0))
             else:
                 msg = ("The truth value of an array with more than one element "
