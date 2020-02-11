@@ -353,6 +353,7 @@ def _check_tbb_version_compatible():
                    "threading layer is disabled.")
             problem = errors.NumbaWarning(msg % tbb_iface_ver)
             warnings.warn(problem)
+            raise ImportError("Problem with TBB. Reason: %s" % msg)
     except (ValueError, OSError) as e:
         # Translate as an ImportError for consistent error class use, this error
         # will never materialise
