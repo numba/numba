@@ -68,16 +68,9 @@ def boolean_literal_cross_type_is(context, builder, sig, args):
     else:
         literal_sig_arg = arg1
         non_literal_arg = args[0]
-
-    
-    # QUESTION: how do I call the already defined casting instead?
-    #           This is just copy-paste from lower_cast
-    lit = context.get_constant_generic(
-        builder,
-        literal_sig_arg.literal_type,
-        literal_sig_arg.literal_value,
-        )
-    cast_literal = context.is_true(builder, literal_sig_arg.literal_type, lit)
+        
+    cast_literal = context.cast(builder, literal_sig_arg, 
+                                types.BooleanLiteral, types.Boolean)
 
     sig_new = typing.signature(types.boolean, types.boolean, types.boolean)
     eq_impl = context.get_function(operator.eq, sig_new)
