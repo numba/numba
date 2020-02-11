@@ -220,6 +220,10 @@ class List(MutableSequence):
         """
         return self._list_type is not None
 
+    @property
+    def dtype(self):
+        return self._list_type.dtype if self._typed else None
+
     def _initialise_list(self, item):
         lsttype = types.ListType(typeof(item))
         self._list_type, self._opaque = self._parse_arg(lsttype)

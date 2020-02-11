@@ -155,6 +155,19 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(L.pop(ui32_1), 2)
         self.assertEqual(L.pop(ui32_0), 123)
 
+    def test_dtype(self):
+        L = List()
+        self.assertEqual(L.dtype, None)
+
+        L = List.empty_list(int32)
+        self.assertEqual(L.dtype, int32)
+
+        L = List.empty_list(float32)
+        self.assertEqual(L.dtype, float32)
+
+        L = List.empty_list(unicode_type)
+        self.assertEqual(L.dtype, unicode_type)
+
     @skip_parfors_unsupported
     def test_unsigned_prange(self):
         @njit(parallel=True)
