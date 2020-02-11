@@ -306,6 +306,8 @@ install_requires = [
     f'numpy >={min_numpy_run_version}',
     'setuptools',
 ]
+if sys.version_info < (3, 8):
+    install_requires.append('importlib_metadata')
 
 metadata = dict(
     name='numba',
