@@ -1372,6 +1372,39 @@ class ArrayAnalysis(object):
             else:
                 return pre, []
         elif isinstance(inst, ir.Branch):
+
+            def handle_call_binop(cond_def):
+                br = None
+                try:
+                    cond_def.fn
+                except:
+                    import pdb; pdb.set_trace()
+                    pass
+                if cond_def.fn == operator.eq:
+                    br = inst.truebr
+                    otherbr = inst.falsebr
+                    cond_val = 1
+                elif cond_def.fn == operator.ne:
+                    br = inst.falsebr
+                    otherbr = inst.truebr
+                    cond_val = 0
+                lhs_typ = self.typemap[cond_def.lhs.name]
+                rhs_typ = self.typemap[cond_def.rhs.name]
+                if (br != None and
+                    ((isinstance(lhs_typ, types.Integer) and
+                    isinstance(rhs_typ, types.Integer)) or
+                    (isinstance(lhs_typ, types.BaseTuple) and
+                    isinstance(rhs_typ, types.BaseTuple)))):
+                    loc = inst.loc
+                    args = (cond_def.lhs, cond_def.rhs)
+                    asserts = self._make_assert_equiv(
+                        scope, loc, equiv_set, args)
+                    asserts.append(
+                        ir.Assign(ir.Const(cond_val, loc), cond_var, loc))
+                    self.prepends[(label, br)] = asserts
+                    self.prepends[(label, otherbr)] = [
+                        ir.Assign(ir.Const(1 - cond_val, loc), cond_var, loc)]
+
             cond_var = inst.cond
             cond_def = guard(get_definition, self.func_ir, cond_var)
             if not cond_def:  # phi variable has no single definition
@@ -1431,6 +1464,17 @@ class ArrayAnalysis(object):
                     self.prepends[(label, otherbr)] = [
                         ir.Assign(ir.Const(1 - cond_val, loc), cond_var, loc)
                     ]
+            elif isinstance(cond_def, ir.Expr) and cond_def.op == 'call':
+                # this handles bool(predicate)
+                glbl_bool = guard(get_definition, self.func_ir, cond_def.func)
+                if glbl_bool is not None and glbl_bool.value is bool:
+                    if len(cond_def.args) == 1:
+                        condition = guard(get_definition, self.func_ir,
+                                          cond_def.args[0])
+                        if (condition is not None and
+                            isinstance(condition, ir.Expr) and
+                            condition.op == 'binop'):
+                                handle_call_binop(condition)
             else:
                 if isinstance(cond_def, ir.Const):
                     cond_def = cond_def.value
