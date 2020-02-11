@@ -215,7 +215,7 @@ class DPPyKernel(DPPyKernelBase):
     A OCL kernel object
     """
 
-    def __init__(self, device_env, llvm_module, name, argtypes, ordered_arg_access_types):
+    def __init__(self, device_env, llvm_module, name, argtypes, ordered_arg_access_types=None):
         super(DPPyKernel, self).__init__()
         self._llvm_module = llvm_module
         self.assembly = self.binary = llvm_module.__str__()
