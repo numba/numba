@@ -256,7 +256,7 @@ API Reference
 
    The total (maximum) number of threads launched by numba.
 
-   Defaults :obj:`numba.config.NUMBA_DEFAULT_NUM_THREADS`, but can be
+   Defaults to :obj:`numba.config.NUMBA_DEFAULT_NUM_THREADS`, but can be
    overridden with the :envvar:`NUMBA_NUM_THREADS` environment variable.
 
 .. py:data:: numba.config.NUMBA_DEFAULT_NUM_THREADS
