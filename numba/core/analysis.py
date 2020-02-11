@@ -313,7 +313,7 @@ def dead_branch_prune(func_ir, called_args):
                     function = guard(get_definition, func_ir, pred.func)
                     if (function is not None and
                         isinstance(function, ir.Global) and
-                        function.value is bool):
+                            function.value is bool):
                         condition = guard(get_definition, func_ir, pred.args[0])
                         if condition is not None:
                             branches.append((branch, condition, blk))
@@ -407,7 +407,8 @@ def dead_branch_prune(func_ir, called_args):
     # at least one an arg of the condition is a const
     # if the condition is met it will replace the branch with a jump
     branch_info = find_branches(func_ir)
-    nullified_conditions = [] # stores conditions that have no impact post prune
+    # stores conditions that have no impact post prune
+    nullified_conditions = []
 
     for branch, condition, blk in branch_info:
         const_conds = []
@@ -517,7 +518,7 @@ def rewrite_semantic_constants(func_ir, called_args):
 
     if DEBUG > 1:
         print(("rewrite_semantic_constants: " +
-              func_ir.func_id.func_name).center(80, '-'))
+               func_ir.func_id.func_name).center(80, '-'))
         print("before".center(80, '*'))
         func_ir.dump()
 
