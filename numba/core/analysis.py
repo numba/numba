@@ -308,9 +308,15 @@ def dead_branch_prune(func_ir, called_args):
             branch_or_jump = blk.body[-1]
             if isinstance(branch_or_jump, ir.Branch):
                 branch = branch_or_jump
-                condition = guard(get_definition, func_ir, branch.cond.name)
-                if condition is not None:
-                    branches.append((branch, condition, blk))
+                pred = guard(get_definition, func_ir, branch.cond.name)
+                if pred is not None:
+                    function = guard(get_definition, func_ir, pred.func)
+                    if (function is not None and
+                        isinstance(function, ir.Global) and
+                        function.value is bool):
+                        condition = guard(get_definition, func_ir, pred.args[0])
+                        if condition is not None:
+                            branches.append((branch, condition, blk))
         return branches
 
     def do_prune(take_truebr, blk):
