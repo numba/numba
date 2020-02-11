@@ -4,7 +4,7 @@ import dis
 import operator
 import logging
 
-from numba.core import errors, dataflow, controlflow, ir, config
+from numba.core import errors, dataflow, controlflow, ir, config, ir_utils
 from numba.core.errors import NotDefinedError
 from numba.core.utils import (
     PYVERSION,
@@ -225,10 +225,9 @@ class Interpreter(object):
         self._remove_unused_temporaries()
         self._insert_outgoing_phis()
 
-    def _inject_call(self, func, gv_name, res_name=None, args=None):
+    def _inject_call(self, func, gv_name, res_name=None):
         """A helper function to inject a call to *func* which is a python
-        function. Returns the stored value.
-
+        function.
         Parameters
         ----------
         func : callable
@@ -238,15 +237,12 @@ class Interpreter(object):
         res_name : str; optional
             The variable name to be used to store the call result.
             If ``None``, a name is created automatically.
-        args: iterable of ir.Var; optional
-            Arguments to the call
         """
         gv_fn = ir.Global(gv_name, func, loc=self.loc)
         self.store(value=gv_fn, name=gv_name, redefine=True)
-        wargs = tuple(args) if args is not None else ()
-        callres = ir.Expr.call(self.get(gv_name), wargs, (), loc=self.loc)
+        callres = ir.Expr.call(self.get(gv_name), (), (), loc=self.loc)
         res_name = res_name or '$callres_{}'.format(gv_name)
-        return self.store(value=callres, name=res_name, redefine=True)
+        self.store(value=callres, name=res_name, redefine=True)
 
     def _insert_try_block_begin(self):
         """Insert IR-nodes to mark the start of a `try` block.
@@ -1167,10 +1163,18 @@ class Interpreter(object):
         }
         truebr = brs[iftrue]
         falsebr = brs[not iftrue]
-        name = "bool%s" % (inst.offset)
+
+        # elaborate rename due to no SSA
+        name = ir_utils.mk_unique_var("bool%s" % (inst.offset))
+        gv_fn = ir.Global("bool", bool, loc=self.loc)
+        self.store(value=gv_fn, name=name)
+
+        callres = ir.Expr.call(self.get(name), (self.get(pred),), (),
+                               loc=self.loc)
+
         pname = "$%spred" % (inst.offset)
-        wrapped = self._inject_call(bool, name, pname, (self.get(pred),))
-        bra = ir.Branch(cond=wrapped, truebr=truebr, falsebr=falsebr,
+        predicate = self.store(value=callres, name=pname)
+        bra = ir.Branch(cond=predicate, truebr=truebr, falsebr=falsebr,
                         loc=self.loc)
         self.current_block.append(bra)
 
