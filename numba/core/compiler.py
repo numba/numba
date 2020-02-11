@@ -465,6 +465,8 @@ class DefaultPassBuilder(object):
         # optimisation
         pm.add_pass(InlineOverloads, "inline overloaded functions")
         if state.flags.auto_parallel.enabled:
+            if utils.PYVERSION > (3, 7):
+                pm.add_pass(CanonicalizeLoopExit, "canonicalize loop exit")
             pm.add_pass(PreParforPass, "Preprocessing for parfors")
         if not state.flags.no_rewrites:
             pm.add_pass(NopythonRewrites, "nopython rewrites")

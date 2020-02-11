@@ -425,12 +425,18 @@ class CanonicalizeLoopExit(FunctionPass):
         fir = state.func_ir
         cfg = compute_cfg_from_blocks(fir.blocks)
         status = False
-        for loop in cfg.loops().values():
+        loops = cfg.loops()
+        for loop in loops.values():
+            # Fix loop exit being a function exit
             for exit_label in loop.exits:
                 if exit_label in cfg.exit_points():
                     self._split_exit_block(fir, cfg, exit_label)
                     status = True
-
+            # Fix loop header sharing exit block
+            for outnode, _data in cfg.successors(loop.header):
+                if outnode in loops:
+                    self._split_loop_header(fir, cfg, loop.header, outnode)
+                    status = True
         fir._reset_analysis_variables()
 
         vlt = postproc.VariableLifetime(fir.blocks)
@@ -439,7 +445,6 @@ class CanonicalizeLoopExit(FunctionPass):
 
     def _split_exit_block(self, fir, cfg, exit_label):
         curblock = fir.blocks[exit_label]
-        newlabel = exit_label + 1
         newlabel = find_max_label(fir.blocks) + 1
         fir.blocks[newlabel] = curblock
         newblock = ir.Block(scope=curblock.scope, loc=curblock.loc)
@@ -447,6 +452,25 @@ class CanonicalizeLoopExit(FunctionPass):
         fir.blocks[exit_label] = newblock
         # Rename all labels
         fir.blocks = rename_labels(fir.blocks)
+
+    def _split_loop_header(self, fir, cfg, header_label, outloop_label):
+        curblock = fir.blocks[header_label]
+        newlabel = find_max_label(fir.blocks) + 1
+        # Replace branch
+        bra = curblock.body[-1]
+        targets = {
+            'truebr': bra.truebr,
+            'falsebr': bra.falsebr,
+        }
+        for k, v in list(targets.items()):
+            if v == outloop_label:
+                targets[k] = newlabel
+        newblock = curblock.copy()
+        newblock.body[-1] = ir.Branch(cond=bra.cond, loc=bra.loc, **targets)
+        newexitblock = ir.Block(scope=curblock.scope, loc=curblock.loc)
+        newexitblock.append(ir.Jump(target=outloop_label, loc=bra.loc))
+        fir.blocks[header_label] = newblock
+        fir.blocks[newlabel] = newexitblock
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
