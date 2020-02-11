@@ -5134,6 +5134,6 @@ def ol_bool(arr):
                 return bool(arr.take(0))
             else:
                 msg = ("The truth value of an array with more than one element "
-                        "is ambiguous. Use a.any() or a.all()")
+                       "is ambiguous. Use a.any() or a.all()")
                 raise ValueError(msg)
         return impl
