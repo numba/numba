@@ -10,6 +10,7 @@ import numpy as np
 from numba.core.compiler import Flags
 from numba import jit, njit, typeof
 from numba.core import types
+from numba.typed import List
 from numba.np.numpy_support import numpy_version
 from numba.core.errors import TypingError
 from numba.core.config import IS_WIN32, IS_32BITS
@@ -2910,6 +2911,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.arange(4)
             yield np.arange(12).reshape(3, 4)
             yield np.arange(12).reshape(3, 4).T
+
+            # Test cases for `numba.typed.List`
+            a = List()
+            for i in range(5):
+                a.append(i)
+            yield a
 
         # used to check that if the input is already an array and the dtype is
         # the same as that of the input/omitted then the array itself is
