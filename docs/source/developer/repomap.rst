@@ -509,7 +509,6 @@ CPU unit tests (GPU target unit tests listed in later sections
 - :ghfile:`numba/unittest_support.py` - Import instead of unittest to handle
   portability issues
 - :ghfile:`numba/testing` - Support code for testing
-- :ghfile:`numba/testing/ddt.py` - decorators for test cases
 - :ghfile:`numba/testing/loader.py` - Find tests on disk
 - :ghfile:`numba/testing/notebook.py` - Support for testing notebooks
 - :ghfile:`numba/testing/main.py` - Numba test runner

@@ -2662,6 +2662,23 @@ if numpy_version >= (1, 10):
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+@overload(np.argwhere)
+def np_argwhere(a):
+
+    if type_can_asarray(a):
+        def impl(a):
+            arr = np.asarray(a)
+            return np.transpose(np.vstack(np.nonzero(arr)))
+    else:
+        def impl(a):
+            if a is not None and bool(a):
+                return np.zeros((1, 1), dtype=types.intp)
+            else:
+                return np.zeros((0, 1), dtype=types.intp)
+
+    return impl
+
+
 @overload(np.flatnonzero)
 def np_flatnonzero(a):
 
@@ -2677,10 +2694,10 @@ def np_flatnonzero(a):
             return np.nonzero(np.ravel(arr))[0]
     else:
         def impl(a):
-            if a is None:
-                data = [x for x in range(0)]
-            else:
+            if a is not None and bool(a):
                 data = [0]
+            else:
+                data = [x for x in range(0)]
             return np.array(data, dtype=types.intp)
 
     return impl

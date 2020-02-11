@@ -210,8 +210,6 @@ The same example for a 2D array and grid of threads would be::
 Note the grid computation when instantiating the kernel must still be
 done manually, for example::
 
-    from __future__ import division  # for Python 2
-
     threadsperblock = (16, 16)
     blockspergrid_x = math.ceil(an_array.shape[0] / threadsperblock[0])
     blockspergrid_y = math.ceil(an_array.shape[1] / threadsperblock[1])

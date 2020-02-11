@@ -9,6 +9,7 @@ from numba import int32, float32, types, prange
 from numba import jitclass, typeof
 from numba.typed import List, Dict
 from numba.utils import IS_PY3
+from numba.errors import TypingError
 from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
                       forbid_codegen)
 
@@ -17,6 +18,11 @@ from numba.unsafe.refcount import get_refcount
 from .test_parfors import skip_unsupported as parfors_skip_unsupported
 
 skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
+
+# global typed-list for testing purposes
+global_typed_list = List.empty_list(int32)
+for i in (1, 2, 3):
+    global_typed_list.append(int32(i))
 
 
 def to_tl(l):
@@ -458,6 +464,25 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             with forbid_codegen():
                 l = List()
                 self.assertEqual(type(l), list)
+
+    def test_catch_global_typed_list(self):
+        @njit()
+        def foo():
+            x = List()
+            for i in global_typed_list:
+                x.append(i)
+
+        expected_message = ("The use of a ListType[int32] type, assigned to "
+                            "variable 'global_typed_list' in globals, is not "
+                            "supported as globals are considered compile-time "
+                            "constants and there is no known way to compile "
+                            "a ListType[int32] type as a constant.")
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            expected_message,
+            str(raises.exception),
+        )
 
 
 class TestAllocation(MemoryLeakMixin, TestCase):

@@ -161,6 +161,10 @@ def numpy_flatnonzero(a):
     return np.flatnonzero(a)
 
 
+def numpy_argwhere(a):
+    return np.argwhere(a)
+
+
 class TestArrayManipulation(MemoryLeakMixin, TestCase):
     """
     Check shape-changing operations on arrays.
@@ -801,6 +805,29 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
 
+    def test_argwhere_basic(self):
+        pyfunc = numpy_argwhere
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(-5, 5) > 2
+            yield np.full(5, fill_value=0)
+            yield np.full(5, fill_value=1)
+            yield np.array([])
+            yield np.array([-1.0, 0.0, 1.0])
+            a = self.random.randn(100)
+            yield a > 0.2
+            yield a.reshape(5, 5, 4) > 0.5
+            yield a.reshape(50, 2, order='F') > 0.5
+            yield a.reshape(25, 4)[1::2] > 0.5
+            yield a == a - 1
+            yield a > -a
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
     @staticmethod
     def array_like_variations():
         yield ((1.1, 2.2), (3.3, 4.4), (5.5, 6.6))
@@ -811,12 +838,14 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
         yield 0
         yield 1
         yield False
+        yield True
         yield (True, False, True)
         yield 2 + 1j
         # the following are not array-like, but numpy 1.15+ does not raise
         yield None
         if not sys.version_info < (3,):
             yield 'a_string'
+            yield ''
 
     @unittest.skipUnless(np_version >= (1, 15),
                          "flatnonzero array-like handling per 1.15+")
@@ -850,6 +879,14 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
             self.assertIn("object has no attribute 'ravel'", str(e.exception))
 
+    def test_argwhere_array_like(self):
+        pyfunc = numpy_argwhere
+        cfunc = jit(nopython=True)(pyfunc)
+        for a in self.array_like_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+            
 
 if __name__ == '__main__':
     unittest.main()
