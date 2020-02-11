@@ -60,21 +60,16 @@ def generic_is(context, builder, sig, args):
 @lower_builtin(operator.is_, types.Boolean, types.BooleanLiteral)
 @lower_builtin(operator.is_, types.BooleanLiteral, types.Boolean)
 def boolean_literal_cross_type_is(context, builder, sig, args):
-    sig_arg0, arg1 = sig.args
+    literal_index = 0 if isinstance(sig.args[0], types.BooleanLiteral) else 1
+    non_literal_index = int(1 ^ literal_index)
 
-    if isinstance(sig_arg0, types.BooleanLiteral):
-        literal_sig_arg = sig_arg0
-        non_literal_arg = args[1]
-    else:
-        literal_sig_arg = arg1
-        non_literal_arg = args[0]
-        
-    cast_literal = context.cast(builder, literal_sig_arg, 
-                                types.BooleanLiteral, types.Boolean)
+    cast_literal = context.cast(builder, args[literal_index],
+                                sig.args[literal_index],
+                                sig.args[literal_index].literal_type)
 
     sig_new = typing.signature(types.boolean, types.boolean, types.boolean)
     eq_impl = context.get_function(operator.eq, sig_new)
-    return eq_impl(builder, (non_literal_arg, cast_literal))
+    return eq_impl(builder, (args[non_literal_index], cast_literal))
 
 
 @lower_builtin(operator.eq, types.Literal, types.Literal)
