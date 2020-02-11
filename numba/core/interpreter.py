@@ -1167,7 +1167,7 @@ class Interpreter(object):
         }
         truebr = brs[iftrue]
         falsebr = brs[not iftrue]
-        name = "bool"
+        name = "bool%s" % (inst.offset)
         pname = "$%spred" % (inst.offset)
         wrapped = self._inject_call(bool, name, pname, (self.get(pred),))
         bra = ir.Branch(cond=wrapped, truebr=truebr, falsebr=falsebr,
