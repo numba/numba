@@ -37,18 +37,11 @@ jobs:
         buildscripts\\incremental\\setup_conda_environment.cmd
       displayName: 'Before Install'
 
-    # VC 9.0 cannot build tbbpool.cpp in Numba, so we need to remove
-    # tbb from the environment before the build stage.
     - script: |
+        # use TBB
         call activate %CONDA_ENV%
-        conda remove -y tbb tbb-devel
-      displayName: 'Remove TBB'
-
-    - script: |
-        # temporarily patch this in to get a recent TBB
-        call activate %CONDA_ENV%
-        conda install -c conda-forge -y tbb tbb-devel
-      displayName: 'Add in conda-forge TBB'
+        conda install -y tbb tbb-devel
+      displayName: 'Add in TBB'
 
     - script: |
         buildscripts\\incremental\\build.cmd
