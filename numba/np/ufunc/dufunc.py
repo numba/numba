@@ -45,7 +45,13 @@ def make_dufunc_kernel(_dufunc):
             _, res = self.context.call_conv.call_function(
                 self.builder, entry_point, isig.return_type, isig.args,
                 cast_args)
-            return self.cast(res, isig.return_type, osig.return_type)
+            castres = self.cast(res, isig.return_type, osig.return_type)
+
+            for val, ty in zip(cast_args, isig.args):
+                self.context.decref(self.builder, ty, val)
+            self.context.decref(self.builder, isig.return_type, res)
+
+            return castres
 
     DUFuncKernel.__name__ += _dufunc.ufunc.__name__
     return DUFuncKernel

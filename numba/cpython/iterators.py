@@ -43,8 +43,9 @@ def make_enumerate_object(context, builder, sig, args):
     res = enum._getvalue()
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
+
 @lower_builtin('iternext', types.EnumerateType)
-@iternext_impl(RefType.BORROWED)
+@iternext_impl(RefType.NEW)
 def iternext_enumerate(context, builder, sig, args, result):
     [enumty] = sig.args
     [enum] = args
@@ -61,15 +62,10 @@ def iternext_enumerate(context, builder, sig, args, result):
 
     with builder.if_then(is_valid):
         srcval = srcres.yielded_value()
-        # As a iternext_impl function, this will incref the yielded value.
-        # We need to release the new reference from call_iternext.
-        if context.enable_nrt:
-            context.nrt.decref(builder, enumty.yield_type[1], srcval)
         result.yield_(context.make_tuple(builder, enumty.yield_type,
                                          [count, srcval]))
 
-
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # builtin `zip` implementation
 
 @lower_builtin(zip, types.VarArg(types.Any))

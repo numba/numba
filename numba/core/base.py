@@ -19,7 +19,7 @@ from numba.core.pythonapi import PythonAPI
 from numba.np import arrayobj
 from numba.core.imputils import (user_function, user_generator,
                        builtin_registry, impl_ret_borrowed,
-                       RegistryLoader)
+                       impl_ret_new_ref, RegistryLoader)
 from numba.cpython import builtins
 
 
@@ -607,8 +607,10 @@ class BaseContext(object):
             else:
                 pyval = getattr(typ.pymod, attr)
                 llval = self.get_constant(attrty, pyval)
+
                 def imp(context, builder, typ, val, attr):
-                    return impl_ret_borrowed(context, builder, attrty, llval)
+                    return impl_ret_new_ref(context, builder, attrty, llval)
+
                 return imp
 
         # Lookup specific getattr implementation for this type and attribute
@@ -700,6 +702,18 @@ class BaseContext(object):
         pair = self.make_helper(builder, ty, val)
         return pair.second
 
+    def decref(self, builder, typ, val):
+        if not self.enable_nrt:
+            return
+
+        self.nrt.decref(builder, typ, val)
+
+    def incref(self, builder, typ, val):
+        if not self.enable_nrt:
+            return
+
+        self.nrt.incref(builder, typ, val)
+
     def cast(self, builder, val, fromty, toty):
         """
         Cast a value of type *fromty* to type *toty*.
@@ -707,6 +721,7 @@ class BaseContext(object):
         granularity of the Numba type system, or lax Python semantics.
         """
         if fromty == toty or toty == types.Any:
+            self.incref(builder, fromty, val)
             return val
         try:
             impl = self._casts.find((fromty, toty))
@@ -732,7 +747,12 @@ class BaseContext(object):
         cmpsig = fnty.get_call_type(self.typing_context, (ty, ty), {})
         cmpfunc = self.get_function(fnty, cmpsig)
         self.add_linking_libs(getattr(cmpfunc, 'libs', ()))
-        return cmpfunc(builder, (cav, cbv))
+        res = cmpfunc(builder, (cav, cbv))
+
+        self.decref(builder, ty, cav)
+        self.decref(builder, ty, cbv)
+
+        return res
 
     def make_optional_none(self, builder, valtype):
         optval = self.make_helper(builder, types.Optional(valtype))

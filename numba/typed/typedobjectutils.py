@@ -25,13 +25,15 @@ def _cast(typingctx, val, typ):
     """Cast *val* to *typ*
     """
     def codegen(context, builder, signature, args):
-        [val, typ] = args
-        context.nrt.incref(builder, signature.return_type, val)
-        return val
-    # Using implicit casting in argument types
+        [val, _] = args
+        casted = context.cast(builder, val, signature.args[0],
+                              signature.return_type)
+
+        return casted
+
     casted = typ.instance_type
     _sentry_safe_cast(val, casted)
-    sig = casted(casted, typ)
+    sig = casted(val, typ)
     return sig, codegen
 
 
@@ -93,11 +95,12 @@ def _nonoptional(typingctx, val):
         raise TypeError('expected an optional')
 
     def codegen(context, builder, sig, args):
-        context.nrt.incref(builder, sig.return_type, args[0])
-        return args[0]
+        casted = context.cast(builder, args[0], sig.args[0], sig.return_type)
+
+        return casted
 
     casted = val.type
-    sig = casted(casted)
+    sig = casted(val)
     return sig, codegen
 
 

@@ -966,13 +966,24 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             # This *should* dec' a and inc' z thus tests that items that are
             # replaced are also dec'ed.
             l[0] = z
+
             ra, rz = get_refcount(a), get_refcount(z)
+
             return l, ra, rz
 
         l, ra, rz = foo()
-        self.assertEqual(l[0], "zyx")
-        self.assertEqual(ra, 1)
-        self.assertEqual(rz, 2)
+        print(l, ra, rz)
+        try:
+            self.assertEqual(l[0], "zyx")
+            # refcounts are a little sensitive to optimization level
+            # and the implementation
+            self.assertEqual(ra, 1)
+            self.assertEqual(rz, 3)
+        except AssertionError:
+            # make sure to clean-up, otherwise we get a false memory
+            # leak error on top
+            del l
+            raise
 
     def test_dict_as_item_in_list(self):
         @njit
@@ -985,7 +996,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(d)
 
         c = foo()
-        self.assertEqual(2, c)
+        self.assertEqual(3, c)
 
     def test_dict_as_item_in_list_multi_refcount(self):
         @njit
@@ -999,7 +1010,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(d)
 
         c = foo()
-        self.assertEqual(3, c)
+        self.assertEqual(4, c)
 
     def test_list_as_value_in_dict(self):
         @njit
@@ -1012,7 +1023,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(l)
 
         c = foo()
-        self.assertEqual(2, c)
+        self.assertEqual(3, c)
 
     def test_list_as_item_in_list(self):
         nested_type = types.ListType(types.int32)

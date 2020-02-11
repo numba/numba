@@ -35,8 +35,10 @@ Status = namedtuple("Status",
 int32_t = ir.IntType(32)
 errcode_t = int32_t
 
+
 def _const_int(code):
     return ir.Constant(errcode_t, code)
+
 
 RETCODE_OK = _const_int(0)
 RETCODE_EXC = _const_int(-1)
@@ -47,8 +49,6 @@ RETCODE_STOPIT = _const_int(-3)
 FIRST_USEREXC = 1
 
 RETCODE_USEREXC = _const_int(FIRST_USEREXC)
-
-
 
 
 class BaseCallConv(object):
@@ -74,11 +74,9 @@ class BaseCallConv(object):
             self.return_native_none(builder)
 
         elif not isinstance(valty, types.Optional):
-            # Value is not an optional, need a cast
-            if valty != retty.type:
-                value = self.context.cast(builder, value, fromty=valty,
-                                          toty=retty.type)
-            retval = self.context.get_return_value(builder, retty.type, value)
+            castval = self.context.cast(builder, value, fromty=valty, toty=retty.type)
+            self.context.decref(builder, valty, value)
+            retval = self.context.get_return_value(builder, retty.type, castval)
             self.return_value(builder, retval)
 
         else:

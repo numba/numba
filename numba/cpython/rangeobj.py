@@ -10,11 +10,13 @@ from numba import prange
 from numba.core import types, cgutils
 from numba.cpython.listobj import ListIterInstance
 from numba.np.arrayobj import make_array
-from numba.core.imputils import (lower_builtin, lower_cast,
-                                    iterator_impl, impl_ret_untracked)
+from numba.core.imputils import (
+    lower_builtin, lower_cast, iterator_impl, impl_ret_untracked, RefType
+)
 from numba.core.typing import signature
 from numba.core.extending import intrinsic, overload, overload_attribute, register_jitable
 from numba.parfors.parfor import internal_prange
+
 
 def make_range_iterator(typ):
     """
@@ -165,20 +167,22 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
 
 
 range_impl_map = {
-    types.int32 : (types.range_state32_type, types.range_iter32_type),
-    types.int64 : (types.range_state64_type, types.range_iter64_type),
-    types.uint64 : (types.unsigned_range_state64_type, types.unsigned_range_iter64_type)
+    types.int32: (types.range_state32_type, types.range_iter32_type),
+    types.int64: (types.range_state64_type, types.range_iter64_type),
+    types.uint64: (types.unsigned_range_state64_type, types.unsigned_range_iter64_type)
 }
 
 for int_type, state_types in range_impl_map.items():
     make_range_impl(int_type, *state_types)
 
-@lower_cast(types.RangeType, types.RangeType)
+
+@lower_cast(types.RangeType, types.RangeType, ref_type=RefType.UNTRACKED)
 def range_to_range(context, builder, fromty, toty, val):
     olditems = cgutils.unpack_tuple(builder, val, 3)
     items = [context.cast(builder, v, fromty.dtype, toty.dtype)
              for v in olditems]
     return cgutils.make_anonymous_struct(builder, items)
+
 
 @intrinsic
 def range_iter_len(typingctx, val):
@@ -187,12 +191,14 @@ def range_iter_len(typingctx, val):
     """
     if isinstance(val, types.RangeIteratorType):
         val_type = val.yield_type
+
         def codegen(context, builder, sig, args):
             (value,) = args
             iter_type = range_impl_map[val_type][1]
             iterobj = cgutils.create_struct_proxy(iter_type)(context, builder, value)
             int_type = iterobj.count.type
             return impl_ret_untracked(context, builder, int_type, builder.load(iterobj.count))
+
         return signature(val_type, val), codegen
     elif isinstance(val, types.ListIter):
         def codegen(context, builder, sig, args):

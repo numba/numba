@@ -2131,8 +2131,8 @@ def array_ctypes_data(context, builder, typ, value):
     return impl_ret_untracked(context, builder, typ, res)
 
 
-@lower_cast(types.ArrayCTypes, types.CPointer)
-@lower_cast(types.ArrayCTypes, types.voidptr)
+@lower_cast(types.ArrayCTypes, types.CPointer, ref_type=RefType.UNTRACKED)
+@lower_cast(types.ArrayCTypes, types.voidptr, ref_type=RefType.UNTRACKED)
 def array_ctypes_to_pointer(context, builder, fromty, toty, val):
     ctinfo = context.make_helper(builder, fromty, value=val)
     res = ctinfo.data
@@ -2442,7 +2442,7 @@ def record_setitem(context, builder, sig, args):
 # Constant arrays and records
 
 
-@lower_constant(types.Array)
+@lower_constant(types.Array, ref_type=RefType.BORROWED)
 def constant_array(context, builder, ty, pyval):
     """
     Create a constant array (mechanism is target-dependent).
@@ -2450,7 +2450,7 @@ def constant_array(context, builder, ty, pyval):
     return context.make_constant_array(builder, ty, pyval)
 
 
-@lower_constant(types.Record)
+@lower_constant(types.Record, ref_type=RefType.BORROWED)
 def constant_record(context, builder, ty, pyval):
     """
     Create a record constant as a stack-allocated array of bytes.
@@ -2460,7 +2460,7 @@ def constant_record(context, builder, ty, pyval):
     return cgutils.alloca_once_value(builder, val)
 
 
-@lower_constant(types.Bytes)
+@lower_constant(types.Bytes, ref_type=RefType.UNTRACKED)
 def constant_bytes(context, builder, ty, pyval):
     """
     Create a constant array from bytes (mechanism is target-dependent).
@@ -5040,7 +5040,7 @@ def array_argsort(context, builder, sig, args):
 # ------------------------------------------------------------------------------
 # Implicit cast
 
-@lower_cast(types.Array, types.Array)
+@lower_cast(types.Array, types.Array, ref_type=RefType.BORROWED)
 def array_to_array(context, builder, fromty, toty, val):
     # Type inference should have prevented illegal array casting.
     assert fromty.mutable != toty.mutable or toty.layout == 'A'

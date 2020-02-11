@@ -11,6 +11,7 @@ import numpy as np
 
 from numba import njit, jit, vectorize, guvectorize
 from numba.core import types, errors, typing, compiler, cgutils
+from numba.core.imputils import RefType
 from numba.core.typed_passes import type_inference_stage
 from numba.core.registry import cpu_target
 from numba.core.compiler import compile_isolated
@@ -55,30 +56,37 @@ except ImportError:
 class MyDummy(object):
     pass
 
+
 class MyDummyType(types.Opaque):
     def can_convert_to(self, context, toty):
         if isinstance(toty, types.Number):
             from numba.core.typeconv import Conversion
             return Conversion.safe
 
+
 mydummy_type = MyDummyType('mydummy')
 mydummy = MyDummy()
+
 
 @typeof_impl.register(MyDummy)
 def typeof_mydummy(val, c):
     return mydummy_type
 
-@lower_cast(MyDummyType, types.Number)
+
+@lower_cast(MyDummyType, types.Number, ref_type=RefType.UNTRACKED)
 def mydummy_to_number(context, builder, fromty, toty, val):
     """
     Implicit conversion from MyDummy to int.
     """
     return context.get_constant(toty, 42)
 
+
 def get_dummy():
     return mydummy
 
+
 register_model(MyDummyType)(models.OpaqueModel)
+
 
 @unbox(MyDummyType)
 def unbox_index(typ, obj, c):
@@ -120,6 +128,7 @@ def unbox_index(typ, obj, c):
 def func1(x=None):
     raise NotImplementedError
 
+
 def type_func1_(context):
     def typer(x=None):
         if x in (None, types.none):
@@ -139,6 +148,7 @@ type_func1 = type_callable(func1)(type_func1_)
 @lower_builtin(func1, types.none)
 def func1_nullary(context, builder, sig, args):
     return context.get_constant(sig.return_type, 42)
+
 
 @lower_builtin(func1, types.Float)
 def func1_unary(context, builder, sig, args):

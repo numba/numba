@@ -1210,10 +1210,11 @@ class Interpreter(object):
             stmt = ir.Raise(exception=exc, loc=self.loc)
             self.current_block.append(stmt)
 
-    def op_YIELD_VALUE(self, inst, value, res):
+    def op_YIELD_VALUE(self, inst, value, castval, res):
         # initialize index to None.  it's being set later in post-processing
         index = None
-        inst = ir.Yield(value=self.get(value), index=index, loc=self.loc)
+        self.store(ir.Expr.cast(self.get(value), loc=self.loc), castval)
+        inst = ir.Yield(value=self.get(castval), index=index, loc=self.loc)
         return self.store(inst, res)
 
     def op_MAKE_FUNCTION(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):

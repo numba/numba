@@ -24,12 +24,14 @@ def _build_set_literal_usecase(code, args):
     code = code % {'initializer': ', '.join(repr(arg) for arg in args)}
     return compile_function('build_set', code, globals())
 
+
 def set_literal_return_usecase(args):
     code = """if 1:
     def build_set():
         return {%(initializer)s}
     """
     return _build_set_literal_usecase(code, args)
+
 
 def set_literal_convert_usecase(args):
     code = """if 1:
@@ -45,9 +47,11 @@ def empty_constructor_usecase():
     s.add(1)
     return len(s)
 
+
 def constructor_usecase(arg):
     s = set(arg)
     return len(s)
+
 
 def iterator_usecase(arg):
     s = set(arg)
@@ -56,6 +60,7 @@ def iterator_usecase(arg):
         l.append(v)
     return l
 
+
 def update_usecase(a, b, c):
     s = set()
     s.update(a)
@@ -63,10 +68,12 @@ def update_usecase(a, b, c):
     s.update(c)
     return list(s)
 
+
 def bool_usecase(arg):
     # Remove one element to allow for empty sets.
     s = set(arg[1:])
     return bool(s)
+
 
 def remove_usecase(a, b):
     s = set(a)
@@ -74,11 +81,13 @@ def remove_usecase(a, b):
         s.remove(v)
     return list(s)
 
+
 def discard_usecase(a, b):
     s = set(a)
     for v in b:
         s.discard(v)
     return list(s)
+
 
 def add_discard_usecase(a, u, v):
     s = set(a)
@@ -399,7 +408,7 @@ class TestSets(BaseTest):
         b = self.duplicates_array(50)
         c = self.sparse_array(50)
         check(a, b, c)
-    
+
     def test_bool(self):
         pyfunc = bool_usecase
         check = self.unordered_checker(pyfunc)

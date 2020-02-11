@@ -5,7 +5,7 @@ instances of a first-class function type.
 from numba.extending import typeof_impl
 from numba.extending import models, register_model
 from numba.extending import unbox, NativeValue, box
-from numba.core.imputils import lower_constant, lower_cast
+from numba.core.imputils import lower_constant, lower_cast, RefType
 from numba.core.ccallback import CFunc
 from numba.core import cgutils
 from llvmlite import ir
@@ -61,13 +61,13 @@ class FunctionModel(models.StructModel):
         super(FunctionModel, self).__init__(dmm, fe_type, members)
 
 
-@lower_constant(types.Dispatcher)
+@lower_constant(types.Dispatcher, RefType.UNTRACKED)
 def lower_constant_dispatcher(context, builder, typ, pyval):
     return context.add_dynamic_addr(builder, id(pyval),
                                     info=type(pyval).__name__)
 
 
-@lower_constant(FunctionType)
+@lower_constant(FunctionType, RefType.UNTRACKED)
 def lower_constant_function_type(context, builder, typ, pyval):
     typ = typ.get_precise()
 
@@ -239,13 +239,13 @@ def box_function_type(typ, val, c):
     return cfunc
 
 
-@lower_cast(UndefinedFunctionType, FunctionType)
+@lower_cast(UndefinedFunctionType, FunctionType, RefType.UNTRACKED)
 def lower_cast_function_type_to_function_type(
         context, builder, fromty, toty, val):
     return val
 
 
-@lower_cast(types.Dispatcher, FunctionType)
+@lower_cast(types.Dispatcher, FunctionType, RefType.UNTRACKED)
 def lower_cast_dispatcher_to_function_type(context, builder, fromty, toty, val):
     toty = toty.get_precise()
 

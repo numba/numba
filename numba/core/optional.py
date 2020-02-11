@@ -4,7 +4,7 @@ from numba.core import types, typing, cgutils
 
 from numba.core.imputils import (lower_cast, lower_builtin,
                                  lower_getattr_generic, impl_ret_untracked,
-                                 lower_setattr_generic)
+                                 lower_setattr_generic, RefType)
 
 
 def always_return_true_impl(context, builder, sig, args):
@@ -51,7 +51,10 @@ def optional_getattr(context, builder, typ, value, attr):
     inner_type = typ.type
     val = context.cast(builder, value, typ, inner_type)
     imp = context.get_getattr(inner_type, attr)
-    return imp(context, builder, inner_type, val, attr)
+    res = imp(context, builder, inner_type, val, attr)
+    context.decref(builder, inner_type, val)
+
+    return res
 
 
 @lower_setattr_generic(types.Optional)
@@ -66,10 +69,14 @@ def optional_setattr(context, builder, sig, args, attr):
 
     newsig = typing.signature(sig.return_type, target_type, valty)
     imp = context.get_setattr(attr, newsig)
-    return imp(builder, (target, val))
+    res = imp(builder, (target, val))
+
+    context.decref(builder, target_type, target)
+
+    return res
 
 
-@lower_cast(types.Optional, types.Optional)
+@lower_cast(types.Optional, types.Optional, ref_type=RefType.NEW)
 def optional_to_optional(context, builder, fromty, toty, val):
     """
     The handling of optional->optional cast must be special cased for
@@ -100,7 +107,7 @@ def optional_to_optional(context, builder, fromty, toty, val):
     return outoptval._getvalue()
 
 
-@lower_cast(types.Any, types.Optional)
+@lower_cast(types.Any, types.Optional, ref_type=RefType.NEW)
 def any_to_optional(context, builder, fromty, toty, val):
     if fromty == types.none:
         return context.make_optional_none(builder, toty.type)
@@ -109,8 +116,8 @@ def any_to_optional(context, builder, fromty, toty, val):
         return context.make_optional_value(builder, toty.type, val)
 
 
-@lower_cast(types.Optional, types.Any)
-@lower_cast(types.Optional, types.Boolean)
+@lower_cast(types.Optional, types.Any, ref_type=RefType.NEW)
+@lower_cast(types.Optional, types.Boolean, ref_type=RefType.UNTRACKED)
 def optional_to_any(context, builder, fromty, toty, val):
     optval = context.make_helper(builder, fromty, value=val)
     validbit = cgutils.as_bool_bit(builder, optval.valid)

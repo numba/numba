@@ -167,11 +167,14 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         oty = tyinp
         tyinp = tyinp.type
         inp = ctxt.cast(bld, inp, oty, tyinp)
+    else:
+        # cast will incref
+        inp = ctxt.cast(bld, inp, tyinp, tyinp)
 
     # then prepare the arg for a concrete instance
     if isinstance(tyinp, types.ArrayCompatible):
-        ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
-        shape   = cgutils.unpack_tuple(bld, ary.shape, tyinp.ndim)
+        ary = ctxt.make_array(tyinp)(ctxt, bld, inp)
+        shape = cgutils.unpack_tuple(bld, ary.shape, tyinp.ndim)
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
         return _ArrayHelper(ctxt, bld, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
@@ -185,6 +188,8 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
 
 _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
                                  types.intp, types.CPointer(types.intp))
+
+
 def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
     '''Low-level utility function used in calculating a shape for
     an implicit output array.  This function assumes that the
@@ -225,12 +230,14 @@ def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
             dest_index += 1
     return dest_index
 
+
 def _build_array(context, builder, array_ty, input_types, inputs):
     """Utility function to handle allocation of an implicit output array
     given the target context, builder, output array type, and a list of
     _ArrayHelper instances.
     """
     intp_ty = context.get_value_type(types.intp)
+
     def make_intp_const(val):
         return context.get_constant(types.intp, val)
 
@@ -253,7 +260,7 @@ def _build_array(context, builder, array_ty, input_types, inputs):
     # mutating along any axis where the argument shape is not one and
     # the destination shape is one.
     for arg_number, arg in enumerate(inputs):
-        if not hasattr(arg, "ndim"): # Skip scalar arguments
+        if not hasattr(arg, "ndim"):  # Skip scalar arguments
             continue
         arg_ndim = make_intp_const(arg.ndim)
         for index in range(arg.ndim):
@@ -298,7 +305,7 @@ def _build_array(context, builder, array_ty, input_types, inputs):
         out_val = array_wrap(builder, wrap_args)
 
     ndim = array_ty.ndim
-    shape   = cgutils.unpack_tuple(builder, array_val.shape, ndim)
+    shape = cgutils.unpack_tuple(builder, array_val.shape, ndim)
     strides = cgutils.unpack_tuple(builder, array_val.strides, ndim)
     return _ArrayHelper(context, builder, shape, strides, array_val.data,
                         array_ty.layout, array_ty.dtype, ndim,
@@ -325,6 +332,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
         ret_ty = sig.return_type
         if isinstance(ret_ty, types.ArrayCompatible):
             output = _build_array(context, builder, ret_ty, sig.args, arguments)
+            context.incref(builder, ret_ty, output.return_val)
         else:
             output = _prepare_argument(
                 context, builder,
@@ -338,7 +346,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
     output = arguments[-1]
 
     outer_sig = [a.base_type for a in arguments]
-    #signature expects return type first, while we have it last:
+    # signature expects return type first, while we have it last:
     outer_sig = outer_sig[-1:] + outer_sig[:-1]
     outer_sig = typing.signature(*outer_sig)
     kernel = kernel_class(context, builder, outer_sig)
@@ -356,6 +364,14 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
         val_out = kernel.generate(*vals_in)
         output.store_data(loop_indices, val_out)
     out = arguments[-1].return_val
+
+    for val, ty in zip(arguments, sig.args):
+        if isinstance(ty, types.Optional):
+            ty = ty.type
+        context.decref(builder, ty, val.return_val)
+    if not explicit_output:
+        context.decref(builder, sig.return_type, output.return_val)
+
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
@@ -374,8 +390,7 @@ class _Kernel(object):
         complex to real/int casts.
 
         """
-        if (isinstance(fromty, types.Complex) and
-            not isinstance(toty, types.Complex)):
+        if (isinstance(fromty, types.Complex) and not isinstance(toty, types.Complex)):
             # attempt conversion of the real part to the specified type.
             # note that NumPy issues a warning in this kind of conversions
             newty = fromty.underlying_float
@@ -433,7 +448,13 @@ def _ufunc_db_function(ufunc):
                 res = self.fn(self.context, self.builder, isig, cast_args)
             dmm = self.context.data_model_manager
             res = dmm[isig.return_type].from_return(self.builder, res)
-            return self.cast(res, isig.return_type, osig.return_type)
+            castres = self.cast(res, isig.return_type, osig.return_type)
+
+            for val, ty in zip(cast_args, isig.args):
+                    self.context.decref(self.builder, ty, val)
+            self.context.decref(self.builder, isig.return_type, res)
+
+            return castres
 
     return _KernelImpl
 

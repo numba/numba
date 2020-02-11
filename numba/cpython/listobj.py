@@ -549,6 +549,7 @@ def getslice_list(context, builder, sig, args):
 
     return impl_ret_new_ref(context, builder, sig.return_type, result.value)
 
+
 @lower_builtin(operator.setitem, types.List, types.SliceType, types.Any)
 def setitem_list(context, builder, sig, args):
     dest = ListInstance(context, builder, sig.args[0], args[0])
@@ -664,6 +665,7 @@ def in_seq(context, builder, sig, args):
 
     return context.compile_internal(builder, seq_contains_impl, sig, args)
 
+
 @lower_builtin(bool, types.Sequence)
 def sequence_bool(context, builder, sig, args):
     def sequence_bool_impl(seq):
@@ -685,14 +687,15 @@ def list_add(context, builder, sig, args):
 
     with cgutils.for_range(builder, a_size) as loop:
         value = a.getitem(loop.index)
-        value = context.cast(builder, value, a.dtype, dest.dtype)
-        dest.setitem(loop.index, value, incref=True)
+        castvalue = context.cast(builder, value, a.dtype, dest.dtype)
+        dest.setitem(loop.index, castvalue, incref=False)
     with cgutils.for_range(builder, b_size) as loop:
         value = b.getitem(loop.index)
-        value = context.cast(builder, value, b.dtype, dest.dtype)
-        dest.setitem(builder.add(loop.index, a_size), value, incref=True)
+        castvalue = context.cast(builder, value, b.dtype, dest.dtype)
+        dest.setitem(builder.add(loop.index, a_size), castvalue, incref=False)
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
+
 
 @lower_builtin(operator.iadd, types.List, types.List)
 def list_add_inplace(context, builder, sig, args):
@@ -721,6 +724,7 @@ def list_mul(context, builder, sig, args):
             dest.setitem(builder.add(loop.index, dest_offset), value, incref=True)
 
     return impl_ret_new_ref(context, builder, sig.return_type, dest.value)
+
 
 @lower_builtin(operator.imul, types.List, types.Integer)
 def list_mul_inplace(context, builder, sig, args):
@@ -860,6 +864,7 @@ def list_copy(context, builder, sig, args):
 
     return context.compile_internal(builder, list_copy_impl, sig, args)
 
+
 @lower_builtin("list.count", types.List, types.Any)
 def list_count(context, builder, sig, args):
 
@@ -871,6 +876,7 @@ def list_count(context, builder, sig, args):
         return res
 
     return context.compile_internal(builder, list_count_impl, sig, args)
+
 
 def _list_extend_list(context, builder, sig, args):
     src = ListInstance(context, builder, sig.args[1], args[1])
@@ -884,10 +890,11 @@ def _list_extend_list(context, builder, sig, args):
 
     with cgutils.for_range(builder, src_size) as loop:
         value = src.getitem(loop.index)
-        value = context.cast(builder, value, src.dtype, dest.dtype)
-        dest.setitem(builder.add(loop.index, dest_size), value, incref=True)
+        castvalue = context.cast(builder, value, src.dtype, dest.dtype)
+        dest.setitem(builder.add(loop.index, dest_size), castvalue, incref=False)
 
     return dest
+
 
 @lower_builtin("list.extend", types.List, types.IterableType)
 def list_extend(context, builder, sig, args):
@@ -1111,10 +1118,10 @@ def ol_sorted(iterable, key=None, reverse=False):
         return lst
     return impl
 
+
 # -----------------------------------------------------------------------------
 # Implicit casting
-
-@lower_cast(types.List, types.List)
+@lower_cast(types.List, types.List, ref_type=RefType.BORROWED)
 def list_to_list(context, builder, fromty, toty, val):
     # Casting from non-reflected to reflected
     assert fromty.dtype == toty.dtype

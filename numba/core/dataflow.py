@@ -640,7 +640,8 @@ class DataFlowAnalysis(object):
     def op_YIELD_VALUE(self, info, inst):
         val = info.pop()
         res = info.make_temp()
-        info.append(inst, value=val, res=res)
+        castval = info.make_temp()
+        info.append(inst, value=val, castval=castval, res=res)
         info.push(res)
 
     def op_SETUP_LOOP(self, info, inst):

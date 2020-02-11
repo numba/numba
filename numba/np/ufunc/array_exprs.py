@@ -389,8 +389,15 @@ def _lower_array_expr(lowerer, expr):
                          for val, inty, outty in arg_zip]
             result = self.context.call_internal(
                 builder, cres.fndesc, inner_sig, cast_args)
-            return self.cast(result, inner_sig.return_type,
-                             self.outer_sig.return_type)
+
+            castres = self.cast(result, inner_sig.return_type,
+                                self.outer_sig.return_type)
+
+            for val, ty in zip(cast_args, inner_sig.args):
+                self.context.decref(self.builder, ty, val)
+            self.context.decref(self.builder, inner_sig.return_type, result)
+
+            return castres
 
     args = [lowerer.loadvar(name) for name in expr_args]
     return npyimpl.numpy_ufunc_kernel(

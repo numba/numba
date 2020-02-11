@@ -37,6 +37,7 @@ def dump_refcount(typingctx, obj):
                 # "%zu" is not portable.  just truncate refcount to 32-bit.
                 # that's good enough for a debugging util.
                 refct_32bit = builder.trunc(refct, ir.IntType(32))
+
                 printed = cgutils.snprintf_stackbuffer(
                     builder, 30, "%d [%p]", refct_32bit, miptr
                 )
@@ -73,6 +74,7 @@ def get_refcount(typingctx, obj):
                 refctptr = cgutils.gep_inbounds(builder, miptr, 0, 0)
                 refct = builder.load(refctptr)
                 refct_32bit = builder.trunc(refct, ir.IntType(32))
+
                 refcounts.append(refct_32bit)
         return refcounts[0]
 

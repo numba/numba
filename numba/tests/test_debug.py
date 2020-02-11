@@ -14,6 +14,7 @@ from numba.core import types, compiler
 from numba.core.compiler import compile_isolated, Flags
 from numba.core.cpu import ParallelOptions
 from numba.core.errors import NumbaPerformanceWarning
+from numba.core.utils import PYVERSION
 from numba import prange
 from numba.experimental import jitclass
 import unittest
@@ -168,11 +169,20 @@ class TestGeneratorDebugOutput(DebugTestBase):
             out = self.compile_simple_gen()
         self.check_debug_output(out, ['ir'])
         self.assertIn('--GENERATOR INFO: %s' % self.func_name, out)
-        expected_gen_info = textwrap.dedent("""
-            generator state variables: ['x', 'y']
-            yield point #1: live variables = ['y'], weak live variables = ['x']
-            yield point #2: live variables = [], weak live variables = ['y']
-            """)
+        if PYVERSION >= (3, 7):
+            # py >= 3.7 uses byteflow.Flow which generates
+            # slightly different IR
+            expected_gen_info = textwrap.dedent("""
+                generator state variables: ['$10yield_value.5', '$4yield_value.2', 'y']
+                yield point #1: live variables = ['y'], weak live variables = ['$4yield_value.2']
+                yield point #2: live variables = [], weak live variables = ['$10yield_value.5']
+                """)
+        else:
+            expected_gen_info = textwrap.dedent("""
+                generator state variables: ['$0.3', '$0.6', 'y']
+                yield point #1: live variables = ['y'], weak live variables = ['$0.3']
+                yield point #2: live variables = [], weak live variables = ['$0.6']
+                """)
         self.assertIn(expected_gen_info, out)
 
 

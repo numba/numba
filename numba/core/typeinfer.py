@@ -1129,7 +1129,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             check_var(var)
 
         try:
-            retty = self.get_return_type(typdict)
+            retty, typdict = self.get_return_type(typdict)
         except Exception as e:
             # partial type inference may raise e.g. attribute error if a
             # constraint has no computable signature, ignore this as needed
@@ -1149,8 +1149,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 fntys = None
 
         if self.generator_info:
-            retty = self.get_generator_type(typdict, retty,
-                                            raise_errors=raise_errors)
+            retty, typdict = self.get_generator_type(typdict, retty,
+                                                     raise_errors=raise_errors)
 
         self.debug.unify_finished(typdict, retty, fntys)
 
@@ -1171,7 +1171,9 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 raise TypingError(msg)
             state_types = [types.unknown for _ in gi.state_vars]
 
+        yield_vars = [y.inst.value.name for y in gi.get_yield_points()]
         yield_types = None
+
         try:
             yield_types = [typdict[y.inst.value.name]
                            for y in gi.get_yield_points()]
@@ -1214,8 +1216,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                                   % ", ".join(sorted(map(str, explain_ty))) +
                                   "\n\n" + "\n".join(yp_highlights))
 
-        return types.Generator(self.func_id.func, yield_type, arg_types,
-                               state_types, has_finalizer=True)
+        typdict = dict(typdict, **dict((yv, yield_type) for yv in yield_vars))
+        return (types.Generator(self.func_id.func, yield_type, arg_types,
+                                state_types, has_finalizer=True),
+                typdict)
 
     def get_function_types(self, typemap):
         """
@@ -1276,9 +1280,15 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
 
     def get_return_type(self, typemap):
         rettypes = set()
-        for var in self._get_return_vars():
+        retvars = self._get_return_vars()
+
+        for var in retvars:
             rettypes.add(typemap[var.name])
-        return self._unify_return_types(rettypes)
+
+        unified = self._unify_return_types(rettypes)
+        typdict = dict(typemap, **dict((v.name, unified) for v in retvars))
+
+        return unified, typdict
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow or "refine" the

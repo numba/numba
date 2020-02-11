@@ -8,7 +8,10 @@ from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
-from numba.core.imputils import lower_builtin, lower_getattr, lower_getattr_generic, lower_cast, lower_constant, iternext_impl, call_getiter, call_iternext, impl_ret_borrowed, impl_ret_untracked, numba_typeref_ctor
+from numba.core.imputils import (
+    lower_builtin, lower_getattr_generic, lower_cast, lower_constant, call_getiter,
+    call_iternext, impl_ret_borrowed, impl_ret_untracked, numba_typeref_ctor, RefType
+)
 from numba.core import typing, types, utils, cgutils
 from numba.core.extending import overload, intrinsic
 from numba.core.typeconv import Conversion
@@ -92,40 +95,48 @@ def gen_non_eq(val):
             return impl
     return none_equality
 
+
 overload(operator.eq)(gen_non_eq(True))
 overload(operator.ne)(gen_non_eq(False))
 
-#-------------------------------------------------------------------------------
 
+# -------------------------------------------------------------------------------
 @lower_getattr_generic(types.DeferredType)
 def deferred_getattr(context, builder, typ, value, attr):
     """
     Deferred.__getattr__ => redirect to the actual type.
     """
     inner_type = typ.get()
-    val = context.cast(builder, value, typ, inner_type)
+    castval = context.cast(builder, value, typ, inner_type)
     imp = context.get_getattr(inner_type, attr)
-    return imp(context, builder, inner_type, val, attr)
+    res = imp(context, builder, inner_type, castval, attr)
+    context.decref(builder, inner_type, castval)
 
-@lower_cast(types.Any, types.DeferredType)
-@lower_cast(types.Optional, types.DeferredType)
-@lower_cast(types.Boolean, types.DeferredType)
+    return res
+
+
+@lower_cast(types.Any, types.DeferredType, ref_type=RefType.NEW)
+@lower_cast(
+    types.Optional, types.DeferredType, ref_type=RefType.NEW)
+@lower_cast(
+    types.Boolean, types.DeferredType, ref_type=RefType.NEW)
 def any_to_deferred(context, builder, fromty, toty, val):
     actual = context.cast(builder, val, fromty, toty.get())
     model = context.data_model_manager[toty]
     return model.set(builder, model.make_uninitialized(), actual)
 
-@lower_cast(types.DeferredType, types.Any)
-@lower_cast(types.DeferredType, types.Boolean)
-@lower_cast(types.DeferredType, types.Optional)
+
+@lower_cast(types.DeferredType, types.Any, ref_type=RefType.NEW)
+@lower_cast(types.DeferredType, types.Boolean, ref_type=RefType.UNTRACKED)
+@lower_cast(
+    types.DeferredType, types.Optional, ref_type=RefType.NEW)
 def deferred_to_any(context, builder, fromty, toty, val):
     model = context.data_model_manager[fromty]
     val = model.get(builder, val)
     return context.cast(builder, val, fromty.get(), toty)
 
 
-#------------------------------------------------------------------------------
-
+# ------------------------------------------------------------------------------
 @lower_builtin(operator.getitem, types.CPointer, types.Integer)
 def getitem_cpointer(context, builder, sig, args):
     base_ptr, idx = args
@@ -155,11 +166,12 @@ def do_minmax(context, builder, argtys, args, cmpop):
         ty = context.typing_context.unify_types(accty, vty)
         assert ty is not None
         acc = context.cast(builder, acc, accty, ty)
-        v = context.cast(builder, v, vty, ty)
+        castval = context.cast(builder, v, vty, ty)
         cmpsig = typing.signature(types.boolean, ty, ty)
         ge = context.get_function(cmpop, cmpsig)
-        pred = ge(builder, (v, acc))
-        res = builder.select(pred, v, acc)
+        pred = ge(builder, (castval, acc))
+        res = builder.select(pred, castval, acc)
+        context.decref(builder, ty, castval)
         return ty, res
 
     typvals = zip(argtys, args)
@@ -295,15 +307,15 @@ def number_constructor(context, builder, sig, args):
         return context.cast(builder, val, valty, sig.return_type)
 
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 # Constants
-
-@lower_constant(types.Dummy)
+@lower_constant(types.Dummy, ref_type=RefType.UNTRACKED)
 def constant_dummy(context, builder, ty, pyval):
     # This handles None, etc.
     return context.get_dummy_value()
 
-@lower_constant(types.ExternalFunctionPointer)
+
+@lower_constant(types.ExternalFunctionPointer, ref_type=RefType.UNTRACKED)
 def constant_function_pointer(context, builder, ty, pyval):
     ptrty = context.get_function_pointer_type(ty)
     ptrval = context.add_dynamic_addr(builder, ty.get_pointer(pyval),
@@ -311,7 +323,7 @@ def constant_function_pointer(context, builder, ty, pyval):
     return builder.bitcast(ptrval, ptrty)
 
 
-@lower_constant(types.Optional)
+@lower_constant(types.Optional, ref_type=RefType.NEW)
 def constant_optional(context, builder, ty, pyval):
     if pyval is None:
         return context.make_optional_none(builder, ty.type)

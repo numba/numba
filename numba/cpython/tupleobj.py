@@ -6,10 +6,10 @@ from llvmlite import ir
 import llvmlite.llvmpy.core as lc
 import operator
 
-from numba.core.imputils import (lower_builtin, lower_getattr_generic,
-                                    lower_cast, lower_constant, iternext_impl,
-                                    impl_ret_borrowed, impl_ret_untracked,
-                                    RefType)
+from numba.core.imputils import (
+    lower_builtin, lower_getattr_generic, lower_cast, lower_constant, iternext_impl,
+    impl_ret_borrowed, impl_ret_new_ref, impl_ret_untracked, RefType
+)
 from numba.core import typing, types, cgutils
 from numba.core.extending import overload_method, overload, intrinsic
 
@@ -28,12 +28,14 @@ def namedtuple_constructor(context, builder, sig, args):
     # The tuple's contents are borrowed
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
+
 @lower_builtin(operator.add, types.BaseTuple, types.BaseTuple)
 def tuple_add(context, builder, sig, args):
     left, right = [cgutils.unpack_tuple(builder, x) for x in args]
     res = context.make_tuple(builder, sig.return_type, left + right)
     # The tuple's contents are borrowed
     return impl_ret_borrowed(context, builder, sig.return_type, res)
+
 
 def tuple_cmp_ordered(context, builder, op, sig, args):
     tu, tv = sig.args
@@ -72,33 +74,38 @@ def tuple_eq(context, builder, sig, args):
         res = builder.and_(res, pred)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower_builtin(operator.ne, types.BaseTuple, types.BaseTuple)
 def tuple_ne(context, builder, sig, args):
     res = builder.not_(tuple_eq(context, builder, sig, args))
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower_builtin(operator.lt, types.BaseTuple, types.BaseTuple)
 def tuple_lt(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, operator.lt, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower_builtin(operator.le, types.BaseTuple, types.BaseTuple)
 def tuple_le(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, operator.le, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
 
 @lower_builtin(operator.gt, types.BaseTuple, types.BaseTuple)
 def tuple_gt(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, operator.gt, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+
 @lower_builtin(operator.ge, types.BaseTuple, types.BaseTuple)
 def tuple_ge(context, builder, sig, args):
     res = tuple_cmp_ordered(context, builder, operator.ge, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-# for hashing see hashing.py
 
+# for hashing see hashing.py
 @lower_getattr_generic(types.BaseNamedTuple)
 def namedtuple_getattr(context, builder, typ, value, attr):
     """
@@ -109,20 +116,22 @@ def namedtuple_getattr(context, builder, typ, value, attr):
     return impl_ret_borrowed(context, builder, typ[index], res)
 
 
-@lower_constant(types.UniTuple)
-@lower_constant(types.NamedUniTuple)
+@lower_constant(types.UniTuple, ref_type=RefType.NEW)
+@lower_constant(types.NamedUniTuple, ref_type=RefType.NEW)
 def unituple_constant(context, builder, ty, pyval):
     """
     Create a homogeneous tuple constant.
     """
     consts = [context.get_constant_generic(builder, ty.dtype, v)
               for v in pyval]
-    return impl_ret_borrowed(
+
+    return impl_ret_new_ref(
         context, builder, ty, cgutils.pack_array(builder, consts),
     )
 
-@lower_constant(types.Tuple)
-@lower_constant(types.NamedTuple)
+
+@lower_constant(types.Tuple, ref_type=RefType.NEW)
+@lower_constant(types.NamedTuple, ref_type=RefType.NEW)
 def unituple_constant(context, builder, ty, pyval):
     """
     Create a heterogeneous tuple constant.
@@ -134,7 +143,7 @@ def unituple_constant(context, builder, ty, pyval):
     )
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Tuple iterators
 
 @lower_builtin('getiter', types.UniTuple)
@@ -269,7 +278,8 @@ def getitem_typed(context, builder, sig, args):
         builder.position_at_end(bbend)
         res = builder.bitcast(phinode, lrtty.as_pointer())
         res = builder.load(res)
-        return impl_ret_borrowed(context, builder, sig.return_type, res)
+
+        return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
 @lower_builtin(operator.getitem, types.UniTuple, types.intp)
@@ -347,13 +357,14 @@ def static_getitem_tuple(context, builder, sig, args):
     return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Implicit conversion
 
-@lower_cast(types.BaseTuple, types.BaseTuple)
+@lower_cast(
+    types.BaseTuple, types.BaseTuple, ref_type=RefType.NEW)
 def tuple_to_tuple(context, builder, fromty, toty, val):
     if (isinstance(fromty, types.BaseNamedTuple)
-        or isinstance(toty, types.BaseNamedTuple)):
+         or isinstance(toty, types.BaseNamedTuple)):
         # Disallowed by typing layer
         raise NotImplementedError
 
@@ -367,7 +378,7 @@ def tuple_to_tuple(context, builder, fromty, toty, val):
     return context.make_tuple(builder, toty, items)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Methods
 
 @overload_method(types.BaseTuple, 'index')

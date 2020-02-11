@@ -592,7 +592,8 @@ class TraceRunner(object):
     def op_YIELD_VALUE(self, state, inst):
         val = state.pop()
         res = state.make_temp()
-        state.append(inst, value=val, res=res)
+        castval = state.make_temp()
+        state.append(inst, value=val, castval=castval, res=res)
         state.push(res)
 
     def op_RAISE_VARARGS(self, state, inst):
