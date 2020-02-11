@@ -3878,21 +3878,14 @@ def np_asarray(a, dtype=None):
         def impl(a, dtype=None):
             return np.array(a, ty)
     elif isinstance(a, types.containers.ListType):
-        dt = a.dtype
-        if is_nonelike(dtype):
-            def impl(a, dtype=None):
-                l = len(a)
-                ret = np.empty(l, dtype=dt)
-                for i, v in enumerate(a):
-                    ret[i] = v
-                return ret
-        else:
-            def impl(a, dtype=None):
-                l = len(a)
-                ret = np.empty(l, dtype=dtype)
-                for i, v in enumerate(a):
-                    ret[i] = v
-                return ret
+        target_dtype = a.dtype if is_nonelike(dtype) else dtype
+
+        def impl(a, dtype=None):
+            l = len(a)
+            ret = np.empty(l, dtype=target_dtype)
+            for i, v in enumerate(a):
+                ret[i] = v
+            return ret
 
     return impl
 
