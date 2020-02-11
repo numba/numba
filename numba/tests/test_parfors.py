@@ -2126,6 +2126,24 @@ class TestPrange(TestPrangeBase):
                'operators.')
         self.assertIn(msg, str(raises.exception))
 
+    @skip_parfors_unsupported
+    def test_prange_py38_loop_exit_sharing(self):
+        # Issue #5156.
+        # A problem with py3.8. The exit point of the inner loop is sharing
+        # with the loop entry of the outer loop. Parfor transformation is
+        # incorrectly removing the blocks assuming such sharing is impossible.
+        @njit(parallel=True)
+        def foo():
+            c = 0
+            for _ in prange(10):
+                n = 1
+                while n > 0:
+                    n -= 1
+                    c += 1
+            return c
+
+        self.assertEqual(foo(), foo.py_func())
+
 #    @skip_parfors_unsupported
     @test_disabled
     def test_check_error_model(self):
