@@ -2,7 +2,7 @@ from contextlib import contextmanager
 import warnings
 
 from numba.core import (errors, types, typing, ir, funcdesc, rewrites,
-                        typeinfer, config, lowering)
+                        typeinfer, config, lowering, utils)
 
 from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass
 from numba.parfors.parfor import ParforPass as _parfor_ParforPass
@@ -15,6 +15,7 @@ from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
                                  get_definition)
+from numba.core.untyped_passes import CanonicalizeLoopExit
 
 
 @contextmanager
@@ -223,6 +224,11 @@ class PreParforPass(FunctionPass):
         """
         # Ensure we have an IR and type information.
         assert state.func_ir
+
+        if utils.PYVERSION > (3, 7):
+            # Apply py3.8+ loop canonicalization
+            CanonicalizeLoopExit().run_pass(state)
+
         preparfor_pass = _parfor_PreParforPass(
             state.func_ir,
             state.type_annotation.typemap,
