@@ -57,16 +57,6 @@ def get_work_dim(*args, **kargs):
 def barrier(*args, **kargs):
     """
     OpenCL barrier()
-
-    Example:
-
-        # workgroup barrier + local memory fence
-        ocl.barrier(ocl.CLK_LOCAL_MEM_FENCE)
-        # workgroup barrier + global memory fence
-        ocl.barrier(ocl.CLK_GLOBAL_MEM_FENCE)
-        # workgroup barrier + global memory fence
-        ocl.barrier()
-
     """
     raise _stub_error
 
@@ -74,13 +64,6 @@ def barrier(*args, **kargs):
 def mem_fence(*args, **kargs):
     """
     OpenCL mem_fence()
-
-    Example:
-
-        # local memory fence
-        ocl.mem_fence(ocl.CLK_LOCAL_MEM_FENCE)
-        # global memory fence
-        ocl.mem_fence(ocl.CLK_GLOBAL_MEM_FENCE)
     """
     raise _stub_error
 
@@ -105,31 +88,3 @@ class Stub(object):
 
     def __repr__(self):
         return self._description_
-
-
-#def shared_array(shape, dtype):
-#    shape = _legalize_shape(shape)
-#    ndim = len(shape)
-#    fname = "ocl.smem.alloc"
-#    restype = types.Array(dtype, ndim, 'C')
-#    sig = typing.signature(restype, types.UniTuple(types.intp, ndim), types.Any)
-#    return ir.Intrinsic(fname, sig, args=(shape, dtype))
-
-
-#class shared(Stub):
-#    """shared namespace
-#    """
-#    _description_ = '<shared>'
-#
-#    array = macro.Macro('shared.array', shared_array, callable=True,
-#                        argnames=['shape', 'dtype'])
-
-
-#def _legalize_shape(shape):
-#    if isinstance(shape, tuple):
-#        return shape
-#    elif isinstance(shape, int):
-#        return (shape,)
-#    else:
-#        raise TypeError("invalid type for shape; got {0}".format(type(shape)))
-
