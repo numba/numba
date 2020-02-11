@@ -11,11 +11,13 @@ from collections import namedtuple
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import cfunc, carray, farray, types, typing, utils, njit
-from numba import cffi_support, numpy_support
-from .support import TestCase, tag, captured_stderr
-from .test_dispatcher import BaseCacheTest
+from numba import cfunc, carray, farray, njit
+from numba.core import types, typing, utils
+import numba.core.typing.cffi_utils as cffi_support
+from numba.tests.support import TestCase, tag, captured_stderr
+from numba.tests.test_dispatcher import BaseCacheTest
+import unittest
+from numba.np import numpy_support
 
 skip_cffi_unsupported = unittest.skipUnless(
     cffi_support.SUPPORTED,
@@ -131,7 +133,7 @@ class TestCFunc(TestCase):
 
     @skip_cffi_unsupported
     def test_cffi(self):
-        from . import cffi_usecases
+        from numba.tests import cffi_usecases
         ffi, lib = cffi_usecases.load_inline_module()
 
         f = cfunc(square_sig)(square_usecase)

@@ -5,16 +5,16 @@ import sys
 import os
 import re
 import multiprocessing
+import unittest
 
 import numpy as np
 
 from numba import (njit, set_num_threads, get_num_threads, prange, config,
                    threading_layer, guvectorize)
-from numba.npyufunc.parallel import _get_thread_id
-from numba import unittest_support as unittest
-from numba.errors import TypingError
-from .support import TestCase, skip_parfors_unsupported, tag
-from .test_parallel_backend import TestInSubprocess
+from numba.np.ufunc.parallel import _get_thread_id
+from numba.core.errors import TypingError
+from numba.tests.support import TestCase, skip_parfors_unsupported, tag
+from numba.tests.test_parallel_backend import TestInSubprocess
 
 
 class TestNumThreads(TestCase):

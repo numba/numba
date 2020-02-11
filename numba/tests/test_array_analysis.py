@@ -5,23 +5,23 @@ import sys
 from collections import namedtuple
 from io import StringIO
 
-from numba import unittest_support as unittest
-from numba import (njit, typeof, types, typing, typeof, ir, bytecode, jitclass,
-                   prange, postproc)
-from .support import TestCase, tag, skip_parfors_unsupported
-from numba.array_analysis import EquivSet, ArrayAnalysis
-from numba.compiler import Compiler, Flags, PassManager
-from numba.targets import cpu, registry
-from numba.ir_utils import remove_dead
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+from numba import njit, typeof, prange
+from numba.core import types, typing, ir, bytecode, postproc, cpu, registry
+from numba.tests.support import TestCase, tag, skip_parfors_unsupported
+from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
+from numba.core.compiler import Compiler, Flags, PassManager
+from numba.core.ir_utils import remove_dead
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
                              IRProcessing, DeadBranchPrune,
                              RewriteSemanticConstants, GenericRewrites,
                              WithLifting, PreserveIR, InlineClosureLikes)
 
-from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
+from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                 NopythonRewrites, IRLegalization)
 
-from numba.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.experimental import jitclass
+import unittest
 
 
 skip_unsupported = skip_parfors_unsupported
@@ -452,7 +452,7 @@ class TestArrayAnalysis(TestCase):
 
 
     def test_stencilcall(self):
-        from numba import stencil
+        from numba.stencils.stencil import stencil
         @stencil
         def kernel_1(a):
             return 0.25 * (a[0,1] + a[1,0] + a[0,-1] + a[-1,0])

@@ -1,6 +1,6 @@
 from ctypes import *
 
-from . import _extras
+from numba.cuda.cudadrv import _extras
 
 cu_device = c_int
 cu_device_attribute = c_int     # enum

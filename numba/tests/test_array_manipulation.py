@@ -3,11 +3,13 @@ from itertools import permutations
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import jit, njit, types, from_dtype, errors, typeof
-from numba.errors import TypingError
-from .support import TestCase, MemoryLeakMixin, CompilationCache, tag
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit, njit, from_dtype, typeof
+from numba.core.errors import TypingError
+from numba.core import types, errors
+from numba.tests.support import (TestCase, MemoryLeakMixin, CompilationCache,
+                                 tag)
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")

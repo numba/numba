@@ -8,9 +8,11 @@ import textwrap
 import numpy as np
 
 from numba.cuda.testing import unittest, SerialMixin
-from numba import cuda, types, utils, numpy_support
+from numba.core import types, utils
+from numba import cuda
 from numba.tests.support import TestCase, compile_function
 from numba.tests.complex_usecases import *
+from numba.np import numpy_support
 
 
 def compile_scalar_func(pyfunc, argtypes, restype):

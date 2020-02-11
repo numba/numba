@@ -2,8 +2,9 @@ import random
 
 import numpy as np
 
-from numba import njit, types
-from numba import unittest_support as unittest
+from numba import njit
+from numba.core import types
+import unittest
 
 class TestMulti3(unittest.TestCase):
     """

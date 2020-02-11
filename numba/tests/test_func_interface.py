@@ -1,4 +1,4 @@
-import numba.unittest_support as unittest
+import unittest
 from numba import jit
 
 

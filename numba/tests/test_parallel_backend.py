@@ -10,19 +10,18 @@ import random
 import subprocess
 import sys
 import threading
+import unittest
 
 import numpy as np
 
-from numba import config
-
-from numba import unittest_support as unittest
 from numba import jit, vectorize, guvectorize, set_num_threads
-
-from .support import (temp_directory, override_config, TestCase, tag,
-                      skip_parfors_unsupported, linux_only)
+from numba.tests.support import (temp_directory, override_config, TestCase, tag,
+                                 skip_parfors_unsupported, linux_only)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
+from numba.core import config
+
 
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 
@@ -31,16 +30,15 @@ _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 # TODO: Put this in a subprocess so the address space is kept clean
 try:
     # Check it's a compatible TBB before loading it
-    from numba.npyufunc.parallel import _check_tbb_version_compatible
+    from numba.np.ufunc.parallel import _check_tbb_version_compatible
     _check_tbb_version_compatible()
-
-    from numba.npyufunc import tbbpool    # noqa: F401
+    from numba.np.ufunc import tbbpool    # noqa: F401
     _HAVE_TBB_POOL = True
 except ImportError:
     _HAVE_TBB_POOL = False
 
 try:
-    from numba.npyufunc import omppool
+    from numba.np.ufunc import omppool
     _HAVE_OMP_POOL = True
 except ImportError:
     _HAVE_OMP_POOL = False
@@ -636,7 +634,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
 
     def test_check_threading_layer_is_gnu(self):
         runme = """if 1:
-            from numba.npyufunc import omppool
+            from numba.np.ufunc import omppool
             assert omppool.openmp_vendor == 'GNU'
             """
         cmdline = [sys.executable, '-c', runme]
@@ -900,7 +898,7 @@ class TestInitSafetyIssues(TestCase):
             print("ERR:", err)
 
 
-@parfors_skip_unsupported
+@skip_parfors_unsupported
 @skip_no_omp
 class TestOpenMPVendors(TestCase):
 

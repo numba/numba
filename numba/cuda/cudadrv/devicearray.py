@@ -14,10 +14,12 @@ from ctypes import c_void_p
 import numpy as np
 
 import numba
-from . import driver as _driver
-from . import devices
-from numba import dummyarray, types, numpy_support
-from numba.unsafe.ndarray import to_fixed_tuple
+from numba.cuda.cudadrv import driver as _driver
+from numba.cuda.cudadrv import devices
+from numba.core import types
+from numba.np.unsafe.ndarray import to_fixed_tuple
+from numba.misc import dummyarray
+from numba.np import numpy_support
 
 try:
     lru_cache = getattr(functools, 'lru_cache')(None)
@@ -352,15 +354,37 @@ class DeviceNDArrayBase(object):
         copy of the data.
         """
         dtype = np.dtype(dtype)
-        if dtype.itemsize != self.dtype.itemsize:
-            raise TypeError("new dtype itemsize doesn't match")
+        shape = list(self.shape)
+        strides = list(self.strides)
+
+        if self.dtype.itemsize != dtype.itemsize:
+            if not self.is_c_contiguous():
+                raise ValueError(
+                    "To change to a dtype of a different size,"
+                    " the array must be C-contiguous"
+                )
+
+            shape[-1], rem = divmod(
+                shape[-1] * self.dtype.itemsize,
+                dtype.itemsize
+            )
+
+            if rem != 0:
+                raise ValueError(
+                    "When changing to a larger dtype,"
+                    " its size must be a divisor of the total size in bytes"
+                    " of the last axis of the array."
+                )
+
+            strides[-1] = dtype.itemsize
+
         return DeviceNDArray(
-            shape=self.shape,
-            strides=self.strides,
+            shape=shape,
+            strides=strides,
             dtype=dtype,
             stream=self.stream,
             gpu_data=self.gpu_data,
-            )
+        )
 
     @property
     def nbytes(self):

@@ -1,9 +1,9 @@
 import numpy as np
 
 from numba import cuda
-from numba import unittest_support as unittest
 from numba.cuda.args import wrap_arg
 from numba.cuda.testing import SerialMixin
+import unittest
 
 
 class DefaultIn(object):

@@ -1,6 +1,6 @@
 import numpy as np
 
-from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
+from numba.np.ufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
                                         GUFuncCallSteps)
 from numba.roc.hsadrv.driver import dgpu_present
 import numba.roc.hsadrv.devicearray as devicearray

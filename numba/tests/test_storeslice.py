@@ -1,9 +1,9 @@
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types, errors
-from .support import TestCase
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import types, errors
+from numba.tests.support import TestCase
 
 
 def setitem_slice(a, start, stop, step, scalar):

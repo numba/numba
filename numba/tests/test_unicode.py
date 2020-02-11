@@ -2,10 +2,11 @@
 from itertools import product
 from itertools import permutations
 
-from numba import njit, types, utils
-import numba.unittest_support as unittest
-from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
-from numba.errors import TypingError
+from numba import njit
+from numba.core import types, utils
+import unittest
+from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
+from numba.core.errors import TypingError
 
 
 _py37_or_later = utils.PYVERSION >= (3, 7)
@@ -1700,7 +1701,15 @@ class TestUnicode(BaseTest):
             ('  tú quién te crees?   ', None),
             ('大处 着眼，小处着手。大大大处', '大处'),
             (' 大处大处  ', ''),
-            (' 大处大处  ', None)
+            ('\t\nabcd\t', '\ta'),
+            (' 大处大处  ', None),
+            ('\t abcd \t', None),
+            ('\n abcd \n', None),
+            ('\r abcd \r', None),
+            ('\x0b abcd \x0b', None),
+            ('\x0c abcd \x0c', None),
+            ('\u2029abcd\u205F', None),
+            ('\u0085abcd\u2009', None)
         ]
 
         # form with no parameter

@@ -5,10 +5,10 @@ Test return values
 
 import math
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types
-from numba.errors import TypingError
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import types
+from numba.core.errors import TypingError
 
 
 enable_pyobj_flags = Flags()

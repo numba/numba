@@ -2,9 +2,9 @@ import math
 import warnings
 
 from numba import jit
-from numba import unittest_support as unittest
-from numba.errors import TypingError, NumbaWarning
-from .support import TestCase
+from numba.core.errors import TypingError, NumbaWarning
+from numba.tests.support import TestCase
+import unittest
 
 
 class TestSelfRecursion(TestCase):
@@ -12,7 +12,7 @@ class TestSelfRecursion(TestCase):
     def setUp(self):
         # Avoid importing this module at toplevel, as it triggers compilation
         # and can therefore fail
-        from . import recursion_usecases
+        from numba.tests import recursion_usecases
         self.mod = recursion_usecases
 
     def check_fib(self, cfunc):
@@ -64,7 +64,7 @@ class TestSelfRecursion(TestCase):
 class TestMutualRecursion(TestCase):
 
     def setUp(self):
-        from . import recursion_usecases
+        from numba.tests import recursion_usecases
         self.mod = recursion_usecases
 
     def test_mutual_1(self):

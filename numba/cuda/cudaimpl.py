@@ -6,11 +6,10 @@ from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba.targets.imputils import Registry
-from numba import cgutils
-from numba import types
+from numba.core.imputils import Registry
+from numba.core import types, cgutils
 from .cudadrv import nvvm
-from . import nvvmutils, stubs
+from numba.cuda import nvvmutils, stubs
 
 registry = Registry()
 lower = registry.lower

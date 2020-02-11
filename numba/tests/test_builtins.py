@@ -5,10 +5,11 @@ import operator
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import jit, typeof, errors, types, utils, config, njit
-from .support import TestCase, tag
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit, typeof, njit
+from numba.core import errors, types, utils, config
+from numba.tests.support import TestCase, tag
 
 
 enable_pyobj_flags = Flags()

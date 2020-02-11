@@ -2,17 +2,20 @@ import numpy as np
 
 from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  skip_parfors_unsupported)
-from numba import njit, types, typed, ir, errors, literal_unroll, prange
+from numba import njit, typed, literal_unroll, prange
+from numba.core import types, errors, ir
 from numba.testing import unittest
-from numba.extending import overload
-from numba.compiler_machinery import PassManager, register_pass, FunctionPass
-from numba.compiler import CompilerBase
-from numba.untyped_passes import (FixupArgs, TranslateByteCode, IRProcessing,
-                                  InlineClosureLikes, SimplifyCFG,
-                                  IterLoopCanonicalization, LiteralUnroll)
-from numba.typed_passes import (NopythonTypeInference, IRLegalization,
-                                NoPythonBackend, PartialTypeInference)
-from numba.ir_utils import (compute_cfg_from_blocks, flatten_labels)
+from numba.core.extending import overload
+from numba.core.compiler_machinery import (PassManager, register_pass,
+                                           FunctionPass)
+from numba.core.compiler import CompilerBase
+from numba.core.untyped_passes import (FixupArgs, TranslateByteCode,
+                                       IRProcessing, InlineClosureLikes,
+                                       SimplifyCFG, IterLoopCanonicalization,
+                                       LiteralUnroll)
+from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
+                                     NoPythonBackend, PartialTypeInference)
+from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
 
 
 class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):

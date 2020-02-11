@@ -1,11 +1,11 @@
-import numba.unittest_support as unittest
+import unittest
 
 import dis
 import struct
 import sys
 
 from numba import jit
-from .support import TestCase, tweak_code
+from numba.tests.support import TestCase, tweak_code
 
 
 class TestExtendedArg(TestCase):

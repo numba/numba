@@ -14,4 +14,4 @@ TRIPLE = "amdgcn--amdhsa"
 
 # Allow user to use "NUMBA_USE_LIBHLC" env-var to use cmdline HLC.
 if os.environ.get('NUMBA_USE_LIBHLC', '').lower() not in ['0', 'no', 'false']:
-    from . import libhlc as hlc
+    from numba.roc.hlc import libhlc as hlc
