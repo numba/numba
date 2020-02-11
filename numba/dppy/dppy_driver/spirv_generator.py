@@ -72,14 +72,15 @@ class Module(object):
         self._finalized = False
 
     def __del__(self):
-        self.close()
-
-    def close(self):
         # Remove all temporary files
         for afile in self._tempfiles:
-            os.unlink(afile)
+            if config.SAVE_DPPY_IR_FILES == 1:
+                print(afile)
+            else:
+                os.unlink(afile)
         # Remove directory
-        os.rmdir(self._tmpdir)
+        if config.SAVE_DPPY_IR_FILES != 1:
+            os.rmdir(self._tmpdir)
 
     def _create_temp_file(self, name, mode='wb'):
         path = self._track_temp_file(name)
@@ -91,9 +92,6 @@ class Module(object):
                             "{0}-{1}".format(len(self._tempfiles), name))
         self._tempfiles.append(path)
         return path
-
-    # def _preprocess(self, llvmir):
-    #    return adapt_llvm_version(llvmir)
 
     def load_llvm(self, llvmir):
         """

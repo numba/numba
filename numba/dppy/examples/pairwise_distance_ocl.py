@@ -23,9 +23,9 @@ def pairwise_python(X, D, xshape0, xshape1):
     idx = dppy.get_global_id(0)
 
     #for i in range(xshape0):
-    for j in range(xshape0):
+    for j in range(X.shape[0]):
         d = 0.0
-        for k in range(xshape1):
+        for k in range(X.shape[1]):
             tmp = X[idx, k] - X[j, k]
             d += tmp * tmp
         D[idx, j] = sqrt(d)
@@ -38,19 +38,9 @@ def call_ocl():
     D = np.empty((args.n, args.n))
 
     #measure running time
-
     device_env = None
-    try:
-        device_env = ocldrv.runtime.get_gpu_device()
-        print("Selected GPU device")
-    except:
-        try:
-            device_env = ocldrv.runtime.get_cpu_device()
-            print("Selected CPU device")
-        except:
-            print("No OpenCL devices found on the system")
-            raise SystemExit()
-
+    device_env = ocldrv.runtime.get_cpu_device()
+    start = time()
     times = list()
 
     dX = device_env.copy_array_to_device(X)
@@ -68,7 +58,6 @@ def call_ocl():
 
     times =  np.asarray(times, dtype=np.float32)
     print("Average time of %d runs is = %f" % (args.r, times.mean()))
-
 
 def main():
     call_ocl()
