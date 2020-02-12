@@ -331,7 +331,7 @@ class _EnvReloader(object):
             if parallel._is_initialized:
                 raise RuntimeError("Cannot set NUMBA_NUM_THREADS to a "
                                    "different value once the threads have been "
-                                   "launched (%s != %s)" %
+                                   "launched (currently have %s, trying to set %s)" %
                                    (_NUMBA_NUM_THREADS,
                                     globals()['NUMBA_NUM_THREADS']))
 
