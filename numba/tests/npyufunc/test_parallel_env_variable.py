@@ -20,14 +20,19 @@ class TestParallelEnvVariable(unittest.TestCase):
         current = str(getattr(env, key, config.NUMBA_DEFAULT_NUM_THREADS))
         threads = "3154"
         env[key] = threads
-        config.reload_config()
         try:
-            self.assertEqual(threads, str(get_thread_count()))
-            self.assertEqual(threads, str(config.NUMBA_NUM_THREADS))
-        finally:
-            # reset the env variable/set to default
-            env[key] = current
             config.reload_config()
+        except RuntimeError as e:
+            # This test should fail if threads have already been launched
+            self.assertIn("Cannot set NUMBA_NUM_THREADS", e.args[0])
+        else:
+            try:
+                self.assertEqual(threads, str(get_thread_count()))
+                self.assertEqual(threads, str(config.NUMBA_NUM_THREADS))
+            finally:
+                # reset the env variable/set to default
+                env[key] = current
+                config.reload_config()
 
 if __name__ == '__main__':
     unittest.main()
