@@ -14,6 +14,7 @@ LIST_ERR_INDEX = -1
 LIST_ERR_NO_MEMORY = -2
 LIST_ERR_MUTATED = -3
 LIST_ERR_ITER_EXHAUSTED = -4
+LIST_ERR_IMMUTABLE = -5
 
 
 class List(object):
@@ -58,6 +59,16 @@ class List(object):
     def allocated(self):
         return self.list_allocated()
 
+    @property
+    def is_mutable(self):
+        return self.list_is_mutable()
+
+    def set_mutable(self):
+        return self.list_set_is_mutable(1)
+
+    def set_immutable(self):
+        return self.list_set_is_mutable(0)
+
     def append(self, item):
         self.list_append(item)
 
@@ -80,10 +91,18 @@ class List(object):
     def list_allocated(self):
         return self.tc.numba_list_allocated(self.lp)
 
+    def list_is_mutable(self):
+        return self.tc.numba_list_is_mutable(self.lp)
+
+    def list_set_is_mutable(self, is_mutable):
+        return self.tc.numba_list_set_is_mutable(self.lp, is_mutable)
+
     def list_setitem(self, i, item):
         status = self.tc.numba_list_setitem(self.lp, i, item)
         if status == LIST_ERR_INDEX:
             raise IndexError("list index out of range")
+        elif status == LIST_ERR_IMMUTABLE:
+            raise ValueError("list is immutable")
         else:
             self.tc.assertEqual(status, LIST_OK)
 
@@ -98,6 +117,8 @@ class List(object):
 
     def list_append(self, item):
         status = self.tc.numba_list_append(self.lp, item)
+        if status == LIST_ERR_IMMUTABLE:
+            raise ValueError("list is immutable")
         self.tc.assertEqual(status, LIST_OK)
 
     def list_pop(self, i):
@@ -111,6 +132,8 @@ class List(object):
         status = self.tc.numba_list_pop(self.lp, i, item_out_buffer)
         if status == LIST_ERR_INDEX:
             raise IndexError("list index out of range")
+        elif status == LIST_ERR_IMMUTABLE:
+            raise ValueError("list is immutable")
         else:
             self.tc.assertEqual(status, LIST_OK)
             return item_out_buffer.raw
@@ -122,6 +145,8 @@ class List(object):
                                                      i.start,
                                                      i.stop,
                                                      i.step)
+            if status == LIST_ERR_IMMUTABLE:
+                raise ValueError("list is immutable")
             self.tc.assertEqual(status, LIST_OK)
         # must be an integer, defer to pop
         else:
@@ -204,6 +229,18 @@ class TestListImpl(TestCase):
             'list_allocated',
             ctypes.c_int,
             [list_t],
+        )
+        # numba_list_is_mutable(NB_List *lp)
+        self.numba_list_is_mutable = wrap(
+            'list_is_mutable',
+            ctypes.c_int,
+            [list_t],
+        )
+        # numba_list_set_is_mutable(NB_List *lp, int is_mutable)
+        self.numba_list_set_is_mutable = wrap(
+            'list_set_is_mutable',
+            None,
+            [list_t, ctypes.c_int],
         )
         # numba_list_setitem(NB_List *l, Py_ssize_t i, const char *item)
         self.numba_list_setitem = wrap(
@@ -421,3 +458,39 @@ class TestListImpl(TestCase):
         # Check different sizes of the key & value.
         for i in range(1, 16):
             self.check_sizing(item_size=i, nmax=2**i)
+
+    def test_mutability(self):
+        # setup and populate a singleton
+        l = List(self, 8, 1)
+        one = struct.pack("q", 1)
+        l.append(one)
+        self.assertTrue(l.is_mutable)
+        self.assertEqual(len(l), 1)
+        r = struct.unpack("q", l[0])[0]
+        self.assertEqual(r, 1)
+
+        # set to immutable and test guards
+        l.set_immutable()
+        self.assertFalse(l.is_mutable)
+        # append
+        with self.assertRaises(ValueError):
+            l.append(one)
+        # setitem
+        with self.assertRaises(ValueError):
+            l[0] = one
+        # pop
+        with self.assertRaises(ValueError):
+            l.pop()
+        # delitem with index
+        with self.assertRaises(ValueError):
+            del l[0]
+        # delitem with slice
+        with self.assertRaises(ValueError):
+            del l[0:1:1]
+        l.set_mutable()
+
+        # check that nothing has changed
+        self.assertTrue(l.is_mutable)
+        self.assertEqual(len(l), 1)
+        r = struct.unpack("q", l[0])[0]
+        self.assertEqual(r, 1)
