@@ -33,7 +33,6 @@ def discriminant(a, b, c):
 def main():
 
     N = 1e+8 // 2
-    N = int(N)
     print('Data size', N)
 
     targets = ['cpu', 'parallel']
