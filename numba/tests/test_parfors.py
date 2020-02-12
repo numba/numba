@@ -19,7 +19,7 @@ import operator
 from collections import defaultdict
 
 import numba.parfors.parfor
-from numba import njit, prange
+from numba import njit, prange, set_num_threads, get_num_threads
 from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall, config, compiler, cpu
 from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations
@@ -2417,35 +2417,40 @@ class TestParforsVectorizer(TestPrangeBase):
 
         fastmath = kwargs.pop('fastmath', False)
         nthreads = kwargs.pop('nthreads', 2)
+        old_nthreads = get_num_threads()
         cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
         assertions = kwargs.pop('assertions', True)
 
         env_opts = {'NUMBA_CPU_NAME': cpu_name,
                     'NUMBA_CPU_FEATURES': '',
-                    'NUMBA_NUM_THREADS': str(nthreads)
                     }
 
         overrides = []
         for k, v in env_opts.items():
             overrides.append(override_env_config(k, v))
 
-        with overrides[0], overrides[1], overrides[2]:
-            sig = tuple([numba.typeof(x) for x in args])
-            pfunc_vectorizable = self.generate_prange_func(func, None)
-            if fastmath == True:
-                cres = self.compile_parallel_fastmath(pfunc_vectorizable, sig)
-            else:
-                cres = self.compile_parallel(pfunc_vectorizable, sig)
+        with overrides[0], overrides[1]:
+            # Replace this with set_num_threads as a context manager when that exists
+            try:
+                set_num_threads(nthreads)
+                sig = tuple([numba.typeof(x) for x in args])
+                pfunc_vectorizable = self.generate_prange_func(func, None)
+                if fastmath == True:
+                    cres = self.compile_parallel_fastmath(pfunc_vectorizable, sig)
+                else:
+                    cres = self.compile_parallel(pfunc_vectorizable, sig)
 
-            # get the gufunc asm
-            asm = self._get_gufunc_asm(cres)
+                # get the gufunc asm
+                asm = self._get_gufunc_asm(cres)
 
-            if assertions:
-                schedty = re.compile('call\s+\w+\*\s+@do_scheduling_(\w+)\(')
-                matches = schedty.findall(cres.library.get_llvm_str())
-                self.assertGreaterEqual(len(matches), 1) # at least 1 parfor call
-                self.assertEqual(matches[0], schedule_type)
-                self.assertTrue(asm != {})
+                if assertions:
+                    schedty = re.compile('call\s+\w+\*\s+@do_scheduling_(\w+)\(')
+                    matches = schedty.findall(cres.library.get_llvm_str())
+                    self.assertGreaterEqual(len(matches), 1) # at least 1 parfor call
+                    self.assertEqual(matches[0], schedule_type)
+                    self.assertTrue(asm != {})
+            finally:
+                set_num_threads(old_nthreads)
 
         return asm
 
