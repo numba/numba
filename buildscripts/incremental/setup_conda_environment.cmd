@@ -32,7 +32,7 @@ call activate %CONDA_ENV%
 if %PYTHON% LSS 3.4 (%CONDA_INSTALL% enum34)
 if %PYTHON% LSS 3.4 (%PIP_INSTALL% singledispatch)
 if %PYTHON% LSS 3.3 (%CONDA_INSTALL% -c numba funcsigs)
-if %PYTHON% LSS 3.8 (%PIP_INSTALL% importlib-metadata)
+if %PYTHON% LSS 3.8 (%CONDA_INSTALL% importlib_metadata)
 @rem Install dependencies for building the documentation
 if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx pygments)
 if "%BUILD_DOC%" == "yes" (%PIP_INSTALL% sphinx_bootstrap_theme)
