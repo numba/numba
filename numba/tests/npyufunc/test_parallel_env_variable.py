@@ -26,13 +26,13 @@ class TestParallelEnvVariable(unittest.TestCase):
             # This test should fail if threads have already been launched
             self.assertIn("Cannot set NUMBA_NUM_THREADS", e.args[0])
         else:
-            try:
-                self.assertEqual(threads, str(get_thread_count()))
-                self.assertEqual(threads, str(config.NUMBA_NUM_THREADS))
-            finally:
-                # reset the env variable/set to default
-                env[key] = current
-                config.reload_config()
+            self.assertEqual(threads, str(get_thread_count()))
+            self.assertEqual(threads, str(config.NUMBA_NUM_THREADS))
+        finally:
+            # reset the env variable/set to default. Should not fail even if
+            # threads are launched because the value is the same.
+            env[key] = current
+            config.reload_config()
 
 if __name__ == '__main__':
     unittest.main()
