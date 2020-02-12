@@ -27,6 +27,7 @@ from numba.core import types, config, errors, cgutils
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder
 from numba.extending import overload, intrinsic
+from numba import njit
 
 
 _IS_OSX = sys.platform.startswith('darwin')
@@ -518,8 +519,9 @@ def _load_num_threads_funcs(lib):
 
 
 # Some helpers to make set_num_threads jittable
+
 @intrinsic
-def debug(tyctx, max_t, ill_t):
+def _debug(tyctx, max_t, ill_t):
     max_t_ty = getattr(max_t, 'literal_type', max_t)
     ill_t_ty = getattr(ill_t, 'literal_type', ill_t)
     sig = types.void(max_t_ty, ill_t_ty)
@@ -529,6 +531,9 @@ def debug(tyctx, max_t, ill_t):
                        b)
     return sig, codegen
 
+@njit
+def debug(max_t, ill_t):
+    _debug(max_t, ill_t)
 
 def gen_snt_check():
     from numba.core.config import NUMBA_NUM_THREADS
