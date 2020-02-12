@@ -345,19 +345,15 @@ def array_sum_axis(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.prod, types.Array)
-@lower_builtin("array.prod", types.Array)
-def array_prod(context, builder, sig, args):
-
+@overload(np.prod)
+@overload_method(types.Array, 'prod')
+def array_prod(arr):
     def array_prod_impl(arr):
         c = 1
         for v in np.nditer(arr):
             c *= v.item()
         return c
-
-    res = context.compile_internal(builder, array_prod_impl, sig, args,
-                                   locals=dict(c=sig.return_type))
-    return impl_ret_borrowed(context, builder, sig.return_type, res)
+    return array_prod_impl        
 
 
 @lower_builtin(np.cumsum, types.Array)
