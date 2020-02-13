@@ -196,13 +196,15 @@ class List(MutableSequence):
         else:
             return cls(lsttype=ListType(item_type), allocated=allocated)
 
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         For users, the constructor does not take any parameters.
         The keyword arguments are for internal use only.
 
         Parameters
         ----------
+        args: iterable
+            The iterable to intialize the list from
         lsttype : numba.core.types.ListType; keyword-only
             Used internally for the list type.
         meminfo : MemInfo; keyword-only
@@ -210,10 +212,15 @@ class List(MutableSequence):
         allocated: int; keyword-only
             Used internally to pre-allocate space for items
         """
+        if args and kwargs:
+            raise ValueError
         if kwargs:
             self._list_type, self._opaque = self._parse_arg(**kwargs)
         else:
             self._list_type = None
+        if args:
+            for i in args[0]:
+                self.append(i)
 
     def _parse_arg(self, lsttype, meminfo=None, allocated=DEFAULT_ALLOCATED):
         if not isinstance(lsttype, ListType):
