@@ -14,25 +14,37 @@ driver API.
 2. Prequisites?
 ================
 
+Bash                 : In the system and not as default Shell
+Tar                  : To extract files
+Git                  : To fetch required dependencies listed below
+C/C++ compiler       : To build the dependencies
+Cmake                : For managing build process of dependencies
+Python3              : Version 3 is required
+Conda or miniconda   : Can be found at https://docs.conda.io/en/latest/miniconda.html
+
+OpenCL 2.1 driver    : DPPy currently works for both Intel GPUs and CPUs is
+                       a correct OpenCL driver version is found on the system.
+
+                       Note. To use the GPU users should be added to "video"
+                       user group on Linux systems.
+
+
+The following requisites will be installed by the install script provided with
+this package.
+
 NUMBA v0.48          : The DPPy backend has only been tested for NUMBA v0.48.
                        The included install script downloads and applies the
                        DDPy patch to the correct NUMBA version.
 
-LLVM-SPIRV translator: Used for SPIRV generation from LLVM IR. 
+LLVM-SPIRV translator: Used for SPIRV generation from LLVM IR.
 
 SPIRV-Tools          : Used internally for code-generation. The provided install
-                       script would handle downloading and installing the 
+                       script would handle downloading and installing the
                        required version.
 
 LLVMDEV              : To support LLVM IR generation.
 
-OpenCL 2.1 driver    : DPPy currently works for both Intel GPUs and CPUs is
-                       a correct OpenCL driver version is found on the system.
-                       
-                       Note. To use the GPU users should be added to "video"
-                       user group on Linux systems.
-
-Others               : All existing dependecies for NUMBA, such as llvmlite, 
+Others               : All existing dependecies for NUMBA, such as llvmlite,
                        also apply to DPPy.
 
 ==================
@@ -59,8 +71,8 @@ After successful installation the following message should be displayed:
     #    $ conda deactivate
 
 The installer script creates a new conda environment called numba-dppy-env with
-all the needed dependencies already installed. To use the DPPy backend, please 
-activate the numba-dppy-env.
+all the needed dependencies already installed. To use the DPPy backend, please
+activate the numba-dppy-env
 
 ================
 4. Running tests
@@ -80,7 +92,7 @@ To run the test suite execute the following:
 5. How Tos and Known Issues
 ===========================
 
-Refer the HowTo.rst guide for an overview of the programming semantics, 
+Refer the HowTo.rst guide for an overview of the programming semantics,
 examples, supported functionalities, and known issues.
 
 
