@@ -1236,3 +1236,10 @@ class TestImmutable(MemoryLeakMixin, TestCase):
                     "list is immutable",
                     str(raises.exception),
                 )
+
+
+class TestListFromIter(MemoryLeakMixin, TestCase):
+
+    def test_basic(self):
+        l = List((1,2,3))
+        print(l)
