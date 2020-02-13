@@ -224,10 +224,12 @@ def _lower_parfor_parallel(lowerer, parfor):
     for l in parfor.loop_nests[1:]:
         assert typemap[l.index_variable.name] == index_var_typ
     numba.parfors.parfor.sequential_parfor_lowering = True
-    func, func_args, func_sig, redargstartdim, func_arg_types = _create_gufunc_for_parfor_body(
-        lowerer, parfor, typemap, typingctx, targetctx, flags, {},
-        bool(alias_map), index_var_typ, parfor.races)
-    numba.parfors.parfor.sequential_parfor_lowering = False
+    try:
+        func, func_args, func_sig, redargstartdim, func_arg_types = _create_gufunc_for_parfor_body(
+            lowerer, parfor, typemap, typingctx, targetctx, flags, {},
+            bool(alias_map), index_var_typ, parfor.races)
+    finally:
+        numba.parfors.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
     func_args = ['sched'] + func_args
