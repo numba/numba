@@ -451,8 +451,13 @@ def typedlist_call(context):
     Defines typing logic for ``List()``.
     Produces List[undefined]
     """
-    def typer():
-        return types.ListType(types.undefined)
+    def typer(*args, **kwargs):
+        if args:
+            item_type = args[0].dtype
+        else:
+            item_type = types.undefined
+
+        return types.ListType(item_type)
     return typer
 
 
