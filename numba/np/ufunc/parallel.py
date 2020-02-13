@@ -23,11 +23,10 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
 from numba.np.numpy_support import as_dtype
-from numba.core import types, config, errors, cgutils
+from numba.core import types, config, errors
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder
-from numba.extending import overload, intrinsic
-from numba import njit
+from numba.extending import overload
 
 
 _IS_OSX = sys.platform.startswith('darwin')
@@ -520,28 +519,12 @@ def _load_num_threads_funcs(lib):
 
 # Some helpers to make set_num_threads jittable
 
-@intrinsic
-def _debug(tyctx, max_t, ill_t):
-    max_t_ty = getattr(max_t, 'literal_type', max_t)
-    ill_t_ty = getattr(ill_t, 'literal_type', ill_t)
-    sig = types.void(max_t_ty, ill_t_ty)
-    def codegen(cgctx, builder, sig, args):
-        a, b = args
-        cgutils.printf(builder, "Max threads %d. Illegal thread count %d\n", a,
-                       b)
-    return sig, codegen
-
-@njit
-def debug(max_t, ill_t):
-    _debug(max_t, ill_t)
-
 def gen_snt_check():
     from numba.core.config import NUMBA_NUM_THREADS
     msg = "The number of threads must be between 1 and %s" % NUMBA_NUM_THREADS
 
     def snt_check(n):
         if n > NUMBA_NUM_THREADS or n < 1:
-            debug(NUMBA_NUM_THREADS, n)
             raise ValueError(msg)
     return snt_check
 
