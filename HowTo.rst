@@ -162,3 +162,14 @@ ParFor Support
 *Parallel For* is supported in this release for upto 3 dimensions.
 
 Full examples can be found in numba/dppy/examples/pa_examples/
+
+
+=======
+Testing
+=======
+
+All examples can be found in numba/dppy/examples/
+
+All tests can be found in numba/dppy/tests/dppy and can be triggered by the following command:
+
+``python -m numba.runtests numba.dppy.tests`` 
