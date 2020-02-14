@@ -105,7 +105,7 @@ class List(object):
         # support -1 to be last element of the list here
         if i < -1 or len(self) == 0:
             IndexError("list index out of range")
-        elif i is -1:
+        elif i == -1:
             i = len(self) - 1
         item_out_buffer = ctypes.create_string_buffer(self.item_size)
         status = self.tc.numba_list_pop(self.lp, i, item_out_buffer)
