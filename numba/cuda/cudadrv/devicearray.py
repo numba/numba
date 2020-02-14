@@ -85,6 +85,7 @@ class DeviceNDArrayBase(object):
             shape = (shape,)
         if isinstance(strides, int):
             strides = (strides,)
+        dtype = np.dtype(dtype)
         self.ndim = len(shape)
         if len(strides) != self.ndim:
             raise ValueError('strides not match ndim')
@@ -92,7 +93,7 @@ class DeviceNDArrayBase(object):
                                                  dtype.itemsize)
         self.shape = tuple(shape)
         self.strides = tuple(strides)
-        self.dtype = np.dtype(dtype)
+        self.dtype = dtype
         self.size = int(functools.reduce(operator.mul, self.shape, 1))
         # prepare gpu memory
         if self.size > 0:
