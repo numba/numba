@@ -53,4 +53,13 @@ void ready(void);
  */
 static void
 parallel_for(void *fn, char **args, size_t *dims, size_t *steps, void *data,\
-             size_t inner_ndim, size_t array_count);
+             size_t inner_ndim, size_t array_count, int num_threads);
+
+
+/* Masking API cf. OpenMP */
+static void
+set_num_threads(int count);
+static int
+get_num_threads(void);
+static int
+get_thread_id(void);

@@ -21,12 +21,16 @@ race conditions.
 #include <windows.h>
 #include <process.h>
 #include <malloc.h>
+#include <signal.h>
 #define NUMBA_WINTHREAD
 #else
 /* PThread */
 #include <pthread.h>
 #include <unistd.h>
 #include <alloca.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <signal.h>
 #define NUMBA_PTHREAD
 #endif
 
@@ -37,6 +41,16 @@ race conditions.
 #include "gufunc_scheduler.h"
 
 #define _DEBUG 0
+
+/* workqueue is not threadsafe, so we use DSO globals to flag and update various
+ * states.
+ */
+/* This variable is the nesting level, it's incremented at the start of each
+ * parallel region and decremented at the end, if parallel regions are nested
+ * on entry the value == 1 and workqueue will abort (this in preference to just
+ * hanging or segfaulting).
+ */
+static int _nesting_level = 0;
 
 /* As the thread-pool isn't inherited by children,
    free the task-queue, too. */
@@ -112,6 +126,12 @@ numba_new_thread(void *worker, void *arg)
 
     pthread_attr_destroy(&attr);
     return (thread_pointer)th;
+}
+
+static int
+get_thread_id(void)
+{
+    return (int)pthread_self();
 }
 
 #endif
@@ -199,6 +219,12 @@ numba_new_thread(void *worker, void *arg)
     return (thread_pointer)handle;
 }
 
+static int
+get_thread_id(void)
+{
+    return GetCurrentThreadId();
+}
+
 #endif
 
 typedef struct Task
@@ -239,14 +265,60 @@ queue_state_wait(Queue *queue, int old, int repl)
 void debug_marker(void);
 void debug_marker() {};
 
+
+#ifdef _MSC_VER
+#define THREAD_LOCAL(ty) __declspec(thread) ty
+#else
+/* Non-standard C99 extension that's understood by gcc and clang */
+#define THREAD_LOCAL(ty) __thread ty
+#endif
+
+// This is the number of threads that is default, it is set on initialisation of
+// the threading backend via the launch_threads() call
+static int _INIT_NUM_THREADS = -1;
+
+// This is the per-thread thread mask, each thread can carry its own mask.
+static THREAD_LOCAL(int) _TLS_num_threads = 0;
+
+static void
+set_num_threads(int count)
+{
+    _TLS_num_threads = count;
+}
+
+static int
+get_num_threads(void)
+{
+    // This is purely to permit the implementation to survive to the point
+    // where it can exit cleanly as multiple threads cannot be used with this
+    // backend
+    if (_TLS_num_threads == 0)
+    {
+        // This is a thread that did not call launch_threads() but is still a
+        // "main" thread, probably from e.g. threading.Thread() use, it still
+        // has a TLS slot which is 0 from the lack of launch_threads() call
+        _TLS_num_threads = _INIT_NUM_THREADS;
+    }
+    return _TLS_num_threads;
+}
+
+
 // this complies to a launchable function from `add_task` like:
 // add_task(nopfn, NULL, NULL, NULL, NULL)
 // useful if you want to limit the number of threads locally
-void nopfn(void *args, void *dims, void *steps, void *data) {};
+// static void nopfn(void *args, void *dims, void *steps, void *data) {};
+
+
+// synchronize the TLS num_threads slot to value args[0]
+static void sync_tls(void *args, void *dims, void *steps, void *data) {
+    int nthreads = *((int *)(args));
+    _TLS_num_threads = nthreads;
+};
+
 
 static void
 parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *data,
-             size_t inner_ndim, size_t array_count)
+             size_t inner_ndim, size_t array_count, int num_threads)
 {
 
     //     args = <ir.Argument '.1' of type i8**>,
@@ -254,20 +326,36 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
     //     steps = <ir.Argument '.3' of type i64*>
     //     data = <ir.Argument '.4' of type i8*>
 
+    // check the nesting level, if it's already 1, abort, workqueue cannot
+    // handle nesting.
+    if (_nesting_level >= 1){
+        fprintf(stderr, "%s", "Terminating: Nested parallel kernel launch "
+                              "detected, the workqueue threading layer does "
+                              "not supported nested parallelism. Try the TBB "
+                              "threading layer.\n");
+        raise(SIGABRT);
+        return;
+    }
+
+    // increment the nest level
+    _nesting_level += 1;
+
     size_t * count_space = NULL;
     char ** array_arg_space = NULL;
     const size_t arg_len = (inner_ndim + 1);
-    size_t i, j, count, remain, total;
+    int i; // induction var for chunking, thread count unlikely to overflow int
+    size_t j, count, remain, total;
 
     ptrdiff_t offset;
     char * base;
+    int old_queue_count = -1;
 
     size_t step;
 
     debug_marker();
 
     total = *((size_t *)dimensions);
-    count = total / NUM_THREADS;
+    count = total / num_threads;
     remain = total;
 
     if(_DEBUG)
@@ -298,12 +386,24 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
         }
     }
 
-
+    // sync the thread pool TLS slots, sync all slots, we don't know which
+    // threads will end up running.
     for (i = 0; i < NUM_THREADS; i++)
+    {
+        add_task(sync_tls, (void *)(&num_threads), NULL, NULL, NULL);
+    }
+    ready();
+    synchronize();
+
+    // This backend isn't threadsafe so just mutate the global
+    old_queue_count = queue_count;
+    queue_count = num_threads;
+
+    for (i = 0; i < num_threads; i++)
     {
         count_space = (size_t *)alloca(sizeof(size_t) * arg_len);
         memcpy(count_space, dimensions, arg_len * sizeof(size_t));
-        if(i == NUM_THREADS - 1)
+        if(i == num_threads - 1)
         {
             // Last thread takes all leftover
             count_space[0] = remain;
@@ -316,7 +416,7 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
         if(_DEBUG)
         {
-            printf("\n=================== THREAD %ld ===================\n", i);
+            printf("\n=================== THREAD %d ===================\n", i);
             printf("\ncount_space: ");
             for(j = 0; j < arg_len; j++)
             {
@@ -357,6 +457,10 @@ parallel_for(void *fn, char **args, size_t *dimensions, size_t *steps, void *dat
 
     ready();
     synchronize();
+
+    queue_count = old_queue_count;
+    // decrement the nest level
+    _nesting_level -= 1;
 }
 
 static void
@@ -422,6 +526,8 @@ static void launch_threads(int count)
             queue_condition_init(&queues[i].cond);
             numba_new_thread(thread_worker, &queues[i]);
         }
+
+        _INIT_NUM_THREADS = count;
     }
 }
 
@@ -448,6 +554,8 @@ static void reset_after_fork(void)
     free(queues);
     queues = NULL;
     NUM_THREADS = -1;
+    _INIT_NUM_THREADS = -1;
+    _nesting_level = 0;
 }
 
 MOD_INIT(workqueue)
@@ -471,6 +579,11 @@ MOD_INIT(workqueue)
                            PyLong_FromVoidPtr(&do_scheduling_signed));
     PyObject_SetAttrString(m, "do_scheduling_unsigned",
                            PyLong_FromVoidPtr(&do_scheduling_unsigned));
-
+    PyObject_SetAttrString(m, "set_num_threads",
+                           PyLong_FromVoidPtr((void*)&set_num_threads));
+    PyObject_SetAttrString(m, "get_num_threads",
+                           PyLong_FromVoidPtr((void*)&get_num_threads));
+    PyObject_SetAttrString(m, "get_thread_id",
+                           PyLong_FromVoidPtr((void*)&get_thread_id));
     return MOD_SUCCESS_VAL(m);
 }
