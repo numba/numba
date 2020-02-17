@@ -14,7 +14,7 @@ from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
-                                 get_definition)
+                                 get_definition, remove_dels)
 
 
 @contextmanager
@@ -267,6 +267,8 @@ class ParforPass(FunctionPass):
                                          state.flags,
                                          state.parfor_diagnostics)
         parfor_pass.run()
+
+        remove_dels(state.func_ir.blocks)
 
         # check the parfor pass worked and warn if it didn't
         has_parfor = False

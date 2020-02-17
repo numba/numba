@@ -2068,10 +2068,10 @@ def check_and_legalize_ir(func_ir):
     if not func_ir.equal_ir(orig_ir):
         msg +=  func_ir.diff_str(orig_ir)
         warnings.warn(NumbaWarning(msg, loc=func_ir.loc))
-    #for blk in func_ir.blocks.values():
-        #dels = [x for x in blk.find_insts(ir.Del)]
-        #if dels:
-            #raise RuntimeError("Illegal IR, del at: %s" % dels[0], dels[0].loc)
+    for blk in func_ir.blocks.values():
+        dels = [x for x in blk.find_insts(ir.Del)]
+        if dels:
+            raise RuntimeError("Illegal IR, del at: %s" % dels[0], dels[0].loc)
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run(True)
 
