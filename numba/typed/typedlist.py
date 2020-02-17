@@ -43,6 +43,21 @@ def _allocated(l):
 
 
 @njit
+def _is_mutable(l):
+    return l._is_mutable()
+
+
+@njit
+def _make_mutable(l):
+    return l._make_mutable()
+
+
+@njit
+def _make_immutable(l):
+    return l._make_immutable()
+
+
+@njit
 def _append(l, item):
     l.append(item)
 
@@ -235,6 +250,15 @@ class List(MutableSequence):
             return 0
         else:
             return _allocated(self)
+
+    def _is_mutable(self):
+        return _is_mutable(self)
+
+    def _make_mutable(self):
+        return _make_mutable(self)
+
+    def _make_immutable(self):
+        return _make_immutable(self)
 
     def __eq__(self, other):
         return _eq(self, other)
