@@ -4,7 +4,7 @@ from textwrap import dedent
 import numpy as np
 
 from numba import njit
-from numba import int32, float32, prange
+from numba import int32, float32, float64, prange
 from numba.core import types
 from numba import typeof
 from numba.typed import List, Dict
@@ -164,6 +164,20 @@ class TestTypedList(MemoryLeakMixin, TestCase):
 
         L = List.empty_list(float32)
         self.assertEqual(L.dtype, float32)
+
+        @njit
+        def foo():
+            L = List.empty_list(float64)
+            L.append(4.2)
+            return L.dtype
+        self.assertEqual(foo(), np.dtype('float64'))
+
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            return l.dtype
+        self.assertEqual(foo(), np.dtype('int64'))
 
     @skip_parfors_unsupported
     def test_unsigned_prange(self):
