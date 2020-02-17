@@ -1155,10 +1155,12 @@ def impl_dtype(l):
     if not isinstance(l, types.ListType):
         return
     dt = l.dtype
+
     def impl(l):
         return dt
 
     return impl
+
 
 def _equals_helper(this, other, OP):
     if not isinstance(this, types.ListType):
