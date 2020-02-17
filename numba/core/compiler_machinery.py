@@ -75,9 +75,6 @@ class CompilerPass(object):
         Runs the initialization sequence for the pass, will run before
         `run_pass`.
         """
-        from numba.core.ir_utils import remove_dels
-        if args[0].func_ir:
-            remove_dels(args[0].func_ir.blocks)
         return False
 
     @abstractmethod
