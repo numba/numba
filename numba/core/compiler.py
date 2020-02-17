@@ -197,7 +197,7 @@ def run_frontend(func, inline_closures=False):
                                             {}, False)
         inline_pass.run()
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run()
+    post_proc.run(True)
     return func_ir
 
 

@@ -520,7 +520,7 @@ def dead_code_elimination(func_ir, typemap=None, alias_map=None,
 
     if do_post_proc:
         post_proc = postproc.PostProcessor(func_ir)
-        post_proc.run()
+        post_proc.run(True)
 
 
 def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases=None):
@@ -1665,7 +1665,7 @@ def get_ir_of_code(glbls, fcode):
         ir, numba.core.cpu.ParallelOptions(False), swapped)
     inline_pass.run()
     post_proc = postproc.PostProcessor(ir)
-    post_proc.run()
+    post_proc.run(True)
     return ir
 
 def replace_arg_nodes(block, args):

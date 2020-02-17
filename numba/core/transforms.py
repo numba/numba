@@ -339,7 +339,7 @@ def with_lifting(func_ir, typingctx, targetctx, flags, locals):
             cls = LiftedWith
         return cls(func_ir, typingctx, targetctx, myflags, locals, **kwargs)
 
-    postproc.PostProcessor(func_ir).run()  # ensure we have variable lifetime
+    postproc.PostProcessor(func_ir).run(True)  # ensure we have variable lifetime
     assert func_ir.variable_lifetime
     vlt = func_ir.variable_lifetime
     blocks = func_ir.blocks.copy()

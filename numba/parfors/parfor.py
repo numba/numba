@@ -1335,7 +1335,7 @@ class PreParforPass(object):
         """Run pre-parfor processing pass.
         """
         post_proc = postproc.PostProcessor(self.func_ir)
-        post_proc.run()
+        post_proc.run(True)
         # e.g. convert A.sum() to np.sum(A) for easier match and optimization
         canonicalize_array_math(self.func_ir, self.typemap,
                                 self.calltypes, self.typingctx)
@@ -1595,7 +1595,7 @@ class ParforPass(object):
 
         # run post processor again to generate Del nodes
         post_proc = postproc.PostProcessor(self.func_ir)
-        post_proc.run()
+        post_proc.run(True)
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
                                 self.typemap)
@@ -2878,7 +2878,7 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
     dprint_func_ir(func_ir, "after parfor sequential simplify")
     # add dels since simplify removes dels
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run()
+    post_proc.run(True)
     return
 
 
