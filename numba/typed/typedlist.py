@@ -457,7 +457,7 @@ def impl_numba_typeref_ctor(cls):
     cls : TypeRef
         Expecting a TypeRef of a precise ListType.
 
-    See also: `redirect_type_ctor` in numba/target/bulitins.py
+    See also: `redirect_type_ctor` in numba/cpython/bulitins.py
     """
     list_ty = cls.instance_type
     if not isinstance(list_ty, types.ListType):
