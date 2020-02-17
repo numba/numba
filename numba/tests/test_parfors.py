@@ -19,8 +19,11 @@ import operator
 from collections import defaultdict
 
 import numba.parfors.parfor
-from numba import njit, prange
-from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall, config, compiler, cpu
+from numba import njit, prange, set_num_threads, get_num_threads
+from numba.core import (types, utils, typing, errors, ir, rewrites,
+                        typed_passes, inline_closurecall, config, compiler, cpu)
+from numba.extending import (overload_method, register_model,
+                             typeof_impl, unbox, NativeValue, models)
 from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (find_callname, guard, build_definitions,
@@ -2419,20 +2422,18 @@ class TestParforsVectorizer(TestPrangeBase):
     def get_gufunc_asm(self, func, schedule_type, *args, **kwargs):
 
         fastmath = kwargs.pop('fastmath', False)
-        nthreads = kwargs.pop('nthreads', 2)
         cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
         assertions = kwargs.pop('assertions', True)
 
         env_opts = {'NUMBA_CPU_NAME': cpu_name,
                     'NUMBA_CPU_FEATURES': '',
-                    'NUMBA_NUM_THREADS': str(nthreads)
                     }
 
         overrides = []
         for k, v in env_opts.items():
             overrides.append(override_env_config(k, v))
 
-        with overrides[0], overrides[1], overrides[2]:
+        with overrides[0], overrides[1]:
             sig = tuple([numba.typeof(x) for x in args])
             pfunc_vectorizable = self.generate_prange_func(func, None)
             if fastmath == True:
@@ -2450,7 +2451,7 @@ class TestParforsVectorizer(TestPrangeBase):
                 self.assertEqual(matches[0], schedule_type)
                 self.assertTrue(asm != {})
 
-        return asm
+            return asm
 
     # this is a common match pattern for something like:
     # \n\tvsqrtpd\t-192(%rbx,%rsi,8), %zmm0\n
@@ -3154,6 +3155,59 @@ class TestParforsMisc(TestParforsBase):
 
         # assert state has not changed
         self.assertFalse(numba.parfors.parfor.sequential_parfor_lowering)
+
+    def test_issue_5098(self):
+        class DummyType(types.Opaque):
+            pass
+
+        dummy_type = DummyType("my_dummy")
+        register_model(DummyType)(models.OpaqueModel)
+
+        class Dummy(object):
+            pass
+
+        @typeof_impl.register(Dummy)
+        def typeof_Dummy(val, c):
+            return dummy_type
+
+        @unbox(DummyType)
+        def unbox_index(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        @overload_method(DummyType, "method1", jit_options={"parallel":True})
+        def _get_method1(obj, arr, func):
+            def _foo(obj, arr, func):
+                def baz(a, f):
+                    c = a.copy()
+                    c[np.isinf(a)] = np.nan
+                    return f(c)
+
+                length = len(arr)
+                output_arr = np.empty(length, dtype=np.float64)
+                for i in prange(length):
+                    output_arr[i] = baz(arr[i], func)
+                for i in prange(length - 1):
+                    output_arr[i] += baz(arr[i], func)
+                return output_arr
+            return _foo
+
+        @njit
+        def bar(v):
+            return v.mean()
+
+        @njit
+        def test1(d):
+            return d.method1(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), bar)
+
+        save_state = numba.parfors.parfor.sequential_parfor_lowering
+        self.assertFalse(save_state)
+        try:
+            test1(Dummy())
+            self.assertFalse(numba.parfors.parfor.sequential_parfor_lowering)
+        finally:
+            # always set the sequential_parfor_lowering state back to the
+            # original state
+            numba.parfors.parfor.sequential_parfor_lowering = save_state
 
 
 @skip_parfors_unsupported
