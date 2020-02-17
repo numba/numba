@@ -1334,12 +1334,19 @@ class PreParforPass(object):
     def run(self):
         """Run pre-parfor processing pass.
         """
+        post_proc = postproc.PostProcessor(self.func_ir)
+        post_proc.run()
         # e.g. convert A.sum() to np.sum(A) for easier match and optimization
         canonicalize_array_math(self.func_ir, self.typemap,
                                 self.calltypes, self.typingctx)
         if self.options.numpy:
             self._replace_parallel_functions(self.func_ir.blocks)
         self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
+        #self.func_ir._reset_analysis_variables()
+        #vlt = postproc.VariableLifetime(self.func_ir.blocks)
+        #self.func_ir.variable_lifetime = vlt
+        #import pdb; pdb.set_trace()
+        #pass
 
     def _replace_parallel_functions(self, blocks):
         """

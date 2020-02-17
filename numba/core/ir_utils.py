@@ -2062,7 +2062,7 @@ def check_and_legalize_ir(func_ir):
     """
     orig_ir = func_ir.copy()
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run()
+    post_proc.run(True)
     msg = ("\nNumba has detected inconsistencies in its internal "
            "representation of the code at %s. Numba can probably recover from "
            "this problem and is attempting to do, however something inside "
