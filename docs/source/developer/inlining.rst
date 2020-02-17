@@ -37,7 +37,7 @@ As an example, consider the following snippet:
 
 This will fail to compile and run, because the type of ``z`` can not be inferred
 as it will only be refined within ``bar``. If we now add ``inline=True`` to the
-decorator for ``bar`` the snippet will compile and run. This i because inlining
+decorator for ``bar`` the snippet will compile and run. This is because inlining
 the call to ``a.append(10)`` will mean that ``z`` will be refined to hold integers
 and so type inference will succeed.
 
