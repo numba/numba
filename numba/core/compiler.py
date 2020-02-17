@@ -464,11 +464,10 @@ class DefaultPassBuilder(object):
 
         # optimisation
         pm.add_pass(InlineOverloads, "inline overloaded functions")
-        if state.flags.auto_parallel.enabled:
-            pm.add_pass(PreParforPass, "Preprocessing for parfors")
         if not state.flags.no_rewrites:
             pm.add_pass(NopythonRewrites, "nopython rewrites")
         if state.flags.auto_parallel.enabled:
+            pm.add_pass(PreParforPass, "Preprocessing for parfors")
             pm.add_pass(ParforPass, "convert to parfors")
 
         # legalise
