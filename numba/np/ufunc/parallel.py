@@ -11,11 +11,11 @@ to steal works from other threads.
 """
 
 import os
-import platform
 import sys
 import warnings
 from threading import RLock as threadRLock
 import multiprocessing
+from ctypes import CFUNCTYPE, c_int, CDLL
 
 import numpy as np
 
@@ -23,9 +23,15 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
 from numba.np.numpy_support import as_dtype
-from numba.core import types, config
+from numba.core import types, config, errors
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder
+from numba.extending import overload
+
+
+_IS_OSX = sys.platform.startswith('darwin')
+_IS_LINUX = sys.platform.startswith('linux')
+_IS_WINDOWS = sys.platform.startswith('win32')
 
 
 def get_thread_count():
@@ -128,7 +134,7 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     array_count = len(sig.args) + 1
 
     parallel_for_ty = lc.Type.function(lc.Type.void(),
-                                       [byte_ptr_t] * 5 + [intp_t, ] * 2)
+                                       [byte_ptr_t] * 5 + [intp_t, ] * 3)
     parallel_for = mod.get_or_insert_function(parallel_for_ty,
                                               name='numba_parallel_for')
 
@@ -142,12 +148,18 @@ def build_gufunc_kernel(library, ctx, info, sig, inner_ndim):
     )
     wrapperlib.add_linking_library(info.library)
 
+    get_num_threads = builder.module.get_or_insert_function(
+        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        name="get_num_threads")
+
+    num_threads = builder.call(get_num_threads, [])
+
     # Prepare call
     fnptr = builder.bitcast(tmp_voidptr, byte_ptr_t)
     innerargs = [as_void_ptr(x) for x
                  in [args, dimensions, steps, data]]
     builder.call(parallel_for, [fnptr] + innerargs +
-                 [intp_t(x) for x in (inner_ndim, array_count)])
+                 [intp_t(x) for x in (inner_ndim, array_count)] + [num_threads])
 
     # Release the GIL
     pyapi.restore_thread(thread_state)
@@ -267,6 +279,7 @@ _windows = sys.platform.startswith('win32')
 class _nop(object):
     """A no-op contextmanager
     """
+
     def __enter__(self):
         pass
 
@@ -313,14 +326,46 @@ def threading_layer():
         return _threading_layer
 
 
+def _check_tbb_version_compatible():
+    """
+    Checks that if TBB is present it is of a compatible version.
+    """
+    try:
+        # first check that the TBB version is new enough
+        if _IS_WINDOWS:
+            libtbb_name = 'tbb'
+        elif _IS_OSX:
+            libtbb_name = 'libtbb.dylib'
+        elif _IS_LINUX:
+            libtbb_name = 'libtbb.so.2'
+        else:
+            raise ValueError("Unknown operating system")
+        libtbb = CDLL(libtbb_name)
+        version_func = libtbb.TBB_runtime_interface_version
+        version_func.argtypes = []
+        version_func.restype = c_int
+        tbb_iface_ver = version_func()
+        if tbb_iface_ver < 11005: # magic number from TBB
+            msg = ("The TBB threading layer requires TBB "
+                   "version 2019.5 or later i.e., "
+                   "TBB_INTERFACE_VERSION >= 11005. Found "
+                   "TBB_INTERFACE_VERSION = %s. The TBB "
+                   "threading layer is disabled.")
+            problem = errors.NumbaWarning(msg % tbb_iface_ver)
+            warnings.warn(problem)
+            raise ImportError("Problem with TBB. Reason: %s" % msg)
+    except (ValueError, OSError) as e:
+        # Translate as an ImportError for consistent error class use, this error
+        # will never materialise
+        raise ImportError("Problem with TBB. Reason: %s" % e)
+
+
 def _launch_threads():
     with _backend_init_process_lock:
         with _backend_init_thread_lock:
             global _is_initialized
             if _is_initialized:
                 return
-
-            from ctypes import CFUNCTYPE, c_int
 
             def select_known_backend(backend):
                 """
@@ -329,6 +374,9 @@ def _launch_threads():
                 lib = None
                 if backend.startswith("tbb"):
                     try:
+                        # check if TBB is present and compatible
+                        _check_tbb_version_compatible()
+                        # now try and load the backend
                         from numba.np.ufunc import tbbpool as lib
                     except ImportError:
                         pass
@@ -363,8 +411,6 @@ def _launch_threads():
             namedbackends = ['tbb', 'omp', 'workqueue']
 
             lib = None
-            _IS_OSX = platform.system() == "Darwin"
-            _IS_LINUX = platform.system() == "Linux"
             err_helpers = dict()
             err_helpers['TBB'] = ("Intel TBB is required, try:\n"
                                   "$ conda/pip install tbb")
@@ -446,10 +492,158 @@ def _launch_threads():
             launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
             launch_threads(NUM_THREADS)
 
+            _load_num_threads_funcs(lib)  # load late
+
             # set library name so it can be queried
             global _threading_layer
             _threading_layer = libname
             _is_initialized = True
+
+
+def _load_num_threads_funcs(lib):
+
+    ll.add_symbol('get_num_threads', lib.get_num_threads)
+    ll.add_symbol('set_num_threads', lib.set_num_threads)
+    ll.add_symbol('get_thread_id', lib.get_thread_id)
+
+    global _set_num_threads
+    _set_num_threads = CFUNCTYPE(None, c_int)(lib.set_num_threads)
+    _set_num_threads(NUM_THREADS)
+
+    global _get_num_threads
+    _get_num_threads = CFUNCTYPE(c_int)(lib.get_num_threads)
+
+    global _get_thread_id
+    _get_thread_id = CFUNCTYPE(c_int)(lib.get_thread_id)
+
+
+# Some helpers to make set_num_threads jittable
+
+def gen_snt_check():
+    from numba.core.config import NUMBA_NUM_THREADS
+    msg = "The number of threads must be between 1 and %s" % NUMBA_NUM_THREADS
+
+    def snt_check(n):
+        if n > NUMBA_NUM_THREADS or n < 1:
+            raise ValueError(msg)
+    return snt_check
+
+
+snt_check = gen_snt_check()
+
+
+@overload(snt_check)
+def ol_snt_check(n):
+    return snt_check
+
+
+def set_num_threads(n):
+    """
+    Set the number of threads to use for parallel execution.
+
+    By default, all :obj:`numba.config.NUMBA_NUM_THREADS` threads are used.
+
+    This functionality works by masking out threads that are not used.
+    Therefore, the number of threads *n* must be less than or equal to
+    :obj:`~.NUMBA_NUM_THREADS`, the total number of threads that are launched.
+    See its documentation for more details.
+
+    This function can be used inside of a jitted function.
+
+    Parameters
+    ----------
+    n: The number of threads. Must be between 1 and NUMBA_NUM_THREADS.
+
+    See Also
+    --------
+    get_num_threads, numba.config.NUMBA_NUM_THREADS,
+    numba.config.NUMBA_DEFAULT_NUM_THREADS, :envvar:`NUMBA_NUM_THREADS`
+
+    """
+    _launch_threads()
+    if not isinstance(n, (int, np.integer)):
+        raise TypeError("The number of threads specified must be an integer")
+    snt_check(n)
+    _set_num_threads(n)
+
+
+@overload(set_num_threads)
+def ol_set_num_threads(n):
+    _launch_threads()
+    if not isinstance(n, types.Integer):
+        msg = "The number of threads specified must be an integer"
+        raise errors.TypingError(msg)
+
+    def impl(n):
+        snt_check(n)
+        _set_num_threads(n)
+    return impl
+
+
+def get_num_threads():
+    """
+    Get the number of threads used for parallel execution.
+
+    By default (if :func:`~.set_num_threads` is never called), all
+    :obj:`numba.config.NUMBA_NUM_THREADS` threads are used.
+
+    This number is less than or equal to the total number of threads that are
+    launched, :obj:`numba.config.NUMBA_NUM_THREADS`.
+
+    This function can be used inside of a jitted function.
+
+    Returns
+    -------
+    The number of threads.
+
+    See Also
+    --------
+    set_num_threads, numba.config.NUMBA_NUM_THREADS,
+    numba.config.NUMBA_DEFAULT_NUM_THREADS, :envvar:`NUMBA_NUM_THREADS`
+
+    """
+    _launch_threads()
+    num_threads = _get_num_threads()
+    if num_threads <= 0:
+        raise RuntimeError("Invalid number of threads. "
+                           "This likely indicates a bug in Numba. "
+                           "(thread_id=%s, num_threads=%s)" %
+                           (_get_thread_id(), num_threads))
+    return num_threads
+
+
+@overload(get_num_threads)
+def ol_get_num_threads():
+    _launch_threads()
+
+    def impl():
+        num_threads = _get_num_threads()
+        if num_threads <= 0:
+            print("Broken thread_id: ", _get_thread_id())
+            print("num_threads: ", num_threads)
+            raise RuntimeError("Invalid number of threads. "
+                               "This likely indicates a bug in Numba.")
+        return num_threads
+    return impl
+
+
+def _get_thread_id():
+    """
+    Returns a unique ID for each thread
+
+    This function is private and should only be used for testing purposes.
+    """
+    _launch_threads()
+    return _get_thread_id()
+
+
+@overload(_get_thread_id)
+def ol_get_thread_id():
+    _launch_threads()
+
+    def impl():
+        return _get_thread_id()
+    return impl
 
 
 _DYLD_WORKAROUND_SET = 'NUMBA_DYLD_WORKAROUND' in os.environ

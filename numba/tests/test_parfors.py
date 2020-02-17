@@ -19,7 +19,7 @@ import operator
 from collections import defaultdict
 
 import numba.parfors.parfor
-from numba import njit, prange
+from numba import njit, prange, set_num_threads, get_num_threads
 from numba.core import (types, utils, typing, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
@@ -2419,20 +2419,18 @@ class TestParforsVectorizer(TestPrangeBase):
     def get_gufunc_asm(self, func, schedule_type, *args, **kwargs):
 
         fastmath = kwargs.pop('fastmath', False)
-        nthreads = kwargs.pop('nthreads', 2)
         cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
         assertions = kwargs.pop('assertions', True)
 
         env_opts = {'NUMBA_CPU_NAME': cpu_name,
                     'NUMBA_CPU_FEATURES': '',
-                    'NUMBA_NUM_THREADS': str(nthreads)
                     }
 
         overrides = []
         for k, v in env_opts.items():
             overrides.append(override_env_config(k, v))
 
-        with overrides[0], overrides[1], overrides[2]:
+        with overrides[0], overrides[1]:
             sig = tuple([numba.typeof(x) for x in args])
             pfunc_vectorizable = self.generate_prange_func(func, None)
             if fastmath == True:
@@ -2450,7 +2448,7 @@ class TestParforsVectorizer(TestPrangeBase):
                 self.assertEqual(matches[0], schedule_type)
                 self.assertTrue(asm != {})
 
-        return asm
+            return asm
 
     # this is a common match pattern for something like:
     # \n\tvsqrtpd\t-192(%rbx,%rsi,8), %zmm0\n
