@@ -9,7 +9,6 @@ from numba.core.typeconv import Conversion
 from numba.np import npdatetime_helpers
 
 
-@total_ordering
 class Boolean(Hashable, Bounded):    
     def __init__(self, name):
         super(Boolean, self).__init__(name)
@@ -17,12 +16,6 @@ class Boolean(Hashable, Bounded):
 
     def cast_python_value(self, value):
         return bool(value)
-
-    def __lt__(self, other):
-        if self.__class__ is not other.__class__:
-            return NotImplemented
-        return self
-
     @property
     def maxval(self):
         """
