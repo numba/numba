@@ -417,7 +417,7 @@ def get_type_max_value(typ):
         if bw == 64:
             return np.finfo(np.float64).max
         raise NotImplementedError("Unsupported floating point type")
-    if isinstance(typ, types.Integer):
+    if isinstance(typ, types.Bounded):
         return typ.maxval
     raise NotImplementedError("Unsupported type")
 
@@ -429,7 +429,7 @@ def get_type_min_value(typ):
         if bw == 64:
             return np.finfo(np.float64).min
         raise NotImplementedError("Unsupported floating point type")
-    if isinstance(typ, types.Integer):
+    if isinstance(typ, types.Bounded):
         return typ.minval
     raise NotImplementedError("Unsupported type")
 
@@ -438,11 +438,10 @@ def get_type_min_value(typ):
 def lower_get_type_min_value(context, builder, sig, args):
     typ = sig.args[0].dtype
     bw = typ.bitwidth
-
-    if isinstance(typ, types.Integer):
+    
+    if isinstance(typ, types.Bounded):
         lty = ir.IntType(bw)
-        val = typ.minval
-        res = ir.Constant(lty, val)
+        res = ir.Constant(lty, typ.minval)
     elif isinstance(typ, types.Float):
         if bw == 32:
             lty = ir.FloatType()
@@ -460,10 +459,9 @@ def lower_get_type_max_value(context, builder, sig, args):
     typ = sig.args[0].dtype
     bw = typ.bitwidth
 
-    if isinstance(typ, types.Integer):
+    if isinstance(typ, types.Bounded):
         lty = ir.IntType(bw)
-        val = typ.maxval
-        res = ir.Constant(lty, val)
+        res = ir.Constant(lty, typ.maxval)
     elif isinstance(typ, types.Float):
         if bw == 32:
             lty = ir.FloatType()

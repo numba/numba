@@ -441,7 +441,6 @@ class Literal(Type):
         return self._literal_type_cache
 
 
-
 class TypeRef(Dummy):
     """Reference to a type.
 
@@ -451,3 +450,19 @@ class TypeRef(Dummy):
         self.instance_type = instance_type
         super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
 
+
+class Bounded(Type):
+    """
+    For types that have minimal and maximal values
+    """
+    @abstractproperty
+    def minval(self):
+        """
+        The minimal value representable by this type.
+        """
+    
+    @abstractproperty
+    def maxval(self):
+        """
+        The maximum value representable by this type.
+        """

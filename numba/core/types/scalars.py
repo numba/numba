@@ -2,18 +2,40 @@ import enum
 
 import numpy as np
 
-from .abstract import Dummy, Hashable, Literal, Number, Type
+from .abstract import Dummy, Hashable, Literal, Number, Type, Bounded
 from functools import total_ordering
 from numba.core import utils
 from numba.core.typeconv import Conversion
 from numba.np import npdatetime_helpers
 
 
-class Boolean(Hashable):
+@total_ordering
+class Boolean(Hashable, Bounded):    
+    def __init__(self, name):
+        super(Boolean, self).__init__(name)
+        self.bitwidth = 1
 
     def cast_python_value(self, value):
         return bool(value)
 
+    def __lt__(self, other):
+        if self.__class__ is not other.__class__:
+            return NotImplemented
+        return self
+
+    @property
+    def maxval(self):
+        """
+        The maximum value representable by this type.
+        """
+        return 1
+
+    @property
+    def minval(self):
+        """
+        The minimal value representable by this type.
+        """
+        return 0
 
 def parse_integer_bitwidth(name):
     for prefix in ('int', 'uint'):
@@ -28,7 +50,7 @@ def parse_integer_signed(name):
 
 
 @total_ordering
-class Integer(Number):
+class Integer(Number, Bounded):
     def __init__(self, name, bitwidth=None, signed=None):
         super(Integer, self).__init__(name)
         if bitwidth is None:

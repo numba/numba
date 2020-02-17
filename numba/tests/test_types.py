@@ -254,10 +254,13 @@ class TestNumbers(TestCase):
         """
         All numeric types have bitwidth attribute
         """
+        self.assertTrue(hasattr(types.boolean, "bitwidth"))
         for ty in types.number_domain:
             self.assertTrue(hasattr(ty, "bitwidth"))
 
     def test_minval_maxval(self):
+        self.assertEqual(types.boolean.minval, 0)
+        self.assertEqual(types.boolean.maxval, 1)
         self.assertEqual(types.int8.maxval, 127)
         self.assertEqual(types.int8.minval, -128)
         self.assertEqual(types.uint8.maxval, 255)
