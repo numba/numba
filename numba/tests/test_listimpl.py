@@ -473,20 +473,25 @@ class TestListImpl(TestCase):
         l.set_immutable()
         self.assertFalse(l.is_mutable)
         # append
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             l.append(one)
+        self.assertIn("list is immutable", str(raises.exception))
         # setitem
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             l[0] = one
+        self.assertIn("list is immutable", str(raises.exception))
         # pop
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             l.pop()
+        self.assertIn("list is immutable", str(raises.exception))
         # delitem with index
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             del l[0]
+        self.assertIn("list is immutable", str(raises.exception))
         # delitem with slice
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             del l[0:1:1]
+        self.assertIn("list is immutable", str(raises.exception))
         l.set_mutable()
 
         # check that nothing has changed
