@@ -75,6 +75,9 @@ class CompilerPass(object):
         Runs the initialization sequence for the pass, will run before
         `run_pass`.
         """
+        from numba.core.ir_utils import remove_dels
+        if args[0].func_ir:
+            remove_dels(args[0].func_ir.blocks)
         return False
 
     @abstractmethod
@@ -283,12 +286,6 @@ class PassManager(object):
 
         # wire in the analysis info so it's accessible
         pss.analysis = self._analysis
-        #if internal_state.func_ir and 'preparfor' in pss.name():
-            #PostProcessor(internal_state.func_ir).run(False)
-        #else:
-        if internal_state.func_ir:
-            from numba.core.ir_utils import remove_dels
-            remove_dels(internal_state.func_ir.blocks)
         with SimpleTimer() as init_time:
             mutated |= check(pss.run_initialization, internal_state)
         with SimpleTimer() as pass_time:
