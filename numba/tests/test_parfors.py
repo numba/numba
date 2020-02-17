@@ -20,7 +20,10 @@ from collections import defaultdict
 
 import numba.parfors.parfor
 from numba import njit, prange, set_num_threads, get_num_threads
-from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall, config, compiler, cpu
+from numba.core import (types, utils, typing, errors, ir, rewrites,
+                        typed_passes, inline_closurecall, config, compiler, cpu)
+from numba.extending import (overload_method, register_model,
+                             typeof_impl, unbox, NativeValue, models)
 from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (find_callname, guard, build_definitions,
@@ -3094,6 +3097,62 @@ class TestParforsMisc(TestParforsBase):
             return data
 
         self.check(test_impl)
+
+    @skip_parfors_unsupported
+    def test_issue_5098(self):
+        class DummyType(types.Opaque):
+            pass
+
+        dummy_type = DummyType("my_dummy")
+        register_model(DummyType)(models.OpaqueModel)
+
+        class Dummy(object):
+            pass
+
+        @typeof_impl.register(Dummy)
+        def typeof_Dummy(val, c):
+            return dummy_type
+
+        @unbox(DummyType)
+        def unbox_index(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        @overload_method(DummyType, "method1", jit_options={"parallel":True})
+        def _get_method1(obj, arr, func):
+            def _foo(obj, arr, func):
+                def baz(a, f):
+                    c = a.copy()
+                    c[np.isinf(a)] = np.nan
+                    return f(c)
+
+                length = len(arr)
+                output_arr = np.empty(length, dtype=np.float64)
+                for i in prange(length):
+                    output_arr[i] = baz(arr[i], func)
+                for i in prange(length - 1):
+                    output_arr[i] += baz(arr[i], func)
+                return output_arr
+            return _foo
+
+        @njit
+        def bar(v):
+            return v.mean()
+
+        @njit
+        def test1(d):
+            return d.method1(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), bar)
+
+        save_state = numba.parfors.parfor.sequential_parfor_lowering
+        self.assertFalse(save_state)
+        try:
+            test1(Dummy())
+            self.assertFalse(numba.parfors.parfor.sequential_parfor_lowering)
+        finally:
+            # always set the sequential_parfor_lowering state back to the
+            # original state
+            numba.parfors.parfor.sequential_parfor_lowering = save_state
+
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):
