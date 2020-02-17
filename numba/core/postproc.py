@@ -65,7 +65,7 @@ class PostProcessor(object):
     def __init__(self, func_ir):
         self.func_ir = func_ir
 
-    def run(self):
+    def run(self, emit_dels=True):
         """
         Run the following passes over Numba IR:
         - canonicalize the CFG
@@ -78,7 +78,8 @@ class PostProcessor(object):
         self.func_ir.variable_lifetime = vlt
 
         # Emit del nodes
-        self._insert_var_dels()
+        if emit_dels:
+            self._insert_var_dels()
 
         bev = analysis.compute_live_variables(vlt.cfg, self.func_ir.blocks,
                                               vlt.usedefs.defmap,
