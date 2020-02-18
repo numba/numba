@@ -1270,22 +1270,23 @@ class TestImmutable(MemoryLeakMixin, TestCase):
 
 class TestListFromIter(MemoryLeakMixin, TestCase):
 
-    def test_from_list(self):
-        @njit
-        def foo():
-            l = List([0, 1, 2])
-            return l
-        cf_received, py_received = foo(), foo.py_func()
-        for r in (cf_received, py_received):
-            for i in range(3):
-                self.assertEqual(i, r[i])
+    def test_types(self):
+        """Test all types that a List can be constructe from."""
 
-    def test_from_range(self):
-        @njit
-        def foo():
-            l = List(range(3))
-            return l
-        cf_received, py_received = foo(), foo.py_func()
-        for r in (cf_received, py_received):
-            for i in range(3):
-                self.assertEqual(i, r[i])
+        def generate_function(line):
+            context = {}
+            exec(dedent("""
+                from numba.typed import List
+                def bar():
+                    {}
+                    return l
+                """.format(line)), context)
+            return njit(context["bar"])
+        for line in ("l = List([0, 1, 2])",
+                     "l = List(range(3))",
+                     ):
+            foo = generate_function(line)
+            cf_received, py_received = foo(), foo.py_func()
+            for result in (cf_received, py_received):
+                for i in range(3):
+                    self.assertEqual(i, result[i])
