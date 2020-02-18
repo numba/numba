@@ -115,7 +115,8 @@ class PostProcessor(object):
         at all yield points.
         """
         self._populate_generator_info()
-
+        # generate del info, it's used in analysis here, strip it out at the end
+        self._insert_var_dels()
         gi = self.func_ir.generator_info
         for yp in gi.get_yield_points():
             live_vars = set(self.func_ir.get_block_entry_vars(yp.block))
@@ -148,6 +149,7 @@ class PostProcessor(object):
             st |= yp.live_vars
             st |= yp.weak_live_vars
         gi.state_vars = sorted(st)
+        self._remove_dels()
 
     def _insert_var_dels(self):
         """
@@ -210,3 +212,16 @@ class PostProcessor(object):
             escape_dead_set = escaping_dead_map[offset]
             for var_name in sorted(escape_dead_set):
                 ir_block.prepend(ir.Del(var_name, loc=ir_block.body[0].loc))
+
+
+    def _remove_dels(self):
+        """
+        Strips the IR of Del nodes
+        """
+        for block in self.func_ir.blocks.values():
+            new_body = []
+            for stmt in block.body:
+                if not isinstance(stmt, ir.Del):
+                    new_body.append(stmt)
+            block.body = new_body
+        return
