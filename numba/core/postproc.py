@@ -77,10 +77,6 @@ class PostProcessor(object):
         vlt = VariableLifetime(self.func_ir.blocks)
         self.func_ir.variable_lifetime = vlt
 
-        # Emit del nodes
-        if emit_dels:
-            self._insert_var_dels()
-
         bev = analysis.compute_live_variables(vlt.cfg, self.func_ir.blocks,
                                               vlt.usedefs.defmap,
                                               vlt.deadmaps.combined)
@@ -92,6 +88,11 @@ class PostProcessor(object):
             self._compute_generator_info()
         else:
             self.func_ir.generator_info = None
+
+        # Emit del nodes, do this last as the generator info parsing generates
+        # and then strips dels as part of its analysis.
+        if emit_dels:
+            self._insert_var_dels()
 
     def _populate_generator_info(self):
         """
