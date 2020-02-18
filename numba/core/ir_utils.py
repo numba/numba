@@ -511,7 +511,7 @@ def remove_args(blocks):
 def dead_code_elimination(func_ir, typemap=None, alias_map=None,
                           arg_aliases=None):
     """ Performs dead code elimination and leaves the IR in a valid state on
-    exit (ir.Dels are present in correct locations).
+    exit
     """
     do_post_proc = False
     while (remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap,
@@ -520,7 +520,7 @@ def dead_code_elimination(func_ir, typemap=None, alias_map=None,
 
     if do_post_proc:
         post_proc = postproc.PostProcessor(func_ir)
-        post_proc.run(True)
+        post_proc.run()
 
 
 def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases=None):
