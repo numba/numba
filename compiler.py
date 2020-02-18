@@ -10,6 +10,7 @@ from numba import ctypes_support as ctypes
 from numba.dppy.dppy_driver import spirv_generator
 from types import FunctionType
 import os
+from numba.compiler import DefaultPassBuilder, CompilerBase
 
 DEBUG=os.environ.get('NUMBA_DPPY_DEBUG', None)
 _NUMBA_PVC_READ_ONLY  = "read_only"
@@ -26,6 +27,25 @@ def _raise_invalid_kernel_enqueue_args():
                      "Usage: dppy_driver.device_env, global size, local size. "
                      "The local size argument is optional.")
     raise ValueError(error_message)
+
+class DPPyCompiler(CompilerBase):
+    """ DPPy Compiler """
+
+    def define_pipelines(self):
+        # this maintains the objmode fallback behaviour
+        pms = []
+        if not self.state.flags.force_pyobject:
+            pms.append(DefaultPassBuilder.define_nopython_pipeline(self.state))
+        if self.state.status.can_fallback or self.state.flags.force_pyobject:
+            pms.append(
+                DefaultPassBuilder.define_objectmode_pipeline(self.state)
+            )
+        if self.state.status.can_giveup:
+            pms.append(
+                DefaultPassBuilder.define_interpreted_pipeline(self.state)
+            )
+        return pms
+
 
 def compile_with_dppy(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the OpenCL backend.
@@ -47,7 +67,8 @@ def compile_with_dppy(pyfunc, return_type, args, debug):
                                       args=args,
                                       return_type=return_type,
                                       flags=flags,
-                                      locals={})
+                                      locals={},
+                                      pipeline_class=DPPyCompiler)
     elif isinstance(pyfunc, ir.FunctionIR):
         cres = compiler.compile_ir(typingctx=typingctx,
                                    targetctx=targetctx,
@@ -55,7 +76,8 @@ def compile_with_dppy(pyfunc, return_type, args, debug):
                                    args=args,
                                    return_type=return_type,
                                    flags=flags,
-                                   locals={})
+                                   locals={},
+                                   pipeline_class=DPPyCompiler)
     else:
         assert(0)
 
@@ -215,7 +237,7 @@ class DPPyKernel(DPPyKernelBase):
     A OCL kernel object
     """
 
-    def __init__(self, device_env, llvm_module, name, argtypes, ordered_arg_access_types):
+    def __init__(self, device_env, llvm_module, name, argtypes, ordered_arg_access_types=None):
         super(DPPyKernel, self).__init__()
         self._llvm_module = llvm_module
         self.assembly = self.binary = llvm_module.__str__()
