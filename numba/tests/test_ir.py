@@ -441,7 +441,7 @@ class TestIRCompounds(CheckEquality):
         self.assertEqual(len(change_set), 2)
         for item in change_set:
             self.assertTrue(item.startswith('del '))
-            check_diffstr(x_ir.diff_str(z_ir), change_set)
+        check_diffstr(x_ir.diff_str(z_ir), change_set)
 
         def foo(a, b):
             c = a * 2

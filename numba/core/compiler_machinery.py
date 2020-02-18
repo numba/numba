@@ -283,6 +283,7 @@ class PassManager(object):
 
         # wire in the analysis info so it's accessible
         pss.analysis = self._analysis
+
         with SimpleTimer() as init_time:
             mutated |= check(pss.run_initialization, internal_state)
         with SimpleTimer() as pass_time:

@@ -30,7 +30,7 @@ from numba.core.analysis import (
     compute_cfg_from_blocks,
     compute_use_defs,
     compute_live_variables)
-
+from numba.core import postproc
 from numba.cpython.rangeobj import range_iter_len
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
@@ -69,7 +69,6 @@ class InlineClosureCallPass(object):
         """Run inline closure call pass.
         """
         # Analysis relies on ir.Del presence, strip out later
-        from numba.core import postproc
         pp = postproc.PostProcessor(self.func_ir)
         pp.run(True)
 
@@ -1036,10 +1035,8 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
         if len(calltypes) == 0:
             return False
         self.crnt_block = block
-
         self.new_body = guard(_inline_const_arraycall, block, func_ir,
                               self.typingctx, typemap, calltypes)
-
         return self.new_body != None
 
     def apply(self):

@@ -15,6 +15,7 @@ from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
                                  get_definition, remove_dels)
+from numba.core import postproc
 
 
 @contextmanager
@@ -198,7 +199,9 @@ class NopythonRewrites(FunctionPass):
         inference.
         """
         # a bunch of these passes are either making assumptions or rely on some
-        # very picky and slightly bizarre state
+        # very picky and slightly bizarre state particularly in relation to
+        # ir.Del presence. To accommodate, ir.Dels are added ahead of running
+        # this pass and stripped at the end.
 
         # Ensure we have an IR and type information.
         assert state.func_ir
@@ -208,7 +211,6 @@ class NopythonRewrites(FunctionPass):
                'pass encountered during compilation of '
                'function "%s"' % (state.func_id.func_name,))
 
-        from numba.core import postproc
         pp = postproc.PostProcessor(state.func_ir)
         pp.run(True)
         with fallback_context(state, msg):

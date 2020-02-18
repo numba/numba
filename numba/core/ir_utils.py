@@ -1633,7 +1633,7 @@ def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
 
 def get_ir_of_code(glbls, fcode):
     """
-    Compile a code object to get its IR.
+    Compile a code object to get its IR, ir.Del nodes are emitted
     """
     nfree = len(fcode.co_freevars)
     func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
@@ -2058,25 +2058,18 @@ def resolve_func_from_module(func_ir, node):
 
 def check_and_legalize_ir(func_ir):
     """
-    This checks that the IR presented is legal, warns and legalizes if not
+    This checks that the IR presented is legal
     """
-    strict = False
-    orig_ir = func_ir.copy()
-    msg = ("\nNumba has detected inconsistencies in its internal "
-           "representation of the code at %s. Numba can probably recover from "
-           "this problem and is attempting to do, however something inside "
-           "Numba needs fixing...\n%s\n") % (func_ir.loc, feedback_details)
-    if not func_ir.equal_ir(orig_ir):
-        msg +=  func_ir.diff_str(orig_ir)
-        warnings.warn(NumbaWarning(msg, loc=func_ir.loc))
+    strict = True
     for blk in func_ir.blocks.values():
         dels = [x for x in blk.find_insts(ir.Del)]
         if dels:
-            args = "Illegal IR, del at: %s" % dels[0], dels[0].loc
+            msg = "Illegal IR, del found at: %s" % dels[0]
             if strict:
-                raise RuntimeError(*args)
+                raise errors.CompilerError(msg, loc=dels[0].loc)
             else:
-                warnings.warn(NumbaWarning(*args))
+                warnings.warn(NumbaWarning(msg))
+    # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run(True)
 
