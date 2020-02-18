@@ -2060,6 +2060,7 @@ def check_and_legalize_ir(func_ir):
     """
     This checks that the IR presented is legal, warns and legalizes if not
     """
+    strict = False
     orig_ir = func_ir.copy()
     msg = ("\nNumba has detected inconsistencies in its internal "
            "representation of the code at %s. Numba can probably recover from "
@@ -2071,7 +2072,11 @@ def check_and_legalize_ir(func_ir):
     for blk in func_ir.blocks.values():
         dels = [x for x in blk.find_insts(ir.Del)]
         if dels:
-            raise RuntimeError("Illegal IR, del at: %s" % dels[0], dels[0].loc)
+            args = "Illegal IR, del at: %s" % dels[0], dels[0].loc
+            if strict:
+                raise RuntimeError(*args)
+            else:
+                warnings.warn(NumbaWarning(*args))
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run(True)
 
