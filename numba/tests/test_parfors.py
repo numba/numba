@@ -139,8 +139,9 @@ class TestParforsBase(TestCase):
 
         # parfor result
         parfor_output = cpfunc.entry_point(*copy_args(*args))
-
-        if py_expected.dtype == np.bool_:
+        
+        # check to avoid TypeError when subtracting arrays
+        if isinstance(py_expected, np.ndarray) and py_expected.dtype == np.bool_:
             np.testing.assert_equal(njit_output, py_expected, **kwargs)
             np.testing.assert_equal(parfor_output, py_expected, **kwargs)
         else:
