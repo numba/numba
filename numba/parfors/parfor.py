@@ -1882,6 +1882,196 @@ class ConvertNumpyPass:
             parfor.dump()
         return parfor
 
+
+class ConvertReducePass:
+    """
+    Find reduce() calls and convert them to parfors.
+    """
+    def __init__(self, pass_states):
+        self.pass_states = pass_states
+        self.rewritten = []
+
+    def run(self, blocks):
+        pass_states = self.pass_states
+
+        topo_order = find_topo_order(blocks)
+        for label in topo_order:
+            block = blocks[label]
+            new_body = []
+            equiv_set = pass_states.array_analysis.get_equiv_set(label)
+            for instr in block.body:
+                parfor = None
+                if isinstance(instr, ir.Assign):
+                    loc = instr.loc
+                    lhs = instr.target
+                    expr = instr.value
+                    callname = guard(find_callname, pass_states.func_ir, expr)
+                    if (callname == ('reduce', 'builtins')
+                        or callname == ('reduce', '_functools')):
+                        # reduce function with generic function
+                        parfor = guard(self._reduce_to_parfor, equiv_set, lhs,
+                                       expr.args, loc)
+                    if parfor:
+                        self.rewritten.append(dict(
+                            new=parfor,
+                            old=instr,
+                            reason='reduce',
+                        ))
+                        instr = parfor
+                new_body.append(instr)
+            block.body = new_body
+        return
+
+    def _reduce_to_parfor(self, equiv_set, lhs, args, loc):
+        """
+        Convert a reduce call to a parfor.
+        The call arguments should be (call_name, array, init_value).
+        """
+        pass_states = self.pass_states
+
+        scope = lhs.scope
+        call_name = args[0]
+        in_arr = args[1]
+        arr_def = get_definition(pass_states.func_ir, in_arr.name)
+
+        mask_var = None
+        mask_indices = None
+
+        # Search for array[boolean_mask]
+        mask_query_result = guard(_find_mask, pass_states.typemap, pass_states.func_ir, arr_def)
+        if mask_query_result:
+            in_arr, mask_var, mask_typ, mask_indices = mask_query_result
+
+        init_val = args[2]
+        size_vars = equiv_set.get_shape(in_arr if mask_indices == None else mask_var)
+        index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
+        mask_index = index_vars
+        if mask_indices:
+            assert False, "DEAD"
+            index_vars = tuple(x if x else index_vars[0] for x in mask_indices)
+        acc_var = lhs
+
+        # init block has to init the reduction variable
+        init_block = ir.Block(scope, loc)
+        init_block.body.append(ir.Assign(init_val, acc_var, loc))
+
+        # produce loop body
+        body_label = next_label()
+        index_var, loop_body = self._mk_reduction_body(call_name,
+                                scope, loc, index_vars, in_arr, acc_var)
+        if mask_indices:
+            assert False, "DEAD"
+            index_var = mask_index[0]
+
+        if mask_var != None:
+            true_label = min(loop_body.keys())
+            false_label = max(loop_body.keys())
+            body_block = ir.Block(scope, loc)
+            loop_body[body_label] = body_block
+            mask = ir.Var(scope, mk_unique_var("$mask_val"), loc)
+            pass_states.typemap[mask.name] = mask_typ
+            mask_val = ir.Expr.getitem(mask_var, index_var, loc)
+            body_block.body.extend([
+               ir.Assign(mask_val, mask, loc),
+               ir.Branch(mask, true_label, false_label, loc)
+            ])
+
+        parfor = Parfor(loopnests, init_block, loop_body, loc, index_var,
+                        equiv_set, ('{} function'.format(call_name),
+                                    'reduction'), pass_states.flags)
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("parfor from reduction")
+            parfor.dump()
+        return parfor
+
+    def _mk_reduction_body(self, call_name, scope, loc,
+                           index_vars, in_arr, acc_var):
+        """
+        Produce the body blocks for a reduction function indicated by call_name.
+        """
+        from numba.core.inline_closurecall import check_reduce_func
+
+        pass_states = self.pass_states
+        reduce_func = get_definition(pass_states.func_ir, call_name)
+        fcode = check_reduce_func(pass_states.func_ir, reduce_func)
+
+        arr_typ = pass_states.typemap[in_arr.name]
+        in_typ = arr_typ.dtype
+        body_block = ir.Block(scope, loc)
+        index_var, index_var_type = _make_index_var(
+            pass_states.typemap, scope, index_vars, body_block)
+
+        tmp_var = ir.Var(scope, mk_unique_var("$val"), loc)
+        pass_states.typemap[tmp_var.name] = in_typ
+        getitem_call = ir.Expr.getitem(in_arr, index_var, loc)
+        pass_states.calltypes[getitem_call] = signature(
+            in_typ, arr_typ, index_var_type)
+        body_block.append(ir.Assign(getitem_call, tmp_var, loc))
+
+        reduce_f_ir = compile_to_numba_ir(fcode,
+                                        pass_states.func_ir.func_id.func.__globals__,
+                                        pass_states.typingctx,
+                                        (in_typ, in_typ),
+                                        pass_states.typemap,
+                                        pass_states.calltypes)
+        loop_body = reduce_f_ir.blocks
+        end_label = next_label()
+        end_block = ir.Block(scope, loc)
+        loop_body[end_label] = end_block
+        first_reduce_label = min(reduce_f_ir.blocks.keys())
+        first_reduce_block = reduce_f_ir.blocks[first_reduce_label]
+        body_block.body.extend(first_reduce_block.body)
+        first_reduce_block.body = body_block.body
+        replace_arg_nodes(first_reduce_block, [acc_var, tmp_var])
+        replace_returns(loop_body, acc_var, end_label)
+        return index_var, loop_body
+
+
+def _find_mask(typemap, func_ir, arr_def):
+    """check if an array is of B[...M...], where M is a
+    boolean array, and other indices (if available) are ints.
+    If found, return B, M, M's type, and a tuple representing mask indices.
+    Otherwise, raise GuardException.
+    """
+    require(isinstance(arr_def, ir.Expr) and arr_def.op == 'getitem')
+    value = arr_def.value
+    index = arr_def.index
+    value_typ = typemap[value.name]
+    index_typ = typemap[index.name]
+    ndim = value_typ.ndim
+    require(isinstance(value_typ, types.npytypes.Array))
+    if (isinstance(index_typ, types.npytypes.Array) and
+        isinstance(index_typ.dtype, types.Boolean) and
+        ndim == index_typ.ndim):
+        return value, index, index_typ.dtype, None
+    elif isinstance(index_typ, types.BaseTuple):
+        # Handle multi-dimension differently by requiring
+        # all indices to be constant except the one for mask.
+        seq, op = find_build_sequence(func_ir, index)
+        require(op == 'build_tuple' and len(seq) == ndim)
+        count_consts = 0
+        mask_indices = []
+        mask_var = None
+        for ind in seq:
+            index_typ = typemap[ind.name]
+            if (isinstance(index_typ, types.npytypes.Array) and
+                isinstance(index_typ.dtype, types.Boolean)):
+                mask_var = ind
+                mask_typ = index_typ.dtype
+                mask_indices.append(None)
+            elif (isinstance(index_typ, types.npytypes.Array) and
+                isinstance(index_typ.dtype, types.Integer)):
+                mask_var = ind
+                mask_typ = index_typ.dtype
+                mask_indices.append(None)
+            elif isinstance(index_typ, types.Integer):
+                count_consts += 1
+                mask_indices.append(ind)
+        require(mask_var and count_consts == ndim - 1)
+        return value, mask_var, mask_typ, mask_indices
+    raise GuardException
+
+
 class ParforPass(ParforPassStates):
 
     """ParforPass class is responsible for converting Numpy
@@ -1909,7 +2099,7 @@ class ParforPass(ParforPassStates):
         if self.options.numpy:
             ConvertNumpyPass(self).run(self.func_ir.blocks)
         if self.options.reduction:
-            self._convert_reduce(self.func_ir.blocks)
+            ConvertReducePass(self).run(self.func_ir.blocks)
         if self.options.prange:
            self._convert_loop(self.func_ir.blocks)
 
@@ -2013,33 +2203,6 @@ class ParforPass(ParforPassStates):
                 else:
                     print('Function {} has no Parfor.'.format(name))
 
-        return
-
-    def _convert_reduce(self, blocks):
-        """
-        Find reduce() calls and convert them to parfors.
-        """
-        topo_order = find_topo_order(blocks)
-        for label in topo_order:
-            block = blocks[label]
-            new_body = []
-            equiv_set = self.array_analysis.get_equiv_set(label)
-            for instr in block.body:
-                parfor = None
-                if isinstance(instr, ir.Assign):
-                    loc = instr.loc
-                    lhs = instr.target
-                    expr = instr.value
-                    callname = guard(find_callname, self.func_ir, expr)
-                    if (callname == ('reduce', 'builtins')
-                        or callname == ('reduce', '_functools')):
-                        # reduce function with generic function
-                        parfor = guard(self._reduce_to_parfor, equiv_set, lhs,
-                                       expr.args, loc)
-                    if parfor:
-                        instr = parfor
-                new_body.append(instr)
-            block.body = new_body
         return
 
     def _convert_loop(self, blocks):
@@ -2377,43 +2540,8 @@ class ParforPass(ParforPassStates):
         If found, return B, M, M's type, and a tuple representing mask indices.
         Otherwise, raise GuardException.
         """
-        require(isinstance(arr_def, ir.Expr) and arr_def.op == 'getitem')
-        value = arr_def.value
-        index = arr_def.index
-        value_typ = self.typemap[value.name]
-        index_typ = self.typemap[index.name]
-        ndim = value_typ.ndim
-        require(isinstance(value_typ, types.npytypes.Array))
-        if (isinstance(index_typ, types.npytypes.Array) and
-            isinstance(index_typ.dtype, types.Boolean) and
-            ndim == index_typ.ndim):
-            return value, index, index_typ.dtype, None
-        elif isinstance(index_typ, types.BaseTuple):
-            # Handle multi-dimension differently by requiring
-            # all indices to be constant except the one for mask.
-            seq, op = find_build_sequence(self.func_ir, index)
-            require(op == 'build_tuple' and len(seq) == ndim)
-            count_consts = 0
-            mask_indices = []
-            mask_var = None
-            for ind in seq:
-                index_typ = self.typemap[ind.name]
-                if (isinstance(index_typ, types.npytypes.Array) and
-                    isinstance(index_typ.dtype, types.Boolean)):
-                    mask_var = ind
-                    mask_typ = index_typ.dtype
-                    mask_indices.append(None)
-                elif (isinstance(index_typ, types.npytypes.Array) and
-                    isinstance(index_typ.dtype, types.Integer)):
-                    mask_var = ind
-                    mask_typ = index_typ.dtype
-                    mask_indices.append(None)
-                elif isinstance(index_typ, types.Integer):
-                    count_consts += 1
-                    mask_indices.append(ind)
-            require(mask_var and count_consts == ndim - 1)
-            return value, mask_var, mask_typ, mask_indices
-        raise GuardException
+        return _find_mask(self.typemap, self.func_ir, arr_def)
+
 
     def _get_prange_init_block(self, entry_block, call_table, prange_args):
         """
@@ -2533,62 +2661,6 @@ class ParforPass(ParforPassStates):
         replace_arg_nodes(first_reduce_block, [acc_var, tmp_var])
         replace_returns(loop_body, acc_var, end_label)
         return index_var, loop_body
-
-    def _reduce_to_parfor(self, equiv_set, lhs, args, loc):
-        """
-        Convert a reduce call to a parfor.
-        The call arguments should be (call_name, array, init_value).
-        """
-        scope = lhs.scope
-        call_name = args[0]
-        in_arr = args[1]
-        arr_def = get_definition(self.func_ir, in_arr.name)
-
-        mask_var = None
-        mask_indices = None
-        result = guard(self._find_mask, arr_def)
-        if result:
-            in_arr, mask_var, mask_typ, mask_indices = result
-
-        init_val = args[2]
-        size_vars = equiv_set.get_shape(in_arr if mask_indices == None else mask_var)
-        index_vars, loopnests = self._mk_parfor_loops(size_vars, scope, loc)
-        mask_index = index_vars
-        if mask_indices:
-            index_vars = tuple(x if x else index_vars[0] for x in mask_indices)
-        acc_var = lhs
-
-        # init block has to init the reduction variable
-        init_block = ir.Block(scope, loc)
-        init_block.body.append(ir.Assign(init_val, acc_var, loc))
-
-        # produce loop body
-        body_label = next_label()
-        index_var, loop_body = self._mk_reduction_body(call_name,
-                                scope, loc, index_vars, in_arr, acc_var)
-        if mask_indices:
-            index_var = mask_index[0]
-
-        if mask_var != None:
-            true_label = min(loop_body.keys())
-            false_label = max(loop_body.keys())
-            body_block = ir.Block(scope, loc)
-            loop_body[body_label] = body_block
-            mask = ir.Var(scope, mk_unique_var("$mask_val"), loc)
-            self.typemap[mask.name] = mask_typ
-            mask_val = ir.Expr.getitem(mask_var, index_var, loc)
-            body_block.body.extend([
-               ir.Assign(mask_val, mask, loc),
-               ir.Branch(mask, true_label, false_label, loc)
-            ])
-
-        parfor = Parfor(loopnests, init_block, loop_body, loc, index_var,
-                        equiv_set, ('{} function'.format(call_name),
-                                    'reduction'), self.flags)
-        if config.DEBUG_ARRAY_OPT >= 1:
-            print("parfor from reduction")
-            parfor.dump()
-        return parfor
 
 
     def fuse_parfors(self, array_analysis, blocks):

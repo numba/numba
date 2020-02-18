@@ -2,6 +2,7 @@
 Tests for sub-components of parfors.
 """
 import unittest
+from functools import reduce
 
 import numpy as np
 
@@ -260,6 +261,42 @@ class TestConvertNumpyPass(BaseTest):
         self.assertEqual(len(sub_pass.rewritten), 1)
         [record] = sub_pass.rewritten
         self.assertEqual(record["reason"], "arrayexpr")
+        self.check_records(sub_pass.rewritten)
+
+        self.run_parallel(test_impl, *args)
+
+
+class TestConvertReducePass(BaseTest):
+    sub_pass_class = numba.parfors.parfor.ConvertReducePass
+
+    def test_reduce_max_basic(self):
+        def test_impl(arr):
+            return reduce(lambda x, y: max(x, y), arr, 0.0)
+
+        x = np.ones(10)
+        args = (x,)
+        argtypes = [typeof(x) for x in args]
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, argtypes)
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "reduce")
+        self.check_records(sub_pass.rewritten)
+
+        self.run_parallel(test_impl, *args)
+
+    def test_reduce_max_masked(self):
+        def test_impl(arr):
+            return reduce(lambda x, y: max(x, y), arr[arr > 5], 0.0)
+
+        x = np.ones(10)
+        args = (x,)
+        argtypes = [typeof(x) for x in args]
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, argtypes)
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "reduce")
         self.check_records(sub_pass.rewritten)
 
         self.run_parallel(test_impl, *args)
