@@ -197,6 +197,9 @@ class NopythonRewrites(FunctionPass):
         Perform any intermediate representation rewrites after type
         inference.
         """
+        # a bunch of these passes are either making assumptions or rely on some
+        # very picky and slightly bizarre state
+
         # Ensure we have an IR and type information.
         assert state.func_ir
         assert isinstance(getattr(state, 'typemap', None), dict)
@@ -204,8 +207,13 @@ class NopythonRewrites(FunctionPass):
         msg = ('Internal error in post-inference rewriting '
                'pass encountered during compilation of '
                'function "%s"' % (state.func_id.func_name,))
+
+        from numba.core import postproc
+        pp = postproc.PostProcessor(state.func_ir)
+        pp.run(True)
         with fallback_context(state, msg):
             rewrites.rewrite_registry.apply('after-inference', state)
+        pp._remove_dels()
         return True
 
 

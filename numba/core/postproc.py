@@ -114,9 +114,9 @@ class PostProcessor(object):
         Compute the generator's state variables as the union of live variables
         at all yield points.
         """
-        self._populate_generator_info()
         # generate del info, it's used in analysis here, strip it out at the end
         self._insert_var_dels()
+        self._populate_generator_info()
         gi = self.func_ir.generator_info
         for yp in gi.get_yield_points():
             live_vars = set(self.func_ir.get_block_entry_vars(yp.block))

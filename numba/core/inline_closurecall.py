@@ -1037,22 +1037,13 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
             return False
         self.crnt_block = block
 
-        # Add in dels for analysis
-        from numba.core import postproc
-        pp = postproc.PostProcessor(func_ir)
-        pp.run(True)
         self.new_body = guard(_inline_const_arraycall, block, func_ir,
                               self.typingctx, typemap, calltypes)
-
-        # strip dels
-        remove_dels(func_ir.blocks)
 
         return self.new_body != None
 
     def apply(self):
         self.crnt_block.body = self.new_body
-        # create fake block structure to strip dels
-        remove_dels({0: self.crnt_block})
         return self.crnt_block
 
 
