@@ -700,7 +700,8 @@ class Lower(BaseLower):
 
             def stararg_handler(index, param, vars):
                 stararg_ty = signature.args[index]
-                assert isinstance(stararg_ty, types.BaseTuple), stararg_ty
+                if not isinstance(stararg_ty, types.BaseTuple):
+                    stararg_ty = types.Tuple((stararg_ty,))
                 values = [self._cast_var(var, sigty)
                           for var, sigty in zip(vars, stararg_ty)]
                 return cgutils.make_anonymous_struct(self.builder, values)
