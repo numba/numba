@@ -43,6 +43,11 @@
                         "associated with command_queue.",                      \
                 __LINE__, __FILE__);                                           \
         goto error;                                                            \
+    case -54:                                                                  \
+        fprintf(stderr, "Open CL Runtime Error: %d (%s) on Line %d in %s\n",   \
+                retval, "[CL_INVALID_WORK_GROUP_SIZE]",                        \
+                __LINE__, __FILE__);                                           \
+        goto error;                                                            \
     default:                                                                   \
         fprintf(stderr, "Open CL Runtime Error: %d (%s) on Line %d in %s\n",   \
                 retval, M, __LINE__, __FILE__);                                \
@@ -1070,16 +1075,14 @@ int set_args_and_enqueue_dp_kernel (env_t env_t_ptr,
     // Set the kernel arguments
     for(i = 0; i < nargs; ++i) {
 #if DEBUG
-//        printf("DEBUG: clSetKernelArgs for arg # %ld\n", i);
+        printf("DEBUG: clSetKernelArgs for arg # %ld\n", i);
 #endif
         kernel_arg_t this_arg = array_of_args[i];
 #if DEBUG
         check_kernelarg_id(this_arg);
-#endif
-#if DEBUG
-//        void **tp = (void**)this_arg->arg_value;
-//        printf("DEBUG: clSetKernelArgs for arg # %ld (size %ld, addr %p)\n", i,
-//                this_arg->arg_size, *tp);
+        void **tp = (void**)this_arg->arg_value;
+        printf("DEBUG: clSetKernelArgs for arg # %ld (size %ld, addr %p)\n", i,
+                this_arg->arg_size, *tp);
 #endif
         err = clSetKernelArg(kernel, i, this_arg->arg_size,
                              this_arg->arg_value);

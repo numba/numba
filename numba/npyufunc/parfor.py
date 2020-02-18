@@ -446,7 +446,7 @@ def _lower_parfor_parallel(lowerer, parfor):
     numba.parfor.sequential_parfor_lowering = True
     loop_ranges = [(l.start, l.stop, l.step) for l in parfor.loop_nests]
 
-    # Determine if target is cpu, csa, or spirv.  openmp should not get here
+    # Determine if target is cpu, or spirv.  openmp should not get here
     target = 'cpu'
     if targetctx.auto_parallel.gen_spirv:
         target = 'spirv'
