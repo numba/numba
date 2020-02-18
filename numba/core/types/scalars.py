@@ -16,6 +16,7 @@ class Boolean(Hashable, Bounded):
 
     def cast_python_value(self, value):
         return bool(value)
+
     @property
     def maxval(self):
         """
