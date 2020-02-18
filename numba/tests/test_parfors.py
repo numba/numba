@@ -3156,6 +3156,7 @@ class TestParforsMisc(TestParforsBase):
         # assert state has not changed
         self.assertFalse(numba.parfors.parfor.sequential_parfor_lowering)
 
+    @skip_parfors_unsupported
     def test_issue_5098(self):
         class DummyType(types.Opaque):
             pass
