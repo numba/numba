@@ -1270,14 +1270,22 @@ class TestImmutable(MemoryLeakMixin, TestCase):
 
 class TestListFromIter(MemoryLeakMixin, TestCase):
 
-    def test_basic(self):
+    def test_from_list(self):
         @njit
         def foo():
-            l = List([1, 2, 3])
+            l = List([0, 1, 2])
             return l
-        cf_received = foo()
-        py_received = foo.py_func()
+        cf_received, py_received = foo(), foo.py_func()
         for r in (cf_received, py_received):
-            self.assertEqual(1, r[0])
-            self.assertEqual(2, r[1])
-            self.assertEqual(3, r[2])
+            for i in range(3):
+                self.assertEqual(i, r[i])
+
+    def test_from_range(self):
+        @njit
+        def foo():
+            l = List(range(3))
+            return l
+        cf_received, py_received = foo(), foo.py_func()
+        for r in (cf_received, py_received):
+            for i in range(3):
+                self.assertEqual(i, r[i])
