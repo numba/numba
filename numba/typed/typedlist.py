@@ -462,7 +462,7 @@ def typedlist_call(context):
 
 
 @overload(numba_typeref_ctor)
-def impl_numba_typeref_ctor(cls):
+def impl_numba_typeref_ctor(cls, *args):
     """
     Defines ``List()``, the type-inferred version of the list ctor.
 
@@ -483,9 +483,15 @@ def impl_numba_typeref_ctor(cls):
         raise errors.LoweringError(msg)
 
     item_type = types.TypeRef(list_ty.item_type)
-
-    def impl(cls):
-        # Simply call .empty_list with the item types from *cls*
-        return List.empty_list(item_type)
+    if args:
+        def impl(cls, *args):
+            r = List.empty_list(item_type)
+            for i in args[0]:
+                r.append(i)
+            return r
+    else:
+        def impl(cls, *args):
+            # Simply call .empty_list with the item types from *cls*
+            return List.empty_list(item_type)
 
     return impl
