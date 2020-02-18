@@ -1680,6 +1680,208 @@ def _make_index_var(typemap, scope, index_vars, body_block):
         raise NotImplementedError(
             "Parfor does not handle arrays of dimension 0")
 
+
+def _mk_parfor_loops(typemap, size_vars, scope, loc):
+    """
+    Create loop index variables and build LoopNest objects for a parfor.
+    """
+    loopnests = []
+    index_vars = []
+    for size_var in size_vars:
+        index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
+        index_vars.append(index_var)
+        typemap[index_var.name] = types.uintp
+        loopnests.append(LoopNest(index_var, 0, size_var, 1))
+    return index_vars, loopnests
+
+class ConvertNumpyPass:
+    """
+    Convert supported Numpy functions, as well as arrayexpr nodes, to
+    parfor nodes.
+    """
+    def __init__(self, pass_states):
+        self.pass_states = pass_states
+        self.rewritten = []
+
+    def run(self, blocks):
+        pass_states = self.pass_states
+        topo_order = find_topo_order(blocks)
+        # variables available in the program so far (used for finding map
+        # functions in array_expr lowering)
+        avail_vars = []
+        for label in topo_order:
+            block = blocks[label]
+            new_body = []
+            equiv_set = pass_states.array_analysis.get_equiv_set(label)
+            for instr in block.body:
+                if isinstance(instr, ir.Assign):
+                    expr = instr.value
+                    lhs = instr.target
+                    if self._is_C_order(lhs.name):
+                        # only translate C order since we can't allocate F
+                        if guard(self._is_supported_npycall, expr):
+                            new_instr = self._numpy_to_parfor(equiv_set, lhs, expr)
+                            self.rewritten.append(dict(
+                                old=instr,
+                                new=new_instr,
+                                reason='numpy_allocator',
+                            ))
+                            instr = new_instr
+                        elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
+                            new_instr = self._arrayexpr_to_parfor(
+                                equiv_set, lhs, expr, avail_vars)
+                            self.rewritten.append(dict(
+                                old=instr,
+                                new=new_instr,
+                                reason='arrayexpr',
+                            ))
+                            instr = new_instr
+                    avail_vars.append(lhs.name)
+                new_body.append(instr)
+            block.body = new_body
+
+    def _is_C_order(self, arr_name):
+        typ = self.pass_states.typemap[arr_name]
+        return isinstance(typ, types.npytypes.Array) and typ.layout == 'C' and typ.ndim > 0
+
+    def _arrayexpr_to_parfor(self, equiv_set, lhs, arrayexpr, avail_vars):
+        """generate parfor from arrayexpr node, which is essentially a
+        map with recursive tree.
+        """
+        pass_states = self.pass_states
+        scope = lhs.scope
+        loc = lhs.loc
+        expr = arrayexpr.expr
+        arr_typ = pass_states.typemap[lhs.name]
+        el_typ = arr_typ.dtype
+
+        # generate loopnests and size variables from lhs correlations
+        size_vars = equiv_set.get_shape(lhs)
+        index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
+
+        # generate init block and body
+        init_block = ir.Block(scope, loc)
+        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
+                                   tuple(size_vars), el_typ, scope, loc)
+        body_label = next_label()
+        body_block = ir.Block(scope, loc)
+        expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
+        pass_states.typemap[expr_out_var.name] = el_typ
+
+        index_var, index_var_typ = _make_index_var(
+            pass_states.typemap, scope, index_vars, body_block)
+
+        body_block.body.extend(
+            _arrayexpr_tree_to_ir(
+                pass_states.func_ir,
+                pass_states.typingctx,
+                pass_states.typemap,
+                pass_states.calltypes,
+                equiv_set,
+                init_block,
+                expr_out_var,
+                expr,
+                index_var,
+                index_vars,
+                avail_vars))
+
+        pat = ('array expression {}'.format(repr_arrayexpr(arrayexpr.expr)),)
+
+        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set, pat[0], pass_states.flags)
+
+        setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
+        pass_states.calltypes[setitem_node] = signature(
+            types.none, pass_states.typemap[lhs.name], index_var_typ, el_typ)
+        body_block.body.append(setitem_node)
+        parfor.loop_body = {body_label: body_block}
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("parfor from arrayexpr")
+            parfor.dump()
+        return parfor
+
+    def _is_supported_npycall(self, expr):
+        """check if we support parfor translation for
+        this Numpy call.
+        """
+        call_name, mod_name = find_callname(self.pass_states.func_ir, expr)
+        if not (isinstance(mod_name, str) and mod_name.startswith('numpy')):
+            return False
+        if call_name in ['zeros', 'ones']:
+            return True
+        if mod_name == 'numpy.random' and call_name in random_calls:
+            return True
+        # TODO: add more calls
+        return False
+
+    def _numpy_to_parfor(self, equiv_set, lhs, expr):
+        call_name, mod_name = find_callname(self.pass_states.func_ir, expr)
+        args = expr.args
+        kws = dict(expr.kws)
+        if call_name in ['zeros', 'ones'] or mod_name == 'numpy.random':
+            return self._numpy_map_to_parfor(equiv_set, call_name, lhs, args, kws, expr)
+        # return error if we couldn't handle it (avoid rewrite infinite loop)
+        raise NotImplementedError("parfor translation failed for ", expr)
+
+    def _numpy_map_to_parfor(self, equiv_set, call_name, lhs, args, kws, expr):
+        """generate parfor from Numpy calls that are maps.
+        """
+        pass_states = self.pass_states
+        scope = lhs.scope
+        loc = lhs.loc
+        arr_typ = pass_states.typemap[lhs.name]
+        el_typ = arr_typ.dtype
+
+        # generate loopnests and size variables from lhs correlations
+        size_vars = equiv_set.get_shape(lhs)
+        index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
+
+        # generate init block and body
+        init_block = ir.Block(scope, loc)
+        init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
+                                   tuple(size_vars), el_typ, scope, loc)
+        body_label = next_label()
+        body_block = ir.Block(scope, loc)
+        expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
+        pass_states.typemap[expr_out_var.name] = el_typ
+
+        index_var, index_var_typ = _make_index_var(
+            pass_states.typemap, scope, index_vars, body_block)
+
+        if call_name == 'zeros':
+            value = ir.Const(el_typ(0), loc)
+        elif call_name == 'ones':
+            value = ir.Const(el_typ(1), loc)
+        elif call_name in random_calls:
+            # remove size arg to reuse the call expr for single value
+            _remove_size_arg(call_name, expr)
+            # update expr type
+            new_arg_typs, new_kw_types = _get_call_arg_types(
+                expr, pass_states.typemap)
+            pass_states.calltypes.pop(expr)
+            pass_states.calltypes[expr] = pass_states.typemap[expr.func.name].get_call_type(
+                typing.Context(), new_arg_typs, new_kw_types)
+            value = expr
+        else:
+            NotImplementedError(
+                "Map of numpy.{} to parfor is not implemented".format(call_name))
+
+        value_assign = ir.Assign(value, expr_out_var, loc)
+        body_block.body.append(value_assign)
+
+        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
+                        ('{} function'.format(call_name,), 'NumPy mapping'),
+                        pass_states.flags)
+
+        setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
+        pass_states.calltypes[setitem_node] = signature(
+            types.none, pass_states.typemap[lhs.name], index_var_typ, el_typ)
+        body_block.body.append(setitem_node)
+        parfor.loop_body = {body_label: body_block}
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("generated parfor for numpy map:")
+            parfor.dump()
+        return parfor
+
 class ParforPass(ParforPassStates):
 
     """ParforPass class is responsible for converting Numpy
@@ -1705,7 +1907,7 @@ class ParforPass(ParforPassStates):
         if self.options.setitem:
             ConvertSetItemPass(self).run(self.func_ir.blocks)
         if self.options.numpy:
-            self._convert_numpy(self.func_ir.blocks)
+            ConvertNumpyPass(self).run(self.func_ir.blocks)
         if self.options.reduction:
             self._convert_reduce(self.func_ir.blocks)
         if self.options.prange:
@@ -1812,37 +2014,6 @@ class ParforPass(ParforPassStates):
                     print('Function {} has no Parfor.'.format(name))
 
         return
-
-    def _convert_numpy(self, blocks):
-        """
-        Convert supported Numpy functions, as well as arrayexpr nodes, to
-        parfor nodes.
-        """
-        topo_order = find_topo_order(blocks)
-        # variables available in the program so far (used for finding map
-        # functions in array_expr lowering)
-        avail_vars = []
-        for label in topo_order:
-            block = blocks[label]
-            new_body = []
-            equiv_set = self.array_analysis.get_equiv_set(label)
-            for instr in block.body:
-                if isinstance(instr, ir.Assign):
-                    expr = instr.value
-                    lhs = instr.target
-                    if self._is_C_order(lhs.name):
-                        # only translate C order since we can't allocate F
-                        if guard(self._is_supported_npycall, expr):
-                            instr = self._numpy_to_parfor(equiv_set, lhs, expr)
-                            if isinstance(instr, tuple):
-                                pre_stmts, instr = instr
-                                new_body.extend(pre_stmts)
-                        elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
-                            instr = self._arrayexpr_to_parfor(
-                                equiv_set, lhs, expr, avail_vars)
-                    avail_vars.append(lhs.name)
-                new_body.append(instr)
-            block.body = new_body
 
     def _convert_reduce(self, blocks):
         """
@@ -2317,164 +2488,11 @@ class ParforPass(ParforPassStates):
             kind = 'pndindex', ''
         return kind
 
-    def _is_C_order(self, arr_name):
-        typ = self.typemap[arr_name]
-        return isinstance(typ, types.npytypes.Array) and typ.layout == 'C' and typ.ndim > 0
-
     def _mk_parfor_loops(self, size_vars, scope, loc):
         """
         Create loop index variables and build LoopNest objects for a parfor.
         """
-        loopnests = []
-        index_vars = []
-        for size_var in size_vars:
-            index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
-            index_vars.append(index_var)
-            self.typemap[index_var.name] = types.uintp
-            loopnests.append(LoopNest(index_var, 0, size_var, 1))
-        return index_vars, loopnests
-
-    def _arrayexpr_to_parfor(self, equiv_set, lhs, arrayexpr, avail_vars):
-        """generate parfor from arrayexpr node, which is essentially a
-        map with recursive tree.
-        """
-        scope = lhs.scope
-        loc = lhs.loc
-        expr = arrayexpr.expr
-        arr_typ = self.typemap[lhs.name]
-        el_typ = arr_typ.dtype
-
-        # generate loopnests and size variables from lhs correlations
-        size_vars = equiv_set.get_shape(lhs)
-        index_vars, loopnests = self._mk_parfor_loops(size_vars, scope, loc)
-
-        # generate init block and body
-        init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(self.typemap, self.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc)
-        body_label = next_label()
-        body_block = ir.Block(scope, loc)
-        expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
-        self.typemap[expr_out_var.name] = el_typ
-
-        index_var, index_var_typ = _make_index_var(
-            self.typemap, scope, index_vars, body_block)
-
-        body_block.body.extend(
-            _arrayexpr_tree_to_ir(
-                self.func_ir,
-                self.typingctx,
-                self.typemap,
-                self.calltypes,
-                equiv_set,
-                init_block,
-                expr_out_var,
-                expr,
-                index_var,
-                index_vars,
-                avail_vars))
-
-        pat = ('array expression {}'.format(repr_arrayexpr(arrayexpr.expr)),)
-
-        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set, pat[0], self.flags)
-
-        setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
-        self.calltypes[setitem_node] = signature(
-            types.none, self.typemap[lhs.name], index_var_typ, el_typ)
-        body_block.body.append(setitem_node)
-        parfor.loop_body = {body_label: body_block}
-        if config.DEBUG_ARRAY_OPT >= 1:
-            print("parfor from arrayexpr")
-            parfor.dump()
-        return parfor
-
-    def _is_supported_npycall(self, expr):
-        """check if we support parfor translation for
-        this Numpy call.
-        """
-        call_name, mod_name = find_callname(self.func_ir, expr)
-        if not (isinstance(mod_name, str) and mod_name.startswith('numpy')):
-            return False
-        if call_name in ['zeros', 'ones']:
-            return True
-        if call_name in ['arange', 'linspace']:
-            return True
-        if mod_name == 'numpy.random' and call_name in random_calls:
-            return True
-        # TODO: add more calls
-        return False
-
-    def _get_ndims(self, arr):
-        # return len(self.array_analysis.array_shape_classes[arr])
-        return self.typemap[arr].ndim
-
-    def _numpy_to_parfor(self, equiv_set, lhs, expr):
-        call_name, mod_name = find_callname(self.func_ir, expr)
-        args = expr.args
-        kws = dict(expr.kws)
-        if call_name in ['zeros', 'ones'] or mod_name == 'numpy.random':
-            return self._numpy_map_to_parfor(equiv_set, call_name, lhs, args, kws, expr)
-        # return error if we couldn't handle it (avoid rewrite infinite loop)
-        raise NotImplementedError("parfor translation failed for ", expr)
-
-    def _numpy_map_to_parfor(self, equiv_set, call_name, lhs, args, kws, expr):
-        """generate parfor from Numpy calls that are maps.
-        """
-        scope = lhs.scope
-        loc = lhs.loc
-        arr_typ = self.typemap[lhs.name]
-        el_typ = arr_typ.dtype
-
-        # generate loopnests and size variables from lhs correlations
-        size_vars = equiv_set.get_shape(lhs)
-        index_vars, loopnests = self._mk_parfor_loops(size_vars, scope, loc)
-
-        # generate init block and body
-        init_block = ir.Block(scope, loc)
-        init_block.body = mk_alloc(self.typemap, self.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc)
-        body_label = next_label()
-        body_block = ir.Block(scope, loc)
-        expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
-        self.typemap[expr_out_var.name] = el_typ
-
-        index_var, index_var_typ = _make_index_var(
-            self.typemap, scope, index_vars, body_block)
-
-        if call_name == 'zeros':
-            value = ir.Const(el_typ(0), loc)
-        elif call_name == 'ones':
-            value = ir.Const(el_typ(1), loc)
-        elif call_name in random_calls:
-            # remove size arg to reuse the call expr for single value
-            _remove_size_arg(call_name, expr)
-            # update expr type
-            new_arg_typs, new_kw_types = _get_call_arg_types(
-                expr, self.typemap)
-            self.calltypes.pop(expr)
-            self.calltypes[expr] = self.typemap[expr.func.name].get_call_type(
-                typing.Context(), new_arg_typs, new_kw_types)
-            value = expr
-        else:
-            NotImplementedError(
-                "Map of numpy.{} to parfor is not implemented".format(call_name))
-
-        value_assign = ir.Assign(value, expr_out_var, loc)
-        body_block.body.append(value_assign)
-
-        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('{} function'.format(call_name,), 'NumPy mapping'),
-                        self.flags)
-
-        setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
-        self.calltypes[setitem_node] = signature(
-            types.none, self.typemap[lhs.name], index_var_typ, el_typ)
-        body_block.body.append(setitem_node)
-        parfor.loop_body = {body_label: body_block}
-        if config.DEBUG_ARRAY_OPT >= 1:
-            print("generated parfor for numpy map:")
-            parfor.dump()
-        return parfor
+        return _mk_parfor_loops(self.typemap, size_vars, scope, loc)
 
     def _mk_reduction_body(self, call_name, scope, loc,
                            index_vars, in_arr, acc_var):
