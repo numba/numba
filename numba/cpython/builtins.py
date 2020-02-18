@@ -280,7 +280,6 @@ def complex_impl(context, builder, sig, args):
 
 
 @lower_builtin(types.NumberClass, types.Any)
-@lower_builtin(types.TypeRef, types.Any)
 def number_constructor(context, builder, sig, args):
     """
     Call a number class, e.g. np.int32(...)
@@ -540,7 +539,7 @@ def iterable_max(iterable):
     return min_max_impl(iterable, greater_than)
 
 
-@lower_builtin(types.TypeRef)
+@lower_builtin(types.TypeRef, types.VarArg(types.Any))
 def redirect_type_ctor(context, builder, sig, args):
     """Redirect constructor implementation to `numba_typeref_ctor(cls, *args)`,
     which should be overloaded by type implementator.
@@ -562,9 +561,12 @@ def redirect_type_ctor(context, builder, sig, args):
     ctor_args = types.Tuple.from_types(sig.args)
     # Make signature T(TypeRef[T], *args) where T is cls
     sig = typing.signature(cls, types.TypeRef(cls), ctor_args)
-
-    args = (context.get_dummy_value(),   # Type object has no runtime repr.
-            context.make_tuple(builder, sig.args[1], args))
+    if len(ctor_args) > 0:
+        args = (context.get_dummy_value(),   # Type object has no runtime repr.
+                *args)
+    else:
+        args = (context.get_dummy_value(),   # Type object has no runtime repr.
+                context.make_tuple(builder, ctor_args, ()))
 
     return context.compile_internal(builder, call_ctor, sig, args)
 
