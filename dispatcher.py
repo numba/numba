@@ -4,15 +4,15 @@ import numpy as np
 
 from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
-from numba import ocl
+from numba import dppy
 from numba.dppy import jit, autojit
-from .descriptor import OCLTargetDesc
+from .descriptor import DPPyTargetDesc
 from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
                                         GUFuncCallSteps)
 
 
-class OCLDispatcher(object):
-    targetdescr = OCLTargetDesc
+class DPPyDispatcher(object):
+    targetdescr = DPPyTargetDesc
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         assert not locals
@@ -56,7 +56,7 @@ class OCLDispatcher(object):
         return getattr(self.compiled, key)
 
 
-class OCLUFuncDispatcher(object):
+class DPPyUFuncDispatcher(object):
     """
     Invoke the OpenCL ufunc specialization for the given inputs.
     """
@@ -84,7 +84,7 @@ class OCLUFuncDispatcher(object):
                       depending on the input arguments.  Type must match
                       the input arguments.
         """
-        return OCLUFuncMechanism.call(self.functions, args, kws)
+        return DPPyUFuncMechanism.call(self.functions, args, kws)
 
     def reduce(self, arg, stream=0):
         assert len(list(self.functions.keys())[0]) == 2, "must be a binary " \
@@ -140,7 +140,7 @@ class OCLUFuncDispatcher(object):
                 return left
 
 
-class _OCLGUFuncCallSteps(GUFuncCallSteps):
+class _DPPyGUFuncCallSteps(GUFuncCallSteps):
     __slots__ = [
         '_stream',
     ]
@@ -165,10 +165,10 @@ class _OCLGUFuncCallSteps(GUFuncCallSteps):
         kernel.forall(nelem, queue=self._stream)(*args)
 
 
-class OCLGenerializedUFunc(GenerializedUFunc):
+class DPPyGenerializedUFunc(GenerializedUFunc):
     @property
     def _call_steps(self):
-        return _OCLGUFuncCallSteps
+        return _DPPyGUFuncCallSteps
 
     def _broadcast_scalar_input(self, ary, shape):
         return devicearray.DeviceNDArray(shape=shape,
@@ -186,7 +186,7 @@ class OCLGenerializedUFunc(GenerializedUFunc):
                                          gpu_data=ary.gpu_data)
 
 
-class OCLUFuncMechanism(UFuncMechanism):
+class DPPyUFuncMechanism(UFuncMechanism):
     """
     Provide OpenCL specialization
     """

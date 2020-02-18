@@ -17,7 +17,7 @@ static const size_t N = 2048;
 /* OpenCl kernel for element-wise addition of two arrays */
 const char* programSource =
     "__kernel                                                             \n"
-    "void vecadd(__global float *A, __global float *B, __global float *C, __global void *meminfo) \n"
+    "void vecadd(__global float *A, __global float *B, __global float *C) \n"
     "{                                                                    \n"
     "   int idx = get_global_id(0);                                       \n"
     "   C[idx] = A[idx] + B[idx];                                         \n"
@@ -29,7 +29,7 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     env_t env_t_ptr;
     program_t program_ptr;
     kernel_t kernel_ptr;
-    size_t num_args = 4;
+    size_t num_args = 3;
     kernel_arg_t kernel_args[num_args];
     float *A, *B, *C;
     size_t i;
@@ -100,8 +100,6 @@ void buildAndExecuteKernel (runtime_t rt, execution_ty ex)
     err |= create_dp_kernel_arg(&buffers[2]->buffer_ptr,
                                           buffers[2]->sizeof_buffer_ptr,
                                           &kernel_args[2]);
-    err |=  create_dp_kernel_arg(&void_p, sizeof(void_p),
-                                           &kernel_args[3]);
     if(err) {
         fprintf(stderr, "Could not create the kernel_args. Abort!\n");
         exit(1);
