@@ -6,7 +6,7 @@ from functools import reduce
 
 import numpy as np
 
-from numba import njit, typeof
+from numba import njit, typeof, prange, pndindex
 import numba.parfors.parfor
 from numba.core import (
     typing,
@@ -123,7 +123,7 @@ class BaseTest(TestCase):
 
     def check_records(self, records):
         for rec in records:
-            self.assertIsInstance(rec['new'], numba.parfors.parfor.Parfor)
+            self.assertIsInstance(rec["new"], numba.parfors.parfor.Parfor)
 
 
 class TestConvertSetItemPass(BaseTest):
@@ -240,18 +240,13 @@ class TestConvertNumpyPass(BaseTest):
         self.run_parallel_check_output_array(test_impl)
 
     def test_numpy_allocators(self):
-        fns = [
-            np.ones,
-            np.zeros,
-        ]
+        fns = [np.ones, np.zeros]
         for fn in fns:
             with self.subTest(fn.__name__):
                 self.check_numpy_allocators(fn)
 
     def test_numpy_random(self):
-        fns = [
-            np.random.random,
-        ]
+        fns = [np.random.random]
         for fn in fns:
             with self.subTest(fn.__name__):
                 self.check_numpy_random(fn)
@@ -308,6 +303,173 @@ class TestConvertReducePass(BaseTest):
         self.check_records(sub_pass.rewritten)
 
         self.run_parallel(test_impl, *args)
+
+
+class TestConvertLoopPass(BaseTest):
+    sub_pass_class = numba.parfors.parfor.ConvertLoopPass
+
+    def test_prange_reduce_simple(self):
+        def test_impl():
+            n = 20
+            c = 0
+            for i in prange(n):
+                c += i
+            return c
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, ())
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "prange")
+        self.check_records(sub_pass.rewritten)
+
+        self.run_parallel(test_impl)
+
+    def test_prange_map_simple(self):
+        def test_impl():
+            n = 20
+            arr = np.ones(n)
+            for i in prange(n):
+                arr[i] += i
+            return arr
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, ())
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "prange")
+        self.check_records(sub_pass.rewritten)
+
+        self.run_parallel(test_impl)
+
+    def test_prange_two_args(self):
+        def test_impl():
+            n = 20
+            arr = np.ones(n)
+            for i in prange(3, n):
+                arr[i] += i
+            return arr
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, ())
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "prange")
+        self.check_records(sub_pass.rewritten)
+
+        self.run_parallel(test_impl)
+
+    def test_prange_three_args(self):
+        def test_impl():
+            n = 20
+            arr = np.ones(n)
+            for i in prange(3, n, 2):
+                arr[i] += i
+            return arr
+
+        with self.assertRaises(NotImplementedError) as raises:
+            self.run_parfor_sub_pass(test_impl, ())
+        self.assertIn(
+            "Only constant step size of 1 is supported for prange",
+            str(raises.exception),
+        )
+
+    def test_prange_map_inner_loop(self):
+        def test_impl():
+            n = 20
+            arr = np.ones((n, n))
+            for i in prange(n):
+                for j in range(i):
+                    arr[i, j] += i + j * n
+            return arr
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, ())
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "prange")
+        self.check_records(sub_pass.rewritten)
+
+        self.run_parallel(test_impl)
+
+    def test_prange_map_nested_prange(self):
+        def test_impl():
+            n = 20
+            arr = np.ones((n, n))
+            for i in prange(n):
+                for j in prange(i):
+                    arr[i, j] += i + j * n
+            return arr
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, ())
+        self.assertEqual(len(sub_pass.rewritten), 2)
+        self.check_records(sub_pass.rewritten)
+        for record in sub_pass.rewritten:
+            self.assertEqual(record["reason"], "prange")
+
+        self.run_parallel(test_impl)
+
+    def test_prange_map_none_index(self):
+        def test_impl():
+            n = 20
+            arr = np.ones(n)
+            for i in prange(n):
+                inner = arr[i : i + 1]
+                inner[()] += 1
+            return arr
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, ())
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        self.check_records(sub_pass.rewritten)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "prange")
+
+        self.run_parallel(test_impl)
+
+    def test_prange_map_overwrite_index(self):
+        def test_impl():
+            n = 20
+            arr = np.ones(n)
+            for i in prange(n):
+                i += 1
+                arr[i] = i
+            return arr
+
+        with self.assertRaises(ValueError) as raises:
+            self.run_parfor_sub_pass(test_impl, ())
+        self.assertIn("Overwrite of parallel loop index", str(raises.exception))
+
+    def test_init_prange(self):
+        def test_impl():
+            n = 20
+            arr = np.ones(n)
+            numba.parfors.parfor.init_prange()
+            val = 0
+            for i in numba.parfors.parfor.internal_prange(len(arr)):
+                val += arr[i]
+            return val
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, ())
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        self.check_records(sub_pass.rewritten)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "prange")
+
+        self.run_parallel(test_impl)
+
+    def test_pndindex(self):
+        def test_impl():
+            n = 20
+            arr = np.ones((n, n))
+            val = 0
+            for idx in pndindex(arr.shape):
+                val += idx[0] * idx[1]
+            return val
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, ())
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        self.check_records(sub_pass.rewritten)
+
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "prange")
+
+        self.run_parallel(test_impl)
 
 
 if __name__ == "__main__":
