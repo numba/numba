@@ -17,7 +17,7 @@ from numba.core import (
     cpu,
 )
 from numba.core.registry import cpu_target
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, is_parfors_unsupported
 
 
 class MyPipeline(object):
@@ -98,17 +98,25 @@ class BaseTest(TestCase):
 
         return sub_pass
 
-    def run_parallel(self, func, *args, **kwargs):
+    def _run_parallel(self, func, *args, **kwargs):
         cfunc = njit(parallel=True)(func)
         expect = func(*args, **kwargs)
         got = cfunc(*args, **kwargs)
+        return expect, got
+
+    def run_parallel(self, func, *args, **kwargs):
+        if is_parfors_unsupported:
+            # Skip
+            return
+        expect, got = self._run_parallel(func, *args, **kwargs)
         self.assertPreciseEqual(expect, got)
 
     def run_parallel_check_output_array(self, func, *args, **kwargs):
+        if is_parfors_unsupported:
+            # Skip
+            return
+        expect, got = self._run_parallel(func, *args, **kwargs)
         # Don't match the value, just the return type. must return array
-        cfunc = njit(parallel=True)(func)
-        expect = func(*args, **kwargs)
-        got = cfunc(*args, **kwargs)
         self.assertIsInstance(expect, np.ndarray)
         self.assertIsInstance(got, np.ndarray)
         self.assertEqual(expect.shape, got.shape)
