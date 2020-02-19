@@ -1334,17 +1334,12 @@ class PreParforPass(object):
     def run(self):
         """Run pre-parfor processing pass.
         """
-        # dels required
-        post_proc = postproc.PostProcessor(self.func_ir)
-        post_proc.run(True)
         # e.g. convert A.sum() to np.sum(A) for easier match and optimization
         canonicalize_array_math(self.func_ir, self.typemap,
                                 self.calltypes, self.typingctx)
         if self.options.numpy:
             self._replace_parallel_functions(self.func_ir.blocks)
         self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
-        # done with dels, remove them
-        remove_dels(self.func_ir.blocks)
 
     def _replace_parallel_functions(self, blocks):
         """
