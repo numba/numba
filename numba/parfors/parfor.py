@@ -45,7 +45,6 @@ from numba.core.ir_utils import (
     replace_vars_inner,
     visit_vars,
     visit_vars_inner,
-    remove_dels,
     remove_dead,
     copy_propagate,
     get_block_copies,
