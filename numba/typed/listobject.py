@@ -1247,7 +1247,7 @@ def ol_list_sort(lst, key=None, reverse=False):
     return impl
 
 
-@overload_attribute(types.ListType, 'dtype')
+@overload_attribute(types.ListType, '_dtype')
 def impl_dtype(l):
     if not isinstance(l, types.ListType):
         return

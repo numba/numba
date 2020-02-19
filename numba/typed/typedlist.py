@@ -236,7 +236,7 @@ class List(MutableSequence):
         return self._list_type is not None
 
     @property
-    def dtype(self):
+    def _dtype(self):
         return self._list_type.dtype if self._typed else None
 
     def _initialise_list(self, item):
