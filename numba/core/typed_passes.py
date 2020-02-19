@@ -9,7 +9,7 @@ from numba.parfors.parfor import ParforPass as _parfor_ParforPass
 from numba.parfors.parfor import Parfor
 
 from numba.core.compiler_machinery import (FunctionPass, LoweringPass,
-                                           register_pass)
+                                           AnalysisPass, register_pass)
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
@@ -310,12 +310,12 @@ class ParforPass(FunctionPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
-class DumpParforDiagnostics(FunctionPass):
+class DumpParforDiagnostics(AnalysisPass):
 
     _name = "dump_parfor_diagnostics"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         if state.flags.auto_parallel.enabled:
@@ -381,12 +381,12 @@ class NativeLowering(LoweringPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
-class IRLegalization(FunctionPass):
+class IRLegalization(AnalysisPass):
 
     _name = "ir_legalization"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         raise_on_unsupported_feature(state.func_ir, state.typemap)
@@ -397,12 +397,12 @@ class IRLegalization(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class NoPythonBackend(FunctionPass):
+class NoPythonBackend(LoweringPass):
 
     _name = "nopython_backend"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        LoweringPass.__init__(self)
 
     def run_pass(self, state):
         """

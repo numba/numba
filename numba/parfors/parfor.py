@@ -1343,6 +1343,8 @@ class PreParforPass(object):
         if self.options.numpy:
             self._replace_parallel_functions(self.func_ir.blocks)
         self.func_ir.blocks = simplify_CFG(self.func_ir.blocks)
+        # done with dels, remove them
+        remove_dels(self.func_ir.blocks)
 
     def _replace_parallel_functions(self, blocks):
         """

@@ -22,7 +22,7 @@ from numba.core.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.core.errors import (TypingError, UnsupportedError,
                                NumbaPendingDeprecationWarning, NumbaWarning,
-                               feedback_details)
+                               feedback_details, CompilerError)
 
 import copy
 
@@ -2056,9 +2056,9 @@ def resolve_func_from_module(func_ir, node):
         return None
 
 
-def check_and_legalize_ir(func_ir):
+def enforce_no_dels(func_ir):
     """
-    This checks that the IR presented is legal
+    Enforce there being no ir.Del nodes in the IR.
     """
     strict = True
     for blk in func_ir.blocks.values():
@@ -2066,12 +2066,20 @@ def check_and_legalize_ir(func_ir):
         if dels:
             msg = "Illegal IR, del found at: %s" % dels[0]
             if strict:
-                raise errors.CompilerError(msg, loc=dels[0].loc)
+                raise CompilerError(msg, loc=dels[0].loc)
             else:
                 warnings.warn(NumbaWarning(msg))
+
+
+def check_and_legalize_ir(func_ir):
+    """
+    This checks that the IR presented is legal
+    """
+    enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
     post_proc.run(True)
+
 
 def convert_code_obj_to_function(code_obj, caller_ir):
     """
