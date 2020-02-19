@@ -317,9 +317,9 @@ class TestUnicodeArray(TestCase):
 
         # --------------
         x2 = np.zeros(3, dtype=np.int64)
-        v2 = np.array(78, dtype=np.int64)
-        exp3 = pyfunc(x1.copy(), 0, v2)
-        got3 = cfunc(x1.copy(), 0, v2)
+        v2 = np.array(3, dtype=np.int64)
+        exp3 = pyfunc(x2.copy(), 0, v2)
+        got3 = cfunc(x2.copy(), 0, v2)
         self.assertPreciseEqual(exp3, got3)
 
     def test_setitem2(self):
