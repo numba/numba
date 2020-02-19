@@ -252,7 +252,7 @@ class TestNumbers(TestCase):
 
     def test_bitwidth(self):
         """
-        All numeric types have bitwidth attribute
+        All numeric and boolean types have bitwidth attribute.
         """
         self.assertTrue(hasattr(types.boolean, "bitwidth"))
         for ty in types.number_domain:

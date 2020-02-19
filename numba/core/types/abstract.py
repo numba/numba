@@ -453,7 +453,7 @@ class TypeRef(Dummy):
 
 class Bounded(Type):
     """
-    For types that have minimal and maximal values
+    For types that have minimal and maximal values.
     """
     @abstractproperty
     def minval(self):
