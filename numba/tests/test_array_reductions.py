@@ -962,7 +962,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                             # some architectures (power, 32bit) for complex input
                             ulps = 3
                         npr, nbr = run_comparative(redFunc, testArray)
-                        self.assertPreciseEqual(npr, nbr, msg=test_name,
+                        self.assertPreciseEqual(npr, nbr, msg=testName,
                                                 prec="single", ulps=ulps)
 
                     # Install it into the class
