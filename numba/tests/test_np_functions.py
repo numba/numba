@@ -100,7 +100,6 @@ def iscomplexobj(x):
     return np.iscomplexobj(x)
 
 
-
 def isscalar(x):
     return np.isscalar(x)
 
@@ -694,8 +693,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertIn("order must be non-negative", str(raises.exception))
 
     def test_isscalar(self):
-        # see https://github.com/numpy/numpy/blob/c31cc36a8a814ed4844a2a553454185601914a5a/numpy/lib/tests/test_type_check.py#L82-L90
-        # https://github.com/numpy/numpy/blob/abdd996ee5a40889ac627445ebfda19bfec326d0/numpy/core/tests/test_numeric.py#L224-L237
         def values():
             yield 3
             yield np.asarray([3])

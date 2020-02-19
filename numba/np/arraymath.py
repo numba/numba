@@ -718,6 +718,7 @@ def np_isscalar(num):
             return False
     return impl
 
+
 def is_np_inf_impl(x, out, fn):
 
     if not type_can_asarray(x):
