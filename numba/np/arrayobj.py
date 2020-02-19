@@ -4957,6 +4957,20 @@ def array_to_array(context, builder, fromty, toty, val):
     return val
 
 
+@lower_cast(types.Array, types.Float)
+@lower_cast(types.Array, types.Integer)
+def array0d_to_scalar(context, builder, fromty, toty, val):
+    # a is an array(T, 0d, C)
+    # See: https://github.com/numba/numba/pull/4516
+    def impl(a):
+        return a.take(0)
+
+    assert(fromty.dtype == toty and fromty.ndim == 0)
+    sig = signature(toty, fromty)
+    res = context.compile_internal(builder, impl, sig, [val])
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 # ------------------------------------------------------------------------------
 # Stride tricks
 
