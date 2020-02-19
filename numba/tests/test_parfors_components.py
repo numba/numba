@@ -268,6 +268,60 @@ class TestConvertNumpyPass(BaseTest):
 
         self.run_parallel(test_impl, *args)
 
+    def test_numpy_arrayexpr_ufunc(self):
+        def test_impl(a, b):
+            return np.sin(-a) + np.float64(1) / np.sqrt(b)
+
+        a = b = np.ones(10)
+
+        args = (a, b)
+        argtypes = [typeof(x) for x in args]
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, argtypes)
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "arrayexpr")
+        self.check_records(sub_pass.rewritten)
+
+        self.run_parallel(test_impl, *args)
+
+    def test_numpy_arrayexpr_boardcast(self):
+        def test_impl(a, b):
+            return a + b + np.array(1)
+
+        a = np.ones(10)
+        b = np.ones((3, 10))
+
+        args = (a, b)
+        argtypes = [typeof(x) for x in args]
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, argtypes)
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "arrayexpr")
+        self.check_records(sub_pass.rewritten)
+
+        self.run_parallel(test_impl, *args)
+
+    def test_numpy_arrayexpr_reshaped(self):
+        def test_impl(a, b):
+            a = a.reshape(1, a.size)  # shape[0] is now constant
+            return a + b
+
+        a = np.ones(10)
+        b = np.ones(10)
+
+        args = (a, b)
+        argtypes = [typeof(x) for x in args]
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, argtypes)
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "arrayexpr")
+        self.check_records(sub_pass.rewritten)
+
+        self.run_parallel(test_impl, *args)
+
 
 class TestConvertReducePass(BaseTest):
     sub_pass_class = numba.parfors.parfor.ConvertReducePass

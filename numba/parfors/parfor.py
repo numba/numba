@@ -2908,6 +2908,7 @@ def _gen_arrayexpr_getitem(
     num_indices = len(all_parfor_indices)
     size_vars = equiv_set.get_shape(var) or []
     size_consts = [equiv_set.get_equiv_const(x) for x in size_vars]
+    # Handle array-scalar
     if ndims == 0:
         # call np.ravel
         ravel_var = ir.Var(var.scope, mk_unique_var("$ravel"), loc)
@@ -2923,9 +2924,11 @@ def _gen_arrayexpr_getitem(
         const_assign = ir.Assign(const_node, const_var, loc)
         out_ir.append(const_assign)
         index_var = const_var
+    # Handle 1d array
     elif ndims == 1:
         # Use last index for 1D arrays
         index_var = all_parfor_indices[-1]
+    # Handle known constant size
     elif any([x != None for x in size_consts]):
         # Need a tuple as index
         ind_offset = num_indices - ndims
