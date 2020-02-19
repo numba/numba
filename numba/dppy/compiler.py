@@ -158,7 +158,8 @@ class DPPyKernelBase(object):
         self.device_env  = None
 
         # list of supported access types, stored in dict for fast lookup
-        self.valid_access_types = {_NUMBA_PVC_READ_ONLY: _NUMBA_PVC_READ_ONLY,
+        self.valid_access_types = {
+                _NUMBA_PVC_READ_ONLY: _NUMBA_PVC_READ_ONLY,
                 _NUMBA_PVC_WRITE_ONLY: _NUMBA_PVC_WRITE_ONLY,
                 _NUMBA_PVC_READ_WRITE: _NUMBA_PVC_READ_WRITE}
 
