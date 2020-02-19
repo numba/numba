@@ -1500,7 +1500,6 @@ class ParforPass(object):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible and optimize the IR."""
         # run array analysis, a pre-requisite for parfor translation
-        remove_dels(self.func_ir.blocks)
         self.array_analysis.run(self.func_ir.blocks)
         # run stencil translation to parfor
         if self.options.stencil:
