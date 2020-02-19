@@ -719,6 +719,23 @@ def np_isscalar(num):
     return impl
 
 
+@overload(np.isclose)
+def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+
+    @register_jitable
+    def within_tol(a, b, rtol, atol):
+        a = np.asarray(a)
+        b = np.asarray(b)
+        return np.less_equal(np.abs(a-b), atol + rtol * np.abs(b))
+
+    def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+        if np.all(np.isfinite(a)) and np.all(np.isfinite(b)):
+            return within_tol(a, b, rtol, atol)
+        else:
+            return None
+    return impl
+
+
 def is_np_inf_impl(x, out, fn):
 
     if not type_can_asarray(x):

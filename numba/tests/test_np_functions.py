@@ -100,6 +100,10 @@ def iscomplexobj(x):
     return np.iscomplexobj(x)
 
 
+def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    return np.isclose(a, b, rtol, atol, equal_nan)
+
+
 def isscalar(x):
     return np.isscalar(x)
 
@@ -691,6 +695,26 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as raises:
                 cfunc(arr, n)
             self.assertIn("order must be non-negative", str(raises.exception))
+
+    def test_isclose(self):
+        def values():
+            # yield 1e10, 1.00001e10
+            yield np.asarray([1e10,1e-7]), np.asarray([1.00001e10,1e-8])
+            yield np.asarray([1e10,1e-8]), np.asarray([1.00001e10,1e-9])
+            yield np.asarray([1e10,1e-8]), np.asarray([1.0001e10,1e-9])
+            # [1.0, np.nan], [1.0, np.nan]
+            # [1.0, np.nan], [1.0, np.nan], equal_nan=True
+            # [1e-8, 1e-7], [0.0, 0.0]
+            # [1e-100, 1e-7], [0.0, 0.0], atol=0.0
+            # [1e-10, 1e-10], [1e-20, 0.0]
+            # [1e-10, 1e-10], [1e-20, 0.999999e-10], atol=0.0
+
+        pyfunc = isclose
+        cfunc = jit(nopython=True)(pyfunc)
+        for a, b in values():
+            expected = pyfunc(a, b)
+            got = cfunc(a, b)
+            self.assertCountEqual(expected, got)
 
     def test_isscalar(self):
         def values():
