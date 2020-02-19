@@ -1539,6 +1539,23 @@ class TestParfors(TestParforsBase):
         x = np.ones(20)
         self.check(test_impl, x, True, check_scheduling=False)
 
+    @skip_parfors_unsupported
+    def test_prange_side_effects(self):
+        def test_impl(a, b):
+            data = np.empty(len(a), dtype=np.float64)
+            size = len(data)
+            for i in numba.prange(size):
+                data[i] = a[i]
+            for i in numba.prange(size):
+                data[i] = data[i] + b[i]
+            return data
+
+        x = np.arange(10 ** 2, dtype=float)
+        y = np.arange(10 ** 2, dtype=float)
+
+        self.check(test_impl, x, y)
+        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), types.Array(types.float64, 1, 'C'))) == 1)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
