@@ -150,7 +150,7 @@ class PostProcessor(object):
             st |= yp.live_vars
             st |= yp.weak_live_vars
         gi.state_vars = sorted(st)
-        self._remove_dels()
+        self.remove_dels()
 
     def _insert_var_dels(self):
         """
@@ -215,7 +215,7 @@ class PostProcessor(object):
                 ir_block.prepend(ir.Del(var_name, loc=ir_block.body[0].loc))
 
 
-    def _remove_dels(self):
+    def remove_dels(self):
         """
         Strips the IR of Del nodes
         """

@@ -215,7 +215,7 @@ class NopythonRewrites(FunctionPass):
         pp.run(True)
         with fallback_context(state, msg):
             rewrites.rewrite_registry.apply('after-inference', state)
-        pp._remove_dels()
+        pp.remove_dels()
         return True
 
 
