@@ -615,6 +615,26 @@ class Parfor(ir.Expr, ir.Stmt):
             block.dump(file)
         print(("end parfor {}".format(self.id)).center(20, '-'), file=file)
 
+    def validate_params(self, typemap):
+        """
+        Check that Parfors params are of valid types.
+        """
+        if self.params is None:
+            msg = ("Cannot run parameter validation on a Parfor with params"
+                   "not set")
+            raise ValueError(msg)
+        for p in self.params:
+            ty = typemap.get(p)
+            if ty is None:
+                msg = ("Cannot validate parameter %s, there is no type "
+                       "information available")
+                raise ValueError(msg)
+            if isinstance(ty, types.BaseTuple):
+                msg = ("Use of a tuple (%s) in a parallel region is not "
+                       "supported due to a limitation of the Generalized "
+                       "Universal Functions that back parallel regions.")
+                raise errors.UnsupportedError(msg % p, self.loc)
+
 def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
     """Recursive array analysis for parfor nodes.
     """
@@ -1604,6 +1624,11 @@ class ParforPass(object):
                                                     self.nested_fusion_info)
             for p in parfors:
                 get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
+
+            # Validate parameters:
+            for p in parfors:
+                p.validate_params(self.typemap)
+
             if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
                 n_parfors = len(parfor_ids)
