@@ -129,6 +129,9 @@ class FakeCUDAArray(object):
     def reshape(self, *args, **kwargs):
         return FakeCUDAArray(self._ary.reshape(*args, **kwargs))
 
+    def view(self, *args, **kwargs):
+        return FakeCUDAArray(self._ary.view(*args, **kwargs))
+
     def is_c_contiguous(self):
         return self._ary.flags.c_contiguous
 

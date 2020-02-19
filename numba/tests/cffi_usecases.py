@@ -20,7 +20,7 @@ def load_inline_module():
     double _numba_test_sin(double x);
     double _numba_test_cos(double x);
     double _numba_test_funcptr(double (*func)(double));
-    bool _numba_test_boolean();
+    bool _numba_test_boolean(void);
     """
 
     ffi = FFI()
@@ -55,7 +55,7 @@ def load_ool_module():
     """
 
     defs = numba_complex + """
-    bool boolean();
+    bool boolean(void);
     double sin(double x);
     double cos(double x);
     int foo(int a, int b, int c);
@@ -66,7 +66,7 @@ def load_ool_module():
     """
 
     source = numba_complex + bool_define + """
-    static bool boolean()
+    static bool boolean(void)
     {
         return true;
     }

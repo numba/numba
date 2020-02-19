@@ -142,6 +142,46 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
                 'axis 2 is out of bounds for array of dimension 2',  # sim
             ])
 
+    def test_devicearray_view_ok(self):
+        original = np.array(np.arange(12), dtype="i2").reshape(3, 4)
+        array = cuda.to_device(original)
+        for dtype in ("i4", "u4", "i8", "f8"):
+            with self.subTest(dtype=dtype):
+                np.testing.assert_array_equal(
+                    array.view(dtype).copy_to_host(),
+                    original.view(dtype)
+                )
+
+    def test_devicearray_view_ok_not_c_contig(self):
+        original = np.array(np.arange(32), dtype="i2").reshape(4, 8)
+        array = cuda.to_device(original)[:, ::2]
+        original = original[:, ::2]
+        np.testing.assert_array_equal(
+            array.view("u2").copy_to_host(),
+            original.view("u2")
+        )
+
+    def test_devicearray_view_bad_not_c_contig(self):
+        original = np.array(np.arange(32), dtype="i2").reshape(4, 8)
+        array = cuda.to_device(original)[:, ::2]
+        with self.assertRaises(ValueError) as e:
+            array.view("i4")
+        self.assertEqual(
+            "To change to a dtype of a different size,"
+            " the array must be C-contiguous",
+            str(e.exception))
+
+    def test_devicearray_view_bad_itemsize(self):
+        original = np.array(np.arange(12), dtype="i2").reshape(4, 3)
+        array = cuda.to_device(original)
+        with self.assertRaises(ValueError) as e:
+            array.view("i4")
+        self.assertEqual(
+            "When changing to a larger dtype,"
+            " its size must be a divisor of the total size in bytes"
+            " of the last axis of the array.",
+            str(e.exception))
+
     def test_devicearray_transpose_ok(self):
         original = np.array(np.arange(12)).reshape(3, 4)
         array = np.transpose(cuda.to_device(original)).copy_to_host()

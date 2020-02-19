@@ -256,7 +256,7 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         return string_writer_put_char(w, OP_FLOAT);
     if (PyComplex_CheckExact(val))
         return string_writer_put_char(w, OP_COMPLEX);
-    if (PyTuple_Check(val)) {
+    if (PyTuple_CheckExact(val)) {
         Py_ssize_t i, n;
         n = PyTuple_GET_SIZE(val);
         TRY(string_writer_put_char, w, OP_START_TUPLE);

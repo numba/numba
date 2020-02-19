@@ -278,6 +278,7 @@ def get_sys_info():
         try:
             from numba.np.ufunc import omppool
             print(fmt % ("OpenMP Threading layer available", True))
+            print(fmt % ("+--> Vendor: ", omppool.openmp_vendor))
         except ImportError as e:
             print(fmt % ("OpenMP Threading layer available", False))
             print(fmt % ("+--> Disabled due to",
