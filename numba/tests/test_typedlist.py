@@ -167,17 +167,12 @@ class TestTypedList(MemoryLeakMixin, TestCase):
 
         @njit
         def foo():
-            L = List.empty_list(float64)
-            L.append(4.2)
-            return L.dtype
-        self.assertEqual(foo(), np.dtype('float64'))
-
-        @njit
-        def foo():
-            l = List()
-            l.append(1)
-            return l.dtype
-        self.assertEqual(foo(), np.dtype('int64'))
+            li, lf = List(), List()
+            li.append(int32(1))
+            lf.append(float32(1.0))
+            return li.dtype, lf.dtype
+        for func in foo, foo.py_func:
+            self.assertEqual(foo(), (np.dtype('int32'), np.dtype('float32')))
 
     @skip_parfors_unsupported
     def test_unsigned_prange(self):
