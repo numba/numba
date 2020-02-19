@@ -319,7 +319,7 @@ class TestConvertLoopPass(BaseTest):
         sub_pass = self.run_parfor_sub_pass(test_impl, ())
         self.assertEqual(len(sub_pass.rewritten), 1)
         [record] = sub_pass.rewritten
-        self.assertEqual(record["reason"], "prange")
+        self.assertEqual(record["reason"], "loop")
         self.check_records(sub_pass.rewritten)
 
         self.run_parallel(test_impl)
@@ -335,7 +335,7 @@ class TestConvertLoopPass(BaseTest):
         sub_pass = self.run_parfor_sub_pass(test_impl, ())
         self.assertEqual(len(sub_pass.rewritten), 1)
         [record] = sub_pass.rewritten
-        self.assertEqual(record["reason"], "prange")
+        self.assertEqual(record["reason"], "loop")
         self.check_records(sub_pass.rewritten)
 
         self.run_parallel(test_impl)
@@ -351,7 +351,7 @@ class TestConvertLoopPass(BaseTest):
         sub_pass = self.run_parfor_sub_pass(test_impl, ())
         self.assertEqual(len(sub_pass.rewritten), 1)
         [record] = sub_pass.rewritten
-        self.assertEqual(record["reason"], "prange")
+        self.assertEqual(record["reason"], "loop")
         self.check_records(sub_pass.rewritten)
 
         self.run_parallel(test_impl)
@@ -383,7 +383,7 @@ class TestConvertLoopPass(BaseTest):
         sub_pass = self.run_parfor_sub_pass(test_impl, ())
         self.assertEqual(len(sub_pass.rewritten), 1)
         [record] = sub_pass.rewritten
-        self.assertEqual(record["reason"], "prange")
+        self.assertEqual(record["reason"], "loop")
         self.check_records(sub_pass.rewritten)
 
         self.run_parallel(test_impl)
@@ -401,7 +401,7 @@ class TestConvertLoopPass(BaseTest):
         self.assertEqual(len(sub_pass.rewritten), 2)
         self.check_records(sub_pass.rewritten)
         for record in sub_pass.rewritten:
-            self.assertEqual(record["reason"], "prange")
+            self.assertEqual(record["reason"], "loop")
 
         self.run_parallel(test_impl)
 
@@ -418,7 +418,7 @@ class TestConvertLoopPass(BaseTest):
         self.assertEqual(len(sub_pass.rewritten), 1)
         self.check_records(sub_pass.rewritten)
         [record] = sub_pass.rewritten
-        self.assertEqual(record["reason"], "prange")
+        self.assertEqual(record["reason"], "loop")
 
         self.run_parallel(test_impl)
 
@@ -449,7 +449,7 @@ class TestConvertLoopPass(BaseTest):
         self.assertEqual(len(sub_pass.rewritten), 1)
         self.check_records(sub_pass.rewritten)
         [record] = sub_pass.rewritten
-        self.assertEqual(record["reason"], "prange")
+        self.assertEqual(record["reason"], "loop")
 
         self.run_parallel(test_impl)
 
@@ -467,9 +467,100 @@ class TestConvertLoopPass(BaseTest):
         self.check_records(sub_pass.rewritten)
 
         [record] = sub_pass.rewritten
-        self.assertEqual(record["reason"], "prange")
+        self.assertEqual(record["reason"], "loop")
 
         self.run_parallel(test_impl)
+
+    def test_numpy_sum(self):
+        def test_impl(arr):
+            return np.sum(arr)
+
+        shape = 11, 13
+        arr = np.arange(np.prod(shape)).reshape(shape)
+        args = (arr,)
+        argtypes = [typeof(x) for x in args]
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, argtypes)
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "loop")
+        self.check_records(sub_pass.rewritten)
+        self.run_parallel(test_impl, *args)
+
+    def test_numpy_sum_bool_array_masked(self):
+        def test_impl(arr):
+            sliced = arr[:, 0]
+            return np.sum(arr[sliced >= 3, 1:2])
+
+        shape = 11, 13
+        arr = np.arange(np.prod(shape)).reshape(shape)
+        args = (arr,)
+        argtypes = [typeof(x) for x in args]
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, argtypes)
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "loop")
+        self.check_records(sub_pass.rewritten)
+        self.run_parallel(test_impl, *args)
+
+    def test_numpy_sum_int_array_masked(self):
+        def test_impl(arr):
+            sel = np.arange(arr.shape[1])
+            return np.sum(arr[:, sel])
+
+        shape = 11, 13
+        arr = np.arange(np.prod(shape)).reshape(shape)
+        args = (arr,)
+        argtypes = [typeof(x) for x in args]
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, argtypes)
+        # 1 for arange; 1 for sum
+        self.assertEqual(len(sub_pass.rewritten), 2)
+        for record in sub_pass.rewritten:
+            self.assertEqual(record["reason"], "loop")
+        self.check_records(sub_pass.rewritten)
+        self.run_parallel(test_impl, *args)
+
+    def test_numpy_fill_method(self):
+        def test_impl(arr):
+            arr.fill(3)
+            return arr
+
+        shape = 11, 13
+        arr = np.arange(np.prod(shape)).reshape(shape)
+        args = (arr,)
+        argtypes = [typeof(x) for x in args]
+
+        sub_pass = self.run_parfor_sub_pass(test_impl, argtypes)
+        # 1 for arange; 1 for sum
+        self.assertEqual(len(sub_pass.rewritten), 1)
+        [record] = sub_pass.rewritten
+        self.assertEqual(record["reason"], "loop")
+        self.check_records(sub_pass.rewritten)
+        self.run_parallel(test_impl, *args)
+
+
+class TestPreParforPass(BaseTest):
+    class sub_pass_class:
+        def __init__(self, pass_states):
+            pass
+
+        def run(self, blocks):
+            pass
+
+    def test_dtype_conversion(self):
+        # array.dtype are converted to np.dtype(array) in the PreParforPass
+        def test_impl(a):
+            b = np.ones(20, dtype=a.dtype)
+            return b
+
+        arr = np.arange(10)
+        args = (arr,)
+        argtypes = [typeof(x) for x in args]
+
+        self.run_parfor_sub_pass(test_impl, argtypes)
+        self.run_parallel(test_impl, *args)
 
 
 if __name__ == "__main__":

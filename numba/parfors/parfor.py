@@ -1363,6 +1363,7 @@ class PreParforPass(object):
                             func_def = get_definition(self.func_ir, expr.func)
                             callname = find_callname(self.func_ir, expr)
                             repl_func = replace_functions_map.get(callname, None)
+                            # Handle method on array type
                             if (repl_func is None and
                                 len(callname) == 2 and
                                 isinstance(callname[1], ir.Var) and
@@ -1947,7 +1948,8 @@ class ConvertReducePass:
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
         mask_index = index_vars
         if mask_indices:
-            assert False, "DEAD"
+            # the following is never tested
+            raise AssertionError("unreachable")
             index_vars = tuple(x if x else index_vars[0] for x in mask_indices)
         acc_var = lhs
 
@@ -1960,7 +1962,8 @@ class ConvertReducePass:
         index_var, loop_body = self._mk_reduction_body(call_name,
                                 scope, loc, index_vars, in_arr, acc_var)
         if mask_indices:
-            assert False, "DEAD"
+            # the following is never tested
+            raise AssertionError("unreachable")
             index_var = mask_index[0]
 
         if mask_var != None:
@@ -2294,7 +2297,7 @@ class ConvertLoopPass:
                     self.rewritten.append(dict(
                         old_loop=loop,
                         new=parfor,
-                        reason='prange',
+                        reason='loop',
                     ))
                     # remove loop blocks from top level dict
                     blocks.pop(loop.header)
@@ -2479,19 +2482,25 @@ def _find_mask(typemap, func_ir, arr_def):
         mask_var = None
         for ind in seq:
             index_typ = typemap[ind.name]
+            # Handle boolean mask
             if (isinstance(index_typ, types.npytypes.Array) and
                 isinstance(index_typ.dtype, types.Boolean)):
                 mask_var = ind
                 mask_typ = index_typ.dtype
                 mask_indices.append(None)
+            # Handle integer array selector
             elif (isinstance(index_typ, types.npytypes.Array) and
                 isinstance(index_typ.dtype, types.Integer)):
                 mask_var = ind
                 mask_typ = index_typ.dtype
                 mask_indices.append(None)
+            # Handle integer index
             elif isinstance(index_typ, types.Integer):
+                # The follow is never tested
+                raise AssertionError('unreachable')
                 count_consts += 1
                 mask_indices.append(ind)
+
         require(mask_var and count_consts == ndim - 1)
         return value, mask_var, mask_typ, mask_indices
     raise GuardException
@@ -2638,54 +2647,11 @@ class ParforPass(ParforPassStates):
         """
         return _find_mask(self.typemap, self.func_ir, arr_def)
 
-
-
     def _mk_parfor_loops(self, size_vars, scope, loc):
         """
         Create loop index variables and build LoopNest objects for a parfor.
         """
         return _mk_parfor_loops(self.typemap, size_vars, scope, loc)
-
-    def _mk_reduction_body(self, call_name, scope, loc,
-                           index_vars, in_arr, acc_var):
-        """
-        Produce the body blocks for a reduction function indicated by call_name.
-        """
-        from numba.core.inline_closurecall import check_reduce_func
-        reduce_func = get_definition(self.func_ir, call_name)
-        fcode = check_reduce_func(self.func_ir, reduce_func)
-
-        arr_typ = self.typemap[in_arr.name]
-        in_typ = arr_typ.dtype
-        body_block = ir.Block(scope, loc)
-        index_var, index_var_type = _make_index_var(
-            self.typemap, scope, index_vars, body_block)
-
-        tmp_var = ir.Var(scope, mk_unique_var("$val"), loc)
-        self.typemap[tmp_var.name] = in_typ
-        getitem_call = ir.Expr.getitem(in_arr, index_var, loc)
-        self.calltypes[getitem_call] = signature(
-            in_typ, arr_typ, index_var_type)
-        body_block.append(ir.Assign(getitem_call, tmp_var, loc))
-
-        reduce_f_ir = compile_to_numba_ir(fcode,
-                                        self.func_ir.func_id.func.__globals__,
-                                        self.typingctx,
-                                        (in_typ, in_typ),
-                                        self.typemap,
-                                        self.calltypes)
-        loop_body = reduce_f_ir.blocks
-        end_label = next_label()
-        end_block = ir.Block(scope, loc)
-        loop_body[end_label] = end_block
-        first_reduce_label = min(reduce_f_ir.blocks.keys())
-        first_reduce_block = reduce_f_ir.blocks[first_reduce_label]
-        body_block.body.extend(first_reduce_block.body)
-        first_reduce_block.body = body_block.body
-        replace_arg_nodes(first_reduce_block, [acc_var, tmp_var])
-        replace_returns(loop_body, acc_var, end_label)
-        return index_var, loop_body
-
 
     def fuse_parfors(self, array_analysis, blocks):
         for label, block in blocks.items():
@@ -2730,6 +2696,7 @@ class ParforPass(ParforPassStates):
         arr_analysis.run(blocks, equiv_set)
         self.fuse_parfors(arr_analysis, blocks)
         unwrap_parfor_blocks(parfor)
+
 
 def _remove_size_arg(call_name, expr):
     "remove size argument from args or kws"
