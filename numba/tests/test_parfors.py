@@ -1554,7 +1554,9 @@ class TestParfors(TestParforsBase):
         y = np.arange(10 ** 2, dtype=float)
 
         self.check(test_impl, x, y)
-        self.assertTrue(countParfors(test_impl, (types.Array(types.float64, 1, 'C'), types.Array(types.float64, 1, 'C'))) == 1)
+        self.assertTrue(countParfors(test_impl,
+                                    (types.Array(types.float64, 1, 'C'),
+                                     types.Array(types.float64, 1, 'C'))) == 1)
 
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
