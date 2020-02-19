@@ -100,6 +100,11 @@ def iscomplexobj(x):
     return np.iscomplexobj(x)
 
 
+
+def isscalar(x):
+    return np.isscalar(x)
+
+
 def isreal(x):
     return np.isreal(x)
 
@@ -687,6 +692,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(ValueError) as raises:
                 cfunc(arr, n)
             self.assertIn("order must be non-negative", str(raises.exception))
+
+    def test_isscalar(self):
+        # see https://github.com/numpy/numpy/blob/c31cc36a8a814ed4844a2a553454185601914a5a/numpy/lib/tests/test_type_check.py#L82-L90
+        # https://github.com/numpy/numpy/blob/abdd996ee5a40889ac627445ebfda19bfec326d0/numpy/core/tests/test_numeric.py#L224-L237
+        def values():
+            yield 3
+            yield np.asarray([3])
+            yield (3,)
+            yield 3j
+            yield 'numba'
+            yield int(10)
+            yield np.int16(12345)
+            yield 4.234
+            yield True
+            yield None
+
+        pyfunc = isscalar
+        cfunc = jit(nopython=True)(pyfunc)
+        for x in values():
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertEqual(expected, got, x)
 
     def test_isobj_functions(self):
         def values():

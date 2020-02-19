@@ -708,6 +708,16 @@ def isrealobj(x):
     return impl
 
 
+@overload(np.isscalar)
+def np_isscalar(num):
+    if isinstance(num, (types.Number, types.UnicodeType, types.Boolean)):
+        def impl(num):
+            return True
+    else:
+        def impl(num):
+            return False
+    return impl
+
 def is_np_inf_impl(x, out, fn):
 
     if not type_can_asarray(x):
