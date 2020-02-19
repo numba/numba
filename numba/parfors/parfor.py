@@ -632,7 +632,8 @@ class Parfor(ir.Expr, ir.Stmt):
                 msg = ("Use of a tuple (%s) in a parallel region is not "
                        "supported due to a limitation of the Generalized "
                        "Universal Functions that back parallel regions.")
-                raise errors.UnsupportedError(msg % p, self.loc)
+                raise errors.UnsupportedParforsError(msg % p, self.loc)
+
 
 def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
     """Recursive array analysis for parfor nodes.

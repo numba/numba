@@ -3068,6 +3068,8 @@ class TestParforsBitMask(TestParforsBase):
             self.check(test_impl, a, b, c)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
+
+@skip_parfors_unsupported
 class TestParforsMisc(TestParforsBase):
     """
     Tests miscellaneous parts of ParallelAccelerator use.
@@ -3078,7 +3080,6 @@ class TestParforsMisc(TestParforsBase):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)
         self.check_parfors_vs_others(pyfunc, cfunc, cpfunc, *args, **kwargs)
 
-    @skip_parfors_unsupported
     def test_no_warn_if_cache_set(self):
 
         def pyfunc():
@@ -3100,7 +3101,6 @@ class TestParforsMisc(TestParforsBase):
                                for cres in cfunc.overloads.values()]
         self.assertEqual(has_dynamic_globals, [False])
 
-    @skip_parfors_unsupported
     def test_statement_reordering_respects_aliasing(self):
         def impl():
             a = np.zeros(10)
@@ -3115,7 +3115,6 @@ class TestParforsMisc(TestParforsBase):
         for line in stdout.getvalue().splitlines():
             self.assertEqual('a[3]: 2.0', line)
 
-    @skip_parfors_unsupported
     def test_parfor_ufunc_typing(self):
         def test_impl(A):
             return np.isinf(A)
@@ -3131,7 +3130,6 @@ class TestParforsMisc(TestParforsBase):
             # recover global state
             numba.parfors.parfor.sequential_parfor_lowering = old_seq_flag
 
-    @skip_parfors_unsupported
     def test_init_block_dce(self):
         # issue4690
         def test_impl():
@@ -3145,7 +3143,6 @@ class TestParforsMisc(TestParforsBase):
 
         self.assertTrue(get_init_block_size(test_impl, ()) == 0)
 
-    @skip_parfors_unsupported
     def test_alias_analysis_for_parfor1(self):
         def test_impl():
             acc = 0
@@ -3157,7 +3154,6 @@ class TestParforsMisc(TestParforsBase):
 
         self.check(test_impl)
 
-    @skip_parfors_unsupported
     def test_no_state_change_in_gufunc_lowering_on_error(self):
         # tests #5098, if there's an exception arising in gufunc lowering the
         # sequential_parfor_lowering global variable should remain as False on
@@ -3212,7 +3208,6 @@ class TestParforsMisc(TestParforsBase):
         # assert state has not changed
         self.assertFalse(numba.parfors.parfor.sequential_parfor_lowering)
 
-    @skip_parfors_unsupported
     def test_issue_5098(self):
         class DummyType(types.Opaque):
             pass
@@ -3265,6 +3260,23 @@ class TestParforsMisc(TestParforsBase):
             # always set the sequential_parfor_lowering state back to the
             # original state
             numba.parfors.parfor.sequential_parfor_lowering = save_state
+
+    def test_tuple_as_arg_to_kernel(self):
+
+        @njit(parallel=True)
+        def tuple_bug():
+            t = (10,)
+            z = 0
+            for x in prange(10):
+                z += t[0]
+            return z
+
+        with self.assertRaises(errors.UnsupportedParforsError) as raises:
+            tuple_bug()
+
+        errstr = str(raises.exception)
+        self.assertIn("Use of a tuple", errstr)
+        self.assertIn("in a parallel region", errstr)
 
 
 @skip_parfors_unsupported
