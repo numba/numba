@@ -1293,3 +1293,15 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             for result in (cf_received, py_received):
                 for i in range(3):
                     self.assertEqual(i, result[i])
+
+    def test_unicode(self):
+        """Test that a List can be created from a unicode string."""
+        @njit
+        def foo():
+            l = List("abc")
+            return l
+        expected = List()
+        for i in ("a", "b", "c"):
+            expected.append(i)
+        self.assertEqual(foo.py_func(), expected)
+        self.assertEqual(foo(), expected)
