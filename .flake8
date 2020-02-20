@@ -312,7 +312,6 @@ exclude =
     numba/tests/test_withlifting.py
     numba/tests/test_errorhandling.py
     numba/tests/test_parfors.py
-    numba/tests/test_pipeline.py
     numba/tests/test_sets.py
     numba/tests/test_dyn_array.py
     numba/tests/test_objects.py
