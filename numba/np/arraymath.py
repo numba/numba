@@ -724,15 +724,19 @@ def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
     @register_jitable
     def within_tol(a, b, rtol, atol):
-        a = np.asarray(a)
-        b = np.asarray(b)
         return np.less_equal(np.abs(a - b), atol + rtol * np.abs(b))
 
     def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-        if np.all(np.isfinite(a)) and np.all(np.isfinite(b)):
+        xfin = np.asarray(np.isfinite(a))
+        yfin = np.asarray(np.isfinite(b))
+        if np.all(xfin) and np.all(yfin):
             return within_tol(a, b, rtol, atol)
         else:
-            return None
+            r = within_tol(a, b, rtol, atol)
+            if equal_nan:
+                return r | (~xfin & ~yfin)
+            else:
+                return r
     return impl
 
 

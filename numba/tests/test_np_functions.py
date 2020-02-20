@@ -698,23 +698,32 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
     def test_isclose(self):
         def values():
-            # yield 1e10, 1.00001e10
-            yield np.asarray([1e10,1e-7]), np.asarray([1.00001e10,1e-8])
-            yield np.asarray([1e10,1e-8]), np.asarray([1.00001e10,1e-9])
-            yield np.asarray([1e10,1e-8]), np.asarray([1.0001e10,1e-9])
-            # [1.0, np.nan], [1.0, np.nan]
-            # [1.0, np.nan], [1.0, np.nan], equal_nan=True
-            # [1e-8, 1e-7], [0.0, 0.0]
-            # [1e-100, 1e-7], [0.0, 0.0], atol=0.0
-            # [1e-10, 1e-10], [1e-20, 0.0]
-            # [1e-10, 1e-10], [1e-20, 0.999999e-10], atol=0.0
+            yield 1e10, 1.00001e10, {}
+            yield 1e10, np.nan, {}
+            yield np.asarray([1e-8, 1e-7]), np.asarray([0.0, 0.0]), {}
+            yield np.asarray([1e10,1e-7]), np.asarray([1.00001e10,1e-8]), {}
+            yield np.asarray([1e10,1e-8]), np.asarray([1.00001e10,1e-9]), {}
+            yield np.asarray([1e10,1e-8]), np.asarray([1.0001e10,1e-9]), {}
+            yield np.asarray([1.0, np.nan]), np.asarray([1.0, np.nan]), {}
+            yield np.asarray([1.0, np.nan]),np.asarray([1.0, np.nan]),\
+                {'equal_nan':True}
+            yield np.asarray([np.nan, np.nan]), np.asarray([1.0, np.nan]),\
+                {'equal_nan':True}
+            yield np.asarray([1e-100, 1e-7]), np.asarray([0.0, 0.0]),\
+                {'atol':0.0}
+            yield np.asarray([1e-10, 1e-10]), np.asarray([1e-20, 0.0]), {}
+            yield np.asarray([1e-10, 1e-10]),\
+                np.asarray([1e-20, 0.999999e-10]),{'atol':0.0}
 
         pyfunc = isclose
         cfunc = jit(nopython=True)(pyfunc)
-        for a, b in values():
-            expected = pyfunc(a, b)
-            got = cfunc(a, b)
-            self.assertCountEqual(expected, got)
+        for a, b, kwargs in values():
+            expected = pyfunc(a, b, **kwargs)
+            got = cfunc(a, b, **kwargs)
+            if isinstance(expected, np.bool_):
+                self.assertEqual(expected, got)
+            else:
+                self.assertCountEqual(expected, got)
 
     def test_isscalar(self):
         def values():
