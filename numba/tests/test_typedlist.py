@@ -171,7 +171,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             li.append(int32(1))
             lf.append(float32(1.0))
             return li._dtype, lf._dtype
-        
+
         self.assertEqual(foo(), (np.dtype('int32'), np.dtype('float32')))
         self.assertEqual(foo.py_func(), (int32, float32))
 
