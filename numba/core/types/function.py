@@ -194,7 +194,7 @@ class FunctionType(Type):
             # Check that the first-class function type implementation
             # supports the given signature.
             if not self.impl.check_signature(sig):
-                raise ValueError(f'{repr(self)} does not support {sig=}')
+                raise ValueError(f'{repr(self)} does not support {sig}')
         return FunctionPrototype(sig.return_type, sig.args)
 
 

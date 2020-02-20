@@ -842,11 +842,11 @@ foo(b, 1) -> 3 # no compilations are triggered
                         if 0 and isinstance(atype, types.DispatcherFunctionType) and isinstance(arg, Dispatcher) and atype.dispatcher.matches(arg):
                             matching_args_count += 1
                         else:
-                            print(f'NOT IMPL: {atype=}, {arg=}')
+                            print(f'NOT IMPL: atype={atype}, arg={arg}')
             if matching_args_count == len(args):
                 return self.overloads[atypes].entry_point
             else:
-                print(f'No match: {atypes=}, {args=}')
+                print(f'No match: atypes={atypes}, args={args}')
         return super(Dispatcher, self)._compile_for_args(*args, **kws)
 
     @global_compiler_lock
