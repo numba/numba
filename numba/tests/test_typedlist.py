@@ -1305,3 +1305,35 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             expected.append(i)
         self.assertEqual(foo.py_func(), expected)
         self.assertEqual(foo(), expected)
+
+    def test_dict_iters(self):
+        """Test that a List can be created from Dict iterators."""
+
+        def generate_function(line):
+            context = {}
+            code = dedent("""
+                from numba.typed import List, Dict
+                def bar():
+                    d = Dict()
+                    d[0], d[1], d[2] = "a", "b", "c"
+                    {}
+                    return l
+                """).format(line)
+            exec(code, context)
+            return njit(context["bar"])
+
+        def generate_expected(values):
+            expected = List()
+            for i in values:
+                expected.append(i)
+            return expected
+
+        for line, values in (
+                ("l = List(d)", (0, 1, 2)),
+                ("l = List(d.keys())", (0, 1, 2)),
+                ("l = List(d.values())", ("a", "b", "c")),
+                ("l = List(d.items())", ((0, "a"), (1, "b"), (2, "c"))),
+        ):
+            foo, expected = generate_function(line), generate_expected(values)
+            for func in (foo, foo.py_func):
+                self.assertEqual(func(), expected)

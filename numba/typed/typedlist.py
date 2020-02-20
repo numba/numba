@@ -460,8 +460,12 @@ def typedlist_call(context):
                     "argument for List constructor must be iterable")
             elif hasattr(iterable, "dtype"):
                 item_type = iterable.dtype
+            elif hasattr(iterable, "yield_type"):
+                item_type = iterable.yield_type
             elif isinstance(iterable, types.UnicodeType):
                 item_type = iterable
+            elif isinstance(iterable, types.DictType):
+                item_type = iterable.key_type
             else:
                 raise TypingError(
                     "unable to determine a suitable dtype for the argument of "
