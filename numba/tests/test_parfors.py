@@ -38,12 +38,11 @@ from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack)
+                      needs_lapack, disabled_test)
 import cmath
 import unittest
 
 
-disabled_test = unittest.skipIf(True, 'Test disabled')
 x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
 
 _GLOBAL_INT_FOR_TESTING1 = 17

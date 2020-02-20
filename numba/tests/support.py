@@ -78,6 +78,8 @@ linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 
 _is_armv7l = platform.machine() == 'armv7l'
 
+disabled_test = unittest.skipIf(True, 'Test disabled')
+
 try:
     import scipy.linalg.cython_lapack
     has_lapack = True
