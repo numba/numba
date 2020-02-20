@@ -35,7 +35,7 @@ from numba.ir_utils import (find_callname, guard, build_definitions,
                             index_var_of_get_setitem)
 from numba import ir
 from numba.unsafe.ndarray import empty_inferred as unsafe_empty
-from numba.compiler import compile_isolated, Flags
+from numba.compiler import compile_isolated, Flags, CompilerBase, DefaultPassBuilder
 from numba.bytecode import ByteCodeIter
 from .support import tag, override_env_config, skip_parfors_unsupported
 from .matmul_usecase import needs_blas
@@ -44,8 +44,8 @@ import cmath
 from numba.extending import (
     register_model, models, typeof_impl, unbox, overload_method, NativeValue,
 )
-
-
+from numba.compiler_machinery import register_pass, FunctionPass
+from numba.typed_passes import IRLegalization
 
 # for decorating tests, marking that Windows with Python 2.7 is not supported
 _windows_py27 = (sys.platform.startswith('win32') and
@@ -3165,6 +3165,60 @@ class TestParforsMisc(TestParforsBase):
             # original state
             numba.parfor.sequential_parfor_lowering = save_state
 
+    @skip_parfors_unsupported
+    def test_no_state_change_in_gufunc_lowering_on_error(self):
+        # tests #5098, if there's an exception arising in gufunc lowering the
+        # sequential_parfor_lowering global variable should remain as False on
+        # stack unwind.
+
+        @register_pass(mutates_CFG=True, analysis_only=False)
+        class BreakParfors(FunctionPass):
+            _name = "break_parfors"
+
+            def __init__(self):
+                FunctionPass.__init__(self)
+
+            def run_pass(self, state):
+                for blk in state.func_ir.blocks.values():
+                    for stmt in blk.body:
+                        if isinstance(stmt, numba.parfor.Parfor):
+                            # races should be a set(), that list is iterable
+                            # permits it to get through to the
+                            # _create_gufunc_for_parfor_body routine at which
+                            # point it needs to be a set so e.g. set.difference
+                            # can be computed, this therefore creates an error
+                            # in the right location.
+                            stmt.races = []
+                    return True
+
+
+        class BreakParforsCompiler(CompilerBase):
+
+            def define_pipelines(self):
+                pm = DefaultPassBuilder.define_nopython_pipeline(self.state)
+                pm.add_pass_after(BreakParfors, IRLegalization)
+                pm.finalize()
+                return [pm]
+
+
+        @njit(parallel=True, pipeline_class=BreakParforsCompiler)
+        def foo():
+            x = 1
+            for _ in prange(1):
+                x += 1
+            return x
+
+        # assert default state for global
+        self.assertFalse(numba.parfor.sequential_parfor_lowering)
+
+        with self.assertRaises(errors.LoweringError) as raises:
+            foo()
+
+        self.assertIn("'list' object has no attribute 'difference'",
+                      str(raises.exception))
+
+        # assert state has not changed
+        self.assertFalse(numba.parfor.sequential_parfor_lowering)
 
 
 @skip_unsupported
