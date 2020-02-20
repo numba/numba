@@ -725,3 +725,22 @@ class TestMiscIssues(TestCase):
             return f(None)
 
         self.assertEqual(foo(a), 1)
+
+    def test_constant_functions(self):
+
+        @jit(nopython=True, firstclass=True)
+        def a():
+            return 123
+
+        @jit(nopython=True, firstclass=True)
+        def b():
+            return 456
+
+        @jit(nopython=True)
+        def foo():
+            return a() + b()
+
+        r = foo()
+        if r != 123 + 456:
+            print(foo.overloads[()].library.get_llvm_str())
+        self.assertEqual(r, 123 + 456)
