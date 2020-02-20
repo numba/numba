@@ -1271,19 +1271,22 @@ class TestImmutable(MemoryLeakMixin, TestCase):
 class TestListFromIter(MemoryLeakMixin, TestCase):
 
     def test_types(self):
-        """Test all types that a List can be constructe from."""
+        """Test all types that a List can be constructed from."""
 
         def generate_function(line):
             context = {}
-            exec(dedent("""
+            code = dedent("""
                 from numba.typed import List
                 def bar():
                     {}
                     return l
-                """.format(line)), context)
+                """).format(line)
+            exec(code, context)
             return njit(context["bar"])
         for line in ("l = List([0, 1, 2])",
                      "l = List(range(3))",
+                     "l = List(List([0, 1, 2]))",
+                     "l = List((0, 1, 2))",
                      ):
             foo = generate_function(line)
             cf_received, py_received = foo(), foo.py_func()
