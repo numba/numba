@@ -24,6 +24,7 @@ from numba.core.extending import (
     type_callable,
 )
 from numba.typed import listobject
+from numba.core.errors import TypingError
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
@@ -453,7 +454,11 @@ def typedlist_call(context):
     """
     def typer(*args, **kwargs):
         if args:
-            item_type = args[0].dtype
+            iterable = args[0]
+            if not isinstance(iterable, types.IterableType):
+                raise TypingError(
+                    "argument for List constructor must be iterable")
+            item_type = iterable.dtype
         else:
             item_type = types.undefined
 
