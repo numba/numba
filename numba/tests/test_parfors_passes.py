@@ -196,7 +196,7 @@ class TestConvertSetItemPass(BaseTest):
         sub_pass = self.run_parfor_sub_pass(test_impl, ())
         self.assertEqual(len(sub_pass.rewritten), 1)
         [record] = sub_pass.rewritten
-        self.assertEqual(record["reason"], "masked_assign_boardcast_scalar")
+        self.assertEqual(record["reason"], "masked_assign_broadcast_scalar")
         self.check_records(sub_pass.rewritten)
 
         self.run_parallel(test_impl)

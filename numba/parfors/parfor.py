@@ -1539,7 +1539,7 @@ class ConvertSetItemPass:
                                         loc, target, index, value)
                                 self.rewritten.append(
                                     dict(old=instr, new=new_instr,
-                                        reason='masked_assign_boardcast_scalar'),
+                                        reason='masked_assign_broadcast_scalar'),
                                 )
                                 instr = new_instr
                             # RHS is an
@@ -2514,7 +2514,7 @@ def _find_mask(typemap, func_ir, arr_def):
 
 class ParforPass(ParforPassStates):
 
-    """ParforPass class is responsible for converting Numpy
+    """ParforPass class is responsible for converting NumPy
     calls in Numba intermediate representation to Parfors, which
     will lower into either sequential or parallel loops during lowering
     stage.
