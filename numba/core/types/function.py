@@ -149,8 +149,8 @@ class FunctionType(Type):
         elif isinstance(obj, Dispatcher):
             if obj.targetoptions.get('no_cfunc_wrapper', True):
                 # first-class function is disabled for the given
-                # dispatcher instance
-                return
+                # dispatcher instance, fallback to default:
+                return types.Dispatcher(obj)
             impl = DispatcherFunctionTypeImpl(obj)
         elif isinstance(obj, WrapperAddressProtocol):
             impl = FunctionTypeImpl(obj.signature())
