@@ -1329,7 +1329,12 @@ class PreParforPass(object):
         self.calltypes = calltypes
         self.typingctx = typingctx
         self.options = options
+        # diagnostics
         self.swapped = swapped
+        self.stats = {
+            'replaced_func': 0,
+            'replaced_dtype': 0,
+        }
 
     def run(self):
         """Run pre-parfor processing pass.
@@ -1405,6 +1410,7 @@ class PreParforPass(object):
                                         break
                             return True
                         if guard(replace_func):
+                            self.stats['replaced_func'] += 1
                             break
                     elif (isinstance(expr, ir.Expr) and expr.op == 'getattr' and
                           expr.attr == 'dtype'):
@@ -1464,6 +1470,7 @@ class PreParforPass(object):
                             block.body.insert(0, dtype_attr_assign)
                             block.body.insert(0, typ_var_assign)
                             block.body.insert(0, g_np_assign)
+                            self.stats['replaced_dtype'] += 1
                             break
 
 def find_template(op):

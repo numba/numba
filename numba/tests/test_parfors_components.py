@@ -1,5 +1,6 @@
 """
 Tests for sub-components of parfors.
+These tests are aimed to produce a good coverage of parfor passes.
 """
 import unittest
 from functools import reduce
@@ -34,16 +35,13 @@ class MyPipeline(object):
 
 class BaseTest(TestCase):
     @classmethod
-    def run_parfor_sub_pass(cls, test_func, args, **kws):
+    def _run_parfor(cls, test_func, args):
         # TODO: refactor this with get_optimized_numba_ir() where this is
         #       copied from
         typingctx = typing.Context()
         targetctx = cpu.CPUContext(typingctx)
         test_ir = compiler.run_frontend(test_func)
-        if kws:
-            options = cpu.ParallelOptions(kws)
-        else:
-            options = cpu.ParallelOptions(True)
+        options = cpu.ParallelOptions(True)
 
         tp = MyPipeline(typingctx, targetctx, args, test_ir)
 
@@ -79,24 +77,36 @@ class BaseTest(TestCase):
             preparfor_pass.run()
 
             rewrites.rewrite_registry.apply("after-inference", tp.state)
+            return tp, options, diagnostics, preparfor_pass
 
-            flags = compiler.Flags()
-            parfor_pass = numba.parfors.parfor.ParforPass(
-                tp.state.func_ir,
-                tp.state.typemap,
-                tp.state.calltypes,
-                tp.state.return_type,
-                tp.state.typingctx,
-                options,
-                flags,
-                diagnostics=diagnostics,
-            )
-            parfor_pass._pre_run()
-            # Run subpass
-            sub_pass = cls.sub_pass_class(parfor_pass)
-            sub_pass.run(parfor_pass.func_ir.blocks)
+    @classmethod
+    def run_parfor_sub_pass(cls, test_func, args):
+        tp, options, diagnostics, _ = cls._run_parfor(test_func, args)
+
+        flags = compiler.Flags()
+        parfor_pass = numba.parfors.parfor.ParforPass(
+            tp.state.func_ir,
+            tp.state.typemap,
+            tp.state.calltypes,
+            tp.state.return_type,
+            tp.state.typingctx,
+            options,
+            flags,
+            diagnostics=diagnostics,
+        )
+        parfor_pass._pre_run()
+        # Run subpass
+        sub_pass = cls.sub_pass_class(parfor_pass)
+        sub_pass.run(parfor_pass.func_ir.blocks)
 
         return sub_pass
+
+    @classmethod
+    def run_parfor_pre_pass(cls, test_func, args):
+        tp, options, diagnostics, preparfor_pass = cls._run_parfor(
+            test_func, args
+        )
+        return preparfor_pass
 
     def _run_parallel(self, func, *args, **kwargs):
         cfunc = njit(parallel=True)(func)
@@ -613,7 +623,22 @@ class TestPreParforPass(BaseTest):
         args = (arr,)
         argtypes = [typeof(x) for x in args]
 
-        self.run_parfor_sub_pass(test_impl, argtypes)
+        pre_pass = self.run_parfor_pre_pass(test_impl, argtypes)
+        self.assertEqual(pre_pass.stats["replaced_func"], 0)
+        self.assertEqual(pre_pass.stats["replaced_dtype"], 1)
+        self.run_parallel(test_impl, *args)
+
+    def test_sum_replacement(self):
+        def test_impl(a):
+            return np.sum(a)
+
+        arr = np.arange(10)
+        args = (arr,)
+        argtypes = [typeof(x) for x in args]
+
+        pre_pass = self.run_parfor_pre_pass(test_impl, argtypes)
+        self.assertEqual(pre_pass.stats["replaced_func"], 1)
+        self.assertEqual(pre_pass.stats["replaced_dtype"], 0)
         self.run_parallel(test_impl, *args)
 
 
