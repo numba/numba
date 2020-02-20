@@ -436,7 +436,9 @@ class TestIRCompounds(CheckEquality):
                 b[idx], b[idx + 1] = b[idx + 1], b[idx]
                 break
 
-        assert change_set
+        # ensure that a mutation occurred.
+        self.asserTrue(change_set)
+
         self.assertFalse(x_ir.equal_ir(z_ir))
         self.assertEqual(len(change_set), 2)
         for item in change_set:

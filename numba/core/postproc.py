@@ -1,4 +1,4 @@
-from numba.core import utils, ir, analysis, transforms
+from numba.core import utils, ir, analysis, transforms, ir_utils
 
 
 class YieldPoint(object):
@@ -219,10 +219,4 @@ class PostProcessor(object):
         """
         Strips the IR of Del nodes
         """
-        for block in self.func_ir.blocks.values():
-            new_body = []
-            for stmt in block.body:
-                if not isinstance(stmt, ir.Del):
-                    new_body.append(stmt)
-            block.body = new_body
-        return
+        ir_utils.remove_dels(self.func_ir.blocks)

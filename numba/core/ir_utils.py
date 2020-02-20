@@ -2060,15 +2060,11 @@ def enforce_no_dels(func_ir):
     """
     Enforce there being no ir.Del nodes in the IR.
     """
-    strict = True
     for blk in func_ir.blocks.values():
         dels = [x for x in blk.find_insts(ir.Del)]
         if dels:
             msg = "Illegal IR, del found at: %s" % dels[0]
-            if strict:
-                raise CompilerError(msg, loc=dels[0].loc)
-            else:
-                warnings.warn(NumbaWarning(msg))
+            raise CompilerError(msg, loc=dels[0].loc)
 
 
 def check_and_legalize_ir(func_ir):
