@@ -1479,6 +1479,8 @@ def find_template(op):
 
 
 class ParforPassStates:
+    """This class encapsulates all internal states of the ParforPass.
+    """
 
     def __init__(self, func_ir, typemap, calltypes, return_type, typingctx,
                  options, flags, diagnostics=ParforDiagnostics()):
@@ -1502,7 +1504,14 @@ class ParforPassStates:
 
 
 class ConvertSetItemPass:
+    """Parfor subpass to convert setitem on Arrays
+    """
     def __init__(self, pass_states):
+        """
+        Parameters
+        ----------
+        pass_states : ParforPassStates
+        """
         self.pass_states = pass_states
         self.rewritten = []
 
@@ -1542,7 +1551,7 @@ class ConvertSetItemPass:
                                         reason='masked_assign_broadcast_scalar'),
                                 )
                                 instr = new_instr
-                            # RHS is an
+                            # RHS is an array
                             elif isinstance(value_typ, types.npytypes.Array):
                                 val_def = guard(get_definition, pass_states.func_ir,
                                                 value.name)
