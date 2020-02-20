@@ -9,12 +9,13 @@ from numba.parfors.parfor import ParforPass as _parfor_ParforPass
 from numba.parfors.parfor import Parfor
 
 from numba.core.compiler_machinery import (FunctionPass, LoweringPass,
-                                           register_pass)
+                                           AnalysisPass, register_pass)
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
-                                 get_definition)
+                                 get_definition, remove_dels)
+from numba.core import postproc
 
 
 @contextmanager
@@ -197,6 +198,11 @@ class NopythonRewrites(FunctionPass):
         Perform any intermediate representation rewrites after type
         inference.
         """
+        # a bunch of these passes are either making assumptions or rely on some
+        # very picky and slightly bizarre state particularly in relation to
+        # ir.Del presence. To accommodate, ir.Dels are added ahead of running
+        # this pass and stripped at the end.
+
         # Ensure we have an IR and type information.
         assert state.func_ir
         assert isinstance(getattr(state, 'typemap', None), dict)
@@ -204,8 +210,12 @@ class NopythonRewrites(FunctionPass):
         msg = ('Internal error in post-inference rewriting '
                'pass encountered during compilation of '
                'function "%s"' % (state.func_id.func_name,))
+
+        pp = postproc.PostProcessor(state.func_ir)
+        pp.run(True)
         with fallback_context(state, msg):
             rewrites.rewrite_registry.apply('after-inference', state)
+        pp.remove_dels()
         return True
 
 
@@ -268,6 +278,8 @@ class ParforPass(FunctionPass):
                                          state.parfor_diagnostics)
         parfor_pass.run()
 
+        remove_dels(state.func_ir.blocks)
+
         # check the parfor pass worked and warn if it didn't
         has_parfor = False
         for blk in state.func_ir.blocks.values():
@@ -298,12 +310,12 @@ class ParforPass(FunctionPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
-class DumpParforDiagnostics(FunctionPass):
+class DumpParforDiagnostics(AnalysisPass):
 
     _name = "dump_parfor_diagnostics"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         if state.flags.auto_parallel.enabled:
@@ -369,12 +381,12 @@ class NativeLowering(LoweringPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
-class IRLegalization(FunctionPass):
+class IRLegalization(AnalysisPass):
 
     _name = "ir_legalization"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         raise_on_unsupported_feature(state.func_ir, state.typemap)
@@ -385,12 +397,12 @@ class IRLegalization(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class NoPythonBackend(FunctionPass):
+class NoPythonBackend(LoweringPass):
 
     _name = "nopython_backend"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        LoweringPass.__init__(self)
 
     def run_pass(self, state):
         """

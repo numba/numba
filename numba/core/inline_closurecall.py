@@ -30,7 +30,7 @@ from numba.core.analysis import (
     compute_cfg_from_blocks,
     compute_use_defs,
     compute_live_variables)
-
+from numba.core import postproc
 from numba.cpython.rangeobj import range_iter_len
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
@@ -68,6 +68,10 @@ class InlineClosureCallPass(object):
     def run(self):
         """Run inline closure call pass.
         """
+        # Analysis relies on ir.Del presence, strip out later
+        pp = postproc.PostProcessor(self.func_ir)
+        pp.run(True)
+
         modified = False
         work_list = list(self.func_ir.blocks.items())
         debug_print = _make_debug_print("InlineClosureCallPass")
@@ -118,11 +122,13 @@ class InlineClosureCallPass(object):
                 _fix_nested_array(self.func_ir)
 
         if modified:
-            remove_dels(self.func_ir.blocks)
             # run dead code elimination
             dead_code_elimination(self.func_ir)
             # do label renaming
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
+
+        # inlining done, strip dels
+        remove_dels(self.func_ir.blocks)
 
         debug_print("END")
 
