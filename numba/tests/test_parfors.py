@@ -33,7 +33,7 @@ from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty
 from numba.core.bytecode import ByteCodeIter
 from numba.core.compiler import (compile_isolated, Flags, CompilerBase,
                                  DefaultPassBuilder)
-from numba.core.compiler_machinery import register_pass, FunctionPass
+from numba.core.compiler_machinery import register_pass, AnalysisPass
 from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
@@ -1538,6 +1538,25 @@ class TestParfors(TestParforsBase):
             return parr.sum()
         x = np.ones(20)
         self.check(test_impl, x, True, check_scheduling=False)
+
+    @skip_parfors_unsupported
+    def test_prange_side_effects(self):
+        def test_impl(a, b):
+            data = np.empty(len(a), dtype=np.float64)
+            size = len(data)
+            for i in numba.prange(size):
+                data[i] = a[i]
+            for i in numba.prange(size):
+                data[i] = data[i] + b[i]
+            return data
+
+        x = np.arange(10 ** 2, dtype=float)
+        y = np.arange(10 ** 2, dtype=float)
+
+        self.check(test_impl, x, y)
+        self.assertTrue(countParfors(test_impl,
+                                    (types.Array(types.float64, 1, 'C'),
+                                     types.Array(types.float64, 1, 'C'))) == 1)
 
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
@@ -3108,11 +3127,11 @@ class TestParforsMisc(TestParforsBase):
         # stack unwind.
 
         @register_pass(mutates_CFG=True, analysis_only=False)
-        class BreakParfors(FunctionPass):
+        class BreakParfors(AnalysisPass):
             _name = "break_parfors"
 
             def __init__(self):
-                FunctionPass.__init__(self)
+                AnalysisPass.__init__(self)
 
             def run_pass(self, state):
                 for blk in state.func_ir.blocks.values():
