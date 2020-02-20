@@ -119,7 +119,7 @@ def _get_wrapper_address(func, sig):
     if hasattr(func, '__wrapper_address__'):
         # func can be any object that implements the
         # __wrapper_address__ protocol.
-        addr = func.__wrapper_address__(sig)
+        addr = func.__wrapper_address__()
     elif isinstance(func, types.FunctionType):
         cfunc = numba.cfunc(sig)(func)
         addr = cfunc._wrapper_address

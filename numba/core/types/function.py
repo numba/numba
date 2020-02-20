@@ -103,18 +103,12 @@ class WrapperAddressProtocol(ABC):
     """
 
     @abstractmethod
-    def __wrapper_address__(self, sig):
-        """Return the address of a first-class function with given signature.
-
-        Parameters
-        ----------
-        sig : Signature
-          A function signature
+    def __wrapper_address__(self):
+        """Return the address of a first-class function.
 
         Returns
         -------
         addr : int
-
         """
 
     @abstractmethod

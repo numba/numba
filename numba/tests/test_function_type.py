@@ -66,8 +66,7 @@ class WAP(types.WrapperAddressProtocol):
         self.cfunc = cfunc(sig)(func)
         self.sig = sig
 
-    def __wrapper_address__(self, sig):
-        assert self.sig == sig, (self.sig, sig)
+    def __wrapper_address__(self):
         return self.cfunc._wrapper_address
 
     def signature(self):
@@ -538,25 +537,28 @@ class TestFunctionTypeExtensions(TestCase):
                     libpath = ctypes.util.find_library('m')
                     lib = ctypes.cdll.LoadLibrary(libpath)
                 self.lib = lib
-                self.fname = fname
-
-            def __wrapper_address__(self, sig):
-                if (self.fname, sig) == ('cos', float64(float64)):
+                self._name = fname
+                if fname == 'cos':
                     addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
-                elif (self.fname, sig) == ('sinf', float32(float32)):
+                    signature = float64(float64)
+                elif fname == 'sinf':
                     addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
+                    signature = float32(float32)
                 else:
                     raise NotImplementedError(
-                        f'wrapper address of `{self.fname}`'
-                        f' with signature `{sig}`')
-                return addr
+                        f'wrapper address of `{fname}`'
+                        f' with signature `{signature}`')
+                self._signature = signature
+                self._address = addr
+
+            def __repr__(self):
+                return f'{type(self).__name__}({self._name!r})'
+
+            def __wrapper_address__(self):
+                return self._address
 
             def signature(self):
-                if self.fname == 'cos':
-                    return float64(float64)
-                if self.fname == 'sinf':
-                    return float32(float32)
-                raise NotImplementedError(f'signature of `{self.fname}`')
+                return self._signature
 
         mycos = LibM('cos')
         mysin = LibM('sinf')

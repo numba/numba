@@ -168,11 +168,11 @@ called via its memory address (function pointer value) from Numba jit
 compiled functions. Such the so-called WAP objects must define the
 following two methods:
 
-.. method:: __wrapper_address__(self, sig: numba.typing.Signature) -> int
+.. method:: __wrapper_address__(self) -> int
 
-            Return the memory address of first-class function with
-            given signature. This method is used when Numba jit
-            compiled function tries to call the given WAP instance.
+            Return the memory address of a first-class function. This
+            method is used when Numba jit compiled function tries to
+            call the given WAP instance.
 
 .. method:: signature(self) -> numba.typing.Signature
 
@@ -191,9 +191,8 @@ package::
 
     >>> import numba, ctypes, ctypes.util, math
     >>> libm = ctypes.cdll.LoadLibrary(ctypes.util.find_library('m'))
-    >>> class LibM(numba.types.WrapperAddressProtocol):
-    ...     def __wrapper_address__(self, sig):
-    ...         assert sig == numba.float64(numba.float64)
+    >>> class LibMCos(numba.types.WrapperAddressProtocol):
+    ...     def __wrapper_address__(self):
     ...         return ctypes.cast(libm.cos, ctypes.c_voidp).value
     ...     def signature(self):
     ...         return numba.float64(numba.float64)
@@ -202,9 +201,9 @@ package::
     ... def foo(f, x):
     ...     return f(x)
     ...
-    >>> foo(LibM(), 0.0)
+    >>> foo(LibMCos(), 0.0)
     1.0
-    >>> foo(LibM(), 0.5), math.cos(0.5)
+    >>> foo(LibMCos(), 0.5), math.cos(0.5)
     (0.8775825618903728, 0.8775825618903728)
 
 Miscellaneous Types
