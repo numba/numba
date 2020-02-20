@@ -1,6 +1,7 @@
 """
 Tests for sub-components of parfors.
-These tests are aimed to produce a good coverage of parfor passes.
+These tests are aimed to produce a good-enough coverage of parfor passes
+so that refactoring on these passes are easier with faster testing turnaround.
 """
 import unittest
 from functools import reduce
