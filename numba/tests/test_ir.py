@@ -437,7 +437,7 @@ class TestIRCompounds(CheckEquality):
                 break
 
         # ensure that a mutation occurred.
-        self.asserTrue(change_set)
+        self.assertTrue(change_set)
 
         self.assertFalse(x_ir.equal_ir(z_ir))
         self.assertEqual(len(change_set), 2)
