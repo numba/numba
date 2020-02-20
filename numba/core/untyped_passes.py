@@ -3,7 +3,8 @@ from contextlib import contextmanager
 from copy import deepcopy, copy
 import warnings
 
-from numba.core.compiler_machinery import FunctionPass, register_pass
+from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
+                                           register_pass)
 from numba.core import (errors, types, ir, bytecode, postproc, rewrites, config,
                         transforms)
 from numba.misc.special import literal_unroll
@@ -382,7 +383,7 @@ class InlineInlinables(FunctionPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=False)
-class PreserveIR(FunctionPass):
+class PreserveIR(AnalysisPass):
     """
     Preserves the IR in the metadata
     """
@@ -390,7 +391,7 @@ class PreserveIR(FunctionPass):
     _name = "preserve_ir"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         state.metadata['preserved_ir'] = state.func_ir.copy()

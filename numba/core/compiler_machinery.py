@@ -7,6 +7,7 @@ from numba.core import errors, config, transforms
 from numba.core.utils import add_metaclass
 from numba.core.tracing import event
 from numba.core.postproc import PostProcessor
+from numba.core.ir_utils import enforce_no_dels
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -290,6 +291,11 @@ class PassManager(object):
             mutated |= check(pss.run_pass, internal_state)
         with SimpleTimer() as finalize_time:
             mutated |= check(pss.run_finalizer, internal_state)
+
+        # Check that if the pass is an instance of a FunctionPass that it hasn't
+        # emitted ir.Dels.
+        if isinstance(pss, FunctionPass):
+            enforce_no_dels(internal_state.func_ir)
 
         if self._ENFORCING:
             # TODO: Add in self consistency enforcement for

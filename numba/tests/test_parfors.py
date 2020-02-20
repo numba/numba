@@ -33,7 +33,7 @@ from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty
 from numba.core.bytecode import ByteCodeIter
 from numba.core.compiler import (compile_isolated, Flags, CompilerBase,
                                  DefaultPassBuilder)
-from numba.core.compiler_machinery import register_pass, FunctionPass
+from numba.core.compiler_machinery import register_pass, AnalysisPass
 from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
@@ -3127,11 +3127,11 @@ class TestParforsMisc(TestParforsBase):
         # stack unwind.
 
         @register_pass(mutates_CFG=True, analysis_only=False)
-        class BreakParfors(FunctionPass):
+        class BreakParfors(AnalysisPass):
             _name = "break_parfors"
 
             def __init__(self):
-                FunctionPass.__init__(self)
+                AnalysisPass.__init__(self)
 
             def run_pass(self, state):
                 for blk in state.func_ir.blocks.values():

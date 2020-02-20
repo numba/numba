@@ -39,7 +39,7 @@ class TestIrUtils(TestCase):
         typemap, _, _ = type_inference_stage(
             typingctx, test_ir, (), None)
         matched_call = ir_utils.find_callname(
-            test_ir, test_ir.blocks[0].body[14].value, typemap)
+            test_ir, test_ir.blocks[0].body[8].value, typemap)
         self.assertTrue(isinstance(matched_call, tuple) and
                         len(matched_call) == 2 and
                         matched_call[0] == 'append')
@@ -87,16 +87,13 @@ class TestIrUtils(TestCase):
             # dead stuff:
             # a const int value 0xdead
             # an assign of above into to variable `dead`
-            # del of both of the above
             # a const int above 0xdeaddead
             # an assign of said int to variable `deaddead`
-            # del of both of the above
-            # this is 8 things to remove
+            # this is 4 things to remove
 
             self.assertEqual(len(the_ir.blocks), 1)
             block = the_ir.blocks[0]
             deads = []
-            dels = [x for x in block.find_insts(ir.Del)]
             for x in block.find_insts(ir.Assign):
                 if isinstance(getattr(x, 'target', None), ir.Var):
                     if 'dead' in getattr(x.target, 'name', ''):
@@ -105,7 +102,6 @@ class TestIrUtils(TestCase):
             expect_removed = []
             self.assertEqual(len(deads), 2)
             expect_removed.extend(deads)
-            del_names = [x.value for x in dels]
             for d in deads:
                 # check the ir.Const is the definition and the value is expected
                 const_val = the_ir.get_definition(d.value)
@@ -113,16 +109,7 @@ class TestIrUtils(TestCase):
                                 const_val.value)
                 expect_removed.append(const_val)
 
-                # check there is a del for both sides of the assignment, one for
-                # the dead variable and one for which to it the const gets
-                # assigned
-                self.assertIn(d.value.name, del_names)
-                self.assertIn(d.target.name, del_names)
-
-                for x in dels:
-                    if x.value in (d.value.name, d.target.name):
-                        expect_removed.append(x)
-            self.assertEqual(len(expect_removed), 8)
+            self.assertEqual(len(expect_removed), 4)
             return expect_removed
 
         def check_dce_ir(the_ir):
@@ -130,7 +117,6 @@ class TestIrUtils(TestCase):
             block = the_ir.blocks[0]
             deads = []
             consts = []
-            dels = [x for x in block.find_insts(ir.Del)]
             for x in block.find_insts(ir.Assign):
                 if isinstance(getattr(x, 'target', None), ir.Var):
                     if 'dead' in getattr(x.target, 'name', ''):
@@ -138,8 +124,6 @@ class TestIrUtils(TestCase):
                 if isinstance(getattr(x, 'value', None), ir.Const):
                     consts.append(x)
             self.assertEqual(len(deads), 0)
-            # check there's no mention of dead in dels
-            self.assertTrue(all(['dead' not in x.value for x in dels]))
 
             # check the consts to make sure there's no reference to 0xdead or
             # 0xdeaddead
