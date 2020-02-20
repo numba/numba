@@ -700,7 +700,8 @@ class Lower(BaseLower):
 
             def stararg_handler(index, param, vars):
                 stararg_ty = signature.args[index]
-                if not isinstance(stararg_ty, types.BaseTuple):
+                stararg_types = (types.StarArgTuple, types.StarArgUniTuple)
+                if not isinstance(stararg_ty, stararg_types):
                     stararg_ty = types.Tuple((stararg_ty,))
                 values = [self._cast_var(var, sigty)
                           for var, sigty in zip(vars, stararg_ty)]
