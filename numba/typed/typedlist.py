@@ -13,7 +13,7 @@ from collections.abc import MutableSequence
 from numba.core.types import ListType, TypeRef
 from numba.core.imputils import numba_typeref_ctor
 from numba.core.dispatcher import Dispatcher
-from numba.core import types, errors, config, cgutils
+from numba.core import types, config, cgutils
 from numba import njit, typeof
 from numba.core.extending import (
     overload_method,
@@ -24,7 +24,7 @@ from numba.core.extending import (
     type_callable,
 )
 from numba.typed import listobject
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, LoweringError
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
@@ -529,12 +529,11 @@ def impl_numba_typeref_ctor(cls, *args):
     """
     list_ty = cls.instance_type
     if not isinstance(list_ty, types.ListType):
-        msg = "expecting a ListType but got {}".format(list_ty)
         return  # reject
     # Ensure the list is precisely typed.
     if not list_ty.is_precise():
         msg = "expecting a precise ListType but got {}".format(list_ty)
-        raise errors.LoweringError(msg)
+        raise LoweringError(msg)
 
     item_type = types.TypeRef(list_ty.item_type)
     if args:
