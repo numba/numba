@@ -445,6 +445,25 @@ def unbox_listtype(typ, val, c):
 # The following contains the logic for the type-inferred constructor
 #
 
+def _guess_dtype(iterable):
+    """Guess the correct dtype of the iterable type. """
+    if not isinstance(iterable, types.IterableType):
+        raise TypingError(
+            "List() argument must be iterable")
+    elif hasattr(iterable, "dtype"):
+        return iterable.dtype
+    elif hasattr(iterable, "yield_type"):
+        return iterable.yield_type
+    elif isinstance(iterable, types.UnicodeType):
+        return iterable
+    elif isinstance(iterable, types.DictType):
+        return iterable.key_type
+    else:
+        # This should never happen, since the 'dtype' of any iterable
+        # should have determined above.
+        raise TypingError(
+            "List() argument does not have a suitable dtype")
+
 
 @type_callable(ListType)
 def typedlist_call(context):
@@ -482,23 +501,7 @@ def typedlist_call(context):
                     .format(len(args))
                 )
             iterable = args[0]
-            # 'guess' the correct dtype or reject
-            if not isinstance(iterable, types.IterableType):
-                raise TypingError(
-                    "List() argument must be iterable")
-            elif hasattr(iterable, "dtype"):
-                item_type = iterable.dtype
-            elif hasattr(iterable, "yield_type"):
-                item_type = iterable.yield_type
-            elif isinstance(iterable, types.UnicodeType):
-                item_type = iterable
-            elif isinstance(iterable, types.DictType):
-                item_type = iterable.key_type
-            else:
-                # This should never happen, since the 'dtype' of any iterable
-                # should have determined above.
-                raise TypingError(
-                    "List() argument does not have a suitable dtype")
+            item_type = _guess_dtype(iterable)
         else:
             item_type = types.undefined
 
