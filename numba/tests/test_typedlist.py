@@ -1352,6 +1352,13 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
+        with self.assertRaises(TypeError) as raises:
+            List(23)
+        self.assertIn(
+            "List() argument must be iterable",
+            str(raises.exception),
+        )
+
     def test_exception_on_inhomogeneous_tuple(self):
         @njit
         def foo():
@@ -1365,6 +1372,11 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
+        with self.assertRaises(TypingError) as raises:
+            List((1, 1.0))
+        # FIXME this bails with a length casting error when we attempt to
+        # append 1.0 to an int typed list.
+
     def test_exception_on_too_many_args(self):
         @njit
         def foo():
@@ -1373,6 +1385,13 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             foo()
+        self.assertIn(
+            "List() expected at most 1 argument, got 2",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypeError) as raises:
+            List((0, 1, 2), (3, 4, 5))
         self.assertIn(
             "List() expected at most 1 argument, got 2",
             str(raises.exception),
@@ -1390,6 +1409,13 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
+        with self.assertRaises(TypeError) as raises:
+            List((0, 1, 2), (3, 4, 5), (6, 7, 8))
+        self.assertIn(
+            "List() expected at most 1 argument, got 3",
+            str(raises.exception),
+        )
+
     def test_exception_on_kwargs(self):
         @njit
         def foo():
@@ -1398,6 +1424,13 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             foo()
+        self.assertIn(
+            "List() takes no keyword arguments",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypeError) as raises:
+            List(iterable=(0, 1, 2))
         self.assertIn(
             "List() takes no keyword arguments",
             str(raises.exception),
