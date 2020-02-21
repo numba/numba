@@ -152,19 +152,21 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
         # Normalize dict kws
         kws = dict(kws)
 
-    # deal with kwonly args
+    # deal with var_positional and kwonly args
     params = pysig.parameters
+    var_positional = any(p.kind == p.VAR_POSITIONAL
+                         for name, p in params.items())
     kwonly = []
     for name, p in params.items():
         if p.kind == p.KEYWORD_ONLY:
             kwonly.append(name)
 
-    if kwonly:
+    if kwonly and not var_positional:
         bind_args = args[:-len(kwonly)]
     else:
         bind_args = args
     bind_kws = kws.copy()
-    if kwonly:
+    if kwonly and not var_positional:
         for idx, n in enumerate(kwonly):
             bind_kws[n] = args[len(kwonly) + idx]
 
