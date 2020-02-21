@@ -1693,8 +1693,10 @@ def _make_index_var(typemap, scope, index_vars, body_block):
     elif ndims == 1:
         return index_vars[0], types.uintp
     else:
-        raise NotImplementedError(
-            "Parfor does not handle arrays of dimension 0")
+        raise errors.RewriteUnsupportedError(
+            "Parfor does not handle arrays of dimension 0",
+            loc=loc,
+        )
 
 
 def _mk_parfor_loops(typemap, size_vars, scope, loc):
@@ -1836,7 +1838,9 @@ class ConvertNumpyPass:
         if call_name in ['zeros', 'ones'] or mod_name == 'numpy.random':
             return self._numpy_map_to_parfor(equiv_set, call_name, lhs, args, kws, expr)
         # return error if we couldn't handle it (avoid rewrite infinite loop)
-        raise NotImplementedError("parfor translation failed for ", expr)
+        raise errors.RewriteUnsupportedError(
+            f"parfor translation failed for {expr}", loc=exprloc,
+        )
 
     def _numpy_map_to_parfor(self, equiv_set, call_name, lhs, args, kws, expr):
         """generate parfor from Numpy calls that are maps.
@@ -2266,15 +2270,21 @@ class ConvertLoopPass:
                             try:
                                 step = pass_states.func_ir.get_definition(args[2])
                             except KeyError:
-                                raise NotImplementedError(
-                                    "Only known step size is supported for prange")
+                                raise errors.RewriteUnsupportedError(
+                                    "Only known step size is supported for prange",
+                                    loc=inst.loc,
+                                )
                             if not isinstance(step, ir.Const):
-                                raise NotImplementedError(
-                                    "Only constant step size is supported for prange")
+                                raise errors.RewriteUnsupportedError(
+                                    "Only constant step size is supported for prange",
+                                    loc=inst.loc,
+                                )
                             step = step.value
                             if step != 1:
-                                raise NotImplementedError(
-                                    "Only constant step size of 1 is supported for prange")
+                                raise errors.RewriteUnsupportedError(
+                                    "Only constant step size of 1 is supported for prange",
+                                    loc=inst.loc,
+                                )
                         index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
                         # assume user-provided start to prange can be negative
                         # this is the only case parfor can have negative index
@@ -2426,9 +2436,10 @@ class ConvertLoopPass:
                         added_indices.add(stmt.target.name)
                     # make sure parallel index is not overwritten
                     elif stmt.target.name in index_set and stmt.target.name != stmt.value.name:
-                        raise ValueError(
-                            "Overwrite of parallel loop index at {}".format(
-                            stmt.target.loc))
+                        raise errors.RewriteUnsupportedError(
+                            "Overwrite of parallel loop index",
+                            loc=stmt.target.loc,
+                        )
 
                 if is_get_setitem(stmt):
                     index = index_var_of_get_setitem(stmt)
@@ -2822,7 +2833,7 @@ def _arrayexpr_tree_to_ir(
                 # elif isinstance(op, (np.ufunc, DUFunc)):
                 # function calls are stored in variables which are not removed
                 # op is typing_key to the variables type
-                func_var_name = _find_func_var(typemap, op, avail_vars)
+                func_var_name = _find_func_var(typemap, op, avail_vars, loc=loc)
                 func_var = ir.Var(scope, mk_unique_var(func_var_name), loc)
                 typemap[func_var.name] = typemap[func_var_name]
                 func_var_def = copy.deepcopy(func_ir.get_definition(func_var_name))
@@ -2867,8 +2878,10 @@ def _arrayexpr_tree_to_ir(
         out_ir.append(ir.Assign(expr, expr_out_var, loc))
 
     if len(out_ir) == 0:
-        raise NotImplementedError(
-            "Don't know how to translate array expression '%r'" % (expr,))
+        raise errors.RewriteUnsupportedError(
+            f"Don't know how to translate array expression '{expr:r}'",
+            loc=expr.loc,
+        )
     typemap.pop(expr_out_var.name, None)
     typemap[expr_out_var.name] = el_typ
     return out_ir
@@ -2976,7 +2989,7 @@ def _gen_arrayexpr_getitem(
     return ir_expr
 
 
-def _find_func_var(typemap, func, avail_vars):
+def _find_func_var(typemap, func, avail_vars, loc):
     """find variable in typemap which represents the function func.
     """
     for v in avail_vars:
@@ -2984,7 +2997,7 @@ def _find_func_var(typemap, func, avail_vars):
         # Function types store actual functions in typing_key.
         if isinstance(t, Function) and t.typing_key == func:
             return v
-    raise RuntimeError("ufunc call variable not found")
+    raise errors.RewriteUnsupportedError("ufunc call variable not found", loc=loc)
 
 
 def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
@@ -3253,7 +3266,7 @@ def check_conflicting_reduction_operators(param, nodes):
                 if first_red_func != node.value.fn:
                     msg = ("Reduction variable %s has multiple conflicting "
                            "reduction operators." % param)
-                    raise errors.UnsupportedError(msg, node.loc)
+                    raise errors.RewriteUnsupportedError(msg, node.loc)
 
 def get_reduction_init(nodes):
     """
