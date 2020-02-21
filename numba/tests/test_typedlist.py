@@ -1338,3 +1338,54 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             foo, expected = generate_function(line), generate_expected(values)
             for func in (foo, foo.py_func):
                 self.assertEqual(func(), expected)
+
+    def test_exception_on_non_iterable_types(self):
+        @njit
+        def foo():
+            l = List(23)
+            return l
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "List() argument must be iterable",
+            str(raises.exception),
+        )
+
+    def test_exception_on_too_many_args(self):
+        @njit
+        def foo():
+            l = List((0, 1, 2), (3, 4, 5))
+            return l
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "List() expected at most 1 argument, got 2",
+            str(raises.exception),
+        )
+
+        @njit
+        def foo():
+            l = List((0, 1, 2), (3, 4, 5), (6, 7, 8))
+            return l
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "List() expected at most 1 argument, got 3",
+            str(raises.exception),
+        )
+
+    def test_exception_on_kwargs(self):
+        @njit
+        def foo():
+            l = List(iterable=(0, 1, 2))
+            return l
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "List() takes no keyword arguments",
+            str(raises.exception),
+        )

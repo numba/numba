@@ -453,11 +453,20 @@ def typedlist_call(context):
     Produces List[undefined]
     """
     def typer(*args, **kwargs):
-        if args:
+        if kwargs:
+            raise TypingError(
+                "List() takes no keyword arguments"
+            )
+        elif args:
+            if not 0 <= len(args) <= 1:
+                raise TypingError(
+                    "List() expected at most 1 argument, got {}"
+                    .format(len(args))
+                )
             iterable = args[0]
             if not isinstance(iterable, types.IterableType):
                 raise TypingError(
-                    "argument for List constructor must be iterable")
+                    "List() argument must be iterable")
             elif hasattr(iterable, "dtype"):
                 item_type = iterable.dtype
             elif hasattr(iterable, "yield_type"):
@@ -467,9 +476,10 @@ def typedlist_call(context):
             elif isinstance(iterable, types.DictType):
                 item_type = iterable.key_type
             else:
+                # This should never happen, since the 'dtype' of any iterable
+                # should have determined above.
                 raise TypingError(
-                    "unable to determine a suitable dtype for the argument of "
-                    "List constructor")
+                    "List() argument does not have a suitable dtype")
         else:
             item_type = types.undefined
 
