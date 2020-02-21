@@ -3958,6 +3958,12 @@ def np_select(condlist, choicelist, default=0):
     return np_select_arr_impl
 
 
+@overload(np.isnat)
+def np_isnat(x):
+    def impl(x):
+        return False
+    return impl 
+
 #----------------------------------------------------------------------------
 # Windowing functions
 #   - translated from the numpy implementations found in:
