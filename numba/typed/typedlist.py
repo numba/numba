@@ -508,13 +508,22 @@ def typedlist_call(context):
 
 @overload(numba_typeref_ctor)
 def impl_numba_typeref_ctor(cls, *args):
-    """
-    Defines ``List()``, the type-inferred version of the list ctor.
+    """Defines lowering for ``List()`` and ``List(iterable)``.
+
+    This defines the lowering logic to instantiate either an empty typed-list
+    or a typed-list initialised with values from a single iterable argument.
 
     Parameters
     ----------
     cls : TypeRef
         Expecting a TypeRef of a precise ListType.
+    args: tuple
+        A tuple that contains a single iterable (optional)
+
+    Returns
+    -------
+    impl : function
+        An implementation suitable for lowering the constructor call.
 
     See also: `redirect_type_ctor` in numba/cpython/bulitins.py
     """
@@ -530,13 +539,15 @@ def impl_numba_typeref_ctor(cls, *args):
     item_type = types.TypeRef(list_ty.item_type)
     if args:
         def impl(cls, *args):
+            # Instatiate an empty list and populate it with values from the
+            # iterable.
             r = List.empty_list(item_type)
             for i in args[0]:
                 r.append(i)
             return r
     else:
         def impl(cls, *args):
-            # Simply call .empty_list with the item types from *cls*
+            # Simply call .empty_list with the item type from *cls*
             return List.empty_list(item_type)
 
     return impl
