@@ -593,6 +593,8 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
             stmt = f(stmt, lives, lives_n_aliases, arg_aliases, alias_map, func_ir,
                      typemap)
             if stmt is None:
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("Statement was removed.")
                 removed = True
                 continue
 
@@ -602,21 +604,29 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
             rhs = stmt.value
             if lhs.name not in lives and has_no_side_effect(
                     rhs, lives_n_aliases, call_table):
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("Statement was removed.")
                 removed = True
                 continue
             if isinstance(rhs, ir.Var) and lhs.name == rhs.name:
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("Statement was removed.")
                 removed = True
                 continue
             # TODO: remove other nodes like SetItem etc.
 
         if isinstance(stmt, ir.Del):
             if stmt.value not in lives:
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("Statement was removed.")
                 removed = True
                 continue
 
         if isinstance(stmt, ir.SetItem):
             name = stmt.target.name
             if name not in lives_n_aliases:
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("Statement was removed.")
                 continue
 
         if type(stmt) in analysis.ir_extension_usedefs:
@@ -660,6 +670,7 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == ['dtype', numpy] or
             call_list == [numba.array_analysis.wrap_index] or
             call_list == [numba.special.prange] or
+            call_list == ['prange', numba] or
             call_list == [numba.parfor.internal_prange]):
             return True
         elif (isinstance(call_list[0], numba.extending._Intrinsic) and
