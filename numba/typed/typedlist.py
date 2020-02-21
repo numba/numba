@@ -448,9 +448,27 @@ def unbox_listtype(typ, val, c):
 
 @type_callable(ListType)
 def typedlist_call(context):
-    """
-    Defines typing logic for ``List()``.
-    Produces List[undefined]
+    """Defines typing logic for ``List()`` and ``List(iterable)``.
+
+    If no argument is given, the returned typer types a new typed-list with an
+    undefined item type. If a single argument is given it must be iterable with
+    a guessable 'dtype'. In this case, the typer types a new typed-list with
+    the type set to the 'dtype' of the iterable arg.
+
+    Parameters
+    ----------
+    arg : single iterable (optional)
+        The single optional argument.
+
+    Returns
+    -------
+    typer : function
+        A typer suitable to type constructor calls.
+
+    Raises
+    ------
+    The returned typer raises a TypingError in case of unsuitable arguments.
+
     """
     def typer(*args, **kwargs):
         if kwargs:
@@ -464,6 +482,7 @@ def typedlist_call(context):
                     .format(len(args))
                 )
             iterable = args[0]
+            # 'guess' the correct dtype or reject
             if not isinstance(iterable, types.IterableType):
                 raise TypingError(
                     "List() argument must be iterable")
