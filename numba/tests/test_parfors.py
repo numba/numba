@@ -1166,7 +1166,7 @@ class TestParfors(TestParforsBase):
                     i = m
 
         n = 211
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(errors.RewriteUnsupportedError) as raises:
             self.check(test_impl, n)
         self.assertIn("Overwrite of parallel loop index", str(raises.exception))
 
@@ -2210,7 +2210,7 @@ class TestPrange(TestPrangeBase):
                 acc += 2
             return acc
 
-        with self.assertRaises(NotImplementedError) as raises:
+        with self.assertRaises(errors.RewriteUnsupportedError) as raises:
             self.prange_tester(test_impl, 1024)
         msg = 'Only constant step size of 1 is supported for prange'
         self.assertIn(msg, str(raises.exception))
