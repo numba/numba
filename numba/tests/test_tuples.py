@@ -618,6 +618,271 @@ class TestMethods(TestCase):
         self.assertEqual(msg, str(raises.exception))
 
 
+class TestIntrinsics(MemoryLeakMixin, TestCase):
+    def test_make_tuple_types(self):
+        from numba.cpython.tupleobj import make_tuple
+        from numba.typed import List, Dict
+    
+        @njit
+        def convert(iterable):
+            return make_tuple(3, iterable)
+
+        typed_list = List()
+        for i in range(3):
+            typed_list.append(i)
+        typed_dict = Dict.empty(
+            key_type=types.int64,
+            value_type=types.int64,
+        )
+        for i in range(3):
+            typed_dict[i] = 2 * i
+
+        testcases = [
+            list(range(3)),
+            np.array(list(range(3))),
+            [(True, True), (True, False), (False, False)],
+            [n for n in range(3)],
+            typed_list,
+            typed_dict,
+            (1, 1j, 'a'),
+            ['123', '456', '789'],
+            "123",
+        ]
+
+        for testcase in testcases:
+            self.assertEqual(tuple(testcase), convert(testcase))
+
+        # test-cases that cannot be passed as arguments
+
+        @njit
+        def create_tuples():
+            a = make_tuple(3, range(3))
+            b = make_tuple(3, zip(range(0, 3), range(3, 6)))
+            c = make_tuple(3, iter(range(3)))
+            d = make_tuple(3, {0: 3, 1: 4, 2: 5})
+            e = make_tuple(3, '123')
+            return a, b, c, d, e
+
+        result = create_tuples()
+        expected = [
+            range(3),
+            zip(range(0, 3), range(3, 6)),
+            iter(range(3)), 
+            {0: 3, 1: 4, 2: 5},
+            '123',
+        ]
+        for res, exp in zip(result, expected):
+            self.assertEqual(tuple(exp), res)
+
+    def test_make_tuple_repeated_call(self):
+        from numba.cpython.tupleobj import make_tuple
+        from numba.typed import List, Dict
+    
+        @njit
+        def convert(iterable):
+            a = make_tuple(3, iterable)
+            b = make_tuple(3, iterable)
+            return a, b
+
+        typed_list = List()
+        for i in range(3):
+            typed_list.append(i)
+        typed_dict = Dict.empty(
+            key_type=types.int64,
+            value_type=types.int64,
+        )
+        for i in range(3):
+            typed_dict[i] = 2 * i
+
+        testcases = [
+            list(range(3)),
+            np.array(list(range(3))),
+            [(True, True), (True, False), (False, False)],
+            [n for n in range(3)],
+            typed_list,
+            typed_dict,
+            (1, 1j, 'a'),
+            ['123', '456', '789'],
+            "123",
+        ]
+
+        for testcase in testcases:
+            res_a, res_b = convert(testcase)
+            exp_a = tuple(testcase)
+            exp_b = tuple(testcase)
+            self.assertEqual(exp_a, res_a)
+            self.assertEqual(exp_b, res_b)
+
+        # test-cases that cannot be passed as arguments
+
+        @njit
+        def foo():
+            it_b = range(6)
+            b1 = make_tuple(3, it_b)
+            b2 = make_tuple(3, it_b)
+            it_c = zip(range(0, 6), range(6, 12))
+            c1 = make_tuple(3, it_c)
+            c2 = make_tuple(3, it_c)
+            it_d = iter(range(6))
+            d1 = make_tuple(3, it_d)
+            d2 = make_tuple(3, it_d)
+            dict_ = {0: 4, 1: 5, 2: 6, 3: 7}
+            h1 = make_tuple(2, dict_)
+            h2 = make_tuple(2, dict_)
+            return (b1, b2), (c1, c2), (d1, d2), (h1, h2)
+
+        results = foo()
+        expected = [
+            (range(3), range(3)),
+            (zip(range(0, 3), range(6, 9)), zip(range(3, 6), range(9, 12))),
+            (range(3), range(3, 6)),
+            (range(2), range(2)),
+        ]
+        for (res_a, res_b), (exp_a, exp_b) in zip(results, expected):
+            self.assertEqual(tuple(exp_a), res_a)
+            self.assertEqual(tuple(exp_b), res_b)
+
+    def test_make_tuple_excess_data(self):
+        from numba.cpython.tupleobj import make_tuple
+        from numba.typed import List, Dict
+    
+        @njit
+        def convert(iterable):
+            return make_tuple(2, iterable)
+
+        typed_list = List()
+        for i in range(3):
+            typed_list.append(i)
+        typed_dict = Dict.empty(
+            key_type=types.int64,
+            value_type=types.int64,
+        )
+        for i in range(3):
+            typed_dict[i] = 2 * i
+
+        testcases = [
+            list(range(3)),
+            # np.array(list(range(3))),
+            [(True, True), (True, False), (False, False)],
+            [n for n in range(3)],
+            typed_list,
+            typed_dict,
+            (1, 1j, 'a'),
+            ['123', '456', '789'],
+            "123",
+        ]
+
+        for testcase in testcases:
+            self.assertEqual(tuple(testcase)[:2], convert(testcase))
+
+        # test-cases that cannot be passed as arguments
+
+        @njit
+        def foo():
+            a = make_tuple(2, range(3))
+            b = make_tuple(2, zip(range(0, 3), range(3, 6)))
+            c = make_tuple(2, iter(range(3)))
+            d = make_tuple(2, {0: 3, 1: 4, 2: 5})
+            e = make_tuple(2, '123')
+            return a, b, c, d, e
+
+        result = foo()
+        expected = [
+            range(3),
+            zip(range(0, 3), range(3, 6)),
+            iter(range(3)), 
+            {0: 3, 1: 4, 2: 5},
+            '123',
+        ]
+        for res, exp in zip(result, expected):
+            self.assertEqual(tuple(exp)[:2], res)
+
+        const = 3
+
+        @njit
+        def foo(array):
+            a = make_tuple(1, array)
+            b = make_tuple(2, array)
+            c = make_tuple(const, array)
+            d = make_tuple(0, array)
+            return a, b, c, d
+
+        np.random.seed(123)
+        for _ in range(10):
+            # Random data
+            arr = np.random.random(3)
+            # Run
+            a, b, c, d = foo(arr)
+            # Check
+            self.assertEqual(tuple(arr[:1]), a)
+            self.assertEqual(tuple(arr[:2]), b)
+            self.assertEqual(tuple(arr[:3]), c)
+            self.assertEqual((), d)
+
+    def test_make_tuple_insufficient_data(self):
+        from numba.cpython.tupleobj import make_tuple
+
+        self.disable_leak_check()
+
+        @njit
+        def foo(x):
+            return make_tuple(3, x)
+
+        test_inputs = [
+            (1, ),
+            [1],
+            "1",
+        ]
+
+        for test_input in test_inputs:
+            with self.assertRaises((ValueError, errors.TypingError)) as raises:
+                foo(test_input)
+
+        @njit
+        def foo(x):
+            return make_tuple(3, iter([1]))
+                
+        with self.assertRaises((ValueError, errors.TypingError)) as raises:
+            foo(test_input)
+
+    def test_make_tuple_invalid_arguments(self):
+        from numba.cpython.tupleobj import make_tuple
+
+        self.disable_leak_check()
+    
+        @njit
+        def foo(x):
+            return make_tuple(x, [1])
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo(3)
+        expected = "must be a constant integer"
+        self.assertIn(expected, str(raises.exception))
+
+        @njit
+        def foo(x):
+            return make_tuple(3, x)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo(1)
+        expected = "must be an iterable"
+        self.assertIn(expected, str(raises.exception))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo(np.array([[1], [2]]))
+        expected = "must be 1d"
+        self.assertIn(expected, str(raises.exception))
+
+        @njit
+        def foo():
+            return make_tuple(-1, [1, 2, 3])
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        expected = "may not be negative"
+        self.assertIn(expected, str(raises.exception))
+
+
 class TestTupleBuild(TestCase):
 
     def test_build_unpack(self):

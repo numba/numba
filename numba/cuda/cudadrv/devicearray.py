@@ -14,10 +14,10 @@ from ctypes import c_void_p
 import numpy as np
 
 import numba
+from numba.cpython.tupleobj import make_tuple
 from numba.cuda.cudadrv import driver as _driver
 from numba.cuda.cudadrv import devices
 from numba.core import types
-from numba.np.unsafe.ndarray import to_fixed_tuple
 from numba.misc import dummyarray
 from numba.np import numpy_support
 
@@ -456,7 +456,7 @@ def _assign_kernel(ndim):
             idx[1, i] = (location % lhs.shape[i]) * (rhs.shape[i] > 1)
             location //= lhs.shape[i]
 
-        lhs[to_fixed_tuple(idx[0], ndim)] = rhs[to_fixed_tuple(idx[1], ndim)]
+        lhs[make_tuple(ndim, idx[0])] = rhs[make_tuple(ndim, idx[1])]
     return kernel
 
 

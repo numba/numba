@@ -5,7 +5,7 @@ from numba.tests.support import TestCase, captured_stdout
 from numba import njit
 from numba.core import types
 from numba.cpython.unsafe.tuple import tuple_setitem
-from numba.np.unsafe.ndarray import to_fixed_tuple, empty_inferred
+from numba.np.unsafe.ndarray import empty_inferred
 from numba.core.unsafe.bytes import memcpy_region
 from numba.core.unsafe.refcount import dump_refcount
 from numba.cpython.unsafe.numbers import trailing_zeros, leading_zeros
@@ -46,45 +46,6 @@ class TestTupleIntrinsic(TestCase):
 class TestNdarrayIntrinsic(TestCase):
     """Tests for numba.unsafe.ndarray
     """
-    def test_to_fixed_tuple(self):
-        const = 3
-
-        @njit
-        def foo(array):
-            a = to_fixed_tuple(array, length=1)
-            b = to_fixed_tuple(array, 2)
-            c = to_fixed_tuple(array, const)
-            d = to_fixed_tuple(array, 0)
-            return a, b, c, d
-
-        np.random.seed(123)
-        for _ in range(10):
-            # Random data
-            arr = np.random.random(3)
-            # Run
-            a, b, c, d = foo(arr)
-            # Check
-            self.assertEqual(a, tuple(arr[:1]))
-            self.assertEqual(b, tuple(arr[:2]))
-            self.assertEqual(c, tuple(arr[:3]))
-            self.assertEqual(d, ())
-
-        # Check error with ndim!=1
-        with self.assertRaises(TypingError) as raises:
-            foo(np.random.random((1, 2)))
-        self.assertIn("Not supported on array.ndim=2",
-                      str(raises.exception))
-
-        # Check error with non-constant length
-        @njit
-        def tuple_with_length(array, length):
-            return to_fixed_tuple(array, length)
-
-        with self.assertRaises(TypingError) as raises:
-            tuple_with_length(np.random.random(3), 1)
-        expectmsg = "*length* argument must be a constant"
-        self.assertIn(expectmsg, str(raises.exception))
-
     def test_issue_3586_variant1(self):
         @njit
         def func():

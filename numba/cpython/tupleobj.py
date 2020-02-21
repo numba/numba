@@ -1,17 +1,20 @@
 """
 Implementation of tuple objects
 """
-
-from llvmlite import ir
-import llvmlite.llvmpy.core as lc
 import operator
 
-from numba.core.imputils import (lower_builtin, lower_getattr_generic,
-                                    lower_cast, lower_constant, iternext_impl,
-                                    impl_ret_borrowed, impl_ret_untracked,
-                                    RefType)
-from numba.core import typing, types, cgutils
-from numba.core.extending import overload_method, overload, intrinsic
+import llvmlite.llvmpy.core as lc
+from llvmlite import ir
+
+from numba import typed
+from numba.core import cgutils, types, typing
+from numba.core.errors import RequireLiteralValue
+from numba.core.extending import intrinsic, overload, overload_method
+from numba.core.imputils import (RefType, impl_ret_borrowed,
+                                 impl_ret_untracked, iternext_impl,
+                                 lower_builtin, lower_cast, lower_constant,
+                                 lower_getattr_generic)
+from numba.cpython.unsafe.tuple import tuple_setitem
 
 
 @lower_builtin(types.NamedTupleClass, types.VarArg(types.Any))
@@ -380,3 +383,156 @@ def tuple_index(tup, value):
         raise ValueError("tuple.index(x): x not in tuple")
 
     return tuple_index_impl
+
+
+#------------------------------------------------------------------------------
+#Intrinsics
+
+@intrinsic
+def make_tuple(typingctx, size, iterable):
+    """Creates a tuple of predetermined size from an iterable.
+
+    Parameters
+    ----------
+    size : IntegerLiteral
+        size of the tuple to be created
+    iterable : Iterable
+        iterable from which to draw the data with at least `size` elements
+
+    Returns
+    -------
+    UniTuple(typ, size)
+        tuple with contents of iterable where `typ` is the type of the contents
+        of the iterable
+
+    Raises
+    ------
+    RequireLiteralValue
+        raised during typing if 'size' parameter is not a constant integer
+    TypeError
+        raised during typing if iterable is of an invalid type
+    ValueError
+        raised at runtime if `len(iterable) < size`
+    """
+    if not isinstance(size, types.IntegerLiteral):
+        raise RequireLiteralValue(
+            f"make_tuple: argument 'size' must be a constant integer")
+    tuple_size = size.literal_value
+    if tuple_size < 0:
+        raise ValueError(
+            f"make_tuple: 'size' may not be negative, got size={tuple_size}")
+
+    too_short_msg = "make_tuple: argument 'iterable' is shorter than specified"
+
+    # Pass-through tuple inputs, truncating if required
+
+    if isinstance(iterable, types.BaseTuple):
+        if len(iterable) < tuple_size:
+            raise ValueError(too_short_msg)
+
+        tuple_type = types.Tuple(iterable[:tuple_size])
+        sig = tuple_type(size, iterable)
+
+        def truncate_tuple_impl(iterable):
+            return iterable[:tuple_size]
+
+        def codegen(context, builder, signature, args):
+            [_, iterable_ty] = sig.args
+            [_, iterable] = args
+
+            # Compile the implementation
+            inner_argtypes = [iterable_ty]
+            inner_sig = typing.signature(tuple_type, *inner_argtypes)
+            inner_args = [iterable]
+            res = context.compile_internal(
+                builder, truncate_tuple_impl, inner_sig, inner_args)
+            return res
+
+        return sig, codegen
+
+    # Treat non-tuple inputs
+
+    if not isinstance(iterable, (types.IterableType, types.StringLiteral)):
+        raise TypeError(
+            f"make_tuple: argument 'iterable' must be an iterable, got {iterable.name}")
+    if isinstance(iterable, types.Array):
+        if not iterable.ndim == 1:
+            raise TypeError(
+                "make_tuple: arrays provided as 'iterable' must be 1d")
+    if hasattr(iterable, 'dtype'):
+        dtype = iterable.dtype
+    elif hasattr(iterable, 'yield_type'):
+        dtype = iterable.yield_type
+    elif hasattr(iterable, 'key_type'):
+        dtype = iterable.key_type
+    elif hasattr(iterable, 'item_type'):
+        dtype = iterable.item_type
+    elif hasattr(iterable, 'literal_type'):
+        dtype = iterable.literal_type
+    elif isinstance(iterable, types.UnicodeType):
+        dtype = iterable
+    else:
+        raise TypeError(
+            "make_tuple: cannot determine dtype of argument 'iterable'"
+            f" of type '{iterable}'")
+
+    tuple_type = types.UniTuple(dtype, tuple_size)
+    sig = tuple_type(size, iterable)
+
+    # Separate implementations are required to ensure that for iterators
+    # multiple calls continue the iteration while multiple calls
+    # with array, lists, etc must restart at the beginning
+    if isinstance(iterable, (types.IteratorType, types.SimpleIterableType, 
+                             types.DictType)):
+        def convert_to_list(iterable):
+            i = 0
+            out = typed.List()
+            for i, val in enumerate(iterable):
+                out.append(val)
+                if i+1 == tuple_size:
+                    break
+            if i+1 != tuple_size:
+                raise ValueError(too_short_msg)
+            return out
+    else:
+        def convert_to_list(iterable):
+            if len(iterable) < tuple_size:
+                raise ValueError(too_short_msg)
+            out = typed.List()
+            for i in range(tuple_size):
+                out.append(iterable[i])
+            return out
+
+    def codegen(context, builder, signature, args):
+        [_, iterable_ty] = sig.args
+        [_, iterable] = args
+
+        # Normalize the input into a list with the requested number of elements
+        inner_argtypes = [iterable_ty]
+        inner_rettype = types.ListType(dtype)
+        inner_sig = typing.signature(inner_rettype, *inner_argtypes)
+        inner_args = [iterable]
+        tmp_list = context.compile_internal(
+            builder, convert_to_list, inner_sig, inner_args)
+
+        # Allocate an empty tuple
+        out_tuple = context.get_constant_null(tuple_type)
+
+        # Copy the list elements into the tuple
+        def list_indexer(a, i):
+            return a[i]
+
+        for i in range(tuple_size):
+            list_idx = context.get_constant(types.intp, i)
+            data = context.compile_internal(builder, list_indexer,
+                                          dtype(inner_rettype, types.intp),
+                                          [tmp_list, list_idx])
+            out_tuple = builder.insert_value(out_tuple, data, i)
+
+        # Clean up the temporary list
+        if context.enable_nrt:
+            context.nrt.decref(builder, inner_rettype, tmp_list)
+
+        return out_tuple
+
+    return sig, codegen
