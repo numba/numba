@@ -1339,10 +1339,23 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             for func in (foo, foo.py_func):
                 self.assertEqual(func(), expected)
 
-    def test_exception_on_non_iterable_types(self):
+    def test_exception_on_plain_int(self):
         @njit
         def foo():
             l = List(23)
+            return l
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "List() argument must be iterable",
+            str(raises.exception),
+        )
+
+    def test_exception_on_inhomogeneous_tuple(self):
+        @njit
+        def foo():
+            l = List((1, 1.0))
             return l
 
         with self.assertRaises(TypingError) as raises:
