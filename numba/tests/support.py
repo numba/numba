@@ -52,7 +52,11 @@ nrt_flags.set("nrt")
 tag = testing.make_tag_decorator(['important', 'long_running'])
 
 _32bit = sys.maxsize <= 2 ** 32
-skip_parfors_unsupported = unittest.skipIf(_32bit, 'parfors not supported')
+is_parfors_unsupported = _32bit
+skip_parfors_unsupported = unittest.skipIf(
+    is_parfors_unsupported,
+    'parfors not supported',
+)
 skip_py38_or_later = unittest.skipIf(
     utils.PYVERSION >= (3, 8),
     "unsupported on py3.8 or later"
@@ -73,6 +77,8 @@ _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 
 _is_armv7l = platform.machine() == 'armv7l'
+
+disabled_test = unittest.skipIf(True, 'Test disabled')
 
 try:
     import scipy.linalg.cython_lapack
