@@ -1557,6 +1557,30 @@ class TestParfors(TestParforsBase):
                                     (types.Array(types.float64, 1, 'C'),
                                      types.Array(types.float64, 1, 'C'))) == 1)
 
+    @skip_parfors_unsupported
+    def test_tuple1(self):
+        def test_impl(a):
+            atup = (3,4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += atup[0] + atup[1] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_tuple2(self):
+        def test_impl(a):
+            atup = a.shape
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += atup[0] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
