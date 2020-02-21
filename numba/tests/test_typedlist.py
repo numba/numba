@@ -1270,8 +1270,8 @@ class TestImmutable(MemoryLeakMixin, TestCase):
 
 class TestListFromIter(MemoryLeakMixin, TestCase):
 
-    def test_types(self):
-        """Test all types that a List can be constructed from."""
+    def test_simple_iterable_types(self):
+        """Test all simple iterables that a List can be constructed from."""
 
         def generate_function(line):
             context = {}
@@ -1287,6 +1287,7 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
                      "l = List(range(3))",
                      "l = List(List([0, 1, 2]))",
                      "l = List((0, 1, 2))",
+                     "l = List(set([0, 1, 2]))",
                      ):
             foo = generate_function(line)
             cf_received, py_received = foo(), foo.py_func()
