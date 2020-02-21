@@ -935,6 +935,17 @@ class TestExtend(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
+    def test_list_extend_unicode_type(self):
+        @njit
+        def foo(string):
+            l = listobject.new_list(types.unicode_type)
+            l.extend(string)
+            return len(l)
+
+        self.assertEqual(foo(""), 0)
+        self.assertEqual(foo("abc"), 3)
+        self.assertEqual(foo("\nabc\t"), 5)
+
 
 class TestInsert(MemoryLeakMixin, TestCase):
     """Test list insert. """
