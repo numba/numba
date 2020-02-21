@@ -173,7 +173,9 @@ class List(MutableSequence):
     Implements the MutableSequence interface.
     """
 
-    def __new__(cls, lsttype=None, meminfo=None, allocated=None):
+    _legal_kwargs = ["lsttype", "meminfo", "allocated"]
+
+    def __new__(cls, *args, **kwargs):
         if config.DISABLE_JIT:
             return list.__new__(list)
         else:
@@ -211,15 +213,26 @@ class List(MutableSequence):
         allocated: int; keyword-only
             Used internally to pre-allocate space for items
         """
-        if args and kwargs:
-            raise ValueError
+        illegal_kwargs = any((kw not in self._legal_kwargs for kw in kwargs))
+        if illegal_kwargs or args and kwargs:
+            raise TypeError("List() takes no keyword arguments")
         if kwargs:
             self._list_type, self._opaque = self._parse_arg(**kwargs)
         else:
             self._list_type = None
-        if args:
-            for i in args[0]:
-                self.append(i)
+            if args:
+                if not 0 <= len(args) <= 1:
+                    raise TypeError(
+                        "List() expected at most 1 argument, got {}"
+                        .format(len(args))
+                    )
+                iterable = args[0]
+                try:
+                    iter(iterable)
+                except TypeError:
+                    raise TypeError("List() argument must be iterable")
+                for i in args[0]:
+                    self.append(i)
 
     def _parse_arg(self, lsttype, meminfo=None, allocated=0):
         if not isinstance(lsttype, ListType):
