@@ -43,23 +43,17 @@ class FunctionType(Type):
 
     def get_call_type(self, context, args, kws):
         from numba.core import typing
-        from . import Array, Number
+
         ptype = self.ftype
         if len(args) == len(ptype.atypes):
             for i, atype in enumerate(args):
-                if isinstance(atype, Literal):
-                    atype = atype.literal_type
-                if isinstance(atype, type(ptype.atypes[i])):
-                    continue
-                elif isinstance(atype, Array):
-                    if (
-                            isinstance(ptype.atypes[i], Array)
-                            and atype.dtype <= ptype.atypes[i].dtype):
-                        continue
-                elif isinstance(atype, Number):
-                    if atype <= ptype.atypes[i]:
-                        continue
-                break
+                # Get the casting score
+                conv_score = context.can_convert(
+                    fromty=atype, toty=ptype.atypes[i],
+                )
+                # Allow safe casts
+                if conv_score > typing.context.Conversion.safe:
+                    break
             else:
                 return typing.signature(ptype.rtype, *ptype.atypes)
             # TODO: implement overload support
