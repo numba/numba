@@ -85,3 +85,21 @@ __kernel void sumGPUCPU ( __global const double *input,
     partialSums[get_group_id(0)] = localSums[0];
     }
  }
+
+__kernel void scalingGPU ( __global double *input,
+                           __global double *finalSum)
+ {
+  uint idx = get_global_id(0);
+
+  input[idx] = input[idx] * finalSum[0];
+
+ }
+
+__kernel void scalingGPUCPU ( __global double *input,
+                              const double scaling_factor)
+ {
+  uint idx = get_global_id(0);
+
+  input[idx] = input[idx] * scaling_factor;
+
+ }

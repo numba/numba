@@ -90,10 +90,10 @@ print_stat(char *str, int *times)
 }
 
 double
-reduction_in_device(size_t global_item_size, size_t nb_work_groups, size_t local_item_size,
+reduction_scaling_in_device(size_t global_item_size, size_t nb_work_groups, size_t local_item_size,
         double *input, double *sum_reduction, double *final_sum,
         cl_context context, cl_command_queue command_queue,
-        cl_kernel kernel, int *times)
+        cl_kernel kernel, cl_kernel scaling_kernel, int *times)
 {
     cl_int ret;
     struct timeval start_time, end_time;
@@ -105,7 +105,7 @@ reduction_in_device(size_t global_item_size, size_t nb_work_groups, size_t local
         init_data(1, 0, final_sum);
 
         // Create memory buffers on the device for each vector
-        cl_mem input_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY,
+        cl_mem input_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
                 global_item_size * sizeof(double), NULL, &ret);
         cl_mem sum_reduction_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
                 nb_work_groups * sizeof(double), NULL, &ret);
@@ -126,17 +126,21 @@ reduction_in_device(size_t global_item_size, size_t nb_work_groups, size_t local
         ret = clSetKernelArg(kernel, 2, local_item_size * sizeof(double), NULL);
         ret = clSetKernelArg(kernel, 3, sizeof(double), (void *)&final_sum_buffer);
 
+        ret = clSetKernelArg(scaling_kernel, 0, sizeof(cl_mem), (void *)&input_buffer);
+        ret = clSetKernelArg(scaling_kernel, 1, sizeof(cl_mem), (void *)&final_sum_buffer);
+
         gettimeofday(&start_time, NULL);
         // Execute the OpenCL kernel on the list
         ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL,
                 &global_item_size, &local_item_size, 0, NULL, NULL);
-
+        ret = clEnqueueNDRangeKernel(command_queue, scaling_kernel, 1, NULL,
+                &global_item_size, &local_item_size, 0, NULL, NULL);
 
         gettimeofday(&end_time, NULL);
-        //print_time("Reduction in Device only", &start_time, &end_time);
         times[round] = end_time.tv_usec - start_time.tv_usec;
 
         ret = clEnqueueReadBuffer(command_queue, final_sum_buffer, CL_TRUE, 0, sizeof(double), final_sum, 0, NULL, NULL);
+        ret = clEnqueueReadBuffer(command_queue, input_buffer, CL_TRUE, 0, sizeof(double) * global_item_size, input, 0, NULL, NULL);
 
         ret = clReleaseMemObject(input_buffer);
         ret = clReleaseMemObject(sum_reduction_buffer);
@@ -147,10 +151,10 @@ reduction_in_device(size_t global_item_size, size_t nb_work_groups, size_t local
 }
 
 double
-reduction_in_host_and_device(size_t global_item_size, size_t nb_work_groups, size_t local_item_size,
+reduction_scaling_in_host_and_device(size_t global_item_size, size_t nb_work_groups, size_t local_item_size,
         double *input, double *sum_reduction,
         cl_context context, cl_command_queue command_queue,
-        cl_kernel kernel, int *times)
+        cl_kernel kernel, cl_kernel scaling_kernel, int *times)
 {
     cl_int ret;
     int i;
@@ -165,7 +169,7 @@ reduction_in_host_and_device(size_t global_item_size, size_t nb_work_groups, siz
         init_data(nb_work_groups, 0, sum_reduction);
 
         // Create memory buffers on the device for each vector
-        cl_mem input_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY,
+        cl_mem input_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
                 global_item_size * sizeof(double), NULL, &ret);
         cl_mem sum_reduction_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
                 nb_work_groups * sizeof(double), NULL, &ret);
@@ -181,6 +185,8 @@ reduction_in_host_and_device(size_t global_item_size, size_t nb_work_groups, siz
         ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&sum_reduction_buffer);
         ret = clSetKernelArg(kernel, 2, local_item_size * sizeof(double), NULL);
 
+        ret = clSetKernelArg(scaling_kernel, 0, sizeof(cl_mem), (void *)&input_buffer);
+
         gettimeofday(&start_time, NULL);
 
         // Execute the OpenCL kernel on the list
@@ -193,9 +199,15 @@ reduction_in_host_and_device(size_t global_item_size, size_t nb_work_groups, siz
         for(i = 0; i < nb_work_groups; i++)
             final_sum_host += sum_reduction[i];
 
+        ret = clSetKernelArg(scaling_kernel, 1, sizeof(double), (void *)&final_sum_host);
+        ret = clEnqueueNDRangeKernel(command_queue, scaling_kernel, 1, NULL,
+                &global_item_size, &local_item_size, 0, NULL, NULL);
+
         gettimeofday(&end_time, NULL);
-        //print_time("Reduction in Host and Device", &start_time, &end_time);
         times[round] = end_time.tv_usec - start_time.tv_usec;
+
+        ret = clEnqueueReadBuffer(command_queue, input_buffer, CL_TRUE, 0,
+                sizeof(double) * global_item_size, input, 0, NULL, NULL);
 
         ret = clReleaseMemObject(input_buffer);
         ret = clReleaseMemObject(sum_reduction_buffer);
@@ -205,7 +217,7 @@ reduction_in_host_and_device(size_t global_item_size, size_t nb_work_groups, siz
 }
 
 double
-reduction_in_host(int size, double *input, int *times) {
+reduction_scaling_in_host(int size, double *input, int *times) {
     int i;
     double sum;
     struct timeval start_time, end_time;
@@ -220,8 +232,10 @@ reduction_in_host(int size, double *input, int *times) {
         for (i = 0; i < size; ++i) {
             sum += input[i];
         }
+        for (i = 0; i < size; ++i) {
+            input[i] *= sum;
+        }
         gettimeofday(&end_time, NULL);
-        //print_time("Reduction in Host only", &start_time, &end_time);
         times[round] = end_time.tv_usec - start_time.tv_usec;
     }
 
@@ -358,38 +372,48 @@ int main(int argc, char **argv) {
     }
 
     // Create the OpenCL kernel
-    cl_kernel kernelGPU = clCreateKernel(program, "sumGPU", &ret);
+    cl_kernel reductionGPU = clCreateKernel(program, "sumGPU", &ret);
     if (ret !=  CL_SUCCESS) {
         printf("Kernel compilation failed with code %d\n", ret);
         abort();
     }
 
-    cl_kernel kernelGPUCPU = clCreateKernel(program, "sumGPUCPU", &ret);
+    cl_kernel reductionGPUCPU = clCreateKernel(program, "sumGPUCPU", &ret);
     if (ret !=  CL_SUCCESS) {
         printf("Kernel compilation failed with code %d\n", ret);
         abort();
     }
+
+    cl_kernel scalingGPU = clCreateKernel(program, "scalingGPU", &ret);
+    if (ret !=  CL_SUCCESS) {
+        printf("Kernel compilation failed with code %d\n", ret);
+        abort();
+    }
+
+    cl_kernel scalingGPUCPU = clCreateKernel(program, "scalingGPUCPU", &ret);
+    if (ret !=  CL_SUCCESS) {
+        printf("Kernel compilation failed with code %d\n", ret);
+        abort();
+    }
+
 
     double result;
-    result = reduction_in_device(global_item_size, nb_work_groups, local_item_size,
+    result = reduction_scaling_in_device(global_item_size, nb_work_groups, local_item_size,
         input, sum_reduction, final_sum,
         context, command_queue,
-        kernelGPU, times);
-    //printf("result Host        \t%lf\n", result);
-    assert(result == global_item_size);
+        reductionGPU, scalingGPU, times);
+    assert(input[0] == result);
     print_stat("Reduction in Device only    ", times);
 
-    result = reduction_in_host_and_device(global_item_size, nb_work_groups, local_item_size,
+    result = reduction_scaling_in_host_and_device(global_item_size, nb_work_groups, local_item_size,
         input, sum_reduction,
         context, command_queue,
-        kernelGPUCPU, times);
-    //printf("result Host+Device \t%lf\n", result);
-    assert(result == global_item_size);
+        reductionGPUCPU, scalingGPUCPU, times);
+    assert(input[0] == result);
     print_stat("Reduction in Host and Device", times);
 
-    result = reduction_in_host(global_item_size, input, times);
-    //printf("result Host+Device \t%lf\n", result);
-    assert(result == global_item_size);
+    result = reduction_scaling_in_host(global_item_size, input, times);
+    assert(input[0] == result);
     print_stat("Reduction in Host only      ", times);
 
 
@@ -397,8 +421,10 @@ int main(int argc, char **argv) {
     ret = clFlush(command_queue);
     ret = clFinish(command_queue);
     ret = clReleaseCommandQueue(command_queue);
-    ret = clReleaseKernel(kernelGPU);
-    ret = clReleaseKernel(kernelGPUCPU);
+    ret = clReleaseKernel(reductionGPU);
+    ret = clReleaseKernel(reductionGPUCPU);
+    ret = clReleaseKernel(scalingGPU);
+    ret = clReleaseKernel(scalingGPUCPU);
     ret = clReleaseProgram(program);
     ret = clReleaseContext(context);
     free(input);
