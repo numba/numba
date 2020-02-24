@@ -352,9 +352,9 @@ def dead_branch_prune(func_ir, called_args):
             # Just to prevent accidents, whilst already guarded, ensure this
             # is an ir.Const
             if not isinstance(pred, (ir.Const, ir.FreeVar, ir.Global)):
-                raise TypeError
+                raise TypeError('Expected constant Numba IR node')
             take_truebr = bool(pred.value)
-        except Exception:
+        except TypeError:
             return False, None
         if DEBUG > 0:
             kill = branch.falsebr if take_truebr else branch.truebr
