@@ -511,3 +511,16 @@ class BoundLiteralArgs(collections.namedtuple(
             args,
             kwargs,
         )
+
+
+def is_jitted(function):
+    """Returns True if a function is wrapped by one of the Numba @jit
+    decorators, for example: numba.jit, numba.njit
+
+    The purpose of this function is to provide a means to check if a function is
+    already JIT decorated.
+    """
+
+    # don't want to export this so import locally
+    from numba.core.dispatcher import Dispatcher
+    return isinstance(function, Dispatcher)
