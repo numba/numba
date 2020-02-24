@@ -796,6 +796,8 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT >= 1:
         print("starting _create_gufunc_for_parfor_body")
 
+    call_table = get_call_table(lowerer.func_ir.blocks)
+
     loc = parfor.init_block.loc
 
     # The parfor body and the main function body share ir.Var nodes.
@@ -841,7 +843,7 @@ def _create_gufunc_for_parfor_body(
         # Get the type of the input.
         pi_type = typemap[pi]
         # If it is a UniTuple or Tuple we will do the conversion.
-        if isinstance(pi_type, types.UniTuple):
+        if isinstance(pi_type, types.UniTuple) or isinstance(pi_type, types.NamedUniTuple):
             # Get the size and dtype of the tuple.
             tuple_count = pi_type.count
             tuple_dtype = pi_type.dtype
@@ -866,7 +868,7 @@ def _create_gufunc_for_parfor_body(
                 parfor_tuple_params.append(pi)
             else:
                 tuple_expanded_parfor_inputs.append(pi)
-        elif isinstance(pi_type, types.Tuple):
+        elif isinstance(pi_type, types.Tuple) or isinstance(pi_type, types.NamedTuple):
             # This is the same as above for UniTuple except that each part of
             # the tuple can have a different type and we fetch that type with
             # pi_type.types[offset].
@@ -1000,13 +1002,39 @@ def _create_gufunc_for_parfor_body(
     gufunc_txt += "def " + gufunc_name + \
         "(sched, " + (", ".join(parfor_params)) + "):\n"
 
+    globls = {"np": np}
+
     # First thing in the gufunc, we reconstruct tuples from their
     # individual parts, e.g., orig_tup_name = (part1, part2,).
     # The rest of the code of the function will use the original tuple name.
     for tup_var, exp_names in tuple_var_to_expanded_names.items():
-        gufunc_txt += "    " + param_dict[tup_var] + " = ("
-        for name in exp_names:
-             gufunc_txt += param_dict[name] + ","
+        tup_type = typemap[tup_var]
+        gufunc_txt += "    " + param_dict[tup_var]
+        # Determine if the tuple is a named tuple.
+        if (isinstance(tup_type, types.NamedTuple) or
+            isinstance(tup_type, types.NamedUniTuple)):
+            named_tup = True
+        else:
+            named_tup = False
+
+        if named_tup:
+            # It is a named tuple so try to find the global that defines the
+            # named tuple.
+            func_def = get_definition(lowerer.func_ir, tup_var)
+            if isinstance(func_def, ir.Expr) and func_def.op == 'call':
+                func_def = get_definition(lowerer.func_ir, func_def.func)
+                if isinstance(func_def, ir.Global):
+                    gval = func_def.value
+                    globls[func_def.name] = eval(gval.__module__ + "." + gval.__name__)
+            gufunc_txt += " = " + tup_type.instance_class.__name__ + "("
+            for name, field_name in zip(exp_names, tup_type.fields):
+                gufunc_txt += field_name + "=" + param_dict[name] + ","
+        else:
+            # Just a regular tuple so use (part0, part1, ...)
+            gufunc_txt += " = ("
+            for name in exp_names:
+                gufunc_txt += param_dict[name] + ","
+
         gufunc_txt += ")\n"
 
     for pindex in range(len(parfor_inputs)):
@@ -1074,7 +1102,6 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
     # Force gufunc outline into existence.
-    globls = {"np": np}
     locls = {}
     exec(gufunc_txt, globls, locls)
     gufunc_func = locls[gufunc_name]
