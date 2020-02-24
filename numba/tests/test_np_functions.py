@@ -40,6 +40,10 @@ def array_equal(a, b):
     return np.array_equal(a, b)
 
 
+def insert(arr, obj, values, axis):
+    return np.insert(arr, obj, values, axis=axis)
+
+
 def append(arr, values, axis):
     return np.append(arr, values, axis=axis)
 
@@ -496,6 +500,44 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             expected = pyfunc(arr, axis)
             got = cfunc(arr, axis)
             self.assertPreciseEqual(expected, got)
+
+    def test_np_insert_exceptions(self):
+        pyfunc = insert
+        cfunc = jit(nopython=True)(pyfunc)
+        arr = np.array([[1, 2, 3], [4, 5, 6]])
+        obj = 1
+        values = np.array([[7, 8, 9]])
+        axis = 0
+
+        # first argument must be array-like
+        with self.assertRaises(TypingError) as raises:
+            cfunc(None, obj, values, axis)
+        self.assertIn(
+            'The first argument "arr" must be array-like', str(raises.exception)
+        )
+
+        # second argument must be int, slice, or sequence of ints
+        with self.assertRaises(TypingError) as raises:
+            cfunc(arr, None, values, axis)
+        self.assertIn(
+            'The second argument "obj" must be an integer, a slice'
+            " or a sequence of integers",
+            str(raises.exception),
+        )
+
+        # third argument must also be array-like
+        with self.assertRaises(TypingError) as raises:
+            cfunc(arr, obj, None, axis)
+        self.assertIn(
+            'The third argument "values" must be array-like', str(raises.exception)
+        )
+
+        # fourth argument must be either nonelike or an integer
+        with self.assertRaises(TypingError) as raises:
+            cfunc(arr, obj, values, axis=0.0)
+        self.assertIn(
+            'The fourth argument "axis" must be None or an integer', str(raises.exception)
+        )
 
     def test_np_append(self):
         def arrays():
