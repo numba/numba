@@ -106,6 +106,17 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         # index
         self.assertEqual(l.index(15), 4)
 
+    def test_list_extend_unicode_type(self):
+        @njit
+        def foo(string):
+            l = List()
+            l.extend(string)
+            return l
+
+        for func in (foo, foo.py_func):
+            for string in ("abc", "\nabc\t"):
+                self.assertEqual(list(func(string)), list(string))
+
     def test_unsigned_access(self):
         L = List.empty_list(int32)
         ui32_0 = types.uint32(0)
