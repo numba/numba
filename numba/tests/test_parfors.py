@@ -33,17 +33,16 @@ from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty
 from numba.core.bytecode import ByteCodeIter
 from numba.core.compiler import (compile_isolated, Flags, CompilerBase,
                                  DefaultPassBuilder)
-from numba.core.compiler_machinery import register_pass, FunctionPass
+from numba.core.compiler_machinery import register_pass, AnalysisPass
 from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack)
+                      needs_lapack, disabled_test)
 import cmath
 import unittest
 
 
-test_disabled = unittest.skipIf(True, 'Test disabled')
 x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
 
 _GLOBAL_INT_FOR_TESTING1 = 17
@@ -280,7 +279,7 @@ def lr_impl(Y, X, w, iterations):
         w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
     return w
 
-def test_kmeans_example(A, numCenter, numIter, init_centroids):
+def example_kmeans_test(A, numCenter, numIter, init_centroids):
     centroids = init_centroids
     N, D = A.shape
 
@@ -577,14 +576,14 @@ class TestParfors(TestParforsBase):
         centers = 3
         A = np.random.ranf((N, D))
         init_centroids = np.random.ranf((centers, D))
-        self.check(test_kmeans_example, A, centers, 3, init_centroids,
+        self.check(example_kmeans_test, A, centers, 3, init_centroids,
                                                                     decimal=1)
         # TODO: count parfors after k-means fusion is working
         # requires recursive parfor counting
         arg_typs = (types.Array(types.float64, 2, 'C'), types.intp, types.intp,
                     types.Array(types.float64, 2, 'C'))
         self.assertTrue(
-            countNonParforArrayAccesses(test_kmeans_example, arg_typs) == 0)
+            countNonParforArrayAccesses(example_kmeans_test, arg_typs) == 0)
 
     @unittest.skipIf(not _32bit, "Only impacts 32 bit hardware")
     @needs_blas
@@ -754,7 +753,7 @@ class TestParfors(TestParforsBase):
             return np.sum(A[:, b])
         self.check(test_impl)
 
-    @test_disabled
+    @disabled_test
     def test_simple_operator_15(self):
         """same as corresponding test_simple_<n> case but using operator.add"""
         def test_impl(v1, v2, m1, m2):
@@ -762,14 +761,14 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, *self.simple_args)
 
-    @test_disabled
+    @disabled_test
     def test_simple_operator_16(self):
         def test_impl(v1, v2, m1, m2):
             return operator.add(m1, m1)
 
         self.check(test_impl, *self.simple_args)
 
-    @test_disabled
+    @disabled_test
     def test_simple_operator_17(self):
         def test_impl(v1, v2, m1, m2):
             return operator.add(m2, v1)
@@ -1237,7 +1236,7 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
     @skip_parfors_unsupported
-    @test_disabled # Test itself is problematic, see #3155
+    @disabled_test # Test itself is problematic, see #3155
     def test_parfor_hoist_setitem(self):
         # Make sure that read of out is not hoisted.
         def test_impl(out):
@@ -1538,6 +1537,25 @@ class TestParfors(TestParforsBase):
             return parr.sum()
         x = np.ones(20)
         self.check(test_impl, x, True, check_scheduling=False)
+
+    @skip_parfors_unsupported
+    def test_prange_side_effects(self):
+        def test_impl(a, b):
+            data = np.empty(len(a), dtype=np.float64)
+            size = len(data)
+            for i in numba.prange(size):
+                data[i] = a[i]
+            for i in numba.prange(size):
+                data[i] = data[i] + b[i]
+            return data
+
+        x = np.arange(10 ** 2, dtype=float)
+        y = np.arange(10 ** 2, dtype=float)
+
+        self.check(test_impl, x, y)
+        self.assertTrue(countParfors(test_impl,
+                                    (types.Array(types.float64, 1, 'C'),
+                                     types.Array(types.float64, 1, 'C'))) == 1)
 
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
@@ -2133,7 +2151,7 @@ class TestPrange(TestPrangeBase):
         self.assertIn(msg, str(raises.exception))
 
 #    @skip_parfors_unsupported
-    @test_disabled
+    @disabled_test
     def test_check_error_model(self):
         def test_impl():
             n = 32
@@ -2695,7 +2713,7 @@ class TestParforsSlice(TestParforsBase):
         self.assertIn("do not match", str(raises.exception))
 
 #    @skip_parfors_unsupported
-    @test_disabled
+    @disabled_test
     def test_parfor_slice8(self):
         def test_impl(a):
             (m,n) = a.shape
@@ -2706,7 +2724,7 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.arange(9).reshape((3,3)))
 
 #    @skip_parfors_unsupported
-    @test_disabled
+    @disabled_test
     def test_parfor_slice9(self):
         def test_impl(a):
             (m,n) = a.shape
@@ -2717,7 +2735,7 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.arange(12).reshape((3,4)))
 
 #    @skip_parfors_unsupported
-    @test_disabled
+    @disabled_test
     def test_parfor_slice10(self):
         def test_impl(a):
             (m,n) = a.shape
@@ -2779,7 +2797,7 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.arange(12).reshape((3,4)))
 
 
-    @test_disabled
+    @disabled_test
     def test_parfor_slice16(self):
         """ This test is disabled because if n is larger than the array size
             then n and n-1 will both be the end of the array and thus the
@@ -3108,11 +3126,11 @@ class TestParforsMisc(TestParforsBase):
         # stack unwind.
 
         @register_pass(mutates_CFG=True, analysis_only=False)
-        class BreakParfors(FunctionPass):
+        class BreakParfors(AnalysisPass):
             _name = "break_parfors"
 
             def __init__(self):
-                FunctionPass.__init__(self)
+                AnalysisPass.__init__(self)
 
             def run_pass(self, state):
                 for blk in state.func_ir.blocks.values():

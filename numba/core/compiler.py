@@ -180,12 +180,13 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
                              flags, locals)
 
 
-def run_frontend(func, inline_closures=False):
+def run_frontend(func, inline_closures=False, emit_dels=False):
     """
     Run the compiler frontend over the given Python function, and return
     the function's canonical Numba IR.
 
     If inline_closures is Truthy then closure inlining will be run
+    If emit_dels is Truthy the ir.Del nodes will be emitted appropriately
     """
     # XXX make this a dedicated Pipeline?
     func_id = bytecode.FunctionIdentity.from_function(func)
@@ -197,7 +198,7 @@ def run_frontend(func, inline_closures=False):
                                             {}, False)
         inline_pass.run()
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run()
+    post_proc.run(emit_dels)
     return func_ir
 
 
