@@ -601,3 +601,16 @@ def type_can_asarray(arr):
     """
     ok = (types.Array, types.Sequence, types.Tuple, types.Number, types.Boolean)
     return isinstance(arr, ok)
+
+
+def obj_is_int_slice_or_sequence_of_ints(obj):
+    """
+    Returns `True` if `obj` is either an integer, a slice or a sequence of
+    integers.
+
+    TODO: Implement a check whether all sequence elements are `types.Integer`.
+          Until then, only parts of the functionality will be supported.
+    """
+    ok = (types.Integer, slice)
+
+    return isinstance(obj, ok)
