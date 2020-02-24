@@ -20,7 +20,7 @@ from numba.core import types
 from numba.core.errors import TypingError
 from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
                                  forbid_codegen)
-from numba.typed import listobject
+from numba.typed import listobject, List
 
 
 class TestCreateAppendLength(MemoryLeakMixin, TestCase):
@@ -920,6 +920,17 @@ class TestExtend(MemoryLeakMixin, TestCase):
         self.assertEqual(foo((1,)), 1)
         self.assertEqual(foo((1,2)), 2)
         self.assertEqual(foo((1,2,3)), 3)
+
+    def test_list_extend_unicode_type(self):
+        @njit
+        def foo(string):
+            l = List()
+            l.extend(string)
+            return len(l)
+
+        self.assertEqual(foo(""), 0)
+        self.assertEqual(foo("abc"), 3)
+        self.assertEqual(foo("\nabc\t"), 5)
 
     def test_list_extend_typing_error_non_iterable(self):
         self.disable_leak_check()
