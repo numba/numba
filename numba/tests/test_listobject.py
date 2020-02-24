@@ -20,7 +20,7 @@ from numba.core import types
 from numba.core.errors import TypingError
 from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
                                  forbid_codegen)
-from numba.typed import listobject, List
+from numba.typed import listobject
 
 
 class TestCreateAppendLength(MemoryLeakMixin, TestCase):
