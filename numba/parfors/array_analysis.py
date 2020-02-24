@@ -2873,7 +2873,7 @@ class ArrayAnalysis(object):
         argtyps = tuple([msg_typ] + [self.typemap[x.name] for x in args])
 
         # assert_equiv takes vararg, which requires a tuple as argument type
-        tup_typ = types.BaseTuple.from_types(argtyps)
+        tup_typ = types.StarArgTuple.from_types(argtyps)
 
         # prepare function variable whose type may vary since it takes vararg
         assert_var = ir.Var(scope, mk_unique_var("assert"), loc)
