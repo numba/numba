@@ -3,7 +3,7 @@ import numpy as np
 from numba import float32, jit
 from numba.np.ufunc import Vectorize
 from numba.core.errors import TypingError
-from ..support import TestCase
+from numba.tests.support import TestCase
 import unittest
 
 

@@ -4,6 +4,8 @@ from collections import OrderedDict
 import linecache
 import os
 import sys
+import operator
+
 import numpy as np
 import types as pytypes
 import operator
@@ -224,10 +226,12 @@ def _lower_parfor_parallel(lowerer, parfor):
     for l in parfor.loop_nests[1:]:
         assert typemap[l.index_variable.name] == index_var_typ
     numba.parfors.parfor.sequential_parfor_lowering = True
-    func, func_args, func_sig, redargstartdim, func_arg_types = _create_gufunc_for_parfor_body(
-        lowerer, parfor, typemap, typingctx, targetctx, flags, {},
-        bool(alias_map), index_var_typ, parfor.races)
-    numba.parfors.parfor.sequential_parfor_lowering = False
+    try:
+        func, func_args, func_sig, redargstartdim, func_arg_types = _create_gufunc_for_parfor_body(
+            lowerer, parfor, typemap, typingctx, targetctx, flags, {},
+            bool(alias_map), index_var_typ, parfor.races)
+    finally:
+        numba.parfors.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
     func_args = ['sched'] + func_args
@@ -413,6 +417,9 @@ def _lower_parfor_parallel(lowerer, parfor):
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
     lowerer.fndesc.typemap = orig_typemap
+
+    if config.DEBUG_ARRAY_OPT:
+        print("_lower_parfor_parallel done")
 
 # A work-around to prevent circular imports
 lowering.lower_extensions[parfor.Parfor] = _lower_parfor_parallel
@@ -785,6 +792,9 @@ def _create_gufunc_for_parfor_body(
     for the parfor body inserted.
     '''
 
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("starting _create_gufunc_for_parfor_body")
+
     loc = parfor.init_block.loc
 
     # The parfor body and the main function body share ir.Var nodes.
@@ -812,6 +822,12 @@ def _create_gufunc_for_parfor_body(
             set(parfor_outputs) -
             set(parfor_redvars)))
 
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("parfor_params = ", parfor_params, " ", type(parfor_params))
+        print("parfor_outputs = ", parfor_outputs, " ", type(parfor_outputs))
+        print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
+        print("parfor_redvars = ", parfor_redvars, " ", type(parfor_redvars))
+
     races = races.difference(set(parfor_redvars))
     for race in races:
         msg = ("Variable %s used in parallel loop may be written "
@@ -819,12 +835,6 @@ def _create_gufunc_for_parfor_body(
                "in non-deterministic or unintended results." % race)
         warnings.warn(NumbaParallelSafetyWarning(msg, loc))
     replace_var_with_array(races, loop_body, typemap, lowerer.fndesc.calltypes)
-
-    if config.DEBUG_ARRAY_OPT >= 1:
-        print("parfor_params = ", parfor_params, " ", type(parfor_params))
-        print("parfor_outputs = ", parfor_outputs, " ", type(parfor_outputs))
-        print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
-        print("parfor_redvars = ", parfor_redvars, " ", type(parfor_redvars))
 
     # Reduction variables are represented as arrays, so they go under
     # different names.
@@ -1159,7 +1169,7 @@ def _create_gufunc_for_parfor_body(
 
     kernel_sig = signature(types.none, *gufunc_param_types)
     if config.DEBUG_ARRAY_OPT:
-        print("kernel_sig = ", kernel_sig)
+        print("finished create_gufunc_for_parfor_body. kernel_sig = ", kernel_sig)
 
     return kernel_func, parfor_args, kernel_sig, redargstartdim, func_arg_types
 
@@ -1322,11 +1332,24 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
                                                           name="do_scheduling_unsigned")
 
+    get_num_threads = builder.module.get_or_insert_function(
+        lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
+        name="get_num_threads")
+
+    num_threads = builder.call(get_num_threads, [])
+
+    with cgutils.if_unlikely(builder, builder.icmp_signed('<=', num_threads,
+                                                  num_threads.type(0))):
+        cgutils.printf(builder, "num_threads: %d\n", num_threads)
+        context.call_conv.return_user_exc(builder, RuntimeError,
+                                                  ("Invalid number of threads. "
+                                                   "This likely indicates a bug in Numba.",))
+
     builder.call(
         do_scheduling, [
             context.get_constant(
-                types.uintp, num_dim), dim_starts, dim_stops, context.get_constant(
-                types.uintp, get_thread_count()), sched, context.get_constant(
+                types.uintp, num_dim), dim_starts, dim_stops, num_threads,
+            sched, context.get_constant(
                     types.intp, debug_flag)])
 
     # Get the LLVM vars for the Numba IR reduction array vars.
@@ -1453,7 +1476,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     nshapes = len(sig_dim_dict) + 1
     shapes = cgutils.alloca_once(builder, intp_t, size=nshapes, name="pshape")
     # For now, outer loop size is the same as number of threads
-    builder.store(context.get_constant(types.intp, get_thread_count()), shapes)
+    builder.store(num_threads, shapes)
     # Individual shape variables go next
     i = 1
     for dim_sym in occurances:

@@ -45,7 +45,6 @@ from numba.core.ir_utils import (
     replace_vars_inner,
     visit_vars,
     visit_vars_inner,
-    remove_dels,
     remove_dead,
     copy_propagate,
     get_block_copies,
@@ -604,6 +603,8 @@ class Parfor(ir.Expr, ir.Stmt):
         file = file or sys.stdout
         print(("begin parfor {}".format(self.id)).center(20, '-'), file=file)
         print("index_var = ", self.index_var, file=file)
+        print("params = ", self.params, file=file)
+        print("races = ", self.races, file=file)
         for loopnest in self.loop_nests:
             print(loopnest, file=file)
         print("init block:", file=file)
@@ -1498,7 +1499,6 @@ class ParforPass(object):
         """run parfor conversion pass: replace Numpy calls
         with Parfors when possible and optimize the IR."""
         # run array analysis, a pre-requisite for parfor translation
-        remove_dels(self.func_ir.blocks)
         self.array_analysis.run(self.func_ir.blocks)
         # run stencil translation to parfor
         if self.options.stencil:
@@ -1550,6 +1550,7 @@ class ParforPass(object):
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
         push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)
+        dprint_func_ir(self.func_ir, "after push call vars")
         # simplify again
         simplify(self.func_ir, self.typemap, self.calltypes)
         dprint_func_ir(self.func_ir, "after optimization")
@@ -1585,7 +1586,7 @@ class ParforPass(object):
 
         # run post processor again to generate Del nodes
         post_proc = postproc.PostProcessor(self.func_ir)
-        post_proc.run()
+        post_proc.run(True)
         if self.func_ir.is_generator:
             fix_generator_types(self.func_ir.generator_info, self.return_type,
                                 self.typemap)
@@ -1788,6 +1789,13 @@ class ParforPass(object):
                     for bl in loop.exits:
                         exit_lives = exit_lives.union(live_map[bl])
                     races = bodydefs.intersection(exit_lives)
+                    # It is possible for the result of an ir.Global to be flagged
+                    # as a race if it is defined in this Parfor and then used in
+                    # a subsequent Parfor.  push_call_vars() in the Parfor pass
+                    # copies such ir.Global nodes into the Parfors in which they
+                    # are used so no need to treat things of type Module as a race.
+                    races = races.intersection({x for x in races
+                              if not isinstance(self.typemap[x], types.misc.Module)})
 
                     # replace jumps to header block with the end block
                     for l in body_labels:
@@ -1961,6 +1969,9 @@ class ParforPass(object):
                     blocks.pop(loop.header)
                     for l in body_labels:
                         blocks.pop(l)
+                    if config.DEBUG_ARRAY_OPT >= 1:
+                        print("parfor from loop")
+                        parfor.dump()
 
     def _replace_loop_access_indices(self, loop_body, index_set, new_index):
         """
@@ -2236,6 +2247,7 @@ class ParforPass(object):
         body_block.body.append(setitem_node)
         parfor.loop_body = {body_label: body_block}
         if config.DEBUG_ARRAY_OPT >= 1:
+            print("parfor from arrayexpr")
             parfor.dump()
         return parfor
 
@@ -2329,6 +2341,7 @@ class ParforPass(object):
             true_block.body.append(ir.Jump(end_label, loc))
 
         if config.DEBUG_ARRAY_OPT >= 1:
+            print("parfor from setitem")
             parfor.dump()
         return parfor
 
@@ -2515,6 +2528,9 @@ class ParforPass(object):
         parfor = Parfor(loopnests, init_block, loop_body, loc, index_var,
                         equiv_set, ('{} function'.format(call_name),
                                     'reduction'), self.flags)
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("parfor from reduction")
+            parfor.dump()
         return parfor
 
 
@@ -2853,7 +2869,7 @@ def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
     dprint_func_ir(func_ir, "after parfor sequential simplify")
     # add dels since simplify removes dels
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run()
+    post_proc.run(True)
     return
 
 
@@ -2965,7 +2981,6 @@ def get_parfor_params(blocks, options_fusion, fusion_info):
 
 
 def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
-
     blocks = wrap_parfor_blocks(parfor)
     cfg = compute_cfg_from_blocks(blocks)
     usedefs = compute_use_defs(blocks)

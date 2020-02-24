@@ -3,7 +3,7 @@ import numpy.core.umath_tests as ut
 
 from numba import void, float32, jit, guvectorize
 from numba.np.ufunc import GUVectorize
-from ..support import tag, TestCase
+from numba.tests.support import tag, TestCase
 import unittest
 
 

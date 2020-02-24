@@ -10,7 +10,7 @@ import re
 import numpy as np
 
 from numba import njit, jit
-from numba.core import types, errors, typing, compiler
+from numba.core import types, errors, typing, compiler, cgutils
 from numba.core.typed_passes import type_inference_stage
 from numba.core.registry import cpu_target
 from numba.core.compiler import compile_isolated
@@ -32,7 +32,6 @@ from numba.extending import (typeof_impl, type_callable,
                              )
 from numba.core.typing.templates import (
     ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
-from numba import cgutils
 
 
 # Pandas-like API implementation
