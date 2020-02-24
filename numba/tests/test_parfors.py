@@ -16,7 +16,7 @@ from functools import reduce
 import numpy as np
 from numpy.random import randn
 import operator
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 import numba.parfors.parfor
 from numba import njit, prange, set_num_threads, get_num_threads
@@ -47,6 +47,8 @@ x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 on
 
 _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
+
+TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
 
 class TestParforsBase(TestCase):
     """
@@ -1576,6 +1578,18 @@ class TestParfors(TestParforsBase):
             b = 7
             for i in numba.prange(len(a)):
                 a[i] += atup[0] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_namedtuple1(self):
+        def test_impl(a):
+            antup = TestNamedTuple(part0=3, part1=4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += antup.part0 + antup.part1 + b
             return a
 
         x = np.arange(10)
