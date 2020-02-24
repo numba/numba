@@ -500,9 +500,6 @@ class UnicodeType(IterableType):
     def iterator_type(self):
         return UnicodeIteratorType(self)
 
-    @property
-    def yield_type(self):
-        return UnicodeIteratorType(self).data
 
 class UnicodeIteratorType(SimpleIteratorType):
 
