@@ -1473,6 +1473,11 @@ def np_datetime_isfinite_impl(context, builder, sig, args):
     return builder.icmp_unsigned('!=', args[0], npdatetime.NAT)
 
 
+def np_isnat_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return builder.icmp_unsigned('==', args[0], npdatetime.NAT)
+
+
 def np_real_isfinite_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
     return mathimpl.is_finite(builder, args[0])
