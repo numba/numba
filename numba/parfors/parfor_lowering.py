@@ -796,8 +796,6 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT >= 1:
         print("starting _create_gufunc_for_parfor_body")
 
-    call_table = get_call_table(lowerer.func_ir.blocks)
-
     loc = parfor.init_block.loc
 
     # The parfor body and the main function body share ir.Var nodes.
