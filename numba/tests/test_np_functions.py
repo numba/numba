@@ -701,9 +701,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield 1e10, 1.00001e10, {}
             yield 1e10, np.nan, {}
             yield np.asarray([1e-8, 1e-7]), np.asarray([0.0, 0.0]), {}
-            yield np.asarray([1e10,1e-7]), np.asarray([1.00001e10,1e-8]), {}
-            yield np.asarray([1e10,1e-8]), np.asarray([1.00001e10,1e-9]), {}
-            yield np.asarray([1e10,1e-8]), np.asarray([1.0001e10,1e-9]), {}
+            yield np.asarray([1e10, 1e-7]), np.asarray([1.00001e10, 1e-8]), {}
+            yield np.asarray([1e10, 1e-8]), np.asarray([1.00001e10, 1e-9]), {}
+            yield np.asarray([1e10, 1e-8]), np.asarray([1.0001e10, 1e-9]), {}
             yield np.asarray([1.0, np.nan]), np.asarray([1.0, np.nan]), {}
             yield np.asarray([1.0, np.nan]),np.asarray([1.0, np.nan]),\
                 {'equal_nan':True}
@@ -724,6 +724,14 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertEqual(expected, got)
             else:
                 self.assertCountEqual(expected, got)
+
+        inputs = [('hello', 'world'), (2.0, None), ('a', 3.0)]
+        for (a, b) in inputs: 
+            with self.assertRaises(TypingError) as raises:
+                cfunc(a, b)
+            self.assertIn("`np.isclose` is not supported for the input types.",
+                          str(raises.exception))
+
 
     def test_isscalar(self):
         def values():
@@ -805,7 +813,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertIn("First argument must be array-like",
                           str(raises.exception))
 
+    def test_isneg_or_ispos_inf_asserts(self):
         self.disable_leak_check()
+
+        pyfuncs = [isneginf, isposinf]
+
         for pyfunc in pyfuncs:
             cfunc = jit(nopython=True)(pyfunc)
             with self.assertRaises(ValueError) as raises:

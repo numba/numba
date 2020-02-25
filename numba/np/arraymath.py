@@ -710,29 +710,32 @@ def isrealobj(x):
 
 @overload(np.isscalar)
 def np_isscalar(num):
-    if isinstance(num, (types.Number, types.UnicodeType, types.Boolean)):
-        def impl(num):
-            return True
-    else:
-        def impl(num):
-            return False
+    res = isinstance(num, (types.Number, types.UnicodeType, types.Boolean))
+    def impl(num):
+        return res
     return impl
+
+
+@register_jitable
+def _within_tol(a, b, rtol, atol):
+    return np.less_equal(np.abs(a - b), atol + rtol * np.abs(b))
 
 
 @overload(np.isclose)
 def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    # Based on NumPy impl.
+    # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/core/numeric.py#L2180-L2292
 
-    @register_jitable
-    def within_tol(a, b, rtol, atol):
-        return np.less_equal(np.abs(a - b), atol + rtol * np.abs(b))
+    if not(type_can_asarray(a) and type_can_asarray(b)):
+        raise TypingError("`np.isclose` is not supported for the input types.")
 
     def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         xfin = np.asarray(np.isfinite(a))
         yfin = np.asarray(np.isfinite(b))
         if np.all(xfin) and np.all(yfin):
-            return within_tol(a, b, rtol, atol)
+            return _within_tol(a, b, rtol, atol)
         else:
-            r = within_tol(a, b, rtol, atol)
+            r = _within_tol(a, b, rtol, atol)
             if equal_nan:
                 return r | (~xfin & ~yfin)
             else:
@@ -745,22 +748,17 @@ def is_np_inf_impl(x, out, fn):
     if not type_can_asarray(x):
         raise TypingError("First argument must be array-like")
 
-    if numpy_version <= (1, 12):
-        wrapper = register_jitable(lambda x: np.asarray(x))
-    else:
-        wrapper = register_jitable(lambda x: x)
-
     if is_nonelike(out):
         if isinstance(x, (types.Array, types.Sequence, types.Tuple)):
             def impl(x, out=None):
                 x = np.asarray(x)
                 out = np.zeros(x.shape, dtype=types.boolean)
                 np.logical_and(np.isinf(x), fn(np.signbit(x)), out)
-                return wrapper(out)
+                return out
         else:
             def impl(x, out=None):
                 out = np.isinf(x) and fn(np.signbit(x))
-                return wrapper(out)
+                return out
     else:
         def impl(x, out=None):
             x = np.asarray(x)
@@ -768,7 +766,7 @@ def is_np_inf_impl(x, out, fn):
             # https://github.com/numpy/numpy/blob/b7c27bd2a3817f59c84b004b87bba5db57d9a9b0/numpy/doc/broadcasting.py#L52
             if (x.size == 1 and x.ndim < out.ndim) or (x.shape == out.shape):
                 np.logical_and(np.isinf(x), fn(np.signbit(x)), out)
-                return wrapper(out)
+                return out
 
             raise ValueError('"x" and "out" have different shapes')
 
