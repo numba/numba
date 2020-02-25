@@ -142,6 +142,7 @@ reduction_scaling_in_device(size_t global_item_size, size_t nb_work_groups, size
 
         ret = clEnqueueReadBuffer(command_queue, final_sum_buffer, CL_TRUE, 0, sizeof(double), final_sum, 0, NULL, NULL);
 
+        ret = clEnqueueReadBuffer(command_queue, input_buffer, CL_TRUE, 0, sizeof(double) * global_item_size, input, 0, NULL, NULL);
         /* Make sure everything is done before this */
         ret = clFlush(command_queue);
         ret = clFinish(command_queue);
@@ -149,7 +150,6 @@ reduction_scaling_in_device(size_t global_item_size, size_t nb_work_groups, size
         gettimeofday(&end_time, NULL);
         times[round] = end_time.tv_usec - start_time.tv_usec;
 
-        ret = clEnqueueReadBuffer(command_queue, input_buffer, CL_TRUE, 0, sizeof(double) * global_item_size, input, 0, NULL, NULL);
 
         ret = clReleaseMemObject(input_buffer);
         ret = clReleaseMemObject(sum_reduction_buffer);
@@ -220,6 +220,9 @@ reduction_scaling_in_host_and_device(size_t global_item_size, size_t nb_work_gro
         ret = clEnqueueNDRangeKernel(command_queue, scaling_kernel, 1, NULL,
                 &global_item_size, &local_item_size, 0, NULL, NULL);
 
+        ret = clEnqueueReadBuffer(command_queue, input_buffer, CL_TRUE, 0,
+                sizeof(double) * global_item_size, input, 0, NULL, NULL);
+
         /* Make sure everything is done before this */
         ret = clFlush(command_queue);
         ret = clFinish(command_queue);
@@ -227,8 +230,6 @@ reduction_scaling_in_host_and_device(size_t global_item_size, size_t nb_work_gro
         gettimeofday(&end_time, NULL);
         times[round] = end_time.tv_usec - start_time.tv_usec;
 
-        ret = clEnqueueReadBuffer(command_queue, input_buffer, CL_TRUE, 0,
-                sizeof(double) * global_item_size, input, 0, NULL, NULL);
 
         ret = clReleaseMemObject(input_buffer);
         ret = clReleaseMemObject(sum_reduction_buffer);
