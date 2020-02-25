@@ -36,6 +36,16 @@ def star_call(x, y, z):
     return star_inner(x, *y), star_inner(*z)
 
 @jit(nopython=True)
+def star_plus_kwargs_inner(a, b, kwarg1=7, kwarg2=8):
+    return a, b, kwarg1, kwarg2
+
+def star_plus_kwargs_call(v, w, x, y, z):
+    return (star_plus_kwargs_inner(v, *w, kwarg1=y),
+            star_plus_kwargs_inner(*x, kwarg1=y),
+            star_plus_kwargs_inner(v, *w, kwarg1=y, kwarg2=z),
+            star_plus_kwargs_inner(*x, kwarg1=y, kwarg2=z))
+
+@jit(nopython=True)
 def argcast_inner(a, b):
     if b:
         # Here `a` is unified to int64 (from int32 originally)
@@ -122,6 +132,16 @@ class TestNestedCall(TestCase):
         check(1, (2,), (3,))
 
     def test_star_call_objmode(self):
+        self.test_star_call(objmode=True)
+
+    def test_star_plus_kwargs_call(self, objmode=False):
+        """
+        Test a function call with a *args followed by named keyword arguments.
+        """
+        cfunc, check = self.compile_func(star_plus_kwargs_call, objmode)
+        check(1, (2,), (3, 6), 4, 5)
+
+    def test_star_plus_kwargs_objmode(self):
         self.test_star_call(objmode=True)
 
     def test_argcast(self):
