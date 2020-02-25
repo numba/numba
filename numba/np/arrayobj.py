@@ -27,11 +27,11 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  impl_ret_new_ref, impl_ret_untracked,
                                  RefType)
 from numba.core.typing import signature
-from numba.core.extending import register_jitable, overload, overload_method
+from numba.core.extending import (register_jitable, overload, overload_method,
+                                  intrinsic)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem
-from . import quicksort, mergesort, slicing
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -4878,24 +4878,35 @@ def array_dot(arr, other):
 
 @overload(np.fliplr)
 def np_flip_lr(a):
-    if not isinstance(a, types.Array):
-        a = np.array(a)
 
-    if len(a.shape) < 2:
-        raise ValueError('Input must be >= 2-d.')
+    if not type_can_asarray(a):
+        raise errors.TypingError("Cannot np.fliplr on %s type" % a)
 
     def impl(a):
-        return a[::, ::-1, ...]
+        A = np.asarray(a)
+        # this handling is superfluous/dead as < 2d array cannot be indexed as
+        # present below and so typing fails. If the typing doesn't fail due to
+        # some future change, this will catch it.
+        if A.ndim < 2:
+            raise ValueError('Input must be >= 2-d.')
+        return A[::, ::-1, ...]
     return impl
 
 
 @overload(np.flipud)
 def np_flip_ud(a):
-    if not isinstance(a, types.Array):
-        a = np.array(a)
+
+    if not type_can_asarray(a):
+        raise errors.TypingError("Cannot np.flipud on %s type" % a)
 
     def impl(a):
-        return a[::-1, ...]
+        A = np.asarray(a)
+        # this handling is superfluous/dead as a 0d array cannot be indexed as
+        # present below and so typing fails. If the typing doesn't fail due to
+        # some future change, this will catch it.
+        if A.ndim < 1:
+            raise ValueError('Input must be >= 1-d.')
+        return A[::-1, ...]
     return impl
 
 
@@ -4929,13 +4940,15 @@ def _build_slice_tuple(tyctx, sz):
 
 @overload(np.flip)
 def np_flip(a):
+    # a constant value is needed for the tuple slice, types.Array.ndim can
+    # provide this and so at presnet only type.Array is support
     if not isinstance(a, types.Array):
-        a = np.array(a)
-    ndim = a.ndim
+        raise errors.TypingError("Cannot np.flip on %s type" % a)
 
     def impl(a):
-        sl = _build_slice_tuple(ndim)
+        sl = _build_slice_tuple(a.ndim)
         return a[sl]
+
     return impl
 
 

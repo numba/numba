@@ -2083,15 +2083,23 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_fliplr_basic(self):
         pyfunc = fliplr
         cfunc = jit(nopython=True)(pyfunc)
-        
+
         def a_variations():
-            yield np.arange(10).reshape(5,2)
+            yield np.arange(10).reshape(5, 2)
             yield np.arange(20).reshape(5, 2, 2)
-        
+            yield ((1, 2),)
+            yield ([1, 2], [3, 4],)
+
         for a in a_variations():
             expected = pyfunc(a)
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+
+        self.assertIn("Cannot np.fliplr on %s type" % types.unicode_type,
+                      str(raises.exception))
 
     def test_fliplr_exception(self):
         pyfunc = fliplr
@@ -2100,41 +2108,67 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # Exceptions leak references
         self.disable_leak_check()
 
-        with self.assertRaises(ValueError) as raises:
-            cfunc([1,2])
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(3))
 
-        self.assertIn("Input must be >= 2-d.", str(raises.exception))
-
+        self.assertIn("cannot index array", str(raises.exception))
+        self.assertIn("with 2 indices", str(raises.exception))
 
     def test_flipud_basic(self):
         pyfunc = flipud
         cfunc = jit(nopython=True)(pyfunc)
-        
+
         def a_variations():
             yield [1]
             yield np.arange(10)
-            yield np.arange(10).reshape(5,2)
+            yield np.arange(10).reshape(5, 2)
             yield np.arange(20).reshape(5, 2, 2)
-        
+            yield ((1, 2),)
+            yield ([1, 2], [3, 4],)
+
         for a in a_variations():
             expected = pyfunc(a)
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
 
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+
+        self.assertIn("Cannot np.flipud on %s type" % types.unicode_type,
+                      str(raises.exception))
+
+    def test_flipud_exception(self):
+        pyfunc = flipud
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1)
+
+        self.assertIn("cannot index array", str(raises.exception))
+        self.assertIn("with 1 indices", str(raises.exception))
+
     def test_flip_basic(self):
         pyfunc = flip
         cfunc = jit(nopython=True)(pyfunc)
-        
+
         def a_variations():
-            yield [1]
+            yield np.array(1)
             yield np.arange(10)
-            yield np.arange(10).reshape(5,2)
+            yield np.arange(10).reshape(5, 2)
             yield np.arange(20).reshape(5, 2, 2)
-        
+
         for a in a_variations():
             expected = pyfunc(a)
             got = cfunc(a)
             self.assertPreciseEqual(expected, got)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc((1, 2, 3))
+
+        self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
 
     def test_roll_basic(self):
         pyfunc = roll
