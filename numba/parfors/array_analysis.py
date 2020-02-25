@@ -111,7 +111,7 @@ def assert_equiv(typingctx, *val):
         # Make sure argument is a single tuple type. Note that this only
         # happens when IR containing assert_equiv call is being compiled
         # (and going through type inference) again.
-        val = (types.Tuple(val),)
+        val = (types.StarArgTuple(val),)
 
     assert(len(val[0]) > 1)
     # Arguments must be either array, tuple, or integer
@@ -1049,7 +1049,7 @@ class ArrayAnalysis(object):
                         for inst in instrs:
                             redefined = set()
                             self._analyze_inst(label, scope, from_set, inst, redefined)
-                            # Remove anything multiply defined in this block 
+                            # Remove anything multiply defined in this block
                             # from every block equivs.
                             self.remove_redefineds(redefined)
                     if equiv_set == None:
@@ -1058,7 +1058,7 @@ class ArrayAnalysis(object):
                         equiv_set = equiv_set.intersect(from_set)
                         redefined = set()
                         equiv_set.union_defs(from_set.defs, redefined)
-                        # Remove anything multiply defined in this block 
+                        # Remove anything multiply defined in this block
                         # from every block equivs.
                         self.remove_redefineds(redefined)
 
