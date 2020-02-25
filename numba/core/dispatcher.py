@@ -247,7 +247,11 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 return
             # This function must *not* hold any reference to self:
             # we take care to bind the necessary objects in the closure.
-            for cres in overloads.values():
+            try:
+                cres_list = list(overloads.values())
+            except KeyError:
+                return
+            for cres in cres_list:
                 try:
                     targetctx.remove_user_function(cres.entry_point)
                 except KeyError:
@@ -814,7 +818,7 @@ class Dispatcher(_DispatcherBase):
                 # XXX fold this in add_overload()? (also see compiler.py)
                 if not cres.objectmode and not cres.interpmode:
                     self.targetctx.insert_user_function(cres.entry_point,
-                                                cres.fndesc, [cres.library])
+                                                        cres.fndesc, [cres.library])
                 self.add_overload(cres)
                 return cres.entry_point
 
@@ -825,11 +829,6 @@ class Dispatcher(_DispatcherBase):
                 def folded(args, kws):
                     return self._compiler.fold_argument_types(args, kws)[1]
                 raise e.bind_fold_arguments(folded)
-
-            if 0:
-                print('='*20, f'{type(self).__name__}[{self.py_func.__name__}].compile({sig})', '='*20)
-                print(cres.library.get_llvm_str())
-                print('='*100)
 
             self.add_overload(cres)
             self._cache.save_overload(sig, cres)
