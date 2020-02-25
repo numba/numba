@@ -3261,18 +3261,20 @@ class TestParforsMisc(TestParforsBase):
             # original state
             numba.parfors.parfor.sequential_parfor_lowering = save_state
 
-    def test_tuple_as_arg_to_kernel(self):
-
+    def test_oversized_tuple_as_arg_to_kernel(self):
         @njit(parallel=True)
-        def tuple_bug():
-            t = (10,)
+        def oversize_tuple():
+            big_tup = (1,2,3,4)
             z = 0
             for x in prange(10):
-                z += t[0]
+                z += big_tup[0]
             return z
 
+        save_max = config.PARFOR_MAX_TUPLE_SIZE
+        config.PARFOR_MAX_TUPLE_SIZE = 3
         with self.assertRaises(errors.UnsupportedParforsError) as raises:
-            tuple_bug()
+            oversize_tuple()
+        config.PARFOR_MAX_TUPLE_SIZE = save_max
 
         errstr = str(raises.exception)
         self.assertIn("Use of a tuple", errstr)
