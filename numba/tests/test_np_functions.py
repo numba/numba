@@ -2898,29 +2898,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.timedelta64('NaT', "ms")
             yield np.timedelta64(34, "ms")
 
-            #     arr = np.array([123, -321, "NaT"], dtype='>datetime64[%s]' % unit)
-# res = np.array([False, False, True])
-# for unit in ['Y', 'M', 'W', 'D',
-#              'h', 'm', 's', 'ms', 'us',
-#              'ns', 'ps', 'fs', 'as']:
-#     arr = np.array([123, -321, "NaT"], dtype='<datetime64[%s]' % unit)
-#     assert_equal(np.isnat(arr), res)
-#     arr = np.array([123, -321, "NaT"], dtype='>datetime64[%s]' % unit)
-#     assert_equal(np.isnat(arr), res)
-#     arr = np.array([123, -321, "NaT"], dtype='<timedelta64[%s]' % unit)
-#     assert_equal(np.isnat(arr), res)
-#     arr = np.array([123, -321, "NaT"], dtype='>timedelta64[%s]' % unit)
-#     assert_equal(np.isnat(arr), res)
+            for unit in ['Y', 'M', 'W', 'D',
+                         'h', 'm', 's', 'ms', 'us',
+                         'ns', 'ps', 'fs', 'as']:
+                yield np.array([123, -321, "NaT"],
+                               dtype='<datetime64[%s]' % unit)
+                yield np.array([123, -321, "NaT"],
+                               dtype='>datetime64[%s]' % unit)
+                yield np.array([123, -321, "NaT"],
+                               dtype='<timedelta64[%s]' % unit)
+                yield np.array([123, -321, "NaT"],
+                               dtype='>timedelta64[%s]' % unit)
 
         pyfunc = isnat
         cfunc = jit(nopython=True)(pyfunc)
 
         for x in values():
-            x = np.asarray(x)
-            print(x)
             expected = pyfunc(x)
             got = cfunc(x)
-            self.assertEqual(expected, got, x)
+            if isinstance(x, np.ndarray):
+                self.assertPreciseEqual(expected, got, (x,))
+            else:
+                self.assertEqual(expected, got, x)
 
     def test_asarray(self):
 
