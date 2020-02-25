@@ -726,12 +726,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 self.assertCountEqual(expected, got)
 
         inputs = [('hello', 'world'), (2.0, None), ('a', 3.0)]
-        for (a, b) in inputs: 
+        for (a, b) in inputs:
             with self.assertRaises(TypingError) as raises:
                 cfunc(a, b)
             self.assertIn("`np.isclose` is not supported for the input types.",
                           str(raises.exception))
-
 
     def test_isscalar(self):
         def values():

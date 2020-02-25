@@ -681,8 +681,7 @@ def np_iscomplex(x):
 def np_isreal(x):
     if type_can_asarray(x):
         def impl(x):
-            ax = np.iscomplex(x)
-            return np.invert(ax)
+            return np.imag(x) == 0
     else:
         def impl(x):
             return False
@@ -711,6 +710,7 @@ def isrealobj(x):
 @overload(np.isscalar)
 def np_isscalar(num):
     res = isinstance(num, (types.Number, types.UnicodeType, types.Boolean))
+
     def impl(num):
         return res
     return impl
@@ -3251,7 +3251,7 @@ def np_real(a):
 @overload(np.imag)
 def np_imag(a):
     def np_imag_impl(a):
-        return a.imag
+        return np.asarray(a).imag
 
     return np_imag_impl
 
