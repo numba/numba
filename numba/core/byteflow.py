@@ -769,8 +769,8 @@ class TraceRunner(object):
     def op_CALL_FUNCTION_EX(self, state, inst):
         prev_inst = state._bytecode[state._pc - 2]
         if ((inst.arg & 1)
-                and prev_inst.opname not in
-                    ('BUILD_MAP','BUILD_CONST_KEY_MAP')):
+                and prev_inst.opname
+                not in ('BUILD_MAP', 'BUILD_CONST_KEY_MAP')):
             errmsg = "CALL_FUNCTION_EX with **kwargs not supported"
             raise UnsupportedError(errmsg)
         if inst.arg & 1:
@@ -780,8 +780,7 @@ class TraceRunner(object):
         vararg = state.pop()
         func = state.pop()
         res = state.make_temp()
-        state.append(inst, func=func, vararg=vararg, kwargs=kwargs,
-                        res=res)
+        state.append(inst, func=func, vararg=vararg, kwargs=kwargs, res=res)
         state.push(res)
 
     def _dup_topx(self, state, inst, count):

@@ -323,8 +323,8 @@ class DataFlowAnalysis(object):
     def op_CALL_FUNCTION_EX(self, info, inst):
         prev_inst = self.bytecode.table[inst.offset - 2]
         if ((inst.arg & 1)
-                and prev_inst.opname not in
-                    ('BUILD_MAP','BUILD_CONST_KEY_MAP')):
+                and prev_inst.opname
+                not in ('BUILD_MAP', 'BUILD_CONST_KEY_MAP')):
             errmsg = 'CALL_FUNCTION_EX with **kwargs not supported'
             raise NotImplementedError(errmsg)
         if inst.arg & 1:
