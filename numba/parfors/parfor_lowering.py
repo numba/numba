@@ -845,8 +845,8 @@ def _create_gufunc_for_parfor_body(
             # Get the size and dtype of the tuple.
             tuple_count = pi_type.count
             tuple_dtype = pi_type.dtype
-            # Only do tuples up to 10 length.
-            if tuple_count < 10:
+            # Only do tuples up to config.PARFOR_MAX_TUPLE_SIZE length.
+            if tuple_count <= config.PARFOR_MAX_TUPLE_SIZE:
                 this_var_expansion = []
                 for i in range(tuple_count):
                     # Generate a new name for the individual part of the tuple var.
@@ -872,7 +872,8 @@ def _create_gufunc_for_parfor_body(
             # pi_type.types[offset].
             tuple_count = pi_type.count
             tuple_types = pi_type.types
-            if tuple_count < 10:
+            # Only do tuples up to config.PARFOR_MAX_TUPLE_SIZE length.
+            if tuple_count <= config.PARFOR_MAX_TUPLE_SIZE:
                 this_var_expansion = []
                 for i in range(tuple_count):
                     expanded_name = "expanded_tuple_var_" + str(next_expanded_tuple_var)
