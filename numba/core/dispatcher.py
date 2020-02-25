@@ -772,6 +772,18 @@ class Dispatcher(_DispatcherBase):
         """
         Compiles first-class function arguments on-demand.
         """
+        if not self.overloads:
+            for value in args:
+                if isinstance(value, (tuple, list)):
+                    common_sig = None
+                    for v in value:
+                        vtype = self.typeof_pyval(v)
+                        if isinstance(vtype, types.FunctionType):
+                            if common_sig is None and vtype.has_signatures():
+                                common_sig = vtype.signature()
+                            else:
+                                vtype.check_signature(common_sig, compile=True)
+
         for atypes in self.overloads:
             if len(atypes) != len(args):
                 continue

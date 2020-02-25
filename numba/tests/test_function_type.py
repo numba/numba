@@ -689,7 +689,7 @@ class TestMiscIssues(TestCase):
         def a(x):
             return x + 1.0
 
-        @numba.cfunc("double(double)")
+        @numba.njit(firstclass=True)
         def b(x):
             return x * x
 
