@@ -129,6 +129,10 @@ reduction_scaling_in_device(size_t global_item_size, size_t nb_work_groups, size
         ret = clSetKernelArg(scaling_kernel, 0, sizeof(cl_mem), (void *)&input_buffer);
         ret = clSetKernelArg(scaling_kernel, 1, sizeof(cl_mem), (void *)&final_sum_buffer);
 
+        /* Make sure everything is done before this */
+        ret = clFlush(command_queue);
+        ret = clFinish(command_queue);
+
         gettimeofday(&start_time, NULL);
         // Execute the OpenCL kernel on the list
         ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL,
@@ -136,10 +140,15 @@ reduction_scaling_in_device(size_t global_item_size, size_t nb_work_groups, size
         ret = clEnqueueNDRangeKernel(command_queue, scaling_kernel, 1, NULL,
                 &global_item_size, &local_item_size, 0, NULL, NULL);
 
+        ret = clEnqueueReadBuffer(command_queue, final_sum_buffer, CL_TRUE, 0, sizeof(double), final_sum, 0, NULL, NULL);
+
+        /* Make sure everything is done before this */
+        ret = clFlush(command_queue);
+        ret = clFinish(command_queue);
+
         gettimeofday(&end_time, NULL);
         times[round] = end_time.tv_usec - start_time.tv_usec;
 
-        ret = clEnqueueReadBuffer(command_queue, final_sum_buffer, CL_TRUE, 0, sizeof(double), final_sum, 0, NULL, NULL);
         ret = clEnqueueReadBuffer(command_queue, input_buffer, CL_TRUE, 0, sizeof(double) * global_item_size, input, 0, NULL, NULL);
 
         ret = clReleaseMemObject(input_buffer);
@@ -187,6 +196,10 @@ reduction_scaling_in_host_and_device(size_t global_item_size, size_t nb_work_gro
 
         ret = clSetKernelArg(scaling_kernel, 0, sizeof(cl_mem), (void *)&input_buffer);
 
+        /* Make sure everything is done before this */
+        ret = clFlush(command_queue);
+        ret = clFinish(command_queue);
+
         gettimeofday(&start_time, NULL);
 
         // Execute the OpenCL kernel on the list
@@ -195,6 +208,10 @@ reduction_scaling_in_host_and_device(size_t global_item_size, size_t nb_work_gro
 
         ret = clEnqueueReadBuffer(command_queue, sum_reduction_buffer, CL_TRUE, 0, nb_work_groups * sizeof(double), sum_reduction, 0, NULL, NULL);
 
+        /* Make sure everything is done before this */
+        ret = clFlush(command_queue);
+        ret = clFinish(command_queue);
+
         // Display the result to the screen
         for(i = 0; i < nb_work_groups; i++)
             final_sum_host += sum_reduction[i];
@@ -202,6 +219,10 @@ reduction_scaling_in_host_and_device(size_t global_item_size, size_t nb_work_gro
         ret = clSetKernelArg(scaling_kernel, 1, sizeof(double), (void *)&final_sum_host);
         ret = clEnqueueNDRangeKernel(command_queue, scaling_kernel, 1, NULL,
                 &global_item_size, &local_item_size, 0, NULL, NULL);
+
+        /* Make sure everything is done before this */
+        ret = clFlush(command_queue);
+        ret = clFinish(command_queue);
 
         gettimeofday(&end_time, NULL);
         times[round] = end_time.tv_usec - start_time.tv_usec;
@@ -398,6 +419,12 @@ int main(int argc, char **argv) {
 
 
     double result;
+    /* Warmup */
+    result = reduction_scaling_in_device(global_item_size, nb_work_groups, local_item_size,
+        input, sum_reduction, final_sum,
+        context, command_queue,
+        reductionGPU, scalingGPU, times);
+
     result = reduction_scaling_in_device(global_item_size, nb_work_groups, local_item_size,
         input, sum_reduction, final_sum,
         context, command_queue,
@@ -418,8 +445,6 @@ int main(int argc, char **argv) {
 
 
     // Clean up
-    ret = clFlush(command_queue);
-    ret = clFinish(command_queue);
     ret = clReleaseCommandQueue(command_queue);
     ret = clReleaseKernel(reductionGPU);
     ret = clReleaseKernel(reductionGPUCPU);
