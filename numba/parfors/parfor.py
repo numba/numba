@@ -1639,6 +1639,8 @@ class ParforPassStates:
             parfor_ids, parfors = get_parfor_params(self.func_ir.blocks,
                                                     self.options.fusion,
                                                     self.nested_fusion_info)
+
+            # Validate reduction in parfors.
             for p in parfors:
                 get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
 
@@ -2825,8 +2827,15 @@ class ParforPass(ParforPassStates):
             parfor_ids, parfors = get_parfor_params(self.func_ir.blocks,
                                                     self.options.fusion,
                                                     self.nested_fusion_info)
+
+            # Validate reduction in parfors.
             for p in parfors:
                 get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
+
+            # Validate parameters:
+            for p in parfors:
+                p.validate_params(self.typemap)
+
             if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
                 n_parfors = len(parfor_ids)
