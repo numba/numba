@@ -321,13 +321,20 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     def op_CALL_FUNCTION_EX(self, info, inst):
-        if inst.arg & 1:
+        prev_inst = self.bytecode.table[inst.offset - 2]
+        if ((inst.arg & 1)
+                and prev_inst.opname not in
+                    ('BUILD_MAP','BUILD_CONST_KEY_MAP')):
             errmsg = 'CALL_FUNCTION_EX with **kwargs not supported'
             raise NotImplementedError(errmsg)
+        if inst.arg & 1:
+            kwargs = info.pop()
+        else:
+            kwargs = None
         vararg = info.pop()
         func = info.pop()
         res = info.make_temp()
-        info.append(inst, func=func, vararg=vararg, res=res)
+        info.append(inst, func=func, vararg=vararg, kwargs=kwargs, res=res)
         info.push(res)
 
     def _build_tuple_unpack(self, info, inst):
