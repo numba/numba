@@ -176,6 +176,28 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         indices = self.generate_advanced_indices(N)
         self.check_setitem_indices(arr, indices)
 
+    def test_setitem_0d(self):
+        # Test setitem with a 0d-array
+        pyfunc = setitem_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        x1 = np.zeros(3)
+        v1 = np.array(3.14)
+
+        exp1 = pyfunc(x1.copy(), 0, v1)
+        got1 = cfunc(x1.copy(), 0, v1)
+        self.assertPreciseEqual(exp1, got1)
+
+        exp2 = pyfunc(x1.copy(), 2, v1)
+        got2 = cfunc(x1.copy(), 2, v1)
+        self.assertPreciseEqual(exp2, got2)
+
+        # --------------
+        x2 = np.zeros(3, dtype=np.int64)
+        v2 = np.array(3, dtype=np.int64)
+        exp3 = pyfunc(x2.copy(), 0, v2)
+        got3 = cfunc(x2.copy(), 0, v2)
+        self.assertPreciseEqual(exp3, got3)
+
 
     def test_np_take(self):
         # shorter version of array.take test in test_array_methods
