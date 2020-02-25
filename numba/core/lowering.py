@@ -9,7 +9,7 @@ from numba import _dynfunc
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
                         generators, config, ir_utils, cgutils)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
-                               LiteralTypingError)
+                               LiteralTypingError, UnsupportedError)
 from numba.core.funcdesc import default_mangler
 
 
@@ -283,6 +283,8 @@ class BaseLower(object):
         """
         Create C wrapper around this function.
         """
+        if self.genlower:
+            raise UnsupportedError('generator as a first-class function type')
         self.context.create_cfunc_wrapper(self.library, self.fndesc,
                                           self.env, self.call_helper)
 

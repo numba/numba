@@ -1,5 +1,6 @@
 import types as pytypes
 from numba import jit, cfunc, types, int64, float64, float32
+from numba.core import errors
 import ctypes
 
 from .support import TestCase
@@ -744,3 +745,26 @@ class TestMiscIssues(TestCase):
         if r != 123 + 456:
             print(foo.overloads[()].library.get_llvm_str())
         self.assertEqual(r, 123 + 456)
+
+    def test_generators(self):
+
+        @jit(firstclass=True, forceobj=True)
+        def gen(xs):
+            for x in xs:
+                x += 1
+                yield x
+
+        @jit(forceobj=True)
+        def con(gen_fn, xs):
+            return [it for it in gen_fn(xs)]
+
+        self.assertEqual(con(gen, (1, 2, 3)), [2, 3, 4])
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            @jit(firstclass=True, nopython=True)
+            def gen_(xs):
+                yield
+
+        self.assertIn(
+            'generator as a first-class function type in nopython mode',
+            str(raises.exception))

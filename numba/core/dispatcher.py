@@ -9,6 +9,7 @@ import sys
 import types as pytypes
 import uuid
 import weakref
+import inspect
 from copy import deepcopy
 
 from numba import _dispatcher
@@ -665,6 +666,13 @@ class Dispatcher(_DispatcherBase):
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
+        if (inspect.isgeneratorfunction(py_func)
+            and targetoptions.get('nopython', False)
+            and not targetoptions.get('no_cfunc_wrapper', True)
+           ):
+            # generators have state that a cfunc wrapper cannot carry
+            raise errors.UnsupportedError('generator as a first-class function type in nopython mode')
+
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 
