@@ -96,6 +96,7 @@ class _FunctionCompiler(object):
             return True, retval
 
     def _compile_core(self, args, return_type):
+        # print(f'_compile_core[{self.py_func.__name__}]({args=}, {return_type=})')
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
         flags = self._customize_flags(flags)
@@ -236,7 +237,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         overloads = self.overloads
         targetctx = self.targetctx
-
         # Early-bind utils.shutting_down() into the function's local namespace
         # (see issue #689)
         def finalizer(shutting_down=utils.shutting_down):
@@ -760,93 +760,20 @@ class Dispatcher(_DispatcherBase):
         self._memo[u] = self
         self._recent.append(self)
 
-    def matches(self, other):
-        """Check if the set of self specializations can be a subset of the set
-        of other's specializations. If other does not have a certain
-        self's specialization, then the compilation of other will be
-        triggered.
+    def _compile_for_args(self, *args, **kws):
         """
-        if not isinstance(other, type(self)):
-            # TODO: other is CFunc instance
-            return False
+        Compiles first-class function arguments on-demand.
+        """
         for atypes in self.overloads:
-            if atypes in other.overloads:
+            if len(atypes) != len(args):
                 continue
-            try:
-                other.compile(atypes)
-            except:
-                # TODO: don't ignore compilation failures when config.DEBUG is True
-                return False
-        return True
-
-    def ___compile_for_args(self, *args, **kws):
-        #print(f'{type(self).__name__}[{self.py_func.__name__}]._compile_for_args({args})')
-
-        # compile Dispatcher arguments
-        # for existing compilation results.
-        for atypes in self.overloads:
-            matching_args_count = 0
-            for atype, arg in zip(atypes, args):
-                a = self.typeof_pyval(arg)
-                if (isinstance(atype, types.FunctionType)
-                    and isinstance(arg, Dispatcher)):
+            for atype, value in zip(atypes, args):
+                vtype = self.typeof_pyval(value)
+                if not ((isinstance(atype, types.FunctionType)
+                         and isinstance(vtype, types.FunctionType)
+                         and atype.matches(vtype, compile=True))
+                        or atype == vtype):
                     break
-                    mn, mx = utils.get_nargs_range(arg.py_func)
-                    if atype.ftype.atypes in arg.overloads:
-                        matching_args_count += 1
-                    elif mn <= atype.nargs <= mx:
-                        try:
-                            arg.compile(atype.ftype.atypes)
-                            matching_args_count += 1
-                        except:
-                            # TODO: don't ignore compilation failures when config.DEBUG is True
-                            break
-                    else:
-                        break
-                elif isinstance(atype, types.Dispatcher):
-                    """
-# Example:
-@njit
-def a(x):
-    return x+1
-@njit
-def b(x):
-    return b+2
-@njit
-def foo(f, x):
-    return f(x)
-
-foo(a, 0) -> 1 # triggers `a.compile((int64,))` and
-               # `foo.compile((int64(int64), int64))`
-
-foo(b, 0) -> 2 # triggers `b.compile((int64,))`, notice that `foo`
-               # will not be compiled because `b` is a first-class
-               # function that realizations match with `a`
-               # realizations
-
-foo(a, 1) -> 2 # no compilations are triggered
-foo(b, 1) -> 3 # no compilations are triggered
-                    """
-                    if atype.dispatcher.matches(arg):
-                        matching_args_count += 1
-                    else:
-                        break
-                else:
-                    # TODO: use penalties to find better matches
-                    if isinstance(arg, float) and isinstance(atype, types.Float):
-                        matching_args_count += 1
-                    elif isinstance(arg, int) and isinstance(atype, types.Integer):
-                        # TODO: check arg fits into atype range
-                        matching_args_count += 1
-                    else:
-                        if 0 and isinstance(atype, types.DispatcherFunctionType) and isinstance(arg, Dispatcher) and atype.dispatcher.matches(arg):
-                            matching_args_count += 1
-                        else:
-                            print(f'NOT IMPL: atype={atype}, arg={arg}')
-            if matching_args_count == len(args):
-                return self.overloads[atypes].entry_point
-            else:
-                print(f'No match: atypes={atypes}, args={args}')
         return super(Dispatcher, self)._compile_for_args(*args, **kws)
 
     @global_compiler_lock
@@ -889,13 +816,19 @@ foo(b, 1) -> 3 # no compilations are triggered
 
             return cres.entry_point
 
-    def get_compile_result(self, sig):
+    def get_compile_result(self, sig, compile=False):
         """Compile (if needed) and return the compilation result with the
         given signature.
         """
         args, return_type = sigutils.normalize_signature(sig)
         atypes = tuple(args)
+        if types.unknown in atypes or types.unknown == return_type:
+            # don't try to compile when the signature contains unknown
+            # types.
+            return
         if atypes not in self.overloads:
+            if not compile:
+                return
             try:
                 self.compile(atypes)
             except Exception as msg:

@@ -71,10 +71,10 @@ def lower_constant_function_type(context, builder, typ, pyval):
                                                 info=type(pyval).__name__)
         return sfunc._getvalue()
     if isinstance(pyval, Dispatcher):
-        cres = pyval.get_compile_result(typ.signature())
+        cres = pyval.get_compile_result(typ.signature(), compile=True)
         if cres is None:
             # TODO: raise exception as compilation failed (unless
-            # compile is disabled)
+            # compile is disabled). Set compile=False to reproduce.
             addr = -1
         else:
             wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
@@ -129,6 +129,7 @@ def _get_wrapper_address(func, sig):
     for the given signature.
 
     """
+    # print(f'_get_wrapper_address[{func}]({sig=})')
     if sig.return_type == types.unknown:
         # addr==-1 indicates that no implementation is available for
         # cases where automatic type-inference was unsuccesful. For
@@ -150,9 +151,12 @@ def _get_wrapper_address(func, sig):
             cfunc = numba.cfunc(sig)(func._pyfunc)
             addr = cfunc._wrapper_address
     elif isinstance(func, Dispatcher):
-        cres = func.get_compile_result(sig)
-        wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
-        addr = cres.library.get_pointer_to_function(wrapper_name)
+        cres = func.get_compile_result(sig, compile=True)
+        if cres is None:
+            addr = 0
+        else:
+            wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
+            addr = cres.library.get_pointer_to_function(wrapper_name)
     else:
         raise NotImplementedError(
             f'get wrapper address of {type(func)} instance with {sig!r}')

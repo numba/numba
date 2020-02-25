@@ -20,7 +20,7 @@ class FunctionTypeImplBase:
         """
         yield self.signature
 
-    def check_signature(self, sig):
+    def check_signature(self, sig, compile=False):
         """Check if the given signature belongs to the function type.
         """
         for signature in self.signatures():
@@ -29,25 +29,19 @@ class FunctionTypeImplBase:
         return False
 
     def get_call_type(self, context, args, kws):
+        from numba.core import typing
         # use when a new compilation is not feasible
         for signature in self.signatures():
             if len(args) != len(signature.args):
                 continue
             for atype, sig_atype in zip(args, signature.args):
                 atype = types.unliteral(atype)
-                if isinstance(atype, type(sig_atype)):
-                    continue
-                elif (isinstance(atype, types.Number)
-                      and type(atype) is type(sig_atype)
-                      and atype <= sig_atype):
-                    continue
-                elif (isinstance(atype, types.Array)
-                      and isinstance(sig_atype, types.Array)
-                      and type(atype.dtype) is type(sig_atype.dtype)
-                      # noqa: E721
-                      and atype.dtype <= sig_atype.dtype):
-                    continue
-                else:
+                # Get the casting score
+                conv_score = context.context.can_convert(
+                    fromty=atype, toty=sig_atype
+                )
+                # Allow safe casts
+                if conv_score > typing.context.Conversion.safe:
                     break
             else:
                 # TODO: there may be better matches
@@ -60,6 +54,9 @@ class FunctionTypeImpl(FunctionTypeImplBase):
 
     def __init__(self, signature):
         self.signature = types.unliteral(signature)
+
+    def has_signatures(self):
+        return True
 
     @property
     def name(self):
@@ -74,6 +71,9 @@ class CFuncFunctionTypeImpl(FunctionTypeImplBase):
     def __init__(self, cfunc):
         self.cfunc = cfunc
         self.signature = types.unliteral(self.cfunc._sig)
+
+    def has_signatures(self):
+        return True
 
     @property
     def name(self):
@@ -97,6 +97,9 @@ class DispatcherFunctionTypeImpl(FunctionTypeImplBase):
         mn, mx = utils.get_nargs_range(self.dispatcher.py_func)
         return types.unknown(*((types.unknown,) * mn))
 
+    def has_signatures(self):
+        return len(self.dispatcher.overloads) > 0
+
     def signatures(self):
         for cres in self.dispatcher.overloads.values():
             yield types.unliteral(cres.signature)
@@ -109,21 +112,27 @@ class DispatcherFunctionTypeImpl(FunctionTypeImplBase):
         return f'{self.name}[{", ".join(map(str, self.signatures()))}]'
 
     def get_call_type(self, context, args, kws):
-        # TODO: check if signature exists
+        args = tuple(map(types.unliteral, args))
+        cres = self.dispatcher.get_compile_result(args, compile=False)
+        if cres is not None:
+            return types.unliteral(cres.signature)
         template, pysig, args, kws = self.dispatcher.get_call_template(args,
                                                                        kws)
         sig = template(context.context).apply(args, kws)
         # return sig  # uncomment to reproduce `a() + b() -> 2 * a()` issue
         return types.unliteral(sig)
 
-    def check_signature(self, sig):
-        if super(DispatcherFunctionTypeImpl, self).check_signature(sig):
+    def check_signature(self, sig, compile=False):
+        if super(DispatcherFunctionTypeImpl, self).check_signature(
+                sig, compile=compile):
             return True
-        try:
-            self.dispatcher.compile(sig.args)
-        except Exception:
-            return False
-        return True
+        if compile:
+            try:
+                self.dispatcher.compile(sig.args)
+                return True
+            except Exception:
+                pass
+        return False
 
 
 class FunctionType(Type):
@@ -167,6 +176,11 @@ class FunctionType(Type):
     def key(self):
         return self.name
 
+    def has_signatures(self):
+        """Return True if function type contains known signatures.
+        """
+        return self.impl.has_signatures()
+
     def signature(self):
         return self.impl.signature
 
@@ -177,13 +191,6 @@ class FunctionType(Type):
 
     def get_call_type(self, context, args, kws):
         return self.impl.get_call_type(context, args, kws)
-
-    def __call__(self, *args, **kwargs):  ## remove?
-        # defined here to enable resolve_function_type call
-        raise NotImplementedError(f'{type(self).__name__}.__call__')
-
-    def resolve_function_type(self, func_type, args, kws):  ## remove?
-        raise NotImplementedError(repr((func_type, args, kws)))
 
     def get_ftype(self, sig=None):
         """Return function prorotype of the given or default signature.
@@ -196,6 +203,24 @@ class FunctionType(Type):
             if not self.impl.check_signature(sig):
                 raise ValueError(f'{repr(self)} does not support {sig}')
         return FunctionPrototype(sig.return_type, sig.args)
+
+    def check_signature(self, sig, compile=False):
+        """Check if the given signature belongs to the function type.
+        Try to compile if enabled.
+        """
+        return self.impl.check_signature(sig, compile=compile)
+
+    def matches(self, other, compile=False):
+        """Return True if other's signatures matches exactly with self's
+        signatures. If other does not have known signatures, try to
+        compile (if enabled).
+        """
+        if self.has_signatures():
+            if other.has_signatures():
+                return self.signature() == other.signature()
+            if compile:
+                return other.check_signature(self.signature(), compile=compile)
+        return False
 
 
 class FunctionPrototype(Type):
