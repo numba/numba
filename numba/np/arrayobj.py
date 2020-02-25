@@ -4960,9 +4960,8 @@ def array_to_array(context, builder, fromty, toty, val):
 @lower_cast(types.Array, types.Float)
 @lower_cast(types.Array, types.Integer)
 def array0d_to_scalar(context, builder, fromty, toty, val):
-    # a is an array(T, 0d, C)
-    # See: https://github.com/numba/numba/pull/4516
     def impl(a):
+        # a is an array(T, 0d, C)
         return a.take(0)
 
     assert(fromty.dtype == toty and fromty.ndim == 0)

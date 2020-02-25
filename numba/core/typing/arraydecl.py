@@ -170,7 +170,7 @@ class GetItemBuffer(AbstractTemplate):
 class SetItemBuffer(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
-        ary, idx, val = args # ary[idx] = val
+        ary, idx, val = args
         if not isinstance(ary, types.Buffer):
             return
         if not ary.mutable:
