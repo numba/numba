@@ -15,6 +15,7 @@ from numba.np import numpy_support
 
 _FS = ('e', 'f')
 
+
 def get_a(ary, i):
     return ary[i].a
 
@@ -1074,6 +1075,7 @@ class TestRecordArrayGetItem(unittest.TestCase):
             jitfunc(arr[0])
         self.assertIn("Field 'f' was not found in record with fields "
                       "('first', 'second')", str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
