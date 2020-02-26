@@ -51,7 +51,8 @@ SPIR_VERSION = (2, 0)
 
 class GenericPointerModel(datamodel.PrimitiveModel):
     def __init__(self, dmm, fe_type):
-        adrsp = SPIR_GENERIC_ADDRSPACE
+        print("GenericPointerModel:", dmm, fe_type, fe_type.addrspace)
+        adrsp = fe_type.addrspace if fe_type.addrspace is not None else SPIR_GENERIC_ADDRSPACE
         be_type = dmm.lookup(fe_type.dtype).get_data_type().as_pointer(adrsp)
         super(GenericPointerModel, self).__init__(dmm, fe_type, be_type)
 
