@@ -8,7 +8,7 @@ class MyError(Exception):
 
 
 regex_pattern = (
-    r'In function [\'"]test_exc[\'"], file [\.\/\\\-a-zA-Z_0-9]+, line \d+'
+    r'In function [\'"]test_exc[\'"], file [\:\.\/\\\-a-zA-Z_0-9]+, line \d+'
 )
 
 
