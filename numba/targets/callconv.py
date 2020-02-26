@@ -498,7 +498,6 @@ class CPUCallConv(BaseCallConv):
         excarg.add_attribute("nocapture")
         excarg.add_attribute("noalias")
 
-        #pdb.set_trace()
         if noalias:
             args = self.get_arguments(fn)
             for a in args:

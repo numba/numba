@@ -81,16 +81,32 @@ def compile_kernel(device, pyfunc, args, access_types, debug=False):
     return oclkern
 
 
-def compile_kernel_parfor(device, func_ir, args, debug=False):
+def compile_kernel_parfor(device, func_ir, args, args_with_addrspaces, debug=False):
     if DEBUG:
         print("compile_kernel_parfor", args)
-    cres = compile_with_dppy(func_ir, types.void, args, debug=debug)
+        for a in args:
+            print(a, type(a))
+            if isinstance(a, types.npytypes.Array):
+                print("addrspace:", a.addrspace)
+
+    cres = compile_with_dppy(func_ir, types.void, args_with_addrspaces, debug=debug)
+    #cres = compile_with_dppy(func_ir, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
+
+    if DEBUG:
+        print("compile_kernel_parfor signature", cres.signature.args)
+        for a in cres.signature.args:
+            print(a, type(a))
+#            if isinstance(a, types.npytypes.Array):
+#                print("addrspace:", a.addrspace)
+
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
+    #kernel = cres.target_context.prepare_ocl_kernel(func, args_with_addrspaces)
     oclkern = DPPyKernel(device_env=device,
                          llvm_module=kernel.module,
                          name=kernel.name,
-                         argtypes=cres.signature.args)
+                         argtypes=args_with_addrspaces)
+                         #argtypes=cres.signature.args)
     return oclkern
 
 
@@ -227,6 +243,9 @@ class DPPyKernel(DPPyKernelBase):
         # self._cacheprog = _CachedProgram(entry_name=self.entry_name,
         #                                 binary=self.binary)
         # First-time compilation using SPIRV-Tools
+        if DEBUG:
+            with open("llvm_kernel.ll", "w") as f:
+                f.write(self.binary)
         self.spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
         #print("DPPyKernel:", self.spirv_bc, type(self.spirv_bc))
         # create a program

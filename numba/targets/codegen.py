@@ -278,9 +278,6 @@ class CodeLibrary(object):
         self._finalize_final_module()
         if config.DEBUG_ARRAY_OPT >= 1:
             print("CodeLibrary::finalize end", self._name)
-        if self._name == 'f1':
-            import pdb
-            #pdb.set_trace()
 
     def _finalize_dynamic_globals(self):
         # Scan for dynamic globals
