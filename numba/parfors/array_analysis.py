@@ -3,13 +3,11 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-import types as pytypes
 import numpy
 import operator
-from numba.core import types, typing, ir, analysis, config, cgutils, errors
+from numba.core import types, ir, config, cgutils, errors
 from numba.core.ir_utils import (
     mk_unique_var,
-    replace_vars_inner,
     find_topo_order,
     dprint_func_ir,
     get_global_func_typ,
@@ -23,7 +21,6 @@ from numba.core.ir_utils import (
     build_definitions)
 from numba.core.analysis import (compute_cfg_from_blocks)
 from numba.core.typing import npydecl, signature
-import collections
 import copy
 from numba.core.extending import intrinsic
 import llvmlite.llvmpy.core as lc
@@ -992,12 +989,12 @@ class ArrayAnalysis(object):
         """run array shape analysis on the given IR blocks, resulting in
         modified IR and finalized EquivSet for each block.
         """
-        if blocks == None:
+        if blocks is None:
             blocks = self.func_ir.blocks
 
         self.func_ir._definitions = build_definitions(self.func_ir.blocks)
 
-        if equiv_set == None:
+        if equiv_set is None:
             init_equiv_set = SymbolicEquivSet(self.typemap)
         else:
             init_equiv_set = equiv_set
@@ -1015,75 +1012,7 @@ class ArrayAnalysis(object):
         cfg = compute_cfg_from_blocks(blocks)
         topo_order = find_topo_order(blocks, cfg=cfg)
         # Traverse blocks in topological order
-        for label in topo_order:
-            if config.DEBUG_ARRAY_OPT >= 2:
-                print("Processing block:", label)
-            block = blocks[label]
-            scope = block.scope
-            new_body = []
-            equiv_set = None
-
-            # equiv_set is the intersection of predecessors
-            preds = cfg.predecessors(label)
-            # some incoming edge may be pruned due to prior analysis
-            if label in self.pruned_predecessors:
-                pruned = self.pruned_predecessors[label]
-            else:
-                pruned = []
-            # Go through each incoming edge, process prepended instructions and
-            # calculate beginning equiv_set of current block as an intersection
-            # of incoming ones.
-            if config.DEBUG_ARRAY_OPT >= 2:
-                print("preds:", preds)
-            for (p, q) in preds:
-                if config.DEBUG_ARRAY_OPT >= 2:
-                    print("p, q:", p, q)
-                if p in pruned:
-                    continue
-                if p in self.equiv_sets:
-                    from_set = self.equiv_sets[p].clone()
-                    if config.DEBUG_ARRAY_OPT >= 2:
-                        print("p in equiv_sets", from_set)
-                    if (p, label) in self.prepends:
-                        instrs = self.prepends[(p, label)]
-                        for inst in instrs:
-                            redefined = set()
-                            self._analyze_inst(label, scope, from_set, inst, redefined)
-                            # Remove anything multiply defined in this block
-                            # from every block equivs.
-                            self.remove_redefineds(redefined)
-                    if equiv_set == None:
-                        equiv_set = from_set
-                    else:
-                        equiv_set = equiv_set.intersect(from_set)
-                        redefined = set()
-                        equiv_set.union_defs(from_set.defs, redefined)
-                        # Remove anything multiply defined in this block
-                        # from every block equivs.
-                        self.remove_redefineds(redefined)
-
-            # Start with a new equiv_set if none is computed
-            if equiv_set == None:
-                equiv_set = init_equiv_set
-            self.equiv_sets[label] = equiv_set
-            # Go through instructions in a block, and insert pre/post
-            # instructions as we analyze them.
-            for inst in block.body:
-                redefined = set()
-                if isinstance(inst, ir.StaticSetItem):
-                    orig_calltype = self.calltypes[inst]
-                    inst = ir.SetItem(inst.target, inst.index_var, inst.value, inst.loc)
-                    self.calltypes[inst] = orig_calltype
-                pre, post = self._analyze_inst(label, scope, equiv_set, inst, redefined)
-                # Remove anything multiply defined in this block from every block equivs.
-                if len(redefined) > 0:
-                    self.remove_redefineds(redefined)
-                for instr in pre:
-                    new_body.append(instr)
-                new_body.append(inst)
-                for instr in post:
-                    new_body.append(instr)
-            block.body = new_body
+        self._run_on_blocks(topo_order, blocks, cfg, init_equiv_set)
 
         if config.DEBUG_ARRAY_OPT >= 1:
             self.dump()
@@ -1093,6 +1022,97 @@ class ArrayAnalysis(object):
         dprint_func_ir(self.func_ir, "after array analysis", blocks)
         if config.DEBUG_ARRAY_OPT >= 1:
             print("Ending ArrayAnalysis:", aa_count_save)
+
+    def _run_on_blocks(self, topo_order, blocks, cfg, init_equiv_set):
+        for label in topo_order:
+            if config.DEBUG_ARRAY_OPT >= 2:
+                print("Processing block:", label)
+            block = blocks[label]
+            scope = block.scope
+            analysis_result = self._per_block_analysis(cfg, block, label, scope, init_equiv_set)
+            self._per_block_transform(block, analysis_result)
+
+    def _per_block_transform(self, block, analysis_result):
+        new_body = []
+        for inst, pre, post in analysis_result:
+            for instr in pre:
+                new_body.append(instr)
+            new_body.append(inst)
+            for instr in post:
+                new_body.append(instr)
+        block.body = new_body
+
+    def _per_block_analysis(self, cfg, block, label, scope, init_equiv_set):
+        equiv_set = None
+        # equiv_set is the intersection of predecessors
+        preds = cfg.predecessors(label)
+        # some incoming edge may be pruned due to prior analysis
+        if label in self.pruned_predecessors:
+            pruned = self.pruned_predecessors[label]
+        else:
+            pruned = []
+        # Go through each incoming edge, process prepended instructions and
+        # calculate beginning equiv_set of current block as an intersection
+        # of incoming ones.
+        if config.DEBUG_ARRAY_OPT >= 2:
+            print("preds:", preds)
+        for (p, q) in preds:
+            if config.DEBUG_ARRAY_OPT >= 2:
+                print("p, q:", p, q)
+            if p in pruned:
+                continue
+            if p in self.equiv_sets:
+                from_set = self.equiv_sets[p].clone()
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("p in equiv_sets", from_set)
+                if (p, label) in self.prepends:
+                    instrs = self.prepends[(p, label)]
+                    for inst in instrs:
+                        redefined = set()
+                        self._analyze_inst(
+                            label, scope, from_set, inst, redefined,
+                        )
+                        # Remove anything multiply defined in this block
+                        # from every block equivs.
+                        # NOTE: necessary? can't observe effect in testsuite
+                        self.remove_redefineds(redefined)
+                if equiv_set is None:
+                    equiv_set = from_set
+                else:
+                    equiv_set = equiv_set.intersect(from_set)
+                    redefined = set()
+                    equiv_set.union_defs(from_set.defs, redefined)
+                    # Remove anything multiply defined in this block
+                    # from every block equivs.
+                    # NOTE: necessary? can't observe effect in testsuite
+                    self.remove_redefineds(redefined)
+
+        # Start with a new equiv_set if none is computed
+        if equiv_set is None:
+            equiv_set = init_equiv_set
+        self.equiv_sets[label] = equiv_set
+
+        # Go through instructions in a block, and insert pre/post
+        # instructions as we analyze them.
+        analyze_result = []
+        for inst in block.body:
+            redefined = set()
+            if isinstance(inst, ir.StaticSetItem):
+                orig_calltype = self.calltypes[inst]
+                inst = ir.SetItem(
+                    inst.target, inst.index_var, inst.value, inst.loc,
+                )
+                self.calltypes[inst] = orig_calltype
+            pre, post = self._analyze_inst(
+                label, scope, equiv_set, inst, redefined,
+            )
+            # Remove anything multiply defined in this block from every block
+            # equivs.
+            if len(redefined) > 0:
+                self.remove_redefineds(redefined)
+
+            analyze_result.append((inst, pre, post))
+        return analyze_result
 
     def dump(self):
         """dump per-block equivalence sets for debugging purposes.
