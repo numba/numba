@@ -7,10 +7,13 @@ from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
 from numba.core.config import IS_WIN32
+from numba.core.errors import TypingError
 from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
 
+
+_FS = ('e', 'f')
 
 def get_a(ary, i):
     return ary[i].a
@@ -265,17 +268,14 @@ def get_field2(rec):
     return out
 
 
-fs = ('e', 'f')
-
-
 def get_field3(rec):
-    f = fs[1]
+    f = _FS[1]
     return rec[f]
 
 
 def get_field4(rec):
     out = 0
-    for f in literal_unroll(fs):
+    for f in literal_unroll(_FS):
         out += rec[f]
     return out
 
@@ -1013,11 +1013,16 @@ class TestRecordArrayGetItem(unittest.TestCase):
     """
     Test getitem when index is Literal[str]
     """
+    def get_cfunc(self, pyfunc, rec_dtype):
+        rectype = numpy_support.from_dtype(rec_dtype)
+        cres = compile_isolated(pyfunc, (rectype,))
+        return cres.entry_point
+
     def test_literal_variable(self):
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = get_field1
-        jitfunc = njit(pyfunc)
-        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+        cfunc = self.get_cfunc(pyfunc, rec_dtype=recordtype2)
+        self.assertEqual(pyfunc(arr[0]), cfunc(arr[0]))
 
     def test_literal_unroll(self):
         arr = np.array([1, 2], dtype=recordtype2)
@@ -1027,7 +1032,7 @@ class TestRecordArrayGetItem(unittest.TestCase):
 
     def test_literal_variable_global_tuple(self):
         """
-        this tests the getitem of record array when the indexes come from a
+        This tests the getitem of record array when the indexes come from a
         global tuple. It tests getitem behaviour but also tests that a global
         tuple is being typed as a tuple of constants.
         """
@@ -1038,7 +1043,7 @@ class TestRecordArrayGetItem(unittest.TestCase):
 
     def test_literal_unroll_global_tuple(self):
         """
-        this tests the getitem of record array when the indexes come from a
+        This tests the getitem of record array when the indexes come from a
         global tuple and are being unrolled.
         It tests getitem behaviour but also tests that literal_unroll accepts
         a global tuple as argument
@@ -1048,6 +1053,31 @@ class TestRecordArrayGetItem(unittest.TestCase):
         jitfunc = njit(pyfunc)
         self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
 
+    def test_literal_unroll_free_var_tuple(self):
+        """
+        This tests the getitem of record array when the indexes come from a
+        free variable tuple (not local, not global) and are being unrolled.
+        It tests getitem behaviour but also tests that literal_unroll accepts
+        a free variable tuple as argument
+        """
+        fs = ('e', 'f')
+        arr = np.array([1, 2], dtype=recordtype2)
+
+        def get_field(rec):
+            out = 0
+            for f in literal_unroll(fs):
+                out += rec[f]
+            return out
+
+        jitfunc = njit(get_field)
+        self.assertEqual(get_field(arr[0]), jitfunc(arr[0]))
+
+    def test_error_w_invalid_field(self):
+        arr = np.array([1, 2], dtype=recordtype3)
+        with self.assertRaises(TypingError) as raises:
+            cfunc = self.get_cfunc(get_field1, rec_dtype=recordtype3)
+        self.assertIn("Field 'f' was not found in record with fields "
+                      "('first', 'second')", str(raises.exception))
 
 if __name__ == '__main__':
     unittest.main()
