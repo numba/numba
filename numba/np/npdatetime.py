@@ -16,6 +16,7 @@ from numba.np import npdatetime_helpers, numpy_support, npyfuncs
 # datetime64 and timedelta64 use the same internal representation
 DATETIME64 = TIMEDELTA64 = Type.int(64)
 NAT = Constant.int(TIMEDELTA64, npdatetime_helpers.NAT)
+NAT_BIG_ENDIAN = Constant.int(TIMEDELTA64, npdatetime_helpers.NAT.newbyteorder())
 
 TIMEDELTA_BINOP_SIG = (types.NPTimedelta,) * 2
 
