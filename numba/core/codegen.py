@@ -13,6 +13,8 @@ from numba.core import utils, config, cgutils
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
+from numba.misc.inspection import disassemble_elf_to_cfg
+
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
@@ -327,59 +329,13 @@ class CodeLibrary(object):
     def get_disasm_cfg(self):
         """
         Get the CFG of the disassembly of the ELF object
+
+        Requires python package: r2pipe
+        Requires radare2 binary on $PATH.
+        Notebook rendering requires python package: graphviz
         """
-        try:
-            import r2pipe
-        except ImportError:
-            raise RuntimeError("r2pipe package needed for disasm CFG")
-
-        def get_rendering(cmd=None):
-            if cmd is None:
-                raise ValueError("No command given")
-            elf = self._get_compiled_object()
-
-            from tempfile import NamedTemporaryFile
-            with NamedTemporaryFile(delete=False) as f:
-                f.write(elf)
-                f.flush() # force write, radare2 needs a binary blob on disk
-
-                # catch if r2pipe can actually talk to radare2
-                try:
-                    flags=['-e io.cache=true', # fix relocations in disassembly
-                           '-e scr.color=1', # 16bit ANSI colour terminal
-                          ]
-                    r = r2pipe.open(f.name, flags=flags)
-                    data = r.cmd('af;%s' % cmd)
-                    r.quit()
-                except Exception as e:
-                    if "radare2 in PATH" in str(e):
-                        msg = ("This feature requires 'radare2' to be "
-                            "installed and available on the system see: "
-                            "https://github.com/radareorg/radare2. "
-                            "Cannot find 'radare2' in $PATH.")
-                        raise RuntimeError(msg)
-                    else:
-                        raise e
-            return data
-
-        class DisasmCFG(object):
-
-            def _repr_svg_(self):
-                try:
-                    import graphviz
-                except ImportError:
-                    raise RuntimeError("graphviz package needed for disasm CFG")
-                jupyter_rendering = get_rendering(cmd='agfd')
-                # this just makes it read slightly better in jupyter notebooks
-                jupyter_rendering.replace('fontname="Courier",',
-                                          'fontname="Courier",fontsize=6,')
-                src = graphviz.Source(jupyter_rendering)
-                return src.pipe('svg').decode('UTF-8')
-
-            def __repr__(self):
-                return get_rendering(cmd='agf')
-
-        return DisasmCFG()
+        elf = self._get_compiled_object()
+        return disassemble_elf_to_cfg(elf)
 
     #
     # Object cache hooks and serialization
