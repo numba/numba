@@ -1673,6 +1673,25 @@ class TestMore(TestCase):
 
         self.assertEqual(foo(), foo.py_func())
 
+    def test_unroll_function_tuple(self):
+        @njit
+        def a():
+            return 1
+
+        @njit
+        def b():
+            return 2
+
+        x = (a, b)
+
+        @njit
+        def foo():
+            out = 0
+            for f in literal_unroll(x):
+                out += f()
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
 
 def capture(real_pass):
     """ Returns a compiler pass that captures the mutation state reported
