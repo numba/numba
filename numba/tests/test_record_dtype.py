@@ -1013,16 +1013,11 @@ class TestRecordArrayGetItem(unittest.TestCase):
     """
     Test getitem when index is Literal[str]
     """
-    def get_cfunc(self, pyfunc, rec_dtype):
-        rectype = numpy_support.from_dtype(rec_dtype)
-        cres = compile_isolated(pyfunc, (rectype,))
-        return cres.entry_point
-
     def test_literal_variable(self):
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = get_field1
-        cfunc = self.get_cfunc(pyfunc, rec_dtype=recordtype2)
-        self.assertEqual(pyfunc(arr[0]), cfunc(arr[0]))
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
 
     def test_literal_unroll(self):
         arr = np.array([1, 2], dtype=recordtype2)
@@ -1074,8 +1069,9 @@ class TestRecordArrayGetItem(unittest.TestCase):
 
     def test_error_w_invalid_field(self):
         arr = np.array([1, 2], dtype=recordtype3)
+        jitfunc = njit(get_field1)
         with self.assertRaises(TypingError) as raises:
-            cfunc = self.get_cfunc(get_field1, rec_dtype=recordtype3)
+            jitfunc(arr[0])
         self.assertIn("Field 'f' was not found in record with fields "
                       "('first', 'second')", str(raises.exception))
 
