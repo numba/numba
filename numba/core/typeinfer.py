@@ -1480,11 +1480,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             typ = typ.copy(readonly=True)
 
         if isinstance(typ, types.BaseAnonymousTuple):
-            types_w_literals = (types.Integer, types.UnicodeType)
-            types_in_tuple = (typ.dtype.types
-                              if isinstance(typ.dtype, types.UnionType)
-                              else (typ.dtype,))
-            if all(isinstance(ty, types_w_literals) for ty in types_in_tuple):
+            types_with_literals = (types.Integer, types.UnicodeType)
+            if all(isinstance(ty, types_with_literals) for ty in typ):
                 typ = types.Tuple([types.literal(val) for val in gvar.value])
 
         self.sentry_modified_builtin(inst, gvar)
