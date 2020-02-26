@@ -81,7 +81,7 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     # run get_parfor_outputs() and get_parfor_reductions() before gufunc creation
     # since Jumps are modified so CFG of loop_body dict will become invalid
-    assert parfor.params != None
+    assert parfor.params is not None
 
     parfor_output_arrays = numba.parfors.parfor.get_parfor_outputs(
         parfor, parfor.params)
@@ -170,7 +170,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             redarrs[redvar.name] = redarr_var
 
             init_val = parfor_reddict[parfor_redvars[i]][0]
-            if init_val != None:
+            if init_val is not None:
                 if isinstance(redvar_typ, types.npytypes.Array):
                     # Create an array of identity values for the reduction.
                     # First, create a variable for np.full.

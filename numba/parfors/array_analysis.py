@@ -524,7 +524,7 @@ class ShapeEquivSet(EquivSet):
     def has_shape(self, name):
         """Return true if the shape of the given variable is available.
         """
-        return self.get_shape(name) != None
+        return self.get_shape(name) is not None
 
     def get_shape(self, name):
         """Return a tuple of variables that corresponds to the shape
@@ -745,7 +745,7 @@ class SymbolicEquivSet(ShapeEquivSet):
         if name in self.def_by:
             return self.def_by[name]
         else:
-            require(func_ir != None)
+            require(func_ir is not None)
             def plus(x, y):
                 x_is_const = isinstance(x, int)
                 y_is_const = isinstance(y, int)
@@ -794,7 +794,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                         value = minus(lhs, rhs)
             elif isinstance(expr, ir.Const) and isinstance(expr.value, int):
                 value = expr.value
-            require(value != None)
+            require(value is not None)
             # update def_by table
             self.def_by[name] = value
             if isinstance(value, int) or (isinstance(value, tuple) and
@@ -1178,7 +1178,7 @@ class ArrayAnalysis(object):
                     isinstance(shape, ir.Var) and
                     isinstance(self.typemap[shape.name], types.containers.Tuple)):
                     pass
-                elif (shape == None or isinstance(shape, tuple) or
+                elif (shape is None or isinstance(shape, tuple) or
                     (isinstance(shape, ir.Var) and
                      not equiv_set.has_shape(shape))):
                     (shape, post) = self._gen_shape_call(equiv_set, lhs,
@@ -1203,7 +1203,7 @@ class ArrayAnalysis(object):
                 is needed and we don't call define().
             """
             needs_define = True
-            if shape != None:
+            if shape is not None:
                 needs_define = equiv_set.insert_equiv(lhs, shape)
             if needs_define:
                 equiv_set.define(lhs, redefined, self.func_ir, typ)
@@ -1223,7 +1223,7 @@ class ArrayAnalysis(object):
             if value_shape == (): # constant
                 equiv_set.set_shape_setitem(inst, target_shape)
                 return pre, []
-            elif value_shape != None:
+            elif value_shape is not None:
                 target_typ = self.typemap[inst.target.name]
                 require(isinstance(target_typ, types.ArrayCompatible))
                 target_ndim = target_typ.ndim
@@ -1274,7 +1274,7 @@ class ArrayAnalysis(object):
                     cond_val = 0
                 lhs_typ = self.typemap[cond_def.lhs.name]
                 rhs_typ = self.typemap[cond_def.rhs.name]
-                if (br != None and
+                if (br is not None and
                     ((isinstance(lhs_typ, types.Integer) and
                       isinstance(rhs_typ, types.Integer)) or
                      (isinstance(lhs_typ, types.BaseTuple) and
@@ -1685,8 +1685,8 @@ class ArrayAnalysis(object):
             replacement_build_tuple_var = None
 
         shape = tuple(shape_list)
-        require(not all(x == None for x in shape))
-        shape = tuple(x for x in shape if x != None)
+        require(not all(x is None for x in shape))
+        shape = tuple(x for x in shape if x is not None)
         return (replacement_build_tuple_var, (shape, stmts))
 
     def _analyze_op_getitem(self, scope, equiv_set, expr):
@@ -2337,7 +2337,7 @@ class ArrayAnalysis(object):
                         sizes.append(size)  # non-1 size to front
                         size_names.append(name)
             if sizes == []:
-                assert(const_size_one != None)
+                assert(const_size_one is not None)
                 sizes.append(const_size_one)
                 size_names.append("1")
             asserts.append(self._call_assert_equiv(scope, loc, equiv_set,
@@ -2356,7 +2356,7 @@ class ArrayAnalysis(object):
         # filter out those that are already equivalent
         if config.DEBUG_ARRAY_OPT >= 2:
             print("make_assert_equiv:", _args, names)
-        if names == None:
+        if names is None:
             names = [x.name for x in _args]
         args = []
         arg_names = []
@@ -2477,7 +2477,7 @@ class ArrayAnalysis(object):
         s = 0
         for size in sizes:
             n = equiv_set.get_equiv_const(size)
-            if n == None:
+            if n is None:
                 return None
             else:
                 s += n

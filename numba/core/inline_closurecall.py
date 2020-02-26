@@ -409,7 +409,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     debug_print("After merge in")
     _debug_dump(func_ir)
 
-    if work_list != None:
+    if work_list is not None:
         for block in new_blocks:
             work_list.append(block)
     return callee_blocks, var_dict
@@ -1037,7 +1037,7 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
         self.crnt_block = block
         self.new_body = guard(_inline_const_arraycall, block, func_ir,
                               self.typingctx, typemap, calltypes)
-        return self.new_body != None
+        return self.new_body is not None
 
     def apply(self):
         self.crnt_block.body = self.new_body
