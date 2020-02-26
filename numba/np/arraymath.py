@@ -681,7 +681,8 @@ def np_iscomplex(x):
 def np_isreal(x):
     if type_can_asarray(x):
         def impl(x):
-            return np.imag(x) == 0
+            ax = np.asarray(x)
+            return ax.imag == 0
     else:
         def impl(x):
             return False
@@ -3251,7 +3252,7 @@ def np_real(a):
 @overload(np.imag)
 def np_imag(a):
     def np_imag_impl(a):
-        return np.asarray(a).imag
+        return a.imag
 
     return np_imag_impl
 
