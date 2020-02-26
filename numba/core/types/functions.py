@@ -272,7 +272,7 @@ class Dispatcher(WeakType, Callable, Dummy):
         template, pysig, args, kws = self.dispatcher.get_call_template(args, kws)
         sig = template(context).apply(args, kws)
         if sig:
-            sig.pysig = pysig
+            sig = sig.replace(pysig=pysig)
             return sig
 
     def get_call_signatures(self):

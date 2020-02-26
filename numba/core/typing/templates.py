@@ -28,15 +28,31 @@ class Signature(object):
 
     # XXX Perhaps the signature should be a BoundArguments, instead
     # of separate args and pysig...
-    __slots__ = 'return_type', 'args', 'recvr', 'pysig'
+    __slots__ = '_return_type', '_args', '_recvr', '_pysig'
 
     def __init__(self, return_type, args, recvr, pysig=None):
         if isinstance(args, list):
             args = tuple(args)
-        self.return_type = return_type
-        self.args = args
-        self.recvr = recvr
-        self.pysig = pysig
+        self._return_type = return_type
+        self._args = args
+        self._recvr = recvr
+        self._pysig = pysig
+
+    @property
+    def return_type(self):
+        return self._return_type
+
+    @property
+    def args(self):
+        return self._args
+
+    @property
+    def recvr(self):
+        return self._recvr
+
+    @property
+    def pysig(self):
+        return self._pysig
 
     def replace(self, **kwargs):
         """Copy and replace the given attributes provided as keyword arguments.
@@ -53,13 +69,13 @@ class Signature(object):
         """
         Needed because of __slots__.
         """
-        return self.return_type, self.args, self.recvr, self.pysig
+        return self._return_type, self._args, self._recvr, self._pysig
 
     def __setstate__(self, state):
         """
         Needed because of __slots__.
         """
-        self.return_type, self.args, self.recvr, self.pysig = state
+        self._return_type, self._args, self._recvr, self._pysig = state
 
     def __hash__(self):
         return hash((self.args, self.return_type))
@@ -96,9 +112,11 @@ class Signature(object):
 
         # Adjust the python signature
         params = list(self.pysig.parameters.values())[1:]
-        sig.pysig = utils.pySignature(
-            parameters=params,
-            return_annotation=self.pysig.return_annotation,
+        sig = sig.replace(
+            pysig=utils.pySignature(
+                parameters=params,
+                return_annotation=self.pysig.return_annotation,
+            ),
         )
         return sig
 
@@ -314,14 +332,14 @@ class CallableTemplate(FunctionTemplate):
                                 "got %r" % (sig,))
             sig = signature(sig, *bound.args)
         if self.recvr is not None:
-            sig.recvr = self.recvr
+            sig = sig.replace(recvr=self.recvr)
         # Hack any omitted parameters out of the typer's pysig,
         # as lowering expects an exact match between formal signature
         # and actual args.
         if len(bound.args) < len(pysig.parameters):
             parameters = list(pysig.parameters.values())[:len(bound.args)]
             pysig = pysig.replace(parameters=parameters)
-        sig.pysig = pysig
+        sig = sig.replace(pysig=pysig)
         cases = [sig]
         return self._select(cases, bound.args, bound.kwargs)
 
@@ -645,7 +663,7 @@ class _IntrinsicTemplate(AbstractTemplate):
             pysig = utils.pysignature(self._definition_func)
             # omit context argument from user function
             parameters = list(pysig.parameters.values())[1:]
-            sig.pysig = pysig.replace(parameters=parameters)
+            sig = sig.replace(pysig=pysig.replace(parameters=parameters))
             self._impl_cache[cache_key] = sig
             self._overload_cache[sig.args] = imp
             # register the lowering
@@ -863,7 +881,7 @@ def bound_function(template_key):
                 def generic(_, args, kws):
                     sig = method_resolver(self, ty, args, kws)
                     if sig is not None and sig.recvr is None:
-                        sig.recvr = ty
+                        sig = sig.replace(recvr=ty)
                     return sig
 
             return types.BoundFunction(MethodTemplate, ty)
