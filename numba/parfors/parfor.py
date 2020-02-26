@@ -630,15 +630,14 @@ class Parfor(ir.Expr, ir.Stmt):
                 raise ValueError(msg)
             if isinstance(ty, types.BaseTuple):
                 if ty.count > config.PARFOR_MAX_TUPLE_SIZE:
-                    msg = ("Use of a tuple (%s) in a parallel region having "
-                           "%d elements.  Since Generalized Universal Functions "
-                           "(GUFUNCs) back parallel regions and GUFUNCs don't "
-                           "support tuples, Numba will unpack tuples up to a "
-                           "certain size threshold in order to pass them to "
-                           "the GUFUNC.  This threshold is currently "
-                           "configured to be %d. This threshold can be "
-                           "changed by setting the Numba environment variable "
-                           "NUMBA_PARFOR_MAX_TUPLE_SIZE.")
+                    msg = ("Use of a tuple (%s) of length %d in a parallel region "
+                           "exceeds the maximum supported tuple size.  Since "
+                           "Generalized Universal Functions back parallel regions "
+                           "and those do not support tuples, tuples passed to "
+                           "parallel regions are unpacked if their size is below "
+                           "a certain threshold, currently configured to be %d. "
+                           "This threshold can be modified using the Numba "
+                           "environment variable NUMBA_PARFOR_MAX_TUPLE_SIZE.")
                     raise errors.UnsupportedParforsError(msg %
                               (p, ty.count, config.PARFOR_MAX_TUPLE_SIZE),
                               self.loc)
@@ -1532,6 +1531,165 @@ class ParforPassStates:
         ir_utils._max_label = max(func_ir.blocks.keys())
         self.flags = flags
 
+    def run(self):
+        """run parfor conversion pass: replace Numpy calls
+        with Parfors when possible and optimize the IR."""
+        # run array analysis, a pre-requisite for parfor translation
+        remove_dels(self.func_ir.blocks)
+        self.array_analysis.run(self.func_ir.blocks)
+        # run stencil translation to parfor
+        if self.options.stencil:
+            stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
+                                            self.array_analysis, self.typingctx, self.flags)
+            stencil_pass.run()
+        if self.options.setitem:
+            self._convert_setitem(self.func_ir.blocks)
+        if self.options.numpy:
+            self._convert_numpy(self.func_ir.blocks)
+        if self.options.reduction:
+            self._convert_reduce(self.func_ir.blocks)
+        if self.options.prange:
+           self._convert_loop(self.func_ir.blocks)
+
+        # setup diagnostics now parfors are found
+        self.diagnostics.setup(self.func_ir, self.options.fusion)
+
+        dprint_func_ir(self.func_ir, "after parfor pass")
+
+        # simplify CFG of parfor body loops since nested parfors with extra
+        # jumps can be created with prange conversion
+        simplify_parfor_body_CFG(self.func_ir.blocks)
+        # simplify before fusion
+        simplify(self.func_ir, self.typemap, self.calltypes)
+        # need two rounds of copy propagation to enable fusion of long sequences
+        # of parfors like test_fuse_argmin (some PYTHONHASHSEED values since
+        # apply_copies_parfor depends on set order for creating dummy assigns)
+        simplify(self.func_ir, self.typemap, self.calltypes)
+
+        if self.options.fusion:
+            self.func_ir._definitions = build_definitions(self.func_ir.blocks)
+            self.array_analysis.equiv_sets = dict()
+            self.array_analysis.run(self.func_ir.blocks)
+            # reorder statements to maximize fusion
+            # push non-parfors down
+            maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap,
+                                                            up_direction=False)
+            dprint_func_ir(self.func_ir, "after maximize fusion down")
+            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            # push non-parfors up
+            maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
+            dprint_func_ir(self.func_ir, "after maximize fusion up")
+            # try fuse again after maximize
+            self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            dprint_func_ir(self.func_ir, "after fusion")
+        # simplify again
+        simplify(self.func_ir, self.typemap, self.calltypes)
+        # push function call variables inside parfors so gufunc function
+        # wouldn't need function variables as argument
+        push_call_vars(self.func_ir.blocks, {}, {}, self.typemap)
+        dprint_func_ir(self.func_ir, "after push call vars")
+        # simplify again
+        simplify(self.func_ir, self.typemap, self.calltypes)
+        dprint_func_ir(self.func_ir, "after optimization")
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("variable types: ", sorted(self.typemap.items()))
+            print("call types: ", self.calltypes)
+
+        if config.DEBUG_ARRAY_OPT >= 3:
+            for(block_label, block) in self.func_ir.blocks.items():
+                new_block = []
+                scope = block.scope
+                for stmt in block.body:
+                    new_block.append(stmt)
+                    if isinstance(stmt, ir.Assign):
+                        loc = stmt.loc
+                        lhs = stmt.target
+                        rhs = stmt.value
+                        lhs_typ = self.typemap[lhs.name]
+                        print("Adding print for assignment to ", lhs.name, lhs_typ, type(lhs_typ))
+                        if lhs_typ in types.number_domain or isinstance(lhs_typ, types.Literal):
+                            str_var = ir.Var(scope, mk_unique_var("str_var"), loc)
+                            self.typemap[str_var.name] = types.StringLiteral(lhs.name)
+                            lhs_const = ir.Const(lhs.name, loc)
+                            str_assign = ir.Assign(lhs_const, str_var, loc)
+                            new_block.append(str_assign)
+                            str_print = ir.Print([str_var], None, loc)
+                            self.calltypes[str_print] = signature(types.none, self.typemap[str_var.name])
+                            new_block.append(str_print)
+                            ir_print = ir.Print([lhs], None, loc)
+                            self.calltypes[ir_print] = signature(types.none, lhs_typ)
+                            new_block.append(ir_print)
+                block.body = new_block
+
+        # run post processor again to generate Del nodes
+        post_proc = postproc.PostProcessor(self.func_ir)
+        post_proc.run()
+        if self.func_ir.is_generator:
+            fix_generator_types(self.func_ir.generator_info, self.return_type,
+                                self.typemap)
+        if sequential_parfor_lowering:
+            lower_parfor_sequential(
+                self.typingctx, self.func_ir, self.typemap, self.calltypes)
+        else:
+            # prepare for parallel lowering
+            # add parfor params to parfors here since lowering is destructive
+            # changing the IR after this is not allowed
+            parfor_ids, parfors = get_parfor_params(self.func_ir.blocks,
+                                                    self.options.fusion,
+                                                    self.nested_fusion_info)
+
+            # Validate reduction in parfors.
+            for p in parfors:
+                get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
+
+            # Validate parameters:
+            for p in parfors:
+                p.validate_params(self.typemap)
+
+            if config.DEBUG_ARRAY_OPT_STATS:
+                name = self.func_ir.func_id.func_qualname
+                n_parfors = len(parfor_ids)
+                if n_parfors > 0:
+                    after_fusion = ("After fusion" if self.options.fusion
+                                    else "With fusion disabled")
+                    print(('{}, function {} has '
+                           '{} parallel for-loop(s) #{}.').format(
+                           after_fusion, name, n_parfors, parfor_ids))
+                else:
+                    print('Function {} has no Parfor.'.format(name))
+
+        return
+
+    def _convert_numpy(self, blocks):
+        """
+        Convert supported Numpy functions, as well as arrayexpr nodes, to
+        parfor nodes.
+        """
+        topo_order = find_topo_order(blocks)
+        # variables available in the program so far (used for finding map
+        # functions in array_expr lowering)
+        avail_vars = []
+        for label in topo_order:
+            block = blocks[label]
+            new_body = []
+            equiv_set = self.array_analysis.get_equiv_set(label)
+            for instr in block.body:
+                if isinstance(instr, ir.Assign):
+                    expr = instr.value
+                    lhs = instr.target
+                    if self._is_C_order(lhs.name):
+                        # only translate C order since we can't allocate F
+                        if guard(self._is_supported_npycall, expr):
+                            instr = self._numpy_to_parfor(equiv_set, lhs, expr)
+                            if isinstance(instr, tuple):
+                                pre_stmts, instr = instr
+                                new_body.extend(pre_stmts)
+                        elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
+                            instr = self._arrayexpr_to_parfor(
+                                equiv_set, lhs, expr, avail_vars)
+                    avail_vars.append(lhs.name)
+                new_body.append(instr)
+            block.body = new_body
 
 class ConvertSetItemPass:
     """Parfor subpass to convert setitem on Arrays
