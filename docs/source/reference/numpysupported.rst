@@ -128,7 +128,7 @@ It is also possible to use local or global tuples together with ``literal_unroll
     ... def get_field_sum(rec):
     ...     out = 0
     ...     for f in literal_unroll(fields_gl):
-    ...        out += arr[f]
+    ...        out += rec[f]
     ...     return out
     ...
     >>> get_field_sum(arr[0])

@@ -47,29 +47,32 @@ class RewriteConstGetitems(Rewrite):
 
 
 @register_rewrite('after-inference')
-class RewriteLiteralGetitems(Rewrite):
+class RewriteStringLiteralGetitems(Rewrite):
     """
     Rewrite IR expressions of the kind `getitem(value=arr, index=$XX)`
-    where `$XX` is a Literal value as
+    where `$XX` is a StringLiteral value as
     `static_getitem(value=arr, index=<literal value>)`.
     """
 
     def match(self, func_ir, block, typemap, calltypes):
+        """
+        Detect all getitem expressions and find which ones have
+        string literal indexes
+        """
         self.getitems = getitems = {}
         self.block = block
-        # Detect all getitem expressions and find which ones can be
-        # rewritten
         for expr in block.find_exprs(op='getitem'):
             if expr.op == 'getitem':
-                if isinstance(typemap[expr.index.name], types.StringLiteral):
-                    literal_value = typemap[expr.index.name].literal_value
-                    getitems[expr] = (expr.index, literal_value)
+                index_ty = typemap[expr.index.name]
+                if isinstance(index_ty, types.StringLiteral):
+                    getitems[expr] = (expr.index, index_ty.literal_value)
 
         return len(getitems) > 0
 
     def apply(self):
         """
-        Rewrite all matching getitems as static_getitems.
+        Rewrite all matching getitems as static_getitems where the index
+        is the literal value of the string.
         """
         new_block = self.block.copy()
         new_block.clear()

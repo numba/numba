@@ -17,7 +17,7 @@ from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
                                      NoPythonBackend, PartialTypeInference)
 from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
 
-x_global = (10, 11)
+_X_GLOBAL = (10, 11)
 
 
 class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):
@@ -1655,7 +1655,7 @@ class TestMore(TestCase):
         @njit
         def foo():
             out = 0
-            for i in literal_unroll(x_global):
+            for i in literal_unroll(_X_GLOBAL):
                 out += i
             return out
 
