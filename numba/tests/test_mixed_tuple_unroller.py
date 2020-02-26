@@ -1693,6 +1693,7 @@ class TestMore(TestCase):
 
         self.assertEqual(foo(), foo.py_func())
 
+
 def capture(real_pass):
     """ Returns a compiler pass that captures the mutation state reported
     by the pass used in the argument"""
