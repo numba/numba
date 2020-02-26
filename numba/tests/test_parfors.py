@@ -1481,7 +1481,7 @@ class TestParfors(TestParforsBase):
     @skip_parfors_unsupported
     def test_reshape_with_too_many_neg_one(self):
         # issue3314
-        with self.assertRaises(ValueError) as raised:
+        with self.assertRaises(errors.RewriteUnsupportedError) as raised:
             @njit(parallel=True)
             def test_impl(a, b):
                 rm = np.zeros((b, b, 1), dtype=np.float64)
