@@ -17,6 +17,8 @@ from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
                                      NoPythonBackend, PartialTypeInference)
 from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
 
+_X_GLOBAL = (10, 11)
+
 
 class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):
 
@@ -1647,6 +1649,49 @@ class TestMore(TestCase):
             lines,
             ['a 1', 'b 2', '3 c', '4 d'],
         )
+
+    def test_unroll_global_tuple(self):
+
+        @njit
+        def foo():
+            out = 0
+            for i in literal_unroll(_X_GLOBAL):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_freevar_tuple(self):
+        x = (10, 11)
+
+        @njit
+        def foo():
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_function_tuple(self):
+        @njit
+        def a():
+            return 1
+
+        @njit
+        def b():
+            return 2
+
+        x = (a, b)
+
+        @njit
+        def foo():
+            out = 0
+            for f in literal_unroll(x):
+                out += f()
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
 
 
 def capture(real_pass):
