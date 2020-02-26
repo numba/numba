@@ -355,6 +355,9 @@ The following top-level functions are supported:
 * :func:`numpy.fill_diagonal`
 * :func:`numpy.flatten` (no order argument; 'C' order only)
 * :func:`numpy.flatnonzero`
+* :func:`numpy.flip` (no axis argument)
+* :func:`numpy.fliplr`
+* :func:`numpy.flipud`
 * :func:`numpy.frombuffer` (only the 2 first arguments)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
