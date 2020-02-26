@@ -537,6 +537,14 @@ class _DispatcherBase(_dispatcher.Dispatcher):
     def inspect_disasm_cfg(self, signature=None):
         """
         For inspecting the CFG of the disassembly of the function.
+
+        Requires python package: r2pipe
+        Requires radare2 binary on $PATH.
+        Notebook rendering requires python package: graphviz
+
+        signature : tuple of Numba types, optional
+            Print/return the disassembly CFG for only the given signatures.
+            If None, the IR is printed for all available signatures.
         """
         if signature is not None:
             cres = self.overloads[signature]
