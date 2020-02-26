@@ -1408,7 +1408,7 @@ def choice(a, size=None, replace=True):
                 return out
             else:
                 # Note we have to construct the array to compute out.size
-                # (`size` can be an arbitrary int or tuple of ints)                
+                # (`size` can be an arbitrary int or tuple of ints)
                 out = np.empty(size, dtype)
                 if out.size > n:
                     raise ValueError("Cannot take a larger sample than "
