@@ -26,6 +26,7 @@ from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
 from numba.core.errors import RequireLiteralValue, TypingError
+import operator
 
 
 def _check_blas():
@@ -665,37 +666,46 @@ def get_isnan(dtype):
         return _trivial_isnan
 
 
-@overload(np.iscomplex)
-def np_iscomplex(x):
+@register_jitable
+def _impl_iscomplex_isreal_arr(fn, x):
+    ax = np.asarray(x) # NumPy uses asanyarray here!
+    return fn(ax.imag, 0)
+
+
+@register_jitable
+def np_iscomplex_isreal(x, operator_fn, opt_ret):
+
     if type_can_asarray(x):
+        return lambda x: _impl_iscomplex_isreal_arr(operator_fn, x)
+    elif isinstance(x, types.Optional):
         def impl(x):
-            ax = np.asarray(x) # NumPy uses asanyarray here!
-            return ax.imag != 0
+            if x is None:
+                return opt_ret
+            return _impl_iscomplex_isreal_arr(operator_fn, x)
     else:
         def impl(x):
             return False
     return impl
+
+
+@overload(np.iscomplex)
+def np_iscomplex(x):
+    return np_iscomplex_isreal(x, operator.ne, False)
 
 
 @overload(np.isreal)
 def np_isreal(x):
-    if type_can_asarray(x):
-        def impl(x):
-            ax = np.asarray(x)
-            return ax.imag == 0
-    else:
-        def impl(x):
-            return False
-    return impl
+    return np_iscomplex_isreal(x, operator.eq, True)
 
 
 @overload(np.iscomplexobj)
 def iscomplexobj(x):
     # Implementation based on NumPy
     # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
-    dt = determine_dtype(x)
+    val = x.key if isinstance(x, types.Optional) else x
+    dt = determine_dtype(val)
     iscmplx = np.issubdtype(dt, np.complexfloating)
-    return lambda x: iscmplx
+    return lambda x: False if x is None else iscmplx
 
 
 @overload(np.isrealobj)
