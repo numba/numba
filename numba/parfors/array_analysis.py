@@ -1132,14 +1132,17 @@ class ArrayAnalysis(object):
                 print("Processing block:", label)
             block = blocks[label]
             scope = block.scope
-            analysis_result = self._per_block_analysis(
+            pending_transforms = self._determine_transform(
                 cfg, block, label, scope, init_equiv_set
             )
-            self._per_block_transform(block, analysis_result)
+            self._combine_to_new_block(block, pending_transforms)
 
-    def _per_block_transform(self, block, analysis_result):
+    def _combine_to_new_block(self, block, pending_transforms):
+        """Combine the new instructions from previous pass into a new block
+        body.
+        """
         new_body = []
-        for inst, pre, post in analysis_result:
+        for inst, pre, post in pending_transforms:
             for instr in pre:
                 new_body.append(instr)
             new_body.append(inst)
@@ -1147,7 +1150,9 @@ class ArrayAnalysis(object):
                 new_body.append(instr)
         block.body = new_body
 
-    def _per_block_analysis(self, cfg, block, label, scope, init_equiv_set):
+    def _determine_transform(self, cfg, block, label, scope, init_equiv_set):
+        """Determine the transformation for each instruction in the block
+        """
         equiv_set = None
         # equiv_set is the intersection of predecessors
         preds = cfg.predecessors(label)
@@ -1199,7 +1204,7 @@ class ArrayAnalysis(object):
 
         # Go through instructions in a block, and insert pre/post
         # instructions as we analyze them.
-        analyze_result = []
+        pending_transforms = []
         for inst in block.body:
             redefined = set()
             if isinstance(inst, ir.StaticSetItem):
@@ -1216,8 +1221,8 @@ class ArrayAnalysis(object):
             if len(redefined) > 0:
                 self.remove_redefineds(redefined)
 
-            analyze_result.append((inst, pre, post))
-        return analyze_result
+            pending_transforms.append((inst, pre, post))
+        return pending_transforms
 
     def dump(self):
         """dump per-block equivalence sets for debugging purposes.
