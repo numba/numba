@@ -56,11 +56,11 @@ class TestMacro(SerialMixin, unittest.TestCase):
 
     def test_global_constants(self):
         udt = cuda.jit((float32[:],))(udt_global_constants)
-        udt(self.getarg())
+        udt[1, 1](self.getarg())
 
     def test_global_build_tuple(self):
         udt = cuda.jit((float32[:, :],))(udt_global_build_tuple)
-        udt(self.getarg2())
+        udt[1, 1](self.getarg2())
 
     @skip_on_cudasim('Simulator does not perform macro expansion')
     def test_global_build_list(self):
@@ -72,7 +72,7 @@ class TestMacro(SerialMixin, unittest.TestCase):
 
     def test_global_constant_tuple(self):
         udt = cuda.jit((float32[:, :],))(udt_global_constant_tuple)
-        udt(self.getarg2())
+        udt[1, 1](self.getarg2())
 
     @skip_on_cudasim("Can't check for constants in simulator")
     def test_invalid_1(self):
