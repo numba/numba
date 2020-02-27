@@ -1049,6 +1049,8 @@ def impl_extend(l, iterable):
             ty = iterable.item_type
         elif hasattr(iterable, "yield_type"):  # iterators and generators
             ty = iterable.yield_type
+        elif isinstance(iterable, types.UnicodeType):
+            ty = iterable
         else:
             raise TypingError("unable to extend list, iterable is missing "
                               "either *dtype*, *item_type* or *yield_type*.")
