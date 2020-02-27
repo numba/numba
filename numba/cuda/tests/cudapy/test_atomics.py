@@ -1,9 +1,9 @@
 import random
 import numpy as np
 
-from numba import config
 from numba import cuda, uint32, uint64, float32, float64
 from numba.cuda.testing import unittest, SerialMixin
+from numba.core import config
 
 
 def cc_X_or_above(major, minor):

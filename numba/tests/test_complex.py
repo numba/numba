@@ -3,11 +3,11 @@ import itertools
 import math
 import sys
 
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated, Flags, utils
-from numba import types
-from .support import TestCase, tag
+from numba.core.compiler import compile_isolated, Flags, utils
+from numba.core import types
+from numba.tests.support import TestCase, tag
 from .complex_usecases import *
+import unittest
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")

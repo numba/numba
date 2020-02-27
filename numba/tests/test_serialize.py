@@ -4,11 +4,11 @@ import pickle
 import subprocess
 import sys
 
-from numba import unittest_support as unittest
-from numba.errors import TypingError
-from numba.targets import registry
-from .support import TestCase, tag
+from numba.core.errors import TypingError
+from numba.tests.support import TestCase, tag
 from .serialize_usecases import *
+import unittest
+from numba.core import registry
 
 
 class TestDispatcherPickling(TestCase):

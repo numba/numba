@@ -1,9 +1,11 @@
 import sys
 
 import numpy as np
-from numba import cuda, numpy_support, types
-from numba import unittest_support as unittest
+from numba import cuda
+from numba.core import types
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
+import unittest
+from numba.np import numpy_support
 
 
 def set_a(ary, i, v):

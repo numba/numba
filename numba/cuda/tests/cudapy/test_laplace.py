@@ -1,7 +1,8 @@
 import numpy as np
 import time
-from numba import cuda, config, float64, void
+from numba import cuda, float64, void
 from numba.cuda.testing import unittest, SerialMixin
+from numba.core import config
 
 # NOTE: CUDA kernel does not return any value
 

@@ -11,14 +11,16 @@ import warnings
 
 import numpy as np
 
-from numba import njit, jitclass
-from numba import int32, int64, float32, float64, types
-from numba import dictobject, typeof
-from numba.typed import Dict
-from numba.typedobjectutils import _sentry_safe_cast
-from numba.errors import TypingError
-from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
-                      forbid_codegen)
+from numba import njit
+from numba import int32, int64, float32, float64
+from numba import typeof
+from numba.typed import Dict, dictobject
+from numba.typed.typedobjectutils import _sentry_safe_cast
+from numba.core.errors import TypingError
+from numba.core import types
+from numba.tests.support import (TestCase, MemoryLeakMixin, unittest,
+                                 override_config, forbid_codegen)
+from numba.experimental import jitclass
 
 
 class TestDictObject(MemoryLeakMixin, TestCase):

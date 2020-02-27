@@ -1,10 +1,10 @@
 from io import StringIO
 import numpy as np
 
-from numba import types
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from .support import TestCase, tag, MemoryLeakMixin
+from numba.core import types
+from numba.core.compiler import compile_isolated, Flags
+from numba.tests.support import TestCase, tag, MemoryLeakMixin
+import unittest
 
 
 looplift_flags = Flags()

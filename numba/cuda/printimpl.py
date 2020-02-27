@@ -2,9 +2,9 @@ from functools import singledispatch
 
 from llvmlite.llvmpy.core import Type, Constant
 
-from numba import types, typing, cgutils
-from numba.targets.imputils import Registry
-from . import nvvmutils
+from numba.core import types, typing, cgutils
+from numba.core.imputils import Registry
+from numba.cuda import nvvmutils
 
 registry = Registry()
 lower = registry.lower

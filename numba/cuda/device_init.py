@@ -8,7 +8,7 @@ from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
                     threadfence, selp, popc, brev, clz, ffs, fma)
 from .cudadrv.error import CudaSupportError
 from .cudadrv import nvvm
-from . import initialize
+from numba.cuda import initialize
 from .errors import KernelRuntimeError
 
 from .decorators import jit, autojit, declare_device

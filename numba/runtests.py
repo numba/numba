@@ -1,4 +1,4 @@
-from numba._runtests import _main, main
+from numba.testing._runtests import _main, main
 
 
 if __name__ == '__main__':

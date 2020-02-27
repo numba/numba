@@ -4,9 +4,9 @@ memory transfers before & after the kernel call.
 """
 import abc
 
-from numba.utils import add_metaclass
+from numba.core.utils import add_metaclass
 
-from numba.typing.typeof import typeof, Purpose
+from numba.core.typing.typeof import typeof, Purpose
 
 
 @add_metaclass(abc.ABCMeta)

@@ -5,9 +5,9 @@ Unit-tests for `typedobjectutils.py`
 import warnings
 
 
-from numba import types
-from .support import TestCase
-from numba.typedobjectutils import _sentry_safe_cast
+from numba.core import types
+from numba.tests.support import TestCase
+from numba.typed.typedobjectutils import _sentry_safe_cast
 
 
 class TestTypedObjectUtils(TestCase):

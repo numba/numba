@@ -32,6 +32,7 @@ Supported Platforms
   - macOS: x86_64
 
 * (Optional) Accelerators and GPUs:
+
   * NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux, Windows,
     macOS (< 10.14)
   * AMD GPUs via ROCm driver on Linux

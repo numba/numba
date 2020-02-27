@@ -10,9 +10,11 @@ import weakref
 from ctypes import c_void_p
 import numpy as np
 from numba.roc.hsadrv import driver as _driver
-from . import devices
-from numba import dummyarray, types, numpy_support
+from numba.roc.hsadrv import devices
+from numba.core import types
 from .error import HsaContextMismatchError
+from numba.misc import dummyarray
+from numba.np import numpy_support
 
 try:
     long

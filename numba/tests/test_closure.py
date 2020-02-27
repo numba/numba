@@ -2,10 +2,10 @@
 import numpy as np
 import numpy
 
-import numba.unittest_support as unittest
+import unittest
 from numba import njit, jit, testing
-from numba.errors import TypingError, UnsupportedError
-from .support import TestCase
+from numba.core.errors import TypingError, UnsupportedError
+from numba.tests.support import TestCase
 
 
 class TestClosure(TestCase):

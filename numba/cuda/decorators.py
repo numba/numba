@@ -1,5 +1,5 @@
-from numba import config, sigutils, types
 from warnings import warn
+from numba.core import types, config, sigutils
 from .compiler import (compile_kernel, compile_device, declare_device_function,
                        AutoJitCUDAKernel, compile_device_template)
 from .simulator.kernel import FakeCUDAKernel
@@ -51,7 +51,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
 
-    if 'boundscheck' in kws:
+    if kws.get('boundscheck') == True:
         raise NotImplementedError("bounds checking is not supported for CUDA")
 
     fastmath = kws.get('fastmath', False)

@@ -1,9 +1,9 @@
 import ctypes
 import warnings
 
-from ... import utils
+from numba.core import utils
 
-from . import enums
+from numba.roc.hsadrv import enums
 from .error import HsaApiError, HsaWarning
 
 _PTR = ctypes.POINTER

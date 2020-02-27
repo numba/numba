@@ -11,38 +11,45 @@ from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 
-from . import config, errors, _runtests as runtests, types
+from numba.core import config
+from numba.testing import _runtests as runtests
+from numba.core import types, errors
 
 # Re-export typeof
-from .special import (
+from numba.misc.special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
     literally, literal_unroll
 )
 
 # Re-export error classes
-from .errors import *
+from numba.core.errors import *
+
+# Re-export types itself
+import numba.core.types as types
 
 # Re-export all type names
-from .types import *
+from numba.core.types import *
 
 # Re-export decorators
-from .decorators import (cfunc, generated_jit, jit, njit, stencil, jit_module)
+from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
+                                   jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
-from .npyufunc import vectorize, guvectorize, threading_layer
+from numba.np.ufunc import (vectorize, guvectorize, threading_layer,
+                            get_num_threads, set_num_threads)
 
 # Re-export Numpy helpers
-from .numpy_support import carray, farray, from_dtype
+from numba.np.numpy_support import carray, farray, from_dtype
 
-# Re-export jitclass
-from .jitclass import jitclass
+# Re-export experimental
+from numba import experimental
 
 # Initialize withcontexts
-import numba.withcontexts
-from numba.withcontexts import objmode_context as objmode
+import numba.core.withcontexts
+from numba.core.withcontexts import objmode_context as objmode
 
 # Enable bytes/unicode array support
-import numba.charseq
+import numba.cpython.charseq
 
 # Keep this for backward compatibility.
 test = runtests.main
@@ -53,7 +60,7 @@ __all__ = """
     from_dtype
     guvectorize
     jit
-    jitclass
+    experimental
     njit
     stencil
     jit_module
@@ -62,10 +69,11 @@ __all__ = """
     gdb
     gdb_breakpoint
     gdb_init
-    stencil
     vectorize
     objmode
     literal_unroll
+    get_num_threads
+    set_num_threads
     """.split() + types.__all__ + errors.__all__
 
 
@@ -110,8 +118,8 @@ def _ensure_critical_deps():
     """
     Make sure Python, NumPy and SciPy have supported versions.
     """
-    from .numpy_support import numpy_version
-    from .utils import PYVERSION
+    from numba.np.numpy_support import numpy_version
+    from numba.core.utils import PYVERSION
 
     if PYVERSION < (3, 6):
         raise ImportError("Numba needs Python 3.6 or greater")

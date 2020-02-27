@@ -2,17 +2,22 @@ import numpy as np
 
 from numba.tests.support import (TestCase, MemoryLeakMixin,
                                  skip_parfors_unsupported)
-from numba import njit, types, typed, ir, errors, literal_unroll, prange
+from numba import njit, typed, literal_unroll, prange
+from numba.core import types, errors, ir
 from numba.testing import unittest
-from numba.extending import overload
-from numba.compiler_machinery import PassManager, register_pass, FunctionPass
-from numba.compiler import CompilerBase
-from numba.untyped_passes import (FixupArgs, TranslateByteCode, IRProcessing,
-                                  InlineClosureLikes, SimplifyCFG,
-                                  IterLoopCanonicalization, LiteralUnroll)
-from numba.typed_passes import (NopythonTypeInference, IRLegalization,
-                                NoPythonBackend, PartialTypeInference)
-from numba.ir_utils import (compute_cfg_from_blocks, flatten_labels)
+from numba.core.extending import overload
+from numba.core.compiler_machinery import (PassManager, register_pass,
+                                           FunctionPass, AnalysisPass)
+from numba.core.compiler import CompilerBase
+from numba.core.untyped_passes import (FixupArgs, TranslateByteCode,
+                                       IRProcessing, InlineClosureLikes,
+                                       SimplifyCFG, IterLoopCanonicalization,
+                                       LiteralUnroll, PreserveIR)
+from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
+                                     NoPythonBackend, PartialTypeInference)
+from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
+
+_X_GLOBAL = (10, 11)
 
 
 class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):
@@ -53,18 +58,6 @@ class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):
             self.check(foo, 'x')
 
         self.assertIn("non literal", str(e.exception))
-
-
-@register_pass(mutates_CFG=False, analysis_only=True)
-class PreserveIR(FunctionPass):
-    _name = "preserve_ir"
-
-    def __init__(self):
-        FunctionPass.__init__(self)
-
-    def run_pass(self, state):
-        state.metadata['func_ir'] = state.func_ir
-        return False
 
 
 @register_pass(mutates_CFG=False, analysis_only=False)
@@ -140,7 +133,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['func_ir']
+            func_ir = cres.metadata['preserved_ir']
             return func_ir, cres.fndesc
 
         ignore_loops_ir, ignore_loops_fndesc = \
@@ -198,7 +191,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
 
             self.assertEqual(foo(), foo.py_func())
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['func_ir']
+            func_ir = cres.metadata['preserved_ir']
             return func_ir, cres.fndesc
 
         ignore_loops_ir, ignore_loops_fndesc = \
@@ -322,7 +315,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['func_ir']
+            func_ir = cres.metadata['preserved_ir']
             return func_ir, cres.fndesc
 
         ignore_loops_ir, ignore_loops_fndesc = \
@@ -391,7 +384,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['func_ir']
+            func_ir = cres.metadata['preserved_ir']
             return func_ir, cres.fndesc
 
         ignore_loops_ir, ignore_loops_fndesc = \
@@ -436,7 +429,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['func_ir']
+            func_ir = cres.metadata['preserved_ir']
             return func_ir, cres.fndesc
 
         ignore_loops_ir, ignore_loops_fndesc = \
@@ -1657,12 +1650,55 @@ class TestMore(TestCase):
             ['a 1', 'b 2', '3 c', '4 d'],
         )
 
+    def test_unroll_global_tuple(self):
+
+        @njit
+        def foo():
+            out = 0
+            for i in literal_unroll(_X_GLOBAL):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_freevar_tuple(self):
+        x = (10, 11)
+
+        @njit
+        def foo():
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_function_tuple(self):
+        @njit
+        def a():
+            return 1
+
+        @njit
+        def b():
+            return 2
+
+        x = (a, b)
+
+        @njit
+        def foo():
+            out = 0
+            for f in literal_unroll(x):
+                out += f()
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
 
 def capture(real_pass):
     """ Returns a compiler pass that captures the mutation state reported
     by the pass used in the argument"""
     @register_pass(mutates_CFG=False, analysis_only=True)
-    class ResultCapturer(FunctionPass):
+    class ResultCapturer(AnalysisPass):
         _name = "capture_%s" % real_pass._name
         _real_pass = real_pass
 

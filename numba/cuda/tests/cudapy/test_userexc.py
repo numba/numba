@@ -1,5 +1,6 @@
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
-from numba import cuda, config
+from numba import cuda
+from numba.core import config
 
 
 class MyError(Exception):
@@ -7,7 +8,7 @@ class MyError(Exception):
 
 
 regex_pattern = (
-    r'In function [\'"]test_exc[\'"], file [\.\/\\\-a-zA-Z_0-9]+, line \d+'
+    r'In function [\'"]test_exc[\'"], file [\:\.\/\\\-a-zA-Z_0-9]+, line \d+'
 )
 
 

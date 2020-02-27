@@ -5,13 +5,11 @@ import random
 import threading
 import gc
 
-from numba import unittest_support as unittest
-from numba.errors import TypingError
-from numba import config
+from numba.core.errors import TypingError
 from numba import njit
-from numba import types
-from numba import utils
-from .support import MemoryLeakMixin, TestCase, tag
+from numba.core import types, utils, config
+from numba.tests.support import MemoryLeakMixin, TestCase, tag
+import unittest
 
 
 nrtjit = njit(_nrt=True, nogil=True)

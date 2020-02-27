@@ -22,16 +22,19 @@ import warnings
 from contextlib import contextmanager
 
 import numpy as np
+
+from numba import testing
+from numba.core import errors, typing, utils, config, cpu
+from numba.core.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
+import unittest
+from numba.core.runtime import rtsys
+from numba.np import numpy_support
+
+
 try:
     import scipy
 except ImportError:
     scipy = None
-
-from numba import config, errors, typing, utils, numpy_support, testing
-from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
-from numba.targets import cpu
-import numba.unittest_support as unittest
-from numba.runtime import rtsys
 
 
 enable_pyobj_flags = Flags()
@@ -49,7 +52,11 @@ nrt_flags.set("nrt")
 tag = testing.make_tag_decorator(['important', 'long_running'])
 
 _32bit = sys.maxsize <= 2 ** 32
-skip_parfors_unsupported = unittest.skipIf(_32bit, 'parfors not supported')
+is_parfors_unsupported = _32bit
+skip_parfors_unsupported = unittest.skipIf(
+    is_parfors_unsupported,
+    'parfors not supported',
+)
 skip_py38_or_later = unittest.skipIf(
     utils.PYVERSION >= (3, 8),
     "unsupported on py3.8 or later"
@@ -70,6 +77,8 @@ _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 
 _is_armv7l = platform.machine() == 'armv7l'
+
+disabled_test = unittest.skipIf(True, 'Test disabled')
 
 try:
     import scipy.linalg.cython_lapack
@@ -105,7 +114,7 @@ class CompilationCache(object):
         Compile the function or retrieve an already compiled result
         from the cache.
         """
-        from numba.targets.registry import cpu_target
+        from numba.core.registry import cpu_target
 
         cache_key = (func, args, return_type, flags)
         try:
@@ -702,7 +711,7 @@ def forbid_codegen():
 
     If code generation is invoked, a RuntimeError is raised.
     """
-    from numba.targets import codegen
+    from numba.core import codegen
     patchpoints = ['CodeLibrary._finalize_final_module']
 
     old = {}
