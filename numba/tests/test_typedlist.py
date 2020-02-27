@@ -106,7 +106,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         # index
         self.assertEqual(l.index(15), 4)
 
-    def test_list_extend_unicode_type(self):
+    def test_list_extend_refines_on_unicode_type(self):
         @njit
         def foo(string):
             l = List()
