@@ -95,6 +95,12 @@ class TestException(SerialMixin, unittest.TestCase):
     def test_raise_causing_warp_diverge_debug(self):
         """Test case for issue #2655 with debug mode.
         """
+        # This test case is a little sensitive to CFG layout, and currently
+        # passes. It is kept as it may signal changes in the CFG layout in
+        # future if it begins to fail again. See for background:
+        # https://github.com/numba/numba/pull/5144
+        # https://github.com/numba/numba/issues/4875
+        # https://github.com/numba/numba/issues/2655
         self.case_raise_causing_warp_diverge(with_debug_mode=True)
 
 
