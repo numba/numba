@@ -114,7 +114,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             return l
 
         for func in (foo, foo.py_func):
-            for string in ("abc", "\nabc\t"):
+            for string in ("a", "abc", "\nabc\t"):
                 self.assertEqual(list(func(string)), list(string))
 
     def test_unsigned_access(self):
