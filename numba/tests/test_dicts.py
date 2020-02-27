@@ -1,9 +1,7 @@
-from __future__ import print_function
-
 from numba import njit
-from numba.errors import TypingError
-import numba.unittest_support as unittest
-from .support import TestCase, force_pyobj_flags
+from numba.core.errors import TypingError
+import unittest
+from numba.tests.support import TestCase, force_pyobj_flags
 
 
 def build_map():
@@ -41,7 +39,7 @@ class TestCompiledDict(TestCase):
 
     def test_unsupported_dict_usage(self):
         # Test dict(dict())
-        from numba.typing.dictdecl import _message_dict_support
+        from numba.core.typing.dictdecl import _message_dict_support
 
         @njit
         def foo():

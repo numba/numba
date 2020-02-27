@@ -1,13 +1,11 @@
-from __future__ import print_function, absolute_import, division
-
 import time
 import ctypes
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba.tests.support import captured_stdout
 from numba import vectorize, guvectorize
+import unittest
 
 
 class TestParUfuncIssues(unittest.TestCase):

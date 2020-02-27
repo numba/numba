@@ -1,22 +1,25 @@
-from __future__ import print_function, absolute_import, division
-
 from itertools import product
+from textwrap import dedent
 
 import numpy as np
 
 from numba import njit
-from numba import int32, float32, types, prange
-from numba import jitclass, typeof
+from numba import int32, float32, prange
+from numba.core import types
+from numba import typeof
 from numba.typed import List, Dict
-from numba.utils import IS_PY3
-from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
-                      forbid_codegen)
+from numba.core.errors import TypingError
+from numba.tests.support import (TestCase, MemoryLeakMixin, override_config,
+                                 forbid_codegen, skip_parfors_unsupported)
 
-from numba.unsafe.refcount import get_refcount
+from numba.core.unsafe.refcount import get_refcount
+from numba.experimental import jitclass
 
-from .test_parfors import skip_unsupported as parfors_skip_unsupported
 
-skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
+# global typed-list for testing purposes
+global_typed_list = List.empty_list(int32)
+for i in (1, 2, 3):
+    global_typed_list.append(int32(i))
 
 
 def to_tl(l):
@@ -152,7 +155,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(L.pop(ui32_1), 2)
         self.assertEqual(L.pop(ui32_0), 123)
 
-    @parfors_skip_unsupported
+    @skip_parfors_unsupported
     def test_unsigned_prange(self):
         @njit(parallel=True)
         def foo(a):
@@ -459,6 +462,135 @@ class TestTypedList(MemoryLeakMixin, TestCase):
                 l = List()
                 self.assertEqual(type(l), list)
 
+    def test_catch_global_typed_list(self):
+        @njit()
+        def foo():
+            x = List()
+            for i in global_typed_list:
+                x.append(i)
+
+        expected_message = ("The use of a ListType[int32] type, assigned to "
+                            "variable 'global_typed_list' in globals, is not "
+                            "supported as globals are considered compile-time "
+                            "constants and there is no known way to compile "
+                            "a ListType[int32] type as a constant.")
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            expected_message,
+            str(raises.exception),
+        )
+
+
+class TestNoneType(MemoryLeakMixin, TestCase):
+
+    def test_append_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            return l
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_len_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            return len(l)
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_getitem_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            return l[0]
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_setitem_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            l[0] = None
+            return l
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_equals_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            m = List()
+            m.append(None)
+            return l == m, l != m, l < m, l <= m, l > m, l >= m
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_not_equals_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            m = List()
+            m.append(1)
+            return l == m, l != m, l < m, l <= m, l > m, l >= m
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_iter_none(self):
+        @njit
+        def impl():
+            l = List()
+            l.append(None)
+            l.append(None)
+            l.append(None)
+            count = 0
+            for i in l:
+                count += 1
+            return count
+
+        self.assertEqual(impl.py_func(), impl())
+
+    def test_none_typed_method_fails(self):
+        """ Test that unsupported operations on List[None] raise. """
+        def generate_function(line1, line2):
+            context = {}
+            exec(dedent("""
+                from numba.typed import List
+                def bar():
+                    lst = List()
+                    {}
+                    {}
+                """.format(line1, line2)), context)
+            return njit(context["bar"])
+        for line1, line2 in (
+                ("lst.append(None)", "lst.pop()"),
+                ("lst.append(None)", "lst.count(None)"),
+                ("lst.append(None)", "lst.index(None)"),
+                ("lst.append(None)", "lst.insert(0, None)"),
+                (""                , "lst.insert(0, None)"),
+                ("lst.append(None)", "lst.clear()"),
+                ("lst.append(None)", "lst.copy()"),
+                ("lst.append(None)", "lst.extend([None])"),
+                ("",                 "lst.extend([None])"),
+                ("lst.append(None)", "lst.remove(None)"),
+                ("lst.append(None)", "lst.reverse()"),
+                ("lst.append(None)", "None in lst"),
+        ):
+            with self.assertRaises(TypingError) as raises:
+                foo = generate_function(line1, line2)
+                foo()
+            self.assertIn(
+                "method support for List[None] is limited",
+                str(raises.exception),
+            )
+
 
 class TestAllocation(MemoryLeakMixin, TestCase):
 
@@ -704,7 +836,6 @@ class TestListInferred(TestCase):
 
 class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
-    @skip_py2
     def test_str_item(self):
         @njit
         def foo():
@@ -727,7 +858,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             l.append(str(i))
             self.assertEqual(l[i], str(i))
 
-    @skip_py2
     def test_str_item_refcount_replace(self):
         @njit
         def foo():
@@ -749,7 +879,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         self.assertEqual(ra, 1)
         self.assertEqual(rz, 2)
 
-    @skip_py2
     def test_dict_as_item_in_list(self):
         @njit
         def foo():
@@ -763,7 +892,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         c = foo()
         self.assertEqual(2, c)
 
-    @skip_py2
     def test_dict_as_item_in_list_multi_refcount(self):
         @njit
         def foo():
@@ -778,7 +906,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         c = foo()
         self.assertEqual(3, c)
 
-    @skip_py2
     def test_list_as_value_in_dict(self):
         @njit
         def foo():
@@ -792,7 +919,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         c = foo()
         self.assertEqual(2, c)
 
-    @skip_py2
     def test_list_as_item_in_list(self):
         nested_type = types.ListType(types.int32)
         @njit
@@ -807,7 +933,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         got = foo()
         self.assertEqual(expected, got)
 
-    @skip_py2
     def test_array_as_item_in_list(self):
         nested_type = types.Array(types.float64, 1, 'C')
         @njit
@@ -822,7 +947,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         # Need to compare the nested arrays
         self.assertTrue(np.all(expected[0] == got[0]))
 
-    @skip_py2
     def test_jitclass_as_item_in_list(self):
 
         spec = [
@@ -863,7 +987,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         [bag_equal(a, b) for a, b in zip(expected, got)]
 
-    @skip_py2
     def test_storage_model_mismatch(self):
         # https://github.com/numba/numba/issues/4520
         # check for storage model mismatch in refcount ops generation
@@ -880,7 +1003,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         for i, x in enumerate(ref):
             self.assertEqual(lst[i], ref[i])
 
-    @skip_py2
     def test_equals_on_list_with_dict_for_equal_lists(self):
         # https://github.com/numba/numba/issues/4879
         a, b = List(), Dict()
@@ -893,7 +1015,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         self.assertEqual(a, c)
 
-    @skip_py2
     def test_equals_on_list_with_dict_for_unequal_dicts(self):
         # https://github.com/numba/numba/issues/4879
         a, b = List(), Dict()
@@ -906,7 +1027,6 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
         self.assertNotEqual(a, c)
 
-    @skip_py2
     def test_equals_on_list_with_dict_for_unequal_lists(self):
         # https://github.com/numba/numba/issues/4879
         a, b = List(), Dict()
@@ -1021,3 +1141,98 @@ class TestListSort(MemoryLeakMixin, TestCase):
             list(foo(my_lists['nb'])),
             foo.py_func(my_lists['py']),
         )
+
+
+class TestImmutable(MemoryLeakMixin, TestCase):
+
+    def test_is_immutable(self):
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            return l._is_mutable()
+        self.assertTrue(foo())
+        self.assertTrue(foo.py_func())
+
+    def test_make_immutable_is_immutable(self):
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            l._make_immutable()
+            return l._is_mutable()
+        self.assertFalse(foo())
+        self.assertFalse(foo.py_func())
+
+    def test_length_still_works_when_immutable(self):
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            l._make_immutable()
+            return len(l),l._is_mutable()
+        length, mutable = foo()
+        self.assertEqual(length, 1)
+        self.assertFalse(mutable)
+
+    def test_getitem_still_works_when_immutable(self):
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            l._make_immutable()
+            return l[0], l._is_mutable()
+        test_item, mutable = foo()
+        self.assertEqual(test_item, 1)
+        self.assertFalse(mutable)
+
+    def test_append_fails(self):
+        self.disable_leak_check()
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            l._make_immutable()
+            l.append(1)
+
+        for func in (foo, foo.py_func):
+            with self.assertRaises(ValueError) as raises:
+                func()
+            self.assertIn(
+                'list is immutable',
+                str(raises.exception),
+            )
+
+    def test_mutation_fails(self):
+        """ Test that any attempt to mutate an immutable typed list fails. """
+        self.disable_leak_check()
+
+        def generate_function(line):
+            context = {}
+            exec(dedent("""
+                from numba.typed import List
+                def bar():
+                    lst = List()
+                    lst.append(1)
+                    lst._make_immutable()
+                    {}
+                """.format(line)), context)
+            return njit(context["bar"])
+        for line in ("lst.append(0)",
+                     "lst[0] = 0",
+                     "lst.pop()",
+                     "del lst[0]",
+                     "lst.extend((0,))",
+                     "lst.insert(0, 0)",
+                     "lst.clear()",
+                     "lst.reverse()",
+                     "lst.sort()",
+                     ):
+            foo = generate_function(line)
+            for func in (foo, foo.py_func):
+                with self.assertRaises(ValueError) as raises:
+                    func()
+                self.assertIn(
+                    "list is immutable",
+                    str(raises.exception),
+                )

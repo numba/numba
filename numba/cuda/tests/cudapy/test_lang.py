@@ -2,7 +2,6 @@
 Test basic language features
 
 """
-from __future__ import print_function, absolute_import, division
 
 import numpy as np
 from numba import cuda, float64

@@ -5,24 +5,22 @@ The tests here only check that the numba typing and codegen are working
 correctly.  Detailed testing of the underlying dictionary operations is done
 in test_dictimpl.py.
 """
-from __future__ import print_function, absolute_import, division
 
 import sys
 import warnings
 
 import numpy as np
 
-from numba import njit, utils, jitclass
-from numba import int32, int64, float32, float64, types
-from numba import dictobject, typeof
-from numba.typed import Dict
-from numba.typedobjectutils import _sentry_safe_cast
-from numba.utils import IS_PY3
-from numba.errors import TypingError
-from .support import (TestCase, MemoryLeakMixin, unittest, override_config,
-                      forbid_codegen)
-
-skip_py2 = unittest.skipUnless(IS_PY3, reason='not supported in py2')
+from numba import njit
+from numba import int32, int64, float32, float64
+from numba import typeof
+from numba.typed import Dict, dictobject
+from numba.typed.typedobjectutils import _sentry_safe_cast
+from numba.core.errors import TypingError
+from numba.core import types
+from numba.tests.support import (TestCase, MemoryLeakMixin, unittest,
+                                 override_config, forbid_codegen)
+from numba.experimental import jitclass
 
 
 class TestDictObject(MemoryLeakMixin, TestCase):
@@ -668,8 +666,7 @@ class TestDictObject(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
-    @unittest.skipUnless(utils.IS_PY3 and sys.maxsize > 2 ** 32,
-                         "Python 3, 64 bit test only")
+    @unittest.skipUnless(sys.maxsize > 2 ** 32, "64 bit test only")
     def test_007_collision_checks(self):
         # this checks collisions in real life for 64bit systems
         @njit
@@ -847,7 +844,6 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         print(foo())
 
-    @skip_py2
     def test_020_string_key(self):
         @njit
         def foo():
@@ -865,7 +861,6 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(items, [('a', 1.), ('b', 2.), ('c', 3.), ('d', 4)])
         self.assertEqual(da, 1.)
 
-    @skip_py2
     def test_021_long_str_key(self):
         @njit
         def foo():
@@ -1046,7 +1041,7 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
 
 
 class TestDictRefctTypes(MemoryLeakMixin, TestCase):
-    @skip_py2
+
     def test_str_key(self):
         @njit
         def foo():
@@ -1077,7 +1072,6 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
             self.assertEqual(d[str(i)], i)
         self.assertEqual(dict(d), expect)
 
-    @skip_py2
     def test_str_val(self):
         @njit
         def foo():
@@ -1107,7 +1101,6 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
             self.assertEqual(d[i], str(i))
         self.assertEqual(dict(d), expect)
 
-    @skip_py2
     def test_str_key_array_value(self):
         np.random.seed(123)
         d = Dict.empty(
@@ -1219,7 +1212,6 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
 
         self.assertEqual(ct, 100)
 
-    @skip_py2
     def test_delitem(self):
         d = Dict.empty(types.int64, types.unicode_type)
         d[1] = 'apple'
@@ -1250,7 +1242,6 @@ class TestDictRefctTypes(MemoryLeakMixin, TestCase):
         # Value is correctly updated
         self.assertPreciseEqual(d[1], np.arange(10, dtype=np.int64) + 100)
 
-    @skip_py2
     def test_storage_model_mismatch(self):
         # https://github.com/numba/numba/issues/4520
         # check for storage model mismatch in refcount ops generation

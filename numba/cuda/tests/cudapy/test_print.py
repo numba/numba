@@ -1,10 +1,8 @@
-from __future__ import print_function
-
 import numpy as np
 
 from numba import cuda
-from numba import unittest_support as unittest
 from numba.cuda.testing import captured_cuda_stdout, SerialMixin
+import unittest
 
 
 def cuhello():

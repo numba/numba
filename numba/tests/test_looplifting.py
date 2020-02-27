@@ -1,11 +1,10 @@
-from __future__ import print_function, division, absolute_import
-
+from io import StringIO
 import numpy as np
 
-from numba import types, utils
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from .support import TestCase, tag, MemoryLeakMixin
+from numba.core import types
+from numba.core.compiler import compile_isolated, Flags
+from numba.tests.support import TestCase, tag, MemoryLeakMixin
+import unittest
 
 
 looplift_flags = Flags()
@@ -204,7 +203,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
     def test_lift3(self):
         self.check_lift_ok(lift3, (types.intp,), (123,))
 
-    @tag('important')
     def test_lift4(self):
         self.check_lift_ok(lift4, (types.intp,), (123,))
 
@@ -214,7 +212,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
     def test_lift_issue2561(self):
         self.check_no_lift(lift_issue2561, (), ())
 
-    @tag('important')
     def test_lift_gen1(self):
         self.check_lift_generator_ok(lift_gen1, (types.intp,), (123,))
 
@@ -256,7 +253,7 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, xcopy + 1)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfoo.inspect_types(file=buf)
         annotation = buf.getvalue()
         buf.close()
@@ -293,7 +290,7 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, (xcopy + 1) * 2)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfoo.inspect_types(file=buf)
         annotation = buf.getvalue()
         buf.close()

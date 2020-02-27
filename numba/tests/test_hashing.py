@@ -2,22 +2,21 @@
 """
 Test hashing of various supported types.
 """
-from __future__ import print_function
 
-import numba.unittest_support as unittest
+import unittest
 
 import sys
 from collections import defaultdict
 
 import numpy as np
 
-from numba import jit, types, utils
-import numba.unittest_support as unittest
-from .support import TestCase, tag, CompilationCache, skip_py38_or_later
-from numba.targets import hashing
+from numba import jit
+from numba.core import types, utils
+import unittest
+from numba.tests.support import TestCase, tag, CompilationCache
 
-if utils.IS_PY3:
-    from numba.unicode import compile_time_get_string_data
+from numba.cpython.unicode import compile_time_get_string_data
+from numba.cpython import hashing
 
 
 def hash_usecase(x):
@@ -34,28 +33,14 @@ class BaseTest(TestCase):
         for val in list(values):
             nb_hash = cfunc(val)
             self.assertIsInstance(nb_hash, utils.INT_TYPES)
-            # Always check the value on python 3
-            # On python 2, if the input was an integral value, with
-            # magnitude < _PyHASH_MODULUS then perform the check
-            proceed = utils.IS_PY3
-            if not proceed:
-                if not isinstance(val, (str, tuple)):
-                    intinput = (not np.iscomplexobj(val) and
-                                (isinstance(val, utils.INT_TYPES) or
-                                 float(val).is_integer()))
-                    nonzero = val != 0
-                    intmin = val < 0 and abs(val) == val
-                    notlong = abs(val) < 2 ** 31 - 1
-                    proceed = intinput and nonzero and not intmin and notlong
-            if proceed:
-                try:
-                    self.assertEqual(nb_hash, hash(val))
-                except AssertionError as e:
-                    print("val, nb_hash, hash(val)")
-                    print(val, nb_hash, hash(val))
-                    print("abs(val), hashing._PyHASH_MODULUS - 1")
-                    print(abs(val), hashing._PyHASH_MODULUS - 1)
-                    raise e
+            try:
+                self.assertEqual(nb_hash, hash(val))
+            except AssertionError as e:
+                print("val, nb_hash, hash(val)")
+                print(val, nb_hash, hash(val))
+                print("abs(val), hashing._PyHASH_MODULUS - 1")
+                print(abs(val), hashing._PyHASH_MODULUS - 1)
+                raise e
 
     def int_samples(self, typ=np.int64):
         for start in (0, -50, 60000, 1 << 32):
@@ -113,12 +98,10 @@ class TestNumberHashing(BaseTest):
             self.assertEqual(a.dtype, np.dtype(typ))
             self.check_hash_values(a)
 
-    @tag('important')
     def test_floats(self):
         self.check_floats(np.float32)
         self.check_floats(np.float64)
 
-    @tag('important')
     def test_complex(self):
         self.check_complex(np.complex64, np.float32)
         self.check_complex(np.complex128, np.float64)
@@ -172,38 +155,6 @@ class TestNumberHashing(BaseTest):
         self.check_hash_values([np.uint64(0x1ffffffffffffffe)])
         self.check_hash_values([np.uint64(0x1fffffffffffffff)])
 
-    @unittest.skipIf(utils.IS_PY3, "Python 2 only test")
-    def test_py27(self):
-        # for common types, check that those with the same contents hash to the
-        # same value and those with different contents hash to something
-        # different, this code doesn't concern itself with validity of hashes
-
-        def check(val1, val2, val3):
-            a1_hash = self.cfunc(val1)
-            a2_hash = self.cfunc(val2)
-            a3_hash = self.cfunc(val3)
-            self.assertEqual(a1_hash, a2_hash)
-            self.assertFalse(a1_hash == a3_hash)
-
-        a1 = 1
-        a2 = 1
-        a3 = 3
-        for ty in [np.int8, np.uint8, np.int16, np.uint16,
-                   np.int32, np.uint32, np.int64, np.uint64]:
-            check(ty(a1), ty(a2), ty(a3))
-
-        a1 = 1.23456
-        a2 = 1.23456
-        a3 = 3.23456
-        for ty in [np.float32, np.float64]:
-            check(ty(a1), ty(a2), ty(a3))
-
-        a1 = 1.23456 + 2.23456j
-        a2 = 1.23456 + 2.23456j
-        a3 = 3.23456 + 4.23456j
-        for ty in [np.complex64, np.complex128]:
-            check(ty(a1), ty(a2), ty(a3))
-
 
 class TestTupleHashing(BaseTest):
     """
@@ -246,7 +197,6 @@ class TestTupleHashing(BaseTest):
         self.check_hash_values([(7,), (0,), (0, 0), (0.5,),
                                 (0.5, (7,), (-2, 3, (4, 6)))])
 
-    @tag('important')
     def test_heterogeneous_tuples(self):
         modulo = 2**63
 
@@ -257,21 +207,7 @@ class TestTupleHashing(BaseTest):
 
         self.check_tuples(self.int_samples(), split)
 
-    @unittest.skipIf(utils.IS_PY3, "Python 2 only test")
-    def test_py27(self):
-        # check that tuples with the same contents hash to the same value
-        # and those with different contents hash to something different
-        a1 = (1, 2, 3)
-        a2 = (1, 2, 3)
-        a3 = (1, 2, 4)
-        a1_hash = self.cfunc(a1)
-        a2_hash = self.cfunc(a2)
-        a3_hash = self.cfunc(a3)
-        self.assertEqual(a1_hash, a2_hash)
-        self.assertFalse(a1_hash == a3_hash)
 
-
-@unittest.skipUnless(utils.IS_PY3, "unicode hash tests are Python 3 only")
 class TestUnicodeHashing(BaseTest):
 
     def test_basic_unicode(self):

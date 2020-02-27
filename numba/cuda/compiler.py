@@ -1,6 +1,4 @@
-from __future__ import absolute_import, print_function
-
-
+import ctypes
 import os
 from functools import reduce, wraps
 import operator
@@ -10,11 +8,9 @@ import warnings
 
 import numpy as np
 
-from numba import ctypes_support as ctypes
-from numba import config, compiler, types, sigutils
-from numba.typing.templates import AbstractTemplate, ConcreteTemplate
-from numba import funcdesc, typing, utils, serialize
-from numba.compiler_lock import global_compiler_lock
+from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
+from numba.core import types, typing, utils, funcdesc, serialize, config, compiler, sigutils
+from numba.core.compiler_lock import global_compiler_lock
 
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
@@ -621,7 +617,7 @@ class CUDAKernel(CUDAKernelBase):
                     locinfo = ''
                 else:
                     sym, filepath, lineno = loc
-                    filepath = os.path.relpath(filepath)
+                    filepath = os.path.abspath(filepath)
                     locinfo = 'In function %r, file %s, line %s, ' % (
                         sym, filepath, lineno,
                         )

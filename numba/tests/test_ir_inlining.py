@@ -3,13 +3,12 @@ This tests the inline kwarg to @jit and @overload etc, it has nothing to do with
 LLVM or low level inlining.
 """
 
-from __future__ import print_function, absolute_import
 
 import numpy as np
 
-import numba
-from numba import njit, ir, types
-from numba.extending import (
+from numba import njit, typeof
+from numba.core import types, ir, ir_utils
+from numba.core.extending import (
     overload,
     overload_method,
     overload_attribute,
@@ -17,17 +16,18 @@ from numba.extending import (
     typeof_impl,
     unbox,
     NativeValue,
+    register_jitable,
 )
-from numba.datamodel.models import OpaqueModel
-from numba.targets.cpu import InlineOptions
-from numba.compiler import DefaultPassBuilder
-from numba.typed_passes import DeadCodeElimination, IRLegalization
-from numba.untyped_passes import PreserveIR
+from numba.core.datamodel.models import OpaqueModel
+from numba.core.cpu import InlineOptions
+from numba.core.compiler import DefaultPassBuilder, CompilerBase
+from numba.core.typed_passes import DeadCodeElimination, IRLegalization
+from numba.core.untyped_passes import PreserveIR
 from itertools import product
-from .support import TestCase, unittest, skip_py38_or_later
+from numba.tests.support import TestCase, unittest, skip_py38_or_later
 
 
-class InlineTestPipeline(numba.compiler.CompilerBase):
+class InlineTestPipeline(CompilerBase):
     """ Same as the standard pipeline, but preserves the func_ir into the
     metadata store"""
 
@@ -45,7 +45,7 @@ class InlineTestPipeline(numba.compiler.CompilerBase):
         return [pipeline]
 
 
-# this global has the same name as the the global in inlining_usecases.py, it
+# this global has the same name as the global in inlining_usecases.py, it
 # is here to check that inlined functions bind to their own globals
 _GLOBAL1 = -50
 
@@ -103,7 +103,7 @@ class InliningBase(TestCase):
 
         # make sure IR doesn't have branches
         fir = j_func.overloads[j_func.signatures[0]].metadata['preserved_ir']
-        fir.blocks = numba.ir_utils.simplify_CFG(fir.blocks)
+        fir.blocks = ir_utils.simplify_CFG(fir.blocks)
         if self._DEBUG:
             print("FIR".center(80, "-"))
             fir.dump()
@@ -457,6 +457,20 @@ class TestFunctionInlining(InliningBase):
                                         'fortran': True}, block_count=37)
 
 
+class TestRegisterJitableInlining(InliningBase):
+
+    def test_register_jitable_inlines(self):
+
+        @register_jitable(inline='always')
+        def foo():
+            return 1
+
+        def impl():
+            foo()
+
+        self.check(impl, inline_expect={'foo': True})
+
+
 class TestOverloadInlining(InliningBase):
 
     def test_basic_inline_never(self):
@@ -742,7 +756,7 @@ class TestOverloadInlining(InliningBase):
 
         # this is the Python equiv of the overloads below
         def bar(x):
-            if isinstance(numba.typeof(x), types.Float):
+            if isinstance(typeof(x), types.Float):
                 return x + 1234
             else:
                 return x + 1
