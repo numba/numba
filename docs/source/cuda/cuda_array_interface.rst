@@ -143,33 +143,6 @@ This means that:
   through the interface.
 
 
-Lifetime management
--------------------
-
-Obtaining the value of the ``__cuda_array_interface__`` property of any object
-has no effect on the lifetime of the object from which it was created - in
-particular one should note that the interface does not specify a slot for the
-owner of the data.
-
-As a result, it is imperative for a consumer to retain a reference to the object
-owning the data for as long as the consumer makes use of the data.
-
-
-Lifetime management in Numba
-----------------------------
-
-Numba provides two mechanisms for creating device arrays depending on the
-required effect on the lifetime of the object from which they are created:
-
-- :func:`cuda.as_cuda_array`: This creates a device array that holds a reference
-  to the owning object. As long as a reference to the device array is held, its
-  underlying data will also be kept alive, even if all other references to the
-  original owning object have been dropped.
-- :func:`from_cuda_array_interface`: This creates a device array with no
-  reference to the owning object by default. The owning object, or some other
-  object to be considered the owner can be passed in the ``owner`` parameter.
-
-
 Pointer Attributes
 ------------------
 
