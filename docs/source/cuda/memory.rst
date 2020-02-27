@@ -56,7 +56,14 @@ Pinned memory
 Streams
 =======
 
+Streams can be passed to functions that accept them (e.g. copies between the
+host and device) and into kernel launch configurations so that the operations
+are executed asynchronously.
+
 .. autofunction:: numba.cuda.stream
+   :noindex:
+
+.. autofunction:: numba.cuda.default_stream
    :noindex:
 
 CUDA streams have the following methods:

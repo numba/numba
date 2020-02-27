@@ -27,9 +27,11 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                  impl_ret_new_ref, impl_ret_untracked,
                                  RefType)
 from numba.core.typing import signature
-from numba.core.extending import register_jitable, overload, overload_method
+from numba.core.extending import (register_jitable, overload, overload_method,
+                                  intrinsic)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
+from numba.cpython.unsafe.tuple import tuple_setitem
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -274,13 +276,25 @@ def getiter_array(context, builder, sig, args):
     return out
 
 
-def _getitem_array1d(context, builder, arrayty, array, idx, wraparound):
-    """
-    Look up and return an element from a 1D array.
-    """
-    ptr = cgutils.get_item_pointer(context, builder, arrayty, array, [idx],
-                                   wraparound=wraparound)
-    return load_item(context, builder, arrayty, ptr)
+def _getitem_array_single_int(context, builder, return_type, aryty, ary, idx):
+    """ Evaluate `ary[idx]`, where idx is a single int. """
+    # optimized form of _getitem_array_generic
+    shapes = cgutils.unpack_tuple(builder, ary.shape, count=aryty.ndim)
+    strides = cgutils.unpack_tuple(builder, ary.strides, count=aryty.ndim)
+    offset = builder.mul(strides[0], idx)
+    dataptr = cgutils.pointer_add(builder, ary.data, offset)
+    view_shapes = shapes[1:]
+    view_strides = strides[1:]
+
+    if isinstance(return_type, types.Buffer):
+        # Build array view
+        retary = make_view(context, builder, aryty, ary, return_type,
+                           dataptr, view_shapes, view_strides)
+        return retary._getvalue()
+    else:
+        # Load scalar from 0-d result
+        assert not view_shapes
+        return load_item(context, builder, aryty, dataptr)
 
 
 @lower_builtin('iternext', types.ArrayIterator)
@@ -289,10 +303,6 @@ def iternext_array(context, builder, sig, args, result):
     [iterty] = sig.args
     [iter] = args
     arrayty = iterty.array_type
-
-    if arrayty.ndim != 1:
-        # TODO
-        raise NotImplementedError("iterating over %dD array" % arrayty.ndim)
 
     iterobj = context.make_helper(builder, iterty, value=iter)
     ary = make_array(arrayty)(context, builder, value=iterobj.array)
@@ -304,8 +314,9 @@ def iternext_array(context, builder, sig, args, result):
     result.set_valid(is_valid)
 
     with builder.if_then(is_valid):
-        value = _getitem_array1d(context, builder, arrayty, ary, index,
-                                 wraparound=False)
+        value = _getitem_array_single_int(
+            context, builder, iterty.yield_type, arrayty, ary, index
+        )
         result.yield_(value)
         nindex = cgutils.increment_index(builder, index)
         builder.store(nindex, iterobj.index)
@@ -718,9 +729,10 @@ class IntegerArrayIndexer(Indexer):
         ):
             builder.branch(self.bb_end)
         # Load the actual index from the array of indices
-        index = _getitem_array1d(self.context, builder,
-                                 self.idxty, self.idxary,
-                                 cur_index, wraparound=False)
+        index = _getitem_array_single_int(
+            self.context, builder, self.idxty.dtype, self.idxty, self.idxary,
+            cur_index
+        )
         index = fix_integer_index(self.context, builder,
                                   self.idxty.dtype, index, self.size)
         return index, cur_index
@@ -763,9 +775,10 @@ class BooleanArrayIndexer(Indexer):
         # Sum all true values
         with cgutils.for_range(builder, self.size) as loop:
             c = builder.load(count)
-            pred = _getitem_array1d(self.context, builder,
-                                    self.idxty, self.idxary,
-                                    loop.index, wraparound=False)
+            pred = _getitem_array_single_int(
+                self.context, builder, self.idxty.dtype,
+                self.idxty, self.idxary, loop.index
+            )
             c = builder.add(c, builder.zext(pred, c.type))
             builder.store(c, count)
 
@@ -792,9 +805,10 @@ class BooleanArrayIndexer(Indexer):
                              likely=False):
             builder.branch(self.bb_end)
         # Load the predicate and branch if false
-        pred = _getitem_array1d(self.context, builder,
-                                self.idxty, self.idxary,
-                                cur_index, wraparound=False)
+        pred = _getitem_array_single_int(
+            self.context, builder, self.idxty.dtype, self.idxty, self.idxary,
+            cur_index
+        )
         with builder.if_then(builder.not_(pred)):
             builder.branch(self.bb_tail)
         # Increment the count for next iteration
@@ -4874,7 +4888,83 @@ def array_dot(arr, other):
     return dot_impl
 
 
-# ------------------------------------------------------------------------------
+@overload(np.fliplr)
+def np_flip_lr(a):
+
+    if not type_can_asarray(a):
+        raise errors.TypingError("Cannot np.fliplr on %s type" % a)
+
+    def impl(a):
+        A = np.asarray(a)
+        # this handling is superfluous/dead as < 2d array cannot be indexed as
+        # present below and so typing fails. If the typing doesn't fail due to
+        # some future change, this will catch it.
+        if A.ndim < 2:
+            raise ValueError('Input must be >= 2-d.')
+        return A[::, ::-1, ...]
+    return impl
+
+
+@overload(np.flipud)
+def np_flip_ud(a):
+
+    if not type_can_asarray(a):
+        raise errors.TypingError("Cannot np.flipud on %s type" % a)
+
+    def impl(a):
+        A = np.asarray(a)
+        # this handling is superfluous/dead as a 0d array cannot be indexed as
+        # present below and so typing fails. If the typing doesn't fail due to
+        # some future change, this will catch it.
+        if A.ndim < 1:
+            raise ValueError('Input must be >= 1-d.')
+        return A[::-1, ...]
+    return impl
+
+
+@intrinsic
+def _build_slice_tuple(tyctx, sz):
+    """ Creates a tuple of slices for np.flip indexing like
+    `(slice(None, None, -1),) * sz` """
+    size = int(sz.literal_value)
+    tuple_type = types.UniTuple(dtype=types.slice3_type, count=size)
+    sig = tuple_type(sz)
+
+    def codegen(context, builder, signature, args):
+        def impl(length, empty_tuple):
+            out = empty_tuple
+            for i in range(length):
+                out = tuple_setitem(out, i, slice(None, None, -1))
+            return out
+
+        inner_argtypes = [types.intp, tuple_type]
+        inner_sig = typing.signature(tuple_type, *inner_argtypes)
+        ll_idx_type = context.get_value_type(types.intp)
+        # Allocate an empty tuple
+        empty_tuple = context.get_constant_undef(tuple_type)
+        inner_args = [ll_idx_type(size), empty_tuple]
+
+        res = context.compile_internal(builder, impl, inner_sig, inner_args)
+        return res
+
+    return sig, codegen
+
+
+@overload(np.flip)
+def np_flip(a):
+    # a constant value is needed for the tuple slice, types.Array.ndim can
+    # provide this and so at presnet only type.Array is support
+    if not isinstance(a, types.Array):
+        raise errors.TypingError("Cannot np.flip on %s type" % a)
+
+    def impl(a):
+        sl = _build_slice_tuple(a.ndim)
+        return a[sl]
+
+    return impl
+
+
+# -----------------------------------------------------------------------------
 # Sorting
 
 _sorts = {}
