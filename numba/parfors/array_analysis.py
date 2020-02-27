@@ -1066,6 +1066,13 @@ class ArrayAnalysis(object):
         # keep track of pruned precessors when branch degenerates to jump
         self.pruned_predecessors = {}
 
+    def copy(self):
+        """Returns a fresh copy with shared references to ``context``,
+        ``func_ir``, ``typemap``, ``calltypes``.
+        """
+        return ArrayAnalysis(
+            self.context, self.func_ir, self.typemap, self.calltypes)
+
     def get_equiv_set(self, block_label):
         """Return the equiv_set object of an block given its label.
         """
@@ -1443,7 +1450,9 @@ class ArrayAnalysis(object):
         elif type(inst) in array_analysis_extensions:
             # let external calls handle stmt if type matches
             f = array_analysis_extensions[type(inst)]
-            pre, post = f(inst, equiv_set, self.typemap, self)
+            # Use a copy to isolate state mutation
+            copied_array_analysis = self.copy()
+            pre, post = f(inst, equiv_set, self.typemap, copied_array_analysis)
 
         return pre, post
 
