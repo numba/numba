@@ -632,7 +632,7 @@ class CUDAKernel(CUDAKernelBase):
                     locinfo = ''
                 else:
                     sym, filepath, lineno = loc
-                    filepath = os.path.relpath(filepath)
+                    filepath = os.path.abspath(filepath)
                     locinfo = 'In function %r, file %s, line %s, ' % (
                         sym, filepath, lineno,
                         )

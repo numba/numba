@@ -2,14 +2,18 @@ import sys
 
 import numpy as np
 import ctypes
-from numba import jit
+from numba import jit, literal_unroll, njit
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
 from numba.core.config import IS_WIN32
+from numba.core.errors import TypingError
 from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
+
+
+_FS = ('e', 'f')
 
 
 def get_a(ary, i):
@@ -249,6 +253,32 @@ def set_charseq(ary, i, cs):
 
 def get_charseq_tuple(ary, i):
     return ary[i].m, ary[i].n
+
+
+def get_field1(rec):
+    fs = ('e', 'f')
+    f = fs[1]
+    return rec[f]
+
+
+def get_field2(rec):
+    fs = ('e', 'f')
+    out = 0
+    for f in literal_unroll(fs):
+        out += rec[f]
+    return out
+
+
+def get_field3(rec):
+    f = _FS[1]
+    return rec[f]
+
+
+def get_field4(rec):
+    out = 0
+    for f in literal_unroll(_FS):
+        out += rec[f]
+    return out
 
 
 recordtype = np.dtype([('a', np.float64),
@@ -978,6 +1008,73 @@ class TestRecordDtypeWithCharSeq(unittest.TestCase):
             expected = pyfunc(self.refsample1d, i)
             got = cfunc(self.nbsample1d, i)
             self.assertEqual(expected, got)
+
+
+class TestRecordArrayGetItem(unittest.TestCase):
+    """
+    Test getitem when index is Literal[str]
+    """
+    def test_literal_variable(self):
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = get_field1
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+
+    def test_literal_unroll(self):
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = get_field2
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+
+    def test_literal_variable_global_tuple(self):
+        """
+        This tests the getitem of record array when the indexes come from a
+        global tuple. It tests getitem behaviour but also tests that a global
+        tuple is being typed as a tuple of constants.
+        """
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = get_field3
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+
+    def test_literal_unroll_global_tuple(self):
+        """
+        This tests the getitem of record array when the indexes come from a
+        global tuple and are being unrolled.
+        It tests getitem behaviour but also tests that literal_unroll accepts
+        a global tuple as argument
+        """
+        arr = np.array([1, 2], dtype=recordtype2)
+        pyfunc = get_field4
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+
+    def test_literal_unroll_free_var_tuple(self):
+        """
+        This tests the getitem of record array when the indexes come from a
+        free variable tuple (not local, not global) and are being unrolled.
+        It tests getitem behaviour but also tests that literal_unroll accepts
+        a free variable tuple as argument
+        """
+        fs = ('e', 'f')
+        arr = np.array([1, 2], dtype=recordtype2)
+
+        def get_field(rec):
+            out = 0
+            for f in literal_unroll(fs):
+                out += rec[f]
+            return out
+
+        jitfunc = njit(get_field)
+        self.assertEqual(get_field(arr[0]), jitfunc(arr[0]))
+
+    def test_error_w_invalid_field(self):
+        arr = np.array([1, 2], dtype=recordtype3)
+        jitfunc = njit(get_field1)
+        with self.assertRaises(TypingError) as raises:
+            jitfunc(arr[0])
+        self.assertIn("Field 'f' was not found in record with fields "
+                      "('first', 'second')", str(raises.exception))
 
 
 if __name__ == '__main__':

@@ -32,13 +32,10 @@ Build and Packaging
 
 Continuous Integration
 ''''''''''''''''''''''
-- :ghfile:`.binstar.yml` - Binstar Build CI config (inactive)
 - :ghfile:`azure-pipelines.yml` - Azure Pipelines CI config (active:
   Win/Mac/Linux)
 - :ghfile:`buildscripts/azure/` - Azure Pipeline configuration for specific
   platforms
-- :ghfile:`.travis.yml` - Travis CI config (active: Mac/Linux, will be
-  dropped in the future)
 - :ghfile:`buildscripts/appveyor/` - Appveyor build scripts
 - :ghfile:`buildscripts/incremental/` - Generic scripts for building Numba
   on various CI systems
