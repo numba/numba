@@ -1430,7 +1430,7 @@ class ArrayAnalysis(object):
         index_def = get_definition(self.func_ir, index)
         fname, mod_name = find_callname(
             self.func_ir, index_def, typemap=self.typemap)
-        require(fname == 'slice' and mod_name in ('__builtin__', 'builtins'))
+        require(fname == 'slice' and mod_name in ('builtins'))
         require(len(index_def.args) == 2)
         lhs = index_def.args[0]
         rhs = index_def.args[1]
@@ -1768,10 +1768,6 @@ class ArrayAnalysis(object):
             if added_mod_name:
                 expr.args = args[1:]
             return result
-
-    def _analyze_op_call___builtin___len(self, scope, equiv_set, loc, args, kws):
-        # python 2 version of len()
-        return self._analyze_op_call_builtins_len(scope, equiv_set, loc, args, kws)
 
     def _analyze_op_call_builtins_len(self, scope, equiv_set, loc, args, kws):
         # python 3 version of len()
