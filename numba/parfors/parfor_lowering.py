@@ -325,11 +325,9 @@ def _lower_parfor_parallel(lowerer, parfor):
                     name="redelem",
                 )
 
-                init_var = ir.Var(scope, name+"#init", loc)
-                init_assign = ir.Assign(oneelem, init_var, loc)
-                if name+"#init" not in typemap:
-                    typemap[init_var.name] = redvar_typ
-                lowerer.lower_inst(init_assign)
+                init_var = pfbdr.assign_inplace(
+                    rhs=oneelem, typ=redvar_typ, name=name + "#init",
+                )
 
                 if config.DEBUG_ARRAY_OPT_RUNTIME:
                     res_print_str = "res_print1 for thread " + str(j) + ":"

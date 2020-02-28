@@ -97,7 +97,7 @@ class ParforLoweringBuilder:
         )
 
     def assign(self, rhs, typ, name="pf_assign") -> ir.Var:
-        """Assign a value to a variable
+        """Assign a value to a new variable
 
         Parameters
         ----------
@@ -117,6 +117,29 @@ class ParforLoweringBuilder:
         self._typemap[var.name] = typ
         redshape_assign = ir.Assign(rhs, var, loc)
         self._lowerer.lower_inst(redshape_assign)
+        return var
+
+    def assign_inplace(self, rhs, typ, name) -> ir.Var:
+        """Assign a value to a new variable or inplace if it already exist
+
+        Parameters
+        ----------
+        rhs : object
+            The value
+        typ : types.Type
+            type of the value
+        name : str
+            variable name to store to
+
+        Returns
+        -------
+        res : ir.Var
+        """
+        loc = self._loc
+        var = ir.Var(self._scope, name, loc)
+        init_assign = ir.Assign(rhs, var, loc)
+        self._typemap.setdefault(var.name, typ)
+        self._lowerer.lower_inst(init_assign)
         return var
 
     def call(self, callable_node, args, kws={}) -> ir.Expr:
