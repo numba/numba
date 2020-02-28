@@ -185,6 +185,9 @@ vary with target operating system and hardware. The following lists them all
   * ``numpy``
   * ``llvmlite``
   * Compiler toolchain mentioned above
+  * OpenMP C headers and runtime libraries compatible with the compiler
+    toolchain mentioned above and accessible to the compiler via standard flags
+    (Linux, Windows).
 
 * Optional build time:
 
