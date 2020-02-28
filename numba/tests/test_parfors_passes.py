@@ -430,7 +430,7 @@ class TestConvertLoopPass(BaseTest):
                 arr[i] += i
             return arr
 
-        with self.assertRaises(errors.RewriteUnsupportedError) as raises:
+        with self.assertRaises(errors.UnsupportedRewriteError) as raises:
             self.run_parfor_sub_pass(test_impl, ())
         self.assertIn(
             "Only constant step size of 1 is supported for prange",
@@ -497,7 +497,7 @@ class TestConvertLoopPass(BaseTest):
                 arr[i] = i
             return arr
 
-        with self.assertRaises(errors.RewriteUnsupportedError) as raises:
+        with self.assertRaises(errors.UnsupportedRewriteError) as raises:
             self.run_parfor_sub_pass(test_impl, ())
         self.assertIn("Overwrite of parallel loop index", str(raises.exception))
 

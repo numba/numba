@@ -1825,7 +1825,7 @@ class ArrayAnalysis(object):
             shape_var = kws['shape']
         if shape_var:
             return shape_var, []
-        raise errors.RewriteUnsupportedError(
+        raise errors.UnsupportedRewriteError(
             "Must specify a shape for array creation",
             loc=loc,
         )
@@ -1850,7 +1850,7 @@ class ArrayAnalysis(object):
         elif 'N' in kws:
             N = kws['N']
         else:
-            raise errors.RewriteUnsupportedError(
+            raise errors.UnsupportedRewriteError(
                 "Expect one argument (or 'N') to eye function",
                 loc=loc,
             )
@@ -1958,7 +1958,7 @@ class ArrayAnalysis(object):
                     else:
                         msg = ("The reshape API may only include one negative"
                                " argument.")
-                        raise errors.RewriteUnsupportedError(msg, loc=reshape_arg.loc)
+                        raise errors.UnsupportedRewriteError(msg, loc=reshape_arg.loc)
 
         if neg_one_index >= 0:
             # If exactly one <0 argument to reshape was found, then we are

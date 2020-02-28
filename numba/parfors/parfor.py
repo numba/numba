@@ -1693,7 +1693,7 @@ def _make_index_var(typemap, scope, index_vars, body_block):
     elif ndims == 1:
         return index_vars[0], types.uintp
     else:
-        raise errors.RewriteUnsupportedError(
+        raise errors.UnsupportedRewriteError(
             "Parfor does not handle arrays of dimension 0",
             loc=loc,
         )
@@ -1838,8 +1838,8 @@ class ConvertNumpyPass:
         if call_name in ['zeros', 'ones'] or mod_name == 'numpy.random':
             return self._numpy_map_to_parfor(equiv_set, call_name, lhs, args, kws, expr)
         # return error if we couldn't handle it (avoid rewrite infinite loop)
-        raise errors.RewriteUnsupportedError(
-            f"parfor translation failed for {expr}", loc=exprloc,
+        raise errors.UnsupportedRewriteError(
+            f"parfor translation failed for {expr}", loc=expr.loc,
         )
 
     def _numpy_map_to_parfor(self, equiv_set, call_name, lhs, args, kws, expr):
@@ -2270,18 +2270,18 @@ class ConvertLoopPass:
                             try:
                                 step = pass_states.func_ir.get_definition(args[2])
                             except KeyError:
-                                raise errors.RewriteUnsupportedError(
+                                raise errors.UnsupportedRewriteError(
                                     "Only known step size is supported for prange",
                                     loc=inst.loc,
                                 )
                             if not isinstance(step, ir.Const):
-                                raise errors.RewriteUnsupportedError(
+                                raise errors.UnsupportedRewriteError(
                                     "Only constant step size is supported for prange",
                                     loc=inst.loc,
                                 )
                             step = step.value
                             if step != 1:
-                                raise errors.RewriteUnsupportedError(
+                                raise errors.UnsupportedRewriteError(
                                     "Only constant step size of 1 is supported for prange",
                                     loc=inst.loc,
                                 )
@@ -2436,7 +2436,7 @@ class ConvertLoopPass:
                         added_indices.add(stmt.target.name)
                     # make sure parallel index is not overwritten
                     elif stmt.target.name in index_set and stmt.target.name != stmt.value.name:
-                        raise errors.RewriteUnsupportedError(
+                        raise errors.UnsupportedRewriteError(
                             "Overwrite of parallel loop index",
                             loc=stmt.target.loc,
                         )
@@ -2878,7 +2878,7 @@ def _arrayexpr_tree_to_ir(
         out_ir.append(ir.Assign(expr, expr_out_var, loc))
 
     if len(out_ir) == 0:
-        raise errors.RewriteUnsupportedError(
+        raise errors.UnsupportedRewriteError(
             f"Don't know how to translate array expression '{expr:r}'",
             loc=expr.loc,
         )
@@ -2997,7 +2997,7 @@ def _find_func_var(typemap, func, avail_vars, loc):
         # Function types store actual functions in typing_key.
         if isinstance(t, Function) and t.typing_key == func:
             return v
-    raise errors.RewriteUnsupportedError("ufunc call variable not found", loc=loc)
+    raise errors.UnsupportedRewriteError("ufunc call variable not found", loc=loc)
 
 
 def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
@@ -3266,7 +3266,7 @@ def check_conflicting_reduction_operators(param, nodes):
                 if first_red_func != node.value.fn:
                     msg = ("Reduction variable %s has multiple conflicting "
                            "reduction operators." % param)
-                    raise errors.RewriteUnsupportedError(msg, node.loc)
+                    raise errors.UnsupportedRewriteError(msg, node.loc)
 
 def get_reduction_init(nodes):
     """

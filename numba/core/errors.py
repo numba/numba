@@ -493,7 +493,7 @@ class UnsupportedError(NumbaError):
     pass
 
 
-class RewriteUnsupportedError(UnsupportedError):
+class UnsupportedRewriteError(UnsupportedError):
     """UnsupportedError from rewrite passes
     """
     pass
