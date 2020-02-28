@@ -1,3 +1,4 @@
+from collections import namedtuple
 import numpy as np
 
 from numba.tests.support import (TestCase, MemoryLeakMixin,
@@ -1649,6 +1650,60 @@ class TestMore(TestCase):
             lines,
             ['a 1', 'b 2', '3 c', '4 d'],
         )
+
+    def test_unroll_named_tuple(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo():
+            abc = ABC(1, 2j, 3.4)
+            out = 0
+            for i in literal_unroll(abc):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_named_tuple_arg(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo(x):
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        abc = ABC(1, 2j, 3.4)
+
+        self.assertEqual(foo(abc), foo.py_func(abc))
+
+    def test_unroll_named_unituple(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo():
+            abc = ABC(1, 2, 3)
+            out = 0
+            for i in literal_unroll(abc):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_named_unituple_arg(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo(x):
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        abc = ABC(1, 2, 3)
+
+        self.assertEqual(foo(abc), foo.py_func(abc))
 
     def test_unroll_global_tuple(self):
 
