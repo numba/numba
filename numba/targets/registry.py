@@ -71,8 +71,10 @@ class CPUTarget(TargetDescriptor):
 # The global CPU target
 cpu_target = CPUTarget()
 
+
 class CPUDispatcher(dispatcher.Dispatcher):
     targetdescr = cpu_target
+
 
 class TargetRegistry(utils.UniqueDict):
     """

@@ -25,9 +25,9 @@ else:
 
 def load_tests(loader, tests, pattern):
     suite = TestSuite()
-    # @@ suite.addTests(load_testsuite(loader, dirname(__file__)))
+    # suite.addTests(load_testsuite(loader, dirname(__file__)))
 
-    # Numba CUDA / OCL / HSA tests are located in a separate directory:
+    # Numba CUDA / DPPy / HSA tests are located in a separate directory:
     cuda_dir = join(dirname(dirname(__file__)), 'cuda/tests')
     suite.addTests(loader.discover(cuda_dir))
 

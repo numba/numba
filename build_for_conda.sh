@@ -20,11 +20,20 @@ while [ "$1" != "" ]; do
     shift
 done
 
+OPENCL_INCLUDE=""
+if [ -z "$OPENCL_HOME" ]; then
+    OPENCL_INCLUDE=""
+else
+    OPENCL_INCLUDE=-I${OPENCL_HOME}/include
+fi
+
 set -x
 
 cd numba/dppy/dppy_driver
 
-gcc ${DEBUG_FLAGS} -Wall -Wextra -Winit-self -Wuninitialized -Wmissing-declarations -std=c99 -fdiagnostics-color=auto -pedantic-errors -fPIC -c opencllite.c -o opencllite.o
+export CC=clang
+
+$CC ${DEBUG_FLAGS} -Wall -Wextra -Winit-self -Wuninitialized -Wmissing-declarations -std=c99 -fdiagnostics-color=auto -fPIC ${OPENCL_INCLUDE} -c opencllite.c -o opencllite.o
 #gcc -g -Wall -Wextra -Winit-self -Wuninitialized -Wmissing-declarations -std=c99 -fdiagnostics-color=auto -pedantic-errors -fPIC -c opencllite.c -o opencllite.o
 
 gcc_ret=$?
@@ -37,7 +46,7 @@ fi
 ar rcs libdpglue.a opencllite.o
 
 #gcc -L. -shared -o libdpglue.so -Wl,--whole-archive -lopencllite
-gcc ${DEBUG_FLAGS} -Wall -Wextra -Winit-self -Wuninitialized -Wmissing-declarations -std=c99 -fdiagnostics-color=auto -pedantic-errors -shared -fPIC -o libdpglue_so.so opencllite.c
+$CC ${DEBUG_FLAGS} -Wall -Wextra -Winit-self -Wuninitialized -Wmissing-declarations -std=c99 -fdiagnostics-color=auto -shared -fPIC ${OPENCL_INCLUDE} -o libdpglue_so.so opencllite.c
 #gcc -Wall -Wextra -Winit-self -Wuninitialized -Wmissing-declarations -std=c99 -fdiagnostics-color=auto -pedantic-errors -shared -fPIC -o libdpglue_so.so opencllite.c
 
 gcc_ret=$?

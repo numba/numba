@@ -188,7 +188,8 @@ def get_ext_modules():
         tbb_root = check_file_at_path(['include', 'tbb', 'tbb.h'])
 
     # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
-    have_openmp = True
+    have_openmp = False
+    tbb_root = None
     if sys.platform.startswith('win'):
         cpp11flags = []
         ompcompileflags = ['-openmp']
@@ -332,7 +333,6 @@ metadata = dict(
         "numba.annotations": ["*.html"],
         # Various test data
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
-        "numba.ocl.tests.ocldrv.data": ["*.bc"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],

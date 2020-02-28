@@ -10,7 +10,6 @@ from llvmlite import ir as ir
 from numba import cgutils, types
 from .base import PYOBJECT, GENERIC_POINTER
 
-import pdb
 
 TryStatus = namedtuple('TryStatus', ['in_try', 'excinfo'])
 
