@@ -9,7 +9,6 @@ import warnings
 
 from unittest.suite import TestSuite
 from numba.testing import load_testsuite
-from numba.testing import ddt # for backward compatibility
 
 
 try:

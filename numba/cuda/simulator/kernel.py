@@ -115,6 +115,9 @@ class FakeCUDAKernel(object):
         return self
 
     def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
+        if ntasks < 0:
+            raise ValueError("Can't create ForAll with negative task count: %s"
+                             % ntasks)
         return self[ntasks, 1, stream, sharedmem]
 
     @property
