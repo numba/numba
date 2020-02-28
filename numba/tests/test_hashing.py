@@ -6,7 +6,9 @@ Test hashing of various supported types.
 import unittest
 
 import sys
+import subprocess
 from collections import defaultdict
+from textwrap import dedent
 
 import numpy as np
 
@@ -21,6 +23,49 @@ from numba.cpython import hashing
 
 def hash_usecase(x):
     return hash(x)
+
+
+class TestHashingSetup(TestCase):
+
+    def test_warn_on_fnv(self):
+        # FNV hash alg variant is not supported, check Numba warns
+        work = """
+        import sys
+        import warnings
+        from collections import namedtuple
+
+        # hash_info is a StructSequence, mock as a named tuple
+        fields = ["width", "modulus", "inf", "nan", "imag", "algorithm",
+                  "hash_bits", "seed_bits", "cutoff"]
+        if sys.version_info[:2] > (3, 7):
+            fields.append("memoryviews")
+
+        hinfo = sys.hash_info
+        FAKE_HASHINFO = namedtuple('FAKE_HASHINFO', fields)
+
+        fd = dict()
+        for f in fields:
+            fd[f] = getattr(hinfo, f)
+
+        fd['algorithm'] = 'fnv'
+
+        fake_hashinfo = FAKE_HASHINFO(**fd)
+
+        # replace the hashinfo with the fnv version
+        sys.hash_info = fake_hashinfo
+        with warnings.catch_warnings(record=True) as warns:
+            # Cause all warnings to always be triggered.
+            warnings.simplefilter("always")
+            import numba
+            assert len(warns) > 0
+            expect = "FNV hashing is not implemented in Numba. See PEP 456"
+            for w in warns:
+                if expect in str(w.message):
+                    break
+            else:
+                raise RuntimeError("Expected warning not found")
+        """
+        subprocess.check_call([sys.executable, '-c', dedent(work)])
 
 
 class BaseTest(TestCase):
