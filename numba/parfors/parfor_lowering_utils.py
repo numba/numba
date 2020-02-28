@@ -31,6 +31,20 @@ class ParforLoweringBuilder:
         return self._lowerer.fndesc.calltypes
 
     def bind_global_function(self, fobj, ftype, args, kws={}):
+        """Bind a global function to a variable.
+
+        Parameters
+        ----------
+        fobj : object
+            The function to be bounded.
+        ftype : types.Type
+        args : Sequence[types.Type]
+        kws : Mapping[str, types.Type]
+
+        Returns
+        -------
+        callable: _CallableNode
+        """
         loc = self._loc
         varname = f"{fobj.__name__}_func"
         gvname = f"{fobj.__name__}"
@@ -42,11 +56,39 @@ class ParforLoweringBuilder:
         return _CallableNode(func=func_var, sig=func_sig)
 
     def make_const_variable(self, cval, typ, name="pf_const") -> ir.Var:
+        """Make a constant variable
+
+        Parameters
+        ----------
+        cval : object
+            The constant value
+        typ : types.Type
+            type of the value
+        name : str
+            variable name to store to
+
+        Returns
+        -------
+        res : ir.Var
+        """
         return self.assign(
             rhs=ir.Const(cval, loc=self._loc), typ=typ, name=name
         )
 
     def make_tuple_variable(self, varlist, name="pf_tuple") -> ir.Var:
+        """Make a tuple variable
+
+        Parameters
+        ----------
+        varlist : Sequence[ir.Var]
+            Variables containing the values to be stored.
+        name : str
+            variable name to store to
+
+        Returns
+        -------
+        res : ir.Var
+        """
         loc = self._loc
         vartys = [self._typemap[x.name] for x in varlist]
         tupty = types.Tuple.from_types(vartys)
@@ -55,6 +97,21 @@ class ParforLoweringBuilder:
         )
 
     def assign(self, rhs, typ, name="pf_assign") -> ir.Var:
+        """Assign a value to a variable
+
+        Parameters
+        ----------
+        rhs : object
+            The value
+        typ : types.Type
+            type of the value
+        name : str
+            variable name to store to
+
+        Returns
+        -------
+        res : ir.Var
+        """
         loc = self._loc
         var = ir.Var(self._scope, mk_unique_var(name), loc)
         self._typemap[var.name] = typ
@@ -62,12 +119,41 @@ class ParforLoweringBuilder:
         self._lowerer.lower_inst(redshape_assign)
         return var
 
-    def call(self, callable_node, args, kws={}) -> ir.Var:
+    def call(self, callable_node, args, kws={}) -> ir.Expr:
+        """Call a bounded callable
+
+        Parameters
+        ----------
+        callable_node : _CallableNode
+            The callee
+        args : Sequence[ir.Var]
+        kws : Mapping[str, ir.Var]
+
+        Returns
+        -------
+        res : ir.Expr
+            The expression node for return value of the call
+        """
         call = ir.Expr.call(callable_node.func, args, kws, loc=self._loc)
         self._calltypes[call] = callable_node.sig
         return call
 
     def setitem(self, obj, index, val) -> ir.SetItem:
+        """Make setitem call
+
+        Parameters
+        ----------
+        obj : ir.Var
+            the object being indexed
+        index : ir.Var
+            the index
+        val : ir.Var
+            the value to be stored
+
+        Returns
+        -------
+        res : ir.SetItem
+        """
         loc = self._loc
         tm = self._typemap
         setitem = ir.SetItem(obj, index, val, loc=loc)
@@ -76,3 +162,27 @@ class ParforLoweringBuilder:
         )
         self._lowerer.lower_inst(setitem)
         return setitem
+
+    def getitem(self, obj, index, typ) -> ir.Expr:
+        """Make getitem call
+
+        Parameters
+        ----------
+        obj : ir.Var
+            the object being indexed
+        index : ir.Var
+            the index
+        val : ir.Var
+            the ty
+
+        Returns
+        -------
+        res : ir.Expr
+            the retrieved value
+        """
+        tm = self._typemap
+        getitem = ir.Expr.getitem(obj, index, loc=self._loc)
+        self._lowerer.fndesc.calltypes[getitem] = signature(
+            typ, tm[obj.name], tm[index.name],
+        )
+        return getitem

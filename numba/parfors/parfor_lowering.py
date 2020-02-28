@@ -295,12 +295,12 @@ def _lower_parfor_parallel(lowerer, parfor):
             if config.DEBUG_ARRAY_OPT_RUNTIME:
                 res_print_str = "res_print"
                 strconsttyp = types.StringLiteral(res_print_str)
-                lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
-                assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
-                                               target=lhs, loc=loc)
-                typemap[lhs.name] = strconsttyp
-                lowerer.lower_inst(assign_lhs)
 
+                lhs = pfbldr.make_const_variable(
+                    cval=res_print_str,
+                    typ=strconsttyp,
+                    name="str_const",
+                )
                 res_print = ir.Print(args=[lhs, redarr], vararg=None, loc=loc)
                 lowerer.fndesc.calltypes[res_print] = signature(types.none,
                                                          typemap[lhs.name],
@@ -311,19 +311,19 @@ def _lower_parfor_parallel(lowerer, parfor):
             # For each element in the reduction array created above.
             for j in range(get_thread_count()):
                 # Create index var to access that element.
-                index_var = ir.Var(scope, mk_unique_var("index_var"), loc)
-                index_var_assign = ir.Assign(ir.Const(j, loc), index_var, loc)
-                typemap[index_var.name] = types.uintp
-                lowerer.lower_inst(index_var_assign)
+                index_var = pfbdr.make_const_variable(
+                    cval=j, typ=types.uintp, name="index_var",
+                )
 
                 # Read that element from the array into oneelem.
-                oneelem = ir.Var(scope, mk_unique_var("redelem"), loc)
-                oneelemgetitem = ir.Expr.getitem(redarr, index_var, loc)
-                typemap[oneelem.name] = redvar_typ
-                lowerer.fndesc.calltypes[oneelemgetitem] = signature(redvar_typ,
-                        typemap[redarr.name], typemap[index_var.name])
-                oneelemassign = ir.Assign(oneelemgetitem, oneelem, loc)
-                lowerer.lower_inst(oneelemassign)
+                oneelemgetitem = pfbdr.getitem(
+                    obj=redarr, index=index_var, typ=redvar_typ,
+                )
+                oneelem = pfbdr.assign(
+                    rhs=oneelemgetitem,
+                    typ=redvar_typ,
+                    name="redelem",
+                )
 
                 init_var = ir.Var(scope, name+"#init", loc)
                 init_assign = ir.Assign(oneelem, init_var, loc)
@@ -334,11 +334,12 @@ def _lower_parfor_parallel(lowerer, parfor):
                 if config.DEBUG_ARRAY_OPT_RUNTIME:
                     res_print_str = "res_print1 for thread " + str(j) + ":"
                     strconsttyp = types.StringLiteral(res_print_str)
-                    lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
-                    assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
-                                               target=lhs, loc=loc)
-                    typemap[lhs.name] = strconsttyp
-                    lowerer.lower_inst(assign_lhs)
+
+                    lhs = pfbdr.make_const_variable(
+                        cval=res_print_str,
+                        typ=strconsttyp,
+                        name="str_const",
+                    )
 
                     res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
                                          vararg=None, loc=loc)
@@ -394,11 +395,12 @@ def _lower_parfor_parallel(lowerer, parfor):
                     if config.DEBUG_ARRAY_OPT_RUNTIME:
                         res_print_str = "res_print2 for thread " + str(j) + ":"
                         strconsttyp = types.StringLiteral(res_print_str)
-                        lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
-                        assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
-                                               target=lhs, loc=loc)
-                        typemap[lhs.name] = strconsttyp
-                        lowerer.lower_inst(assign_lhs)
+
+                        lhs = pfbdr.make_const_variable(
+                            cval=res_print_str,
+                            typ=strconsttyp,
+                            name="str_const",
+                        )
 
                         res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
                                              vararg=None, loc=loc)
