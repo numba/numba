@@ -3538,7 +3538,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
-    @unittest.skipIf(np_version < (1, 13), "NumPy Unsupported")
+    @unittest.skipIf(numpy_version < (1, 13), "NumPy Unsupported")
     def test_isin(self):
         np_pyfunc = np_isin
         np_nbfunc = njit(np_pyfunc)

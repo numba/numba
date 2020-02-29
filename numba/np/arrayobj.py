@@ -1997,26 +1997,25 @@ def in1d(ar1, ar2, assume_unique=False, invert=False):
         return ret[rev_idx]
 
 
-if numpy_version >= (1, 13):
-    @overload(np.isin)
-    def np_isin(element, test_elements, assume_unique=False, invert=False):
-        #here you can perform some prep operation for numpy isin, if necessary
-        if not type_can_asarray(element):
-            raise errors.TypingError('The first argument "element" must '
-                                     'be array-like')
+@overload(np.isin)
+def np_isin(element, test_elements, assume_unique=False, invert=False):
+    #here you can perform some prep operation for numpy isin, if necessary
+    if not type_can_asarray(element):
+        raise errors.TypingError('The first argument "element" must '
+                                 'be array-like')
 
-        if not type_can_asarray(test_elements):
-            raise errors.TypingError('The second argument "test_elements" must '
-                                     'be array-like')
+    if not type_can_asarray(test_elements):
+        raise errors.TypingError('The second argument "test_elements" must '
+                                 'be array-like')
 
-        element = np.asarray(element)
+    element = np.asarray(element)
 
-        def numba_isin(element, test_elements, assume_unique=False,
-                       invert=False):
-            return in1d(element, test_elements, assume_unique, invert) \
-                .reshape(np.shape(element))
+    def numba_isin(element, test_elements, assume_unique=False,
+                   invert=False):
+        return in1d(element, test_elements, assume_unique, invert) \
+            .reshape(np.shape(element))
 
-        return numba_isin
+    return numba_isin
 
 
 @overload(np.repeat)
