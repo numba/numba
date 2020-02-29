@@ -301,7 +301,7 @@ numpydoc_show_class_members = False
 
 def _autogenerate():
     from numba.scripts.generate_lower_listing import gen_lower_listing
-    from numba.help.inspector import write_listings
+    from numba.misc.help.inspector import write_listings
 
     basedir = os.path.dirname(__file__)
     gen_lower_listing(os.path.join(basedir,

@@ -5,8 +5,7 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 2.7 and 3.5 or later, and Numpy versions 1.7 to
-1.16.
+Numba is compatible with Python 3.6 or later, and Numpy versions 1.15 or later.
 
 Our supported platforms are:
 
@@ -19,8 +18,7 @@ Our supported platforms are:
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
-:ref:`numba-parallel` is only available on 64-bit platforms,
-and is not supported in Python 2.7 on Windows.
+:ref:`numba-parallel` is only available on 64-bit platforms.
 
 Installing using conda on x86/x86_64/POWER Platforms
 ----------------------------------------------------
@@ -186,8 +184,6 @@ vary with target operating system and hardware. The following lists them all
   * ``setuptools``
   * ``numpy``
   * ``llvmlite``
-  * ``funcsigs`` (Python 2)
-  * ``singledispatch`` (Python 2)
   * Compiler toolchain mentioned above
 
 * Optional build time:
@@ -204,8 +200,6 @@ vary with target operating system and hardware. The following lists them all
   * ``setuptools``
   * ``numpy``
   * ``llvmlite``
-  * ``funcsigs`` (Python 2)
-  * ``singledispatch`` (Python 2)
 
 * Optional runtime are:
 
@@ -295,5 +289,4 @@ further information.
                                   pci bus id: 1
 
 (output truncated due to length)
-
 

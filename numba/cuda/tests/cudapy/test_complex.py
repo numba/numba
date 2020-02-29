@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 import cmath
 import math
 import itertools
@@ -10,9 +8,11 @@ import textwrap
 import numpy as np
 
 from numba.cuda.testing import unittest, SerialMixin
-from numba import cuda, types, utils, numpy_support
+from numba.core import types, utils
+from numba import cuda
 from numba.tests.support import TestCase, compile_function
 from numba.tests.complex_usecases import *
+from numba.np import numpy_support
 
 
 def compile_scalar_func(pyfunc, argtypes, restype):
@@ -180,7 +180,6 @@ class TestCMath(BaseComplexTest, TestCase):
     def test_isinf(self):
         self.check_predicate_func(isinf_usecase)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
     def test_isfinite(self):
         self.check_predicate_func(isfinite_usecase)
 

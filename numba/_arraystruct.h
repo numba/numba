@@ -7,7 +7,7 @@
  */
 
 typedef struct {
-    void     *meminfo;  /* see _nrt_python.c and nrt.h in numba/runtime */
+    void     *meminfo;  /* see _nrt_python.c and nrt.h in numba/core/runtime */
     PyObject *parent;
     npy_intp nitems;
     npy_intp itemsize;

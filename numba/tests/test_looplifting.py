@@ -1,12 +1,10 @@
-from __future__ import print_function, division, absolute_import
-
+from io import StringIO
 import numpy as np
 
-from numba import types, utils
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from .support import TestCase, tag, MemoryLeakMixin, skip_py38_or_later
-
+from numba.core import types
+from numba.core.compiler import compile_isolated, Flags
+from numba.tests.support import TestCase, tag, MemoryLeakMixin
+import unittest
 
 
 looplift_flags = Flags()
@@ -118,7 +116,6 @@ def reject_npm1(x):
     return a
 
 
-@skip_py38_or_later
 class TestLoopLifting(MemoryLeakMixin, TestCase):
 
     def try_lift(self, pyfunc, argtypes):
@@ -206,7 +203,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
     def test_lift3(self):
         self.check_lift_ok(lift3, (types.intp,), (123,))
 
-    @tag('important')
     def test_lift4(self):
         self.check_lift_ok(lift4, (types.intp,), (123,))
 
@@ -216,7 +212,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
     def test_lift_issue2561(self):
         self.check_no_lift(lift_issue2561, (), ())
 
-    @tag('important')
     def test_lift_gen1(self):
         self.check_lift_generator_ok(lift_gen1, (types.intp,), (123,))
 
@@ -233,7 +228,6 @@ class TestLoopLifting(MemoryLeakMixin, TestCase):
         self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))
 
 
-@skip_py38_or_later
 class TestLoopLiftingAnnotate(TestCase):
     def test_annotate_1(self):
         """
@@ -259,7 +253,7 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, xcopy + 1)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfoo.inspect_types(file=buf)
         annotation = buf.getvalue()
         buf.close()
@@ -296,7 +290,7 @@ class TestLoopLiftingAnnotate(TestCase):
         r = cfoo(x)
         np.testing.assert_equal(r, (xcopy + 1) * 2)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfoo.inspect_types(file=buf)
         annotation = buf.getvalue()
         buf.close()
@@ -308,7 +302,6 @@ class TestLoopLiftingAnnotate(TestCase):
         self.assertIn("Loop at line {line}".format(line=line2), annotation)
 
 
-@skip_py38_or_later
 class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
     def assert_has_lifted(self, jitted, loopcount):
         lifted = jitted.overloads[jitted.signatures[0]].lifted
@@ -492,7 +485,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         """
         https://github.com/numba/numba/issues/2179
 
-        Looplifting transformation is using the wrong verion of variable `h`.
+        Looplifting transformation is using the wrong version of variable `h`.
         """
         from numba import jit
 

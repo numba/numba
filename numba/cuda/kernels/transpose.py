@@ -1,7 +1,7 @@
 from numba import cuda
 from numba.cuda.cudadrv.driver import driver
-from numba import numpy_support as nps
 import math
+from numba.np import numpy_support as nps
 
 def transpose(a, b=None):
     """Compute the transpose of 'a' and store it into 'b', if given,

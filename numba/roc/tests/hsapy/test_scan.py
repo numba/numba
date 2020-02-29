@@ -1,9 +1,7 @@
-from __future__ import print_function, absolute_import, division
-
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import roc, intp, int32
+import unittest
 
 
 @roc.jit(device=True)
@@ -119,7 +117,7 @@ def device_scan(tid, data, temp, inclusive):
     warp_scan_res = warp_scan(tid, temp, inclusive)
     roc.barrier(roc.CLK_GLOBAL_MEM_FENCE)
 
-    # Get parital result
+    # Get partial result
     if lane == (_WARPSIZE - 1):
         temp[warpid] = temp[tid]
     roc.barrier(roc.CLK_GLOBAL_MEM_FENCE)
@@ -129,7 +127,7 @@ def device_scan(tid, data, temp, inclusive):
         warp_scan(tid, temp, True)
     roc.barrier(roc.CLK_GLOBAL_MEM_FENCE)
 
-    # Accumlate scanned partial results
+    # Accumulate scanned partial results
     if warpid > 0:
         warp_scan_res += temp[warpid - 1]
     roc.barrier(roc.CLK_GLOBAL_MEM_FENCE)

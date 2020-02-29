@@ -1,6 +1,5 @@
 # A temporary wrapper to connect to the HLC LLVM binaries.
 # Currently, connect to commandline interface.
-from __future__ import print_function, absolute_import
 import sys
 from subprocess import check_call, check_output
 import subprocess
@@ -8,14 +7,13 @@ import tempfile
 import os
 import re
 from collections import namedtuple
-from numba import config
 from numba.roc.hsadrv import devices
 from .common import AMDGCNModule
 from .config import ROCM_BC_PATH
-from . import TRIPLE
+from numba.roc.hlc import TRIPLE
 from datetime import datetime
 from contextlib import contextmanager
-from numba import utils
+from numba.core import utils, config
 from numba.roc.hsadrv.error import HsaSupportError
 
 _real_check_call = check_call
@@ -27,11 +25,7 @@ def error_pipe():
     if NOISY_CMDLINE:
        yield subprocess.STDOUT
     else:
-        if utils.IS_PY3:
-           yield subprocess.DEVNULL
-        else:
-           with open(os.devnull, 'wb') as devnull:
-               yield devnull
+        yield subprocess.DEVNULL
 
 
 def check_call(*args, **kwargs):

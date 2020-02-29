@@ -1,4 +1,3 @@
-from __future__ import absolute_import, print_function
 import numpy as np
 from numba import cuda
 from numba.cuda.testing import unittest, SerialMixin

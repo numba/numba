@@ -1,13 +1,12 @@
-from __future__ import print_function
-
 import itertools
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba import types, jit, typeof
-from numba.errors import TypingError
-from .support import MemoryLeakMixin, TestCase, tag
+import unittest
+from numba import jit, typeof
+from numba.core import types
+from numba.core.errors import TypingError
+from numba.tests.support import MemoryLeakMixin, TestCase, tag
 
 
 def getitem_usecase(a, b):
@@ -127,7 +126,6 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         foo(arr, 1)
         self.assertEqual(arr[0], arr[1])
 
-    @tag('important')
     def test_getitem_array(self):
         # Test advanced indexing with a single array index
         N = 4

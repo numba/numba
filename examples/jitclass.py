@@ -6,8 +6,8 @@ A simple jitclass example.
 """
 
 import numpy as np
-from numba import jitclass          # import the decorator
 from numba import int32, float32    # import the types
+from numba.experimental import jitclass
 
 spec = [
     ('value', int32),               # a simple scalar field

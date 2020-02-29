@@ -1,6 +1,4 @@
-from __future__ import print_function
-
-import numba.unittest_support as unittest
+import unittest
 
 from collections import namedtuple
 import contextlib
@@ -11,11 +9,12 @@ import sys
 
 import numpy as np
 
-from numba.compiler import compile_isolated, Flags
-from numba import jit, types
-import numba.unittest_support as unittest
-from .support import (TestCase, enable_pyobj_flags, MemoryLeakMixin, tag,
-                      compile_function)
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit
+from numba.core import types
+import unittest
+from numba.tests.support import (TestCase, enable_pyobj_flags, MemoryLeakMixin,
+                                 tag, compile_function)
 
 
 Point = namedtuple('Point', ('a', 'b'))
@@ -63,6 +62,11 @@ def update_usecase(a, b, c):
     s.update(b)
     s.update(c)
     return list(s)
+
+def bool_usecase(arg):
+    # Remove one element to allow for empty sets.
+    s = set(arg[1:])
+    return bool(s)
 
 def remove_usecase(a, b):
     s = set(a)
@@ -275,10 +279,6 @@ def unique_usecase(src):
     return res
 
 
-needs_set_literals = unittest.skipIf(sys.version_info < (2, 7),
-                                     "set literals unavailable before Python 2.7")
-
-
 class BaseTest(MemoryLeakMixin, TestCase):
 
     def setUp(self):
@@ -335,29 +335,18 @@ class BaseTest(MemoryLeakMixin, TestCase):
 
 class TestSetLiterals(BaseTest):
 
-    @needs_set_literals
     def test_build_set(self, flags=enable_pyobj_flags):
         pyfunc = set_literal_return_usecase((1, 2, 3, 2))
         self.run_nullary_func(pyfunc, flags=flags)
 
-    @needs_set_literals
     def test_build_heterogeneous_set(self, flags=enable_pyobj_flags):
         pyfunc = set_literal_return_usecase((1, 2.0, 3j, 2))
         self.run_nullary_func(pyfunc, flags=flags)
         pyfunc = set_literal_return_usecase((2.0, 2))
         got, expected = self.run_nullary_func(pyfunc, flags=flags)
 
-        # Check that items are inserted in the right order (here the
-        # result will be {2.0}, not {2})
-        # Note: http://bugs.python.org/issue26020 changed the previously invalid
-        #       ordering.
-        if ((sys.version_info[:2] == (2, 7) and sys.version_info[2] >= 13) or
-              (sys.version_info[:2] == (3, 5) and sys.version_info[2] >= 3) or
-              (sys.version_info[:2] >= (3, 6))):
-            self.assertIs(type(got.pop()), type(expected.pop()))
+        self.assertIs(type(got.pop()), type(expected.pop()))
 
-    @tag('important')
-    @needs_set_literals
     def test_build_set_nopython(self):
         arg = list(self.sparse_array(50))
         pyfunc = set_literal_convert_usecase(arg)
@@ -384,7 +373,6 @@ class TestSets(BaseTest):
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
-    @tag('important')
     def test_set_return(self):
         pyfunc = set_return_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -392,7 +380,6 @@ class TestSets(BaseTest):
         arg = (1, 2, 3, 2, 7)
         self.assertEqual(cfunc(arg), set(arg))
 
-    @tag('important')
     def test_iterator(self):
         pyfunc = iterator_usecase
         check = self.unordered_checker(pyfunc)
@@ -401,7 +388,6 @@ class TestSets(BaseTest):
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
-    @tag('important')
     def test_update(self):
         pyfunc = update_usecase
         check = self.unordered_checker(pyfunc)
@@ -413,6 +399,15 @@ class TestSets(BaseTest):
         b = self.duplicates_array(50)
         c = self.sparse_array(50)
         check(a, b, c)
+    
+    def test_bool(self):
+        pyfunc = bool_usecase
+        check = self.unordered_checker(pyfunc)
+
+        check([1])
+        check([1, 2])
+        check([False, False])
+        check([True, False])
 
     def test_remove(self):
         pyfunc = remove_usecase
@@ -431,7 +426,6 @@ class TestSets(BaseTest):
         with self.assertRaises(KeyError) as raises:
             cfunc((1, 2, 3), (5, ))
 
-    @tag('important')
     def test_discard(self):
         pyfunc = discard_usecase
         check = self.unordered_checker(pyfunc)
@@ -454,7 +448,6 @@ class TestSets(BaseTest):
         check = self.unordered_checker(pyfunc)
         check((1,), 5, 5)
 
-    @tag('important')
     def test_pop(self):
         pyfunc = pop_usecase
         check = self.unordered_checker(pyfunc)
@@ -462,7 +455,6 @@ class TestSets(BaseTest):
         check((2, 3, 55, 11, 8, 42))
         check(self.sparse_array(50))
 
-    @tag('important')
     def test_contains(self):
         pyfunc = contains_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -628,7 +620,6 @@ class OtherTypesTest(object):
         check(self.duplicates_array(200))
         check(self.sparse_array(200))
 
-    @tag('important')
     def test_update(self):
         pyfunc = update_usecase
         check = self.unordered_checker(pyfunc)
@@ -682,7 +673,6 @@ class TestUnboxing(BaseTest):
             self.assertPreciseEqual(got, expected)
         return check
 
-    @tag('important')
     def test_numbers(self):
         check = self.check_unary(unbox_usecase)
         check(set([1, 2]))
@@ -695,7 +685,6 @@ class TestUnboxing(BaseTest):
         check(set([(1, 2), (3, 4)]))
         check(set([(1, 2j), (3, 4j)]))
 
-    @tag('important')
     def test_set_inside_tuple(self):
         check = self.check_unary(unbox_usecase3)
         check((1, set([2, 3, 4])))
@@ -770,7 +759,6 @@ class TestSetReflection(BaseTest):
                 cfunc(s)
             self.assertPreciseEqual(s, set([1, 2, 3, 42]))
 
-    @tag('important')
     def test_reflect_same_set(self):
         """
         When the same set object is reflected twice, behaviour should
@@ -803,7 +791,6 @@ class TestExamples(BaseTest):
     Examples of using sets.
     """
 
-    @tag('important')
     def test_unique(self):
         pyfunc = unique_usecase
         check = self.unordered_checker(pyfunc)

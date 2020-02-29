@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function
-
 import os
 import sys
 from collections import namedtuple
@@ -9,11 +7,12 @@ from ctypes import (c_size_t, byref, c_char_p, c_void_p, Structure, CDLL,
 import tempfile
 import os
 import re
-from numba import utils, config
+import weakref
 from numba.roc.hsadrv import devices
 from .common import AMDGCNModule
 
 from numba.roc.hlc.hlc import CmdLine
+from numba.core import config
 
 # the CLI tooling is needed for the linking phase at present
 cli = CmdLine()
@@ -72,7 +71,7 @@ class HLC(object):
                 hlc.ROC_ParseBitcode.restype = moduleref_ptr
                 hlc.ROC_ModuleEmitBRIG.restype = c_size_t
                 hlc.ROC_Initialize()
-                utils.finalize(hlc, hlc.ROC_Finalize)
+                weakref.finalize(hlc, hlc.ROC_Finalize)
 
                 hlc.ROC_SetCommandLineOption.argtypes = [
                     c_int,

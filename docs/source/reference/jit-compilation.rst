@@ -7,7 +7,7 @@ JIT functions
 
 .. _jit-decorator:
 
-.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={})
+.. decorator:: numba.jit(signature=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False)
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters are optional.
@@ -74,7 +74,7 @@ JIT functions
    .. _jit-decorator-parallel:
 
    If true, *parallel* enables the automatic parallelization of a number of
-   common Numpy constructs as well as the fusion of adjacent parallel 
+   common Numpy constructs as well as the fusion of adjacent parallel
    operations to maximize cache locality.
 
    The *error_model* option controls the divide-by-zero behavior.
@@ -94,6 +94,16 @@ JIT functions
    Further, if :ref:`Intel SVML <intel-svml>` is installed faster but less
    accurate versions of some math intrinsics are used (answers to within
    ``4 ULP``).
+
+   .. _jit-decorator-boundscheck:
+
+   If True, ``boundscheck`` enables bounds checking for array indices. Out of
+   bounds accesses will raise IndexError. The default is to not do bounds
+   checking. If bounds checking is disabled, out of bounds accesses can
+   produce garbage results or segfaults. However, enabling bounds checking
+   will slow down typical functions, so it is recommended to only use this
+   flag for debugging. You can also set the `NUMBA_BOUNDSCHECK` environment
+   variable to 0 or 1 to globally override this flag.
 
    The *locals* dictionary may be used to force the :ref:`numba-types`
    of particular local variables, for example if you want to force the
@@ -316,7 +326,10 @@ Vectorized functions (ufuncs and DUFuncs)
    for the function you are implementing.
 
    If your function doesn't take an output array, you should omit the "arrow"
-   in the layout string (e.g. ``"(n),(n)"``).
+   in the layout string (e.g. ``"(n),(n)"``). When doing this, it is important
+   to be aware that changes to the input arrays cannot always be relied on to be
+   visible outside the execution of the ufunc, as NumPy may pass in temporary
+   arrays as inputs (for example, if a cast is required).
 
    .. seealso::
       Specification of the `layout string <http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_

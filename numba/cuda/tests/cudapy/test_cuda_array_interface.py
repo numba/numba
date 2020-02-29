@@ -247,7 +247,8 @@ class TestCudaArrayInterface(CUDATestCase):
 
     def test_consuming_strides(self):
         hostarray = np.arange(10).reshape(2, 5)
-        face = cuda.to_device(hostarray).__cuda_array_interface__
+        devarray = cuda.to_device(hostarray)
+        face = devarray.__cuda_array_interface__
         self.assertIsNone(face['strides'])
         got = cuda.from_cuda_array_interface(face).copy_to_host()
         np.testing.assert_array_equal(got, hostarray)

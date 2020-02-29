@@ -1,15 +1,13 @@
-from __future__ import print_function
 import os
 import subprocess
 import sys
 import warnings
 import numpy as np
 
-import numba.unittest_support as unittest
+import unittest
 from numba import jit
-from numba.errors import NumbaWarning, deprecated, NumbaDeprecationWarning
-from numba import errors
-from .support import skip_py38_or_later
+from numba.core.errors import NumbaWarning, deprecated, NumbaDeprecationWarning
+from numba.core import errors
 
 
 class TestBuiltins(unittest.TestCase):
@@ -100,7 +98,6 @@ class TestBuiltins(unittest.TestCase):
 
             self.assertEqual(len(w), 0)
 
-    @skip_py38_or_later
     def test_loop_lift_warn(self):
         def do_loop(x):
             a = {} # noqa dead

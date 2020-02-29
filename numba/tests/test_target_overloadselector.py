@@ -1,13 +1,11 @@
-from __future__ import print_function
-
 from itertools import product, permutations
 from collections import defaultdict
 
-import numba.unittest_support as unittest
-from numba.targets.base import OverloadSelector
-from numba.targets.registry import cpu_target
-from numba.targets.imputils import builtin_registry, RegistryLoader
-from numba import types
+import unittest
+from numba.core.base import OverloadSelector
+from numba.core.registry import cpu_target
+from numba.core.imputils import builtin_registry, RegistryLoader
+from numba.core import types
 
 
 class TestOverloadSelector(unittest.TestCase):

@@ -141,9 +141,13 @@ transfers and kernel execution. For further details on streams, see the `CUDA C
 Programming Guide Streams section
 <http://docs.nvidia.com/cuda/cuda-c-programming-guide/#streams>`_.
 
-To create a stream:
+To create a new stream:
 
 .. autofunction:: numba.cuda.stream
+
+To get the default stream:
+
+.. autofunction:: numba.cuda.default_stream
 
 Streams are instances of :class:`numba.cuda.cudadrv.driver.Stream`:
 
