@@ -1,24 +1,23 @@
 """
 Unspecified error handling tests
 """
-from __future__ import division
 
 from numba import jit, njit, typed, int64
-from numba import unittest_support as unittest
-from numba import errors, utils
+from numba.core import errors, utils
 import numpy as np
 
 
-from numba.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
-                                  IRProcessing,)
+from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, FixupArgs,
+                                       IRProcessing,)
 
-from numba.typed_passes import (NopythonTypeInference, DeadCodeElimination,
-                                NativeLowering,
-                                IRLegalization, NoPythonBackend)
+from numba.core.typed_passes import (NopythonTypeInference, DeadCodeElimination,
+                                     NativeLowering, IRLegalization,
+                                     NoPythonBackend)
 
-from numba.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 
-from .support import skip_parfors_unsupported
+from numba.tests.support import skip_parfors_unsupported
+import unittest
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
 _global_list = [1, 2, 3, 4]
@@ -94,8 +93,8 @@ class TestMiscErrorHandling(unittest.TestCase):
 
     def test_use_of_ir_unknown_loc(self):
         # for context see # 3390
-        import numba
-        class TestPipeline(numba.compiler.CompilerBase):
+        from numba.core.compiler import CompilerBase
+        class TestPipeline(CompilerBase):
             def define_pipelines(self):
                 name = 'bad_DCE_pipeline'
                 pm = PassManager(name)
@@ -111,7 +110,7 @@ class TestMiscErrorHandling(unittest.TestCase):
                 pm.finalize()
                 return [pm]
 
-        @numba.jit(pipeline_class=TestPipeline)
+        @njit(pipeline_class=TestPipeline)
         def f(a):
             return 0
 
@@ -162,11 +161,7 @@ class TestMiscErrorHandling(unittest.TestCase):
         def foo():
             y = (x for x in range(10))
 
-        if utils.IS_PY3:
-            expected = "The use of yield in a closure is unsupported."
-        else:
-            # funcsigs falls over on py27
-            expected = "Cannot obtain a signature for"
+        expected = "The use of yield in a closure is unsupported."
 
         for dec in jit(forceobj=True), njit:
             with self.assertRaises(errors.UnsupportedError) as raises:

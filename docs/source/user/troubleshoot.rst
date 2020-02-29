@@ -378,6 +378,8 @@ still result in compilation of a ufunc, as there is no straightforward pure
 Python implementation of these functions.
 
 
+.. _debugging-jit-compiled-code:
+
 Debugging JIT compiled code with GDB
 ====================================
 

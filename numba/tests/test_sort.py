@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import copy
 import itertools
 import math
@@ -8,15 +6,16 @@ import sys
 
 import numpy as np
 
-from numba.compiler import compile_isolated, Flags
-from numba import jit, types, utils, njit
-import numba.unittest_support as unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit, njit
+from numba.core import types, utils, errors
+import unittest
 from numba import testing
-from .support import TestCase, MemoryLeakMixin, tag
+from numba.tests.support import TestCase, MemoryLeakMixin, tag
 
-from numba.targets.quicksort import make_py_quicksort, make_jit_quicksort
-from numba.targets.mergesort import make_jit_mergesort
-from .timsort import make_py_timsort, make_jit_timsort, MergeRun
+from numba.misc.quicksort import make_py_quicksort, make_jit_quicksort
+from numba.misc.mergesort import make_jit_mergesort
+from numba.misc.timsort import make_py_timsort, make_jit_timsort, MergeRun
 
 
 def make_temp_list(keys, n):
@@ -174,7 +173,6 @@ class BaseTimsortTest(BaseSortingTest):
         f = self.timsort.merge_init
         return f(keys)
 
-    @tag('important')
     def test_binarysort(self):
         n = 20
         def check(l, n, start=0):
@@ -260,7 +258,6 @@ class BaseTimsortTest(BaseSortingTest):
         for i in range(len(l) - 1):
             check(l, i, n)
 
-    @tag('important')
     def test_gallop_left(self):
         n = 20
         f = self.timsort.gallop_left
@@ -649,7 +646,6 @@ class BaseQuicksortTest(BaseSortingTest):
         l = self.duprandom_list(n)
         check(l, n)
 
-    @tag('important')
     def test_run_quicksort(self):
         f = self.quicksort.run_quicksort
 
@@ -783,7 +779,6 @@ class TestNumpySort(TestCase):
         for orig in self.int_arrays():
             self.check_sort_inplace(pyfunc, cfunc, orig)
 
-    @tag('important')
     def test_array_sort_float(self):
         pyfunc = sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -828,7 +823,6 @@ class TestNumpySort(TestCase):
         check(argsort_kind_usecase, is_stable=False)
         check(np_argsort_kind_usecase, is_stable=False)
 
-    @tag('important')
     def test_argsort_float(self):
         def check(pyfunc):
             cfunc = jit(nopython=True)(pyfunc)
@@ -838,7 +832,6 @@ class TestNumpySort(TestCase):
         check(argsort_usecase)
         check(np_argsort_usecase)
 
-    @tag('important')
     def test_argsort_float(self):
         def check(pyfunc, is_stable):
             cfunc = jit(nopython=True)(pyfunc)
@@ -854,7 +847,6 @@ class TestNumpySort(TestCase):
 
 class TestPythonSort(TestCase):
 
-    @tag('important')
     def test_list_sort(self):
         pyfunc = list_sort_usecase
         cfunc = jit(nopython=True)(pyfunc)
@@ -898,7 +890,7 @@ class TestPythonSort(TestCase):
             self.assertNotEqual(list(orig), got)   # sanity check
 
 
-class TestMergeSort(unittest.TestCase):
+class TestMergeSort(TestCase):
     def setUp(self):
         np.random.seed(321)
 
@@ -921,6 +913,161 @@ class TestMergeSort(unittest.TestCase):
         sorter = njit(lambda arr: toplevel(arr))
         for args in arglist:
             self.check_argsort_stable(sorter, *args)
+
+
+nop_compiler = lambda x:x
+
+
+class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
+
+    def test_01(self):
+
+        a = [3, 1, 4, 1, 5, 9]
+
+        @njit
+        def external_key(z):
+            return 1. / z
+
+        @njit
+        def foo(x, key=None):
+            new_x = x[:]
+            new_x.sort(key=key)
+            return sorted(x[:], key=key), new_x
+
+        self.assertPreciseEqual(foo(a[:]), foo.py_func(a[:]))
+        self.assertPreciseEqual(foo(a[:], external_key),
+                                foo.py_func(a[:], external_key))
+
+    def test_02(self):
+
+        a = [3, 1, 4, 1, 5, 9]
+
+        @njit
+        def foo(x):
+            def closure_key(z):
+                return 1. / z
+            new_x = x[:]
+            new_x.sort(key=closure_key)
+            return sorted(x[:], key=closure_key), new_x
+
+        self.assertPreciseEqual(foo(a[:]), foo.py_func(a[:]))
+
+    def test_03(self):
+
+        a = [3, 1, 4, 1, 5, 9]
+
+        def gen(compiler):
+
+            @compiler
+            def bar(x, func):
+                new_x = x[:]
+                new_x.sort(key=func)
+                return sorted(x[:], key=func), new_x
+
+            @compiler
+            def foo(x):
+                def closure_escapee_key(z):
+                    return 1. / z
+                return bar(x, closure_escapee_key)
+
+            return foo
+
+        self.assertPreciseEqual(gen(njit)(a[:]), gen(nop_compiler)(a[:]))
+
+    def test_04(self):
+
+        a = ['a','b','B','b','C','A']
+
+        @njit
+        def external_key(z):
+            return z.upper()
+
+        @njit
+        def foo(x, key=None):
+            new_x = x[:]
+            new_x.sort(key=key)
+            return sorted(x[:], key=key), new_x
+
+        self.assertPreciseEqual(foo(a[:]), foo.py_func(a[:]))
+        self.assertPreciseEqual(foo(a[:], external_key),
+                                foo.py_func(a[:], external_key))
+
+    def test_05(self):
+
+        a = ['a','b','B','b','C','A']
+
+        @njit
+        def external_key(z):
+            return z.upper()
+
+        @njit
+        def foo(x, key=None, reverse=False):
+            new_x = x[:]
+            new_x.sort(key=key, reverse=reverse)
+            return (sorted(x[:], key=key, reverse=reverse), new_x)
+
+        for key, rev in itertools.product((None, external_key),
+                                          (True, False, 1, -12, 0)):
+            self.assertPreciseEqual(foo(a[:], key, rev),
+                                    foo.py_func(a[:], key, rev))
+
+    def test_optional_on_key(self):
+        a = [3, 1, 4, 1, 5, 9]
+
+        @njit
+        def foo(x, predicate):
+            if predicate:
+                def closure_key(z):
+                    return 1. / z
+            else:
+                closure_key = None
+
+            new_x = x[:]
+            new_x.sort(key=closure_key)
+
+            return (sorted(x[:], key=closure_key), new_x)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            TF = True
+            foo(a[:], TF)
+
+        msg = "Key must concretely be None or a Numba JIT compiled function"
+        self.assertIn(msg, str(raises.exception))
+
+    def test_exceptions_sorted(self):
+
+        @njit
+        def foo_sorted(x, key=None, reverse=False):
+            return sorted(x[:], key=key, reverse=reverse)
+
+        @njit
+        def foo_sort(x, key=None, reverse=False):
+            new_x = x[:]
+            new_x.sort(key=key, reverse=reverse)
+            return new_x
+
+        @njit
+        def external_key(z):
+            return 1. / z
+
+        a = [3, 1, 4, 1, 5, 9]
+
+        for impl in (foo_sort, foo_sorted):
+
+            # check illegal key
+            with self.assertRaises(errors.TypingError) as raises:
+                impl(a, key="illegal")
+
+            expect = "Key must be None or a Numba JIT compiled function"
+            self.assertIn(expect, str(raises.exception))
+
+            # check illegal reverse
+            with self.assertRaises(errors.TypingError) as raises:
+                impl(a, key=external_key, reverse="go backwards")
+
+            expect = "an integer is required for 'reverse'"
+            self.assertIn(expect, str(raises.exception))
+
 
 
 if __name__ == '__main__':

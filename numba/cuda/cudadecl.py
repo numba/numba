@@ -1,9 +1,8 @@
-from __future__ import print_function, division, absolute_import
-from numba import types
-from numba.typing.npydecl import register_number_classes
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    AbstractTemplate, MacroTemplate,
-                                    signature, Registry)
+from numba.core import types
+from numba.core.typing.npydecl import register_number_classes
+from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
+                                         AbstractTemplate, MacroTemplate,
+                                         signature, Registry)
 from numba import cuda
 
 

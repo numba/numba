@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import
 import math
 import numpy as np
 from numba import cuda, float64, int8, int32

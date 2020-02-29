@@ -1,9 +1,8 @@
 """
 A library written in CUDA Python for generating reduction kernels
 """
-from __future__ import division
 
-from numba.numpy_support import from_dtype
+from numba.np.numpy_support import from_dtype
 
 
 _WARPSIZE = 32
@@ -143,7 +142,7 @@ def _gpu_reduce_factory(fn, nbtype):
 
         Launch config:
 
-        Blocksize must be mutiple of warpsize and it is limited to 4 warps.
+        Blocksize must be multiple of warpsize and it is limited to 4 warps.
         """
         tid = cuda.threadIdx.x
 

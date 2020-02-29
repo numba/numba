@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, division, absolute_import
 
 import logging
 import os
@@ -9,14 +8,13 @@ from llvmlite import ir
 from llvmlite.binding import Linkage
 import llvmlite.llvmpy.core as lc
 
-from numba import cgutils
-from numba.utils import IS_PY3
-from . import llvm_types as lt
-from numba.compiler import compile_extra, Flags
-from numba.compiler_lock import global_compiler_lock
+from numba.pycc import llvm_types as lt
+from numba.core.compiler import compile_extra, Flags
+from numba.core.compiler_lock import global_compiler_lock
 
-from numba.targets.registry import cpu_target
-from numba.runtime import nrtdynmod
+from numba.core.registry import cpu_target
+from numba.core.runtime import nrtdynmod
+from numba.core import cgutils
 
 
 logger = logging.getLogger(__name__)
@@ -304,72 +302,7 @@ class _ModuleCompiler(object):
             return None
 
 
-class ModuleCompilerPy2(_ModuleCompiler):
-
-    @property
-    def module_create_definition(self):
-        """Return the signature and name of the function to initialize the module.
-        """
-        signature = lc.Type.function(lt._pyobject_head_p,
-                                     (lt._int8_star,
-                                      self.method_def_ptr,
-                                      lt._int8_star,
-                                      lt._pyobject_head_p,
-                                      lt._int32))
-
-        name = "Py_InitModule4"
-
-        if lt._trace_refs_:
-            name += "TraceRefs"
-        if lt._plat_bits == 64:
-            name += "_64"
-
-        return signature, name
-
-    @property
-    def module_init_definition(self):
-        """Return the signature and name of the function to initialize the extension.
-        """
-        return lc.Type.function(lc.Type.void(), ()), "init" + self.module_name
-
-    def _emit_python_wrapper(self, llvm_module):
-
-        # Define the module initialization function.
-        mod_init_fn = llvm_module.add_function(*self.module_init_definition)
-        entry = mod_init_fn.append_basic_block('Entry')
-        builder = lc.Builder(entry)
-        pyapi = self.context.get_python_api(builder)
-
-        # Python C API module creation function.
-        create_module_fn = llvm_module.add_function(*self.module_create_definition)
-        create_module_fn.linkage = lc.LINKAGE_EXTERNAL
-
-        # Define a constant string for the module name.
-        mod_name_const = self.context.insert_const_string(llvm_module,
-                                                          self.module_name)
-
-        method_array = self._emit_method_array(llvm_module)
-
-        mod = builder.call(create_module_fn,
-                           (mod_name_const,
-                            method_array,
-                            NULL,
-                            lc.Constant.null(lt._pyobject_head_p),
-                            lc.Constant.int(lt._int32, sys.api_version)))
-
-        env_array = self._emit_environment_array(llvm_module, builder, pyapi)
-        envgv_array = self._emit_envgvs_array(llvm_module, builder, pyapi)
-
-        self._emit_module_init_code(llvm_module, builder, mod,
-                                    method_array, env_array, envgv_array)
-        # XXX No way to notify failure to caller...
-
-        builder.ret_void()
-
-        self.dll_exports.append(mod_init_fn.name)
-
-
-class ModuleCompilerPy3(_ModuleCompiler):
+class ModuleCompiler(_ModuleCompiler):
 
     _ptr_fun = lambda ret, *args: lc.Type.pointer(lc.Type.function(ret, args))
 
@@ -526,5 +459,3 @@ class ModuleCompilerPy3(_ModuleCompiler):
 
         self.dll_exports.append(mod_init_fn.name)
 
-
-ModuleCompiler = ModuleCompilerPy3 if IS_PY3 else ModuleCompilerPy2

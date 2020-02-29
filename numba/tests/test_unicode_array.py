@@ -1,14 +1,12 @@
-from __future__ import print_function, unicode_literals
-
 import platform
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba import jit, utils, from_dtype, types
+import unittest
+from numba import jit, from_dtype
+from numba.core import types, utils
 from numba.typed import Dict
 from numba.tests.support import TestCase
 
-skip_py2 = unittest.skipIf(not utils.IS_PY3, "not supported in Python 2")
 require_py37 = unittest.skipIf(utils.PYVERSION < (3, 7), "requires Python 3.7+")
 
 
@@ -41,6 +39,10 @@ def getitem_key(x, y, j):
 
 def return_len(x, i):
     return len(x[i])
+
+
+def return_bool(x, i):
+    return bool(x[i])
 
 
 def equal_getitem(x, i, j):
@@ -215,7 +217,6 @@ def return_not(x, i):
     return not x[i]
 
 
-@skip_py2
 @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
 class TestUnicodeArray(TestCase):
 
@@ -454,6 +455,18 @@ class TestUnicodeArray(TestCase):
         self._test(pyfunc, cfunc, np.array(['12', '3']), 0)
         self._test(pyfunc, cfunc, np.array([b'12', b'3']), 1)
         self._test(pyfunc, cfunc, np.array(['12', '3']), 1)
+
+    def test_return_bool(self):
+        pyfunc = return_bool
+        cfunc = jit(nopython=True)(pyfunc)
+        self._test(pyfunc, cfunc, np.array(''), ())
+        self._test(pyfunc, cfunc, np.array(b''), ())
+        self._test(pyfunc, cfunc, np.array(b'12'), ())
+        self._test(pyfunc, cfunc, np.array('12'), ())
+        self._test(pyfunc, cfunc, np.array([b'12', b'']), 0)
+        self._test(pyfunc, cfunc, np.array(['12', '']), 0)
+        self._test(pyfunc, cfunc, np.array([b'12', b'']), 1)
+        self._test(pyfunc, cfunc, np.array(['12', '']), 1)
 
     def _test_op_getitem(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)

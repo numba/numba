@@ -1,8 +1,10 @@
-from numba import unittest_support as unittest
-import numpy as np
-from numba import cuda, types
 import struct
+import numpy as np
+
+from numba import cuda
+from numba.core import types
 from numba.cuda.testing import SerialMixin
+import unittest
 
 
 def float_to_int(x):
@@ -33,7 +35,7 @@ class TestCasting(SerialMixin, unittest.TestCase):
             argarray = np.zeros(1, dtype=intype)
             argarray[0] = arg
             resarray = np.zeros(1, dtype=outtype)
-            cuda_wrapper_fn(argarray, resarray)
+            cuda_wrapper_fn[1, 1](argarray, resarray)
             return resarray[0]
 
         return wrapper_fn

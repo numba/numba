@@ -65,8 +65,7 @@ The following built-in functions are supported:
 * :func:`len`
 * :func:`min`: only the multiple-argument form
 * :func:`max`: only the multiple-argument form
-* :class:`range`: semantics are similar to those of Python 3 even in Python 2:
-  a range object is returned instead of an array of values.
+* :class:`range`
 * :func:`round`
 * :func:`zip`
 
@@ -111,7 +110,6 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.acos`
 * :func:`math.asin`
 * :func:`math.atan`
-* :func:`math.arctan`
 * :func:`math.acosh`
 * :func:`math.asinh`
 * :func:`math.atanh`
@@ -150,14 +148,12 @@ The following functions from the :mod:`operator` module are supported:
 
 * :func:`operator.add`
 * :func:`operator.and_`
-* :func:`operator.div` (Python 2 only)
 * :func:`operator.eq`
 * :func:`operator.floordiv`
 * :func:`operator.ge`
 * :func:`operator.gt`
 * :func:`operator.iadd`
 * :func:`operator.iand`
-* :func:`operator.idiv` (Python 2 only)
 * :func:`operator.ifloordiv`
 * :func:`operator.ilshift`
 * :func:`operator.imod`

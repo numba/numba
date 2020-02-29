@@ -1,14 +1,15 @@
-from __future__ import print_function
-
 import decimal
 import itertools
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types, utils, njit, errors, typeof, numpy_support
-from .support import TestCase, tag
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import njit, typeof
+from numba.core import utils, types, errors
+from numba.tests.support import TestCase, tag
+from numba.core.typing import arraydecl
+from numba.core.types import intp, ellipsis, slice2_type, slice3_type
 
 
 enable_pyobj_flags = Flags()
@@ -471,7 +472,6 @@ class TestGetItem(TestCase):
         for arg in args:
             self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
 
-    @tag('important')
     def test_3d_slicing_npm(self):
         self.test_3d_slicing(flags=Noflags)
 
@@ -567,7 +567,6 @@ class TestGetItem(TestCase):
         a = np.arange(20, dtype='i4').reshape(5, 4)[::2]
         self.assertPreciseEqual(pyfunc(a, 0), cfunc(a, 0))
 
-    @tag('important')
     def test_integer_indexing_1d_for_2d_npm(self):
         self.test_integer_indexing_1d_for_2d(flags=Noflags)
 
@@ -611,7 +610,6 @@ class TestGetItem(TestCase):
             j = np.array(j).astype(np.int32)
             self.assertEqual(pyfunc(a, i, j), cfunc(a, i, j))
 
-    @tag('important')
     def test_2d_integer_indexing_npm(self):
         self.test_2d_integer_indexing(flags=Noflags)
 
@@ -833,11 +831,9 @@ class TestSetItem(TestCase):
         got = cfunc(arg.copy(), *args)
         self.assertPreciseEqual(expected, got)
 
-        if numpy_support.version != (1, 7):
-            # Numpy 1.7 doesn't always raise an error here (object mode)
-            args = (seq, 1, -N + k, 1)
-            with self.assertRaises(ValueError) as raises:
-                cfunc(arg.copy(), *args)
+        args = (seq, 1, -N + k, 1)
+        with self.assertRaises(ValueError) as raises:
+            cfunc(arg.copy(), *args)
 
     def test_1d_slicing_set_tuple(self, flags=enable_pyobj_flags):
         """
@@ -905,7 +901,6 @@ class TestSetItem(TestCase):
     def test_1d_slicing_add_npm(self):
         self.test_1d_slicing_add(flags=Noflags)
 
-    @tag('important')
     def test_2d_slicing_set(self, flags=enable_pyobj_flags):
         """
         2d to 2d slice assignment
@@ -1072,8 +1067,6 @@ class TestTyping(TestCase):
         Check an appropriate layout is inferred for the result of array
         indexing.
         """
-        from numba.typing import arraydecl
-        from numba.types import intp, ellipsis, slice2_type, slice3_type
 
         func = arraydecl.get_array_index_type
 

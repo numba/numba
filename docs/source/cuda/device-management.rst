@@ -67,8 +67,8 @@ obtain a context manager that ensures execution on the selected GPU.
    :noindex:
 .. attribute:: numba.cuda.cudadrv.devices.gpus
 
-:py:data:`.gpus` is an instance of the :class:`_DeviceList` class, from which
-the current GPU context can also be retrieved:
+:py:data:`numba.cuda.gpus` is an instance of the ``_DeviceList`` class, from
+which the current GPU context can also be retrieved:
 
 .. autoclass:: numba.cuda.cudadrv.devices._DeviceList
     :members: current

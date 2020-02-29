@@ -1,4 +1,3 @@
-
 """
 Python wrapper that connects CPython interpreter to the Numba typed-list.
 
@@ -9,12 +8,14 @@ and uses `@jit` functions to access it. Since it inherits from MutableSequence
 it should really quack like the CPython `list`.
 
 """
-from numba.six import MutableSequence
-from numba.types import ListType, TypeRef
-from numba.targets.imputils import numba_typeref_ctor
-from numba import listobject
-from numba import njit, types, cgutils, errors, typeof
-from numba.extending import (
+from collections.abc import MutableSequence
+
+from numba.core.types import ListType, TypeRef
+from numba.core.imputils import numba_typeref_ctor
+from numba.core.dispatcher import Dispatcher
+from numba.core import types, errors, config, cgutils
+from numba import njit, typeof
+from numba.core.extending import (
     overload_method,
     overload,
     box,
@@ -22,6 +23,7 @@ from numba.extending import (
     NativeValue,
     type_callable,
 )
+from numba.typed import listobject
 
 
 @njit
@@ -38,6 +40,21 @@ def _length(l):
 @njit
 def _allocated(l):
     return l._allocated()
+
+
+@njit
+def _is_mutable(l):
+    return l._is_mutable()
+
+
+@njit
+def _make_mutable(l):
+    return l._make_mutable()
+
+
+@njit
+def _make_immutable(l):
+    return l._make_immutable()
 
 
 @njit
@@ -140,6 +157,11 @@ def _index(l, item, start, end):
     return l.index(item, start, end)
 
 
+@njit
+def _sort(l, key, reverse):
+    return l.sort(key, reverse)
+
+
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -149,6 +171,13 @@ class List(MutableSequence):
 
     Implements the MutableSequence interface.
     """
+
+    def __new__(cls, lsttype=None, meminfo=None, allocated=None):
+        if config.DISABLE_JIT:
+            return list.__new__(list)
+        else:
+            return object.__new__(cls)
+
     @classmethod
     def empty_list(cls, item_type, allocated=0):
         """Create a new empty List.
@@ -160,7 +189,10 @@ class List(MutableSequence):
         allocated: int
             number of items to pre-allocate
         """
-        return cls(lsttype=ListType(item_type), allocated=allocated)
+        if config.DISABLE_JIT:
+            return list()
+        else:
+            return cls(lsttype=ListType(item_type), allocated=allocated)
 
     def __init__(self, **kwargs):
         """
@@ -169,7 +201,7 @@ class List(MutableSequence):
 
         Parameters
         ----------
-        lsttype : numba.types.ListType; keyword-only
+        lsttype : numba.core.types.ListType; keyword-only
             Used internally for the list type.
         meminfo : MemInfo; keyword-only
             Used internally to pass the MemInfo object when boxing.
@@ -218,6 +250,15 @@ class List(MutableSequence):
             return 0
         else:
             return _allocated(self)
+
+    def _is_mutable(self):
+        return _is_mutable(self)
+
+    def _make_mutable(self):
+        return _make_mutable(self)
+
+    def _make_immutable(self):
+        return _make_immutable(self)
 
     def __eq__(self, other):
         return _eq(self, other)
@@ -298,6 +339,16 @@ class List(MutableSequence):
 
     def index(self, item, start=None, stop=None):
         return _index(self, item, start, stop)
+
+    def sort(self, key=None, reverse=False):
+        """Sort the list inplace.
+
+        See also ``list.sort()``
+        """
+        # If key is not already a dispatcher object, make it so
+        if callable(key) and not isinstance(key, Dispatcher):
+            key = njit(key)
+        return _sort(self, key, reverse)
 
     def __str__(self):
         buf = []
@@ -406,7 +457,7 @@ def impl_numba_typeref_ctor(cls):
     cls : TypeRef
         Expecting a TypeRef of a precise ListType.
 
-    See also: `redirect_type_ctor` in numba/target/bulitins.py
+    See also: `redirect_type_ctor` in numba/cpython/bulitins.py
     """
     list_ty = cls.instance_type
     if not isinstance(list_ty, types.ListType):

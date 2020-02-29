@@ -8,7 +8,6 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <math.h>
-#include "_math_c99.h"
 #ifdef _MSC_VER
     #define int64_t signed __int64
     #define uint64_t unsigned __int64
@@ -134,8 +133,7 @@ numba_cpowf(npy_cfloat *a, npy_cfloat *b, npy_cfloat *out) {
     *out = npy_cpackf((float) _out.real, (float) _out.imag);
 }
 
-/* C99 math functions: redirect to system implementations
-   (but see _math_c99.h for Windows) */
+/* C99 math functions: redirect to system implementations */
 
 NUMBA_EXPORT_FUNC(double)
 numba_gamma(double x)
@@ -255,36 +253,8 @@ numba_extract_record_data(PyObject *recordobj, Py_buffer *pbuf) {
     if (!attrdata) return NULL;
 
     if (-1 == PyObject_GetBuffer(attrdata, pbuf, 0)){
-        #if PY_MAJOR_VERSION >= 3
-            Py_DECREF(attrdata);
-            return NULL;
-        #else
-            /* HACK!!! */
-            /* In Python 2.6, it will report no buffer interface for record
-               even though it should */
-            PyBufferObject_Hack *hack;
-
-            /* Clear the error */
-            PyErr_Clear();
-
-            hack = (PyBufferObject_Hack*) attrdata;
-
-            if (hack->b_base == NULL) {
-                ptr = hack->b_ptr;
-            } else {
-                PyBufferProcs *bp;
-                readbufferproc proc = NULL;
-
-                bp = hack->b_base->ob_type->tp_as_buffer;
-                /* FIXME Ignoring any flag.  Just give me the pointer */
-                proc = (readbufferproc)bp->bf_getreadbuffer;
-                if ((*proc)(hack->b_base, 0, &ptr) <= 0) {
-                    Py_DECREF(attrdata);
-                    return NULL;
-                }
-                ptr = (char*)ptr + hack->b_offset;
-            }
-        #endif
+        Py_DECREF(attrdata);
+        return NULL;
     } else {
         ptr = pbuf->buf;
     }
@@ -810,12 +780,6 @@ NUMBA_EXPORT_FUNC(int)
 numba_fatal_error(void)
 {
     PyGILState_Ensure();
-#if PY_MAJOR_VERSION < 3
-    /* Py_FatalError doesn't print the current error on Python 2, do it
-       ourselves. */
-    if (PyErr_Occurred())
-        PyErr_Print();
-#endif
     Py_FatalError("in Numba-compiled function");
     return 0; /* unreachable */
 }
@@ -858,13 +822,7 @@ static void traceback_add(const char *funcname, const char *filename, int lineno
     return;
 
 error:
-#if PY_MAJOR_VERSION >= 3
     _PyErr_ChainExceptions(exc, val, tb);
-#else
-    Py_XDECREF(globals);
-    Py_XDECREF(code);
-    Py_XDECREF(frame);
-#endif
 }
 
 /* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
@@ -1040,11 +998,7 @@ numba_unpickle(const char *data, int n)
     /* Caching the pickle.loads function shaves a couple µs here. */
     if (loads == NULL) {
         PyObject *picklemod;
-#if PY_MAJOR_VERSION >= 3
         picklemod = PyImport_ImportModule("pickle");
-#else
-        picklemod = PyImport_ImportModule("cPickle");
-#endif
         if (picklemod == NULL)
             return NULL;
         loads = PyObject_GetAttrString(picklemod, "loads");
@@ -1094,7 +1048,6 @@ numba_unpickle(const char *data, int n)
 NUMBA_EXPORT_FUNC(void *)
 numba_extract_unicode(PyObject *obj, Py_ssize_t *length, int *kind,
                       unsigned int *ascii, Py_ssize_t *hash) {
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 3)
     if (!PyUnicode_READY(obj)) {
         *length = PyUnicode_GET_LENGTH(obj);
         *kind = PyUnicode_KIND(obj);
@@ -1120,10 +1073,6 @@ numba_extract_unicode(PyObject *obj, Py_ssize_t *length, int *kind,
     } else {
         return NULL;
     }
-#else
-    /* this function only works in Python 3 */
-    return NULL;
-#endif
 }
 
 /* this is late included as it #defines e.g. SHIFT that should not impact

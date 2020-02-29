@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import
 import numpy as np
 from numba import cuda, float32, int32
 from numba.cuda.testing import unittest, SerialMixin
@@ -25,6 +24,13 @@ class TestCudaSlicing(SerialMixin, unittest.TestCase):
 
         cucopy[1, 10](inp, out)
 
+    def test_assign_empty_slice(self):
+        # Issue #5017. Assigning to an empty slice should not result in a
+        # CudaAPIError.
+        N = 0
+        a = range(N)
+        arr = cuda.device_array(len(a))
+        arr[:] = cuda.to_device(a)
 
 if __name__ == '__main__':
     unittest.main()

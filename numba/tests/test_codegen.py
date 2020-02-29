@@ -2,7 +2,6 @@
 Tests for numba.targets.codegen.
 """
 
-from __future__ import print_function
 
 import warnings
 import base64
@@ -14,11 +13,10 @@ import weakref
 
 import llvmlite.binding as ll
 
-import numba.unittest_support as unittest
-from numba import utils
-from numba.targets.codegen import JITCPUCodegen
-from numba.compiler_lock import global_compiler_lock
-from .support import TestCase
+import unittest
+from numba.core.codegen import JITCPUCodegen
+from numba.core.compiler_lock import global_compiler_lock
+from numba.tests.support import TestCase
 
 
 asm_sum = r"""
@@ -90,7 +88,7 @@ class JITCPUCodegenTestCase(TestCase):
     def test_get_pointer_to_function(self):
         library = self.compile_module(asm_sum)
         ptr = library.get_pointer_to_function("sum")
-        self.assertIsInstance(ptr, utils.integer_types)
+        self.assertIsInstance(ptr, int)
         cfunc = ctypes_sum_ty(ptr)
         self.assertEqual(cfunc(2, 3), 5)
         # Note: With llvm3.9.1, deleting `library` will cause memory error in
@@ -101,7 +99,7 @@ class JITCPUCodegenTestCase(TestCase):
         # Same, but with dependency on another library
         library2 = self.compile_module(asm_sum_outer, asm_sum_inner)
         ptr = library2.get_pointer_to_function("sum")
-        self.assertIsInstance(ptr, utils.integer_types)
+        self.assertIsInstance(ptr, int)
         cfunc = ctypes_sum_ty(ptr)
         self.assertEqual(cfunc(2, 3), 5)
 

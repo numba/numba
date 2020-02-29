@@ -1,4 +1,3 @@
-from __future__ import print_function, absolute_import, division
 import os.path
 import numpy as np
 from numba.cuda.testing import unittest
@@ -82,7 +81,7 @@ class TestLinker(SerialMixin, unittest.TestCase):
         A = np.array([123])
         B = np.array([321])
 
-        foo(A, B)
+        foo[1, 1](A, B)
 
         self.assertTrue(A[0] == 123 + 2 * 321)
 

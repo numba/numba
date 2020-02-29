@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 import numpy as np
 
 from numba import cuda
@@ -23,7 +21,7 @@ class TestFreeVar(SerialMixin, unittest.TestCase):
             A[i] = sdata[i]
 
         A = np.arange(2, dtype="float32")
-        foo(A, 0)
+        foo[1, 1](A, 0)
 
 
 if __name__ == '__main__':

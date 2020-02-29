@@ -1,9 +1,7 @@
-from __future__ import print_function, absolute_import
-
 from llvmlite import binding as ll
 from llvmlite.llvmpy import core as lc
-from numba import utils
-from numba.targets.codegen import BaseCPUCodegen, CodeLibrary
+from numba.core import utils
+from numba.core.codegen import BaseCPUCodegen, CodeLibrary
 from .hlc import DATALAYOUT, TRIPLE, hlc
 
 

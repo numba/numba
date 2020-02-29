@@ -1,13 +1,11 @@
-from __future__ import absolute_import, print_function, division
-
 import threading
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import cuda
 from numba.cuda.testing import SerialMixin, skip_unless_cudasim
 import numba.cuda.simulator as simulator
+import unittest
 
 
 class TestCudaSimIssues(SerialMixin, unittest.TestCase):
@@ -18,7 +16,9 @@ class TestCudaSimIssues(SerialMixin, unittest.TestCase):
         When the `cuda` module is referenced in a device function,
         it does not have the kernel API (e.g. cuda.threadIdx, cuda.shared)
         """
-        from .support import cuda_module_in_device_function as inner
+        from numba.cuda.tests.cudasim import support
+
+        inner = support.cuda_module_in_device_function
 
         @cuda.jit
         def outer(out):
