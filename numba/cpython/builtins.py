@@ -437,12 +437,15 @@ def get_type_min_value(typ):
 @lower_builtin(get_type_min_value, types.DType)
 def lower_get_type_min_value(context, builder, sig, args):
     typ = sig.args[0].dtype
-    bw = typ.bitwidth
-    
-    if isinstance(typ, types.Bounded):
-        lty = ir.IntType(bw)
+
+    if isinstance(typ, types.Boolean):
+        lty = ir.IntType(1)
+        res = ir.Constant(lty, typ.minval)
+    elif isinstance(typ, types.Bounded):
+        lty = ir.IntType(typ.bitwidth)
         res = ir.Constant(lty, typ.minval)
     elif isinstance(typ, types.Float):
+        bw = typ.bitwidth
         if bw == 32:
             lty = ir.FloatType()
         elif bw == 64:
@@ -457,12 +460,15 @@ def lower_get_type_min_value(context, builder, sig, args):
 @lower_builtin(get_type_max_value, types.DType)
 def lower_get_type_max_value(context, builder, sig, args):
     typ = sig.args[0].dtype
-    bw = typ.bitwidth
-
-    if isinstance(typ, types.Bounded):
-        lty = ir.IntType(bw)
+    
+    if isinstance(typ, types.Boolean):
+        lty = ir.IntType(1)
+        res = ir.Constant(lty, typ.maxval)
+    elif isinstance(typ, types.Bounded):
+        lty = ir.IntType(typ.bitwidth)
         res = ir.Constant(lty, typ.maxval)
     elif isinstance(typ, types.Float):
+        bw = typ.bitwidth
         if bw == 32:
             lty = ir.FloatType()
         elif bw == 64:
