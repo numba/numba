@@ -10,9 +10,6 @@ from numba.np import npdatetime_helpers
 
 
 class Boolean(Hashable, Bounded):    
-    def __init__(self, name):
-        super(Boolean, self).__init__(name)
-
     def cast_python_value(self, value):
         return bool(value)
 
