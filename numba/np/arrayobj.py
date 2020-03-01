@@ -14,7 +14,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import pndindex
+from numba import literal_unroll, pndindex
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran)
@@ -4929,20 +4929,22 @@ def _build_slice_tuple(tyctx, sz):
     size = int(sz.literal_value)
     tuple_type = types.UniTuple(dtype=types.slice3_type, count=size)
     sig = tuple_type(sz)
+    indices = tuple(range(size))
 
     def codegen(context, builder, signature, args):
-        def impl(length, empty_tuple):
+        def impl(empty_tuple):
             out = empty_tuple
-            for i in range(length):
+            if size == 0:
+                return out
+            for i in literal_unroll(indices):
                 out = tuple_setitem(out, i, slice(None, None, -1))
             return out
 
-        inner_argtypes = [types.intp, tuple_type]
+        inner_argtypes = [tuple_type]
         inner_sig = typing.signature(tuple_type, *inner_argtypes)
-        ll_idx_type = context.get_value_type(types.intp)
         # Allocate an empty tuple
         empty_tuple = context.get_constant_undef(tuple_type)
-        inner_args = [ll_idx_type(size), empty_tuple]
+        inner_args = [empty_tuple]
 
         res = context.compile_internal(builder, impl, inner_sig, inner_args)
         return res

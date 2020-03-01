@@ -1,28 +1,23 @@
 import random
+import unittest
+
 import numpy as np
 
-from numba.tests.support import TestCase, captured_stdout
-from numba import njit
+from numba import literal_unroll, njit
 from numba.core import types
-from numba.cpython.unsafe.tuple import tuple_setitem
-from numba.np.unsafe.ndarray import to_fixed_tuple, empty_inferred
+from numba.core.errors import TypingError
 from numba.core.unsafe.bytes import memcpy_region
 from numba.core.unsafe.refcount import dump_refcount
-from numba.cpython.unsafe.numbers import trailing_zeros, leading_zeros
-from numba.core.errors import TypingError
+from numba.cpython.unsafe.numbers import leading_zeros, trailing_zeros
+from numba.cpython.unsafe.tuple import tuple_setitem
+from numba.np.unsafe.ndarray import empty_inferred, to_fixed_tuple
+from numba.tests.support import TestCase, captured_stdout
 
 
 class TestTupleIntrinsic(TestCase):
     """Tests for numba.unsafe.tuple
     """
     def test_tuple_setitem(self):
-        @njit
-        def foo(tup, idxs, vals):
-            out_tup = tup
-            for i, v in zip(idxs, vals):
-                out_tup = tuple_setitem(out_tup, i, v)
-            return tup, out_tup
-
         random.seed(123)
         for _ in range(20):
             # Random data
@@ -32,15 +27,118 @@ class TestTupleIntrinsic(TestCase):
             idxs = list(range(len(vals)))
             random.shuffle(idxs)
             idxs = tuple(idxs)
+
             # Expect
             expect_tup = tuple(tup)
             expect_out = np.asarray(expect_tup)
             expect_out[np.asarray(idxs)] = vals
+
             # Got
-            got_tup, got_out = foo(tup, idxs, vals)
+            @njit
+            def foo(tup):
+                out_tup = tup
+                counter = 0
+                for i in literal_unroll(idxs):
+                    v = vals[counter]
+                    out_tup = tuple_setitem(out_tup, i, v)
+                    counter += 1
+                return tup, out_tup
+
+            got_tup, got_out = foo(tup)
+
             # Check
             self.assertEqual(got_tup, expect_tup)
             self.assertEqual(got_out, tuple(expect_out))
+
+    def test_tuple_setitem_heterogeneous(self):
+        test_case = [1, 'a', np.zeros(2)]
+        tup = tuple(test_case)
+
+        # Expect
+        expected_case = test_case.copy()
+        i = 1
+        v = 'b'
+        expected_case[i] = v
+        expected = tuple(expected_case)
+
+        # Got
+        @njit
+        def foo(tup, v):
+            return tuple_setitem(tup, i, v)
+
+        got_out = foo(tup, v)
+
+        # Check
+        self.assertEqual(got_out, expected)
+
+        # Expect
+        expected_case = test_case.copy()
+        i = 2
+        v = np.ones(2)
+        expected_case[i] = v
+        expected = tuple(expected_case)
+
+        # Got
+        @njit
+        def foo(tup, v):
+            return tuple_setitem(tup, i, v)
+
+        got_out = foo(tup, v)
+
+        # Check
+        self.assertEqual(got_out, expected)
+
+    def test_tuple_setitem_heterogeneous_invalid_inputs(self):
+        test_case = [1, 'a', np.zeros(2)]
+        tup = tuple(test_case)
+        v = 'b'
+
+        # Check non-tuple input
+        i = 1
+
+        @njit
+        def foo(tup, v):
+            return tuple_setitem(1, i, v)
+
+        with self.assertRaises(TypingError) as raises:
+            foo(tup, v)
+        self.assertIn("must of type tuple, got type IntegerLiteral",
+                      str(raises.exception))
+
+        # Check negative index
+        i = -1
+
+        @njit
+        def foo(tup, v):
+            return tuple_setitem(tup, i, v)
+
+        with self.assertRaises(TypingError) as raises:
+            foo(tup, v)
+        self.assertIn("index out of range", str(raises.exception))
+
+        # Check index > length - 1
+        i = 3
+
+        @njit
+        def foo(tup, v):
+            return tuple_setitem(tup, i, v)
+
+        with self.assertRaises(TypingError) as raises:
+            foo(tup, v)
+        self.assertIn("index out of range", str(raises.exception))
+
+        # Check incompatible type of new value
+        i = 2
+
+        @njit
+        def foo(tup, v):
+            return tuple_setitem(tup, i, v)
+
+        with self.assertRaises(TypingError) as raises:
+            foo(tup, v)
+        self.assertIn("must of type array(float64, 1d, C), got type "
+                      "UnicodeType",
+                      str(raises.exception))
 
 
 class TestNdarrayIntrinsic(TestCase):
@@ -212,3 +310,7 @@ class TestZeroCounts(TestCase):
 
     def test_leading_zeros_error(self):
         self.check_error_msg(leading_zeros)
+
+
+if __name__ == '__main__':
+    unittest.main()
