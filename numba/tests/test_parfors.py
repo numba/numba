@@ -1166,7 +1166,7 @@ class TestParfors(TestParforsBase):
                     i = m
 
         n = 211
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(errors.UnsupportedRewriteError) as raises:
             self.check(test_impl, n)
         self.assertIn("Overwrite of parallel loop index", str(raises.exception))
 
@@ -1481,7 +1481,7 @@ class TestParfors(TestParforsBase):
     @skip_parfors_unsupported
     def test_reshape_with_too_many_neg_one(self):
         # issue3314
-        with self.assertRaises(ValueError) as raised:
+        with self.assertRaises(errors.UnsupportedRewriteError) as raised:
             @njit(parallel=True)
             def test_impl(a, b):
                 rm = np.zeros((b, b, 1), dtype=np.float64)
@@ -2210,7 +2210,7 @@ class TestPrange(TestPrangeBase):
                 acc += 2
             return acc
 
-        with self.assertRaises(NotImplementedError) as raises:
+        with self.assertRaises(errors.UnsupportedRewriteError) as raises:
             self.prange_tester(test_impl, 1024)
         msg = 'Only constant step size of 1 is supported for prange'
         self.assertIn(msg, str(raises.exception))

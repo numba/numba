@@ -17,6 +17,7 @@ from numba.core import (
     inline_closurecall,
     compiler,
     cpu,
+    errors
 )
 from numba.core.registry import cpu_target
 from numba.tests.support import TestCase, is_parfors_unsupported
@@ -429,7 +430,7 @@ class TestConvertLoopPass(BaseTest):
                 arr[i] += i
             return arr
 
-        with self.assertRaises(NotImplementedError) as raises:
+        with self.assertRaises(errors.UnsupportedRewriteError) as raises:
             self.run_parfor_sub_pass(test_impl, ())
         self.assertIn(
             "Only constant step size of 1 is supported for prange",
@@ -496,7 +497,7 @@ class TestConvertLoopPass(BaseTest):
                 arr[i] = i
             return arr
 
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(errors.UnsupportedRewriteError) as raises:
             self.run_parfor_sub_pass(test_impl, ())
         self.assertIn("Overwrite of parallel loop index", str(raises.exception))
 
