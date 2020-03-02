@@ -426,9 +426,9 @@ class BaseContext(object):
         return fnty
 
     def declare_function(self, module, fndesc):
-        print("base.py: declare_function", module, "\n\targs:", fndesc.args, "\n\trestype:", fndesc.restype, "\n\targtypes:", fndesc.argtypes, fndesc.mangled_name, fndesc.noalias)
+        #print("base.py: declare_function", module, "\n\targs:", fndesc.args, "\n\trestype:", fndesc.restype, "\n\targtypes:", fndesc.argtypes, fndesc.mangled_name, fndesc.noalias)
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        print("fnty:", fnty)
+        #print("fnty:", fnty)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:

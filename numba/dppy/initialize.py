@@ -1,6 +1,7 @@
 from __future__ import absolute_import, print_function
 import llvmlite.binding as ll
 import os
+from distutils import sysconfig
 
 
 def init_jit():
@@ -10,9 +11,9 @@ def init_jit():
 def initialize_all():
     from numba.targets.registry import dispatcher_registry
     dispatcher_registry.ondemand['dppy'] = init_jit
-    dir_path = (os.path.dirname(os.path.realpath(__file__)) +
-                               "/dppy_driver/libdpglue_so.so")
-    ll.load_library_permanently(dir_path)
+    dir_path = os.path.dirname(os.path.realpath(__file__)) + "/dppy_driver"
+    dpgluelib = dir_path + "/libdpglue" +  sysconfig.get_config_var('EXT_SUFFIX')
+    ll.load_library_permanently(dpgluelib)
     ll.load_library_permanently('libOpenCL.so')
 
 def _initialize_ufunc():

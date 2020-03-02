@@ -39,7 +39,6 @@ versioneer.parentdir_prefix = 'numba-'
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
 
-
 GCCFLAGS = ["-std=c89", "-Wdeclaration-after-statement", "-Werror"]
 
 if os.environ.get("NUMBA_GCC_FLAGS"):
@@ -152,6 +151,7 @@ def get_ext_modules():
                                    **np_compile_args)
 
     ext_npyufunc_workqueue_impls = []
+    ext_dppy_impls = []
 
     def check_file_at_path(path2file):
         """
@@ -188,8 +188,8 @@ def get_ext_modules():
         tbb_root = check_file_at_path(['include', 'tbb', 'tbb.h'])
 
     # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
-    have_openmp = False
-    tbb_root = None
+    have_openmp = True
+    opeclliteflags = list()
     if sys.platform.startswith('win'):
         cpp11flags = []
         ompcompileflags = ['-openmp']
@@ -209,6 +209,7 @@ def get_ext_modules():
     else:
         cpp11flags = ['-std=c++11']
         ompcompileflags = ['-fopenmp']
+        openclliteflags = ['-Wall', '-Wextra', '-Winit-self', '-Wuninitialized', '-Wmissing-declarations', '-std=c99', '-fdiagnostics-color=auto', '-shared', '-fPIC']
         if platform.machine() == 'ppc64le':
             omplinkflags = ['-fopenmp']
         else:
@@ -238,6 +239,25 @@ def get_ext_modules():
         ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
     else:
         print("TBB not found")
+
+    # Search for OpenCL, first check env var OPENCLROOT then conda locations
+    opencl_root = os.getenv('OPENCLROOT')
+    if not opencl_root:
+        #opencl_root = check_file_at_path(['include', 'opencl', 'cl.h', "CL.h"])
+        opencl_root = "/usr"
+
+    print("Building opencllite")
+    ext_dppy = Extension(
+        name='numba.dppy.dppy_driver.libdpglue',
+        sources=[
+            'numba/dppy/dppy_driver/opencllite.c'
+        ],
+        depends=['numba/dppy/dppy_driver/dp_glue.h'],
+        include_dirs=[os.path.join(opencl_root, 'include')],
+        extra_compile_args=openclliteflags,
+    )
+    ext_dppy_impls.append(ext_dppy)
+
 
     # Disable OpenMP if we are building a wheel or
     # forced by user with NUMBA_NO_OPENMP=1
@@ -297,6 +317,7 @@ def get_ext_modules():
                    ext_jitclass_box, ext_cuda_extras]
 
     ext_modules += ext_npyufunc_workqueue_impls
+    ext_modules += ext_dppy_impls
 
     return ext_modules
 

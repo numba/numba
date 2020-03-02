@@ -1,17 +1,20 @@
 from cffi import FFI
 import os
 import sys
+from distutils import sysconfig
 
 
 ffibuilder = FFI()
 
 libDPGlueHome = os.path.dirname(os.path.realpath(__file__))
+dpgluelib_dir = os.getcwd() + "/builds/numba/dppy/dppy_driver"
+dpgluelib = "dpglue" +  sysconfig.get_config_var('EXT_SUFFIX')[:-3]
+print("====== ", dpgluelib_dir, "   === ", dpgluelib)
 
 BAD_ENV_PATH_ERRMSG = """
 DP_GLUE_HOME is set to '{0}' which is not a valid path to a
 dynamic link library for your system.
 """
-
 
 def _raise_bad_env_path(path, extra=None):
     error_message = BAD_ENV_PATH_ERRMSG.format(path)
@@ -24,16 +27,16 @@ def _raise_bad_env_path(path, extra=None):
 # if libDPGlueHome is None:
 #    raise ValueError("FATAL: Set the DP_GLUE_HOME for "
 #                     "dp_glue.h and libDPGlueHome.so")
-
-
+'''
 if libDPGlueHome is not None:
     try:
         os.path.abspath(libDPGlueHome)
     except ValueError:
         _raise_bad_env_path(libDPGlueHome)
 
-    if not os.path.isfile(libDPGlueHome + "/libdpglue.a"):
-        _raise_bad_env_path(libDPGlueHome + "/libdpglue.a")
+    if os.path.isfile(libDPGlueHome + "/libdpglue.so"):
+        _raise_bad_env_path(libDPGlueHome + "/libdpglue.so")
+'''
 
 glue_h = ''.join(list(filter(lambda x: len(x) > 0 and x[0] != "#", 
                              open(libDPGlueHome + '/dp_glue.h', 'r')
@@ -50,9 +53,10 @@ ffibuilder.set_source(
     """
          #include "dp_glue.h"   // the C header of the library
     """,
-    libraries=["dpglue", "OpenCL"],
+    libraries=[dpgluelib, "OpenCL"],
     include_dirs=[libDPGlueHome],
-    library_dirs=[libDPGlueHome]
+    library_dirs=[dpgluelib_dir],
+    extra_link_args=["-Wl,-rpath=" + dpgluelib_dir]
 )   # library name, for the linker
 
 
