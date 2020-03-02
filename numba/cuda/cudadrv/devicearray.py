@@ -58,13 +58,14 @@ def require_cuda_ndarray(obj):
 
 def is_contiguous(ary):
     """
-    Returns True iff `ary` is C-style contiguous.
+    Returns True iff `ary` is C-style contiguous while ignoreing
+    broadcasted and 1-sized dimensions.
     As opposed to array_core(), it does not call require_context(),
     which can be quite expensive.
     """
     size = ary.dtype.itemsize
     for shape, stride in zip(reversed(ary.shape), reversed(ary.strides)):
-        if shape > 1:
+        if shape > 1 and stride != 0:
             if size != stride:
                 return False
             size *= shape
