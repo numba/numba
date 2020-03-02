@@ -36,6 +36,29 @@ class FakeShape(tuple):
         return super(FakeShape, self).__getitem__(k)
 
 
+class FakeKernelCUDAArray(object):
+    def __init__(self, item):
+        assert isinstance(item, FakeCUDAArray)
+        self.__dict__['_item'] = item
+
+    def __wrap_if_fake(self,item):
+        return FakeKernelCUDAArray(item) if isinstance(item,FakeCUDAArray) else item
+
+    def __getattr__(self, attrname):
+        return self.__wrap_if_fake(self._item.__getitem__(attrname))
+
+    def __getitem__(self, idx):
+        return self.__wrap_if_fake(self._item.__getitem__(idx))
+
+    def __setitem__(self, idx, val):
+        self._item.__setitem__(idx, val)
+
+    def __setattr__(self, nm, val):
+        self.__setattr__(nm, val)
+
+
+
+
 class FakeCUDAArray(object):
     '''
     Implements the interface of a DeviceArray/DeviceRecord, but mostly just
@@ -63,10 +86,7 @@ class FakeCUDAArray(object):
             attr = getattr(self._ary, attrname)
             return attr
         except AttributeError as e:
-            try:
-                return self.__getitem__(attrname)
-            except AttributeError as e:
-                six.raise_from(AttributeError("Wrapped array has no attribute '%s'" % attrname), e)
+            six.raise_from(AttributeError("Wrapped array has no attribute '%s'" % attrname), e)
 
     def bind(self, stream=0):
         return FakeCUDAArray(self._ary, stream)
@@ -79,7 +99,11 @@ class FakeCUDAArray(object):
         return FakeCUDAArray(np.transpose(self._ary, axes=axes))
 
     def __getitem__(self, idx):
-        return FakeCUDAArray(self._ary.__getitem__(idx), stream=self.stream)
+        ret = self._ary.__getitem__(idx)
+        if np.issubdtype(type(ret), np.number) or np.issubdtype(type(ret),np.bool_):
+            return ret
+        else:
+            return FakeCUDAArray(self._ary.__getitem__(idx), stream=self.stream)
 
     def __setitem__(self, idx, val):
         return self._ary.__setitem__(idx, val)

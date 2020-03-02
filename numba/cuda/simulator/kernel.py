@@ -6,7 +6,7 @@ import threading
 import numpy as np
 
 from numba.core.utils import reraise
-from .cudadrv.devicearray import to_device, auto_device
+from .cudadrv.devicearray import to_device, auto_device, FakeCUDAArray, FakeKernelCUDAArray
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
 from ..args import wrap_arg, ArgHint
@@ -86,11 +86,14 @@ class FakeCUDAKernel(object):
                 )
 
                 if isinstance(arg, np.ndarray) and arg.ndim > 0:
-                    return wrap_arg(arg).to_device(retr)
+                    ret = wrap_arg(arg).to_device(retr)
                 elif isinstance(arg, ArgHint):
-                    return arg.to_device(retr)
+                    ret = arg.to_device(retr)
                 else:
-                    return arg
+                    ret = arg
+                if isinstance(ret,FakeCUDAArray):
+                    return FakeKernelCUDAArray(ret)
+                return ret
 
             fake_args = [fake_arg(arg) for arg in args]
             with swapped_cuda_module(self.fn, fake_cuda_module):
