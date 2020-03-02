@@ -6,7 +6,7 @@ from scipy.misc import ascent
 from numpy import ones
 import numpy
 
-from numba.decorators import jit
+from numba import jit
 
 
 @jit(nopython=True)

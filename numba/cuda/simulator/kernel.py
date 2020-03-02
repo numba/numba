@@ -5,7 +5,7 @@ import threading
 
 import numpy as np
 
-from numba.utils import reraise
+from numba.core.utils import reraise
 from .cudadrv.devicearray import to_device, auto_device
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
@@ -51,16 +51,23 @@ class FakeCUDAKernel(object):
         self._device = device
         self._fastmath = fastmath
         self.extensions = list(extensions) # defensive copy
-        # Initial configuration: 1 block, 1 thread, stream 0, no dynamic shared
+        # Initial configuration: grid unconfigured, stream 0, no dynamic shared
         # memory.
-        self[1, 1, 0, 0]
+        self.grid_dim = None
+        self.block_dim = None
+        self.stream = 0
+        self.dynshared_size = 0
 
     def __call__(self, *args):
         if self._device:
             with swapped_cuda_module(self.fn, _get_kernel_context()):
                 return self.fn(*args)
 
-        fake_cuda_module = FakeCUDAModule(self.grid_dim, self.block_dim,
+        # Ensure we've been given a valid grid configuration
+        grid_dim, block_dim = normalize_kernel_dimensions(self.grid_dim,
+                                                          self.block_dim)
+
+        fake_cuda_module = FakeCUDAModule(grid_dim, block_dim,
                                           self.dynshared_size)
         with _push_kernel_context(fake_cuda_module):
             # fake_args substitutes all numpy arrays for FakeCUDAArrays
@@ -88,13 +95,12 @@ class FakeCUDAKernel(object):
             fake_args = [fake_arg(arg) for arg in args]
             with swapped_cuda_module(self.fn, fake_cuda_module):
                 # Execute one block at a time
-                for grid_point in np.ndindex(*self.grid_dim):
-                    bm = BlockManager(self.fn, self.grid_dim, self.block_dim)
+                for grid_point in np.ndindex(*grid_dim):
+                    bm = BlockManager(self.fn, grid_dim, block_dim)
                     bm.run(grid_point, *fake_args)
 
             for wb in retr:
                 wb()
-
 
     def __getitem__(self, configuration):
         self.grid_dim, self.block_dim = \

@@ -10,19 +10,18 @@ import random
 import subprocess
 import sys
 import threading
+import unittest
 
 import numpy as np
 
-from numba import config
-
-from numba import unittest_support as unittest
-from numba import jit, vectorize, guvectorize
-
-from .support import (temp_directory, override_config, TestCase, tag,
-                      skip_parfors_unsupported, linux_only)
+from numba import jit, vectorize, guvectorize, set_num_threads
+from numba.tests.support import (temp_directory, override_config, TestCase, tag,
+                                 skip_parfors_unsupported, linux_only)
 
 import queue as t_queue
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
+from numba.core import config
+
 
 _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 
@@ -30,13 +29,16 @@ _TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
 # Check which backends are available
 # TODO: Put this in a subprocess so the address space is kept clean
 try:
-    from numba.npyufunc import tbbpool    # noqa: F401
+    # Check it's a compatible TBB before loading it
+    from numba.np.ufunc.parallel import _check_tbb_version_compatible
+    _check_tbb_version_compatible()
+    from numba.np.ufunc import tbbpool    # noqa: F401
     _HAVE_TBB_POOL = True
 except ImportError:
     _HAVE_TBB_POOL = False
 
 try:
-    from numba.npyufunc import omppool
+    from numba.np.ufunc import omppool
     _HAVE_OMP_POOL = True
 except ImportError:
     _HAVE_OMP_POOL = False
@@ -100,6 +102,19 @@ class jit_runner(runnable):
         expected = foo(a, b)
         got = cfunc(a, b)
         np.testing.assert_allclose(expected, got)
+
+
+class mask_runner(object):
+    def __init__(self, runner, mask, **options):
+        self.runner = runner
+        self.mask = mask
+
+    def __call__(self):
+        if self.mask:
+            # Tests are all run in isolated subprocesses, so we
+            # don't have to worry about this affecting other tests
+            set_num_threads(self.mask)
+        self.runner()
 
 
 class linalg_runner(runnable):
@@ -226,6 +241,17 @@ class TestParallelBackendBase(TestCase):
         ]
         all_impls.extend(parfor_impls)
 
+    if config.NUMBA_NUM_THREADS < 2:
+        # Not enough cores
+        masks = []
+    else:
+        masks = [1, 2]
+
+    mask_impls = []
+    for impl in all_impls:
+        for mask in masks:
+            mask_impls.append(mask_runner(impl, mask))
+
     parallelism = ['threading', 'random']
     parallelism.append('multiprocessing_spawn')
     if _HAVE_OS_FORK:
@@ -243,6 +269,7 @@ class TestParallelBackendBase(TestCase):
             guvectorize_runner(nopython=True, target='parallel'),
         ],
         'concurrent_mix_use': all_impls,
+        'concurrent_mix_use_masks': mask_impls,
     }
 
     safe_backends = {'omp', 'tbb'}
@@ -314,17 +341,7 @@ class TestParallelBackend(TestParallelBackendBase):
 TestParallelBackend.generate()
 
 
-class TestSpecificBackend(TestParallelBackendBase):
-    """
-    This is quite contrived, for each test in the TestParallelBackend tests it
-    generates a test that will run the TestParallelBackend test in a new python
-    process with an environment modified to ensure a specific threadsafe backend
-    is used. This is with view of testing the backends independently and in an
-    isolated manner such that if they hang/crash/have issues, it doesn't kill
-    the test suite.
-    """
-    _DEBUG = False
-
+class TestInSubprocess(object):
     backends = {'tbb': skip_no_tbb,
                 'omp': skip_no_omp,
                 'workqueue': unittest.skipIf(False, '')}
@@ -353,6 +370,18 @@ class TestSpecificBackend(TestParallelBackendBase):
         env_copy['NUMBA_THREADING_LAYER'] = str(threading_layer)
         cmdline = [sys.executable, "-m", "numba.runtests", test]
         return self.run_cmd(cmdline, env_copy)
+
+
+class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
+    """
+    This is quite contrived, for each test in the TestParallelBackend tests it
+    generates a test that will run the TestParallelBackend test in a new python
+    process with an environment modified to ensure a specific threadsafe backend
+    is used. This is with view of testing the backends independently and in an
+    isolated manner such that if they hang/crash/have issues, it doesn't kill
+    the test suite.
+    """
+    _DEBUG = False
 
     @classmethod
     def _inject(cls, p, name, backend, backend_guard):
@@ -553,6 +582,46 @@ class TestMiscBackendIssues(ThreadLayerTestHelper):
             print(out, err)
         self.assertIn("@tbb@", out)
 
+    def test_workqueue_aborts_on_nested_parallelism(self):
+        """
+        Tests workqueue raises sigabrt if a nested parallel call is performed
+        """
+        runme = """if 1:
+            from numba import njit, prange
+            import numpy as np
+
+            @njit(parallel=True)
+            def nested(x):
+                for i in prange(len(x)):
+                    x[i] += 1
+
+
+            @njit(parallel=True)
+            def main():
+                Z = np.zeros((5, 10))
+                for i in prange(Z.shape[0]):
+                    nested(Z[i])
+                return Z
+
+            main()
+        """
+        cmdline = [sys.executable, '-c', runme]
+        env = os.environ.copy()
+        env['NUMBA_THREADING_LAYER'] = "workqueue"
+        env['NUMBA_NUM_THREADS'] = "4"
+
+        try:
+            out, err = self.run_cmd(cmdline, env=env)
+        except AssertionError as e:
+            if self._DEBUG:
+                print(out, err)
+            e_msg = str(e)
+            self.assertIn("failed with code", e_msg)
+            # raised a SIGABRT, but the value is platform specific so just check
+            # the error message
+            self.assertIn("Terminating: Nested parallel kernel launch detected",
+                          e_msg)
+
 
 # 32bit or windows py27 (not that this runs on windows)
 @skip_parfors_unsupported
@@ -565,7 +634,7 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
 
     def test_check_threading_layer_is_gnu(self):
         runme = """if 1:
-            from numba.npyufunc import omppool
+            from numba.np.ufunc import omppool
             assert omppool.openmp_vendor == 'GNU'
             """
         cmdline = [sys.executable, '-c', runme]
@@ -827,6 +896,26 @@ class TestInitSafetyIssues(TestCase):
         if self._DEBUG:
             print("OUT:", out)
             print("ERR:", err)
+
+
+@skip_parfors_unsupported
+@skip_no_omp
+class TestOpenMPVendors(TestCase):
+
+    def test_vendors(self):
+        """
+        Checks the OpenMP vendor strings are correct
+        """
+        expected = dict()
+        expected['win32'] = "MS"
+        expected['darwin'] = "Intel"
+        expected['linux'] = "GNU"
+
+        # only check OS that are supported, custom toolchains may well work as
+        # may other OS
+        for k in expected.keys():
+            if sys.platform.startswith(k):
+                self.assertEqual(expected[k], omppool.openmp_vendor)
 
 
 if __name__ == '__main__':

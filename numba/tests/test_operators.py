@@ -6,11 +6,13 @@ import warnings
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import jit, types, typeinfer, utils, errors
-from .support import TestCase, tag, needs_blas
-from .matmul_usecase import (matmul_usecase, imatmul_usecase, DumbMatrix,)
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit
+from numba.core import types, utils, errors, typeinfer
+from numba.tests.support import TestCase, tag, needs_blas
+from numba.tests.matmul_usecase import (matmul_usecase, imatmul_usecase,
+                                        DumbMatrix,)
 
 Noflags = Flags()
 

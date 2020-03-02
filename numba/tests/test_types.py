@@ -12,23 +12,26 @@ import operator
 import shutil
 import sys
 import uuid
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
 import weakref
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import sigutils, types, typing, errors
-from numba.types.abstract import _typecache
-from numba.typing.templates import make_overload_template
-from numba import jit, njit, numpy_support, typeof
-from numba.extending import (overload, register_model, models, unbox,
-                             NativeValue, typeof_impl)
-from .support import TestCase, temp_directory
-from .enum_usecases import Color, Shake, Shape
+from numba.core import types, typing, errors, sigutils
+from numba.core.types.abstract import _typecache
+from numba.core.typing.templates import make_overload_template
+from numba import jit, njit, typeof
+from numba.core.extending import (overload, register_model, models, unbox,
+                                  NativeValue, typeof_impl)
+from numba.tests.support import TestCase, temp_directory
+from numba.tests.enum_usecases import Color, Shake, Shape
+import unittest
+from numba.np import numpy_support
+
+
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle
 
 
 Point = namedtuple('Point', ('x', 'y'))
@@ -499,8 +502,8 @@ class TestPickling(TestCase):
     # call templates are not picklable
     @unittest.expectedFailure
     def test_external_function_pointers(self):
-        from numba.typing import ctypes_utils
-        from .ctypes_usecases import c_sin, c_cos
+        from numba.core.typing import ctypes_utils
+        from numba.tests.ctypes_usecases import c_sin, c_cos
         for fnptr in (c_sin, c_cos):
             ty = ctypes_utils.make_function_type(fnptr)
             self.assertIsInstance(ty, types.ExternalFunctionPointer)
@@ -615,7 +618,7 @@ class TestIsInternalTypeMarker(TestCase):
     the `is_internal` attr of a concrete Type class
     """
     source_lines = """
-from numba import types
+from numba.core import types
 
 class FooType(types.Type):
     def __init__(self):

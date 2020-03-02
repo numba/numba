@@ -4,7 +4,7 @@ Shared code for the low level compiler tooling
 
 
 from abc import abstractmethod, ABCMeta
-from numba.utils import add_metaclass
+from numba.core.utils import add_metaclass
 import re
 
 # These are for parsing labels and metadata

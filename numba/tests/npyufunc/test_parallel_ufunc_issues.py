@@ -3,9 +3,9 @@ import ctypes
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba.tests.support import captured_stdout
 from numba import vectorize, guvectorize
+import unittest
 
 
 class TestParUfuncIssues(unittest.TestCase):

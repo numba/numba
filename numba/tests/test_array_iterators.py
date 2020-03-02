@@ -2,10 +2,11 @@ import itertools
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import jit, typeof, types
-from numba.compiler import compile_isolated
-from .support import TestCase, CompilationCache, MemoryLeakMixin, tag
+from numba import jit, typeof
+from numba.core import types
+from numba.core.compiler import compile_isolated
+from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin, tag
+import unittest
 
 
 def array_iter(arr):
@@ -13,6 +14,9 @@ def array_iter(arr):
     for i, v in enumerate(arr):
         total += i * v
     return total
+
+def array_iter_items(arr):
+    return list(iter(arr))
 
 def array_view_iter(arr, idx):
     total = 0
@@ -123,8 +127,15 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         super(TestArrayIterators, self).setUp()
         self.ccache = CompilationCache()
 
-    def check_array_iter(self, arr):
+    def check_array_iter_1d(self, arr):
         pyfunc = array_iter
+        cres = compile_isolated(pyfunc, [typeof(arr)])
+        cfunc = cres.entry_point
+        expected = pyfunc(arr)
+        self.assertPreciseEqual(cfunc(arr), expected)
+
+    def check_array_iter_items(self, arr):
+        pyfunc = array_iter_items
         cres = compile_isolated(pyfunc, [typeof(arr)])
         cfunc = cres.entry_point
         expected = pyfunc(arr)
@@ -165,13 +176,19 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
     def test_array_iter(self):
         # Test iterating over a 1d array
         arr = np.arange(6)
-        self.check_array_iter(arr)
+        self.check_array_iter_1d(arr)
+        self.check_array_iter_items(arr)
         arr = arr[::2]
         self.assertFalse(arr.flags.c_contiguous)
         self.assertFalse(arr.flags.f_contiguous)
-        self.check_array_iter(arr)
+        self.check_array_iter_1d(arr)
+        self.check_array_iter_items(arr)
         arr = np.bool_([1, 0, 0, 1])
-        self.check_array_iter(arr)
+        self.check_array_iter_1d(arr)
+        self.check_array_iter_items(arr)
+        arr = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+        self.check_array_iter_items(arr)
+        self.check_array_iter_items(arr.T)
 
     def test_array_view_iter(self):
         # Test iterating over a 1d view over a 2d array

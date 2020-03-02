@@ -3,9 +3,9 @@ from itertools import product
 
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import jit
-from .support import TestCase, tag, needs_lapack
+from numba.tests.support import TestCase, tag, needs_lapack
+import unittest
 
 
 def roots_fn(p):

@@ -1,10 +1,10 @@
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import float32, jit
-from numba.npyufunc import Vectorize
-from numba.errors import TypingError
-from ..support import TestCase
+from numba.np.ufunc import Vectorize
+from numba.core.errors import TypingError
+from numba.tests.support import TestCase
+import unittest
 
 
 dtype = np.float32

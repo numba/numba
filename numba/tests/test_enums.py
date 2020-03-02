@@ -4,10 +4,10 @@ Tests for enum support.
 
 
 import numpy as np
-import numba.unittest_support as unittest
+import unittest
 from numba import jit, vectorize
 
-from .support import TestCase
+from numba.tests.support import TestCase
 from .enum_usecases import Color, Shape, Shake, Planet, RequestError
 
 

@@ -1,9 +1,9 @@
 import numpy as np
 
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
 from numba import typeof
-from numba import unittest_support as unittest
-from .support import MemoryLeakMixin
+from numba.tests.support import MemoryLeakMixin
+import unittest
 
 
 def array_return(a, i):

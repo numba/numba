@@ -3,13 +3,14 @@ import itertools
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated
-from numba import types, typeinfer, typing, jit, errors
-from numba.typeconv import Conversion
+from numba.core.compiler import compile_isolated
+from numba import jit
+from numba.core import types, typing, errors, typeinfer, utils
+from numba.core.typeconv import Conversion
 
-from .support import TestCase, tag
-from .test_typeconv import CompatibilityTestMixin
+from numba.tests.support import TestCase, tag
+from numba.tests.test_typeconv import CompatibilityTestMixin
+import unittest
 
 
 i8 = types.int8
@@ -676,6 +677,61 @@ class TestMiscIssues(TestCase):
         for v in (0, 1, 2):
             res = cfunc(v)
             self.assertEqual(res, pyfunc(v))
+
+
+class TestFoldArguments(unittest.TestCase):
+    def check_fold_arguments_list_inputs(self, func, args, kws):
+        def make_tuple(*args):
+            return args
+
+        unused_handler = None
+
+        pysig = utils.pysignature(func)
+        names = list(pysig.parameters)
+
+        with self.subTest(kind='dict'):
+            folded_dict = typing.fold_arguments(
+                pysig, args, kws, make_tuple, unused_handler, unused_handler,
+            )
+            # correct ordering
+            for i, (j, k) in enumerate(zip(folded_dict, names)):
+                (got_index, got_param, got_name) = j
+                self.assertEqual(got_index, i)
+                self.assertEqual(got_name, f'arg.{k}')
+
+        kws = list(kws.items())
+        with self.subTest(kind='list'):
+            folded_list = typing.fold_arguments(
+                pysig, args, kws, make_tuple, unused_handler, unused_handler,
+            )
+            self.assertEqual(folded_list, folded_dict)
+
+    def test_fold_arguments_list_inputs(self):
+        cases = [
+            dict(
+                func=lambda a, b, c, d: None,
+                args=['arg.a', 'arg.b'],
+                kws=dict(c='arg.c', d='arg.d')
+            ),
+            dict(
+                func=lambda: None,
+                args=[],
+                kws=dict(),
+            ),
+            dict(
+                func=lambda a: None,
+                args=['arg.a'],
+                kws={},
+            ),
+            dict(
+                func=lambda a: None,
+                args=[],
+                kws=dict(a='arg.a'),
+            ),
+        ]
+        for case in cases:
+            with self.subTest(**case):
+                self.check_fold_arguments_list_inputs(**case)
 
 
 if __name__ == '__main__':

@@ -2,10 +2,12 @@
 from itertools import product
 from itertools import permutations
 
-from numba import njit, types, utils
-import numba.unittest_support as unittest
-from .support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
-from numba.errors import TypingError
+from numba import njit
+from numba.core import types, utils
+import unittest
+from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
+from numba.core.errors import TypingError
+from numba.cpython.unicode import _MAX_UNICODE
 
 
 _py37_or_later = utils.PYVERSION >= (3, 7)
@@ -335,6 +337,14 @@ def islower_usecase(x):
 
 def lower_usecase(x):
     return x.lower()
+
+
+def ord_usecase(x):
+    return ord(x)
+
+
+def chr_usecase(x):
+    return chr(x)
 
 
 class BaseTest(MemoryLeakMixin, TestCase):
@@ -1700,7 +1710,15 @@ class TestUnicode(BaseTest):
             ('  tú quién te crees?   ', None),
             ('大处 着眼，小处着手。大大大处', '大处'),
             (' 大处大处  ', ''),
-            (' 大处大处  ', None)
+            ('\t\nabcd\t', '\ta'),
+            (' 大处大处  ', None),
+            ('\t abcd \t', None),
+            ('\n abcd \n', None),
+            ('\r abcd \r', None),
+            ('\x0b abcd \x0b', None),
+            ('\x0c abcd \x0c', None),
+            ('\u2029abcd\u205F', None),
+            ('\u0085abcd\u2009', None)
         ]
 
         # form with no parameter
@@ -2386,6 +2404,62 @@ class TestUnicodeIteration(BaseTest):
         for f in (pyfunc, cfunc):
             with self.assertRaises(StopIteration):
                 f()
+
+
+class TestUnicodeAuxillary(BaseTest):
+
+    def test_ord(self):
+        pyfunc = ord_usecase
+        cfunc = njit(pyfunc)
+        for ex in UNICODE_EXAMPLES:
+            for a in ex:
+                self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_ord_invalid(self):
+        self.disable_leak_check()
+
+        pyfunc = ord_usecase
+        cfunc = njit(pyfunc)
+
+        # wrong number of chars
+        for func in (pyfunc, cfunc):
+            for ch in ('', 'abc'):
+                with self.assertRaises(TypeError) as raises:
+                    func(ch)
+                self.assertIn('ord() expected a character',
+                              str(raises.exception))
+
+        # wrong type
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1.23)
+        self.assertIn('Invalid use of Function', str(raises.exception))
+
+    def test_chr(self):
+        pyfunc = chr_usecase
+        cfunc = njit(pyfunc)
+        for ex in UNICODE_EXAMPLES:
+            for x in ex:
+                a = ord(x)
+                self.assertPreciseEqual(pyfunc(a), cfunc(a))
+        # test upper/lower bounds
+        for a in (0x0, _MAX_UNICODE):
+            self.assertPreciseEqual(pyfunc(a), cfunc(a))
+
+    def test_chr_invalid(self):
+        pyfunc = chr_usecase
+        cfunc = njit(pyfunc)
+
+        # value negative/>_MAX_UNICODE
+        for func in (pyfunc, cfunc):
+            for v in (-2, _MAX_UNICODE + 1):
+                with self.assertRaises(ValueError) as raises:
+                    func(v)
+                self.assertIn("chr() arg not in range", str(raises.exception))
+
+        # wrong type
+        with self.assertRaises(TypingError) as raises:
+            cfunc('abc')
+        self.assertIn('Invalid use of Function', str(raises.exception))
 
 
 if __name__ == '__main__':

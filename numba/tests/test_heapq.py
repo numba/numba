@@ -4,8 +4,8 @@ import itertools
 import numpy as np
 
 from numba import jit
-from numba.compiler import Flags
-from .support import TestCase, CompilationCache, MemoryLeakMixin
+from numba.core.compiler import Flags
+from numba.tests.support import TestCase, CompilationCache, MemoryLeakMixin
 
 no_pyobj_flags = Flags()
 no_pyobj_flags.set("nrt")

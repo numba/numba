@@ -1,4 +1,4 @@
-import numba.unittest_support as unittest
+import unittest
 from numba.cuda.testing import CUDATestCase
 from numba import cuda
 from numba.cuda.testing import skip_on_cudasim

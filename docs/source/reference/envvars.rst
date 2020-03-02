@@ -363,7 +363,10 @@ Threading Control
    of ``OMP_NUM_THREADS`` and ``MKL_NUM_THREADS``.
 
    *Default value:* The number of CPU cores on the system as determined at run
-   time, this can be accessed via ``numba.config.NUMBA_DEFAULT_NUM_THREADS``.
+   time. This can be accessed via :obj:`numba.config.NUMBA_DEFAULT_NUM_THREADS`.
+
+   See also the section on :ref:`setting_the_number_of_threads` for
+   information on how to set the number of threads at runtime.
 
 .. envvar:: NUMBA_THREADING_LAYER
 

@@ -1,8 +1,8 @@
 import numpy as np
 
 from numba import cuda
-from numba import unittest_support as unittest
 from numba.cuda.testing import captured_cuda_stdout, SerialMixin
+import unittest
 
 
 def cuhello():
@@ -41,7 +41,7 @@ class TestPrint(SerialMixin, unittest.TestCase):
     def test_printfloat(self):
         jprintfloat = cuda.jit('void()', debug=False)(printfloat)
         with captured_cuda_stdout() as stdout:
-            jprintfloat()
+            jprintfloat[1, 1]()
         # CUDA and the simulator use different formats for float formatting
         self.assertIn(stdout.getvalue(), ["0 23 34.750000 321\n",
                                           "0 23 34.75 321\n"])
@@ -49,7 +49,7 @@ class TestPrint(SerialMixin, unittest.TestCase):
     def test_printempty(self):
         cufunc = cuda.jit('void()', debug=False)(printempty)
         with captured_cuda_stdout() as stdout:
-            cufunc()
+            cufunc[1, 1]()
         self.assertEqual(stdout.getvalue(), "\n")
 
     def test_string(self):

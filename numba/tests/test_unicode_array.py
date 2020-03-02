@@ -1,8 +1,9 @@
 import platform
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba import jit, utils, from_dtype, types
+import unittest
+from numba import jit, from_dtype
+from numba.core import types, utils
 from numba.typed import Dict
 from numba.tests.support import TestCase
 

@@ -9,9 +9,9 @@ import numpy as np
 import logging
 from io import StringIO
 
-import numba.unittest_support as unittest
-from numba import dispatcher
+import unittest
 from numba.tests.support import temp_directory, SerialMixin
+from numba.core import dispatcher
 
 
 @contextlib.contextmanager
@@ -159,7 +159,7 @@ jit_module({jit_options})
                               'boundscheck': False})
 
     def test_jit_module_logging_output(self):
-        logger = logging.getLogger('numba.decorators')
+        logger = logging.getLogger('numba.core.decorators')
         logger.setLevel(logging.DEBUG)
         jit_options = {"nopython": True,
                        "error_model": "numpy",
@@ -173,7 +173,7 @@ jit_module({jit_options})
                 self.assertTrue(all(i in logs for i in expected))
 
     def test_jit_module_logging_level(self):
-        logger = logging.getLogger('numba.decorators')
+        logger = logging.getLogger('numba.core.decorators')
         # Test there's no logging for INFO level
         logger.setLevel(logging.INFO)
         with captured_logs(logger) as logs:

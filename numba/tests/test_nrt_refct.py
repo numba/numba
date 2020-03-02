@@ -7,10 +7,10 @@ import gc
 
 import numpy as np
 
-import numba.unittest_support as unittest
+import unittest
 from numba import njit
-from numba.runtime import rtsys
-from .support import TestCase
+from numba.core.runtime import rtsys
+from numba.tests.support import TestCase
 
 
 class TestNrtRefCt(TestCase):

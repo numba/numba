@@ -3,8 +3,8 @@ import threading
 import multiprocessing
 import numpy as np
 from numba import cuda
-from numba import unittest_support as unittest
 from numba.cuda.testing import skip_on_cudasim, SerialMixin
+import unittest
 
 try:
     from concurrent.futures import ThreadPoolExecutor
@@ -23,7 +23,7 @@ def check_concurrent_compiling():
         x[0] += 1
 
     def use_foo(x):
-        foo(x)
+        foo[1, 1](x)
         return x
 
     arrays = [np.arange(10) for i in range(10)]
