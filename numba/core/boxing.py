@@ -547,8 +547,8 @@ def unbox_tuple(typ, obj, c):
     c.builder.store(value, value_ptr)
 
     if cleanups:
-        with c.builder.if_then(size_matches, likely=True):
-            def cleanup():
+        def cleanup():
+            with c.builder.if_then(size_matches, likely=True):
                 for func in reversed(cleanups):
                     func()
     else:
