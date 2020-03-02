@@ -32,7 +32,7 @@ class NumbaIRLexer(RegexLexer):
             (fun_or_var, Name.Constant),
 
             # <built-in function some>
-            (r'<.*>', String),
+            (r'<[^>]*>', String),
 
             (r'[=<>{}\[\]()*.,!]|x\b', Punctuation)
         ],
