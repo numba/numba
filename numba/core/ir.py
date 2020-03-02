@@ -1462,7 +1462,7 @@ class FunctionIR(object):
                     raise ValueError(msg)
                 else:
                     from pygments import highlight
-                    from pygments.lexers import DelphiLexer as lexer
+                    from .ir_lexer import NumbaIRLexer as lexer
                     from pygments.formatters import Terminal256Formatter
                     print(highlight(text, lexer(), Terminal256Formatter()))
             else:
