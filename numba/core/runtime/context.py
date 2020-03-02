@@ -211,6 +211,9 @@ class NRTContext(object):
             fn.args[0].add_attribute("nocapture")
             builder.call(fn, [mi])
 
+    def debug_refcount(self, builder, typ, value):
+        self._call_incref_decref(builder, typ, value, "NRT_debug_refcount")
+
     def incref(self, builder, typ, value):
         """
         Recursively incref the given *value* and its members.

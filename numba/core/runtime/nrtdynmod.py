@@ -100,6 +100,26 @@ def _define_nrt_decref(module, atomic_decr):
     builder.ret_void()
 
 
+
+def _define_nrt_debug_refcount(module):
+    """
+    Implement NRT_debug_refcount
+    """
+    fn_debug = module.get_or_insert_function(incref_decref_ty,
+                                              name="NRT_debug_refcount")
+
+    builder = ir.IRBuilder(fn_debug.append_basic_block())
+    [ptr] = fn_debug.args
+    is_null = builder.icmp_unsigned("==", ptr, cgutils.get_null_value(ptr.type))
+    with cgutils.if_unlikely(builder, is_null):
+        cgutils.printf(builder, "*** NRT DEBUG null\n")
+        builder.ret_void()
+
+    cgutils.printf(builder, "*** NRT DEBUG %zu [%p]\n", builder.load(ptr),
+                   ptr)
+    builder.ret_void()
+
+
 # Set this to True to measure the overhead of atomic refcounts compared
 # to non-atomic.
 _disable_atomicity = 0
@@ -193,6 +213,7 @@ def create_nrt_module(ctx):
     _define_nrt_meminfo_data(ir_mod)
     _define_nrt_incref(ir_mod, atomic_inc)
     _define_nrt_decref(ir_mod, atomic_dec)
+    _define_nrt_debug_refcount(ir_mod)
 
     _define_nrt_unresolved_abort(ctx, ir_mod)
 
