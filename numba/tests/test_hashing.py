@@ -37,8 +37,6 @@ class TestHashingSetup(TestCase):
         # hash_info is a StructSequence, mock as a named tuple
         fields = ["width", "modulus", "inf", "nan", "imag", "algorithm",
                   "hash_bits", "seed_bits", "cutoff"]
-        if sys.version_info[:2] > (3, 7):
-            fields.append("memoryviews")
 
         hinfo = sys.hash_info
         FAKE_HASHINFO = namedtuple('FAKE_HASHINFO', fields)
