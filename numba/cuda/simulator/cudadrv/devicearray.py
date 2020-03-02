@@ -46,7 +46,7 @@ class FakeCUDAArray(object):
 
 
     def __init__(self, ary, stream=0):
-        self._ary = ary.reshape(1) if ary.ndim == 0 else ary
+        self._ary = ary
         self.stream = stream
 
     @property
@@ -63,8 +63,10 @@ class FakeCUDAArray(object):
             attr = getattr(self._ary, attrname)
             return attr
         except AttributeError as e:
-            msg = "Wrapped array has no attribute '%s'" % attrname
-            raise AttributeError(msg) from e
+            try:
+                return self.__getitem__(attrname)
+            except AttributeError as e:
+                six.raise_from(AttributeError("Wrapped array has no attribute '%s'" % attrname), e)
 
     def bind(self, stream=0):
         return FakeCUDAArray(self._ary, stream)
@@ -77,10 +79,7 @@ class FakeCUDAArray(object):
         return FakeCUDAArray(np.transpose(self._ary, axes=axes))
 
     def __getitem__(self, idx):
-        item = self._ary.__getitem__(idx)
-        if isinstance(item, np.ndarray):
-            return FakeCUDAArray(item, stream=self.stream)
-        return item
+        return FakeCUDAArray(self._ary.__getitem__(idx), stream=self.stream)
 
     def __setitem__(self, idx, val):
         return self._ary.__setitem__(idx, val)
