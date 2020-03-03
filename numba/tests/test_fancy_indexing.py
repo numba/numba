@@ -208,11 +208,11 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
 
         # --------------
         # UnicodeCharSeq
-        x_ucs = np.zeros(5, dtype='<U3')
-        v_ucs = np.array('abc')
-        exp5 = pyfunc(x_ucs.copy(), 0, v_ucs)
-        got5 = cfunc(x_ucs.copy(), 0, v_ucs)
-        self.assertPreciseEqual(exp5, got5)
+        # x_ucs = np.zeros(5, dtype='<U3')
+        # v_ucs = np.array('abc')
+        # exp5 = pyfunc(x_ucs.copy(), 0, v_ucs)
+        # got5 = cfunc(x_ucs.copy(), 0, v_ucs)
+        # self.assertPreciseEqual(exp5, got5)
 
 
     def test_np_take(self):
