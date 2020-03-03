@@ -1479,6 +1479,11 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             # Global array in nopython mode is constant
             typ = typ.copy(readonly=True)
 
+        if isinstance(typ, types.BaseAnonymousTuple):
+            types_with_literals = (types.Integer, types.UnicodeType)
+            if all(isinstance(ty, types_with_literals) for ty in typ):
+                typ = types.Tuple([types.literal(val) for val in gvar.value])
+
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled
         # like const value in numba

@@ -6,6 +6,7 @@ import math
 import numpy as np
 import sys
 import ctypes
+import warnings
 from collections import namedtuple
 
 import llvmlite.binding as ll
@@ -460,7 +461,22 @@ _hashsecret = _build_hashsecret()
 # ------------------------------------------------------------------------------
 
 
-if _Py_hashfunc_name == 'siphash24':
+if _Py_hashfunc_name in ('siphash24', 'fnv'):
+
+    # Check for use of the FNV hashing alg, warn users that it's not implemented
+    # and functionality relying of properties derived from hashing will be fine
+    # but hash values themselves are likely to be different.
+    if _Py_hashfunc_name == 'fnv':
+        msg = ("FNV hashing is not implemented in Numba. See PEP 456 "
+               "https://www.python.org/dev/peps/pep-0456/ "
+               "for rationale over not using FNV. Numba will continue to work, "
+               "but hashes for built in types will be computed using "
+               "siphash24. This will permit e.g. dictionaries to continue to "
+               "behave as expected, however anything relying on the value of "
+               "the hash opposed to hash as a derived property is likely to "
+               "not work as expected.")
+        warnings.warn(msg)
+
     # This is a translation of CPython's siphash24 function:
     # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L287-L413    # noqa: E501
 
@@ -608,10 +624,6 @@ if _Py_hashfunc_name == 'siphash24':
         v0, v1, v2, v3 = _DOUBLE_ROUND(v0, v1, v2, v3)
         t = (v0 ^ v1) ^ (v2 ^ v3)
         return t
-
-elif _Py_hashfunc_name == 'fnv':
-    # TODO: Should this instead warn and switch to siphash24?
-    raise NotImplementedError("FNV hashing is not implemented")
 else:
     msg = "Unsupported hashing algorithm in use %s" % _Py_hashfunc_name
     raise ValueError(msg)

@@ -35,7 +35,7 @@ class TestCasting(SerialMixin, unittest.TestCase):
             argarray = np.zeros(1, dtype=intype)
             argarray[0] = arg
             resarray = np.zeros(1, dtype=outtype)
-            cuda_wrapper_fn(argarray, resarray)
+            cuda_wrapper_fn[1, 1](argarray, resarray)
             return resarray[0]
 
         return wrapper_fn

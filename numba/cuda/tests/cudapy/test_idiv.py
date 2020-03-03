@@ -14,7 +14,7 @@ class TestCudaIDiv(SerialMixin, unittest.TestCase):
 
         x = np.ones((2, 2), dtype=np.float32)
         grid = cuda.to_device(x)
-        div(grid, 2, 2)
+        div[1, 1](grid, 2, 2)
         y = grid.copy_to_host()
         self.assertTrue(np.all(y == 0.5))
 
@@ -29,7 +29,7 @@ class TestCudaIDiv(SerialMixin, unittest.TestCase):
 
         x = np.ones((2, 2), dtype=np.float64)
         grid = cuda.to_device(x)
-        div_double(grid, 2, 2)
+        div_double[1, 1](grid, 2, 2)
         y = grid.copy_to_host()
         self.assertTrue(np.all(y == 0.5))
 

@@ -1,3 +1,4 @@
+from collections import namedtuple
 import numpy as np
 
 from numba.tests.support import (TestCase, MemoryLeakMixin,
@@ -16,6 +17,8 @@ from numba.core.untyped_passes import (FixupArgs, TranslateByteCode,
 from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
                                      NoPythonBackend, PartialTypeInference)
 from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
+
+_X_GLOBAL = (10, 11)
 
 
 class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):
@@ -1647,6 +1650,103 @@ class TestMore(TestCase):
             lines,
             ['a 1', 'b 2', '3 c', '4 d'],
         )
+
+    def test_unroll_named_tuple(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo():
+            abc = ABC(1, 2j, 3.4)
+            out = 0
+            for i in literal_unroll(abc):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_named_tuple_arg(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo(x):
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        abc = ABC(1, 2j, 3.4)
+
+        self.assertEqual(foo(abc), foo.py_func(abc))
+
+    def test_unroll_named_unituple(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo():
+            abc = ABC(1, 2, 3)
+            out = 0
+            for i in literal_unroll(abc):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_named_unituple_arg(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo(x):
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        abc = ABC(1, 2, 3)
+
+        self.assertEqual(foo(abc), foo.py_func(abc))
+
+    def test_unroll_global_tuple(self):
+
+        @njit
+        def foo():
+            out = 0
+            for i in literal_unroll(_X_GLOBAL):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_freevar_tuple(self):
+        x = (10, 11)
+
+        @njit
+        def foo():
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_function_tuple(self):
+        @njit
+        def a():
+            return 1
+
+        @njit
+        def b():
+            return 2
+
+        x = (a, b)
+
+        @njit
+        def foo():
+            out = 0
+            for f in literal_unroll(x):
+                out += f()
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
 
 
 def capture(real_pass):

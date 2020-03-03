@@ -76,6 +76,43 @@ The following are optional entries:
             and will raise a ``NotImplementedError`` exception if one is passed
             to a GPU function.
 
+
+Lifetime management
+-------------------
+
+Obtaining the value of the ``__cuda_array_interface__`` property of any object
+has no effect on the lifetime of the object from which it was created. In
+particular, note that the interface has no slot for the owner of the data.
+
+It is therefore imperative for a consumer to retain a reference to the object
+owning the data for as long as they make use of the data.
+
+
+Lifetime management in Numba
+----------------------------
+
+Numba provides two mechanisms for creating device arrays. Which to use depends
+on whether the created device array should maintain the life of the object from
+which it is created:
+
+- ``as_cuda_array``: This creates a device array that holds a reference to the
+  owning object. As long as a reference to the device array is held, its
+  underlying data will also be kept alive, even if all other references to the
+  original owning object have been dropped.
+- ``from_cuda_array_interface``: This creates a device array with no reference
+  to the owning object by default. The owning object, or some other object to
+  be considered the owner can be passed in the ``owner`` parameter.
+
+The interfaces of these functions are:
+
+.. automethod:: numba.cuda.as_cuda_array
+
+.. automethod:: numba.cuda.from_cuda_array_interface
+
+
+Pointer Attributes
+------------------
+
 Additional information about the data pointer can be retrieved using
 ``cuPointerGetAttribute`` or ``cudaPointerGetAttributes``.  Such information
 include:

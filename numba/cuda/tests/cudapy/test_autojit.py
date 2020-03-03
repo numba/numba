@@ -11,11 +11,11 @@ class TestCudaAutoJit(SerialMixin, unittest.TestCase):
         def what(a, b, c):
             pass
 
-        what(np.empty(1), 1.0, 21)
-        what(np.empty(1), 1.0, 21)
-        what(np.empty(1), np.empty(1, dtype=np.int32), 21)
-        what(np.empty(1), np.empty(1, dtype=np.int32), 21)
-        what(np.empty(1), 1.0, 21)
+        what[1, 1](np.empty(1), 1.0, 21)
+        what[1, 1](np.empty(1), 1.0, 21)
+        what[1, 1](np.empty(1), np.empty(1, dtype=np.int32), 21)
+        what[1, 1](np.empty(1), np.empty(1, dtype=np.int32), 21)
+        what[1, 1](np.empty(1), 1.0, 21)
 
         self.assertTrue(len(what.definitions) == 2)
 

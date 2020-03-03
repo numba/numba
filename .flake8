@@ -50,7 +50,6 @@ exclude =
     numba/core/dataflow.py
     numba/runtests.py
     numba/core/pythonapi.py
-    numba/extending.py
     numba/core/decorators.py
     numba/core/typeconv/typeconv.py
     numba/core/typeconv/rules.py

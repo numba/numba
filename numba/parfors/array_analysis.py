@@ -1670,7 +1670,7 @@ class ArrayAnalysis(object):
         fname, mod_name = find_callname(
             self.func_ir, index_def, typemap=self.typemap
         )
-        require(fname == "slice" and mod_name in ("__builtin__", "builtins"))
+        require(fname == 'slice' and mod_name in ('builtins'))
         require(len(index_def.args) == 2)
         lhs = index_def.args[0]
         rhs = index_def.args[1]
@@ -2134,14 +2134,6 @@ class ArrayAnalysis(object):
                 expr.args = args[1:]
             return result
 
-    def _analyze_op_call___builtin___len(
-        self, scope, equiv_set, loc, args, kws
-    ):
-        # python 2 version of len()
-        return self._analyze_op_call_builtins_len(
-            scope, equiv_set, loc, args, kws
-        )
-
     def _analyze_op_call_builtins_len(self, scope, equiv_set, loc, args, kws):
         # python 3 version of len()
         require(len(args) == 1)
@@ -2194,8 +2186,9 @@ class ArrayAnalysis(object):
             shape_var = kws["shape"]
         if shape_var:
             return shape_var, []
-        raise errors.RewriteUnsupportedError(
-            "Must specify a shape for array creation", loc=loc
+        raise errors.UnsupportedRewriteError(
+            "Must specify a shape for array creation",
+            loc=loc,
         )
 
     def _analyze_op_call_numpy_empty(self, scope, equiv_set, loc, args, kws):
@@ -2226,8 +2219,9 @@ class ArrayAnalysis(object):
         elif "N" in kws:
             N = kws["N"]
         else:
-            raise errors.RewriteUnsupportedError(
-                "Expect one argument (or 'N') to eye function", loc=loc
+            raise errors.UnsupportedRewriteError(
+                "Expect one argument (or 'N') to eye function",
+                loc=loc,
             )
         if "M" in kws:
             M = kws["M"]
@@ -2344,11 +2338,9 @@ class ArrayAnalysis(object):
                     if neg_one_index == -1:
                         neg_one_index = arg_index
                     else:
-                        msg = (
-                            "The reshape API may only include one negative"
-                            " argument."
-                        )
-                        raise errors.RewriteUnsupportedError(
+                        msg = ("The reshape API may only include one negative"
+                               " argument.")
+                        raise errors.UnsupportedRewriteError(
                             msg, loc=reshape_arg.loc
                         )
 

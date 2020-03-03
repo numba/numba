@@ -1,7 +1,3 @@
-# NOTE: for building under Windows.
-# Use setuptools so as to enable support of the special
-# "Microsoft Visual C++ Compiler for Python 2.7" (http://aka.ms/vcpython27)
-# Note setuptools >= 6.0 is required for this.
 from setuptools import setup, Extension, find_packages
 from distutils.command import build
 from distutils.spawn import spawn

@@ -9,7 +9,7 @@ import re
 
 import numpy as np
 
-from numba import njit, jit
+from numba import njit, jit, vectorize, guvectorize
 from numba.core import types, errors, typing, compiler, cgutils
 from numba.core.typed_passes import type_inference_stage
 from numba.core.registry import cpu_target
@@ -28,7 +28,8 @@ from numba.extending import (typeof_impl, type_callable,
                              make_attribute_wrapper,
                              intrinsic, _Intrinsic,
                              register_jitable,
-                             get_cython_function_address
+                             get_cython_function_address,
+                             is_jitted,
                              )
 from numba.core.typing.templates import (
     ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
@@ -1578,6 +1579,19 @@ class TestBoxingCallingJIT(TestCase):
             "cannot do x > 0",
             str(raises.exception),
         )
+
+
+class TestMisc(TestCase):
+
+    def test_is_jitted(self):
+        def foo(x):
+            pass
+
+        self.assertFalse(is_jitted(foo))
+        self.assertTrue(is_jitted(njit(foo)))
+        self.assertFalse(is_jitted(vectorize(foo)))
+        self.assertFalse(is_jitted(vectorize(parallel=True)(foo)))
+        self.assertFalse(is_jitted(guvectorize('void(float64[:])', '(m)')(foo)))
 
 
 if __name__ == '__main__':
