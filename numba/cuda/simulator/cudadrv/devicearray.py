@@ -86,7 +86,8 @@ class FakeCUDAArray(object):
             attr = getattr(self._ary, attrname)
             return attr
         except AttributeError as e:
-            six.raise_from(AttributeError("Wrapped array has no attribute '%s'" % attrname), e)
+            msg = "Wrapped array has no attribute '%s'" % attrname
+            raise AttributeError(msg) from e
 
     def bind(self, stream=0):
         return FakeCUDAArray(self._ary, stream)
