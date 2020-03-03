@@ -21,9 +21,11 @@ import warnings
 import logging
 import threading
 from itertools import product
+from abc import ABCMeta, abstractmethod
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float)
 import contextlib
+import importlib
 import numpy as np
 from collections import namedtuple, deque
 
@@ -45,7 +47,7 @@ SUPPORTS_IPC = sys.platform.startswith('linux')
 def _make_logger():
     logger = logging.getLogger(__name__)
     # is logging configured?
-    if not utils.logger_hasHandlers(logger):
+    if not logger.hasHandlers():
         # read user config
         lvl = str(config.CUDA_LOG_LEVEL).upper()
         lvl = getattr(logging, lvl, None)
@@ -553,15 +555,235 @@ def met_requirement_for_device(device):
                                (device, MIN_REQUIRED_CC))
 
 
-class _SizeNotSet(object):
+class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
+    def __init__(self, *args, **kwargs):
+        if 'context' not in kwargs:
+            raise RuntimeError("Memory manager requires a context")
+        self._context = kwargs.pop('context')
+
+    @abstractmethod
+    def memalloc(self, nbytes, stream=0):
+        pass
+
+    @abstractmethod
+    def memhostalloc(self, nbytes, mapped, portable, wc):
+        pass
+
+    @abstractmethod
+    def mempin(self, owner, pointer, size, mapped):
+        pass
+
+    @abstractmethod
+    def initialize(self):
+        pass
+
+    @abstractmethod
+    def get_ipc_handle(self, ary, stream=0):
+        pass
+
+    @abstractmethod
+    def get_memory_info(self):
+        pass
+
+    @abstractmethod
+    def reset(self):
+        pass
+
+    @abstractmethod
+    def defer_cleanup(self):
+        pass
+
+    @property
+    @abstractmethod
+    def interface_version(self):
+        pass
+
+
+class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.allocations = utils.UniqueDict()
+        self.deallocations = _PendingDeallocs()
+
+    def _attempt_allocation(self, allocator):
+        """
+        Attempt allocation by calling *allocator*.  If a out-of-memory error
+        is raised, the pending deallocations are flushed and the allocation
+        is retried.  If it fails in the second attempt, the error is reraised.
+        """
+        try:
+            allocator()
+        except CudaAPIError as e:
+            # is out-of-memory?
+            if e.code == enums.CUDA_ERROR_OUT_OF_MEMORY:
+                # clear pending deallocations
+                self.deallocations.clear()
+                # try again
+                allocator()
+            else:
+                raise
+
+    def memhostalloc(self, bytesize, mapped=False, portable=False,
+                     wc=False):
+        pointer = c_void_p()
+        flags = 0
+        if mapped:
+            flags |= enums.CU_MEMHOSTALLOC_DEVICEMAP
+        if portable:
+            flags |= enums.CU_MEMHOSTALLOC_PORTABLE
+        if wc:
+            flags |= enums.CU_MEMHOSTALLOC_WRITECOMBINED
+
+        def allocator():
+            driver.cuMemHostAlloc(byref(pointer), bytesize, flags)
+
+        if mapped:
+            self._attempt_allocation(allocator)
+        else:
+            allocator()
+
+        owner = None
+
+        finalizer = _hostalloc_finalizer(self, pointer, bytesize, mapped)
+        ctx = weakref.proxy(self._context)
+
+        if mapped:
+
+            mem = MappedMemory(ctx, owner, pointer, bytesize,
+                               finalizer=finalizer)
+            self.allocations[mem.handle.value] = mem
+            return mem.own()
+        else:
+            mem = PinnedMemory(ctx, owner, pointer, bytesize,
+                               finalizer=finalizer)
+            return mem
+
+    def mempin(self, owner, pointer, size, mapped=False):
+        if isinstance(pointer, (int, long)):
+            pointer = c_void_p(pointer)
+
+        # possible flags are "portable" (between context)
+        # and "device-map" (map host memory to device thus no need
+        # for memory transfer).
+        flags = 0
+
+        if mapped:
+            flags |= enums.CU_MEMHOSTREGISTER_DEVICEMAP
+
+        def allocator():
+            driver.cuMemHostRegister(pointer, size, flags)
+
+        if mapped:
+            self._attempt_allocation(allocator)
+        else:
+            allocator()
+
+        finalizer = _pin_finalizer(self, pointer, mapped)
+        ctx = weakref.proxy(self._context)
+
+        if mapped:
+            mem = MappedMemory(ctx, owner, pointer, size,
+                               finalizer=finalizer)
+            self.allocations[mem.handle.value] = mem
+            return mem.own()
+        else:
+            mem = PinnedMemory(ctx, owner, pointer, size,
+                               finalizer=finalizer)
+            return mem
+
+    def initialize(self):
+        pass
+
+    def reset(self):
+        self.allocations.clear()
+        self.deallocations.clear()
+
+    @contextlib.contextmanager
+    def defer_cleanup(self):
+        with self.deallocations.disable():
+            yield
+
+
+class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
+    def initialize(self):
+        # Set the memory capacity of *deallocations* as the memory manager
+        # becomes active for the first time
+        if self.deallocations.memory_capacity == _SizeNotSet:
+            self.deallocations.memory_capacity = self.get_memory_info().total
+
+    def memalloc(self, bytesize):
+        ptr = drvapi.cu_device_ptr()
+
+        def allocator():
+            driver.cuMemAlloc(byref(ptr), bytesize)
+
+        self._attempt_allocation(allocator)
+
+        finalizer = _alloc_finalizer(self, ptr, bytesize)
+        ctx = weakref.proxy(self._context)
+        mem = AutoFreePointer(ctx, ptr, bytesize, finalizer)
+        self.allocations[ptr.value] = mem
+        return mem.own()
+
+    def get_memory_info(self):
+        free = c_size_t()
+        total = c_size_t()
+        driver.cuMemGetInfo(byref(free), byref(total))
+        return _MemoryInfo(free=free.value, total=total.value)
+
+    def get_ipc_handle(self, memory, stream=0):
+        ipchandle = drvapi.cu_ipc_mem_handle()
+        driver.cuIpcGetMemHandle(
+            byref(ipchandle),
+            memory.owner.handle,
+        )
+        source_info = self._context.device.get_device_identity()
+        offset = memory.handle.value - memory.owner.handle.value
+
+        from numba.cuda.cudadrv.driver import IpcHandle
+        return IpcHandle(memory, ipchandle, memory.size, source_info,
+                         offset=offset)
+
+    @property
+    def interface_version(self):
+        return 1
+
+
+_memory_manager = None
+
+def _ensure_memory_manager():
+    global _memory_manager
+
+    if _memory_manager:
+        return
+
+    if config.CUDA_MEMORY_MANAGER:
+        try:
+            mgr_module = importlib.import_module(config.CUDA_MEMORY_MANAGER)
+            _memory_manager = mgr_module._numba_memory_manager
+        except Exception:
+            raise RuntimeError("Failed to use memory manager from %s" %
+                               config.CUDA_MEMORY_MANAGER)
+    else:
+        _memory_manager = NumbaCUDAMemoryManager
+
+def set_memory_manager(mm_plugin):
+    global _memory_manager
+    _memory_manager = mm_plugin
+
+
+class _SizeNotSet(int):
     """
     Dummy object for _PendingDeallocs when *size* is not set.
     """
+
+    def __new__(cls, *args, **kwargs):
+        return super().__new__(cls, 0)
+
     def __str__(self):
         return '?'
 
-    def __int__(self):
-        return 0
 
 _SizeNotSet = _SizeNotSet()
 
@@ -569,17 +791,19 @@ _SizeNotSet = _SizeNotSet()
 class _PendingDeallocs(object):
     """
     Pending deallocations of a context (or device since we are using the primary
-    context).
+    context). The capacity defaults to being unset (_SizeNotSet) but can be
+    modified later once the driver is initialized and the total memory capacity
+    known.
     """
-    def __init__(self, capacity):
+    def __init__(self, capacity=_SizeNotSet):
         self._cons = deque()
         self._disable_count = 0
         self._size = 0
-        self._memory_capacity = capacity
+        self.memory_capacity = capacity
 
     @property
     def _max_pending_bytes(self):
-        return int(self._memory_capacity * config.CUDA_DEALLOCS_RATIO)
+        return int(self.memory_capacity * config.CUDA_DEALLOCS_RATIO)
 
     def add_item(self, dtor, handle, size=_SizeNotSet):
         """
@@ -647,8 +871,9 @@ class Context(object):
         self.device = device
         self.handle = handle
         self.allocations = utils.UniqueDict()
-        # *deallocations* is lazily initialized on context push
-        self.deallocations = None
+        self.deallocations = _PendingDeallocs()
+        _ensure_memory_manager()
+        self.memory_manager = _memory_manager(context=self)
         self.modules = utils.UniqueDict()
         # For storing context specific data
         self.extras = {}
@@ -659,19 +884,15 @@ class Context(object):
         """
         # Free owned resources
         _logger.info('reset context of device %s', self.device.id)
-        self.allocations.clear()
+        self.memory_manager.reset()
         self.modules.clear()
         # Clear trash
-        if self.deallocations:
-            self.deallocations.clear()
+        self.deallocations.clear()
 
     def get_memory_info(self):
         """Returns (free, total) memory in bytes in the context.
         """
-        free = c_size_t()
-        total = c_size_t()
-        driver.cuMemGetInfo(byref(free), byref(total))
-        return _MemoryInfo(free=free.value, total=total.value)
+        return self.memory_manager.get_memory_info()
 
     def get_active_blocks_per_multiprocessor(self, func, blocksize, memsize, flags=None):
         """Return occupancy of a function.
@@ -714,9 +935,7 @@ class Context(object):
         """Initialize the context for use.
         It's safe to be called multiple times.
         """
-        # setup *deallocations* as the context becomes active for the first time
-        if self.deallocations is None:
-            self.deallocations = _PendingDeallocs(self.get_memory_info().total)
+        self.memory_manager.initialize()
 
     def push(self):
         """
@@ -733,106 +952,14 @@ class Context(object):
         popped = driver.pop_active_context()
         assert popped.value == self.handle.value
 
-    def _attempt_allocation(self, allocator):
-        """
-        Attempt allocation by calling *allocator*.  If a out-of-memory error
-        is raised, the pending deallocations are flushed and the allocation
-        is retried.  If it fails in the second attempt, the error is reraised.
-        """
-        try:
-            allocator()
-        except CudaAPIError as e:
-            # is out-of-memory?
-            if e.code == enums.CUDA_ERROR_OUT_OF_MEMORY:
-                # clear pending deallocations
-                self.deallocations.clear()
-                # try again
-                allocator()
-            else:
-                raise
-
     def memalloc(self, bytesize):
-        ptr = drvapi.cu_device_ptr()
-
-        def allocator():
-            driver.cuMemAlloc(byref(ptr), bytesize)
-
-        self._attempt_allocation(allocator)
-
-        finalizer = _alloc_finalizer(self, ptr, bytesize)
-        mem = AutoFreePointer(weakref.proxy(self), ptr, bytesize, finalizer)
-        self.allocations[ptr.value] = mem
-        return mem.own()
+        return self.memory_manager.memalloc(bytesize)
 
     def memhostalloc(self, bytesize, mapped=False, portable=False, wc=False):
-        pointer = c_void_p()
-        flags = 0
-        if mapped:
-            flags |= enums.CU_MEMHOSTALLOC_DEVICEMAP
-        if portable:
-            flags |= enums.CU_MEMHOSTALLOC_PORTABLE
-        if wc:
-            flags |= enums.CU_MEMHOSTALLOC_WRITECOMBINED
-
-        def allocator():
-            driver.cuMemHostAlloc(byref(pointer), bytesize, flags)
-
-        if mapped:
-            self._attempt_allocation(allocator)
-        else:
-            allocator()
-
-        owner = None
-
-        finalizer = _hostalloc_finalizer(self, pointer, bytesize, mapped)
-
-        if mapped:
-            mem = MappedMemory(weakref.proxy(self), owner, pointer, bytesize,
-                               finalizer=finalizer)
-            self.allocations[mem.handle.value] = mem
-            return mem.own()
-        else:
-            mem = PinnedMemory(weakref.proxy(self), owner, pointer, bytesize,
-                               finalizer=finalizer)
-            return mem
+        return self.memory_manager.memhostalloc(bytesize, mapped, portable, wc)
 
     def mempin(self, owner, pointer, size, mapped=False):
-        if isinstance(pointer, (int, long)):
-            pointer = c_void_p(pointer)
-
-        if mapped and not self.device.CAN_MAP_HOST_MEMORY:
-            raise CudaDriverError("%s cannot map host memory" % self.device)
-
-        # possible flags are "portable" (between context)
-        # and "device-map" (map host memory to device thus no need
-        # for memory transfer).
-        flags = 0
-
-        if mapped:
-            flags |= enums.CU_MEMHOSTREGISTER_DEVICEMAP
-
-        def allocator():
-            driver.cuMemHostRegister(pointer, size, flags)
-
-        if mapped:
-            self._attempt_allocation(allocator)
-        else:
-            allocator()
-
-        finalizer = _pin_finalizer(self, pointer, mapped)
-
-        if mapped:
-            mem = MappedMemory(weakref.proxy(self), owner, pointer, size,
-                               finalizer=finalizer)
-            self.allocations[mem.handle.value] = mem
-            return mem.own()
-        else:
-            mem = PinnedMemory(weakref.proxy(self), owner, pointer, size,
-                               finalizer=finalizer)
-            return mem
-
-    def memunpin(self, pointer):
-        raise NotImplementedError
+        return self.memory_manager.mempin(owner, pointer, size, mapped)
 
     def get_ipc_handle(self, memory):
         """
@@ -840,15 +967,7 @@ class Context(object):
         """
         if not SUPPORTS_IPC:
             raise OSError('OS does not support CUDA IPC')
-        ipchandle = drvapi.cu_ipc_mem_handle()
-        driver.cuIpcGetMemHandle(
-            ctypes.byref(ipchandle),
-            memory.owner.handle,
-            )
-        source_info = self.device.get_device_identity()
-        offset = memory.handle.value - memory.owner.handle.value
-        return IpcHandle(memory, ipchandle, memory.size, source_info,
-                         offset=offset)
+        return self.memory_manager.get_ipc_handle(memory)
 
     def open_ipc_handle(self, handle, size):
         # open the IPC handle to get the device pointer
@@ -912,6 +1031,12 @@ class Context(object):
     def synchronize(self):
         driver.cuCtxSynchronize()
 
+    @contextlib.contextmanager
+    def defer_cleanup(self):
+        with self.memory_manager.defer_cleanup():
+            with self.deallocations.disable():
+                yield
+
     def __repr__(self):
         return "<CUDA context %s of device %d>" % (self.handle, self.device.id)
 
@@ -959,9 +1084,9 @@ def load_module_image(context, image):
                   _module_finalizer(context, handle))
 
 
-def _alloc_finalizer(context, handle, size):
-    allocations = context.allocations
-    deallocations = context.deallocations
+def _alloc_finalizer(memory_manager, handle, size):
+    allocations = memory_manager.allocations
+    deallocations = memory_manager.deallocations
 
     def core():
         if allocations:
@@ -971,7 +1096,7 @@ def _alloc_finalizer(context, handle, size):
     return core
 
 
-def _hostalloc_finalizer(context, handle, size, mapped):
+def _hostalloc_finalizer(memory_manager, handle, size, mapped):
     """
     Finalize page-locked host memory allocated by `context.memhostalloc`.
 
@@ -981,8 +1106,8 @@ def _hostalloc_finalizer(context, handle, size, mapped):
     finalization of device objects.
 
     """
-    allocations = context.allocations
-    deallocations = context.deallocations
+    allocations = memory_manager.allocations
+    deallocations = memory_manager.deallocations
     if not mapped:
         size = _SizeNotSet
 
@@ -994,7 +1119,7 @@ def _hostalloc_finalizer(context, handle, size, mapped):
     return core
 
 
-def _pin_finalizer(context, handle, mapped):
+def _pin_finalizer(memory_manager, handle, mapped):
     """
     Finalize temporary page-locking of host memory by `context.mempin`.
 
@@ -1007,7 +1132,7 @@ def _pin_finalizer(context, handle, mapped):
     `context.deallocations` queue.
 
     """
-    allocations = context.allocations
+    allocations = memory_manager.allocations
 
     def core():
         if mapped and allocations:
@@ -1117,7 +1242,7 @@ class _StagedIpcImpl(object):
         with cuda.gpus[srcdev.id]:
             impl.close()
 
-        return newmem.own()
+        return newmem
 
     def close(self):
         # Nothing has to be done here
@@ -1232,6 +1357,7 @@ class IpcHandle(object):
 
 
 class MemoryPointer(object):
+
     """A memory pointer that owns the buffer with an optional finalizer.
 
     When an instance is deleted, the finalizer will be called regardless

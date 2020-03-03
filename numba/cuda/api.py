@@ -412,8 +412,7 @@ def defer_cleanup():
 
     Note: this context manager can be nested.
     """
-    deallocs = current_context().deallocations
-    with deallocs.disable():
+    with current_context().defer_cleanup():
         yield
 
 

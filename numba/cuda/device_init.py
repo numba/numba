@@ -7,6 +7,10 @@ from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
                     threadfence_block, threadfence_system,
                     threadfence, selp, popc, brev, clz, ffs, fma)
 from .cudadrv.error import CudaSupportError
+from numba.cuda.cudadrv.driver import (BaseCUDAMemoryManager,
+                                       HostOnlyCUDAMemoryManager,
+                                       MemoryPointer, MappedMemory,
+                                       PinnedMemory, set_memory_manager)
 from .cudadrv import nvvm
 from numba.cuda import initialize
 from .errors import KernelRuntimeError

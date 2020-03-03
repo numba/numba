@@ -357,6 +357,9 @@ class _EnvReloader(object):
         # gdb binary location
         GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')
 
+        # CUDA Memory management
+        CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str, '')
+
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():
             if name.isupper():

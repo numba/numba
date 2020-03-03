@@ -30,6 +30,10 @@ def skip_unless_conda_cudatoolkit(reason):
     return unittest.skipUnless(get_conda_ctk() is not None, reason)
 
 
+def skip_with_external_memmgr(reason):
+    return unittest.skipIf(config.CUDA_MEMORY_MANAGER, reason)
+
+
 class CUDATextCapture(object):
 
     def __init__(self, stream):
