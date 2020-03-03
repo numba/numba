@@ -137,15 +137,11 @@ def assert_equiv(typingctx, *val):
     assert len(val[0]) > 1
     # Arguments must be either array, tuple, or integer
     assert all(
-        map(
-            lambda a: (
-                isinstance(a, types.ArrayCompatible)
-                or isinstance(a, types.BaseTuple)
-                or isinstance(a, types.SliceType)
-                or isinstance(a, types.Integer)
-            ),
-            val[0][1:],
-        )
+        isinstance(a, types.ArrayCompatible)
+        or isinstance(a, types.BaseTuple)
+        or isinstance(a, types.SliceType)
+        or isinstance(a, types.Integer)
+        for a in val[0][1:]
     )
 
     def codegen(context, builder, sig, args):
@@ -409,9 +405,7 @@ class ShapeEquivSet(EquivSet):
                 return (name,)
 
             typ = self.typemap[name]
-            if isinstance(typ, types.BaseTuple) or isinstance(
-                typ, types.ArrayCompatible
-            ):
+            if isinstance(typ, (types.BaseTuple, types.ArrayCompatible)):
                 ndim = (
                     typ.ndim
                     if isinstance(typ, types.ArrayCompatible)
