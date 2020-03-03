@@ -60,6 +60,8 @@ class FakeKernelCUDAArray(object):
     def __setitem__(self, idx, val):
         self._item.__setitem__(idx, val)
 
+    def __len__(self):
+        return len(self.__dict__['_item'])
 
 class FakeCUDAArray(object):
     '''
