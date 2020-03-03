@@ -1,7 +1,3 @@
-# NOTE: for building under Windows.
-# Use setuptools so as to enable support of the special
-# "Microsoft Visual C++ Compiler for Python 2.7" (http://aka.ms/vcpython27)
-# Note setuptools >= 6.0 is required for this.
 from setuptools import setup, Extension, find_packages
 from distutils.command import build
 from distutils.spawn import spawn
@@ -145,9 +141,15 @@ def get_ext_modules():
     ext_np_ufunc = Extension(name="numba.np.ufunc._internal",
                              sources=["numba/np/ufunc/_internal.c"],
                              depends=["numba/np/ufunc/_ufunc.c",
-                                     "numba/np/ufunc/_internal.h",
-                                     "numba/_pymodule.h"],
+                                      "numba/np/ufunc/_internal.h",
+                                      "numba/_pymodule.h"],
                              **np_compile_args)
+
+    ext_npyufunc_num_threads = Extension(name="numba.np.ufunc._num_threads",
+                                         sources=[
+                                             "numba/np/ufunc/_num_threads.c"],
+                                         depends=["numba/_pymodule.h"],
+                                         )
 
     ext_np_ufunc_backends = []
 
@@ -290,8 +292,8 @@ def get_ext_modules():
                                 include_dirs=["numba"])
 
     ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib, ext_typeconv,
-                   ext_np_ufunc, ext_mviewbuf, ext_nrt_python,
-                   ext_jitclass_box, ext_cuda_extras]
+                   ext_np_ufunc, ext_npyufunc_num_threads, ext_mviewbuf,
+                   ext_nrt_python, ext_jitclass_box, ext_cuda_extras]
 
     ext_modules += ext_np_ufunc_backends
 

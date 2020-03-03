@@ -41,6 +41,12 @@ typedef struct {
  *
  * Items must normally not be NULL, except during construction when
  * the list is not yet visible outside the function that builds it.
+ *
+ * Additionally, this list has boolean member 'is_mutable' that can be used to
+ * set a list as immutable. Two functions to query and set this member are
+ * provided. Any attempt to mutate an immutable list will result in a status
+ * of LIST_ERR_IMMUTABLE.
+ *
  */
 typedef struct {
     /* size of the list in items  */
@@ -49,6 +55,8 @@ typedef struct {
     Py_ssize_t      item_size;
     /* total allocated slots in items */
     Py_ssize_t allocated;
+    /* is the list mutable */
+    int is_mutable;
     /* method table for type-dependent operations */
     list_type_based_methods_table methods;
     /* array/pointer for items. Interpretation is governed by item_size */
@@ -79,6 +87,12 @@ numba_list_length(NB_List *lp);
 
 NUMBA_EXPORT_FUNC(Py_ssize_t)
 numba_list_allocated(NB_List *lp);
+
+NUMBA_EXPORT_FUNC(int)
+numba_list_is_mutable(NB_List *lp);
+
+NUMBA_EXPORT_FUNC(void)
+numba_list_set_is_mutable(NB_List *lp, int is_mutable);
 
 NUMBA_EXPORT_FUNC(int)
 numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item);

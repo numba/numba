@@ -32,13 +32,10 @@ Build and Packaging
 
 Continuous Integration
 ''''''''''''''''''''''
-- :ghfile:`.binstar.yml` - Binstar Build CI config (inactive)
 - :ghfile:`azure-pipelines.yml` - Azure Pipelines CI config (active:
   Win/Mac/Linux)
 - :ghfile:`buildscripts/azure/` - Azure Pipeline configuration for specific
   platforms
-- :ghfile:`.travis.yml` - Travis CI config (active: Mac/Linux, will be
-  dropped in the future)
 - :ghfile:`buildscripts/appveyor/` - Appveyor build scripts
 - :ghfile:`buildscripts/incremental/` - Generic scripts for building Numba
   on various CI systems
@@ -53,8 +50,6 @@ Documentation / Examples
 - :ghfile:`README.rst` - README for repo, also uploaded to PyPI
 - :ghfile:`CONTRIBUTING.md` - Documentation on how to contribute to project
   (out of date, should be updated to point to Sphinx docs)
-- :ghfile:`AUTHORS` - List of Github users who have contributed PRs (out of
-  date)
 - :ghfile:`CHANGE_LOG` - History of Numba releases, also directly embedded
   into Sphinx documentation
 - :ghfile:`docs/` - Documentation source

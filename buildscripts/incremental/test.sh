@@ -5,6 +5,8 @@ source activate $CONDA_ENV
 # Make sure any error below is reported as such
 set -v -e
 
+# Ensure the README is correctly formatted
+if [ "$BUILD_DOC" == "yes" ]; then rstcheck README.rst; fi
 # Ensure that the documentation builds without warnings
 pushd docs
 if [ "$BUILD_DOC" == "yes" ]; then make SPHINXOPTS=-W clean html; fi

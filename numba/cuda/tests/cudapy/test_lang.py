@@ -18,7 +18,7 @@ class TestLang(SerialMixin, unittest.TestCase):
                 a[i] = v
 
         a = np.zeros(len(tup))
-        foo(a)
+        foo[1, 1](a)
         self.assertTrue(np.all(a == tup))
 
     def test_zip(self):
@@ -33,7 +33,7 @@ class TestLang(SerialMixin, unittest.TestCase):
             a[0] = c
 
         a = np.zeros(1)
-        foo(a)
+        foo[1, 1](a)
         b = np.array(t1)
         c = np.array(t2)
         self.assertTrue(np.all(a == (b + c).sum()))

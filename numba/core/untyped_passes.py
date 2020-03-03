@@ -3,7 +3,8 @@ from contextlib import contextmanager
 from copy import deepcopy, copy
 import warnings
 
-from numba.core.compiler_machinery import FunctionPass, register_pass
+from numba.core.compiler_machinery import (FunctionPass, AnalysisPass,
+                                           register_pass)
 from numba.core import (errors, types, ir, bytecode, postproc, rewrites, config,
                         transforms)
 from numba.misc.special import literal_unroll
@@ -382,7 +383,7 @@ class InlineInlinables(FunctionPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=False)
-class PreserveIR(FunctionPass):
+class PreserveIR(AnalysisPass):
     """
     Preserves the IR in the metadata
     """
@@ -390,7 +391,7 @@ class PreserveIR(FunctionPass):
     _name = "preserve_ir"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         state.metadata['preserved_ir'] = state.func_ir.copy()
@@ -601,7 +602,7 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
     """
     _name = "transform_literal_unroll_const_list_to_tuple"
 
-    _accepted_types = (types.Tuple, types.UniTuple)
+    _accepted_types = (types.BaseTuple,)
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -673,6 +674,10 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
                               to_unroll.op == "build_tuple"):
                             # this is fine, do nothing
                             pass
+                        elif (isinstance(to_unroll, (ir.Global, ir.FreeVar)) and
+                              isinstance(to_unroll.value, tuple)):
+                            # this is fine, do nothing
+                            pass
                         elif isinstance(to_unroll, ir.Arg):
                             # this is only fine if the arg is a tuple
                             ty = state.typemap[to_unroll.name]
@@ -711,7 +716,7 @@ class MixedContainerUnroller(FunctionPass):
 
     _DEBUG = False
 
-    _accepted_types = (types.Tuple, types.UniTuple)
+    _accepted_types = (types.BaseTuple,)
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -1229,7 +1234,7 @@ class IterLoopCanonicalization(FunctionPass):
     _DEBUG = False
 
     # if partial typing info is available it will only look at these types
-    _accepted_types = (types.Tuple, types.UniTuple)
+    _accepted_types = (types.BaseTuple,)
     _accepted_calls = (literal_unroll,)
 
     def __init__(self):

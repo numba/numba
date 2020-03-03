@@ -77,28 +77,17 @@ fi
 # Install latest llvmlite build
 $CONDA_INSTALL -c numba llvmlite
 
-# Install enum34 and singledispatch for Python < 3.4
-if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
-if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
 # Install importlib-metadata for Python < 3.8
 if [ $PYTHON \< "3.8" ]; then $CONDA_INSTALL importlib_metadata; fi
-# Install funcsigs for Python < 3.3
-if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments numpydoc; fi
-if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme; fi
+if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme rstcheck; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL tbb tbb-devel; fi
-# install the faulthandler for Python 2.x, but not on armv7l as it doesn't exist
-# in berryconda
-archstr=`uname -m`
-if [[ "$archstr" != 'armv7l' ]]; then
-    if [ $PYTHON \< "3.0" ]; then $CONDA_INSTALL faulthandler; fi
-fi
 
 # environment dump for debug
 echo "DEBUG ENV:"

@@ -1,6 +1,13 @@
 ==================================
-Creating Numpy universal functions
+Creating NumPy universal functions
 ==================================
+
+There are two types of universal functions:
+
+* Those which operate on scalars, these are "universal functions" or *ufuncs*
+  (see ``@vectorize`` below).
+* Those which operate on higher dimensional arrays and scalars, these are
+  "generalized universal functions" or *gufuncs* (``@guvectorize`` below).
 
 .. _vectorize:
 
