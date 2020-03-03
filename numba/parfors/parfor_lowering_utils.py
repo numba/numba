@@ -139,9 +139,9 @@ class ParforLoweringBuilder:
         """
         loc = self._loc
         var = ir.Var(self._scope, name, loc)
-        init_assign = ir.Assign(rhs, var, loc)
+        assign = ir.Assign(rhs, var, loc)
         self._typemap.setdefault(var.name, typ)
-        self._lowerer.lower_inst(init_assign)
+        self._lowerer.lower_inst(assign)
         return var
 
     def call(self, callable_node, args, kws={}) -> ir.Expr:
