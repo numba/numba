@@ -1462,9 +1462,11 @@ class FunctionIR(object):
                     raise ValueError(msg)
                 else:
                     from pygments import highlight
-                    from .ir_lexer import NumbaIRLexer as lexer
+                    from numba.misc.dump_style \
+                        import NumbaIRLexer as lexer, by_colorscheme
                     from pygments.formatters import Terminal256Formatter
-                    print(highlight(text, lexer(), Terminal256Formatter()))
+                    print(highlight(text, lexer(), Terminal256Formatter(
+                        style=by_colorscheme())))
             else:
                 print(text)
 

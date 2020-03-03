@@ -1,7 +1,16 @@
-# -*- coding: utf-8 -*-
+
+import numba.core.config
+from pygments.styles.default import DefaultStyle
+from pygments.styles.bw import BlackWhiteStyle
+from pygments.styles.manni import ManniStyle
+from pygments.styles.monokai import MonokaiStyle
+from pygments.styles.native import NativeStyle
 
 from pygments.lexer import RegexLexer, include, bygroups, words
-from pygments.token import Text, Name, String,  Punctuation, Keyword, Operator
+from pygments.token import Text, Name, String,  Punctuation, Keyword, \
+    Operator, Number
+
+from pygments.style import Style
 
 
 class NumbaIRLexer(RegexLexer):
@@ -30,11 +39,12 @@ class NumbaIRLexer(RegexLexer):
             (fun_or_var + r'(\=)',
                 bygroups(Name.Attribute, Punctuation)),
             (fun_or_var, Name.Constant),
+            (r'[0-9]+', Number),
 
             # <built-in function some>
             (r'<[^>]*>', String),
 
-            (r'[=<>{}\[\]()*.,!]|x\b', Punctuation)
+            (r'[=<>{}\[\]()*.,!\':]|x\b', Punctuation)
         ],
 
         'keyword':[
@@ -47,3 +57,23 @@ class NumbaIRLexer(RegexLexer):
             (r'(\n|\s)', Text),
         ],
     }
+
+
+def by_colorscheme():
+    styles = BlackWhiteStyle.styles.copy()
+    styles.update({
+        Name.Function:             "bold",
+        Name.Attribute:            "bold",
+        Name.Constant:             "bold",
+    })
+    numba_bw = type('NumbaBwStyle', (Style, ), {'styles': styles})
+
+    style_map = {
+        'no_color' : numba_bw,
+        'dark_bg' : MonokaiStyle,
+        'light_bg' : ManniStyle,
+        'blue_bg' : NativeStyle,
+        'jupyter_nb' : DefaultStyle,
+    }
+
+    return style_map[numba.core.config.COLOR_SCHEME]
