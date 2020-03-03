@@ -47,14 +47,14 @@ class FakeKernelCUDAArray(object):
     def __getattr__(self, attrname):
         return self.__wrap_if_fake(self._item.__getitem__(attrname))
 
+    def __setattr__(self, nm, val):
+        self._item.__setitem__(nm, val)
+
     def __getitem__(self, idx):
         return self.__wrap_if_fake(self._item.__getitem__(idx))
 
     def __setitem__(self, idx, val):
         self._item.__setitem__(idx, val)
-
-    def __setattr__(self, nm, val):
-        self.__setattr__(nm, val)
 
 
 
