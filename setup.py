@@ -240,6 +240,7 @@ def get_ext_modules():
     else:
         print("TBB not found")
 
+    '''
     # Search for OpenCL, first check env var OPENCLROOT then conda locations
     opencl_root = os.getenv('OPENCLROOT')
     if not opencl_root:
@@ -255,9 +256,14 @@ def get_ext_modules():
         depends=['numba/dppy/dppy_driver/dp_glue.h'],
         include_dirs=[os.path.join(opencl_root, 'include')],
         extra_compile_args=openclliteflags,
+        libraries=['OpenCL'],  # TODO: if --debug or -g, use 'tbb_debug'
+            library_dirs=[
+                # for Linux
+                os.path.join(opencl_root, 'lib', 'x86_64-linux-gnu'),
+            ],
     )
     ext_dppy_impls.append(ext_dppy)
-
+    '''
 
     # Disable OpenMP if we are building a wheel or
     # forced by user with NUMBA_NO_OPENMP=1
@@ -329,7 +335,7 @@ build_requires = ['numpy', 'cffi>=1.0.0']
 install_requires = ['llvmlite>=0.31.0dev0', 'numpy', 'setuptools', 'cffi>=1.0.0']
 install_requires.extend(['enum34; python_version < "3.4"'])
 install_requires.extend(['singledispatch; python_version < "3.4"'])
-install_requires.extend(['funcsigs; python_version < "3.3"'])
+install_requires.extend(['funcsigs; python_version < "3.5"'])
 
 modules_with_cffi=['./numba/dppy/dppy_driver/driverapi.py:ffibuilder']
 
