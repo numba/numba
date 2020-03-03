@@ -89,6 +89,8 @@ class FakeCUDAKernel(object):
                     ret = wrap_arg(arg).to_device(retr)
                 elif isinstance(arg, ArgHint):
                     ret = arg.to_device(retr)
+                elif isinstance(arg, np.void):
+                    ret = FakeCUDAArray(arg)  # In case a np record comes in.
                 else:
                     ret = arg
                 if isinstance(ret,FakeCUDAArray):

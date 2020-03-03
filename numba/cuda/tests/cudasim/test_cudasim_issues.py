@@ -11,7 +11,7 @@ import unittest
 
 class TestCudaSimIssues(SerialMixin, unittest.TestCase):
     BACKYARD_TYPE = [('statue', float64),
-                     ('newspaper', float64, 6)]
+                     ('newspaper', float64, (6, ))]
 
     GOOSE_TYPE = [('garden', float64, (12,)),
                   ('town', float64, (42,)),
@@ -31,9 +31,9 @@ class TestCudaSimIssues(SerialMixin, unittest.TestCase):
 
         item = np.zeros(1, self.GOOSE_NP_DTYPE)
         simple_kernel[1, 1](item[0])
-        np.testing.assert_equal(45, item[0]['garden'][0])
-        np.testing.assert_equal(item[0]['backyard']['statue'], 3)
-        np.testing.assert_equal(item[0]['backyard']['newspaper'][3], 5)
+        np.testing.assert_equal(item[0]['garden'][0], 45)
+        np.testing.assert_equal(3, item[0]['backyard']['statue'])
+        np.testing.assert_equal(5, item[0]['backyard']['newspaper'][3])
 
     def test_cuda_module_in_device_function(self):
         """

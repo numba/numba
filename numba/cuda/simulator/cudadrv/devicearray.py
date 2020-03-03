@@ -47,7 +47,7 @@ class FakeKernelCUDAArray(object):
 
     def __getattr__(self, attrname):
         if attrname in dir(self.__dict__['_item']._ary):  # For, eg, array size.
-            return getattr(self.__dict__['_item']._ary, attrname)
+            return self.__wrap_if_fake(getattr(self.__dict__['_item']._ary, attrname))
         else:
             return self.__wrap_if_fake(self._item.__getitem__(attrname))
 
