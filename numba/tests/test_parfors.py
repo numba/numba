@@ -16,7 +16,7 @@ from functools import reduce
 import numpy as np
 from numpy.random import randn
 import operator
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 import numba.parfors.parfor
 from numba import njit, prange, set_num_threads, get_num_threads
@@ -47,6 +47,8 @@ x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 on
 
 _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
+
+TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
 
 class TestParforsBase(TestCase):
     """
@@ -1556,6 +1558,42 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countParfors(test_impl,
                                     (types.Array(types.float64, 1, 'C'),
                                      types.Array(types.float64, 1, 'C'))) == 1)
+
+    @skip_parfors_unsupported
+    def test_tuple1(self):
+        def test_impl(a):
+            atup = (3,4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += atup[0] + atup[1] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_tuple2(self):
+        def test_impl(a):
+            atup = a.shape
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += atup[0] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_namedtuple1(self):
+        def test_impl(a):
+            antup = TestNamedTuple(part0=3, part1=4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += antup.part0 + antup.part1 + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
 
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
@@ -3227,6 +3265,25 @@ class TestParforsMisc(TestParforsBase):
             # always set the sequential_parfor_lowering state back to the
             # original state
             numba.parfors.parfor.sequential_parfor_lowering = save_state
+
+    def test_oversized_tuple_as_arg_to_kernel(self):
+        @njit(parallel=True)
+        def oversize_tuple():
+            big_tup = (1,2,3,4)
+            z = 0
+            for x in prange(10):
+                z += big_tup[0]
+            return z
+
+        save_max = config.PARFOR_MAX_TUPLE_SIZE
+        config.PARFOR_MAX_TUPLE_SIZE = 3
+        with self.assertRaises(errors.UnsupportedParforsError) as raises:
+            oversize_tuple()
+        config.PARFOR_MAX_TUPLE_SIZE = save_max
+
+        errstr = str(raises.exception)
+        self.assertIn("Use of a tuple", errstr)
+        self.assertIn("in a parallel region", errstr)
 
 
 @skip_parfors_unsupported

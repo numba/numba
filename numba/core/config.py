@@ -173,6 +173,11 @@ class _EnvReloader(object):
         # of external references
         FUNCTION_CACHE_SIZE = _readenv("NUMBA_FUNCTION_CACHE_SIZE", int, 128)
 
+        # Maximum tuple size that parfors will unpack and pass to
+        # internal gufunc.
+        PARFOR_MAX_TUPLE_SIZE = _readenv("NUMBA_PARFOR_MAX_TUPLE_SIZE",
+                                         int, 100)
+
         # Enable logging of cache operation
         DEBUG_CACHE = _readenv("NUMBA_DEBUG_CACHE", int, DEBUG)
 
