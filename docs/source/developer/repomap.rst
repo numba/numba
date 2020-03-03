@@ -402,8 +402,6 @@ typing and implementation to be specified together.
   needed to link generated code
 - :ghfile:`numba/core/fastmathpass.py` - Rewrite pass to add fastmath
   attributes to function call sites and binary operations
-- :ghfile:`numba/core/removerefctpass.py` - Rewrite pass to remove
-  unnecessary incref/decref pairs
 - :ghfile:`numba/core/descriptors.py` - empty base class for all target
   descriptors (is this needed?)
 - :ghfile:`numba/cpython/builtins.py` - Python builtin functions and

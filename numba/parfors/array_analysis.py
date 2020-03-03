@@ -406,11 +406,9 @@ class ShapeEquivSet(EquivSet):
 
             typ = self.typemap[name]
             if isinstance(typ, (types.BaseTuple, types.ArrayCompatible)):
-                ndim = (
-                    typ.ndim
-                    if isinstance(typ, types.ArrayCompatible)
-                    else len(typ)
-                )
+                ndim = (typ.ndim
+                        if isinstance(typ, types.ArrayCompatible)
+                        else len(typ))
                 # Treat 0d array as if it were a scalar.
                 if ndim == 0:
                     return (name,)
@@ -1347,7 +1345,6 @@ class ArrayAnalysis(object):
             if result[0] is not None:
                 assert isinstance(inst, ir.SetItem)
                 inst.index = result[0]
-                # inst.index_var = result[0]
             result = result[1]
             (target_shape, pre) = result
             value_shape = equiv_set.get_shape(inst.value)
@@ -1513,7 +1510,7 @@ class ArrayAnalysis(object):
     def gen_static_slice_size(
         self, lhs_rel, rhs_rel, loc, scope, stmts, equiv_set
     ):
-        the_var, the_typ = self.gen_literal_slice_part(
+        the_var, *_ = self.gen_literal_slice_part(
             rhs_rel - lhs_rel,
             loc,
             scope,
@@ -1673,25 +1670,9 @@ class ArrayAnalysis(object):
         rhs_typ = self.typemap[rhs.name]
 
         if config.DEBUG_ARRAY_OPT >= 2:
-            print(
-                "slice_size",
-                "index=",
-                index,
-                "dsize=",
-                dsize,
-                "index_def=",
-                index_def,
-                "lhs=",
-                lhs,
-                "rhs=",
-                rhs,
-                "size_typ=",
-                size_typ,
-                "lhs_typ=",
-                lhs_typ,
-                "rhs_typ=",
-                rhs_typ,
-            )
+            print(f"slice_size index={index} dsize={dsize} "
+                  f"index_def={index_def} lhs={lhs} rhs={rhs} "
+                  f"size_typ={size_typ} lhs_typ={lhs_typ} rhs_typ={rhs_typ}")
 
         # Make a deepcopy of the original slice to use as the
         # replacement slice, which we will modify as necessary
