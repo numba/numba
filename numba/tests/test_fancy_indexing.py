@@ -198,6 +198,14 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         got3 = cfunc(x2.copy(), 0, v2)
         self.assertPreciseEqual(exp3, got3)
 
+        # --------------
+        # coercing
+        x_f64 = np.zeros(3, dtype=np.float64)
+        v_i64 = np.array(1, dtype=np.int64)
+        exp4 = pyfunc(x_f64.copy(), 0, v_i64)
+        got4 = cfunc(x_f64.copy(), 0, v_i64)
+        self.assertPreciseEqual(exp4, got4)
+
 
     def test_np_take(self):
         # shorter version of array.take test in test_array_methods
