@@ -894,11 +894,27 @@ class Context(object):
     def get_default_stream(self):
         return Stream(weakref.proxy(self), drvapi.cu_stream(0), None)
 
+    def get_legacy_default_stream(self):
+        handle = drvapi.cu_stream(drvapi.CU_STREAM_LEGACY)
+        return Stream(weakref.proxy(self), handle, None)
+
+    def get_per_thread_default_stream(self):
+        handle = drvapi.cu_stream(drvapi.CU_STREAM_PER_THREAD)
+        return Stream(weakref.proxy(self), handle, None)
+
     def create_stream(self):
         handle = drvapi.cu_stream()
         driver.cuStreamCreate(byref(handle), 0)
         return Stream(weakref.proxy(self), handle,
                       _stream_finalizer(self.deallocations, handle))
+
+    def create_external_stream(self, ptr):
+        if not isinstance(ptr, int):
+            raise TypeError("ptr for external stream must be an int")
+        handle = drvapi.cu_stream(ptr)
+        return Stream(weakref.proxy(self), handle,
+                      _stream_finalizer(self.deallocations, handle),
+                      external=True)
 
     def create_event(self, timing=True):
         handle = drvapi.cu_event()
@@ -1403,9 +1419,10 @@ class MappedOwnedPointer(OwnedPointer, mviewbuf.MemAlloc):
 
 
 class Stream(object):
-    def __init__(self, context, handle, finalizer):
+    def __init__(self, context, handle, finalizer, external=False):
         self.context = context
         self.handle = handle
+        self.external = external
         if finalizer is not None:
             weakref.finalize(self, finalizer)
 
@@ -1414,10 +1431,18 @@ class Stream(object):
         return self.handle.value or 0
 
     def __repr__(self):
-        if self.handle.value:
-            return "<CUDA stream %d on %s>" % (self.handle.value, self.context)
+        default_streams = {
+            0: "<Default CUDA stream on %s>",
+            1: "<Legacy default CUDA stream on %s>",
+            2: "<Per-thread default CUDA stream on %s>",
+        }
+        ptr = self.handle.value or 0
+        if ptr in default_streams:
+            return default_streams[ptr] % self.context
+        elif self.external:
+            return "<External CUDA stream %d on %s>" % (ptr, self.context)
         else:
-            return "<Default CUDA stream on %s>" % self.context
+            return "<CUDA stream %d on %s>" % (ptr, self.context)
 
     def synchronize(self):
         '''
