@@ -31,12 +31,12 @@ class ParforLoweringBuilder:
         return self._lowerer.fndesc.calltypes
 
     def bind_global_function(self, fobj, ftype, args, kws={}):
-        """Bind a global function to a variable.
+        """Binds a global function to a variable.
 
         Parameters
         ----------
         fobj : object
-            The function to be bounded.
+            The function to be bound.
         ftype : types.Type
         args : Sequence[types.Type]
         kws : Mapping[str, types.Type]
@@ -56,7 +56,7 @@ class ParforLoweringBuilder:
         return _CallableNode(func=func_var, sig=func_sig)
 
     def make_const_variable(self, cval, typ, name="pf_const") -> ir.Var:
-        """Make a constant variable
+        """Makes a constant variable
 
         Parameters
         ----------
@@ -76,7 +76,7 @@ class ParforLoweringBuilder:
         )
 
     def make_tuple_variable(self, varlist, name="pf_tuple") -> ir.Var:
-        """Make a tuple variable
+        """Makes a tuple variable
 
         Parameters
         ----------
@@ -143,7 +143,7 @@ class ParforLoweringBuilder:
         return var
 
     def call(self, callable_node, args, kws={}) -> ir.Expr:
-        """Call a bounded callable
+        """Call a bound callable
 
         Parameters
         ----------
@@ -155,14 +155,14 @@ class ParforLoweringBuilder:
         Returns
         -------
         res : ir.Expr
-            The expression node for return value of the call
+            The expression node for the return value of the call
         """
         call = ir.Expr.call(callable_node.func, args, kws, loc=self._loc)
         self._calltypes[call] = callable_node.sig
         return call
 
     def setitem(self, obj, index, val) -> ir.SetItem:
-        """Make setitem call
+        """Makes a setitem call
 
         Parameters
         ----------
@@ -187,7 +187,7 @@ class ParforLoweringBuilder:
         return setitem
 
     def getitem(self, obj, index, typ) -> ir.Expr:
-        """Make getitem call
+        """Makes a getitem call
 
         Parameters
         ----------
