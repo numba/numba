@@ -672,7 +672,6 @@ class ParforDiagnostics(object):
     def has_setup(self, state):
         self._has_setup = state
 
-
     def count_parfors(self, blocks=None):
         return len(self.get_parfors())
 
@@ -1378,13 +1377,13 @@ class PreParforPass(object):
                                     # Add the array that the method is on to the arg list.
                                     expr.args.insert(0, callname[1])
 
-                            require(repl_func != None)
+                            require(repl_func is not None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
                             try:
                                 new_func =  repl_func(lhs_typ, *typs)
                             except:
                                 new_func = None
-                            require(new_func != None)
+                            require(new_func is not None)
                             g = copy.copy(self.func_ir.func_id.func.__globals__)
                             g['numba'] = numba
                             g['np'] = numpy
@@ -1496,7 +1495,7 @@ class ParforPassStates:
         self.nested_fusion_info = diagnostics.nested_fusion_info
 
         self.array_analysis = array_analysis.ArrayAnalysis(
-            typingctx, func_ir, typemap, calltypes,
+            self.typingctx, self.func_ir, self.typemap, self.calltypes,
         )
 
         ir_utils._max_label = max(func_ir.blocks.keys())
@@ -1963,7 +1962,7 @@ class ConvertReducePass:
             in_arr, mask_var, mask_typ, mask_indices = mask_query_result
 
         init_val = args[2]
-        size_vars = equiv_set.get_shape(in_arr if mask_indices == None else mask_var)
+        size_vars = equiv_set.get_shape(in_arr if mask_indices is None else mask_var)
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
         mask_index = index_vars
         if mask_indices:
@@ -1985,7 +1984,7 @@ class ConvertReducePass:
             raise AssertionError("unreachable")
             index_var = mask_index[0]
 
-        if mask_var != None:
+        if mask_var is not None:
             true_label = min(loop_body.keys())
             false_label = max(loop_body.keys())
             body_block = ir.Block(scope, loc)
@@ -2213,7 +2212,7 @@ class ConvertLoopPass:
                         else:
                             in_arr = args[0]
                         size_vars = equiv_set.get_shape(in_arr
-                                        if mask_indices == None else mask_var)
+                                        if mask_indices is None else mask_var)
                         index_vars, loops = _mk_parfor_loops(
                             pass_states.typemap, size_vars, scope, loc,
                         )
@@ -2238,7 +2237,7 @@ class ConvertLoopPass:
 
                         # if masked array optimization is being applied, create
                         # the branch for array selection
-                        if mask_var != None:
+                        if mask_var is not None:
                             # The following code are not tested
                             raise AssertionError("unreachable")
                             body_label = next_label()
@@ -2956,7 +2955,7 @@ def _gen_arrayexpr_getitem(
         # Use last index for 1D arrays
         index_var = all_parfor_indices[-1]
     # Handle known constant size
-    elif any([x != None for x in size_consts]):
+    elif any([x is not None for x in size_consts]):
         # Need a tuple as index
         ind_offset = num_indices - ndims
         tuple_var = ir.Var(var.scope, mk_unique_var(
@@ -3310,7 +3309,7 @@ def get_reduce_nodes(name, nodes, func_ir):
         if isinstance(val, ir.Var):
             return lookup(val)
         else:
-            return var if (varonly or val == None) else val
+            return var if (varonly or val is None) else val
 
     for i, stmt in enumerate(nodes):
         lhs = stmt.target
@@ -3986,7 +3985,7 @@ def simplify_parfor_body_CFG(blocks):
 def wrap_parfor_blocks(parfor, entry_label = None):
     """wrap parfor blocks for analysis/optimization like CFG"""
     blocks = parfor.loop_body.copy()  # shallow copy is enough
-    if entry_label == None:
+    if entry_label is None:
         entry_label = min(blocks.keys())
     assert entry_label > 0  # we are using 0 for init block here
 

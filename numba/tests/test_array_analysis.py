@@ -186,7 +186,7 @@ class TestArrayAnalysis(TestCase):
             for func in equivs:
                 # only test the equiv_set of the first block
                 func(analysis.equiv_sets[0])
-        if asserts == None:
+        if asserts is None:
             self.assertTrue(self._has_no_assertcall(analysis.func_ir))
         else:
             for func in asserts:

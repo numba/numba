@@ -1431,7 +1431,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 raise TypingError("cannot type infer runaway recursion")
 
             sig = typing.signature(return_type, *args)
-            sig.pysig = pysig
+            sig = sig.replace(pysig=pysig)
             # Keep track of unique return_type
             frame.add_return_type(return_type)
             return sig
