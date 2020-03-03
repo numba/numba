@@ -44,10 +44,10 @@ class UnicodeCharSeq(Type):
     def key(self):
         return self.count
 
-    # def can_convert_to(self, typingctx, other):
-    #     if isinstance(other, UnicodeCharSeq) and \
-    #             self.count <= other.count:
-    #         return Conversion.safe
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, UnicodeCharSeq) and \
+                self.count <= other.count:
+            return Conversion.safe
 
     def can_convert_from(self, typingctx, other):
         if isinstance(other, UnicodeType):
