@@ -9,6 +9,8 @@ _CallableNode = namedtuple("BoundFunc", ["func", "sig"])
 
 
 class ParforLoweringBuilder:
+    """Helper class for building Numba-IR and lowering for Parfor.
+    """
     def __init__(self, lowerer, scope, loc):
         self._lowerer = lowerer
         self._scope = scope
@@ -115,8 +117,8 @@ class ParforLoweringBuilder:
         loc = self._loc
         var = ir.Var(self._scope, mk_unique_var(name), loc)
         self._typemap[var.name] = typ
-        redshape_assign = ir.Assign(rhs, var, loc)
-        self._lowerer.lower_inst(redshape_assign)
+        assign = ir.Assign(rhs, var, loc)
+        self._lowerer.lower_inst(assign)
         return var
 
     def assign_inplace(self, rhs, typ, name) -> ir.Var:

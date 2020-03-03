@@ -118,7 +118,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             # Reduction array is created and initialized to the initial reduction value.
 
             # First create a var for the numpy empty ufunc.
-            empty_bound_node = pfbdr.bind_global_function(
+            glbl_np_empty = pfbdr.bind_global_function(
                 fobj=np.empty,
                 ftype=get_np_ufunc_typ(np.empty),
                 args=(
@@ -161,7 +161,7 @@ def _lower_parfor_parallel(lowerer, parfor):
             )
 
             # Add call to empty passing the size var tuple.
-            empty_call = pfbdr.call(empty_bound_node, args=[size_var])
+            empty_call = pfbdr.call(glbl_np_empty, args=[size_var])
 
             redarr_var = pfbdr.assign(
                 rhs=empty_call, typ=redarrvar_typ, name="redarr",
@@ -212,7 +212,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                 redtoset = redvar
 
             # For each thread, initialize the per-worker reduction array to the current reduction array value.
-            for j in range(get_thread_count()):
+            for j in range(thread_count):
                 index_var = pfbdr.make_const_variable(
                     cval=j, typ=types.uintp, name="index_var",
                 )
@@ -309,7 +309,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                 lowerer.lower_inst(res_print)
 
             # For each element in the reduction array created above.
-            for j in range(get_thread_count()):
+            for j in range(thread_count):
                 # Create index var to access that element.
                 index_var = pfbdr.make_const_variable(
                     cval=j, typ=types.uintp, name="index_var",
