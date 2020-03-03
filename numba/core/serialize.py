@@ -110,3 +110,31 @@ def _rebuild_code(marshal_version, bytecode_magic, marshalled):
         raise RuntimeError("incompatible bytecode version")
     return marshal.loads(marshalled)
 
+
+class _pickleable_function:
+    def __init__(self, func):
+        self.__func = func
+        functools.update_wrapper(self, self.__func)
+
+    @classmethod
+    def _rebuild(cls, *args):
+        return cls(_rebuild_function(*args))
+
+    def __eq__(self, func):
+        return self.__func == func
+
+    def __hash__(self, func):
+        return hash(self.__func)
+
+    def __reduce__(self):
+        globs = numba.serialize._get_function_globals_for_reduction(self.__func)
+        return (
+            _rebuild_reduction, type(self), _reduce_function(self.__func, globs)
+        )
+
+    def __call__(self, *args, **kwargs):
+        return self.__func(*args, **kwargs)
+
+    def __repr__(self):
+        return "_pickleable_function({!r})".format(self.__func)
+

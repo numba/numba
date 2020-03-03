@@ -48,26 +48,25 @@ class UFuncDispatcher(object):
     targetdescr = ufunc_target
 
     def __init__(self, py_func, locals={}, targetoptions={}):
-        self.py_func = py_func
+        self.py_func = serialize.pickleable_function(py_func)
         self.overloads = utils.UniqueDict()
         self.targetoptions = targetoptions
         self.locals = locals
         self.cache = NullCache()
 
     def __reduce__(self):
-        globs = serialize._get_function_globals_for_reduction(self.py_func)
         return (
             serialize._rebuild_reduction,
             (
                 self.__class__,
-                serialize._reduce_function(self.py_func, globs),
+                self.py_func,
                 self.locals, self.targetoptions,
             ),
         )
 
     @classmethod
-    def _rebuild(cls, redfun, locals, targetoptions):
-        return cls(serialize._rebuild_function(*redfun),
+    def _rebuild(cls, func, locals, targetoptions):
+        return cls(func,
                    locals, targetoptions)
 
     def enable_caching(self):

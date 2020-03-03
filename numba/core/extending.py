@@ -16,6 +16,7 @@ from numba.core.datamodel import models   # noqa: F401
 from numba.core.datamodel import register_default as register_model  # noqa: F401, E501
 from numba.core.pythonapi import box, unbox, reflect, NativeValue  # noqa: F401
 from numba._helperlib import _import_cython_function  # noqa: F401
+        from numba.core import serialize
 
 
 def type_callable(func):
@@ -268,7 +269,7 @@ class _Intrinsic(object):
 
     def __init__(self, name, defn):
         self._name = name
-        self._defn = defn
+        self._defn = serialize._pickleable_function(defn)
 
     @property
     def _uuid(self):
@@ -309,25 +310,16 @@ class _Intrinsic(object):
         return "<intrinsic {0}>".format(self._name)
 
     def __reduce__(self):
-        from numba.core import serialize
-
-        def reduce_func(fn):
-            gs = serialize._get_function_globals_for_reduction(fn)
-            return serialize._reduce_function(fn, gs)
-
         return (serialize._rebuild_reduction,
-                (self.__class__, str(self._uuid), self._name,
-                 reduce_func(self._defn)))
+                (self.__class__, str(self._uuid), self._name, self._defn))
 
     @classmethod
-    def _rebuild(cls, uuid, name, defn_reduced):
+    def _rebuild(cls, uuid, name, defn):
         from numba.core import serialize
 
         try:
             return cls._memo[uuid]
         except KeyError:
-            defn = serialize._rebuild_function(*defn_reduced)
-
             llc = cls(name=name, defn=defn)
             llc._register()
             llc._set_uuid(uuid)

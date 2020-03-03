@@ -41,7 +41,7 @@ class OmittedArg(object):
 class _FunctionCompiler(object):
     def __init__(self, py_func, targetdescr, targetoptions, locals,
                  pipeline_class):
-        self.py_func = py_func
+        self.py_func = numba.core.serialize._pickleable_function(py_func)
         self.targetdescr = targetdescr
         self.targetoptions = targetoptions
         self.locals = locals
@@ -112,9 +112,6 @@ class _FunctionCompiler(object):
             raise cres.typing_error
         return cres
 
-    def get_globals_for_reduction(self):
-        return serialize._get_function_globals_for_reduction(self.py_func)
-
     def _get_implementation(self, args, kws):
         return self.py_func
 
@@ -129,11 +126,6 @@ class _GeneratedFunctionCompiler(_FunctionCompiler):
         super(_GeneratedFunctionCompiler, self).__init__(
             py_func, targetdescr, targetoptions, locals, pipeline_class)
         self.impls = set()
-
-    def get_globals_for_reduction(self):
-        # This will recursively get the globals used by any nested
-        # implementation function.
-        return serialize._get_function_globals_for_reduction(self.py_func)
 
     def _get_implementation(self, args, kws):
         impl = self.py_func(*args, **kws)
@@ -695,15 +687,14 @@ class Dispatcher(_DispatcherBase):
             sigs = []
         else:
             sigs = [cr.signature for cr in self.overloads.values()]
-        globs = self._compiler.get_globals_for_reduction()
         return (serialize._rebuild_reduction,
                 (self.__class__, str(self._uuid),
-                 serialize._reduce_function(self.py_func, globs),
+                 self.py_func,
                  self.locals, self.targetoptions, self._impl_kind,
                  self._can_compile, sigs))
 
     @classmethod
-    def _rebuild(cls, uuid, func_reduced, locals, targetoptions, impl_kind,
+    def _rebuild(cls, uuid, py_func, locals, targetoptions, impl_kind,
                  can_compile, sigs):
         """
         Rebuild an Dispatcher instance after it was __reduce__'d.
@@ -712,7 +703,6 @@ class Dispatcher(_DispatcherBase):
             return cls._memo[uuid]
         except KeyError:
             pass
-        py_func = serialize._rebuild_function(*func_reduced)
         self = cls(py_func, locals, targetoptions, impl_kind)
         # Make sure this deserialization will be merged with subsequent ones
         self._set_uuid(uuid)

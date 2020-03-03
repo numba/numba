@@ -77,20 +77,17 @@ class DeviceFunctionTemplate(object):
     """Unmaterialized device function
     """
     def __init__(self, pyfunc, debug, inline):
-        self.py_func = pyfunc
+        self.py_func = serialize._pickleable_function(pyfunc)
         self.debug = debug
         self.inline = inline
         self._compileinfos = {}
 
     def __reduce__(self):
-        glbls = serialize._get_function_globals_for_reduction(self.py_func)
-        func_reduced = serialize._reduce_function(self.py_func, glbls)
-        args = (self.__class__, func_reduced, self.debug, self.inline)
+        args = (self.__class__, self.py_func, self.debug, self.inline)
         return (serialize._rebuild_reduction, args)
 
     @classmethod
-    def _rebuild(cls, func_reduced, debug, inline):
-        func = serialize._rebuild_function(*func_reduced)
+    def _rebuild(cls, func, debug, inline):
         return compile_device_template(func, debug=debug, inline=inline)
 
     def compile(self, args):
@@ -206,7 +203,7 @@ def declare_device_function(name, restype, argtypes):
 class DeviceFunction(object):
 
     def __init__(self, pyfunc, return_type, args, inline, debug):
-        self.py_func = pyfunc
+        self.py_func = serialize._pickleable_function(pyfunc)
         self.return_type = return_type
         self.args = args
         self.inline = True
@@ -225,15 +222,13 @@ class DeviceFunction(object):
                                                  [cres.library])
 
     def __reduce__(self):
-        globs = serialize._get_function_globals_for_reduction(self.py_func)
-        func_reduced = serialize._reduce_function(self.py_func, globs)
-        args = (self.__class__, func_reduced, self.return_type, self.args,
+        args = (self.__class__, self.py_func, self.return_type, self.args,
                 self.inline, self.debug)
         return (serialize._rebuild_reduction, args)
 
     @classmethod
-    def _rebuild(cls, func_reduced, return_type, args, inline, debug):
-        return cls(serialize._rebuild_function(*func_reduced), return_type,
+    def _rebuild(cls, func, return_type, args, inline, debug):
+        return cls(func, return_type,
                    args, inline, debug)
 
     def __repr__(self):
@@ -825,11 +820,10 @@ class AutoJitCUDAKernel(CUDAKernelBase):
             defn.inspect_types(file=file)
 
     @classmethod
-    def _rebuild(cls, func_reduced, bind, targetoptions, config):
+    def _rebuild(cls, func, bind, targetoptions, config):
         """
         Rebuild an instance.
         """
-        func = serialize._rebuild_function(*func_reduced)
         instance = cls(func, bind, targetoptions)
         instance._deserialize_config(config)
         return instance
@@ -839,9 +833,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         Reduce the instance for serialization.
         Compiled definitions are discarded.
         """
-        glbls = serialize._get_function_globals_for_reduction(self.py_func)
-        func_reduced = serialize._reduce_function(self.py_func, glbls)
         config = self._serialize_config()
-        args = (self.__class__, func_reduced, self.bind, self.targetoptions,
+        args = (self.__class__, self.py_func, self.bind, self.targetoptions,
                 config)
         return (serialize._rebuild_reduction, args)
