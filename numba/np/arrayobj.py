@@ -4969,6 +4969,15 @@ def array0d_to_scalar(context, builder, fromty, toty, val):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+@lower_cast(types.Array, types.UnicodeCharSeq)
+def unichr_to_unichr(context, builder, fromty, toty, val):
+    def impl(a):
+        return str(a[()])
+
+    sig = signature(toty, fromty)
+    res = context.compile_internal(builder, impl, sig, [val])
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
 # ------------------------------------------------------------------------------
 # Stride tricks
 
