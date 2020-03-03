@@ -4976,7 +4976,7 @@ def unichr_to_unichr(context, builder, fromty, toty, val):
 
     sig = signature(toty, fromty)
     res = context.compile_internal(builder, impl, sig, [val])
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 # ------------------------------------------------------------------------------
 # Stride tricks
@@ -5055,3 +5055,4 @@ def as_strided(x, shape=None, strides=None):
         return x
 
     return as_strided_impl
+
