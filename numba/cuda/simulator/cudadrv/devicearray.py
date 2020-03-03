@@ -30,6 +30,7 @@ class FakeShape(tuple):
     indexing, similar to the shape in CUDA Python. (Numpy shape arrays allow
     negative indexing)
     '''
+
     def __getitem__(self, k):
         if isinstance(k, int) and k < 0:
             raise IndexError('tuple index out of range')
@@ -41,11 +42,14 @@ class FakeKernelCUDAArray(object):
         assert isinstance(item, FakeCUDAArray)
         self.__dict__['_item'] = item
 
-    def __wrap_if_fake(self,item):
-        return FakeKernelCUDAArray(item) if isinstance(item,FakeCUDAArray) else item
+    def __wrap_if_fake(self, item):
+        return FakeKernelCUDAArray(item) if isinstance(item, FakeCUDAArray) else item
 
     def __getattr__(self, attrname):
-        return self.__wrap_if_fake(self._item.__getitem__(attrname))
+        if attrname in dir(self.__dict__['_item']._ary):  # For, eg, array size.
+            return getattr(self.__dict__['_item']._ary, attrname)
+        else:
+            return self.__wrap_if_fake(self._item.__getitem__(attrname))
 
     def __setattr__(self, nm, val):
         self._item.__setitem__(nm, val)
@@ -57,16 +61,13 @@ class FakeKernelCUDAArray(object):
         self._item.__setitem__(idx, val)
 
 
-
-
 class FakeCUDAArray(object):
     '''
     Implements the interface of a DeviceArray/DeviceRecord, but mostly just
     wraps a NumPy array.
     '''
 
-    __cuda_ndarray__ = True     # There must be gpu_data attribute
-
+    __cuda_ndarray__ = True  # There must be gpu_data attribute
 
     def __init__(self, ary, stream=0):
         self._ary = ary
@@ -101,7 +102,7 @@ class FakeCUDAArray(object):
 
     def __getitem__(self, idx):
         ret = self._ary.__getitem__(idx)
-        if np.issubdtype(type(ret), np.number) or np.issubdtype(type(ret),np.bool_):
+        if np.issubdtype(type(ret), np.number) or np.issubdtype(type(ret), np.bool_):
             return ret
         else:
             return FakeCUDAArray(self._ary.__getitem__(idx), stream=self.stream)
@@ -262,8 +263,8 @@ def device_array_like(ary, stream=0):
 
     # Stride permuation. E.g. a stride array (4, -2, 12) becomes
     # [(1, -2), (0, 4), (2, 12)]
-    strideperm = [ x for x in enumerate(ary.strides) ]
-    strideperm.sort(key = lambda x: x[1])
+    strideperm = [x for x in enumerate(ary.strides)]
+    strideperm.sort(key=lambda x: x[1])
 
     # Compute new strides using permutation
     strides = [0] * len(ary.strides)
@@ -313,4 +314,3 @@ def require_cuda_ndarray(obj):
     "Raises ValueError is is_cuda_ndarray(obj) evaluates False"
     if not is_cuda_ndarray(obj):
         raise ValueError('require an cuda ndarray object')
-
