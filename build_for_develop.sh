@@ -1,7 +1,10 @@
 #!/bin/bash
 
+CC=gcc
+CXX=g++
+
 function usage() {
-	echo "usage: ./build_for_conda.sh [ [-h | --help] | [-d | --debug] ]"
+    echo "usage: ./build_for_conda.sh [ [-h | --help] | [-d | --debug] ]"
 }
 
 DEBUG_FLAGS=""
