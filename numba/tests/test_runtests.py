@@ -42,7 +42,6 @@ class TestCase(unittest.TestCase):
         lines = self.check_testsuite_size(ids, 5000)
         # CUDA should be included by default
         self.assertTrue(any('numba.cuda.tests.' in line for line in lines))
-        self.assertTrue(any('numba.ocl.tests.' in line for line in lines))
         # As well as subpackage
         self.assertTrue(
             any('numba.tests.npyufunc.test_' in line for line in lines),
@@ -68,11 +67,11 @@ class TestCase(unittest.TestCase):
         self.check_listing_prefix('numba.cuda.tests.cudasim')
 
     def test_module(self):
-        self.check_testsuite_size(['numba.tests.test_utils'], 3)
-        self.check_testsuite_size(['numba.tests.test_nested_calls'], 5)
+        self.check_testsuite_size(['numba.tests.test_storeslice'], 2)
+        self.check_testsuite_size(['numba.tests.test_nested_calls'], 10)
         # Several modules
         self.check_testsuite_size(['numba.tests.test_nested_calls',
-                                   'numba.tests.test_utils'], 13)
+                                   'numba.tests.test_storeslice'], 12)
 
     def test_subpackage(self):
         self.check_testsuite_size(['numba.tests.npyufunc'], 50)

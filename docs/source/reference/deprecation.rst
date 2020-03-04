@@ -100,8 +100,8 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Pending-deprecation warnings will be issued in version 0.44.0
-* Deprecation warnings and replacements will be issued in version 0.48.0
-* Support will be removed in version 0.49.0
+* Deprecation warnings and replacements will be issued in version 0.49.0
+* Support will be removed in version 0.50.0
 
 Recommendations
 ---------------
@@ -205,7 +205,7 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.48.0
+* Support will be removed in version 0.50.0
 
 Recommendations
 ---------------

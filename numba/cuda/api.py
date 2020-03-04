@@ -231,8 +231,35 @@ def _fill_stride_by_order(shape, dtype, order):
 def device_array_like(ary, stream=0):
     """Call cuda.devicearray() with information from the array.
     """
-    return device_array(shape=ary.shape, dtype=ary.dtype,
-                        strides=ary.strides, stream=stream)
+    # Avoid attempting to recompute strides if the default strides will be
+    # sufficient to create a contiguous array.
+    if ary.flags['C_CONTIGUOUS'] or ary.ndim <= 1:
+        return device_array(shape=ary.shape, dtype=ary.dtype, stream=stream)
+    elif ary.flags['F_CONTIGUOUS']:
+        return device_array(shape=ary.shape, dtype=ary.dtype, order='F',
+                            stream=stream)
+
+    # Otherwise, we need to compute new strides using an algorithm adapted from
+    # NumPy v1.17.4's PyArray_NewLikeArrayWithShape in
+    # core/src/multiarray/ctors.c. We permute the strides in ascending order
+    # then compute the stride for the dimensions with the same permutation.
+
+    # Stride permuation. E.g. a stride array (4, -2, 12) becomes
+    # [(1, -2), (0, 4), (2, 12)]
+    strideperm = [ x for x in enumerate(ary.strides) ]
+    strideperm.sort(key = lambda x: x[1])
+
+    # Compute new strides using permutation
+    strides = [0] * len(ary.strides)
+    stride = ary.dtype.itemsize
+    for i_perm, _ in strideperm:
+        strides[i_perm] = stride
+        stride *= ary.shape[i_perm]
+    strides = tuple(strides)
+
+    return device_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
+                        stream=stream)
+
 
 # Stream helper
 @require_context

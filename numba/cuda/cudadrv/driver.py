@@ -1252,7 +1252,7 @@ class MemoryPointer(object):
         self._owner = owner
 
         if finalizer is not None:
-            self._finalizer = utils.finalize(self, finalizer)
+            self._finalizer = weakref.finalize(self, finalizer)
 
     @property
     def owner(self):
@@ -1359,7 +1359,7 @@ class PinnedMemory(mviewbuf.MemAlloc):
         self._bufptr_ = self.host_pointer.value
 
         if finalizer is not None:
-            utils.finalize(self, finalizer)
+            weakref.finalize(self, finalizer)
 
     def own(self):
         return self
@@ -1388,7 +1388,7 @@ class OwnedPointer(object):
                 pass
 
         self._mem.refct += 1
-        utils.finalize(self, deref)
+        weakref.finalize(self, deref)
 
     def __getattr__(self, fname):
         """Proxy MemoryPointer methods
@@ -1405,7 +1405,7 @@ class Stream(object):
         self.context = context
         self.handle = handle
         if finalizer is not None:
-            utils.finalize(self, finalizer)
+            weakref.finalize(self, finalizer)
 
     def __int__(self):
         return self.handle.value
@@ -1435,7 +1435,7 @@ class Event(object):
         self.context = context
         self.handle = handle
         if finalizer is not None:
-            utils.finalize(self, finalizer)
+            weakref.finalize(self, finalizer)
 
     def query(self):
         """
@@ -1497,7 +1497,7 @@ class Module(object):
         self.handle = handle
         self.info_log = info_log
         if finalizer is not None:
-            self._finalizer = utils.finalize(self, finalizer)
+            self._finalizer = weakref.finalize(self, finalizer)
 
     def unload(self):
         self.context.unload_module(self)
@@ -1658,7 +1658,7 @@ class Linker(object):
         driver.cuLinkCreate(len(raw_keys), option_keys, option_vals,
                             byref(self.handle))
 
-        utils.finalize(self, driver.cuLinkDestroy, handle)
+        weakref.finalize(self, driver.cuLinkDestroy, handle)
 
         self.linker_info_buf = linkerinfo
         self.linker_errors_buf = linkererrors

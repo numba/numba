@@ -993,6 +993,21 @@ class TestArrayAnalysisParallelRequired(TestCase):
         np.testing.assert_array_equal(
             njit(test_impl2, parallel=True)(A, a), test_impl2(A, a))
 
+    @skip_unsupported
+    def test_slice_dtype_issue_5056(self):
+        # see issue 5056
+
+        @njit(parallel=True)
+        def test_impl(data):
+            N = data.shape[0]
+            sums = np.zeros(N)
+            for i in prange(N):
+                sums[i] = np.sum(data[np.int32(0):np.int32(1)])
+            return sums
+
+        data = np.arange(10.)
+        np.testing.assert_array_equal(test_impl(data), test_impl.py_func(data))
+
 
 if __name__ == '__main__':
     unittest.main()

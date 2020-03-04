@@ -374,6 +374,19 @@ def countArrays(test_func, args, **kws):
     test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
     return _count_arrays_inner(test_ir.blocks, tp.state.typemap)
 
+def get_init_block_size(test_func, args, **kws):
+    test_ir, tp = get_optimized_numba_ir(test_func, args, **kws)
+    blocks = test_ir.blocks
+
+    ret_count = 0
+
+    for label, block in blocks.items():
+        for i, inst in enumerate(block.body):
+            if isinstance(inst, numba.parfor.Parfor):
+                ret_count += len(inst.init_block.body)
+
+    return ret_count
+
 def _count_arrays_inner(blocks, typemap):
     ret_count = 0
     arr_set = set()
@@ -1531,6 +1544,19 @@ class TestParfors(TestParforsBase):
         def test_impl(n):
             return np.sum(n) + np.prod(n) + np.min(n) + np.max(n) + np.var(n)
         self.check(test_impl, np.array(7), check_scheduling=False)
+
+    @skip_unsupported
+    def test_array_analysis_optional_def(self):
+        def test_impl(x, half):
+            size = len(x)
+            parr = x[0:size]
+
+            if half:
+                parr = x[0:size//2]
+
+            return parr.sum()
+        x = np.ones(20)
+        self.check(test_impl, x, True, check_scheduling=False)
 
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
@@ -3055,6 +3081,20 @@ class TestParforsMisc(TestParforsBase):
         finally:
             # recover global state
             numba.parfor.sequential_parfor_lowering = old_seq_flag
+
+    @skip_unsupported
+    def test_init_block_dce(self):
+        # issue4690
+        def test_impl():
+            res = 0
+            arr = [1,2,3,4,5]
+            numba.parfor.init_prange()
+            dummy = arr
+            for i in numba.prange(5):
+                res += arr[i]
+            return res + dummy[2]
+
+        self.assertTrue(get_init_block_size(test_impl, ()) == 0)
 
     @skip_unsupported
     def test_alias_analysis_for_parfor1(self):

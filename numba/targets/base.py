@@ -29,8 +29,6 @@ PYOBJECT = GENERIC_POINTER
 void_ptr = GENERIC_POINTER
 
 
-import pdb
-
 class OverloadSelector(object):
     """
     An object matching an actual signature against a registry of formal
@@ -49,7 +47,6 @@ class OverloadSelector(object):
     def find(self, sig):
         out = self._cache.get(sig)
         if out is None:
-            #pdb.set_trace()
             out = self._find(sig)
             self._cache[sig] = out
         return out
@@ -429,7 +426,9 @@ class BaseContext(object):
         return fnty
 
     def declare_function(self, module, fndesc):
+        #print("base.py: declare_function", module, "\n\targs:", fndesc.args, "\n\trestype:", fndesc.restype, "\n\targtypes:", fndesc.argtypes, fndesc.mangled_name, fndesc.noalias)
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
+        #print("fnty:", fnty)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:

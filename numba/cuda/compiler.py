@@ -254,6 +254,9 @@ class ExternFunction(object):
 
 class ForAll(object):
     def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
+        if ntasks < 0:
+            raise ValueError("Can't create ForAll with negative task count: %s"
+                             % ntasks)
         self.kernel = kernel
         self.ntasks = ntasks
         self.thread_per_block = tpb
@@ -261,6 +264,9 @@ class ForAll(object):
         self.sharedmem = sharedmem
 
     def __call__(self, *args):
+        if self.ntasks == 0:
+            return
+
         if isinstance(self.kernel, AutoJitCUDAKernel):
             kernel = self.kernel.specialize(*args)
         else:
