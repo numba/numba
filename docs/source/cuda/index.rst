@@ -9,6 +9,7 @@ Numba for CUDA GPUs
    overview.rst
    kernels.rst
    memory.rst
+   external-memory.rst
    device-functions.rst
    cudapysupported.rst
    intrinsics.rst

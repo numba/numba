@@ -557,46 +557,119 @@ def met_requirement_for_device(device):
 
 class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
     def __init__(self, *args, **kwargs):
+        """The __init__ method sets the """
         if 'context' not in kwargs:
             raise RuntimeError("Memory manager requires a context")
         self._context = kwargs.pop('context')
 
     @abstractmethod
     def memalloc(self, nbytes, stream=0):
-        pass
+        """
+        Allocate on-device memory in the current context.
+
+        :param nbytes: Size of allocation in bytes
+        :type nbytes: int
+        :param stream: Stream to use for the allocation (if relevant)
+        :type stream: Stream
+        :return: A memory pointer instance that owns the allocated memory
+        :rtype: :class:`MemoryPointer`
+        """
 
     @abstractmethod
     def memhostalloc(self, nbytes, mapped, portable, wc):
-        pass
+        """
+        Allocate pinned host memory.
+
+        :param nbytes: Size of the allocation in bytes
+        :type nbytes: int
+        :param mapped: Whether the allocated memory should be mapped into the CUDA
+                       address space.
+        :type mapped: bool
+        :param portable: Whether the memory will be considered pinned by all
+                         contexts, and not just the calling context.
+        :type portable: bool
+        :param wc: Whether to allocate the memory as write-combined.
+        :type wc: bool
+        :return: A memory pointer instance that owns the allocated memory. The
+                 return type depends on whether the region was mapped into
+                 device memory.
+        :rtype: :class:`MappedMemory` or :class:`PinnedMemory`
+        """
 
     @abstractmethod
     def mempin(self, owner, pointer, size, mapped):
-        pass
+        """
+        Pin a region of host memory that is already allocated.
+
+        :param owner: An object that owns the memory.
+        :param pointer: The pointer to the beginning of the region to pin.
+        :type pointer: int
+        :param size: The size of the region to pin.
+        :type size: int
+        :param mapped: Whether the region should also be mapped into device memory.
+        :type mapped: bool
+        :return: A memory pointer instance that refers to the allocated
+                 memory.
+        :rtype: :class:`MappedMemory` or :class:`PinnedMemory`
+        """
 
     @abstractmethod
     def initialize(self):
-        pass
+        """
+        Perform any initialization required for the EMM plugin instanc eto be
+        ready to use.
+        :return: None
+        """
 
     @abstractmethod
-    def get_ipc_handle(self, ary, stream=0):
-        pass
+    def get_ipc_handle(self, memory, stream=0):
+        """
+        Return an IPC handle from a GPU allocation.
+
+        :param memory: Memory for which the IPC handle should be created.
+        :type memory: :class:`MemoryPointer`
+        :param stream: Optional stream to use for the creation of the handle.
+        :type stream: Stream
+        :return: IPC handle for the allocation
+        :rtype: :class:`IpcHandle`
+        """
 
     @abstractmethod
     def get_memory_info(self):
-        pass
+        """
+        Returns (free, total) memory in bytes in the context. May raise
+        :class:`NotImplementedError`, if returning such information is not
+        practical (e.g. for a pool allocator).
+
+        :return: Memory info
+        :rtype: :class:`MemoryInfo`
+        """
 
     @abstractmethod
     def reset(self):
-        pass
+        """
+        Clear up all memory allocated in this context.
+
+        :return: None
+        """
 
     @abstractmethod
     def defer_cleanup(self):
-        pass
+        """
+        Returns a context manager that ensures the implementation of deferred
+        cleanup whilst it is active.
+
+        :return: Context manager
+        """
 
     @property
     @abstractmethod
     def interface_version(self):
-        pass
+        """
+        Returns an integer specifying the version of the EMM Plugin interface
+        supported by the plugin implementation. Should always return 1 for
+        implementations described in this proposal.
+        """
 
 
 class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
@@ -730,7 +803,7 @@ class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
         free = c_size_t()
         total = c_size_t()
         driver.cuMemGetInfo(byref(free), byref(total))
-        return _MemoryInfo(free=free.value, total=total.value)
+        return MemoryInfo(free=free.value, total=total.value)
 
     def get_ipc_handle(self, memory, stream=0):
         ipchandle = drvapi.cu_ipc_mem_handle()
@@ -857,8 +930,17 @@ class _PendingDeallocs(object):
         return len(self._cons)
 
 
-_MemoryInfo = namedtuple("_MemoryInfo", "free,total")
+MemoryInfo = namedtuple("MemoryInfo", "free,total")
+"""Free and total memory for a device.
 
+.. py:attribute:: free
+
+   Free device memory in bytes.
+
+.. py:attribute:: total
+
+    Total device memory in bytes.
+"""
 
 class Context(object):
     """
@@ -1357,19 +1439,46 @@ class IpcHandle(object):
 
 
 class MemoryPointer(object):
+    """A memory pointer that owns a buffer, with an optional finalizer. Memory
+    pointers provide reference counting, and instances are initialized with a
+    reference count of 1.
 
-    """A memory pointer that owns the buffer with an optional finalizer.
+    The base ``MemoryPointer`` class does not use the
+    reference count for managing the buffer lifetime. Instead, the buffer
+    lifetime is tied to the memory pointer instance's lifetime:
 
-    When an instance is deleted, the finalizer will be called regardless
-    of the `.refct`.
+    - When the instance is deleted, the finalizer will be called.
+    - When the reference count drops to 0, no action is taken.
 
-    An instance is created with `.refct=1`.  The buffer lifetime
-    is tied to the MemoryPointer instance's lifetime.  The finalizer is invoked
-    only if the MemoryPointer instance's lifetime ends.
+    Subclasses of ``MemoryPointer`` may modify these semantics, for example to
+    tie the buffer lifetime to the reference count, so that the buffer is freed
+    when there are no more references.
+
+    :param context: The context in which the pointer was allocated.
+    :type context: Context
+    :param pointer: The address of the buffer.
+    :type pointer: ctypes.c_void_p
+    :param size: The size of the allocation in bytes.
+    :type size: int
+    :param owner: The owner is sometimes set by the internals of this class, or used for
+                  Numba's internal memory management. It should not be provided
+                  by an external user of the ``MemoryPointer`` class (e.g. from
+                  within an EMM Plugin); the default of `None` should always
+                  suffice.
+    :type owner: NoneType
+    :param finalizer: A method that is called when the buffer is to be freed.
+                     Usually the finalizer will make
+                     a call to the memory management library (either internal
+                     to Numba, or external if allocated by an EMM Plugin) to inform
+                     it that the memory is no longer required, and that it
+                     could potentially be freed. The memory manager may choose
+                     to defer actually freeing the memory to any later time
+                     after the finalizer runs - it is not required to free the
+                     buffer immediately.
     """
     __cuda_memory__ = True
 
-    def __init__(self, context, pointer, size, finalizer=None, owner=None):
+    def __init__(self, context, pointer, size, owner=None, finalizer=None):
         self.context = context
         self.device_pointer = pointer
         self.size = size
