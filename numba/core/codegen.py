@@ -34,9 +34,10 @@ def dump(header, body):
             from pygments import highlight
             from pygments.lexers import GasLexer as lexer
             from pygments.formatters import Terminal256Formatter
+            from numba.misc.dump_style import by_colorscheme
             def printer(arg):
                 print(highlight(arg, lexer(),
-                      Terminal256Formatter(style='solarized-light')))
+                      Terminal256Formatter(style=by_colorscheme())))
     else:
         printer = print
     print('=' * 80)
