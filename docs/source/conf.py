@@ -128,7 +128,7 @@ html_theme_options = {
     # 'prev_next_buttons_location': 'bottom',
     'style_external_links': True,
     # 'vcs_pageview_mode': '',
-    # 'style_nav_header_background': '#2980B9',
+    'style_nav_header_background': '#00A3E0',
     # Toc options
     # 'collapse_navigation': True,
     # 'sticky_navigation': True,
@@ -149,7 +149,7 @@ html_theme_options = {
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = "../_static/numba-blue-icon-rgb.svg"
+html_logo = "../_static/numba-white-icon-rgb.svg"
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32

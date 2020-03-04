@@ -115,6 +115,7 @@ The following Python libraries have adopted the CUDA Array Interface:
 - `ArrayViews <https://github.com/xnd-project/arrayviews>`_
 - `JAX <https://jax.readthedocs.io/en/latest/index.html>`_
 - The RAPIDS stack:
+
     - `cuDF <https://rapidsai.github.io/projects/cudf/en/0.11.0/10min-cudf-cupy.html>`_
     - `cuML <https://docs.rapids.ai/api/cuml/nightly/>`_
     - `cuSignal <https://github.com/rapidsai/cusignal>`_
