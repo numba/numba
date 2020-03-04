@@ -192,9 +192,10 @@ class BaseLower(object):
                     from pygments import highlight
                     from pygments.lexers import LlvmLexer as lexer
                     from pygments.formatters import Terminal256Formatter
+                    from numba.misc.dump_style import by_colorscheme
                     print(highlight(self.module.__repr__(), lexer(),
                                     Terminal256Formatter(
-                                        style='solarized-light')))
+                                        style=by_colorscheme())))
                 except ImportError:
                     msg = "Please install pygments to see highlighted dumps"
                     raise ValueError(msg)

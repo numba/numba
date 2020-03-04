@@ -8,7 +8,7 @@ from pygments.styles.native import NativeStyle
 
 from pygments.lexer import RegexLexer, include, bygroups, words
 from pygments.token import Text, Name, String,  Punctuation, Keyword, \
-    Operator, Number
+    Operator, Number, Comment, Error
 
 from pygments.style import Style
 
@@ -60,16 +60,14 @@ class NumbaIRLexer(RegexLexer):
 
 
 def by_colorscheme():
-    styles = BlackWhiteStyle.styles.copy()
+    styles = DefaultStyle.styles.copy()
     styles.update({
-        Name.Function:             "bold",
-        Name.Attribute:            "bold",
-        Name.Constant:             "bold",
+        Name.Variable:        "#888888",
     })
-    numba_bw = type('NumbaBwStyle', (Style, ), {'styles': styles})
+    custom_default = type('CustomDefaultStyle', (Style, ), {'styles': styles})
 
     style_map = {
-        'no_color' : numba_bw,
+        'no_color' : custom_default,
         'dark_bg' : MonokaiStyle,
         'light_bg' : ManniStyle,
         'blue_bg' : NativeStyle,
