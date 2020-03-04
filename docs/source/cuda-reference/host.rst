@@ -141,6 +141,11 @@ transfers and kernel execution. For further details on streams, see the `CUDA C
 Programming Guide Streams section
 <http://docs.nvidia.com/cuda/cuda-c-programming-guide/#streams>`_.
 
+Streams are instances of :class:`numba.cuda.cudadrv.driver.Stream`:
+
+.. autoclass:: numba.cuda.cudadrv.driver.Stream
+   :members: synchronize, auto_synchronize
+
 To create a new stream:
 
 .. autofunction:: numba.cuda.stream
@@ -149,8 +154,14 @@ To get the default stream:
 
 .. autofunction:: numba.cuda.default_stream
 
-Streams are instances of :class:`numba.cuda.cudadrv.driver.Stream`:
+To get the default stream with an explicit choice of whether it is the legacy
+or per-thread default stream:
 
-.. autoclass:: numba.cuda.cudadrv.driver.Stream
-   :members: synchronize, auto_synchronize
+.. autofunction:: numba.cuda.legacy_default_stream
 
+.. autofunction:: numba.cuda.per_thread_default_stream
+
+To construct a Numba ``Stream`` object using a stream allocated elsewhere, the
+``external_stream`` function is provided:
+
+.. autofunction:: numba.cuda.external_stream
