@@ -1,6 +1,10 @@
+try:
+    from pygments.styles.default import DefaultStyle
+except ImportError:
+    msg = "Please install pygments to see highlighted dumps"
+    raise ImportError(msg)
 
 import numba.core.config
-from pygments.styles.default import DefaultStyle
 from pygments.styles.manni import ManniStyle
 from pygments.styles.monokai import MonokaiStyle
 from pygments.styles.native import NativeStyle
@@ -59,6 +63,10 @@ class NumbaIRLexer(RegexLexer):
 
 
 def by_colorscheme():
+    """
+    Get appropriate style for highlighting according to
+    NUMBA_COLOR_SCHEME setting
+    """
     styles = DefaultStyle.styles.copy()
     styles.update({
         Name.Variable:        "#888888",
