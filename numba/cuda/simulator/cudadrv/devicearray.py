@@ -72,7 +72,7 @@ class FakeCUDAArray(object):
     __cuda_ndarray__ = True  # There must be gpu_data attribute
 
     def __init__(self, ary, stream=0):
-        if ary.ndim == 0:
+        if ary.ndim == 0:  # needed for TestCudaNDArray.test_device_array_interface
             self._ary = ary.reshape(1)
             self._ary_access = self._ary[0]
         else:
