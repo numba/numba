@@ -1,12 +1,8 @@
-try:
-    # Try to use setuptools so as to enable support of the special
-    # "Microsoft Visual C++ Compiler for Python 2.7" (http://aka.ms/vcpython27)
-    # for building under Windows.
-    # Note setuptools >= 6.0 is required for this.
-    from setuptools import setup, Extension
-except ImportError:
-    from distutils.core import setup, Extension
-
+# NOTE: for building under Windows.
+# Use setuptools so as to enable support of the special
+# "Microsoft Visual C++ Compiler for Python 2.7" (http://aka.ms/vcpython27)
+# Note setuptools >= 6.0 is required for this.
+from setuptools import setup, Extension, find_packages
 from distutils.command import build
 from distutils.spawn import spawn
 from distutils import sysconfig
@@ -15,6 +11,12 @@ import os
 import platform
 
 import versioneer
+
+min_python_version = "3.6"
+min_numpy_build_version = "1.11"
+min_numpy_run_version = "1.15"
+min_llvmlite_version = "0.31.0dev0"
+max_llvmlite_version = "0.32.0"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -36,7 +38,6 @@ versioneer.parentdir_prefix = 'numba-'
 
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
-
 
 GCCFLAGS = ["-std=c89", "-Wdeclaration-after-statement", "-Werror"]
 
@@ -99,7 +100,6 @@ def get_ext_modules():
     # C API (include dirs, library dirs etc.)
     np_compile_args = np_misc.get_info('npymath')
 
-
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],
                             extra_compile_args=CFLAGS,
@@ -151,6 +151,7 @@ def get_ext_modules():
                                    **np_compile_args)
 
     ext_npyufunc_workqueue_impls = []
+    ext_dppy_impls = []
 
     def check_file_at_path(path2file):
         """
@@ -188,6 +189,7 @@ def get_ext_modules():
 
     # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
     have_openmp = True
+    opeclliteflags = list()
     if sys.platform.startswith('win'):
         cpp11flags = []
         ompcompileflags = ['-openmp']
@@ -207,6 +209,7 @@ def get_ext_modules():
     else:
         cpp11flags = ['-std=c++11']
         ompcompileflags = ['-fopenmp']
+        openclliteflags = ['-Wall', '-Wextra', '-Winit-self', '-Wuninitialized', '-Wmissing-declarations', '-std=c99', '-fdiagnostics-color=auto', '-shared', '-fPIC']
         if platform.machine() == 'ppc64le':
             omplinkflags = ['-fopenmp']
         else:
@@ -216,19 +219,51 @@ def get_ext_modules():
         print("Using Intel TBB from:", tbb_root)
         ext_npyufunc_tbb_workqueue = Extension(
             name='numba.npyufunc.tbbpool',
-            sources=['numba/npyufunc/tbbpool.cpp', 'numba/npyufunc/gufunc_scheduler.cpp'],
+            sources=[
+                'numba/npyufunc/tbbpool.cpp',
+                'numba/npyufunc/gufunc_scheduler.cpp',
+            ],
             depends=['numba/npyufunc/workqueue.h'],
             include_dirs=[os.path.join(tbb_root, 'include')],
             extra_compile_args=cpp11flags,
-            libraries   =['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
-            library_dirs=[os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),  # for Linux
-                        os.path.join(tbb_root, 'lib'),                       # for MacOS
-                        os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),   # for Windows
-                        ],
-            )
+            libraries=['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
+            library_dirs=[
+                # for Linux
+                os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),
+                # for MacOS
+                os.path.join(tbb_root, 'lib'),
+                # for Windows
+                os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),
+            ],
+        )
         ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
     else:
         print("TBB not found")
+
+    '''
+    # Search for OpenCL, first check env var OPENCLROOT then conda locations
+    opencl_root = os.getenv('OPENCLROOT')
+    if not opencl_root:
+        #opencl_root = check_file_at_path(['include', 'opencl', 'cl.h', "CL.h"])
+        opencl_root = "/usr"
+
+    print("Building opencllite")
+    ext_dppy = Extension(
+        name='numba.dppy.dppy_driver.libdpglue',
+        sources=[
+            'numba/dppy/dppy_driver/opencllite.c'
+        ],
+        depends=['numba/dppy/dppy_driver/dp_glue.h'],
+        include_dirs=[os.path.join(opencl_root, 'include')],
+        extra_compile_args=openclliteflags,
+        libraries=['OpenCL'],  # TODO: if --debug or -g, use 'tbb_debug'
+            library_dirs=[
+                # for Linux
+                os.path.join(opencl_root, 'lib', 'x86_64-linux-gnu'),
+            ],
+    )
+    ext_dppy_impls.append(ext_dppy)
+    '''
 
     # Disable OpenMP if we are building a wheel or
     # forced by user with NUMBA_NO_OPENMP=1
@@ -237,12 +272,16 @@ def get_ext_modules():
     elif have_openmp:
         print("Using OpenMP from:", have_openmp)
         # OpenMP backed work queue
-        ext_npyufunc_omppool = Extension( name='numba.npyufunc.omppool',
-                                    sources=['numba/npyufunc/omppool.cpp',
-                                            'numba/npyufunc/gufunc_scheduler.cpp'],
-                                    depends=['numba/npyufunc/workqueue.h'],
-                                    extra_compile_args=ompcompileflags + cpp11flags,
-                                    extra_link_args = omplinkflags)
+        ext_npyufunc_omppool = Extension(
+            name='numba.npyufunc.omppool',
+            sources=[
+                'numba/npyufunc/omppool.cpp',
+                'numba/npyufunc/gufunc_scheduler.cpp',
+            ],
+            depends=['numba/npyufunc/workqueue.h'],
+            extra_compile_args=ompcompileflags + cpp11flags,
+            extra_link_args=omplinkflags,
+        )
 
         ext_npyufunc_workqueue_impls.append(ext_npyufunc_omppool)
     else:
@@ -252,10 +291,10 @@ def get_ext_modules():
     # version is built. Users can select a backend via env vars.
     ext_npyufunc_workqueue = Extension(
         name='numba.npyufunc.workqueue',
-        sources=['numba/npyufunc/workqueue.c', 'numba/npyufunc/gufunc_scheduler.cpp'],
+        sources=['numba/npyufunc/workqueue.c',
+                 'numba/npyufunc/gufunc_scheduler.cpp'],
         depends=['numba/npyufunc/workqueue.h'])
     ext_npyufunc_workqueue_impls.append(ext_npyufunc_workqueue)
-
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
                              extra_link_args=install_name_tool_fixer,
@@ -284,34 +323,19 @@ def get_ext_modules():
                    ext_jitclass_box, ext_cuda_extras]
 
     ext_modules += ext_npyufunc_workqueue_impls
+    ext_modules += ext_dppy_impls
 
     return ext_modules
 
 
-def find_packages(root_dir, root_name):
-    """
-    Recursively find packages in *root_dir*.
-    """
-    packages = []
-    def rec(path, pkg_name):
-        packages.append(pkg_name)
-        for fn in sorted(os.listdir(path)):
-            subpath = os.path.join(path, fn)
-            if os.path.exists(os.path.join(subpath, "__init__.py")):
-                subname = "%s.%s" % (pkg_name, fn)
-                rec(subpath, subname)
-    rec(root_dir, root_name)
-    return packages
-
-
-packages = find_packages("numba", "numba")
+packages = find_packages(include=["numba", "numba.*"])
 
 build_requires = ['numpy', 'cffi>=1.0.0']
 
 install_requires = ['llvmlite>=0.31.0dev0', 'numpy', 'setuptools', 'cffi>=1.0.0']
 install_requires.extend(['enum34; python_version < "3.4"'])
 install_requires.extend(['singledispatch; python_version < "3.4"'])
-install_requires.extend(['funcsigs; python_version < "3.3"'])
+install_requires.extend(['funcsigs; python_version < "3.5"'])
 
 modules_with_cffi=['./numba/dppy/dppy_driver/driverapi.py:ffibuilder']
 
@@ -319,18 +343,16 @@ metadata = dict(
     name='numba',
     description="compiling Python code using LLVM",
     version=versioneer.get_version(),
-
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.4",
-        "Programming Language :: Python :: 3.5",
+        "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         "Topic :: Software Development :: Compilers",
     ],
     package_data={
@@ -338,7 +360,6 @@ metadata = dict(
         "numba.annotations": ["*.html"],
         # Various test data
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
-        "numba.ocl.tests.ocldrv.data": ["*.bc"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],
@@ -356,9 +377,10 @@ metadata = dict(
     setup_requires=build_requires,
     install_requires=install_requires,
     cffi_modules=modules_with_cffi,
+    python_requires=f">={min_python_version}",
     license="BSD",
     cmdclass=cmdclass,
-    )
+)
 
 with open('README.rst') as f:
     metadata['long_description'] = f.read()

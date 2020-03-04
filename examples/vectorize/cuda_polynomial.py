@@ -16,7 +16,6 @@ def main():
                                 target='cuda')(poly.discriminant)
 
     N = 1e+8 // 2
-    N = int(N)
 
     print('Data size', N)
 

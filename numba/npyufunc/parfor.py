@@ -1135,10 +1135,29 @@ def _create_gufunc_for_parfor_body(
     # Reorder all the params so that inputs go first then outputs.
     parfor_params = parfor_inputs + parfor_outputs
     if target=='spirv':
+        def addrspace_from(params, def_addr):
+            addrspaces = []
+            for p in params:
+                if isinstance(to_scalar_from_0d(typemap[p]),
+                              types.npytypes.Array):
+                    addrspaces.append(def_addr)
+                else:
+                    addrspaces.append(None)
+            return addrspaces
+
+        print(dir(numba.dppy))
+        print(numba.dppy.compiler.DEBUG)
+        addrspaces = addrspace_from(parfor_params, numba.dppy.target.SPIR_GLOBAL_ADDRSPACE)
+
         # Pass in the initial value as a simple var.
         parfor_params.extend(parfor_redvars)
         parfor_params.extend(parfor_local_redarrs)
+        addrspaces.extend(addrspace_from(parfor_redvars, dppy.target.SPIR_GENERIC_ADDRSPACE))
+        addrspaces.extend(addrspace_from(parfor_local_redarrs, dppy.target.SPIR_LOCAL_ADDRSPACE))
     parfor_params.extend(parfor_redarrs)
+
+    if target=='spirv':
+        addrspaces.extend(addrspace_from(parfor_redarrs, dppy.target.SPIR_GLOBAL_ADDRSPACE))
 
     if config.DEBUG_ARRAY_OPT >= 1:
         print("parfor_params = ", parfor_params, type(parfor_params))
@@ -1169,15 +1188,32 @@ def _create_gufunc_for_parfor_body(
 
     # Get the types of each parameter.
     param_types = [to_scalar_from_0d(typemap[v]) for v in parfor_params]
+
+    param_types_addrspaces = copy.copy(param_types)
+
     # Calculate types of args passed to gufunc.
     func_arg_types = [typemap[v] for v in (parfor_inputs + parfor_outputs)]
     if target=='spirv':
+        assert(len(param_types_addrspaces) == len(addrspaces))
+        for i in range(len(param_types_addrspaces)):
+            if addrspaces[i] is not None:
+                print("before:", id(param_types_addrspaces[i]))
+                assert(isinstance(param_types_addrspaces[i], types.npytypes.Array))
+                param_types_addrspaces[i] = param_types_addrspaces[i].copy(addrspace=addrspaces[i])
+                print("setting param type", i, param_types[i], id(param_types[i]), "to addrspace", param_types_addrspaces[i].addrspace)
         # the output reduction array has the same types as the local reduction reduction arrays
         func_arg_types.extend(parfor_redvar_types)
         func_arg_types.extend(parfor_red_arg_types)
     func_arg_types.extend(parfor_red_arg_types)
 
+    def print_arg_with_addrspaces(args):
+        for a in args:
+            print(a, type(a))
+            if isinstance(a, types.npytypes.Array):
+                print("addrspace:", a.addrspace)
+
     if config.DEBUG_ARRAY_OPT >= 1:
+        print_arg_with_addrspaces(param_types)
         print("func_arg_types = ", func_arg_types, type(func_arg_types))
 
     # Replace illegal parameter names in the loop body with legal ones.
@@ -1236,7 +1272,7 @@ def _create_gufunc_for_parfor_body(
         # Intentionally do nothing here for reduction initialization in gufunc.
         # We don't have to do anything because we pass in the initial reduction
         # var value as a param.
-        pass
+        reduction_sentinel_name = get_unused_var_name("__reduction_sentinel__", loop_body_var_table)
     else:
         # Add initialization of reduction variables
         for arr, var in zip(parfor_redarrs, parfor_redvars):
@@ -1306,26 +1342,37 @@ def _create_gufunc_for_parfor_body(
     redargstartdim = {}
     if target=='spirv':
         if has_reduction:
+            if target == 'spirv':
+                for var, local_arr in zip(parfor_redvars, parfor_local_redarrs):
+                    if redtyp_is_scalar(typemap[var]):
+                        gufunc_txt += "    " + param_dict[local_arr] + \
+                            "[gufunc_tnum] = " + param_dict[var] + "\n"
+                    else:
+                        # After the gufunc loops, copy the accumulated temp array back to reduction array with ":"
+                        gufunc_txt += "    " + param_dict[local_arr] + \
+                            "[gufunc_tnum, :] = " + param_dict[var] + "[:]\n"
+
             gufunc_txt += "    gufunc_red_offset = 1\n"
             gufunc_txt += "    while gufunc_red_offset < gufunc_numItems:\n"
             gufunc_txt += "        mask = (2 * gufunc_red_offset) - 1\n"
             gufunc_txt += "        dppy.barrier(dppy.enums.CLK_LOCAL_MEM_FENCE)\n"
-            gufunc_txt += "        if (gufunc_tnum and mask) == 0:\n"
-            gufunc_txt += "            # red_result[gufunc_tnum] = red_result[gufunc_tnum] (reduction_operator) red_result[gufunc_tnum+offset]\n"
-            gufunc_txt += "            pass\n"
+            gufunc_txt += "        if (gufunc_tnum & mask) == 0:\n"
+            gufunc_txt += "            " + reduction_sentinel_name + " = 0\n"
+#            gufunc_txt += "            # red_result[gufunc_tnum] = red_result[gufunc_tnum] (reduction_operator) red_result[gufunc_tnum+offset]\n"
+#            gufunc_txt += "            pass\n"
             gufunc_txt += "        gufunc_red_offset *= 2\n"
             gufunc_txt += "    dppy.barrier(dppy.enums.CLK_LOCAL_MEM_FENCE)\n"
             gufunc_txt += "    if gufunc_tnum == 0:\n"
-            for arr, var in zip(parfor_redarrs, parfor_redvars):
+            for arr, var, local_arr in zip(parfor_redarrs, parfor_redvars, parfor_local_redarrs):
                 # After the gufunc loops, copy the accumulated temp value back to reduction array.
                 if redtyp_is_scalar(typemap[var]):
                     gufunc_txt += "        " + param_dict[arr] + \
-                        "[gufunc_wgNum] = " + param_dict[var] + "\n"
+                        "[gufunc_wgNum] = " + param_dict[local_arr] + "[0]\n"
                     redargstartdim[arr] = 1
                 else:
                     # After the gufunc loops, copy the accumulated temp array back to reduction array with ":"
                     gufunc_txt += "        " + param_dict[arr] + \
-                        "[gufunc_wgNum, :] = " + param_dict[var] + "[:]\n"
+                        "[gufunc_wgNum, :] = " + param_dict[local_arr] + "[0, :]\n"
                     redargstartdim[arr] = 0
     else:
         # Add assignments of reduction variables (for returning the value)
@@ -1387,6 +1434,7 @@ def _create_gufunc_for_parfor_body(
         gufunc_param_types = [
             numba.types.npytypes.Array(
                 numba.intp, 1, "C")] + param_types
+        param_types_addrspaces = [numba.types.npytypes.Array(numba.intp, 1, "C")] + param_types_addrspaces
     else:
         gufunc_param_types = param_types
 
@@ -1461,9 +1509,7 @@ def _create_gufunc_for_parfor_body(
     # Search all the block in the gufunc outline for the sentinel assignment.
     for label, block in gufunc_ir.blocks.items():
         for i, inst in enumerate(block.body):
-            if isinstance(
-                    inst,
-                    ir.Assign) and inst.target.name == sentinel_name:
+            if isinstance(inst, ir.Assign) and inst.target.name == sentinel_name:
                 # We found the sentinel assignment.
                 loc = inst.loc
                 scope = block.scope
@@ -1472,6 +1518,7 @@ def _create_gufunc_for_parfor_body(
                 # but the new block maintains the current block label.
                 prev_block = ir.Block(scope, loc)
                 prev_block.body = block.body[:i]
+
                 # The current block is used for statements after the sentinel.
                 block.body = block.body[i + 1:]
                 # But the current block gets a new label.
@@ -1496,6 +1543,45 @@ def _create_gufunc_for_parfor_body(
             continue
         break
 
+    if target == 'spirv' and has_reduction:
+        # Search all the block in the gufunc outline for the reduction sentinel assignment.
+        for label, block in gufunc_ir.blocks.items():
+            for i, inst in enumerate(block.body):
+                if isinstance(
+                        inst,
+                        ir.Assign) and inst.target.name == reduction_sentinel_name:
+                    # We found the reduction sentinel assignment.
+                    loc = inst.loc
+                    scope = block.scope
+                    # split block across __sentinel__
+                    # A new block is allocated for the statements prior to the sentinel
+                    # but the new block maintains the current block label.
+                    prev_block = ir.Block(scope, loc)
+                    prev_block.body = block.body[:i]
+                    # The current block is used for statements after the sentinel.
+                    block.body = block.body[i + 1:]
+                    # But the current block gets a new label.
+                    body_first_label = min(loop_body.keys())
+
+                    # The previous block jumps to the minimum labelled block of the
+                    # parfor body.
+                    prev_block.append(ir.Jump(body_first_label, loc))
+                    # Add all the parfor loop body blocks to the gufunc function's
+                    # IR.
+                    for (l, b) in loop_body.items():
+                        gufunc_ir.blocks[l] = b
+                    body_last_label = max(loop_body.keys())
+                    gufunc_ir.blocks[new_label] = block
+                    gufunc_ir.blocks[label] = prev_block
+                    # Add a jump from the last parfor body block to the block containing
+                    # statements after the sentinel.
+                    gufunc_ir.blocks[body_last_label].append(
+                        ir.Jump(new_label, loc))
+                    break
+            else:
+                continue
+            break
+
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_ir last dump before renaming")
         gufunc_ir.dump()
@@ -1504,7 +1590,6 @@ def _create_gufunc_for_parfor_body(
     remove_dels(gufunc_ir.blocks)
 
     if config.DEBUG_ARRAY_OPT:
-        print("flush")
         sys.stdout.flush()
 
     if config.DEBUG_ARRAY_OPT:
@@ -1534,7 +1619,8 @@ def _create_gufunc_for_parfor_body(
         kernel_func = numba.dppy.compiler.compile_kernel_parfor(
             numba.dppy.dppy_driver.driver.runtime.get_gpu_device(),
             gufunc_ir,
-            gufunc_param_types)
+            gufunc_param_types,
+            param_types_addrspaces)
     else:
         kernel_func = compiler.compile_ir(
             typingctx,
@@ -2034,16 +2120,37 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
     redarrs = [lowerer.loadvar(redarrdict[x].name) for x in redvars]
     nredvars = len(redvars)
     ninouts = len(expr_args) - nredvars
-    all_llvm_args = [lowerer.getvar(x) for x in expr_args[:ninouts]] + redarrs
-    all_val_types = [context.get_value_type(lowerer.fndesc.typemap[x]) for x in expr_args[:ninouts]] + redarrs
-    all_args = [lowerer.loadvar(x) for x in expr_args[:ninouts]] + redarrs
+
+    def getvar_or_none(lowerer, x):
+        try:
+            return lowerer.getvar(x)
+        except:
+            return None
+
+    def loadvar_or_none(lowerer, x):
+        try:
+            return lowerer.loadvar(x)
+        except:
+            return None
+
+    def val_type_or_none(context, lowerer, x):
+        try:
+            return context.get_value_type(lowerer.fndesc.typemap[x])
+        except:
+            return None
+
+    all_llvm_args = [getvar_or_none(lowerer, x) for x in expr_args[:ninouts]] + red_llvm_vars
+    all_val_types = [val_type_or_none(context, lowerer, x) for x in expr_args[:ninouts]] + red_val_types
+    all_args = [loadvar_or_none(lowerer, x) for x in expr_args[:ninouts]] + redarrs
 
     # Create a NULL void * pointer for meminfo and parent parts of ndarrays.
     null_ptr = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="null_ptr")
     builder.store(builder.inttoptr(context.get_constant(types.uintp, 0), void_ptr_t), null_ptr)
     #builder.store(cgutils.get_null_value(byte_ptr_t), null_ptr)
 
-    gpu_device_env = numba.dppy.dppy_driver.driver.runtime.get_gpu_device().get_env_ptr()
+    gpu_device = numba.dppy.dppy_driver.driver.runtime.get_gpu_device()
+    gpu_device_env = gpu_device.get_env_ptr()
+    max_work_group_size = gpu_device.get_max_work_group_size()
     gpu_device_int = int(numba.dppy.dppy_driver.driver.ffi.cast("uintptr_t", gpu_device_env))
     #print("gpu_device_env", gpu_device_env, type(gpu_device_env), gpu_device_int)
     kernel_t_obj = cres.kernel._kernel_t_obj[0]
@@ -2056,119 +2163,198 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
     cur_arg = 0
     read_bufs_after_enqueue = []
     # Put each part of each argument into kernel_arg_array.
-    for var, arg, llvm_arg, arg_type, gu_sig, val_type, index in zip(expr_args, all_args, all_llvm_args,
+#    for var, arg, llvm_arg, arg_type, gu_sig, val_type, index in zip(expr_args, all_args, all_llvm_args,
+#                                     expr_arg_types, sin + sout, all_val_types, range(len(expr_args))):
+    for var, llvm_arg, arg_type, gu_sig, val_type, index in zip(expr_args, all_llvm_args,
                                      expr_arg_types, sin + sout, all_val_types, range(len(expr_args))):
         if config.DEBUG_ARRAY_OPT:
             print("var:", var, type(var),
-                  "arg:", arg, type(arg),
-                  "llvm_arg:", llvm_arg, type(llvm_arg),
-                  "arg_type:", arg_type, type(arg_type),
-                  "gu_sig:", gu_sig,
-                  "val_type:", val_type, type(val_type),
-                  "index:", index)
+#                  "\n\targ:", arg, type(arg),
+                  "\n\tllvm_arg:", llvm_arg, type(llvm_arg),
+                  "\n\targ_type:", arg_type, type(arg_type),
+                  "\n\tgu_sig:", gu_sig,
+                  "\n\tval_type:", val_type, type(val_type),
+                  "\n\tindex:", index)
+
         if isinstance(arg_type, types.npytypes.Array):
-            # Handle meminfo
-            kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+            # --------------------------------------------------------------------------------------
+            if llvm_arg is not None:
+                # Handle meminfo.  Not used by kernel so just write a null pointer.
+                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
 
-            builder.call(
-                create_dppy_kernel_arg, [null_ptr,
-                                           context.get_constant(types.uintp, sizeof_void_ptr),
-                                           kernel_arg])
-            dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-            cur_arg += 1
-            builder.store(builder.load(kernel_arg), dst)
-
-            #cgutils.printf(builder, "dst0 = ")
-            #cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
-            #cgutils.printf(builder, "\n")
-
-            # Handle parent
-            kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-            builder.call(
-                create_dppy_kernel_arg, [null_ptr,
-                                           context.get_constant(types.uintp, sizeof_void_ptr),
-                                           kernel_arg])
-            dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-            cur_arg += 1
-            builder.store(builder.load(kernel_arg), dst)
-
-            #cgutils.printf(builder, "dst1 = ")
-            #cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
-            #cgutils.printf(builder, "\n")
-
-            # Handle array size
-            kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-            array_size_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 2)])
-            builder.call(
-                create_dppy_kernel_arg, [builder.bitcast(array_size_member, void_ptr_ptr_t),
-                                           context.get_constant(types.uintp, sizeof_intp),
-                                           kernel_arg])
-            dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-            cur_arg += 1
-            builder.store(builder.load(kernel_arg), dst)
-            # Handle itemsize
-            kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-            item_size_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 3)])
-            builder.call(
-                create_dppy_kernel_arg, [builder.bitcast(item_size_member, void_ptr_ptr_t),
-                                           context.get_constant(types.uintp, sizeof_intp),
-                                           kernel_arg])
-            dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-            cur_arg += 1
-            builder.store(builder.load(kernel_arg), dst)
-            # Calculate total buffer size
-            total_size = cgutils.alloca_once(builder, intp_t,  size=context.get_constant(types.uintp, 1), name="total_size" + str(cur_arg))
-            builder.store(builder.mul(builder.load(array_size_member), builder.load(item_size_member)), total_size)
-            # Handle data
-            kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-            data_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 4)])
-            buffer_name = "buffer_ptr" + str(cur_arg)
-            buffer_ptr = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name=buffer_name)
-            # env, buffer_size, buffer_ptr
-            builder.call(
-                create_dppy_rw_mem_buffer, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
-                                              builder.load(total_size),
-                                              buffer_ptr])
-
-            if index < num_inputs:
                 builder.call(
-                    write_mem_buffer_to_device, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
-                                                 builder.load(buffer_ptr),
-                                                 context.get_constant(types.uintp, 1),
-                                                 context.get_constant(types.uintp, 0),
-                                                 builder.load(total_size),
-                                                 builder.bitcast(builder.load(data_member), void_ptr_t)])
+                    create_dppy_kernel_arg, [null_ptr,
+                                               context.get_constant(types.uintp, sizeof_void_ptr),
+                                               kernel_arg])
+                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                cur_arg += 1
+                builder.store(builder.load(kernel_arg), dst)
+
+                #cgutils.printf(builder, "dst0 = ")
+                #cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
+                #cgutils.printf(builder, "\n")
+
+                # Handle parent.  Not used by kernel so just write a null pointer.
+                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+                builder.call(
+                    create_dppy_kernel_arg, [null_ptr,
+                                               context.get_constant(types.uintp, sizeof_void_ptr),
+                                               kernel_arg])
+                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                cur_arg += 1
+                builder.store(builder.load(kernel_arg), dst)
+
+                #cgutils.printf(builder, "dst1 = ")
+                #cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
+                #cgutils.printf(builder, "\n")
+
+                # Handle array size
+                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+                array_size_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 2)])
+                builder.call(
+                    create_dppy_kernel_arg, [builder.bitcast(array_size_member, void_ptr_ptr_t),
+                                               context.get_constant(types.uintp, sizeof_intp),
+                                               kernel_arg])
+                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                cur_arg += 1
+                builder.store(builder.load(kernel_arg), dst)
+                # Handle itemsize
+                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+                item_size_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 3)])
+                builder.call(
+                    create_dppy_kernel_arg, [builder.bitcast(item_size_member, void_ptr_ptr_t),
+                                               context.get_constant(types.uintp, sizeof_intp),
+                                               kernel_arg])
+                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                cur_arg += 1
+                builder.store(builder.load(kernel_arg), dst)
+                # Calculate total buffer size
+                total_size = cgutils.alloca_once(builder, intp_t, size=context.get_constant(types.uintp, 1), name="total_size" + str(cur_arg))
+                builder.store(builder.sext(builder.mul(builder.load(array_size_member), builder.load(item_size_member)), intp_t), total_size)
+                # Handle data
+                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+                data_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 4)])
+                buffer_name = "buffer_ptr" + str(cur_arg)
+                buffer_ptr = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name=buffer_name)
+                # env, buffer_size, buffer_ptr
+                builder.call(
+                    create_dppy_rw_mem_buffer, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
+                                                  builder.load(total_size),
+                                                  buffer_ptr])
+
+                if index < num_inputs:
+                    builder.call(
+                        write_mem_buffer_to_device, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
+                                                     builder.load(buffer_ptr),
+                                                     context.get_constant(types.uintp, 1),
+                                                     context.get_constant(types.uintp, 0),
+                                                     builder.load(total_size),
+                                                     builder.bitcast(builder.load(data_member), void_ptr_t)])
+                else:
+                    read_bufs_after_enqueue.append((buffer_ptr, total_size, data_member))
+
+                builder.call(create_dppy_kernel_arg_from_buffer, [buffer_ptr, kernel_arg])
+                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                cur_arg += 1
+                builder.store(builder.load(kernel_arg), dst)
+                # Handle shape
+                shape_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 5)])
+                for this_dim in range(arg_type.ndim):
+                    kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+                    shape_entry = builder.gep(shape_member, [context.get_constant(types.int32, 0), context.get_constant(types.int32, this_dim)])
+                    builder.call(
+                        create_dppy_kernel_arg, [builder.bitcast(shape_entry, void_ptr_ptr_t),
+                                                   context.get_constant(types.uintp, sizeof_intp),
+                                                   kernel_arg])
+                    dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                    cur_arg += 1
+                    builder.store(builder.load(kernel_arg), dst)
+                # Handle strides
+                stride_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 6)])
+                for this_stride in range(arg_type.ndim):
+                    kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+                    stride_entry = builder.gep(stride_member, [context.get_constant(types.int32, 0), context.get_constant(types.int32, this_dim)])
+                    builder.call(
+                        create_dppy_kernel_arg, [builder.bitcast(stride_entry, void_ptr_ptr_t),
+                                                   context.get_constant(types.uintp, sizeof_intp),
+                                                   kernel_arg])
+                    dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                    cur_arg += 1
+                    builder.store(builder.load(kernel_arg), dst)
             else:
-                read_bufs_after_enqueue.append((buffer_ptr, total_size, data_member))
+                # --------------------------------------------------------------------------------------
+                # Handle meminfo.  Not used by kernel so just write a null pointer.
+                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
 
-            builder.call(create_dppy_kernel_arg_from_buffer, [buffer_ptr, kernel_arg])
-            dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-            cur_arg += 1
-            builder.store(builder.load(kernel_arg), dst)
-            # Handle shape
-            shape_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 5)])
-            for this_dim in range(arg_type.ndim):
-                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                shape_entry = builder.gep(shape_member, [context.get_constant(types.int32, 0), context.get_constant(types.int32, this_dim)])
                 builder.call(
-                    create_dppy_kernel_arg, [builder.bitcast(shape_entry, void_ptr_ptr_t),
+                    create_dppy_kernel_arg, [null_ptr,
+                                               context.get_constant(types.uintp, sizeof_void_ptr),
+                                               kernel_arg])
+                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                cur_arg += 1
+                builder.store(builder.load(kernel_arg), dst)
+
+                # Handle parent.  Not used by kernel so just write a null pointer.
+                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+                builder.call(
+                    create_dppy_kernel_arg, [null_ptr,
+                                               context.get_constant(types.uintp, sizeof_void_ptr),
+                                               kernel_arg])
+                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                cur_arg += 1
+                builder.store(builder.load(kernel_arg), dst)
+
+                # Handle array size.  Equal to the max number of items in a work group.  We might not need the whole thing.
+                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+                dtype_itemsize = context.get_abi_sizeof(context.get_data_type(arg_type.dtype))
+                local_size = max_work_group_size * dtype_itemsize
+                #print("dtype:", arg_type.dtype, type(arg_type.dtype), dtype_itemsize, local_size, max_work_group_size)
+
+                builder.call(
+                    create_dppy_kernel_arg, [builder.inttoptr(context.get_constant(types.uintp, max_work_group_size), void_ptr_ptr_t),
                                                context.get_constant(types.uintp, sizeof_intp),
                                                kernel_arg])
                 dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
                 cur_arg += 1
                 builder.store(builder.load(kernel_arg), dst)
-            # Handle strides
-            stride_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 6)])
-            for this_stride in range(arg_type.ndim):
+                # Handle itemsize
                 kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                stride_entry = builder.gep(stride_member, [context.get_constant(types.int32, 0), context.get_constant(types.int32, this_dim)])
                 builder.call(
-                    create_dppy_kernel_arg, [builder.bitcast(stride_entry, void_ptr_ptr_t),
+                    create_dppy_kernel_arg, [builder.inttoptr(context.get_constant(types.uintp, dtype_itemsize), void_ptr_ptr_t),
                                                context.get_constant(types.uintp, sizeof_intp),
                                                kernel_arg])
                 dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
                 cur_arg += 1
                 builder.store(builder.load(kernel_arg), dst)
+                # Handle data.  Pass null for local data.
+                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+                builder.call(
+                    create_dppy_kernel_arg, [null_ptr,
+                                               context.get_constant(types.uintp, local_size),
+                                               kernel_arg])
+                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                cur_arg += 1
+                builder.store(builder.load(kernel_arg), dst)
+                # Handle shape
+                for this_dim in range(arg_type.ndim):
+                    kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+                    builder.call(
+                        create_dppy_kernel_arg, [builder.inttoptr(context.get_constant(types.uintp, max_work_group_size), void_ptr_ptr_t),
+                                                   context.get_constant(types.uintp, sizeof_intp),
+                                                   kernel_arg])
+                    dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                    cur_arg += 1
+                    builder.store(builder.load(kernel_arg), dst)
+                # Handle strides
+                for this_stride in range(arg_type.ndim):
+                    kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
+                    builder.call(
+                        create_dppy_kernel_arg, [builder.inttoptr(context.get_constant(types.uintp, 1), void_ptr_ptr_t),
+                                                   context.get_constant(types.uintp, sizeof_intp),
+                                                   kernel_arg])
+                    dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
+                    cur_arg += 1
+                    builder.store(builder.load(kernel_arg), dst)
         else:
             kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
             # Handle non-arrays

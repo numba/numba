@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 
 from numba.compiler import compile_isolated, DEFAULT_FLAGS
+from numba.cuda.testing import SerialMixin
 from numba import typeof, config, cuda, njit
 from numba.types import float64
 from numba import unittest_support as unittest
@@ -104,6 +105,15 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
         # Doesn't raise
         boundscheck(b)
 
+    def tearDown(self):
+        config.BOUNDSCHECK = self.old_boundscheck
+
+
+class TestNoCudaBoundsCheck(SerialMixin, unittest.TestCase):
+    def setUp(self):
+        self.old_boundscheck = config.BOUNDSCHECK
+        config.BOUNDSCHECK = None
+
     @unittest.skipIf(not cuda.is_available(), "NO CUDA")
     def test_no_cuda_boundscheck(self):
         with self.assertRaises(NotImplementedError):
@@ -121,7 +131,7 @@ class TestBoundsCheckNoError(MemoryLeakMixin, unittest.TestCase):
             # Out of bounds but doesn't raise (it does raise in the simulator,
             # so skip there)
             if not config.ENABLE_CUDASIM:
-                func2(x, a)
+                func2[1, 1](x, a)
 
     def tearDown(self):
         config.BOUNDSCHECK = self.old_boundscheck

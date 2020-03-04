@@ -1,113 +1,105 @@
-****************
-Python to SPIR-V
-****************
+                                ****************
+                                      DPPY
+                                ****************
+=========
+1. What?
+=========
 
-An OpenCL / SPIR-V backend for Numba
-####################################
+DPPy proof-of-concept backend for NUMBA to support compilation for Intel CPU and
+GPU architectures. The present implementation of DPPy is based on OpenCL 2.1,
+but is likely to change in the future to reply on Sycl/DPC++ or Intel Level-0
+driver API.
 
-This repository is a Proof of Concept on how to translate numpy-based Python to SPIR-V code.
-It uses Numba to translate Python to LLVM and SPIRV-LLVM to generate the final SPIR-V.
-Although most Numba tests are working, this is a prototype, only meant for experimentation.
+================
+2. Prequisites?
+================
 
-**TODO** / requirements for future development:
- - An official LLVM backend targeting SPIR-V is critical requirement of this project
- - A clean-up / refactorization of the Numba .cuda, .hsa and .ocl backends is needed
+Bash                 : In the system and not as default Shell
+Tar                  : To extract files
+Git                  : To fetch required dependencies listed below
+C/C++ compiler       : To build the dependencies
+Cmake                : For managing build process of dependencies
+Python3              : Version 3 is required
+Conda or miniconda   : Can be found at https://docs.conda.io/en/latest/miniconda.html
 
-This repository was originally forked from **Numba 0.33** and tested with **llvmlite 0.18**. The llvmlite lib is an augmented Python wrapper for **LLVM 4.0** that Numba uses internally to handle the LLVM IR code.
+OpenCL 2.1 driver    : DPPy currently works for both Intel GPUs and CPUs is
+                       a correct OpenCL driver version is found on the system.
 
-**Dependencies** / installation requirements:
- - llvmlite 0.18. Install with conda, pip or build manually (requires LLVM 4.0)
- - Intel OpenCL 2.1 and a recent Intel CPU supporting it (e.g. Haswell, Skylake)
- - LLVM 4.0 to SPIR-V translator. Use https://github.com/thewilsonator/llvm-target-spirv
- - LLVM 4.0 with which to build the translator. Use https://github.com/thewilsonator/llvm
- - SPIRV-Tools https://github.com/KhronosGroup/SPIRV-Tools, i.e. spirv-as/dis/opt/val
-
-First of all, clone this repository and install Numba following http://numba.pydata.org/numba-doc/dev/user/installing.html#installing-from-source and http://numba.pydata.org/numba-doc/dev/developer/contributing.html#building-numba. Next install llvmlite. If building manually, follow http://llvmlite.pydata.org/en/latest/install/index.html#building-manually. Finally run the tests for both llvmlite and Numba to verify you have a working Numba installation.
-
-Now the details for the OpenCL / SPIR-V backend. First install OpenCL 2.1 from the Intel website. A new OpenCL platform should appear by the name Experimental OpenCL 2.1 CPU Only Platform. Clone *thewilsonator/* *llvm-target-spirv* and *llvm*, place the files in llvm-target-spirv/* into llvm/lib/Target/SPIRV/, and build llvm with cmake to obtain the **llc** binary. Build the SPIRV-Tools binaries too, i.e. **spirv-as/dis/opt/val**. Finally place the binaries in a folder pointed by the environtment variable $SPIRVDIR, which defaults to /opt/spirv/
-
-Verify the installation by running the examples available in /numba/examples/ocljit/.
-Do not hesitate to open an issue for more information or help.
-
-An effort by **StreamHPC** www.streamhpc.eu (formerly StreamComputing)
-
-------------------------------------------------------------------------------------
+                       Note. To use the GPU users should be added to "video"
+                       user group on Linux systems.
 
 
-A Just-In-Time(JIT) Compiler for Numerical Functions in Python.
-#########################################################
+The following requisites will be installed by the install script provided with
+this package.
 
-Numba is an open source, NumPy-aware optimizing compiler for Python sponsored
-by Anaconda, Inc.  It uses the LLVM compiler project to generate machine code
-from Python syntax.
+NUMBA v0.48          : The DPPy backend has only been tested for NUMBA v0.48.
+                       The included install script downloads and applies the
+                       DDPy patch to the correct NUMBA version.
 
-Numba can compile a large subset of numerically-focused Python, including many
-NumPy functions.  Additionally, Numba has support for automatic
-parallelization of loops, generation of GPU-accelerated code, and creation of
-ufuncs and C callbacks.
+LLVM-SPIRV translator: Used for SPIRV generation from LLVM IR.
 
-For more information about Numba, see the Numba homepage: 
-http://numba.pydata.org
+SPIRV-Tools          : Used internally for code-generation. The provided install
+                       script would handle downloading and installing the
+                       required version.
 
-Dependencies
-============
+LLVMDEV              : To support LLVM IR generation.
 
-* llvmlite (version 0.31.0 or higher)
-* NumPy (version 1.9 or higher)
-* funcsigs (for Python 2)
+Others               : All existing dependecies for NUMBA, such as llvmlite,
+                       also apply to DPPy.
 
-Supported Platforms
+==================
+3. How to install?
+==================
+
+Extract the archive:
+
+    tar -zxvf NUMBA-PVC-offline.tar.gz
+
+Run the installer script:
+
+    ./build_numba_dppy.sh --prefix $PATH_TO_INSTALL_NUMBA-DPPY
+
+After successful installation the following message should be displayed:
+
+    #
+    #  Use the following to activate the correct environment
+    #
+    #    $ conda activate numba-dppy-env
+    #
+    #  Use the following to deactivate environment
+    #
+    #    $ conda deactivate
+
+The installer script creates a new conda environment called numba-dppy-env with
+all the needed dependencies already installed. To use the DPPy backend, please
+activate the numba-dppy-env
+
+================
+4. Running tests
+================
+
+To make sure the installation was successful, try running the examples and the
+test suite:
+
+    $PATH_TO_INSTALL_NUMBA-DPPY/numba/dppy/examples/
+    $PATH_TO_INSTALL_NUMBA-DPPY/numba/dppy/tests/dppy/
+
+To run the test suite execute the following:
+
+    $ python -m numba.runtests numba.dppy.tests
+
+===========================
+5. How Tos and Known Issues
+===========================
+
+Refer the HowTo.rst guide for an overview of the programming semantics,
+examples, supported functionalities, and known issues.
+
+
+===================
+6. Reporting issues
 ===================
 
-* Operating systems and CPU:
-
-  - Linux: x86 (32-bit), x86_64, ppc64le (POWER8 and 9), ARMv7 (32-bit),
-    ARMv8 (64-bit)
-  - Windows: x86, x86_64
-  - macOS: x86_64
-  
-* Python versions: 2.7, 3.5-3.7
-* NumPy: >= 1.11
-* NVIDIA GPUs (Kepler architecture or later) via CUDA driver on Linux, Windows,
-  macOS (< 10.14)
-* AMD GPUs via ROCm driver on Linux
-* llvmlite: >= 0.31.0
+Please email diptorup.deb@intel.com to report issues and bugs.
 
 
-Installing
-==========
-
-The easiest way to install Numba and get updates is by using the Anaconda
-Distribution: https://www.anaconda.com/download
-
-::
-
-   $ conda install numba
-
-For more options, see the Installation Guide: http://numba.pydata.org/numba-doc/latest/user/installing.html
-
-Documentation
-=============
-
-http://numba.pydata.org/numba-doc/latest/index.html
-
-
-Mailing Lists
-=============
-
-Join the Numba mailing list numba-users@continuum.io:
-https://groups.google.com/a/continuum.io/d/forum/numba-users
-
-Some old archives are at: http://librelist.com/browser/numba/
-
-
-Continuous Integration
-======================
-
-.. image:: https://travis-ci.org/numba/numba.svg?branch=master
-    :target: https://travis-ci.org/numba/numba
-    :alt: Travis CI
-
-.. image:: https://dev.azure.com/numba/numba/_apis/build/status/numba.numba?branchName=master
-    :target: https://dev.azure.com/numba/numba/_build/latest?definitionId=1?branchName=master
-    :alt: Azure Pipelines
