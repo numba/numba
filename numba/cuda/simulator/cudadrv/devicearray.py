@@ -108,11 +108,11 @@ class FakeCUDAArray(object):
         return FakeCUDAArray(np.transpose(self._ary, axes=axes))
 
     def __getitem__(self, idx):
-        ret = self._ary.__getitem__(idx)
+        ret = self._ary_access.__getitem__(idx)
         if np.issubdtype(type(ret), np.number) or np.issubdtype(type(ret), np.bool_):
             return ret
         else:
-            return FakeCUDAArray(self._ary_access.__getitem__(idx), stream=self.stream)
+            return FakeCUDAArray(ret, stream=self.stream)
 
     def __setitem__(self, idx, val):
         return self._ary_access.__setitem__(idx, val)
