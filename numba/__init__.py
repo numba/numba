@@ -35,7 +35,8 @@ from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
                                    jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
-from numba.np.ufunc import vectorize, guvectorize, threading_layer
+from numba.np.ufunc import (vectorize, guvectorize, threading_layer,
+                            get_num_threads, set_num_threads)
 
 # Re-export Numpy helpers
 from numba.np.numpy_support import carray, farray, from_dtype
@@ -71,6 +72,8 @@ __all__ = """
     vectorize
     objmode
     literal_unroll
+    get_num_threads
+    set_num_threads
     """.split() + types.__all__ + errors.__all__
 
 

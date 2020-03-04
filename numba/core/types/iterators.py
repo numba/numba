@@ -1,4 +1,5 @@
 from .common import SimpleIterableType, SimpleIteratorType
+from ..errors import TypingError
 
 
 class RangeType(SimpleIterableType):
@@ -96,7 +97,9 @@ class ArrayIterator(SimpleIteratorType):
         self.array_type = array_type
         name = "iter(%s)" % (self.array_type,)
         nd = array_type.ndim
-        if nd == 0 or nd == 1:
+        if nd == 0:
+            raise TypingError("iteration over a 0-d array")
+        elif nd == 1:
             yield_type = array_type.dtype
         else:
             yield_type = array_type.copy(ndim=array_type.ndim - 1)

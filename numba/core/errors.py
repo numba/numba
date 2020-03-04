@@ -493,6 +493,12 @@ class UnsupportedError(NumbaError):
     pass
 
 
+class UnsupportedRewriteError(UnsupportedError):
+    """UnsupportedError from rewrite passes
+    """
+    pass
+
+
 class IRError(NumbaError):
     """
     An error occurred during Numba IR generation.

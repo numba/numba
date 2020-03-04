@@ -120,6 +120,12 @@ class TestNoCudaBoundsCheck(SerialMixin, unittest.TestCase):
             def func():
                 pass
 
+        # Make sure we aren't raising "not supported" error if we aren't
+        # requesting bounds checking anyway. Related pull request: #5257
+        @cuda.jit(boundscheck=False)
+        def func3():
+            pass
+
         with override_env_config('NUMBA_BOUNDSCHECK', '1'):
             @cuda.jit
             def func2(x, a):

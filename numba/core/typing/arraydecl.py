@@ -544,7 +544,24 @@ class StaticGetItemRecord(AbstractTemplate):
         # Resolution of members for records
         record, idx = args
         if isinstance(record, types.Record) and isinstance(idx, str):
+            if idx not in record.fields:
+                raise KeyError(f"Field '{idx}' was not found in record with "
+                               f"fields {tuple(record.fields.keys())}")
             ret = record.typeof(idx)
+            assert ret
+            return signature(ret, *args)
+
+
+@infer_global(operator.getitem)
+class StaticGetItemLiteralRecord(AbstractTemplate):
+    def generic(self, args, kws):
+        # Resolution of members for records
+        record, idx = args
+        if isinstance(record, types.Record) and isinstance(idx, types.StringLiteral):
+            if idx.literal_value not in record.fields:
+                raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
+                               f"fields {tuple(record.fields.keys())}")
+            ret = record.typeof(idx.literal_value)
             assert ret
             return signature(ret, *args)
 

@@ -30,7 +30,7 @@ from numba.core.analysis import (
     compute_cfg_from_blocks,
     compute_use_defs,
     compute_live_variables)
-
+from numba.core import postproc
 from numba.cpython.rangeobj import range_iter_len
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
@@ -68,6 +68,10 @@ class InlineClosureCallPass(object):
     def run(self):
         """Run inline closure call pass.
         """
+        # Analysis relies on ir.Del presence, strip out later
+        pp = postproc.PostProcessor(self.func_ir)
+        pp.run(True)
+
         modified = False
         work_list = list(self.func_ir.blocks.items())
         debug_print = _make_debug_print("InlineClosureCallPass")
@@ -118,11 +122,13 @@ class InlineClosureCallPass(object):
                 _fix_nested_array(self.func_ir)
 
         if modified:
-            remove_dels(self.func_ir.blocks)
             # run dead code elimination
             dead_code_elimination(self.func_ir)
             # do label renaming
             self.func_ir.blocks = rename_labels(self.func_ir.blocks)
+
+        # inlining done, strip dels
+        remove_dels(self.func_ir.blocks)
 
         debug_print("END")
 
@@ -403,7 +409,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     debug_print("After merge in")
     _debug_dump(func_ir)
 
-    if work_list != None:
+    if work_list is not None:
         for block in new_blocks:
             work_list.append(block)
     return callee_blocks, var_dict
@@ -1031,7 +1037,7 @@ class RewriteArrayOfConsts(rewrites.Rewrite):
         self.crnt_block = block
         self.new_body = guard(_inline_const_arraycall, block, func_ir,
                               self.typingctx, typemap, calltypes)
-        return self.new_body != None
+        return self.new_body is not None
 
     def apply(self):
         self.crnt_block.body = self.new_body

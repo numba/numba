@@ -5,8 +5,8 @@ import subprocess
 
 import numpy as np
 
-from ..support import capture_cache_log
-from ..test_dispatcher import BaseCacheTest
+from numba.tests.support import capture_cache_log
+from numba.tests.test_dispatcher import BaseCacheTest
 from numba.core import config
 import unittest
 

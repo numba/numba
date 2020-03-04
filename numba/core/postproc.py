@@ -1,4 +1,4 @@
-from numba.core import utils, ir, analysis, transforms
+from numba.core import utils, ir, analysis, transforms, ir_utils
 
 
 class YieldPoint(object):
@@ -65,7 +65,7 @@ class PostProcessor(object):
     def __init__(self, func_ir):
         self.func_ir = func_ir
 
-    def run(self):
+    def run(self, emit_dels=False):
         """
         Run the following passes over Numba IR:
         - canonicalize the CFG
@@ -76,9 +76,6 @@ class PostProcessor(object):
         self.func_ir.blocks = transforms.canonicalize_cfg(self.func_ir.blocks)
         vlt = VariableLifetime(self.func_ir.blocks)
         self.func_ir.variable_lifetime = vlt
-
-        # Emit del nodes
-        self._insert_var_dels()
 
         bev = analysis.compute_live_variables(vlt.cfg, self.func_ir.blocks,
                                               vlt.usedefs.defmap,
@@ -91,6 +88,11 @@ class PostProcessor(object):
             self._compute_generator_info()
         else:
             self.func_ir.generator_info = None
+
+        # Emit del nodes, do this last as the generator info parsing generates
+        # and then strips dels as part of its analysis.
+        if emit_dels:
+            self._insert_var_dels()
 
     def _populate_generator_info(self):
         """
@@ -113,8 +115,9 @@ class PostProcessor(object):
         Compute the generator's state variables as the union of live variables
         at all yield points.
         """
+        # generate del info, it's used in analysis here, strip it out at the end
+        self._insert_var_dels()
         self._populate_generator_info()
-
         gi = self.func_ir.generator_info
         for yp in gi.get_yield_points():
             live_vars = set(self.func_ir.get_block_entry_vars(yp.block))
@@ -147,6 +150,7 @@ class PostProcessor(object):
             st |= yp.live_vars
             st |= yp.weak_live_vars
         gi.state_vars = sorted(st)
+        self.remove_dels()
 
     def _insert_var_dels(self):
         """
@@ -209,3 +213,10 @@ class PostProcessor(object):
             escape_dead_set = escaping_dead_map[offset]
             for var_name in sorted(escape_dead_set):
                 ir_block.prepend(ir.Del(var_name, loc=ir_block.body[0].loc))
+
+
+    def remove_dels(self):
+        """
+        Strips the IR of Del nodes
+        """
+        ir_utils.remove_dels(self.func_ir.blocks)

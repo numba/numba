@@ -106,6 +106,17 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         # index
         self.assertEqual(l.index(15), 4)
 
+    def test_list_extend_refines_on_unicode_type(self):
+        @njit
+        def foo(string):
+            l = List()
+            l.extend(string)
+            return l
+
+        for func in (foo, foo.py_func):
+            for string in ("a", "abc", "\nabc\t"):
+                self.assertEqual(list(func(string)), list(string))
+
     def test_unsigned_access(self):
         L = List.empty_list(int32)
         ui32_0 = types.uint32(0)
@@ -1141,3 +1152,98 @@ class TestListSort(MemoryLeakMixin, TestCase):
             list(foo(my_lists['nb'])),
             foo.py_func(my_lists['py']),
         )
+
+
+class TestImmutable(MemoryLeakMixin, TestCase):
+
+    def test_is_immutable(self):
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            return l._is_mutable()
+        self.assertTrue(foo())
+        self.assertTrue(foo.py_func())
+
+    def test_make_immutable_is_immutable(self):
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            l._make_immutable()
+            return l._is_mutable()
+        self.assertFalse(foo())
+        self.assertFalse(foo.py_func())
+
+    def test_length_still_works_when_immutable(self):
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            l._make_immutable()
+            return len(l),l._is_mutable()
+        length, mutable = foo()
+        self.assertEqual(length, 1)
+        self.assertFalse(mutable)
+
+    def test_getitem_still_works_when_immutable(self):
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            l._make_immutable()
+            return l[0], l._is_mutable()
+        test_item, mutable = foo()
+        self.assertEqual(test_item, 1)
+        self.assertFalse(mutable)
+
+    def test_append_fails(self):
+        self.disable_leak_check()
+        @njit
+        def foo():
+            l = List()
+            l.append(1)
+            l._make_immutable()
+            l.append(1)
+
+        for func in (foo, foo.py_func):
+            with self.assertRaises(ValueError) as raises:
+                func()
+            self.assertIn(
+                'list is immutable',
+                str(raises.exception),
+            )
+
+    def test_mutation_fails(self):
+        """ Test that any attempt to mutate an immutable typed list fails. """
+        self.disable_leak_check()
+
+        def generate_function(line):
+            context = {}
+            exec(dedent("""
+                from numba.typed import List
+                def bar():
+                    lst = List()
+                    lst.append(1)
+                    lst._make_immutable()
+                    {}
+                """.format(line)), context)
+            return njit(context["bar"])
+        for line in ("lst.append(0)",
+                     "lst[0] = 0",
+                     "lst.pop()",
+                     "del lst[0]",
+                     "lst.extend((0,))",
+                     "lst.insert(0, 0)",
+                     "lst.clear()",
+                     "lst.reverse()",
+                     "lst.sort()",
+                     ):
+            foo = generate_function(line)
+            for func in (foo, foo.py_func):
+                with self.assertRaises(ValueError) as raises:
+                    func()
+                self.assertIn(
+                    "list is immutable",
+                    str(raises.exception),
+                )
