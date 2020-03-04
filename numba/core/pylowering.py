@@ -398,9 +398,24 @@ class PyLower(BaseLower):
             val = self.loadvar(expr.value.name)
             self.incref(val)
             return val
+        elif expr.op == 'phi':
+            bb = self.builder.basic_block
+            self.builder.position_at_start(bb)
+            phinode = self.builder.phi(self.pyapi.pyobj)
+            self.pending_phis[phinode] = expr
+            self.builder.position_at_end(bb)
+            self.incref(phinode)
+            return phinode
 
         else:
             raise NotImplementedError(expr)
+
+    def lower_pending_phis(self):
+        for phinode, expr in self.pending_phis.items():
+            for ib, iv in zip(expr.incoming_blocks, expr.incoming_values):
+                with self.builder.goto_block(self.lastblkmap[ib]):
+                    val = self.builder.load(self._getvar(iv.name))
+                    phinode.add_incoming(val, self.lastblkmap[ib])
 
     def lower_const(self, const):
         # All constants are frozen inside the environment

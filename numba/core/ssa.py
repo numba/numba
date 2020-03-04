@@ -14,16 +14,16 @@ _logger = logging.getLogger(__name__)
 
 
 def recontruct_ssa(fir):
-    print("BEFORE SSA".center(80, "-"))
-    print(fir.dump())
-    print("=" * 80)
+    _logger.debug("BEFORE SSA".center(80, "-"))
+    _logger.debug(fir.dump_to_string())
+    _logger.debug("=" * 80)
 
     newblocks = _run_ssa(fir.blocks)
     newfir = fir.derive(blocks=newblocks)
 
-    print("AFTER SSA".center(80, "-"))
-    print(newfir.dump())
-    print("=" * 80)
+    _logger.debug("AFTER SSA".center(80, "-"))
+    _logger.debug(newfir.dump_to_string())
+    _logger.debug("=" * 80)
     return newfir
 
 
@@ -246,7 +246,7 @@ class _FixSSAVars:
         for defstmt in local_defs:
             def_pos = self._stmt_index(defstmt, block, stop=cur_pos)
             if def_pos < cur_pos:
-                seldef = defstmt.target
+                seldef = defstmt
                 break
 
         if seldef is None:
