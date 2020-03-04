@@ -193,10 +193,6 @@ def _check_struct_alignment(rec, fields):
                 raise ValueError(msg.format(npy_align, llvm_align, dt))
 
 
-def is_arrayscalar(val):
-    return np.dtype(type(val)) in FROM_DTYPE
-
-
 def map_arrayscalar_type(val):
     if isinstance(val, np.generic):
         # We can't blindly call np.dtype() as it loses information
