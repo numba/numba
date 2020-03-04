@@ -46,8 +46,8 @@ class FakeKernelCUDAArray(object):
         return FakeKernelCUDAArray(item) if isinstance(item, FakeCUDAArray) else item
 
     def __getattr__(self, attrname):
-        if attrname in dir(self.__dict__['_item']._ary):  # For, eg, array size.
-            return self.__wrap_if_fake(getattr(self.__dict__['_item']._ary, attrname))
+        if attrname in dir(self._item._ary):  # For, eg, array size.
+            return self.__wrap_if_fake(getattr(self._item._ary, attrname))
         else:
             return self.__wrap_if_fake(self._item.__getitem__(attrname))
 
@@ -61,7 +61,7 @@ class FakeKernelCUDAArray(object):
         self._item.__setitem__(idx, val)
 
     def __len__(self):
-        return len(self.__dict__['_item'])
+        return len(self._item)
 
 class FakeCUDAArray(object):
     '''
