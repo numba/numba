@@ -14,7 +14,7 @@ from pygments.style import Style
 
 class NumbaIRLexer(RegexLexer):
     """
-    For Numba IR code.
+    Pygments style lexer for Numba IR (for use with highlighting etc).
     """
     name = 'Numba_IR'
     aliases = ['numba_ir']
