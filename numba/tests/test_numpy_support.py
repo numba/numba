@@ -41,6 +41,8 @@ class TestFromDtype(TestCase):
         check('D', types.complex128)
         check('c16', types.complex128)
 
+        check('O', types.pyobject)
+
         check('b', types.int8)
         check('i1', types.int8)
         check('B', types.uint8)
