@@ -160,7 +160,7 @@ class TestCudaDriver(SerialMixin, unittest.TestCase):
         self.assertIn("External CUDA stream", repr(s))
         # Ensure neither "Default" nor "default"
         self.assertNotIn("efault", repr(s))
-        self.assertNotEqual(0, int(s))
+        self.assertEqual(ptr, int(s))
         self.assertTrue(s)
         self.assertTrue(s.external)
 
