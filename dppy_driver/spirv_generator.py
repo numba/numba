@@ -17,6 +17,7 @@ def _raise_bad_env_path(msg, path, extra=None):
 _real_check_call = check_call
 
 def check_call(*args, **kwargs):
+    #print("check_call:", *args, **kwargs)
     return _real_check_call(*args, **kwargs)
 
 class CmdLine(object):
