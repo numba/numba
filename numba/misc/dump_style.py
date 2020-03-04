@@ -45,7 +45,7 @@ class NumbaIRLexer(RegexLexer):
             (r'[0-9]+', Number),
 
             # <built-in function some>
-            (r'<[^>]*>', String),
+            (r'<[^>\n]*>', String),
 
             (r'[=<>{}\[\]()*.,!\':]|x\b', Punctuation)
         ],
