@@ -132,7 +132,7 @@ def assert_equiv(typingctx, *val):
         # Make sure argument is a single tuple type. Note that this only
         # happens when IR containing assert_equiv call is being compiled
         # (and going through type inference) again.
-        val = (types.Tuple(val),)
+        val = (types.StarArgTuple(val),)
 
     assert len(val[0]) > 1
     # Arguments must be either array, tuple, or integer
