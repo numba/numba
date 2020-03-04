@@ -528,6 +528,13 @@ class Expr(Inst):
         return cls(op=op, value=value, loc=loc)
 
     @classmethod
+    def phi(cls, loc):
+        """Phi node
+        """
+        assert isinstance(loc, Loc)
+        return cls(op='phi', incoming_values=[], incoming_blocks=[], loc=loc)
+
+    @classmethod
     def make_function(cls, name, code, closure, defaults, loc):
         """
         A node for making a function object.
