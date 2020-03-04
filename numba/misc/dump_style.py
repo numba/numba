@@ -1,14 +1,13 @@
 
 import numba.core.config
 from pygments.styles.default import DefaultStyle
-from pygments.styles.bw import BlackWhiteStyle
 from pygments.styles.manni import ManniStyle
 from pygments.styles.monokai import MonokaiStyle
 from pygments.styles.native import NativeStyle
 
 from pygments.lexer import RegexLexer, include, bygroups, words
 from pygments.token import Text, Name, String,  Punctuation, Keyword, \
-    Operator, Number, Comment, Error
+    Operator, Number
 
 from pygments.style import Style
 
