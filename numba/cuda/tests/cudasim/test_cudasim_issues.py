@@ -35,6 +35,16 @@ class TestCudaSimIssues(SerialMixin, unittest.TestCase):
         np.testing.assert_equal(3, item[0]['backyard']['statue'])
         np.testing.assert_equal(5, item[0]['backyard']['newspaper'][3])
 
+    def test_recarray_setting(self):
+        recordwith2darray = np.dtype([('i', np.int32), ('j', np.float32, (3, 2))])
+        rec = np.recarray(2, dtype=recordwith2darray)
+        rec[0]['i'] = 45
+        @cuda.jit
+        def simple_kernel(f):
+            f[1] = f[0]
+        simple_kernel[1, 1](rec)
+        np.testing.assert_equal(rec[0]['i'], rec[1]['i'])
+
     def test_cuda_module_in_device_function(self):
         """
         Discovered in https://github.com/numba/numba/issues/1837.

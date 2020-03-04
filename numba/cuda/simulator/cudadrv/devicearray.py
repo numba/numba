@@ -109,7 +109,7 @@ class FakeCUDAArray(object):
 
     def __getitem__(self, idx):
         ret = self._ary_access.__getitem__(idx)
-        if np.issubdtype(type(ret), np.number) or np.issubdtype(type(ret), np.bool_):
+        if np.issubdtype(type(ret), np.number) or np.issubdtype(type(ret), np.bool_) or np.issubdtype(type(ret), np.record):
             return ret
         else:
             return FakeCUDAArray(ret, stream=self.stream)
