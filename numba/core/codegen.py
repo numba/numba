@@ -23,7 +23,7 @@ def _is_x86(triple):
     return arch in _x86arch
 
 
-def dump(header, body):
+def dump(header, body, lang=None):
     if config.HIGHLIGHT_DUMPS:
         try:
             import pygments
@@ -32,9 +32,11 @@ def dump(header, body):
             raise ValueError(msg)
         else:
             from pygments import highlight
-            from pygments.lexers import GasLexer as lexer
+            from pygments.lexers import GasLexer as gas_lexer
+            from pygments.lexers import LlvmLexer as llvm_lexer
             from pygments.formatters import Terminal256Formatter
             from numba.misc.dump_style import by_colorscheme
+            lexer = llvm_lexer if lang is None else gas_lexer
             def printer(arg):
                 print(highlight(arg, lexer(),
                       Terminal256Formatter(style=by_colorscheme())))
@@ -282,7 +284,7 @@ class CodeLibrary(object):
             # attempt to dump assembly if nothing is produced.
             asm = self.get_asm_str()
             if asm:
-                dump("ASSEMBLY %s" % self._name, self.get_asm_str())
+                dump("ASSEMBLY %s" % self._name, self.get_asm_str(), 'asm')
 
     def get_defined_functions(self):
         """
