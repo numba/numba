@@ -37,13 +37,18 @@ class FakeShape(tuple):
         return super(FakeShape, self).__getitem__(k)
 
 
-class FakeKernelCUDAArray(object):
+class FakeWithinKernelCUDAArray(object):
+    '''
+    Created to emulate the behavior of arrays within kernels, where either array.item or array['item'] is valid.
+    This is weird behavior and should eventually be removed.
+    '''
+
     def __init__(self, item):
         assert isinstance(item, FakeCUDAArray)
         self.__dict__['_item'] = item
 
     def __wrap_if_fake(self, item):
-        return FakeKernelCUDAArray(item) if isinstance(item, FakeCUDAArray) else item
+        return FakeWithinKernelCUDAArray(item) if isinstance(item, FakeCUDAArray) else item
 
     def __getattr__(self, attrname):
         if attrname in dir(self._item._ary):  # For, eg, array size.
