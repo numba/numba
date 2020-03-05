@@ -162,6 +162,9 @@ or per-thread default stream:
 .. autofunction:: numba.cuda.per_thread_default_stream
 
 To construct a Numba ``Stream`` object using a stream allocated elsewhere, the
-``external_stream`` function is provided:
+``external_stream`` function is provided. Note that the lifetime of external
+streams must be managed by the user - Numba will not deallocate an external
+stream, and the stream must remain valid whilst the Numba ``Stream`` object is
+in use.
 
 .. autofunction:: numba.cuda.external_stream
