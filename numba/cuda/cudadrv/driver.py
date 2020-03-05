@@ -560,7 +560,7 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
         """The __init__ method sets the """
         if 'context' not in kwargs:
             raise RuntimeError("Memory manager requires a context")
-        self._context = kwargs.pop('context')
+        self.context = kwargs.pop('context')
 
     @abstractmethod
     def memalloc(self, nbytes, stream=0):
@@ -719,7 +719,7 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         owner = None
 
         finalizer = _hostalloc_finalizer(self, pointer, bytesize, mapped)
-        ctx = weakref.proxy(self._context)
+        ctx = weakref.proxy(self.context)
 
         if mapped:
 
@@ -753,7 +753,7 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
             allocator()
 
         finalizer = _pin_finalizer(self, pointer, mapped)
-        ctx = weakref.proxy(self._context)
+        ctx = weakref.proxy(self.context)
 
         if mapped:
             mem = MappedMemory(ctx, owner, pointer, size,
@@ -794,7 +794,7 @@ class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
         self._attempt_allocation(allocator)
 
         finalizer = _alloc_finalizer(self, ptr, bytesize)
-        ctx = weakref.proxy(self._context)
+        ctx = weakref.proxy(self.context)
         mem = AutoFreePointer(ctx, ptr, bytesize, finalizer=finalizer)
         self.allocations[ptr.value] = mem
         return mem.own()
@@ -811,7 +811,7 @@ class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
             byref(ipchandle),
             memory.owner.handle,
         )
-        source_info = self._context.device.get_device_identity()
+        source_info = self.context.device.get_device_identity()
         offset = memory.handle.value - memory.owner.handle.value
 
         from numba.cuda.cudadrv.driver import IpcHandle
