@@ -50,6 +50,8 @@ INDEXTY = types.intp
 
 index_types = types.integer_domain
 
+DEFAULT_ALLOCATED = 0
+
 
 @register_model(ListType)
 class ListModel(models.StructModel):
@@ -258,7 +260,7 @@ def _imp_dtor(context, module):
     return fn
 
 
-def new_list(item, allocated=0):
+def new_list(item, allocated=DEFAULT_ALLOCATED):
     """Construct a new list. (Not implemented in the interpreter yet)
 
     Parameters
@@ -369,7 +371,7 @@ def _list_new(typingctx, itemty, allocated):
 
 
 @overload(new_list)
-def impl_new_list(item, allocated=0):
+def impl_new_list(item, allocated=DEFAULT_ALLOCATED):
     """Creates a new list.
 
     Parameters
@@ -385,7 +387,7 @@ def impl_new_list(item, allocated=0):
 
     itemty = item
 
-    def imp(item, allocated=0):
+    def imp(item, allocated=DEFAULT_ALLOCATED):
         if allocated < 0:
             raise RuntimeError("expecting *allocated* to be >= 0")
         lp = _list_new(itemty, allocated)
