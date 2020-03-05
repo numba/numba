@@ -1,4 +1,6 @@
 from contextlib import contextmanager
+from collections import defaultdict
+from copy import copy
 import warnings
 
 from numba.core import (errors, types, typing, ir, funcdesc, rewrites,
@@ -669,3 +671,48 @@ class DeadCodeElimination(FunctionPass):
     def run_pass(self, state):
         dead_code_elimination(state.func_ir, state.typemap)
         return True
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class PreLowerStripPhis(LoweringPass):
+
+    _name = "strip_phis"
+
+    def __init__(self):
+        LoweringPass.__init__(self)
+
+    def run_pass(self, state):
+        state.func_ir = self._strip_phi_nodes(state.func_ir)
+        return True
+
+    def _strip_phi_nodes(self, fir):
+        exporters = defaultdict(list)
+        phis = set()
+        for label, block in fir.blocks.items():
+            for assign in block.find_insts(ir.Assign):
+                if isinstance(assign.value, ir.Expr):
+                    if assign.value.op == 'phi':
+                        phis.add(assign)
+                        phi = assign.value
+                        for ib, iv in zip(phi.incoming_blocks,
+                                          phi.incoming_values):
+                            exporters[ib].append((assign.target, iv))
+
+        newblocks = {}
+        for label, block in fir.blocks.items():
+            newblk = copy(block)
+            newblocks[label] = newblk
+
+            # strip phis
+            newblk.body = [stmt for stmt in block.body if stmt not in phis]
+
+            for target, rhs in exporters[label]:
+                assign = ir.Assign(
+                    target=target,
+                    value=rhs,
+                    loc=target.loc
+                )
+                newblk.insert_before_terminator(assign)
+
+        func_ir = fir.derive(blocks=newblocks)
+        return func_ir

@@ -10,7 +10,7 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from numba.core import types, utils, ir, generators, cgutils
-from numba.core.errors import ForbiddenConstruct
+from numba.core.errors import ForbiddenConstruct, LoweringError
 from numba.core.lowering import BaseLower
 
 
@@ -399,23 +399,10 @@ class PyLower(BaseLower):
             self.incref(val)
             return val
         elif expr.op == 'phi':
-            bb = self.builder.basic_block
-            self.builder.position_at_start(bb)
-            phinode = self.builder.phi(self.pyapi.pyobj)
-            self.pending_phis[phinode] = expr
-            self.builder.position_at_end(bb)
-            self.incref(phinode)
-            return phinode
+            raise LoweringError("PHI not stripped")
 
         else:
             raise NotImplementedError(expr)
-
-    def lower_pending_phis(self):
-        for phinode, expr in self.pending_phis.items():
-            for ib, iv in zip(expr.incoming_blocks, expr.incoming_values):
-                with self.builder.goto_block(self.lastblkmap[ib]):
-                    val = self.builder.load(self._getvar(iv.name))
-                    phinode.add_incoming(val, self.lastblkmap[ib])
 
     def lower_const(self, const):
         # All constants are frozen inside the environment

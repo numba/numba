@@ -251,20 +251,8 @@ class BaseLower(object):
             self.builder.position_at_end(bb)
             self.lower_block(block)
             self.lastblkmap[offset] = self.builder.basic_block
-        # Finish up pending phis
-        self.lower_pending_phis()
         self.post_lower()
         return entry_block_tail
-
-    def lower_pending_phis(self):
-        for phinode, (expr, resty) in self.pending_phis.items():
-            for ib, iv in zip(expr.incoming_blocks, expr.incoming_values):
-                with self.builder.goto_block(self.lastblkmap[ib]):
-                    # The incoming block is responsible of casting to resty
-                    incty = self.typeof(iv.name)
-                    val = self.loadvar(iv.name)
-                    casted = self.context.cast(self.builder, val, incty, resty)
-                    phinode.add_incoming(casted, self.lastblkmap[ib])
 
     def lower_block(self, block):
         """
@@ -1177,13 +1165,7 @@ class Lower(BaseLower):
             return castval
 
         elif expr.op == "phi":
-            bb = self.builder.basic_block
-            self.builder.position_at_start(bb)
-            phinode = self.builder.phi(self.context.get_value_type(resty))
-            self.pending_phis[phinode] = expr, resty
-            self.builder.position_at_end(bb)
-            self.incref(resty, phinode)
-            return phinode
+            raise LoweringError("PHI not stripped")
 
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)

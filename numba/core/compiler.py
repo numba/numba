@@ -25,7 +25,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      NopythonRewrites, PreParforPass,
                                      ParforPass, DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
-                                     InlineOverloads)
+                                     InlineOverloads, PreLowerStripPhis)
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd, CompileInterpMode)
@@ -471,6 +471,9 @@ class DefaultPassBuilder(object):
             pm.add_pass(NopythonRewrites, "nopython rewrites")
         if state.flags.auto_parallel.enabled:
             pm.add_pass(ParforPass, "convert to parfors")
+
+        # strip phis
+        pm.add_pass(PreLowerStripPhis, "remove phis nodes")
 
         # legalise
         pm.add_pass(IRLegalization,
