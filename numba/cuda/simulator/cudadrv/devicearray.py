@@ -40,7 +40,8 @@ class FakeShape(tuple):
 class FakeWithinKernelCUDAArray(object):
     '''
     Created to emulate the behavior of arrays within kernels, where either array.item or array['item'] is valid.
-    This is weird behavior and should eventually be removed.
+    This behaviour does not follow the semantics of Python and NumPy with
+    non-jitted code, and will be deprecated and removed.
     '''
 
     def __init__(self, item):
