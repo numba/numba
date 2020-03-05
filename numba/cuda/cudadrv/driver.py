@@ -795,7 +795,7 @@ class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
 
         finalizer = _alloc_finalizer(self, ptr, bytesize)
         ctx = weakref.proxy(self._context)
-        mem = AutoFreePointer(ctx, ptr, bytesize, finalizer)
+        mem = AutoFreePointer(ctx, ptr, bytesize, finalizer=finalizer)
         self.allocations[ptr.value] = mem
         return mem.own()
 
