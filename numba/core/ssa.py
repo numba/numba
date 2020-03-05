@@ -38,7 +38,6 @@ def _run_ssa(blocks):
             "Fix SSA violator on var %s with %d assignments",
             varname, len(assignlist),
         )
-
         blocks, defmap = _fresh_vars(blocks, varname, assignlist)
         _logger.debug("Replaced assignments: %s", pformat(defmap))
 
@@ -141,7 +140,7 @@ def _run_sbaa_block_pass(states, blk, handler):
             ret = handler.on_assign(states, stmt)
         else:
             ret = handler.on_other(states, stmt)
-        if ret is not stmt:
+        if ret is not stmt and ret is not None:
             _logger.debug("replaced with: %s", ret)
         yield ret
 
@@ -198,27 +197,23 @@ class _FreshVarHandler:
 
 class _FixSSAVars:
     def on_assign(self, states, assign):
-        label = states['label']
-        defmap = states['defmap']
-        defs = defmap[label]
-        if assign in defs:
-            return assign
-        else:
-            rhs = assign.value
-            if isinstance(rhs, ir.Inst):
-                phidef = self._fix_var(
-                    states, assign, assign.value.list_vars(),
+        rhs = assign.value
+        if isinstance(rhs, ir.Inst):
+            newdef = self._fix_var(
+                states, assign, assign.value.list_vars(),
+            )
+            # Has a replacement that is not the current variable
+            if newdef is not None and states['varname'] != newdef.target.name:
+                replmap = {states['varname']: newdef.target}
+                rhs = copy(rhs)
+
+                ir_utils.replace_vars_inner(rhs, replmap)
+                return ir.Assign(
+                    target=assign.target,
+                    value=rhs,
+                    loc=assign.loc,
                 )
-                if phidef is not None:
-                    replmap = {states['varname']: phidef.target}
-                    rhs = copy(rhs)
-                    ir_utils.replace_vars_inner(rhs, replmap)
-                    return ir.Assign(
-                        target=assign.target,
-                        value=rhs,
-                        loc=assign.loc,
-                    )
-            return assign
+        return assign
 
     def on_other(self, states, stmt):
         phidef = self._fix_var(
@@ -243,7 +238,7 @@ class _FixSSAVars:
         block = states['block']
 
         cur_pos = self._stmt_index(stmt, block)
-        for defstmt in local_defs:
+        for defstmt in reversed(local_defs):
             def_pos = self._stmt_index(defstmt, block, stop=cur_pos)
             if def_pos < cur_pos:
                 seldef = defstmt
@@ -295,6 +290,11 @@ class _FixSSAVars:
             return self._find_def_from_top(states, label)
 
     def _stmt_index(self, defstmt, block, stop=-1):
+        """
+
+        Assumptions:
+        - no two statements can point to the same object.
+        """
         try:
             return block.body.index(defstmt, 0, stop)
         except ValueError:
