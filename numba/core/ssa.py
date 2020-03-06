@@ -6,7 +6,7 @@ from copy import copy
 from pprint import pformat
 from collections import defaultdict
 
-from numba.core import ir, ir_utils
+from numba.core import ir, ir_utils, errors
 from numba.core.analysis import compute_cfg_from_blocks
 
 
@@ -237,6 +237,7 @@ class _FixSSAVars:
             return self._find_def(states, stmt)
 
     def _find_def(self, states, stmt):
+        _logger.debug("find_def var=%r stmt=%s", states['varname'], stmt)
         seldef = None
         label = states['label']
         local_defs = states['defmap'][label]
@@ -250,11 +251,12 @@ class _FixSSAVars:
                 break
 
         if seldef is None:
-            seldef = self._find_def_from_top(states, label)
+            seldef = self._find_def_from_top(states, label, loc=stmt.loc)
 
         return seldef
 
-    def _find_def_from_top(self, states, label):
+    def _find_def_from_top(self, states, label, loc):
+        _logger.debug("find_def_from_top label %r", label)
         cfg = states['cfg']
         defmap = states['defmap']
         phimap = states['phimap']
@@ -277,22 +279,28 @@ class _FixSSAVars:
                 defmap[label].insert(0, phinode)
                 phimap[label].append(phinode)
                 for pred, _ in cfg.predecessors(label):
-                    incoming_def = self._find_def_from_bottom(states, pred)
+                    incoming_def = self._find_def_from_bottom(
+                        states, pred, loc=loc,
+                    )
                     phinode.value.incoming_values.append(incoming_def.target)
                     phinode.value.incoming_blocks.append(pred)
                 return phinode
         else:
             idom = cfg.immediate_dominators()[label]
-            return self._find_def_from_bottom(states, idom)
+            if idom == label:
+                raise errors.NotDefinedError(states['varname'], loc=loc)
+            _logger.debug("idom %s from label %s", idom, label)
+            return self._find_def_from_bottom(states, idom, loc=loc)
 
-    def _find_def_from_bottom(self, states, label):
+    def _find_def_from_bottom(self, states, label, loc):
+        _logger.debug("find_def_from_bottom label %r", label)
         defmap = states['defmap']
         defs = defmap[label]
         if defs:
             lastdef = defs[-1]
             return lastdef
         else:
-            return self._find_def_from_top(states, label)
+            return self._find_def_from_top(states, label, loc=loc)
 
     def _stmt_index(self, defstmt, block, stop=-1):
         """
