@@ -23,7 +23,7 @@ def _is_x86(triple):
     return arch in _x86arch
 
 
-def dump(header, body, lang=None):
+def dump(header, body, lang):
     if config.HIGHLIGHT_DUMPS:
         try:
             import pygments
@@ -36,7 +36,9 @@ def dump(header, body, lang=None):
             from pygments.lexers import LlvmLexer as llvm_lexer
             from pygments.formatters import Terminal256Formatter
             from numba.misc.dump_style import by_colorscheme
-            lexer = llvm_lexer if lang is None else gas_lexer
+
+            lexer_map = {'llvm': llvm_lexer, 'asm': 'gas_lexer'}
+            lexer = lexer_map[lang]
             def printer(arg):
                 print(highlight(arg, lexer(),
                       Terminal256Formatter(style=by_colorscheme())))
@@ -224,7 +226,8 @@ class CodeLibrary(object):
         self._raise_if_finalized()
 
         if config.DUMP_FUNC_OPT:
-            dump("FUNCTION OPTIMIZED DUMP %s" % self._name, self.get_llvm_str())
+            dump("FUNCTION OPTIMIZED DUMP %s" % self._name,
+                 self.get_llvm_str(), 'llvm')
 
         # Link libraries for shared code
         seen = set()
@@ -277,7 +280,7 @@ class CodeLibrary(object):
         self._finalized = True
 
         if config.DUMP_OPTIMIZED:
-            dump("OPTIMIZED DUMP %s" % self._name, self.get_llvm_str())
+            dump("OPTIMIZED DUMP %s" % self._name, self.get_llvm_str(), 'llvm')
 
         if config.DUMP_ASSEMBLY:
             # CUDA backend cannot return assembly this early, so don't
