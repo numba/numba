@@ -37,7 +37,7 @@ def dump(header, body, lang):
             from pygments.formatters import Terminal256Formatter
             from numba.misc.dump_style import by_colorscheme
 
-            lexer_map = {'llvm': llvm_lexer, 'asm': 'gas_lexer'}
+            lexer_map = {'llvm': llvm_lexer, 'asm': gas_lexer}
             lexer = lexer_map[lang]
             def printer(arg):
                 print(highlight(arg, lexer(),
