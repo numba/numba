@@ -139,8 +139,7 @@ class Interpreter(object):
                              self.arg_count, self.arg_names)
         _logger.debug(fir.dump_to_string())
 
-        return recontruct_ssa(fir)
-        # return fir
+        return fir
 
     def _legalize_exception_vars(self):
         """Search for unsupported use of exception variables.

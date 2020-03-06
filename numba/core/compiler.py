@@ -19,7 +19,9 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        FindLiterallyCalls,
                                        MakeFunctionToJitFunction,
                                        CanonicalizeLoopExit,
-                                       CanonicalizeLoopEntry, LiteralUnroll,)
+                                       CanonicalizeLoopEntry, LiteralUnroll,
+                                       ReconstructSSA,
+                                       )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      NopythonRewrites, PreParforPass,
@@ -459,6 +461,7 @@ class DefaultPassBuilder(object):
         pm.add_pass(FindLiterallyCalls, "find literally calls")
         pm.add_pass(LiteralUnroll, "handles literal_unroll")
 
+        pm.add_pass(ReconstructSSA, "ssa")
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
         pm.add_pass(AnnotateTypes, "annotate types")

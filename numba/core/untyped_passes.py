@@ -19,6 +19,7 @@ from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels)
+from numba.core.ssa import recontruct_ssa
 from numba.core import interpreter
 
 
@@ -1452,3 +1453,18 @@ class SimplifyCFG(FunctionPass):
         state.func_ir.blocks = new_blks
         mutated = blks != new_blks
         return mutated
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class ReconstructSSA(FunctionPass):
+    """Perform SSA-reconstruction
+    """
+    _name = "reconstruct_ssa"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        newfir = recontruct_ssa(state.func_ir)
+        state.func_ir = newfir
+        return True      # XXX detect if it actually got changed
