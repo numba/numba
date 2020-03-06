@@ -110,6 +110,9 @@ profiling, see the `NVidia Profiler User's Guide
 .. autofunction:: numba.cuda.profile_stop
 .. autofunction:: numba.cuda.profiling
 
+
+.. _events:
+
 Events
 ~~~~~~
 
@@ -129,6 +132,9 @@ Events are instances of the :class:`numba.cuda.cudadrv.driver.Event` class:
 
 .. autoclass:: numba.cuda.cudadrv.driver.Event
    :members: query, record, synchronize, wait
+
+
+.. _streams:
 
 Stream Management
 -----------------
