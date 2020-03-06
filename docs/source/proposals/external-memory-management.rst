@@ -20,7 +20,7 @@ library manages its own memory distinctly from the others. For example:
 * `Numba <https://numba.pydata.org/>`_ internally manages memory for the creation
   of device and mapped host arrays.
 * `The RAPIDS libraries <https://rapids.ai/>`_ (cuDF, cuML, etc.) use the `Rapids
-  Memory Manager (RMM) <https://github.com/rapidsai/rmm>`_ for allocating device
+  Memory Manager <https://github.com/rapidsai/rmm>`_ for allocating device
   memory.
 * `CuPy <https://cupy.chainer.org/>`_ includes a `memory pool
   implementation <https://docs-cupy.chainer.org/en/stable/reference/memory.html>`_
