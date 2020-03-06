@@ -183,8 +183,13 @@ class _FreshVarHandler:
     def on_assign(self, states, assign):
         if assign in states['assignlist']:
             scope = states['scope']
+            # Allow first assignment to retain the name
+            if assign is not states['assignlist'][0]:
+                newtarget = assign.target
+            else:
+                newtarget = scope.redefine(assign.target.name, loc=assign.loc)
             assign = ir.Assign(
-                target=scope.redefine(assign.target.name, loc=assign.loc),
+                target=newtarget,
                 value=assign.value,
                 loc=assign.loc
             )
@@ -216,11 +221,11 @@ class _FixSSAVars:
         return assign
 
     def on_other(self, states, stmt):
-        phidef = self._fix_var(
+        newdef = self._fix_var(
             states, stmt, stmt.list_vars(),
         )
-        if phidef is not None:
-            replmap = {states['varname']: phidef.target}
+        if newdef is not None and states['varname'] != newdef.target.name:
+            replmap = {states['varname']: newdef.target}
             stmt = copy(stmt)
             ir_utils.replace_vars_stmt(stmt, replmap)
         return stmt
