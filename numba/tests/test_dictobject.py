@@ -1599,3 +1599,41 @@ class TestNoJit(TestCase):
             with forbid_codegen():
                 d = Dict.empty(types.int32, types.float32)
                 self.assertEqual(type(d), dict)
+
+
+class TestDictIterator(TestCase):
+    def test_dict_iterator(self):
+        @njit
+        def fun1():
+            dd = Dict.empty(key_type=types.intp,
+                            value_type=types.intp)
+            dd[0] = 10
+            dd[1] = 20
+            dd[2] = 30
+
+            for v in dd.values():
+                print(v)
+            for k in dd.keys():
+                print(k)
+            return list(dd.keys()), list(dd.values())
+
+        @njit
+        def fun2():
+            dd = Dict.empty(key_type=types.intp,
+                            value_type=types.intp)
+            dd[4] = 77
+            dd[5] = 88
+            dd[6] = 99
+
+            for k in dd.keys():
+                print(k)
+            for v in dd.values():
+                print(v)
+            return list(dd.keys()), list(dd.values())
+        res1 = fun1()
+        res2 = fun2()
+
+        self.assertEqual([0,1,2], res1[0])
+        self.assertEqual([10,20,30], res1[1])
+        self.assertEqual([4,5,6], res2[0])
+        self.assertEqual([77,88,99], res2[1])
