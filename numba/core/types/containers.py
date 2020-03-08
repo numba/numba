@@ -624,6 +624,7 @@ class DictItemsIterableType(SimpleIterableType):
         self.parent = parent
         self.yield_type = self.parent.keyvalue_type
         name = "items[{}]".format(self.parent.name)
+        self.name = name
         iterator_type = DictIteratorType(self)
         super(DictItemsIterableType, self).__init__(name, iterator_type)
 
@@ -636,6 +637,7 @@ class DictKeysIterableType(SimpleIterableType):
         self.parent = parent
         self.yield_type = self.parent.key_type
         name = "keys[{}]".format(self.parent.name)
+        self.name = name
         iterator_type = DictIteratorType(self)
         super(DictKeysIterableType, self).__init__(name, iterator_type)
 
@@ -648,6 +650,7 @@ class DictValuesIterableType(SimpleIterableType):
         self.parent = parent
         self.yield_type = self.parent.value_type
         name = "values[{}]".format(self.parent.name)
+        self.name = name
         iterator_type = DictIteratorType(self)
         super(DictValuesIterableType, self).__init__(name, iterator_type)
 
@@ -657,5 +660,11 @@ class DictIteratorType(SimpleIteratorType):
         self.parent = iterable.parent
         self.iterable = iterable
         yield_type = iterable.yield_type
-        name = "iter[{}->{}]".format(iterable.parent, yield_type)
+        name = "iter[{}->{}],{}".format(iterable.parent, yield_type,
+                                        iterable.name)
+        # name = "iter[{}->{}]".format(iterable.parent, yield_type)
         super(DictIteratorType, self).__init__(name, yield_type)
+
+    # @property
+    # def key(self):
+    #     return self.name + self.iterable.name
