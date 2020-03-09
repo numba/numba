@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import
 import copy
 from collections import namedtuple
 
+from .dppy_passbuilder import DPPyPassBuilder
 from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler, ir
 from .dppy_driver import driver
@@ -35,7 +36,8 @@ class DPPyCompiler(CompilerBase):
         # this maintains the objmode fallback behaviour
         pms = []
         if not self.state.flags.force_pyobject:
-            pms.append(DefaultPassBuilder.define_nopython_pipeline(self.state))
+            print("No python DPPY pipeline...")
+            pms.append(DPPyPassBuilder.define_nopython_pipeline(self.state))
         if self.state.status.can_fallback or self.state.flags.force_pyobject:
             pms.append(
                 DefaultPassBuilder.define_objectmode_pipeline(self.state)
@@ -102,7 +104,8 @@ def compile_kernel(device, pyfunc, args, access_types, debug=False):
     return oclkern
 
 
-def compile_kernel_parfor(device, func_ir, args, args_with_addrspaces, debug=False):
+def compile_kernel_parfor(device, func_ir, args, args_with_addrspaces,
+                          debug=False):
     if DEBUG:
         print("compile_kernel_parfor", args)
         for a in args:
@@ -110,7 +113,8 @@ def compile_kernel_parfor(device, func_ir, args, args_with_addrspaces, debug=Fal
             if isinstance(a, types.npytypes.Array):
                 print("addrspace:", a.addrspace)
 
-    cres = compile_with_dppy(func_ir, types.void, args_with_addrspaces, debug=debug)
+    cres = compile_with_dppy(func_ir, types.void, args_with_addrspaces,
+                             debug=debug)
     #cres = compile_with_dppy(func_ir, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
 
