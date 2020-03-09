@@ -258,13 +258,19 @@ class _FixSSAVars:
         seldef = None
         label = states['label']
         local_defs = states['defmap'][label]
+        local_phis = states['phimap'][label]
         block = states['block']
 
         cur_pos = self._stmt_index(stmt, block)
         for defstmt in reversed(local_defs):
+            # Phi nodes have no index
             def_pos = self._stmt_index(defstmt, block, stop=cur_pos)
             if def_pos < cur_pos:
                 seldef = defstmt
+                break
+            # Maybe it's a PHI
+            elif defstmt in local_phis:
+                seldef = local_phis[-1]
                 break
 
         if seldef is None:
