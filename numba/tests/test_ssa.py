@@ -2,7 +2,10 @@
 Tests for SSA reconstruction
 """
 import sys
+import copy
 import logging
+
+import numpy as np
 
 from numba import njit
 from numba.core import errors
@@ -23,8 +26,8 @@ class TestSSA(TestCase):
     Contains tests to help isolate problems in SSA
     """
     def check_func(self, func, *args):
-        got = func(*args)
-        exp = func.py_func(*args)
+        got = func(*copy.deepcopy(args))
+        exp = func.py_func(*copy.deepcopy(args))
         self.assertEqual(got, exp)
 
     def test_argument_name_reused(self):
@@ -100,3 +103,29 @@ class TestSSA(TestCase):
         with self.assertRaises(errors.NotDefinedError) as raises:
             self.check_func(foo, 1)
         self.assertEqual(raises.exception.name, "c")
+
+    def test_phi_propagation(self):
+        @njit
+        def foo(actions):
+            n = 1
+
+            i = 0
+            ct = 0
+            while n > 0 and i < len(actions):
+                n -= 1
+
+                while actions[i]:
+                    if actions[i]:
+                        if actions[i]:
+                            n += 10
+                        actions[i] -= 1
+                    else:
+                        if actions[i]:
+                            n += 20
+                        actions[i] += 1
+
+                    ct += n
+                ct += n
+            return ct, n
+
+        self.check_func(foo, np.array([1, 2]))
