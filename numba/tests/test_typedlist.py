@@ -616,6 +616,25 @@ class TestAllocation(MemoryLeakMixin, TestCase):
             tl = List.empty_list(types.int32, i)
             self.assertEqual(tl._allocated(), i)
 
+    def test_allocation_njit(self):
+        # kwarg version
+        @njit
+        def foo(i):
+            tl = List.empty_list(types.int32, allocated=i)
+            return tl._allocated()
+
+        for j in range(16):
+            self.assertEqual(foo(j), j)
+
+        # posarg version
+        @njit
+        def foo(i):
+            tl = List.empty_list(types.int32, i)
+            return tl._allocated()
+
+        for j in range(16):
+            self.assertEqual(foo(j), j)
+
     def test_growth_and_shrinkage(self):
         tl = List.empty_list(types.int32)
         growth_before = {0: 0, 4:4, 8:8, 16:16}

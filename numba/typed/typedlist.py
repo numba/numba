@@ -25,9 +25,11 @@ from numba.core.extending import (
 )
 from numba.typed import listobject
 
+DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
+
 
 @njit
-def _make_list(itemty, allocated=0):
+def _make_list(itemty, allocated=DEFAULT_ALLOCATED):
     return listobject._as_meminfo(listobject.new_list(itemty,
                                                       allocated=allocated))
 
@@ -172,14 +174,14 @@ class List(MutableSequence):
     Implements the MutableSequence interface.
     """
 
-    def __new__(cls, lsttype=None, meminfo=None, allocated=None):
+    def __new__(cls, lsttype=None, meminfo=None, allocated=DEFAULT_ALLOCATED):
         if config.DISABLE_JIT:
             return list.__new__(list)
         else:
             return object.__new__(cls)
 
     @classmethod
-    def empty_list(cls, item_type, allocated=0):
+    def empty_list(cls, item_type, allocated=DEFAULT_ALLOCATED):
         """Create a new empty List.
 
         Parameters
@@ -213,7 +215,7 @@ class List(MutableSequence):
         else:
             self._list_type = None
 
-    def _parse_arg(self, lsttype, meminfo=None, allocated=0):
+    def _parse_arg(self, lsttype, meminfo=None, allocated=DEFAULT_ALLOCATED):
         if not isinstance(lsttype, ListType):
             raise TypeError('*lsttype* must be a ListType')
 
@@ -247,7 +249,7 @@ class List(MutableSequence):
 
     def _allocated(self):
         if not self._typed:
-            return 0
+            return DEFAULT_ALLOCATED
         else:
             return _allocated(self)
 
@@ -364,12 +366,12 @@ class List(MutableSequence):
 
 # XXX: should we have a better way to classmethod
 @overload_method(TypeRef, 'empty_list')
-def typedlist_empty(cls, item_type):
+def typedlist_empty(cls, item_type, allocated=DEFAULT_ALLOCATED):
     if cls.instance_type is not ListType:
         return
 
-    def impl(cls, item_type):
-        return listobject.new_list(item_type)
+    def impl(cls, item_type, allocated=DEFAULT_ALLOCATED):
+        return listobject.new_list(item_type, allocated=allocated)
 
     return impl
 
