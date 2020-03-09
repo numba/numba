@@ -1611,10 +1611,6 @@ class TestDictIterator(TestCase):
             dd[1] = 20
             dd[2] = 30
 
-            for v in dd.values():
-                print(v)
-            for k in dd.keys():
-                print(k)
             return list(dd.keys()), list(dd.values())
 
         @njit
@@ -1625,10 +1621,6 @@ class TestDictIterator(TestCase):
             dd[5] = 88
             dd[6] = 99
 
-            for k in dd.keys():
-                print(k)
-            for v in dd.values():
-                print(v)
             return list(dd.keys()), list(dd.values())
         res1 = fun1()
         res2 = fun2()

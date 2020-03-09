@@ -662,9 +662,4 @@ class DictIteratorType(SimpleIteratorType):
         yield_type = iterable.yield_type
         name = "iter[{}->{}],{}".format(iterable.parent, yield_type,
                                         iterable.name)
-        # name = "iter[{}->{}]".format(iterable.parent, yield_type)
         super(DictIteratorType, self).__init__(name, yield_type)
-
-    # @property
-    # def key(self):
-    #     return self.name + self.iterable.name
