@@ -2,6 +2,8 @@
 Implement Dominance-Fronter-based SSA by Choi et al
 """
 import logging
+import operator
+from functools import reduce
 from copy import copy
 from pprint import pformat
 from collections import defaultdict
@@ -54,7 +56,8 @@ def _fix_ssa_vars(blocks, varname, defmap):
     states['varname'] = varname
     states['defmap'] = defmap
     states['phimap'] = phimap = defaultdict(list)
-    states['cfg'] = compute_cfg_from_blocks(blocks)
+    states['cfg'] = cfg = compute_cfg_from_blocks(blocks)
+    states['df+'] = _iterated_domfronts(cfg)
     newblocks = _run_block_rewrite(blocks, states, _FixSSAVars())
     # insert phi nodes
     for label, philist in phimap.items():
@@ -62,6 +65,19 @@ def _fix_ssa_vars(blocks, varname, defmap):
         # Prepend PHI nodes to the block
         curblk.body = philist + curblk.body
     return newblocks
+
+
+def _iterated_domfronts(cfg):
+    domfronts = {k: set(vs) for k, vs in cfg.dominance_frontier().items()}
+    keep_going = True
+    while keep_going:
+        keep_going = False
+        for k, vs in domfronts.items():
+            inner = reduce(operator.or_, [domfronts[v] for v in vs], set())
+            if inner.difference(vs):
+                vs |= inner
+                keep_going = True
+    return domfronts
 
 
 def _fresh_vars(blocks, varname, assignlist):
@@ -184,8 +200,9 @@ class _FreshVarHandler:
         if assign in states['assignlist']:
             scope = states['scope']
             # Allow first assignment to retain the name
-            if assign is not states['assignlist'][0]:
+            if assign is states['assignlist'][0]:
                 newtarget = assign.target
+                _logger.debug("first assign: %s", newtarget)
             else:
                 newtarget = scope.redefine(assign.target.name, loc=assign.loc)
             assign = ir.Assign(
@@ -260,7 +277,7 @@ class _FixSSAVars:
         cfg = states['cfg']
         defmap = states['defmap']
         phimap = states['phimap']
-        domfronts = cfg.dominance_frontier()
+        domfronts = states['df+']
         for deflabel, defstmt in defmap.items():
             df = domfronts[deflabel]
             if label in df:
@@ -282,6 +299,7 @@ class _FixSSAVars:
                     incoming_def = self._find_def_from_bottom(
                         states, pred, loc=loc,
                     )
+                    _logger.debug("incoming_def %s", incoming_def)
                     phinode.value.incoming_values.append(incoming_def.target)
                     phinode.value.incoming_blocks.append(pred)
                 return phinode
