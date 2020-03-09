@@ -1,5 +1,6 @@
 """Miscellaneous inspection tools
 """
+from tempfile import NamedTemporaryFile
 
 
 def disassemble_elf_to_cfg(elf):
@@ -16,7 +17,6 @@ def disassemble_elf_to_cfg(elf):
         if cmd is None:
             raise ValueError("No command given")
 
-        from tempfile import NamedTemporaryFile
         with NamedTemporaryFile(delete=False) as f:
             f.write(elf)
             f.flush()  # force write, radare2 needs a binary blob on disk
