@@ -35,15 +35,15 @@ def _run_ssa(blocks):
         return {}
 
     violators = _find_defs_violators(blocks)
-    for varname, assignlist in violators.items():
+    for varname in violators:
         _logger.debug(
-            "Fix SSA violator on var %s with %d assignments",
-            varname, len(assignlist),
+            "Fix SSA violator on var %s", varname,
         )
-        blocks, defmap = _fresh_vars(blocks, varname, assignlist)
+        blocks, defmap = _fresh_vars(blocks, varname)
         _logger.debug("Replaced assignments: %s", pformat(defmap))
 
         blocks = _fix_ssa_vars(blocks, varname, defmap)
+        violators = _find_defs_violators(blocks)
     # XXX
     # blocks = _clone_blocks(blocks)
     return blocks
@@ -80,12 +80,11 @@ def _iterated_domfronts(cfg):
     return domfronts
 
 
-def _fresh_vars(blocks, varname, assignlist):
+def _fresh_vars(blocks, varname):
     """Rewrite to put fresh variable names
     """
     states = _make_states(blocks)
     states['varname'] = varname
-    states['assignlist'] = assignlist
     states['defmap'] = defmap = defaultdict(list)
     newblocks = _run_block_rewrite(blocks, states, _FreshVarHandler())
     return newblocks, defmap
@@ -100,14 +99,13 @@ def _find_defs_violators(blocks):
     """
     Returns
     -------
-    res : Dict[str, [ir.Assign]]
-        The violators in a dictionary of variable name mapping to the
-        assignment statements.
+    res : Set[str]
+        The violators in a dictionary of variable name.
     """
     defs = defaultdict(list)
     _run_block_analysis(blocks, defs, _GatherDefsHandler())
     _logger.debug("defs %s", pformat(defs))
-    violators = {k: vs for k, vs in defs.items() if len(vs) > 1}
+    violators = {k for k, vs in defs.items() if len(vs) > 1}
     _logger.debug("SSA violators %s", pformat(violators))
     return violators
 
@@ -197,10 +195,11 @@ class _GatherDefsHandler:
 
 class _FreshVarHandler:
     def on_assign(self, states, assign):
-        if assign in states['assignlist']:
+        if assign.target.name == states['varname']:
             scope = states['scope']
+            defmap = states['defmap']
             # Allow first assignment to retain the name
-            if assign is states['assignlist'][0]:
+            if len(defmap) == 0:
                 newtarget = assign.target
                 _logger.debug("first assign: %s", newtarget)
             else:
@@ -210,7 +209,7 @@ class _FreshVarHandler:
                 value=assign.value,
                 loc=assign.loc
             )
-            states['defmap'][states['label']].append(assign)
+            defmap[states['label']].append(assign)
         return assign
 
     def on_other(self, states, stmt):
