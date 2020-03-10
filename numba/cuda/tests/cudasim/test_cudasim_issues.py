@@ -27,19 +27,14 @@ class TestCudaSimIssues(SerialMixin, unittest.TestCase):
 
         @cuda.jit
         def simple_kernel(f):
-            shr = cuda.shared.array(1, dtype=goose_nb_type)
-            shr[0] = f
             f.garden[0] = 45.0
-            shr[0].backyard.statue = 3.0
-            f.backyard.statue = shr[0].backyard.statue
             f.backyard.newspaper[3] = 2.0
             f.backyard.newspaper[3] = f.backyard.newspaper[3] + 3.0
 
         item = np.recarray(1, dtype=goose_np_type)
         simple_kernel[1, 1](item[0])
         np.testing.assert_equal(item[0]['garden'][0], 45)
-        np.testing.assert_equal(3, item[0]['backyard']['statue'])
-        np.testing.assert_equal(5, item[0]['backyard']['newspaper'][3])
+        np.testing.assert_equal(item[0]['backyard']['newspaper'], 3)
 
     def test_recarray_setting(self):
         recordwith2darray = np.dtype([('i', np.int32), ('j', np.float32, (3, 2))])
