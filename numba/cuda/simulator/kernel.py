@@ -93,7 +93,7 @@ class FakeCUDAKernel(object):
                     ret = FakeCUDAArray(arg)  # In case a np record comes in.
                 else:
                     ret = arg
-                if isinstance(ret,FakeCUDAArray):
+                if isinstance(ret, FakeCUDAArray):
                     return FakeWithinKernelCUDAArray(ret)
                 return ret
 
