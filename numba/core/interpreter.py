@@ -16,7 +16,7 @@ from numba.core.utils import (
     )
 from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
 from numba.core.unsafe import eh
-from numba.core.ssa import recontruct_ssa
+
 
 _logger = logging.getLogger(__name__)
 
@@ -138,7 +138,6 @@ class Interpreter(object):
                              self.first_loc, self.definitions,
                              self.arg_count, self.arg_names)
         _logger.debug(fir.dump_to_string())
-
         return fir
 
     def _legalize_exception_vars(self):
