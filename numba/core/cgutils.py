@@ -161,7 +161,8 @@ class _StructProxy(object):
         """
         if field.startswith('_'):
             return super(_StructProxy, self).__setattr__(field, value)
-        self[self._datamodel.get_field_position(field)] = value
+        index = self._datamodel.get_field_position(field)
+        self._set_entry(index, value, '{}, #{}'.format(field, index))
 
     def __getitem__(self, index):
         """
@@ -170,10 +171,7 @@ class _StructProxy(object):
         member_val = self._builder.load(self._get_ptr_by_index(index))
         return self._cast_member_to_value(index, member_val)
 
-    def __setitem__(self, index, value):
-        """
-        Store the LLVM *value* into the field at *index*.
-        """
+    def _set_entry(self, index, value, name):
         ptr = self._get_ptr_by_index(index)
         value = self._cast_member_from_value(index, value)
         if value.type != ptr.type.pointee:
@@ -188,10 +186,16 @@ class _StructProxy(object):
                 raise TypeError("Invalid store of {value.type} to "
                                 "{ptr.type.pointee} in "
                                 "{self._datamodel} "
-                                "(trying to write member #{index})"
+                                "(trying to write member {name})"
                                 .format(value=value, ptr=ptr, self=self,
-                                        index=index))
+                                        name=name))
         self._builder.store(value, ptr)
+
+    def __setitem__(self, index, value):
+        """
+        Store the LLVM *value* into the field at *index*.
+        """
+        self._set_entry(index, value, '#{}'.format(index))
 
     def __len__(self):
         """
