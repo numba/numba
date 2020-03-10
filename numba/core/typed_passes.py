@@ -674,12 +674,12 @@ class DeadCodeElimination(FunctionPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=False)
-class PreLowerStripPhis(LoweringPass):
+class PreLowerStripPhis(FunctionPass):
 
     _name = "strip_phis"
 
     def __init__(self):
-        LoweringPass.__init__(self)
+        FunctionPass.__init__(self)
 
     def run_pass(self, state):
         state.func_ir = self._strip_phi_nodes(state.func_ir)
@@ -714,5 +714,5 @@ class PreLowerStripPhis(LoweringPass):
                 )
                 newblk.insert_before_terminator(assign)
 
-        func_ir = fir.derive(blocks=newblocks)
-        return func_ir
+        fir.blocks = newblocks
+        return fir
