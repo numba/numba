@@ -183,6 +183,9 @@ class DPPyTargetContext(BaseContext):
         return wrapper
 
     def declare_function(self, module, fndesc):
+        fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
+        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        fn.attributes.add('alwaysinline')
         ret = super(DPPyTargetContext, self).declare_function(module, fndesc)
         # XXX: Refactor fndesc instead of this special case
         if fndesc.llvm_func_name.startswith('dppy_py_devfn'):
