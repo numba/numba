@@ -1,35 +1,41 @@
 import threading
 
 import numpy as np
-from numpy import float64
 
-from numba import cuda, numba
+import numba as nb
+from numba import cuda
 from numba.cuda.testing import SerialMixin, skip_unless_cudasim
 import numba.cuda.simulator as simulator
 import unittest
 
 
+
 class TestCudaSimIssues(SerialMixin, unittest.TestCase):
-    BACKYARD_TYPE = [('statue', float64),
-                     ('newspaper', float64, (6, ))]
 
-    GOOSE_TYPE = [('garden', float64, (12,)),
-                  ('town', float64, (42,)),
-                  ('backyard', BACKYARD_TYPE)]
-
-    GOOSE_NP_DTYPE = np.dtype(GOOSE_TYPE, align=True)
-
-    GOOSE_NB_DTYPE = numba.from_dtype(GOOSE_NP_DTYPE)
 
     def test_record_access(self):
+        backyard_type = [('statue', np.float64),
+                         ('newspaper', np.float64, (6,))]
+
+        goose_type = [('garden', np.float64, (12,)),
+                      ('town', np.float64, (42,)),
+                      ('backyard', backyard_type)]
+
+        goose_np_type = np.dtype(goose_type, align=True)
+
+        goose_nb_type = nb.from_dtype(goose_np_type)
+
         @cuda.jit
         def simple_kernel(f):
+            shr = cuda.shared.array(1, dtype=goose_nb_type)
+            shr[0] = f
             f.garden[0] = 45.0
-            f.backyard.statue = 3.0
+            shr[0].backyard.statue = 3.0
+            f.backyard.statue = shr[0].backyard.statue
             f.backyard.newspaper[3] = 2.0
             f.backyard.newspaper[3] = f.backyard.newspaper[3] + 3.0
 
-        item = np.zeros(1, self.GOOSE_NP_DTYPE)
+        item = np.recarray(1, dtype=goose_np_type)
         simple_kernel[1, 1](item[0])
         np.testing.assert_equal(item[0]['garden'][0], 45)
         np.testing.assert_equal(3, item[0]['backyard']['statue'])

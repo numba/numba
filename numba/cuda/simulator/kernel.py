@@ -6,7 +6,8 @@ import threading
 import numpy as np
 
 from numba.core.utils import reraise
-from .cudadrv.devicearray import to_device, auto_device, FakeCUDAArray, FakeWithinKernelCUDAArray
+from .cudadrv.devicearray import to_device, auto_device, \
+    FakeCUDAArray, FakeWithinKernelCUDAArray
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
 from ..args import wrap_arg, ArgHint

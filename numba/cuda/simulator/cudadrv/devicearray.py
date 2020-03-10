@@ -39,9 +39,10 @@ class FakeShape(tuple):
 
 class FakeWithinKernelCUDAArray(object):
     '''
-    Created to emulate the behavior of arrays within kernels, where either array.item or array['item'] is valid.
-    This behaviour does not follow the semantics of Python and NumPy with
-    non-jitted code, and will be deprecated and removed.
+    Created to emulate the behavior of arrays within kernels, where either
+    array.item or array['item'] is valid. This behaviour does not follow
+    the semantics of Python and NumPy with non-jitted code, and will be
+    deprecated and removed.
     '''
 
     def __init__(self, item):
@@ -49,7 +50,10 @@ class FakeWithinKernelCUDAArray(object):
         self.__dict__['_item'] = item
 
     def __wrap_if_fake(self, item):
-        return FakeWithinKernelCUDAArray(item) if isinstance(item, FakeCUDAArray) else item
+        if isinstance(item, FakeCUDAArray):
+            return FakeWithinKernelCUDAArray(item)
+        else:
+            return item
 
     def __getattr__(self, attrname):
         if attrname in dir(self._item._ary):  # For e.g. array size.
@@ -69,6 +73,7 @@ class FakeWithinKernelCUDAArray(object):
     def __len__(self):
         return len(self._item)
 
+
 class FakeCUDAArray(object):
     '''
     Implements the interface of a DeviceArray/DeviceRecord, but mostly just
@@ -78,7 +83,8 @@ class FakeCUDAArray(object):
     __cuda_ndarray__ = True  # There must be gpu_data attribute
 
     def __init__(self, ary, stream=0):
-        if ary.ndim == 0:  # needed for TestCudaNDArray.test_device_array_interface
+        # ary/ary_access needed for TestCudaNDArray.test_device_array_interface
+        if ary.ndim == 0:
             self._ary = ary.reshape(1)
             self._ary_access = self._ary[0]
         else:
