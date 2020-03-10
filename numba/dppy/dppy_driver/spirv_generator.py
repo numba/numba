@@ -57,7 +57,7 @@ class CmdLine(object):
         # The opt step is needed for:
         #     a) generate a bitcode file from the text IR file
         #     b) hoist all allocas to the enty block of the module
-        check_call(["opt","-O3","-o",ipath+'.bc',ipath])
+        check_call(["opt","-O1","-o",ipath+'.bc',ipath])
         check_call(["llvm-spirv","-o",opath,ipath+'.bc'])
         os.unlink(ipath + '.bc')
 
