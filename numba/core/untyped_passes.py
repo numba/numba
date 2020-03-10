@@ -19,7 +19,7 @@ from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels)
-from numba.core.ssa import recontruct_ssa
+from numba.core.ssa import reconstruct_ssa
 from numba.core import interpreter
 
 
@@ -1465,6 +1465,6 @@ class ReconstructSSA(FunctionPass):
         FunctionPass.__init__(self)
 
     def run_pass(self, state):
-        newfir = recontruct_ssa(state.func_ir)
+        newfir = reconstruct_ssa(state.func_ir)
         state.func_ir = newfir
         return True      # XXX detect if it actually got changed

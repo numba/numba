@@ -15,7 +15,7 @@ from numba.core.analysis import compute_cfg_from_blocks
 _logger = logging.getLogger(__name__)
 
 
-def recontruct_ssa(fir):
+def reconstruct_ssa(fir):
     _logger.debug("BEFORE SSA".center(80, "-"))
     _logger.debug(fir.dump_to_string())
     _logger.debug("=" * 80)
@@ -44,8 +44,6 @@ def _run_ssa(blocks):
 
         blocks = _fix_ssa_vars(blocks, varname, defmap)
         violators = _find_defs_violators(blocks)
-    # XXX
-    # blocks = _clone_blocks(blocks)
     return blocks
 
 
@@ -110,11 +108,6 @@ def _find_defs_violators(blocks):
     return violators
 
 
-def _clone_blocks(blocks):
-    states = _make_states(blocks)
-    return _run_block_rewrite(blocks, states, _CloneHandler())
-
-
 def _run_block_analysis(blocks, states, handler):
     for label, blk in blocks.items():
         _logger.debug("==== SSA block analysis pass on %s", label)
@@ -157,28 +150,6 @@ def _run_sbaa_block_pass(states, blk, handler):
         if ret is not stmt and ret is not None:
             _logger.debug("replaced with: %s", ret)
         yield ret
-
-
-class _CloneHandler:
-    def on_assign(self, states, assign):
-        _logger.debug("    assign to %s", assign.target)
-        rhs = assign.value
-        if isinstance(rhs, ir.Inst):
-            _logger.debug("    used %s", rhs.list_vars())
-            # XXX
-            replmap = dict(zip(rhs.list_vars(), rhs.list_vars()))
-            rhs = ir_utils.replace_vars_inner(rhs, replmap)
-
-        newtarget = assign.target
-        return ir.Assign(target=newtarget, value=rhs, loc=assign.loc)
-
-    def on_other(self, states, stmt):
-        _logger.debug("    used %s", stmt.list_vars())
-        # XXX
-        replmap = dict(zip(stmt.list_vars(), stmt.list_vars()))
-        stmt = copy(stmt)
-        ir_utils.replace_vars_stmt(stmt, replmap)
-        return stmt
 
 
 class _GatherDefsHandler:
@@ -264,7 +235,7 @@ class _FixSSAVars:
 
     def _find_def(self, states, stmt):
         _logger.debug("find_def var=%r stmt=%s", states['varname'], stmt)
-        seldef = None
+        selected_def = None
         label = states['label']
         local_defs = states['defmap'][label]
         local_phis = states['phimap'][label]
@@ -275,17 +246,18 @@ class _FixSSAVars:
             # Phi nodes have no index
             def_pos = self._stmt_index(defstmt, block, stop=cur_pos)
             if def_pos < cur_pos:
-                seldef = defstmt
+                selected_def = defstmt
                 break
             # Maybe it's a PHI
             elif defstmt in local_phis:
-                seldef = local_phis[-1]
+                selected_def = local_phis[-1]
                 break
 
-        if seldef is None:
-            seldef = self._find_def_from_top(states, label, loc=stmt.loc)
-
-        return seldef
+        if selected_def is None:
+            selected_def = self._find_def_from_top(
+                states, label, loc=stmt.loc,
+            )
+        return selected_def
 
     def _find_def_from_top(self, states, label, loc):
         _logger.debug("find_def_from_top label %r", label)
