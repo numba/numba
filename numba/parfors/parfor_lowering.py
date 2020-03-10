@@ -48,6 +48,8 @@ def _lower_parfor_parallel(lowerer, parfor):
     orig_typemap = lowerer.fndesc.typemap
     # replace original typemap with copy and restore the original at the end.
     lowerer.fndesc.typemap = copy.copy(orig_typemap)
+    if config.DEBUG_ARRAY_OPT:
+        print("lowerer.fndesc", lowerer.fndesc, type(lowerer.fndesc))
     typemap = lowerer.fndesc.typemap
     varmap = lowerer.varmap
 
@@ -228,7 +230,12 @@ def _lower_parfor_parallel(lowerer, parfor):
         assert typemap[l.index_variable.name] == index_var_typ
     numba.parfors.parfor.sequential_parfor_lowering = True
     try:
-        func, func_args, func_sig, redargstartdim, func_arg_types, exp_name_to_tuple_var = _create_gufunc_for_parfor_body(
+        (func,
+         func_args,
+         func_sig,
+         redargstartdim,
+         func_arg_types,
+         exp_name_to_tuple_var) = _create_gufunc_for_parfor_body(
             lowerer, parfor, typemap, typingctx, targetctx, flags, {},
             bool(alias_map), index_var_typ, parfor.races)
     finally:
@@ -847,26 +854,24 @@ def _create_gufunc_for_parfor_body(
             tuple_count = pi_type.count
             tuple_dtype = pi_type.dtype
             # Only do tuples up to config.PARFOR_MAX_TUPLE_SIZE length.
-            if tuple_count <= config.PARFOR_MAX_TUPLE_SIZE:
-                this_var_expansion = []
-                for i in range(tuple_count):
-                    # Generate a new name for the individual part of the tuple var.
-                    expanded_name = "expanded_tuple_var_" + str(next_expanded_tuple_var)
-                    # Add that name to the new list of inputs to the gufunc.
-                    tuple_expanded_parfor_inputs.append(expanded_name)
-                    this_var_expansion.append(expanded_name)
-                    # Remember a mapping from new param name to original tuple
-                    # var and the index within the tuple.
-                    expanded_name_to_tuple_var[expanded_name] = (pi, i)
-                    next_expanded_tuple_var += 1
-                    # Set the type of the new parameter.
-                    typemap[expanded_name] = tuple_dtype
-                # Remember a mapping from the original tuple var to the
-                # individual parts.
-                tuple_var_to_expanded_names[pi] = this_var_expansion
-                parfor_tuple_params.append(pi)
-            else:
-                tuple_expanded_parfor_inputs.append(pi)
+            assert(tuple_count <= config.PARFOR_MAX_TUPLE_SIZE)
+            this_var_expansion = []
+            for i in range(tuple_count):
+                # Generate a new name for the individual part of the tuple var.
+                expanded_name = "expanded_tuple_var_" + str(next_expanded_tuple_var)
+                # Add that name to the new list of inputs to the gufunc.
+                tuple_expanded_parfor_inputs.append(expanded_name)
+                this_var_expansion.append(expanded_name)
+                # Remember a mapping from new param name to original tuple
+                # var and the index within the tuple.
+                expanded_name_to_tuple_var[expanded_name] = (pi, i)
+                next_expanded_tuple_var += 1
+                # Set the type of the new parameter.
+                typemap[expanded_name] = tuple_dtype
+            # Remember a mapping from the original tuple var to the
+            # individual parts.
+            tuple_var_to_expanded_names[pi] = this_var_expansion
+            parfor_tuple_params.append(pi)
         elif isinstance(pi_type, types.Tuple) or isinstance(pi_type, types.NamedTuple):
             # This is the same as above for UniTuple except that each part of
             # the tuple can have a different type and we fetch that type with
@@ -874,24 +879,22 @@ def _create_gufunc_for_parfor_body(
             tuple_count = pi_type.count
             tuple_types = pi_type.types
             # Only do tuples up to config.PARFOR_MAX_TUPLE_SIZE length.
-            if tuple_count <= config.PARFOR_MAX_TUPLE_SIZE:
-                this_var_expansion = []
-                for i in range(tuple_count):
-                    expanded_name = "expanded_tuple_var_" + str(next_expanded_tuple_var)
-                    tuple_expanded_parfor_inputs.append(expanded_name)
-                    this_var_expansion.append(expanded_name)
-                    expanded_name_to_tuple_var[expanded_name] = (pi, i)
-                    next_expanded_tuple_var += 1
-                    typemap[expanded_name] = tuple_types[i]
-                tuple_var_to_expanded_names[pi] = this_var_expansion
-                parfor_tuple_params.append(pi)
-            else:
-                tuple_expanded_parfor_inputs.append(pi)
+            assert(tuple_count <= config.PARFOR_MAX_TUPLE_SIZE)
+            this_var_expansion = []
+            for i in range(tuple_count):
+                expanded_name = "expanded_tuple_var_" + str(next_expanded_tuple_var)
+                tuple_expanded_parfor_inputs.append(expanded_name)
+                this_var_expansion.append(expanded_name)
+                expanded_name_to_tuple_var[expanded_name] = (pi, i)
+                next_expanded_tuple_var += 1
+                typemap[expanded_name] = tuple_types[i]
+            tuple_var_to_expanded_names[pi] = this_var_expansion
+            parfor_tuple_params.append(pi)
         else:
             tuple_expanded_parfor_inputs.append(pi)
     parfor_inputs = tuple_expanded_parfor_inputs
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
+        print("parfor_inputs post tuple handling = ", parfor_inputs, " ", type(parfor_inputs))
     # -------------------------------------------------------------------------
 
     races = races.difference(set(parfor_redvars))
@@ -1020,20 +1023,36 @@ def _create_gufunc_for_parfor_body(
         if named_tup:
             # It is a named tuple so try to find the global that defines the
             # named tuple.
-            func_def = get_definition(lowerer.func_ir, tup_var)
-            if isinstance(func_def, ir.Expr) and func_def.op == 'call':
-                func_def = get_definition(lowerer.func_ir, func_def.func)
-                if isinstance(func_def, ir.Global):
-                    gval = func_def.value
-                    globls[func_def.name] = eval(gval.__module__ + "." + gval.__name__)
+            found = False
+            func_def = guard(get_definition, lowerer.func_ir, tup_var)
+            if config.DEBUG_ARRAY_OPT:
+                print("func_def:", func_def, type(func_def))
+            if (func_def is not None and
+                isinstance(func_def, ir.Expr) and
+                func_def.op == 'call'):
+                func_def = guard(get_definition, lowerer.func_ir, func_def.func)
+                if config.DEBUG_ARRAY_OPT:
+                    print("func definition:", func_def, type(func_def))
+                if func_def is not None:
+                    if isinstance(func_def, ir.Global):
+                        gval = func_def.value
+                        globls[func_def.name] = eval(gval.__module__ + "." + gval.__name__)
+                        found = True
+                    if isinstance(func_def, ir.FreeVar):
+                        gval = func_def.value
+                        if config.DEBUG_ARRAY_OPT:
+                            print("gval:", gval, type(gval))
+                            print(dir(gval))
+                        #globls[func_def.name] = eval(gval.__module__ + "." + gval.__name__)
+                        found = True
+            if found is False and config.DEBUG_ARRAY_OPT:
+                print("Didn't find definition of namedtuple for globls.")
             gufunc_txt += " = " + tup_type.instance_class.__name__ + "("
             for name, field_name in zip(exp_names, tup_type.fields):
                 gufunc_txt += field_name + "=" + param_dict[name] + ","
         else:
             # Just a regular tuple so use (part0, part1, ...)
-            gufunc_txt += " = ("
-            for name in exp_names:
-                gufunc_txt += param_dict[name] + ","
+            gufunc_txt += " = (" + ", ".join([param_dict[x] for x in exp_names]) + ", "
 
         gufunc_txt += ")\n"
 

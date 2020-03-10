@@ -1562,7 +1562,7 @@ class TestParfors(TestParforsBase):
     @skip_parfors_unsupported
     def test_tuple1(self):
         def test_impl(a):
-            atup = (3,4)
+            atup = (3, 4)
             b = 7
             for i in numba.prange(len(a)):
                 a[i] += atup[0] + atup[1] + b
@@ -1584,6 +1584,18 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, x)
 
     @skip_parfors_unsupported
+    def test_tuple3(self):
+        def test_impl(a):
+            atup = (np.arange(10), 4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += atup[0][5] + atup[1] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
     def test_namedtuple1(self):
         def test_impl(a):
             antup = TestNamedTuple(part0=3, part1=4)
@@ -1595,6 +1607,18 @@ class TestParfors(TestParforsBase):
         x = np.arange(10)
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_namedtuple2(self):
+        TestNamedTuple2 = namedtuple('TestNamedTuple2', ('part0', 'part1'))
+        def test_impl(a):
+            antup = TestNamedTuple2(part0=3, part1=4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += antup.part0 + antup.part1 + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -3275,11 +3299,9 @@ class TestParforsMisc(TestParforsBase):
                 z += big_tup[0]
             return z
 
-        save_max = config.PARFOR_MAX_TUPLE_SIZE
-        config.PARFOR_MAX_TUPLE_SIZE = 3
-        with self.assertRaises(errors.UnsupportedParforsError) as raises:
-            oversize_tuple()
-        config.PARFOR_MAX_TUPLE_SIZE = save_max
+        with override_env_config('NUMBA_PARFOR_MAX_TUPLE_SIZE', '3'):
+            with self.assertRaises(errors.UnsupportedParforsError) as raises:
+                oversize_tuple()
 
         errstr = str(raises.exception)
         self.assertIn("Use of a tuple", errstr)
