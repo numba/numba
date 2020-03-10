@@ -29,6 +29,10 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         retr = dary.copy_to_host()
         np.testing.assert_array_equal(retr, ary)
 
+    def test_devicearray_dtype(self):
+        dary = cuda.device_array(shape=(100,), dtype="f4")
+        self.assertEqual(dary.dtype, np.dtype("f4"))
+
     def test_devicearray_no_copy(self):
         array = np.arange(100, dtype=np.float32)
         cuda.to_device(array, copy=False)
