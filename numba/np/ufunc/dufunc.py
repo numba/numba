@@ -175,18 +175,21 @@ class DUFunc(_internal._DUFunc):
         assert (args_len == nin) or (args_len == nin + self.ufunc.nout)
         assert not kws
         argtys = []
-        # To avoid a mismatch in how Numba types values as opposed to
-        # Numpy, we need to first check for scalars.  For example, on
-        # 64-bit systems, numba.typeof(3) => int32, but
-        # np.array(3).dtype => int64.
         for arg in args[:nin]:
-            if numpy_support.is_arrayscalar(arg):
-                argtys.append(numpy_support.map_arrayscalar_type(arg))
+            argty = typeof(arg)
+            if isinstance(argty, types.Array):
+                argty = argty.dtype
             else:
-                argty = typeof(arg)
-                if isinstance(argty, types.Array):
-                    argty = argty.dtype
-                argtys.append(argty)
+                # To avoid a mismatch in how Numba types scalar values as
+                # opposed to Numpy, we need special logic for scalars.
+                # For example, on 64-bit systems, numba.typeof(3) => int32, but
+                # np.array(3).dtype => int64.
+
+                # Note: this will not handle numpy "duckarrays" correctly,
+                # including but not limited to those implementing `__array__`
+                # and `__array_ufunc__`.
+                argty = numpy_support.map_arrayscalar_type(arg)
+            argtys.append(argty)
         return self._compile_for_argtys(tuple(argtys))
 
     def _compile_for_argtys(self, argtys, return_type=None):
