@@ -90,16 +90,6 @@ class TestException(SerialMixin, unittest.TestCase):
         """
         self.case_raise_causing_warp_diverge(with_debug_mode=False)
 
-    @unittest.skip("python 3.8 CFG refactor makes this test pass")
-    @skip_on_cudasim("failing case doesn't happen in CUDASIM")
-    @unittest.expectedFailure
-    def test_raise_causing_warp_diverge_failing(self):
-        """Test case for issue #2655.
-
-        This test that the issue still exists in debug mode.
-        """
-        self.case_raise_causing_warp_diverge(with_debug_mode=True)
-
 
 if __name__ == '__main__':
     unittest.main()
