@@ -31,7 +31,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
 
     def test_devicearray_dtype(self):
         dary = cuda.device_array(shape=(100,), dtype="f4")
-        dary.dtype == np.dtype("f4")
+        self.assertEqual(dary.dtype, np.dtype("f4"))
 
     def test_devicearray_no_copy(self):
         array = np.arange(100, dtype=np.float32)
