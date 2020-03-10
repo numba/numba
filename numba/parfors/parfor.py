@@ -619,7 +619,7 @@ class Parfor(ir.Expr, ir.Stmt):
         Check that Parfors params are of valid types.
         """
         if self.params is None:
-            msg = ("Cannot run parameter validation on a Parfor with params"
+            msg = ("Cannot run parameter validation on a Parfor with params "
                    "not set")
             raise ValueError(msg)
         for p in self.params:
