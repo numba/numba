@@ -116,24 +116,25 @@ class Module(object):
         self._cmd.generate(ipath=self._llvmfile, opath=spirv_path)
 
         # Validate the SPIR-V code
-        try:
-            self._cmd.validate(ipath=spirv_path)
-        except CalledProcessError:
-            print("SPIR-V Validation failed...")
-            pass
-        else:
-            # Optimize SPIR-V code
-            opt_path = self._track_temp_file("optimized-spirv")
-            self._cmd.optimize(ipath=spirv_path, opath=opt_path)
+        if config.SPIRV_VAL == 1:
+            try:
+                self._cmd.validate(ipath=spirv_path)
+            except CalledProcessError:
+                print("SPIR-V Validation failed...")
+                pass
+            else:
+                # Optimize SPIR-V code
+                opt_path = self._track_temp_file("optimized-spirv")
+                self._cmd.optimize(ipath=spirv_path, opath=opt_path)
 
-            if config.DUMP_ASSEMBLY:
-                # Disassemble optimized SPIR-V code
-                dis_path = self._track_temp_file("disassembled-spirv")
-                self._cmd.disassemble(ipath=opt_path, opath=dis_path)
-                with open(dis_path, 'rb') as fin_opt:
-                    print("ASSEMBLY".center(80, "-"))
-                    print(fin_opt.read())
-                    print("".center(80, "="))
+                if config.DUMP_ASSEMBLY:
+                    # Disassemble optimized SPIR-V code
+                    dis_path = self._track_temp_file("disassembled-spirv")
+                    self._cmd.disassemble(ipath=opt_path, opath=dis_path)
+                    with open(dis_path, 'rb') as fin_opt:
+                        print("ASSEMBLY".center(80, "-"))
+                        print(fin_opt.read())
+                        print("".center(80, "="))
 
         # Read and return final SPIR-V (not optimized!)
         with open(spirv_path, 'rb') as fin:
