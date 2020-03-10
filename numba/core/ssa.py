@@ -235,6 +235,16 @@ class _FixSSAVars:
                     value=rhs,
                     loc=assign.loc,
                 )
+        elif isinstance(rhs, ir.Var):
+            newdef = self._fix_var(states, assign, [rhs])
+            # Has a replacement that is not the current variable
+            if newdef is not None and states['varname'] != newdef.target.name:
+                return ir.Assign(
+                    target=assign.target,
+                    value=newdef.target,
+                    loc=assign.loc,
+                )
+
         return assign
 
     def on_other(self, states, stmt):
