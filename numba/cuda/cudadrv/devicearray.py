@@ -58,7 +58,7 @@ def require_cuda_ndarray(obj):
 
 def is_contiguous(ary):
     """
-    Returns True iff `ary` is C-style contiguous while ignoreing
+    Returns True iff `ary` is C-style contiguous while ignoring
     broadcasted and 1-sized dimensions.
     As opposed to array_core(), it does not call require_context(),
     which can be quite expensive.
