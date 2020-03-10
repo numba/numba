@@ -172,6 +172,22 @@ def array_core(ary):
     return ary[tuple(core_index)]
 
 
+def is_contiguous(ary):
+    """
+    Returns True iff `ary` is C-style contiguous while ignoring
+    broadcasted and 1-sized dimensions.
+    As opposed to array_core(), it does not call require_context(),
+    which can be quite expensive.
+    """
+    size = ary.dtype.itemsize
+    for shape, stride in zip(reversed(ary.shape), reversed(ary.strides)):
+        if shape > 1 and stride != 0:
+            if size != stride:
+                return False
+            size *= shape
+    return True
+
+
 def sentry_contiguous(ary):
     core = array_core(ary)
     if not core.flags['C_CONTIGUOUS'] and not core.flags['F_CONTIGUOUS']:
@@ -289,4 +305,3 @@ def require_cuda_ndarray(obj):
     "Raises ValueError is is_cuda_ndarray(obj) evaluates False"
     if not is_cuda_ndarray(obj):
         raise ValueError('require an cuda ndarray object')
-

@@ -121,14 +121,9 @@ class DeviceNDArrayBase(object):
         else:
             ptr = 0
 
-        if array_core(self).flags['C_CONTIGUOUS']:
-            strides = None
-        else:
-            strides = tuple(self.strides)
-
         return {
             'shape': tuple(self.shape),
-            'strides': strides,
+            'strides': None if is_contiguous(self) else tuple(self.strides),
             'data': (ptr, False),
             'typestr': self.dtype.str,
             'version': 2,
@@ -707,6 +702,22 @@ def array_core(ary):
     for stride in ary.strides:
         core_index.append(0 if stride == 0 else slice(None))
     return ary[tuple(core_index)]
+
+
+def is_contiguous(ary):
+    """
+    Returns True iff `ary` is C-style contiguous while ignoring
+    broadcasted and 1-sized dimensions.
+    As opposed to array_core(), it does not call require_context(),
+    which can be quite expensive.
+    """
+    size = ary.dtype.itemsize
+    for shape, stride in zip(reversed(ary.shape), reversed(ary.strides)):
+        if shape > 1 and stride != 0:
+            if size != stride:
+                return False
+            size *= shape
+    return True
 
 
 errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
