@@ -34,7 +34,7 @@ class TestCudaSimIssues(SerialMixin, unittest.TestCase):
         item = np.recarray(1, dtype=goose_np_type)
         simple_kernel[1, 1](item[0])
         np.testing.assert_equal(item[0]['garden'][0], 45)
-        np.testing.assert_equal(item[0]['backyard']['newspaper'], 3)
+        np.testing.assert_equal(item[0]['backyard']['newspaper'][3], 3)
 
     def test_recarray_setting(self):
         recordwith2darray = np.dtype([('i', np.int32), ('j', np.float32, (3, 2))])
