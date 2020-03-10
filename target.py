@@ -52,7 +52,7 @@ SPIR_VERSION = (2, 0)
 class GenericPointerModel(datamodel.PrimitiveModel):
     def __init__(self, dmm, fe_type):
         #print("GenericPointerModel:", dmm, fe_type, fe_type.addrspace)
-        adrsp = fe_type.addrspace if fe_type.addrspace is not None else SPIR_GENERIC_ADDRSPACE
+        adrsp = fe_type.addrspace if fe_type.addrspace is not None else SPIR_GLOBAL_ADDRSPACE
         be_type = dmm.lookup(fe_type.dtype).get_data_type().as_pointer(adrsp)
         super(GenericPointerModel, self).__init__(dmm, fe_type, be_type)
 
@@ -127,7 +127,7 @@ class DPPyTargetContext(BaseContext):
         def sub_gen_with_global(lty):
             if isinstance(lty, llvmir.PointerType):
                 # DRD : Cast all pointer types to global address space.
-                #if  lty.addrspace == SPIR_GENERIC_ADDRSPACE: # jcaraban
+                if  lty.addrspace != SPIR_GLOBAL_ADDRSPACE: # jcaraban
                     return (lty.pointee.as_pointer(SPIR_GLOBAL_ADDRSPACE),
                             lty.addrspace)
             return lty, None
@@ -172,6 +172,7 @@ class DPPyTargetContext(BaseContext):
 
         set_dppy_kernel(wrapper)
 
+        #print(str(wrapper_module))
         # Link
         module.link_in(ll.parse_assembly(str(wrapper_module)))
         # To enable inlining which is essential because addrspacecast 1->0 is
