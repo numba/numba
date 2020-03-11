@@ -499,12 +499,11 @@ class TestConvertLoopPass(BaseTest):
             arr = np.ones(n)
             for i in prange(n):
                 i += 1
-                arr[i] = i
+                arr[i - 1] = i
             return arr
 
-        with self.assertRaises(errors.UnsupportedRewriteError) as raises:
-            self.run_parfor_sub_pass(test_impl, ())
-        self.assertIn("Overwrite of parallel loop index", str(raises.exception))
+        self.run_parfor_sub_pass(test_impl, ())
+        self.run_parallel(test_impl)
 
     def test_init_prange(self):
         def test_impl():
