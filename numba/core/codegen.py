@@ -13,6 +13,8 @@ from numba.core import utils, config, cgutils
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
+from numba.misc.inspection import disassemble_elf_to_cfg
+
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
@@ -329,6 +331,17 @@ class CodeLibrary(object):
         fn = self.get_function(name)
         dot = ll.get_function_cfg(fn)
         return _CFG(dot)
+
+    def get_disasm_cfg(self):
+        """
+        Get the CFG of the disassembly of the ELF object
+
+        Requires python package: r2pipe
+        Requires radare2 binary on $PATH.
+        Notebook rendering requires python package: graphviz
+        """
+        elf = self._get_compiled_object()
+        return disassemble_elf_to_cfg(elf)
 
     #
     # Object cache hooks and serialization
