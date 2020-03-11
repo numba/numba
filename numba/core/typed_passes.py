@@ -683,6 +683,9 @@ class PreLowerStripPhis(FunctionPass):
 
     def run_pass(self, state):
         state.func_ir = self._strip_phi_nodes(state.func_ir)
+        # Rerun postprocessor to update metadata
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run(emit_dels=False)
         return True
 
     def _strip_phi_nodes(self, fir):

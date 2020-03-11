@@ -1465,6 +1465,9 @@ class ReconstructSSA(FunctionPass):
         FunctionPass.__init__(self)
 
     def run_pass(self, state):
-        newfir = reconstruct_ssa(state.func_ir)
-        state.func_ir = newfir
+        state.func_ir = reconstruct_ssa(state.func_ir)
+        # Rerun postprocessor to update metadata
+        # example generator_info
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run(emit_dels=False)
         return True      # XXX detect if it actually got changed
