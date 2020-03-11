@@ -1466,6 +1466,10 @@ class ReconstructSSA(FunctionPass):
 
     def run_pass(self, state):
         state.func_ir = reconstruct_ssa(state.func_ir)
+
+        # Rebuild definitions
+        state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+
         # Rerun postprocessor to update metadata
         # example generator_info
         post_proc = postproc.PostProcessor(state.func_ir)

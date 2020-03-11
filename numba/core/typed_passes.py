@@ -16,7 +16,8 @@ from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
-                                 get_definition, remove_dels)
+                                 get_definition, remove_dels,
+                                 build_definitions)
 from numba.core import postproc
 
 
@@ -683,6 +684,7 @@ class PreLowerStripPhis(FunctionPass):
 
     def run_pass(self, state):
         state.func_ir = self._strip_phi_nodes(state.func_ir)
+        state.func_ir._definitions = build_definitions(state.func_ir.blocks)
         # Rerun postprocessor to update metadata
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run(emit_dels=False)
@@ -691,6 +693,7 @@ class PreLowerStripPhis(FunctionPass):
     def _strip_phi_nodes(self, fir):
         exporters = defaultdict(list)
         phis = set()
+        # Find all variables that needs to be exported
         for label, block in fir.blocks.items():
             for assign in block.find_insts(ir.Assign):
                 if isinstance(assign.value, ir.Expr):
@@ -701,6 +704,7 @@ class PreLowerStripPhis(FunctionPass):
                                           phi.incoming_values):
                             exporters[ib].append((assign.target, iv))
 
+        # Rewrite the blocks with the new exporting assignments
         newblocks = {}
         for label, block in fir.blocks.items():
             newblk = copy(block)
@@ -709,13 +713,23 @@ class PreLowerStripPhis(FunctionPass):
             # strip phis
             newblk.body = [stmt for stmt in block.body if stmt not in phis]
 
+            # insert exporters
             for target, rhs in exporters[label]:
                 assign = ir.Assign(
                     target=target,
                     value=rhs,
                     loc=target.loc
                 )
-                newblk.insert_before_terminator(assign)
+                # Insert at the earliest possible location; i.e. after the
+                # last assignment to rhs
+                assignments = [stmt
+                               for stmt in newblk.find_insts(ir.Assign)
+                               if stmt.target == rhs]
+                if assignments:
+                    last_assignment = assignments[-1]
+                    newblk.insert_after(assign, last_assignment)
+                else:
+                    newblk.prepend(assign)
 
         fir.blocks = newblocks
         return fir
