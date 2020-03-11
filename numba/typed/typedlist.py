@@ -237,7 +237,9 @@ class List(MutableSequence):
 
     @property
     def _dtype(self):
-        return self._list_type.dtype if self._typed else None
+        if not self._typed:
+            raise TypeError("invalid operation on untyped list")
+        return self._list_type.dtype
 
     def _initialise_list(self, item):
         lsttype = types.ListType(typeof(item))
