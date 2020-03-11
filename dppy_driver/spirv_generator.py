@@ -59,7 +59,8 @@ class CmdLine(object):
         #     b) hoist all allocas to the enty block of the module
         check_call(["opt","-O1","-o",ipath+'.bc',ipath])
         check_call(["llvm-spirv","-o",opath,ipath+'.bc'])
-        os.unlink(ipath + '.bc')
+        if config.SAVE_DPPY_IR_FILES == 0:
+            os.unlink(ipath + '.bc')
 
 
 class Module(object):
@@ -75,12 +76,12 @@ class Module(object):
     def __del__(self):
         # Remove all temporary files
         for afile in self._tempfiles:
-            if config.SAVE_DPPY_IR_FILES == 1:
+            if config.SAVE_DPPY_IR_FILES != 0:
                 print(afile)
             else:
                 os.unlink(afile)
         # Remove directory
-        if config.SAVE_DPPY_IR_FILES != 1:
+        if config.SAVE_DPPY_IR_FILES == 0:
             os.rmdir(self._tmpdir)
 
     def _create_temp_file(self, name, mode='wb'):
@@ -109,6 +110,7 @@ class Module(object):
         """
         Finalize module and return the SPIR-V code
         """
+        print("+++++++", config.SAVE_DPPY_IR_FILES)
         assert not self._finalized, "Module finalized already"
 
         # Generate SPIR-V from "friendly" LLVM-based SPIR 2.0
