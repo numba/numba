@@ -166,6 +166,34 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(L.pop(ui32_1), 2)
         self.assertEqual(L.pop(ui32_0), 123)
 
+    def test_dtype(self):
+
+        L = List.empty_list(int32)
+        self.assertEqual(L._dtype, int32)
+
+        L = List.empty_list(float32)
+        self.assertEqual(L._dtype, float32)
+
+        @njit
+        def foo():
+            li, lf = List(), List()
+            li.append(int32(1))
+            lf.append(float32(1.0))
+            return li._dtype, lf._dtype
+
+        self.assertEqual(foo(), (np.dtype('int32'), np.dtype('float32')))
+        self.assertEqual(foo.py_func(), (int32, float32))
+
+    def test_dtype_raises_exception_on_untyped_list(self):
+
+        with self.assertRaises(RuntimeError) as raises:
+            L = List()
+            L._dtype
+        self.assertIn(
+            "invalid operation on untyped list",
+            str(raises.exception),
+        )
+
     @skip_parfors_unsupported
     def test_unsigned_prange(self):
         @njit(parallel=True)

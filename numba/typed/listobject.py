@@ -12,6 +12,7 @@ from numba import _helperlib
 from numba.core.extending import (
     overload,
     overload_method,
+    overload_attribute,
     register_jitable,
     intrinsic,
     register_model,
@@ -1247,6 +1248,18 @@ def ol_list_sort(lst, key=None, reverse=False):
             for i in tmp:
                 ordered.append(lst[i])
             lst[:] = ordered
+    return impl
+
+
+@overload_attribute(types.ListType, '_dtype')
+def impl_dtype(l):
+    if not isinstance(l, types.ListType):
+        return
+    dt = l.dtype
+
+    def impl(l):
+        return dt
+
     return impl
 
 
