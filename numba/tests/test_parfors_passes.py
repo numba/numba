@@ -14,6 +14,7 @@ from numba.core import (
     typing,
     rewrites,
     typed_passes,
+    untyped_passes,
     inline_closurecall,
     compiler,
     cpu,
@@ -58,6 +59,8 @@ class BaseTest(TestCase):
 
             rewrites.rewrite_registry.apply("before-inference", tp.state)
 
+            untyped_passes.ReconstructSSA().run_pass(tp.state)
+
             (
                 tp.state.typemap,
                 tp.state.return_type,
@@ -65,6 +68,8 @@ class BaseTest(TestCase):
             ) = typed_passes.type_inference_stage(
                 tp.state.typingctx, tp.state.func_ir, tp.state.args, None
             )
+
+            typed_passes.PreLowerStripPhis().run_pass(tp.state)
 
             diagnostics = numba.parfors.parfor.ParforDiagnostics()
 
