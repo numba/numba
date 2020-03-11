@@ -9,13 +9,13 @@ from numba.core.extending import intrinsic
 
 # QUESTION: Is there a good place for this function somewhere else?
 #           I keep writing boiler-plate type checks and having a function that
-#           does this for most applications would get rid of much of the 
+#           does this for most applications would get rid of much of the
 #           boiler-plate.
 def validate_arg_type(arg, arg_name, valid_types, none_allowed=False,
                       msg_prefix=None):
     """Checks that a parameter of an overload has the correct type and prints
     appropriate error message if not.
-    
+
     Usage: validate_arg_type(tup, 'tup', types.BaseTuple,
                              msg_prefix='tuple_setitem: ')
     """
