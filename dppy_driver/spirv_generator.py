@@ -110,7 +110,6 @@ class Module(object):
         """
         Finalize module and return the SPIR-V code
         """
-        print("+++++++", config.SAVE_DPPY_IR_FILES)
         assert not self._finalized, "Module finalized already"
 
         # Generate SPIR-V from "friendly" LLVM-based SPIR 2.0
