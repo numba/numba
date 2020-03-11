@@ -563,7 +563,7 @@ def redirect_type_ctor(context, builder, sig, args):
     sig = typing.signature(cls, types.TypeRef(cls), ctor_args)
     if len(ctor_args) > 0:
         args = (context.get_dummy_value(),   # Type object has no runtime repr.
-                *args)
+                context.make_tuple(builder, ctor_args, args))
     else:
         args = (context.get_dummy_value(),   # Type object has no runtime repr.
                 context.make_tuple(builder, ctor_args, ()))
