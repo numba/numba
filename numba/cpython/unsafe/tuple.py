@@ -2,6 +2,8 @@
 This file provides internal compiler utilities that support certain special
 operations with tuple and workarounds for limitations enforced in userland.
 """
+import inspect
+
 from numba.core import types, typing
 from numba.core.errors import RequireLiteralValue
 from numba.core.extending import intrinsic
@@ -51,7 +53,6 @@ def validate_arg_type(arg, arg_name, valid_types, none_allowed=False,
     if none_allowed is True:
         valid_types = valid_types + (types.NoneType, type(None))
 
-    import inspect
     have_type_spec = all(inspect.isclass(x) for x in valid_types)
 
     if have_type_spec:
