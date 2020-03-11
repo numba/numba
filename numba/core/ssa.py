@@ -20,13 +20,12 @@ def reconstruct_ssa(fir):
     _logger.debug(fir.dump_to_string())
     _logger.debug("=" * 80)
 
-    newblocks = _run_ssa(fir.blocks)
-    newfir = fir.derive(blocks=newblocks)
+    fir.blocks = _run_ssa(fir.blocks)
 
     _logger.debug("AFTER SSA".center(80, "-"))
-    _logger.debug(newfir.dump_to_string())
+    _logger.debug(fir.dump_to_string())
     _logger.debug("=" * 80)
-    return newfir
+    return fir
 
 
 def _run_ssa(blocks):

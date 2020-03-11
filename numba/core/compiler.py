@@ -466,6 +466,9 @@ class DefaultPassBuilder(object):
         pm.add_pass(NopythonTypeInference, "nopython frontend")
         pm.add_pass(AnnotateTypes, "annotate types")
 
+        # strip phis
+        pm.add_pass(PreLowerStripPhis, "remove phis nodes")
+
         # optimisation
         pm.add_pass(InlineOverloads, "inline overloaded functions")
         if state.flags.auto_parallel.enabled:
@@ -474,9 +477,6 @@ class DefaultPassBuilder(object):
             pm.add_pass(NopythonRewrites, "nopython rewrites")
         if state.flags.auto_parallel.enabled:
             pm.add_pass(ParforPass, "convert to parfors")
-
-        # strip phis
-        pm.add_pass(PreLowerStripPhis, "remove phis nodes")
 
         # legalise
         pm.add_pass(IRLegalization,
