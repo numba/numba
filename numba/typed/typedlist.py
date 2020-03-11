@@ -25,6 +25,7 @@ from numba.core.extending import (
 )
 from numba.typed import listobject
 from numba.core.errors import TypingError, LoweringError
+from numba.core.typing.templates import Signature
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
@@ -506,24 +507,35 @@ def typedlist_call(context):
     The returned typer raises a TypingError in case of unsuitable arguments.
 
     """
-    def typer(*args, **kwargs):
-        if kwargs:
-            raise TypingError(
-                "List() takes no keyword arguments"
-            )
-        elif args:
-            if not 0 <= len(args) <= 1:
-                raise TypingError(
-                    "List() expected at most 1 argument, got {}"
-                    .format(len(args))
-                )
-            iterable = args[0]
-            item_type = _guess_dtype(iterable)
-        else:
-            item_type = types.undefined
 
-        return types.ListType(item_type)
-    return typer
+    class Typer(object):
+
+        def attach_sig(self):
+            from inspect import signature as mypysig
+
+            def mytyper(iterable):
+                pass
+            self.pysig = mypysig(mytyper)
+
+        def __call__(self, *args, **kwargs):
+            if kwargs:
+                raise TypingError(
+                    "List() takes no keyword arguments"
+                )
+            elif args:
+                if not 0 <= len(args) <= 1:
+                    raise TypingError(
+                        "List() expected at most 1 argument, got {}"
+                        .format(len(args))
+                    )
+                rt = types.ListType(_guess_dtype(args[0]))
+                self.attach_sig()
+                return Signature(rt, args, None, pysig=self.pysig)
+            else:
+                item_type = types.undefined
+                return types.ListType(item_type)
+
+    return Typer()
 
 
 @overload(numba_typeref_ctor)
