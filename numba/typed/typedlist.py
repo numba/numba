@@ -177,7 +177,11 @@ class List(MutableSequence):
 
     _legal_kwargs = ["lsttype", "meminfo", "allocated"]
 
-    def __new__(cls, lsttype=None, meminfo=None, allocated=DEFAULT_ALLOCATED):
+    def __new__(cls,
+                lsttype=None,
+                meminfo=None,
+                allocated=DEFAULT_ALLOCATED,
+                **kwargs):
         if config.DISABLE_JIT:
             return list.__new__(list)
         else:
