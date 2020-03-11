@@ -175,7 +175,7 @@ class TestTypedList(MemoryLeakMixin, TestCase):
 
     def test_dtype_raises_exception_on_untyped_list(self):
 
-        with self.assertRaises(TypeError) as raises:
+        with self.assertRaises(RuntimeError) as raises:
             L = List()
             L._dtype
         self.assertIn(
