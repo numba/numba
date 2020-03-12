@@ -450,6 +450,10 @@ def _parse_dtype(dtype):
     if isinstance(dtype, types.DTypeSpec):
         return dtype.dtype
 
+def _parse_order(order):
+    if isinstance(order, types.StringLiteral):
+        return order.literal_value
+
 def _parse_nested_sequence(context, typ):
     """
     Parse a (possibly 0d) nested sequence type.
@@ -513,15 +517,28 @@ class NdConstructor(CallableTemplate):
     """
 
     def generic(self):
-        def typer(shape, dtype=None):
+        def typer(shape, dtype=None, order=None):
             if dtype is None:
                 nb_dtype = types.double
             else:
                 nb_dtype = _parse_dtype(dtype)
+                if nb_dtype is None:
+                    return
+
+            if order is None:
+                order = 'C'
+            else:
+                order = _parse_order(order)
+                if order is None:
+                    return
+                if order not in {'C', 'F'}:
+                    raise TypingError("only 'C' or 'F' order is permitted")
 
             ndim = _parse_shape(shape)
-            if nb_dtype is not None and ndim is not None:
-                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+            if ndim is None:
+                return
+
+            return types.Array(dtype=nb_dtype, ndim=ndim, layout=order)
 
         return typer
 
