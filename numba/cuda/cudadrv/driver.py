@@ -912,8 +912,7 @@ class Context(object):
         if not isinstance(ptr, int):
             raise TypeError("ptr for external stream must be an int")
         handle = drvapi.cu_stream(ptr)
-        return Stream(weakref.proxy(self), handle,
-                      _stream_finalizer(self.deallocations, handle),
+        return Stream(weakref.proxy(self), handle, None,
                       external=True)
 
     def create_event(self, timing=True):
