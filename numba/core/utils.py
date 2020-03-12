@@ -491,8 +491,8 @@ def iter_multivalued_args(args):
     a = args[0]
     for rest in iter_multivalued_args(args[1:]):
         if isinstance(a, Dispatcher):
-            for a_ in a.get_members():
-                yield (a_,) + rest
+            for cres in a.overloads.values():
+                yield (types.function.CompileResultWAP(cres),) + rest
         elif isinstance(a, (tuple, list, set)):
             typ = type(a)
             for a_ in iter_multivalued_args(tuple(a)):
@@ -515,18 +515,26 @@ def unify_function_types(numba_types):
     types that are not function or dispatcher type, the transformation
     is considered incorrect.
 
-    If any of the Numba function types are Dispatcher types, the
-    unified function type will be imprecise (all argument types and
-    return type are specified as undefined) and an unique
-    UndefinedFunctionType holding all Dispatcher instances.
 
+
+    """
+    dtype = unified_function_type(numba_types)
+    if dtype is None:
+        return numba_types
+    return (dtype,) * len(numba_types)
+
+
+def unified_function_type(numba_types):
+    """Return unified function type. When not possible, return None.
+
+    If any of the Numba function types is a Dispatcher type, the
+    unified function type will be UndefinedFunctionType instance.
     """
     if not (numba_types
             and isinstance(numba_types[0],
                            (types.Dispatcher, types.FunctionType))):
-        return numba_types
+        return
 
-    n = len(numba_types)
     mnargs, mxargs = None, None
     dispatchers = set()
     function = None
@@ -538,7 +546,7 @@ def unify_function_types(numba_types):
             if mnargs is None:
                 mnargs, mxargs = mnargs1, mxargs1
             elif not (mnargs, mxargs) == (mnargs1, mxargs1):
-                return numba_types
+                return
             dispatchers.add(t.dispatcher)
         elif isinstance(t, types.FunctionType):
             if mnargs is None:
@@ -557,7 +565,7 @@ def unify_function_types(numba_types):
                 else:
                     assert function == t
         else:
-            return numba_types
+            return
 
     if function is not None:
         if undefined_function is not None:
@@ -569,5 +577,4 @@ def unify_function_types(numba_types):
     else:
         function = types.UndefinedFunctionType(mnargs, dispatchers)
 
-    # print(f'unify_function_types -> {function}')
-    return (function,) * n
+    return function

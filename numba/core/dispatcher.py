@@ -246,11 +246,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 return
             # This function must *not* hold any reference to self:
             # we take care to bind the necessary objects in the closure.
-            try:
-                cres_list = list(overloads.values())
-            except KeyError:
-                return
-            for cres in cres_list:
+            for cres in overloads.values():
                 try:
                     targetctx.remove_user_function(cres.entry_point)
                 except KeyError:
@@ -633,10 +629,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         return tp
 
 
-class DispatcherNoMatch(TypeError):
-    pass
-
-
 class Dispatcher(_DispatcherBase):
     """
     Implementation of user-facing dispatcher objects (i.e. created using
@@ -657,15 +649,6 @@ class Dispatcher(_DispatcherBase):
     __uuid = None
     __numba__ = 'py_func'
 
-    def clone(self):
-        new = type(self)(self.py_func, locals=self.locals,
-                         targetoptions=self.targetoptions,
-                         impl_kind = self._impl_kind,
-                         pipeline_class = self._compiler.pipeline_class
-        )
-        new.pyfunc = self.py_func
-        return new
-    
     def __init__(self, py_func, locals={}, targetoptions={},
                  impl_kind='direct', pipeline_class=compiler.Compiler):
         """
@@ -682,12 +665,6 @@ class Dispatcher(_DispatcherBase):
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
-        if (inspect.isgeneratorfunction(py_func)
-            and targetoptions.get('nopython', False)
-            and not targetoptions.get('no_cfunc_wrapper', True)
-           ):
-            # generators have state that a cfunc wrapper cannot carry
-            raise errors.UnsupportedError('generator as a first-class function type in nopython mode')
 
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
@@ -801,123 +778,8 @@ class Dispatcher(_DispatcherBase):
         self._memo[u] = self
         self._recent.append(self)
 
-    def _get_exact_compile_result(self, values):
-        """Return existing compile result that signature arguments match
-        exactly with the types of given argument values. Return None
-        exact match does not exist.
-
-        Callable arguments are treated as first-class functions.
-
-        TODO: should this be implemented in numba/_dispatcherimpl.cpp (dispatcher_resolve)?
-        """
-        return # NOTUSED
-        vtypes = []  # a list containing Numba types or tuples of Numba types
-        for value in values:
-            if isinstance(value, OmittedArg):
-                # TODO: Handle ommited arguments
-                vtypes.append(types.Omitted(value.value))
-            else:
-                if self.enable_prototypes:
-                    ftypes = tuple(types.FunctionType.extract_function_types(value))
-                    # hmm, int value can also generate multiple matches
-                    # for argument types int8, int16, etc
-                    if ftypes:
-                        vtypes.append(ftypes)
-                    else:
-                        vtypes.append(self.typeof_pyval(value))
-                else:
-                    vtypes.append(self.typeof_pyval(value))
-
-        for atypes in self.overloads:
-            # assuming that atypes == self.overloads[atypes].signature.args
-            if len(atypes) != len(vtypes):
-                continue
-            for atype, vtype in zip(atypes, vtypes):
-                # TODO: Handle ommited arguments
-                assert not isinstance(atype, types.Omitted)
-                if isinstance(vtype, tuple):
-                    for vt in vtype:
-                        if atype == vt:
-                            # found match, break vt-loop
-                            break
-                    else:
-                        # no match, break atype-loop
-                        break
-                elif atype == vtype:
-                    continue
-                else:
-                    # no match, break atype-loop
-                    if isinstance(vtype, types.Dispatcher):
-                        pass
-                    break
-            else:
-                # atype-loop was not broken, so we found a match
-                return self.overloads[atypes]
-        # no match was found
-        return
-
-    def NOTUSED_compile_for_args(self, *args, **kws):
-        """
-        Compiles first-class function arguments on-demand.
-        """
-        # print(f'COMPILE_FOR_ARGS[{self.py_func.__name__}]({args=})')
-        if self.enable_prototypes:
-            cres = self._get_exact_compile_result(args)
-            if cres is not None:
-                print('FOUND EXACT MATCH FOR ARGS: ')
-                cres.dump()
-                return cres.entry_point
-            # If args contains Dispatcher instances, and all other
-            # arguments match, we compile argument dispatcher.
-
-            for value in args:
-                if isinstance(value, Dispatcher):
-                    value.dump()
-        
-            unboxed = []
-            atypes_unboxed = []
-            atypes = []
-            for value in args:
-                break
-                vtype = self.typeof_pyval(value)
-                atypes.append(vtype)
-                if isinstance(vtype, types.FunctionType):
-                    atypes_unboxed.append(vtype.get_numba_type())
-                    unboxed.append(value)
-                else:
-                    atypes_unboxed.append(vtype)
-                    unboxed.append(value)
-            atypes_unboxed = tuple(atypes_unboxed)
-
-            if not self.overloads:
-                for value in args:
-                    break
-                    if isinstance(value, (tuple, list)):
-                        common_sig = None
-                        for v in value:
-                            vtype = self.typeof_pyval(v)
-                            if isinstance(vtype, types.FunctionType):
-                                if common_sig is None and vtype.has_signatures():
-                                    common_sig = vtype.signature()
-                                else:
-                                    vtype.check_signature(common_sig, compile=True)
-
-            for atypes in self.overloads:
-                break
-                if len(atypes) != len(args):
-                    continue
-                for atype, value in zip(atypes, args):
-                    vtype = self.typeof_pyval(value)
-                    if not ((isinstance(atype, types.FunctionType)
-                             and isinstance(vtype, types.FunctionType)
-                             and atype.matches(vtype, compile=True))
-                            or atype == vtype):
-                        break
-        return super(Dispatcher, self)._compile_for_args(*args, **kws)
-
     @global_compiler_lock
     def compile(self, sig):
-        # print(f'{type(self).__name__}[{self.py_func.__name__}].compile({sig=})')
         if not self._can_compile:
             raise RuntimeError("compilation disabled")
         # Use counter to track recursion compilation depth
@@ -1012,19 +874,6 @@ class Dispatcher(_DispatcherBase):
             return self.overloads[signature].metadata
         else:
             return dict((sig, self.overloads[sig].metadata) for sig in self.signatures)
-
-    def get_members(self):
-        for cres in self.overloads.values():
-            yield types.function.CompileResultWAP(cres)
-
-    def get_types(self):
-        """Return Numba function types of dispatcher overloads.
-        """
-        for cres in self.overloads.values():
-            sig = cres.signature
-            for typs in utils.resolve_dispatcher_types((sig.return_type,) + sig.args):
-                sig_ = Signature(typs[0], typs[1:], recvr=None)
-                yield types.FunctionType(sig_)
 
 
 class LiftedCode(_DispatcherBase):

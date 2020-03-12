@@ -266,7 +266,9 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
     def __new__(cls, types):
 
-        types = utils.unify_function_types(types)
+        t = utils.unified_function_type(types)
+        if t is not None:
+            return UniTuple(dtype=t, count=len(types))
 
         _HeterogeneousTuple.is_types_iterable(types)
 

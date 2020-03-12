@@ -1048,8 +1048,9 @@ def unbox_deferred(typ, obj, c):
 
 @unbox(types.Dispatcher)
 def unbox_dispatcher(typ, obj, c):
-    # In native code, Dispatcher types can be casted to FunctionType types.
+    # In native code, Dispatcher types can be casted to FunctionType.
     return NativeValue(obj)
+
 
 @box(types.Dispatcher)
 def box_pyobject(typ, val, c):
