@@ -666,7 +666,7 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
         """
         Returns an integer specifying the version of the EMM Plugin interface
         supported by the plugin implementation. Should always return 1 for
-        implementations described in this proposal.
+        implementations of this version of the specification.
         """
 
 
