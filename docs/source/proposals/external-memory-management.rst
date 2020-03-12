@@ -138,7 +138,7 @@ New classes and functions will be added to ``numba.cuda.cudadrv.driver``:
 * ``set_memory_manager``: a method for registering an external memory manager with
   Numba.
 
-These will be exposed through the public API, in the `numba.cuda` module.
+These will be exposed through the public API, in the ``numba.cuda`` module.
 Additionally, some classes that are already part of the `driver` module will be
 exposed as part of the public API:
 
