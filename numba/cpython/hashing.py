@@ -131,8 +131,7 @@ def _fpext(tyctx, val):
                           'p4': _Py_uhash_t,
                           '_PyHASH_MODULUS': _Py_uhash_t,
                           '_PyHASH_BITS': types.int32,
-                          '_PyLong_SHIFT': types.int32,
-                          'x.1': _Py_uhash_t})
+                          '_PyLong_SHIFT': types.int32,})
 def _long_impl(val):
     # This function assumes val came from a long int repr with val being a
     # uint64_t this means having to split the input into PyLong_SHIFT size
@@ -167,11 +166,12 @@ def _long_impl(val):
 def int_hash(val):
 
     _HASH_I64_MIN = -2 if sys.maxsize <= 2 ** 32 else -4
+    _SIGNED_MIN = _Py_hash_t(-(1 << (_hash_width - 1)))
 
     # this is a bit involved due to the CPython repr of ints
     def impl(val):
-        # If the magnitude is under PyHASH_MODULUS, if so just return the
-        # value itval as the has, couple of special cases if val == val:
+        # If the magnitude is under PyHASH_MODULUS, just return the
+        # value val as the hash, couple of special cases if val == val:
         # 1. it's 0, in which case return 0
         # 2. it's signed int minimum value, return the value CPython computes
         # but Numba cannot as there's no type wide enough to hold the shifts.
@@ -181,11 +181,10 @@ def int_hash(val):
         # and use the standard wide unsigned hash implementation
         mag = abs(val)
         if mag < _PyHASH_MODULUS:
-            if val == -val:
-                if val == 0:
-                    ret = 0
-                else:  # int64 min, -0x8000000000000000
-                    ret = _Py_hash_t(_HASH_I64_MIN)
+            if val == 0:
+                ret = 0
+            elif val == _SIGNED_MIN:  # e.g. int64 min, -0x8000000000000000
+                ret = _Py_hash_t(_HASH_I64_MIN)
             else:
                 ret = _Py_hash_t(val)
         else:
