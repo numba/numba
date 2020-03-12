@@ -1,8 +1,8 @@
 .. _nbep-7:
 
-===========================================
-NBEP 7: External Memory Management Plugins
-===========================================
+===============================================
+NBEP 7: CUDA External Memory Management Plugins
+===============================================
 
 :Author: Graham Markall, NVIDIA
 :Contributors: Thomson Comer, Peter Entschev, Leo Fang, John Kirkham, Keith Kraus
