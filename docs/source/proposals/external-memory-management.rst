@@ -905,7 +905,7 @@ The test suite can be run with the CuPy plugin using:
 
 .. code-block::
 
-   NUMBA_CUDA_MEMORY_MANAGER=nbep7. python -m numba.runtests numba.cuda.tests
+   NUMBA_CUDA_MEMORY_MANAGER=nbep7.cupy_mempool python -m numba.runtests numba.cuda.tests
 
 This plugin implementation is presently more primitive than the RMM
 implementation, and results in some errors with the unit test suite:
