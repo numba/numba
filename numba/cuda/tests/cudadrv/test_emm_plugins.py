@@ -4,97 +4,99 @@ import sys
 import weakref
 
 from numba import cuda
+from numba.core import config
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
 from numba.tests.support import linux_only
 
+if not config.ENABLE_CUDASIM:
+    class DeviceOnlyEMMPlugin(cuda.HostOnlyCUDAMemoryManager):
+        """
+        Dummy EMM Plugin implementation for testing. It memorises which plugin
+        API methods have been called so that the tests can check that Numba
+        called into the plugin as expected.
+        """
 
-class DeviceOnlyEMMPlugin(cuda.HostOnlyCUDAMemoryManager):
-    """
-    Dummy EMM Plugin implementation for testing. It memorises which
-    plugin API methods have been called so that the tests can check that Numba
-    called into the plugin as expected.
-    """
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+            # For tracking our dummy allocations
+            self.allocations = {}
+            self.count = 0
 
-        # For tracking our dummy allocations
-        self.allocations = {}
-        self.count = 0
+            # For tracking which methods have been called
+            self.initialized = False
+            self.memalloc_called = False
+            self.reset_called = False
+            self.get_memory_info_called = False
+            self.get_ipc_handle_called = False
 
-        # For tracking which methods have been called
-        self.initialized = False
-        self.memalloc_called = False
-        self.reset_called = False
-        self.get_memory_info_called = False
-        self.get_ipc_handle_called = False
+        def memalloc(self, size):
+            # We maintain a list of allocations and keep track of them, so that
+            # we can test that the finalizers of objects returned by memalloc
+            # get called.
 
-    def memalloc(self, size):
-        # We maintain a list of allocations and keep track of them, so that we
-        # can test that the finalizers of objects returned by memalloc get
-        # called.
+            # Numba should have initialized the memory manager when preparing
+            # the context for use, prior to any memalloc call.
+            if not self.initialized:
+                raise RuntimeError("memalloc called before initialize")
+            self.memalloc_called = True
 
-        # Numba should have initialized the memory manager when preparing the
-        # context for use, prior to any memalloc call.
-        if not self.initialized:
-            raise RuntimeError("memalloc called before initialize")
-        self.memalloc_called = True
+            # Create an allocation and record it
+            self.count += 1
+            alloc_count = self.count
+            self.allocations[alloc_count] = size
 
-        # Create an allocation and record it
-        self.count += 1
-        alloc_count = self.count
-        self.allocations[alloc_count] = size
+            # The finalizer deletes the record from our internal dict of
+            # allocations.
+            finalizer_allocs = self.allocations
 
-        # The finalizer deletes the record from our internal dict of
-        # allocations.
-        finalizer_allocs = self.allocations
+            def finalizer():
+                del finalizer_allocs[alloc_count]
 
-        def finalizer():
-            del finalizer_allocs[alloc_count]
+            # We use an AutoFreePointer so that the finalizer will be run when
+            # the reference count drops to zero.
+            ctx = weakref.proxy(self.context)
+            ptr = ctypes.c_void_p(alloc_count)
+            return cuda.cudadrv.driver.AutoFreePointer(ctx, ptr, size,
+                                                       finalizer=finalizer)
 
-        # We use an AutoFreePointer so that the finalizer will be run when the
-        # reference count drops to zero.
-        ctx = weakref.proxy(self.context)
-        ptr = ctypes.c_void_p(alloc_count)
-        return cuda.cudadrv.driver.AutoFreePointer(ctx, ptr, size,
-                                                   finalizer=finalizer)
+        def initialize(self):
+            # No special initialization needed.
+            self.initialized = True
 
-    def initialize(self):
-        # No special initialization needed.
-        self.initialized = True
+        def reset(self):
+            # We remove all allocations on reset, just as a real EMM Plugin
+            # would do. Note that our finalizers in memalloc don't check
+            # whether the allocations are still alive, so running them after
+            # reset will detect any allocations that are floating around at
+            # exit time; however, the atexit finalizer for weakref will only
+            # print a traceback, not terminate the interpreter abnormally.
+            self.reset_called = True
 
-    def reset(self):
-        # We remove all allocations on reset, just as a real EMM Plugin would
-        # do. Note that our finalizers in memalloc don't check whether the
-        # allocations are still alive, so running them after reset will detect
-        # any allocations that are floating around at exit time; however, the
-        # atexit finalizer for weakref will only print a traceback, not
-        # terminate the interpreter abnormally.
-        self.reset_called = True
+        def get_memory_info(self):
+            # Return some dummy memory information
+            self.get_memory_info_called = True
+            return cuda.MemoryInfo(free=32, total=64)
 
-    def get_memory_info(self):
-        # Return some dummy memory information
-        self.get_memory_info_called = True
-        return cuda.MemoryInfo(free=32, total=64)
+        def get_ipc_handle(self, memory):
+            # The dummy IPC handle is only a string, so it is important that
+            # the tests don't try to do too much with it (e.g. open / close
+            # it).
+            self.get_ipc_handle_called = True
+            return "Dummy IPC handle for alloc %s" % memory.device_pointer.value
 
-    def get_ipc_handle(self, memory):
-        # The dummy IPC handle is only a string, so it is important that the
-        # tests don't try to do too much with it (e.g. open / close it).
-        self.get_ipc_handle_called = True
-        return "Dummy IPC handle for alloc %s" % memory.device_pointer.value
-
-    @property
-    def interface_version(self):
-        # The expected version for an EMM Plugin.
-        return 1
+        @property
+        def interface_version(self):
+            # The expected version for an EMM Plugin.
+            return 1
 
 
-class BadVersionEMMPlugin(DeviceOnlyEMMPlugin):
-    """A plugin that claims to implement a different interface version"""
+    class BadVersionEMMPlugin(DeviceOnlyEMMPlugin):
+        """A plugin that claims to implement a different interface version"""
 
-    @property
-    def interface_version(self):
-        return 2
+        @property
+        def interface_version(self):
+            return 2
 
 
 @skip_on_cudasim('EMM Plugins not supported on CUDA simulator')
