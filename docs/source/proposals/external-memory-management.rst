@@ -607,8 +607,8 @@ Running this should result in output similar to the following:
 .. code-block::
 
    Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Current Allocs,Start,End,Elapsed,Location
-   Alloc,0,0x7fae06600000,0,80,0,0,1,1.10549,1.1074,0.00191666,/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py:683
-   Free,0,0x7fae06600000,0,0,0,0,0,1.10798,1.10921,0.00122238,/home/nfs/gmarkall/numbadev/numba/numba/utils.py:678
+   Alloc,0,0x7fae06600000,0,80,0,0,1,1.10549,1.1074,0.00191666,<path>/numba/numba/cuda/cudadrv/driver.py:683
+   Free,0,0x7fae06600000,0,0,0,0,0,1.10798,1.10921,0.00122238,<path>/numba/numba/utils.py:678
 
 Note that there is some scope for improvement in RMM for detecting the line
 number at which the allocation / free occurred, but this is outside the scope of
@@ -825,8 +825,8 @@ We see the following output:
 .. code-block::
 
    Event Type,Device ID,Address,Stream,Size (bytes),Free Memory,Total Memory,Current Allocs,Start,End,Elapsed,Location
-   Alloc,0,0x7f96c7400000,0,80,0,0,1,1.13396,1.13576,0.00180059,/home/nfs/gmarkall/numbadev/numba/numba/cuda/cudadrv/driver.py:686
-   Free,0,0x7f96c7400000,0,0,0,0,0,1.13628,1.13723,0.000956004,/home/nfs/gmarkall/numbadev/numba/numba/utils.py:678
+   Alloc,0,0x7f96c7400000,0,80,0,0,1,1.13396,1.13576,0.00180059,<path>/numba/numba/cuda/cudadrv/driver.py:686
+   Free,0,0x7f96c7400000,0,0,0,0,0,1.13628,1.13723,0.000956004,<path>/numba/numba/utils.py:678
 
 This output is similar to the expected output from the example usage presented
 above (though note that the pointer addresses and timestamps vary compared to
