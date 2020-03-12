@@ -1479,10 +1479,14 @@ class ReconstructSSA(FunctionPass):
 
     def _patch_locals(self, state):
         # Fix locals type annotation
+        locals_dict = state.get('locals')
+        if locals_dict is None:
+            return
+
         first_blk, *_ = state.func_ir.blocks.values()
         scope = first_blk.scope
         for parent, redefs in scope.var_redefinitions.items():
-            if parent in state.locals:
-                typ = state.locals[parent]
+            if parent in locals_dict:
+                typ = locals_dict[parent]
                 for derived in redefs:
-                    state.locals[derived] = typ
+                    locals_dict[derived] = typ
