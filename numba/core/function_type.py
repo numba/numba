@@ -2,9 +2,6 @@
 instances of a first-class function type.
 """
 
-# import types as pytypes
-import numba
-from numba import types as nbtypes
 from numba.extending import typeof_impl
 from numba.extending import models, register_model
 from numba.extending import unbox, NativeValue, box
@@ -21,7 +18,14 @@ from numba.core.dispatcher import Dispatcher
 @typeof_impl.register(WrapperAddressProtocol)
 @typeof_impl.register(CFunc)
 def typeof_function_type(val, c):
-    return FunctionType.fromobject(val)
+    if isinstance(val, CFunc):
+        sig = val._sig
+    elif isinstance(val, WrapperAddressProtocol):
+        sig = val.signature()
+    else:
+        raise NotImplementedError(
+            f'function type from {type(val).__name__}')
+    return FunctionType(sig)
 
 
 @register_model(FunctionPrototype)
@@ -49,10 +53,10 @@ class FunctionModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
             # address of cfunc wrapper function:
-            ('addr', nbtypes.voidptr),
+            ('addr', types.voidptr),
             # address of PyObject* referencing the Python function
             # object:
-            ('pyaddr', nbtypes.voidptr),
+            ('pyaddr', types.voidptr),
         ]
         super(FunctionModel, self).__init__(dmm, fe_type, members)
 
@@ -73,24 +77,9 @@ def lower_constant_function_type(context, builder, typ, pyval):
         sfunc.pyaddr = context.add_dynamic_addr(builder, id(pyval),
                                                 info=type(pyval).__name__)
         return sfunc._getvalue()
-    if 0 and isinstance(pyval, Dispatcher):
-        cres = pyval.get_compile_result(typ.signature(), compile=True)
-        if cres is None:
-            # TODO: raise exception as compilation failed (unless
-            # compile is disabled). Set compile=False to reproduce.
-            addr = -1
-        else:
-            wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
-            addr = cres.library.get_pointer_to_function(wrapper_name)
-        sfunc = cgutils.create_struct_proxy(typ)(context, builder)
-        sfunc.addr = context.add_dynamic_addr(builder, addr,
-                                              info=str(typ))
-        sfunc.pyaddr = context.add_dynamic_addr(builder, id(pyval),
-                                                info=type(pyval).__name__)
-        return sfunc._getvalue()
+
     # TODO: implement support for WrapperAddressProtocol,
     # and types.FunctionType, ctypes.CFUNCTYPE
-
     raise NotImplementedError(
         'lower_constant_struct_function_type({}, {}, {}, {})'
         .format(context, builder, typ, pyval))
@@ -108,13 +97,10 @@ def _get_wrapper_address(func, sig):
     Parameters
     ----------
     func : object
-      A function object that has been numba.cfunc decorated or an
-      object that implements the wrapper address protocol (see note
-      below).  numba.cfunc(sig) is applied to pure Python function
-      inputs and the source of numba.cfunc decorated functions in case
-      the signature of `func` and `sig` do not match.
+      A Numba cfunc or jit decoreated function or an object that
+      implements the wrapper address protocol (see note below).
     sig : Signature
-      The function signature.
+      The expected function signature.
 
     Returns
     -------
@@ -132,33 +118,24 @@ def _get_wrapper_address(func, sig):
     for the given signature.
 
     """
-    if sig.return_type == types.unknown:
-        # addr==-1 indicates that no implementation is available for
-        # cases where automatic type-inference was unsuccesful. For
-        # example, the type of unused jit-decorated function arguments
-        # is unknown but also unneeded.
-        addr = -1  # todo: revise
+    if not sig.is_precise():
+        # addr==-1 will indicate that no implementation is available
+        # for cases where type-inference did not identified the
+        # function type. For example, the type of an unused
+        # jit-decorated function argument will be undefined but also
+        # irrelevant.
+        addr = -1
     elif hasattr(func, '__wrapper_address__'):
         # func can be any object that implements the
         # __wrapper_address__ protocol.
         addr = func.__wrapper_address__()
-    elif isinstance(func, types.FunctionType):
-        cfunc = numba.cfunc(sig)(func)
-        addr = cfunc._wrapper_address
     elif isinstance(func, CFunc):
-        if sig == func._sig:
-            addr = func._wrapper_address
-        else:
-            # TODO: remove?
-            cfunc = numba.cfunc(sig)(func._pyfunc)
-            addr = cfunc._wrapper_address
+        assert sig == func._sig
+        addr = func.address
     elif isinstance(func, Dispatcher):
-        cres = func.get_compile_result(sig, compile=True)
-        if cres is None:
-            addr = -1
-        else:
-            wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
-            addr = cres.library.get_pointer_to_function(wrapper_name)
+        cres = func.get_compile_result(sig)
+        wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
+        addr = cres.library.get_pointer_to_function(wrapper_name)
     else:
         raise NotImplementedError(
             f'get wrapper address of {type(func)} instance with {sig!r}')
@@ -170,37 +147,6 @@ def _get_wrapper_address(func, sig):
                          f' a positive integer but got {addr} [sig={sig}]')
     # print(f'_get_wrapper_address[{func}]({sig=}) -> {addr}')
     return addr
-
-
-@unbox(FunctionType)
-def unbox_function_type(typ, obj, c):
-    sfunc = cgutils.create_struct_proxy(typ)(c.context, c.builder)
-
-    addr = lower_get_wrapper_address(
-        c.context, c.builder, obj, typ.signature(), failure_mode='return_null')
-    sfunc.addr = c.pyapi.long_as_voidptr(addr)
-    c.pyapi.decref(addr)
-
-    llty = c.context.get_value_type(nbtypes.voidptr)
-    sfunc.pyaddr = c.builder.ptrtoint(obj, llty)
-
-    return NativeValue(sfunc._getvalue())
-
-
-@box(FunctionType)
-def box_function_type(typ, val, c):
-    sfunc = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
-    pyaddr_ptr = cgutils.alloca_once(c.builder, c.pyapi.pyobj)
-    raw_ptr = c.builder.inttoptr(sfunc.pyaddr, c.pyapi.pyobj)
-    with c.builder.if_then(cgutils.is_null(c.builder, raw_ptr),
-                           likely=False):
-        cstr = f"first-class function {typ} parent object not set"
-        c.pyapi.err_set_string("PyExc_MemoryError", cstr)
-        c.builder.ret(c.pyapi.get_null_object())
-    c.builder.store(raw_ptr, pyaddr_ptr)
-    cfunc = c.builder.load(pyaddr_ptr)
-    c.pyapi.incref(cfunc)
-    return cfunc
 
 
 def lower_get_wrapper_address(context, builder, func, sig,
@@ -234,13 +180,40 @@ def lower_get_wrapper_address(context, builder, func, sig,
                 builder.ret(pyapi.get_null_object())
             else:
                 raise NotImplementedError(failure_mode)
-
-    # _get_wrapper_address checks that pyaddr is int and nonzero, so
-    # no need to check it here. But it will be impossible to tell if
-    # the addr value actually corresponds to a memory location of a
-    # valid function.
+    # else the caller will handle addr == NULL
 
     return addr  # new reference or NULL
+
+
+@unbox(FunctionType)
+def unbox_function_type(typ, obj, c):
+    sfunc = cgutils.create_struct_proxy(typ)(c.context, c.builder)
+
+    addr = lower_get_wrapper_address(
+        c.context, c.builder, obj, typ.signature, failure_mode='return_null')
+    sfunc.addr = c.pyapi.long_as_voidptr(addr)
+    c.pyapi.decref(addr)
+
+    llty = c.context.get_value_type(types.voidptr)
+    sfunc.pyaddr = c.builder.ptrtoint(obj, llty)
+
+    return NativeValue(sfunc._getvalue())
+
+
+@box(FunctionType)
+def box_function_type(typ, val, c):
+    sfunc = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
+    pyaddr_ptr = cgutils.alloca_once(c.builder, c.pyapi.pyobj)
+    raw_ptr = c.builder.inttoptr(sfunc.pyaddr, c.pyapi.pyobj)
+    with c.builder.if_then(cgutils.is_null(c.builder, raw_ptr),
+                           likely=False):
+        cstr = f"first-class function {typ} parent object not set"
+        c.pyapi.err_set_string("PyExc_MemoryError", cstr)
+        c.builder.ret(c.pyapi.get_null_object())
+    c.builder.store(raw_ptr, pyaddr_ptr)
+    cfunc = c.builder.load(pyaddr_ptr)
+    c.pyapi.incref(cfunc)
+    return cfunc
 
 
 @lower_cast(UndefinedFunctionType, FunctionType)
@@ -252,15 +225,14 @@ def lower_cast_function_type_to_function_type(
 @lower_cast(types.Dispatcher, FunctionType)
 def lower_cast_dispatcher_to_function_type(context, builder, fromty, toty, val):
     pyapi = context.get_python_api(builder)
-
     sfunc = cgutils.create_struct_proxy(toty)(context, builder)
-    addr = lower_get_wrapper_address(
-        context, builder, val, toty.signature(),
-        failure_mode='return_exc')
 
+    addr = lower_get_wrapper_address(
+        context, builder, val, toty.signature,
+        failure_mode='return_exc')
     sfunc.addr = pyapi.long_as_voidptr(addr)
     pyapi.decref(addr)
 
-    llty = context.get_value_type(nbtypes.voidptr)
+    llty = context.get_value_type(types.voidptr)
     sfunc.pyaddr = builder.ptrtoint(val, llty)
     return sfunc._getvalue()

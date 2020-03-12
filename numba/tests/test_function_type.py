@@ -730,7 +730,7 @@ class TestMiscIssues(TestCase):
         def f_inner(i):
             return int64(i * 3)
 
-        @cfunc(int64(f_inner._sig.as_type()))
+        @cfunc(int64(types.FunctionType(f_inner._sig)))
         def f(f_inner):
             return f_inner(123.4)
 

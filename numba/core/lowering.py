@@ -941,7 +941,8 @@ class Lower(BaseLower):
     def _lower_call_FunctionType(self, fnty, expr, signature):
         self.debug_print("# calling first-class function type")
         sig = types.unliteral(signature)
-        ftype = fnty.get_ftype(sig)
+        assert fnty.check_signature(signature)
+        ftype = fnty.ftype
         argvals = self.fold_call_args(
             fnty, sig, expr.args, expr.vararg, expr.kws,
         )

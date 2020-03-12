@@ -534,7 +534,6 @@ def unify_function_types(numba_types):
 
     for t in numba_types:
         if isinstance(t, types.Dispatcher):
-
             mnargs1, mxargs1 = get_nargs_range(t.dispatcher.py_func)
             if mnargs is None:
                 mnargs, mxargs = mnargs1, mxargs1
@@ -563,15 +562,12 @@ def unify_function_types(numba_types):
     if function is not None:
         if undefined_function is not None:
             assert function.nargs == undefined_function.nargs
-            # todo: make undefined_function precise?
-            # todo: compile dispatchers against function.signature?
-            function = undefined_function.get_function_type(
-                sig=function.signature())
+            function = undefined_function
     elif undefined_function is not None:
         undefined_function.dispatchers.update(dispatchers)
         function = undefined_function
     else:
-        function = types.UndefinedFunctionType.make(mnargs, dispatchers)
+        function = types.UndefinedFunctionType(mnargs, dispatchers)
 
     # print(f'unify_function_types -> {function}')
     return (function,) * n

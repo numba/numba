@@ -316,7 +316,7 @@ class Dispatcher(WeakType, Callable, Dummy):
             other_types = list(other.dispatcher.get_types())
 
             if len(self_types) == 0 and len(other_types) == 0:
-                return types.UndefinedFunctionType.make(mnargs, {self.dispatcher, other.dispatcher})
+                return types.UndefinedFunctionType(mnargs, {self.dispatcher, other.dispatcher})
 
             if len(self_types) >= 1 and not other_types:
                 typ = self_types[-1]
@@ -331,7 +331,7 @@ class Dispatcher(WeakType, Callable, Dummy):
 
         if isinstance(other, types.FunctionType) and mnargs <= other.nargs <= mxargs:
             self_types = list(self.dispatcher.get_types())
-            if other.signature().return_type is types.undefined:
+            if not other.is_precise():
                 other.dispatchers.update([self.dispatcher])
                 if self_types:
                     return self_types[0]

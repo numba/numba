@@ -133,7 +133,7 @@ class Signature(object):
         """
         Convert this signature to a first-class function type.
         """
-        return types.FunctionType.fromobject(self)
+        return types.FunctionType(self)
 
     def __unliteral__(self):
         return signature(types.unliteral(self.return_type),

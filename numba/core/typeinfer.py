@@ -1095,9 +1095,9 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                     typdict[var] = types.unknown
                     return
             tp = tv.getone()
+
             if isinstance(tp, types.UndefinedFunctionType):
-                # compiles
-                tp = tp.get_function_type()
+                tp = tp.get_precise()
 
             if not tp.is_precise():
                 offender = find_offender(name, exhaustive=True)

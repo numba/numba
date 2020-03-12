@@ -140,22 +140,9 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  )
         return cr
 
-    def get_addresses(self):
-        """Return a mapping of compiled function kinds and the addresses to
-        corresponding functions.
-        """
-        addresses = {}
-        for kind in ['func', 'cpython_wrapper', 'cfunc_wrapper']:
-            name = getattr(self.fndesc, 'llvm_' + kind + '_name')
-            addr = self.library.get_pointer_to_function(name)
-            if addr:
-                addresses[kind] = addr
-        return addresses
-
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__} {self.entry_point}')
         self.signature.dump(tab=tab + '  ')
-        print(f'{tab}  Addresses: {self.get_addresses()}')
         print(f'{tab}END DUMP')
 
 

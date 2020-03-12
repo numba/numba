@@ -278,17 +278,10 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self._can_compile = not val
 
     def add_overload(self, cres):
-        if 0:
-            print(f'----- ADD OVERLOAD {self.py_func.__name__}')
-            cres.dump()
-
         args = tuple(cres.signature.args)
         sig = [a._code for a in args]
         self._insert(sig, cres.entry_point, cres.objectmode, cres.interpmode)
         self.overloads[args] = cres
-
-        if 0:
-            print(cres.library.get_llvm_str())
 
     def fold_argument_types(self, args, kws):
         return self._compiler.fold_argument_types(args, kws)
@@ -958,23 +951,13 @@ class Dispatcher(_DispatcherBase):
 
             return cres.entry_point
 
-    def get_compile_result(self, sig, compile=False):
+    def get_compile_result(self, sig):
         """Compile (if needed) and return the compilation result with the
         given signature.
         """
-        args, return_type = sigutils.normalize_signature(sig)
-        atypes = tuple(args)
-        if types.undefined in atypes and 0:
-            # don't try to compile when the signature contains unknown
-            # types.
-            return
+        atypes = tuple(sig.args)
         if atypes not in self.overloads:
-            if not compile:
-                return
-            try:
-                self.compile(atypes)
-            except Exception as msg:
-                return
+            self.compile(atypes)
         return self.overloads[atypes]
 
     def recompile(self):
@@ -1041,7 +1024,7 @@ class Dispatcher(_DispatcherBase):
             sig = cres.signature
             for typs in utils.resolve_dispatcher_types((sig.return_type,) + sig.args):
                 sig_ = Signature(typs[0], typs[1:], recvr=None)
-                yield types.FunctionType.fromobject(sig_)
+                yield types.FunctionType(sig_)
 
 
 class LiftedCode(_DispatcherBase):
