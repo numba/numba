@@ -859,7 +859,7 @@ Numba CUDA Unit tests
 ^^^^^^^^^^^^^^^^^^^^^
 
 As well as providing correct execution of a simple example, all relevant Numba
-CUDA unit tests also pass with the prototype branch. for the internal memory
+CUDA unit tests also pass with the prototype branch, for both the internal memory
 manager and the RMM EMM Plugin.
 
 RMM
