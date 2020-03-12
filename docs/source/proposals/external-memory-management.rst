@@ -646,7 +646,6 @@ allocations and deallocations:
 
 These are used to track allocations and deallocations of:
 
-
 * Device memory
 * Pinned memory
 * Mapped memory
