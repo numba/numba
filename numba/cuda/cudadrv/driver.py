@@ -695,7 +695,7 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
 
     def _attempt_allocation(self, allocator):
         """
-        Attempt allocation by calling *allocator*.  If a out-of-memory error
+        Attempt allocation by calling *allocator*.  If an out-of-memory error
         is raised, the pending deallocations are flushed and the allocation
         is retried.  If it fails in the second attempt, the error is reraised.
         """
