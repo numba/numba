@@ -1,6 +1,5 @@
 import ctypes
 import numpy as np
-import sys
 import weakref
 
 from numba import cuda
@@ -89,7 +88,6 @@ if not config.ENABLE_CUDASIM:
         def interface_version(self):
             # The expected version for an EMM Plugin.
             return 1
-
 
     class BadVersionEMMPlugin(DeviceOnlyEMMPlugin):
         """A plugin that claims to implement a different interface version"""
