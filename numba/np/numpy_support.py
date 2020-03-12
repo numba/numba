@@ -31,6 +31,8 @@ FROM_DTYPE = {
 
     np.dtype('complex64'): types.complex64,
     np.dtype('complex128'): types.complex128,
+
+    np.dtype(object): types.pyobject,
 }
 
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
@@ -143,6 +145,8 @@ def as_dtype(nbtype):
     if isinstance(nbtype, types.NestedArray):
         spec = (as_dtype(nbtype.dtype), tuple(nbtype.shape))
         return np.dtype(spec)
+    if isinstance(nbtype, types.PyObject):
+        return np.dtype(object)
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
                               % (nbtype,))
 
@@ -187,10 +191,6 @@ def _check_struct_alignment(rec, fields):
                     'This is likely a NumPy bug.'
                 )
                 raise ValueError(msg.format(npy_align, llvm_align, dt))
-
-
-def is_arrayscalar(val):
-    return np.dtype(type(val)) in FROM_DTYPE
 
 
 def map_arrayscalar_type(val):

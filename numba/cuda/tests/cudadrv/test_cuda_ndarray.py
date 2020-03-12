@@ -29,6 +29,10 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         retr = dary.copy_to_host()
         np.testing.assert_array_equal(retr, ary)
 
+    def test_devicearray_dtype(self):
+        dary = cuda.device_array(shape=(100,), dtype="f4")
+        self.assertEqual(dary.dtype, np.dtype("f4"))
+
     def test_devicearray_no_copy(self):
         array = np.arange(100, dtype=np.float32)
         cuda.to_device(array, copy=False)
@@ -428,6 +432,66 @@ class TestRecarray(SerialMixin, unittest.TestCase):
 
         np.testing.assert_array_equal(expect1, got1)
         np.testing.assert_array_equal(expect2, got2)
+
+
+class TestCoreContiguous(SerialMixin, unittest.TestCase):
+    def _test_against_array_core(self, view):
+        self.assertEqual(
+            devicearray.is_contiguous(view),
+            devicearray.array_core(view).flags['C_CONTIGUOUS']
+        )
+
+    def test_device_array_like_1d(self):
+        d_a = cuda.device_array(10, order='C')
+        self._test_against_array_core(d_a)
+
+    def test_device_array_like_2d(self):
+        d_a = cuda.device_array((10, 12), order='C')
+        self._test_against_array_core(d_a)
+
+    def test_device_array_like_2d_transpose(self):
+        d_a = cuda.device_array((10, 12), order='C')
+        self._test_against_array_core(d_a.T)
+
+    def test_device_array_like_3d(self):
+        d_a = cuda.device_array((10, 12, 14), order='C')
+        self._test_against_array_core(d_a)
+
+    def test_device_array_like_1d_f(self):
+        d_a = cuda.device_array(10, order='F')
+        self._test_against_array_core(d_a)
+
+    def test_device_array_like_2d_f(self):
+        d_a = cuda.device_array((10, 12), order='F')
+        self._test_against_array_core(d_a)
+
+    def test_device_array_like_2d_f_transpose(self):
+        d_a = cuda.device_array((10, 12), order='F')
+        self._test_against_array_core(d_a.T)
+
+    def test_device_array_like_3d_f(self):
+        d_a = cuda.device_array((10, 12, 14), order='F')
+        self._test_against_array_core(d_a)
+
+    def test_1d_view(self):
+        shape = 10
+        view = np.zeros(shape)[::2]
+        self._test_against_array_core(view)
+
+    def test_1d_view_f(self):
+        shape = 10
+        view = np.zeros(shape, order='F')[::2]
+        self._test_against_array_core(view)
+
+    def test_2d_view(self):
+        shape = (10, 12)
+        view = np.zeros(shape)[::2, ::2]
+        self._test_against_array_core(view)
+
+    def test_2d_view_f(self):
+        shape = (10, 12)
+        view = np.zeros(shape, order='F')[::2, ::2]
+        self._test_against_array_core(view)
 
 
 if __name__ == '__main__':

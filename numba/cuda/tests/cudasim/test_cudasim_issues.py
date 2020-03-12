@@ -2,13 +2,49 @@ import threading
 
 import numpy as np
 
+import numba as nb
 from numba import cuda
 from numba.cuda.testing import SerialMixin, skip_unless_cudasim
 import numba.cuda.simulator as simulator
 import unittest
 
 
+
 class TestCudaSimIssues(SerialMixin, unittest.TestCase):
+
+
+    def test_record_access(self):
+        backyard_type = [('statue', np.float64),
+                         ('newspaper', np.float64, (6,))]
+
+        goose_type = [('garden', np.float64, (12,)),
+                      ('town', np.float64, (42,)),
+                      ('backyard', backyard_type)]
+
+        goose_np_type = np.dtype(goose_type, align=True)
+
+        goose_nb_type = nb.from_dtype(goose_np_type)
+
+        @cuda.jit
+        def simple_kernel(f):
+            f.garden[0] = 45.0
+            f.backyard.newspaper[3] = 2.0
+            f.backyard.newspaper[3] = f.backyard.newspaper[3] + 3.0
+
+        item = np.recarray(1, dtype=goose_np_type)
+        simple_kernel[1, 1](item[0])
+        np.testing.assert_equal(item[0]['garden'][0], 45)
+        np.testing.assert_equal(item[0]['backyard']['newspaper'][3], 5)
+
+    def test_recarray_setting(self):
+        recordwith2darray = np.dtype([('i', np.int32), ('j', np.float32, (3, 2))])
+        rec = np.recarray(2, dtype=recordwith2darray)
+        rec[0]['i'] = 45
+        @cuda.jit
+        def simple_kernel(f):
+            f[1] = f[0]
+        simple_kernel[1, 1](rec)
+        np.testing.assert_equal(rec[0]['i'], rec[1]['i'])
 
     def test_cuda_module_in_device_function(self):
         """
