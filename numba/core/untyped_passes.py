@@ -1466,6 +1466,7 @@ class ReconstructSSA(FunctionPass):
 
     def run_pass(self, state):
         state.func_ir = reconstruct_ssa(state.func_ir)
+        self._patch_locals(state)
 
         # Rebuild definitions
         state.func_ir._definitions = build_definitions(state.func_ir.blocks)
@@ -1475,3 +1476,13 @@ class ReconstructSSA(FunctionPass):
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run(emit_dels=False)
         return True      # XXX detect if it actually got changed
+
+    def _patch_locals(self, state):
+        # Fix locals type annotation
+        first_blk, *_ = state.func_ir.blocks.values()
+        scope = first_blk.scope
+        for parent, redefs in scope.var_redefinitions.items():
+            if parent in state.locals:
+                typ = state.locals[parent]
+                for derived in redefs:
+                    state.locals[derived] = typ

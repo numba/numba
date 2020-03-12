@@ -1046,6 +1046,7 @@ class Scope(EqualityCheckMixin):
         self.localvars = VarMap()
         self.loc = loc
         self.redefined = defaultdict(int)
+        self.var_redefinitions = defaultdict(set)
 
     def define(self, name, loc):
         """
@@ -1099,6 +1100,7 @@ class Scope(EqualityCheckMixin):
             ct = self.redefined[name]
             self.redefined[name] = ct + 1
             newname = "%s.%d" % (name, ct + 1)
+            self.var_redefinitions[name].add(newname)
             return self.define(newname, loc)
 
     def make_temp(self, loc):
