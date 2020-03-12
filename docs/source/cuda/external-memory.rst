@@ -69,9 +69,10 @@ Management of other objects
 ---------------------------
 
 In addition to memory, Numba manages the allocation and deallocation of
-:ref:`events <events>`, :ref:`streams <streams>`, and modules (modules are a
-compiled objects, which is generated for CUDA kernels). The management of
-events, streams, and modules is unchanged by the use of an EMM Plugin.
+:ref:`events <events>`, :ref:`streams <streams>`, and modules (a module is a
+compiled object, which is generated from ``@cuda.jit``\ -ted functions). The
+management of events, streams, and modules is unchanged by the use of an EMM
+Plugin.
 
 
 Asynchronous allocation and deallocation
