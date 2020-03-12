@@ -790,8 +790,9 @@ designs presented in this document. The current implementations can be found in:
 
 * Numba branch: https://github.com/gmarkall/numba/tree/grm-numba-nbep-7.
 * RMM branch: https://github.com/gmarkall/rmm/tree/grm-numba-nbep-7.
-* CuPy implementation: `nbep7/cupy_mempool.py <nbep7/cupy_mempool.py>`_ - uses an
-  unmodified CuPy.
+* CuPy implementation:
+  https://github.com/gmarkall/nbep-7/blob/master/nbep7/cupy_mempool.py - uses
+  an unmodified CuPy.
 
   * See `CuPy memory management
     docs <https://docs-cupy.chainer.org/en/stable/reference/memory.html>`_.
