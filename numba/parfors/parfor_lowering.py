@@ -1034,15 +1034,9 @@ def _create_gufunc_for_parfor_body(
                 if config.DEBUG_ARRAY_OPT:
                     print("func definition:", func_def, type(func_def))
                 if func_def is not None:
-                    if isinstance(func_def, ir.Global):
+                    if isinstance(func_def, ir.Global) or isinstance(func_def, ir.FreeVar):
                         gval = func_def.value
-                        globls[func_def.name] = eval(gval.__module__ + "." + gval.__name__)
-                        found = True
-                    if isinstance(func_def, ir.FreeVar):
-                        gval = func_def.value
-                        if config.DEBUG_ARRAY_OPT:
-                            print("gval:", gval, type(gval))
-                            print(dir(gval))
+                        globls[func_def.name] = gval
                         #globls[func_def.name] = eval(gval.__module__ + "." + gval.__name__)
                         found = True
             if found is False and config.DEBUG_ARRAY_OPT:
