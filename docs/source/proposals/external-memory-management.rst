@@ -484,7 +484,7 @@ Example implementation - A RAPIDS Memory Manager (RMM) Plugin
 -------------------------------------------------------------
 
 An implementation of an EMM plugin within the `Rapids Memory Manager
-(RMM) <https://github.com:rapidsai/rmm>`_ is sketched out in this section. This is
+(RMM) <https://github.com/rapidsai/rmm>`_ is sketched out in this section. This is
 intended to show an overview of the implementation in order to support the
 descriptions above and to illustrate how the plugin interface can be used -
 different choices may be made for a production-ready implementation.
