@@ -498,7 +498,8 @@ The plugin implementation consists of additions to `python/rmm/rmm.py
    from contextlib import context_manager
    # RMM already has Numba as a dependency, so these imports need not be guarded
    # by a check for the presence of numba.
-   from numba.cuda import HostOnlyCUDAMemoryManager, MemoryPointer, IpcHandle
+   from numba.cuda import (HostOnlyCUDAMemoryManager, MemoryPointer, IpcHandle,
+                           set_memory_manager)
 
 
    # New class implementing the EMM Plugin:
@@ -575,7 +576,7 @@ The plugin implementation consists of additions to `python/rmm/rmm.py
 
    # Utility function register `RMMNumbaManager` as an EMM:
    def use_rmm_for_numba():
-       cuda.set_memory_manager(RMMNumbaManager)
+       set_memory_manager(RMMNumbaManager)
 
    # To support `NUMBA_CUDA_MEMORY_MANAGER=rmm`:
    _numba_memory_manager = RMMNumbaManager
