@@ -31,7 +31,7 @@ Overview of External Memory Management
 ======================================
 
 When an EMM Plugin is in use (see :ref:`setting-emm-plugin`), Numba will make
-allocation and deallocation through the Plugin. It will never directly call
+memory allocations and deallocations through the Plugin. It will never directly call
 functions such as ``cuMemAlloc``, ``cuMemFree``, etc.
 
 EMM Plugins always take responsibility for the management of device memory.
