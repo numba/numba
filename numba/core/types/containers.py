@@ -5,7 +5,7 @@ from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
 from ..errors import TypingError
-
+from .. import utils
 
 class Pair(Type):
     """
@@ -265,6 +265,9 @@ class UnionType(Type):
 class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
     def __new__(cls, types):
+
+        types = utils.unify_function_types(types)
+
         _HeterogeneousTuple.is_types_iterable(types)
 
         if types and all(t == types[0] for t in types[1:]):

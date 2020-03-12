@@ -945,19 +945,46 @@ class Lower(BaseLower):
         argvals = self.fold_call_args(
             fnty, sig, expr.args, expr.vararg, expr.kws,
         )
-        func_ptr = self.__get_function_pointer(ftype, expr.func.name)
+        func_ptr = self.__get_function_pointer(ftype, expr.func.name, sig=sig)
         res = self.builder.call(func_ptr, argvals, cconv=fnty.cconv)
         return res
 
-    def __get_function_pointer(self, ftype, fname):
+    def __get_function_pointer(self, ftype, fname, sig=None):
+        from numba.core.function import _get_addr
         llty = self.context.get_value_type(ftype)
         fstruct = self.loadvar(fname)
         addr = self.builder.extract_value(fstruct, 0,
                                           name='addr_of_%s' % (fname))
-        # TODO: catch calling addr == -1 and raise an exception
+
         fptr = cgutils.alloca_once(self.builder, llty,
                                    name="fptr_of_%s" % (fname))
-        self.builder.store(self.builder.bitcast(addr, llty), fptr)
+        with self.builder.if_else(
+                cgutils.is_null(self.builder, addr),
+                likely=False) as (then, orelse):
+            with then:
+                # TODO: acquire gil??
+                pyaddr = self.builder.extract_value(
+                    fstruct, 1,
+                    name='pyaddr_of_%s' % (fname))
+                # todo: check pyaddr == NULL ?
+                # cgutils.printf(self.builder, "pyaddr=%p\n", pyaddr)
+                # todo use self.api?
+                pyapi = self.context.get_python_api(self.builder)
+                addr1 = _get_addr(self.context, self.builder, pyaddr, sig,
+                                  failure_mode='ignore')
+                # cgutils.printf(self.builder, "addr1=%p\n", addr1)
+                with self.builder.if_then(
+                        cgutils.is_null(self.builder, addr1), likely=False):
+                    self.return_exception(
+                        RuntimeError,
+                        exc_args=(f"{ftype} function address is null",),
+                        loc=self.loc)
+                addr2 = pyapi.long_as_voidptr(addr1)
+                # TODO: save addr2 to fstruct to avoid further calls
+                # to python and to avoid gil?? Need a test case..
+                self.builder.store(self.builder.bitcast(addr2, llty), fptr)
+            with orelse:
+                self.builder.store(self.builder.bitcast(addr, llty), fptr)
         return self.builder.load(fptr)
 
     def _lower_call_normal(self, fnty, expr, signature):

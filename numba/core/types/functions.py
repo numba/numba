@@ -3,7 +3,7 @@ import traceback
 from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
 from .misc import unliteral
-from numba.core import errors
+from numba.core import errors, utils, types
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -263,6 +263,11 @@ class Dispatcher(WeakType, Callable, Dummy):
         self._store_object(dispatcher)
         super(Dispatcher, self).__init__("type(%s)" % dispatcher)
 
+    def dump(self, tab=''):
+        print(f'{tab}DUMP {type(self).__name__}[code={self._code}, name={self.name}]')
+        self.dispatcher.dump(tab=tab + '  ')
+        print(f'{tab}END DUMP')
+
     def get_call_type(self, context, args, kws):
         """
         Resolve a call to this dispatcher using the given argument types.
@@ -297,6 +302,43 @@ class Dispatcher(WeakType, Callable, Dummy):
         Get the implementation key for the given signature.
         """
         return self.get_overload(sig)
+
+    def unify(self, context, other):
+        # todo: revise
+        mnargs, mxargs = utils.get_nargs_range(self.dispatcher.py_func)
+
+        if isinstance(other, Dispatcher):
+            mnargs2, mxargs2 = utils.get_nargs_range(other.dispatcher.py_func)
+            if (mnargs, mxargs) != (mnargs2, mxargs2):
+                return
+
+            self_types = list(self.dispatcher.get_types())
+            other_types = list(other.dispatcher.get_types())
+
+            if len(self_types) == 0 and len(other_types) == 0:
+                return types.UndefinedFunctionType.make(mnargs, {self.dispatcher, other.dispatcher})
+
+            if len(self_types) >= 1 and not other_types:
+                typ = self_types[-1]
+                # assuming that other.compile(typ.signature) works
+                return typ
+            if self_types and other_types:
+                s = set(self_types).intersection(other_types)
+                if len(s) == 1:
+                    return list(s)[0]
+                elif s:
+                    print(f'{type(self).__name__}.unify: ignoring multiple choices: {s}')
+
+        if isinstance(other, types.FunctionType) and mnargs <= other.nargs <= mxargs:
+            self_types = list(self.dispatcher.get_types())
+            if other.signature().return_type is types.undefined:
+                other.dispatchers.update([self.dispatcher])
+                if self_types:
+                    return self_types[0]
+                return other
+
+            if not self_types or other in self_types:
+                return other
 
 
 class ObjModeDispatcher(Dispatcher):

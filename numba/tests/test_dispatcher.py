@@ -1775,7 +1775,7 @@ class TestDispatcherFunctionBoundaries(TestCase):
                       cmpfn=jit(lambda x, y: x[1] - y[1]))
         self.assertEqual(got, (0, 4))
 
-    def test_dispatcher_cannot_return_to_python(self):
+    def _test_dispatcher_cannot_return_to_python(self):
         @jit(nopython=True)
         def foo(fn):
             return fn

@@ -51,7 +51,7 @@ class Flags(utils.ConfigOptions):
         'boundscheck': False,
         'forceinline': False,
         'no_cpython_wrapper': False,
-        'no_cfunc_wrapper': True,
+        'no_cfunc_wrapper': False,
         # Enable automatic parallel optimization, can be fine-tuned by taking
         # a dictionary of sub-options instead of a boolean, see parfor.py for
         # detail.
@@ -139,6 +139,24 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  reload_init=reload_init,
                  )
         return cr
+
+    def get_addresses(self):
+        """Return a mapping of compiled function kinds and the addresses to
+        corresponding functions.
+        """
+        addresses = {}
+        for kind in ['func', 'cpython_wrapper', 'cfunc_wrapper']:
+            name = getattr(self.fndesc, 'llvm_' + kind + '_name')
+            addr = self.library.get_pointer_to_function(name)
+            if addr:
+                addresses[kind] = addr
+        return addresses
+
+    def dump(self, tab=''):
+        print(f'{tab}DUMP {type(self).__name__} {self.entry_point}')
+        self.signature.dump(tab=tab + '  ')
+        print(f'{tab}  Addresses: {self.get_addresses()}')
+        print(f'{tab}END DUMP')
 
 
 _LowerResult = namedtuple("_LowerResult", [

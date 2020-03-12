@@ -1,6 +1,5 @@
 import types as pytypes
 from numba import jit, cfunc, types, int64, float64, float32
-from numba.core import errors
 import ctypes
 
 from .support import TestCase
@@ -30,7 +29,7 @@ def mk_cfunc_func(sig):
 
 def njit_func(func):
     assert isinstance(func, pytypes.FunctionType), repr(func)
-    f = jit(nopython=True, firstclass=True)(func)
+    f = jit(nopython=True)(func)
     f.pyfunc = func
     return f
 
@@ -38,7 +37,7 @@ def njit_func(func):
 def mk_njit_with_sig_func(sig):
     def njit_with_sig_func(func):
         assert isinstance(func, pytypes.FunctionType), repr(func)
-        f = jit(sig, nopython=True, firstclass=True)(func)
+        f = jit(sig, nopython=True)(func)
         f.pyfunc = func
         return f
     return njit_with_sig_func
@@ -101,7 +100,7 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [#mk_cfunc_func(sig),
+        for decor in [mk_cfunc_func(sig),
                       njit_func,
                       mk_njit_with_sig_func(sig),
                       mk_ctypes_func(sig),
@@ -135,7 +134,8 @@ class TestFunctionType(TestCase):
                 # (a_str, types.unicode_type(int64)),
         ]:
             for decor in [mk_cfunc_func(sig), njit_func,
-                          mk_njit_with_sig_func(sig), mk_wap_func(sig)]:
+                          mk_njit_with_sig_func(sig),
+                          mk_wap_func(sig), mk_ctypes_func(sig)][:-1]:
                 for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                     jit_ = jit(**jit_opts)
                     with self.subTest(
@@ -156,12 +156,16 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), njit_func]:
+        for decor in [mk_cfunc_func(sig), njit_func,
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
+                      mk_ctypes_func(sig)][:-1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
                     a_ = decor(a)
-                    self.assertEqual(jit_(foo)(a_).pyfunc, foo(a))
+                    r1 = jit_(foo)(a_).pyfunc
+                    r2 = foo(a)
+                    self.assertEqual(r1, r2)
 
     def test_in_seq_call(self):
         """Functions are passed in as arguments, used as tuple items, and
@@ -182,7 +186,8 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), njit_func]:
+        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), njit_func,
+                      mk_njit_with_sig_func(sig), mk_ctypes_func(sig)][:-1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -212,7 +217,9 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), njit_func]:
+        for decor in [mk_cfunc_func(sig), njit_func,
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
+                      mk_ctypes_func(sig)][:-2]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -236,7 +243,8 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), njit_func,
-                      mk_njit_with_sig_func(sig)]:
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
+                      mk_ctypes_func(sig)][:-2]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -257,7 +265,9 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), njit_func]:
+        for decor in [mk_cfunc_func(sig), njit_func,
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
+                      mk_ctypes_func(sig)][:-2]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -280,7 +290,9 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), njit_func]:
+        for decor in [mk_cfunc_func(sig), njit_func,
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
+                      mk_ctypes_func(sig)]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
             with self.subTest(decor=decor.__name__):
@@ -353,7 +365,8 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), njit_func,
-                      mk_njit_with_sig_func(sig), mk_wap_func(sig)]:
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
+                      mk_ctypes_func(sig)][:-1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -388,7 +401,8 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), njit_func,
-                      mk_njit_with_sig_func(sig)]:
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
+                      mk_ctypes_func(sig)][:-2]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -419,7 +433,9 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), njit_func]:
+        for decor in [mk_cfunc_func(sig), njit_func,
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
+                      mk_ctypes_func(sig)][:-1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -452,7 +468,9 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), njit_func]:
+        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), njit_func,
+                      mk_njit_with_sig_func(sig),
+                      mk_ctypes_func(sig)][:-1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -476,13 +494,16 @@ class TestFunctionType(TestCase):
             return i + 2
 
         def foo(funcs, i):
-            r = funcs[i](123)
+            f = funcs[i]
+            r = f(123)
             return r
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), njit_func]:
-            for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
+        for decor in [
+                mk_cfunc_func(sig), mk_wap_func(sig), njit_func,
+                mk_njit_with_sig_func(sig), mk_ctypes_func(sig)][:-1]:
+            for jit_opts in [dict(nopython=True), dict(forceobj=True)][:1]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
                     a_ = decor(a)
@@ -511,7 +532,8 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), njit_func]:
+        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), njit_func,
+                      mk_njit_with_sig_func(sig), mk_ctypes_func(sig)][:-1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -608,11 +630,11 @@ class TestMiscIssues(TestCase):
 
     def test_issue_3405_using_njit(self):
 
-        @jit(nopython=True, firstclass=True)
+        @jit(nopython=True)
         def a():
             return 2
 
-        @jit(nopython=True, firstclass=True)
+        @jit(nopython=True)
         def b():
             return 3
 
@@ -689,7 +711,7 @@ class TestMiscIssues(TestCase):
         def a(x):
             return x + 1.0
 
-        @numba.njit(firstclass=True)
+        @numba.njit()
         def b(x):
             return x * x
 
@@ -729,11 +751,11 @@ class TestMiscIssues(TestCase):
 
     def test_constant_functions(self):
 
-        @jit(nopython=True, firstclass=True)
+        @jit(nopython=True)
         def a():
             return 123
 
-        @jit(nopython=True, firstclass=True)
+        @jit(nopython=True)
         def b():
             return 456
 
@@ -748,7 +770,7 @@ class TestMiscIssues(TestCase):
 
     def test_generators(self):
 
-        @jit(firstclass=True, forceobj=True)
+        @jit(forceobj=True)
         def gen(xs):
             for x in xs:
                 x += 1
@@ -760,11 +782,38 @@ class TestMiscIssues(TestCase):
 
         self.assertEqual(con(gen, (1, 2, 3)), [2, 3, 4])
 
-        with self.assertRaises(errors.UnsupportedError) as raises:
-            @jit(firstclass=True, nopython=True)
-            def gen_(xs):
-                yield
+        @jit(nopython=True)
+        def gen_(xs):
+            for x in xs:
+                x += 1
+                yield x
+        self.assertEqual(con(gen_, (1, 2, 3)), [2, 3, 4])
 
-        self.assertIn(
-            'generator as a first-class function type in nopython mode',
-            str(raises.exception))
+    def test_jit_support(self):
+
+        @jit(nopython=True)
+        def foo(f, x):
+            return f(x)
+
+        @jit()
+        def a(x):
+            return x + 1
+
+        @jit()
+        def a2(x):
+            return x - 1
+
+        @jit()
+        def b(x):
+            return x + 1.5
+
+        self.assertEqual(foo(a, 1), 2)
+        a2(5)  # pre-compile
+        self.assertEqual(foo(a2, 2), 1)
+        self.assertEqual(foo(a2, 3), 2)
+        self.assertEqual(foo(a, 2), 3)
+        self.assertEqual(foo(a, 1.5), 2.5)
+        self.assertEqual(foo(a2, 1), 0)
+        self.assertEqual(foo(a, 2.5), 3.5)
+        self.assertEqual(foo(b, 1.5), 3.0)
+        self.assertEqual(foo(b, 1), 2.5)

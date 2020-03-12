@@ -21,7 +21,7 @@ class _CFuncCompiler(_FunctionCompiler):
         flags.set('no_cpython_wrapper', True)
         # TODO: enable cfunc wrapper generation from first-class
         # function support:
-        flags.set('no_cfunc_wrapper', True)
+        flags.set('no_cfunc_wrapper', False)
         # Disable compilation of the IR module, because we first want to
         # add the cfunc wrapper.
         flags.set('no_compile', True)
@@ -83,7 +83,9 @@ class CFunc(object):
 
         # Compile native function
         cres = self._compiler.compile(sig.args, sig.return_type)
+
         assert not cres.objectmode  # disabled by compiler above
+        return cres
         fndesc = cres.fndesc
 
         # TODO: eliminate C wrapper compilation because first-class

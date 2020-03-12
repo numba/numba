@@ -20,7 +20,7 @@ from inspect import Parameter as pyParameter # noqa: F401
 
 from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
-
+from numba.core import types
 
 INT_TYPES = (int,)
 longint = int
@@ -464,3 +464,114 @@ def get_nargs_range(pyfunc):
         if p.default == inspect._empty:
             min_nargs += 1
     return min_nargs, max_nargs
+
+
+def resolve_dispatcher_types(numba_types):
+    """Generate tuples of numba types by iterating over all the signatures
+    of available compilation results in the dispatcher types.
+    """
+    if not numba_types:
+        yield ()
+        return
+    t = numba_types[0]
+    for rest in resolve_dispatcher_types(numba_types[1:]):
+        if isinstance(t, types.Dispatcher):
+            for cres in t.dispatcher.overloads.values():
+                t_ = types.FunctionType.fromobject(cres.signature)
+                yield (t_, ) + rest
+        else:
+            yield (t, ) + rest
+
+
+def iter_multivalued_args(args):
+    from numba.core.dispatcher import Dispatcher
+    if len(args) == 0:
+        yield ()
+        return
+    a = args[0]
+    for rest in iter_multivalued_args(args[1:]):
+        if isinstance(a, Dispatcher):
+            for a_ in a.get_members():
+                yield (a_,) + rest
+        elif isinstance(a, (tuple, list, set)):
+            typ = type(a)
+            for a_ in iter_multivalued_args(tuple(a)):
+                yield (typ(a_),) + rest
+        else:
+            yield (a,) + rest
+
+
+def unify_function_types(numba_types):
+    """Return a normalized tuple of Numba function types so that
+
+        Tuple(numba_types)
+
+    becomes
+
+        UniTuple(dtype=<unified function type>, count=len(numba_types))
+
+    If the above transformation would be incorrect, return the
+    original input as given. For instance, if the input tuple contains
+    types that are not function or dispatcher type, the transformation
+    is considered incorrect.
+
+    If any of the Numba function types are Dispatcher types, the
+    unified function type will be imprecise (all argument types and
+    return type are specified as undefined) and an unique
+    UndefinedFunctionType holding all Dispatcher instances.
+
+    """
+    if not (numba_types
+            and isinstance(numba_types[0],
+                           (types.Dispatcher, types.FunctionType))):
+        return numba_types
+
+    n = len(numba_types)
+    mnargs, mxargs = None, None
+    dispatchers = set()
+    function = None
+    undefined_function = None
+
+    for t in numba_types:
+        if isinstance(t, types.Dispatcher):
+
+            mnargs1, mxargs1 = get_nargs_range(t.dispatcher.py_func)
+            if mnargs is None:
+                mnargs, mxargs = mnargs1, mxargs1
+            elif not (mnargs, mxargs) == (mnargs1, mxargs1):
+                return numba_types
+            dispatchers.add(t.dispatcher)
+        elif isinstance(t, types.FunctionType):
+            if mnargs is None:
+                mnargs = mxargs = t.nargs
+            elif not (mnargs == mxargs == t.nargs):
+                return numba_types
+            if isinstance(t, types.UndefinedFunctionType):
+                if undefined_function is None:
+                    undefined_function = t
+                else:
+                    assert undefined_function == t
+                dispatchers.update(t.dispatchers)
+            else:
+                if function is None:
+                    function = t
+                else:
+                    assert function == t
+        else:
+            return numba_types
+
+    if function is not None:
+        if undefined_function is not None:
+            assert function.nargs == undefined_function.nargs
+            # todo: make undefined_function precise?
+            # todo: compile dispatchers against function.signature?
+            function = undefined_function.get_function_type(
+                sig=function.signature())
+    elif undefined_function is not None:
+        undefined_function.dispatchers.update(dispatchers)
+        function = undefined_function
+    else:
+        function = types.UndefinedFunctionType.make(mnargs, dispatchers)
+
+    # print(f'unify_function_types -> {function}')
+    return (function,) * n

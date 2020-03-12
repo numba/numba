@@ -338,7 +338,12 @@ class PairFirstConstraint(object):
                 if not isinstance(tp, types.Pair):
                     # XXX is this an error?
                     continue
-                assert tp.first_type.is_precise()
+                if isinstance(tp.first_type, types.FunctionType):
+                    # todo: investigate if undefined function type can
+                    # be made precise earlier
+                    pass
+                else:
+                    assert tp.first_type.is_precise()
                 typeinfer.add_type(self.target, tp.first_type, loc=self.loc)
 
 
@@ -1090,6 +1095,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                     typdict[var] = types.unknown
                     return
             tp = tv.getone()
+            if isinstance(tp, types.UndefinedFunctionType):
+                # compiles
+                tp = tp.get_function_type()
+
             if not tp.is_precise():
                 offender = find_offender(name, exhaustive=True)
                 msg = ("Cannot infer the type of variable '%s'%s, "
@@ -1217,6 +1226,9 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
     def _unify_return_types(self, rettypes):
         if rettypes:
             unified = self.context.unify_types(*rettypes)
+            if isinstance(unified, types.FunctionType):
+                # unified can be UndefinedFunctionType
+                return unified
             if unified is None or not unified.is_precise():
                 def check_type(atype):
                     lst = []

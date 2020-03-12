@@ -48,7 +48,6 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={},
                          raise_errors=True):
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
-
     warnings = errors.WarningsFixer(errors.NumbaWarning)
     infer = typeinfer.TypeInferer(typingctx, interp, warnings)
     with typingctx.callstack.register(infer, interp.func_id, args):
@@ -363,8 +362,17 @@ class NativeLowering(LoweringPass):
                     lower.create_cpython_wrapper(flags.release_gil)
 
                 if not flags.no_cfunc_wrapper:
-                    # for first-class function support
-                    lower.create_cfunc_wrapper()
+                    # skip cfunc wrapper generation if unsupported
+                    # argument or return types are used
+                    for t in state.args:
+                        if isinstance(t, (types.Omitted, types.Generator)):
+                            break
+                    else:
+                        if isinstance(restype,
+                                      (types.Optional, types.Generator)):
+                            pass
+                        else:
+                            lower.create_cfunc_wrapper()
 
                 env = lower.env
                 call_helper = lower.call_helper
