@@ -508,7 +508,7 @@ The plugin implementation consists of additions to `python/rmm/rmm.py
            ctx = cuda.current_context()
            ptr = ctypes.c_uint64(int(addr))
            finalizer = _make_finalizer(addr, stream)
-           return MemoryPointer(ctx, ptr, bytesize, finalizer=finalizer)
+           return MemoryPointer(ctx, ptr, size, finalizer=finalizer)
 
       def get_ipc_handle(self, memory):
            """ 
