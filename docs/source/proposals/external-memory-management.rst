@@ -496,6 +496,8 @@ The plugin implementation consists of additions to `python/rmm/rmm.py
 
    # New imports:
    from contextlib import context_manager
+   # RMM already has Numba as a dependency, so these imports need not be guarded
+   # by a check for the presence of numba.
    from numba.cuda import HostOnlyCUDAMemoryManager, MemoryPointer, IpcHandle
 
 
