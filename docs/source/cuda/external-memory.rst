@@ -114,7 +114,7 @@ implementation follows:
   interface (rather than being handled within Numba) because the base address of
   the allocation is only known by the underlying library. Closing an IPC handle
   is handled internally within Numba.
-- It is optional provide memory info from the ``get_memory_info`` method, which
+- It is optional to provide memory info from the ``get_memory_info`` method, which
   provides a count of the total and free memory on the device for the context.
   It is preferrable to implement the method, but this may not be practical for
   all allocators. If memory info is not provided, this method should raise a
