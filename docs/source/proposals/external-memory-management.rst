@@ -48,7 +48,7 @@ If an EMM is to be used, it will entirely replace Numba's internal memory
 management for the duration of program execution. An interface for setting the
 memory manager will be provided.
 
-Device v.s. Host memory
+Device vs. Host memory
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 An EMM will always take responsibility for the management of device memory.
@@ -915,4 +915,3 @@ The 8 errors are due to a lack of implementation of ``get_ipc_handle`` in the
 CuPy EMM Plugin implementation. It is expected that this implementation will be
 re-visited and completed so that CuPy can be used stably as an allocator for
 Numba in the future.
-
