@@ -639,7 +639,8 @@ At present, memory management is implemented in the
 :class:`~numba.cuda.cudadrv.driver.Context` class. It maintains lists of
 allocations and deallocations:
 
-* ``allocations`` is a ``numba.utils.UniqueDict``, created at context creation time.
+* ``allocations`` is a ``numba.core.utils.UniqueDict``, created at context
+  creation time.
 * ``deallocations`` is an instance of the ``_PendingDeallocs`` class, and is created
   when ``Context.prepare_for_use()`` is called.
 
