@@ -646,7 +646,7 @@ class BaseCUDAMemoryManager(object, metaclass=ABCMeta):
     @abstractmethod
     def reset(self):
         """
-        Clear up all memory allocated in this context.
+        Clears up all memory allocated in this context.
 
         :return: None
         """
