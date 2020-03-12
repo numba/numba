@@ -95,7 +95,7 @@ Asynchronous allocation / deallocation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 An asynchronous memory manager might provide the facility for an allocation or
-free to take a CUDA stream and execute asynchronously. For freeing this is
+free to take a CUDA stream and execute asynchronously. For freeing, this is
 unlikely to cause issues since it operates at a layer beneath Python, but for
 allocations this could be problematic if the user tries to then launch a kernel
 on the default stream from this asynchronous memory allocation.
