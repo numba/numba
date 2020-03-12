@@ -229,8 +229,8 @@ of :meth:`~numba.cuda.BaseCUDAMemoryManager.get_ipc_handle`:
 Guidance for constructing an IPC handle in the context of implementing an EMM
 Plugin:
 
-- The ``memory`` parameter to ``get_ipc_handle`` can be passed as the ``base``
-  parameter.
+- The ``memory`` parameter passed to the ``get_ipc_handle`` method of an EMM
+  Plugin can be passed as the ``base`` parameter.
 - A suitable type for the ``handle`` can be constructed as ``ctypes.c_byte *
   64``. The data for ``handle`` must be populated using a method for obtaining a
   CUDA IPC handle appropriate to the underlying library.
