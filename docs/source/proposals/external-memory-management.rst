@@ -489,7 +489,8 @@ intended to show an overview of the implementation in order to support the
 descriptions above and to illustrate how the plugin interface can be used -
 different choices may be made for a production-ready implementation.
 
-The plugin implementation consists of additions to ``python/rmm/rmm.py``\ :
+The plugin implementation consists of additions to `python/rmm/rmm.py
+<https://github.com/rapidsai/rmm/blob/d5831ac5ebb5408ee83f63b7c7d03d8870ecb361/python/rmm/rmm.py>`_:
 
 .. code-block:: python
 
