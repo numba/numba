@@ -177,7 +177,7 @@ Memory Pointers
 ---------------
 
 EMM Plugins should construct memory pointer instances that represent their
-allocations, for return to Numba. The appopriate memory pointer class to use in
+allocations, for return to Numba. The appropriate memory pointer class to use in
 each method is:
 
 - :class:`~numba.cuda.MemoryPointer`: returned from ``memalloc``
