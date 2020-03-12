@@ -4,13 +4,13 @@ import numpy as np
 
 from numba import cuda
 from numba.cuda.testing import (unittest, skip_on_cudasim,
-                                skip_with_external_memmgr, SerialMixin)
+                                skip_if_external_memmgr, SerialMixin)
 from numba.tests.support import captured_stderr
 from numba.core import config
 
 
 @skip_on_cudasim('not supported on CUDASIM')
-@skip_with_external_memmgr('Deallocation specific to Numba memory management')
+@skip_if_external_memmgr('Deallocation specific to Numba memory management')
 class TestDeallocation(SerialMixin, unittest.TestCase):
     def test_max_pending_count(self):
         # get deallocation manager and flush it
@@ -62,7 +62,7 @@ class TestDeallocation(SerialMixin, unittest.TestCase):
 
 
 @skip_on_cudasim("defer_cleanup has no effect in CUDASIM")
-@skip_with_external_memmgr('Deallocation specific to Numba memory management')
+@skip_if_external_memmgr('Deallocation specific to Numba memory management')
 class TestDeferCleanup(SerialMixin, unittest.TestCase):
     def test_basic(self):
         harr = np.arange(5)

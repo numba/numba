@@ -5,8 +5,7 @@ import weakref
 
 from numba import cuda
 from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
-
-not_linux = not sys.platform.startswith('linux')
+from numba.tests.support import linux_only
 
 
 class DeviceOnlyEMMPlugin(cuda.HostOnlyCUDAMemoryManager):
@@ -162,7 +161,7 @@ class TestDeviceOnlyEMMPlugin(unittest.TestCase, SerialMixin):
         self.assertEqual(meminfo.free, 32)
         self.assertEqual(meminfo.total, 64)
 
-    @unittest.skipIf(not_linux, "IPC only supported on Linux")
+    @linux_only
     def test_get_ipc_handle(self):
         # We don't attempt to close the IPC handle in this test because Numba
         # will be expecting a real IpcHandle object to have been returned from

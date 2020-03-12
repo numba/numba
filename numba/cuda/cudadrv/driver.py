@@ -793,8 +793,8 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
 
     @contextlib.contextmanager
     def defer_cleanup(self):
-        """Disables cleanup of mapped or pinned host memory in the current
-        context.
+        """Returns a context manager that disables cleanup of mapped or pinned
+        host memory in the current context whilst it is active.
 
         EMM Plugins that override this method must obtain the context manager
         from this method before yielding to ensure that cleanup of host
@@ -847,8 +847,10 @@ class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
 
     @property
     def interface_version(self):
-        return 1
+        return _SUPPORTED_EMM_INTERFACE_VERSION
 
+
+_SUPPORTED_EMM_INTERFACE_VERSION = 1
 
 _memory_manager = None
 
@@ -858,15 +860,16 @@ def _ensure_memory_manager():
     if _memory_manager:
         return
 
-    if config.CUDA_MEMORY_MANAGER:
-        try:
-            mgr_module = importlib.import_module(config.CUDA_MEMORY_MANAGER)
-            set_memory_manager(mgr_module._numba_memory_manager)
-        except Exception:
-            raise RuntimeError("Failed to use memory manager from %s" %
-                               config.CUDA_MEMORY_MANAGER)
-    else:
+    if config.CUDA_MEMORY_MANAGER == 'default':
         _memory_manager = NumbaCUDAMemoryManager
+        return
+
+    try:
+        mgr_module = importlib.import_module(config.CUDA_MEMORY_MANAGER)
+        set_memory_manager(mgr_module._numba_memory_manager)
+    except Exception:
+        raise RuntimeError("Failed to use memory manager from %s" %
+                           config.CUDA_MEMORY_MANAGER)
 
 def set_memory_manager(mm_plugin):
     """Configure Numba to use an External Memory Management (EMM) Plugin. If
@@ -881,8 +884,9 @@ def set_memory_manager(mm_plugin):
 
     dummy = mm_plugin(context=None)
     iv = dummy.interface_version
-    if iv != 1:
-        err = "EMM Plugin interface has version %d - version 1 required" % iv
+    if iv != _SUPPORTED_EMM_INTERFACE_VERSION:
+        err = "EMM Plugin interface has version %d - version %d required" \
+              % (iv, _SUPPORTED_EMM_INTERFACE_VERSION)
         raise RuntimeError(err)
 
     _memory_manager = mm_plugin
@@ -1083,6 +1087,8 @@ class Context(object):
         return self.memory_manager.memhostalloc(bytesize, mapped, portable, wc)
 
     def mempin(self, owner, pointer, size, mapped=False):
+        if mapped and not self.device.CAN_MAP_HOST_MEMORY:
+            raise CudaDriverError("%s cannot map host memory" % self.device)
         return self.memory_manager.mempin(owner, pointer, size, mapped)
 
     def get_ipc_handle(self, memory):

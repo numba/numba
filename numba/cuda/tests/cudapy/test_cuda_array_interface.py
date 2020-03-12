@@ -3,7 +3,7 @@ import numpy as np
 from numba import vectorize, guvectorize
 from numba import cuda
 from numba.cuda.testing import unittest, CUDATestCase
-from numba.cuda.testing import skip_on_cudasim, skip_with_external_memmgr
+from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
 
 
 class MyArray(object):
@@ -30,7 +30,7 @@ class TestCudaArrayInterface(CUDATestCase):
         self.assertEqual(wrapped.device_ctypes_pointer.value,
                          d_arr.device_ctypes_pointer.value)
 
-    @skip_with_external_memmgr('Ownership not relevant with external memmgr')
+    @skip_if_external_memmgr('Ownership not relevant with external memmgr')
     def test_ownership(self):
         # Get the deallocation queue
         ctx = cuda.current_context()
