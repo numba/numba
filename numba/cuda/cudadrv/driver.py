@@ -679,7 +679,7 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
     :class:`numba.cuda.BaseCUDAMemoryManager`) for its own internal state
     management. If an EMM Plugin based on this class also implements these
     methods, then its implementations of these must also call the method from
-    ``super()`` to give ``HostOnlyCUDAMemoryManager`` an opportunity  to do the
+    ``super()`` to give ``HostOnlyCUDAMemoryManager`` an opportunity to do the
     necessary work for the host allocations it is managing.
 
     This class does not implement ``interface_version``, as it will always be
