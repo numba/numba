@@ -11,7 +11,7 @@ from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 from numba.tests.support import linux_only
 import unittest
 
-
+not_linux = not sys.platform.startswith('linux')
 has_mp_get_context = hasattr(mp, 'get_context')
 
 
@@ -180,7 +180,7 @@ class TestIpcMemory(CUDATestCase):
         self.check_ipc_array(slice(3, 8))
         self.check_ipc_array(slice(None, 8))
 
-@linux_only
+@unittest.skipUnless(not_linux, 'Only on OS other than Linux')
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcNotSupported(CUDATestCase):
     def test_unsupported(self):
