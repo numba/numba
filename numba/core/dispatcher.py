@@ -9,14 +9,13 @@ import sys
 import types as pytypes
 import uuid
 import weakref
-import inspect
 from copy import deepcopy
 
 from numba import _dispatcher
 from numba.core import utils, types, errors, typing, serialize, config, compiler, sigutils
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.typeconv.rules import default_type_manager
-from numba.core.typing.templates import fold_arguments, Signature
+from numba.core.typing.templates import fold_arguments
 from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
 from numba.core.utils import reraise
@@ -100,6 +99,7 @@ class _FunctionCompiler(object):
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
         flags = self._customize_flags(flags)
+
         impl = self._get_implementation(args, {})
         cres = compiler.compile_extra(self.targetdescr.typing_context,
                                       self.targetdescr.target_context,
@@ -237,6 +237,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         overloads = self.overloads
         targetctx = self.targetctx
+
         # Early-bind utils.shutting_down() into the function's local namespace
         # (see issue #689)
         def finalizer(shutting_down=utils.shutting_down):
@@ -665,7 +666,6 @@ class Dispatcher(_DispatcherBase):
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
-
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 
@@ -690,17 +690,6 @@ class Dispatcher(_DispatcherBase):
 
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
-
-        # Enable prototypes means that callable arguments that are
-        # jit-decorated functions are treated as first-class function
-        # types. That is, the prototypes of the callable realizations
-        # are used in finding a overloads match. If not match is
-        # found, type-inference will be triggered that generates a new
-        # realization for the callable argument.
-
-        self.enable_prototypes = not (targetoptions.get('nopython', False) or targetoptions.get('forceobj', False))
-        # todo: should no_cfunc_wrapper flag be also used here?
-        # print(f'{targetoptions=} {self.enable_prototypes=}')
 
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}, type code={self._type._code}]')
@@ -807,10 +796,8 @@ class Dispatcher(_DispatcherBase):
                 def folded(args, kws):
                     return self._compiler.fold_argument_types(args, kws)[1]
                 raise e.bind_fold_arguments(folded)
-
             self.add_overload(cres)
             self._cache.save_overload(sig, cres)
-
             return cres.entry_point
 
     def get_compile_result(self, sig):
@@ -938,7 +925,6 @@ class LiftedCode(_DispatcherBase):
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:
                 raise cres.typing_error
-
             self.add_overload(cres)
             return cres.entry_point
 

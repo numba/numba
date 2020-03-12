@@ -175,27 +175,12 @@ class CPUContext(BaseContext):
         status, out = self.call_conv.call_function(
             builder, wrapper_callee, fndesc.restype, fndesc.argtypes, wrapfn.args)
 
-        # The C wrapper function interface lacks Python/C API. So,
-        # when the callee raises an exception, it will be catched and
-        # the exception message will be written to stderr. The return
-        # value will be undefined in the case of exceptions.
-        # TODO: investigate if longjmp could be used.
-        pyapi = self.get_python_api(builder)
         with builder.if_then(status.is_error, likely=False):
             # If (and only if) an error occurred, acquire the GIL
             # and use the interpreter to write out the exception.
+            pyapi = self.get_python_api(builder)
             gil_state = pyapi.gil_ensure()
             self.call_conv.raise_error(builder, pyapi, status)
-            cstr = self.insert_const_string(
-                builder.module,
-                f'call to first-class function {fndesc.llvm_func_name}')
-            strobj = pyapi.string_from_string(cstr)
-            pyapi.err_write_unraisable(strobj)
-            pyapi.decref(strobj)
-            pyapi.gil_release(gil_state)
-            # TODO: set special `out` value so that the caller could
-            # get a hint about the raised exception: maximal int value
-            # for integers? `nan` value for floats?
 
         builder.ret(out)
         library.add_ir_module(wrapper_module)

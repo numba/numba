@@ -299,7 +299,7 @@ class TestFunctionType(TestCase):
                 a_ = decor(a)
                 self.assertEqual(jit_(mkfoo(a_))().pyfunc, mkfoo(a)())
 
-    def __test_in_overload(self):
+    def test_in_overload(self):
         """Function is passed in as an argument and called with different
         argument types.
 
@@ -312,18 +312,14 @@ class TestFunctionType(TestCase):
             r2 = f(123.45)
             return (r1, r2)
 
-        # sig = int64(int64)
-
         for decor in [njit_func]:
-            # mk_cfunc_func(sig),
-            # int64(int64) argument types do not match with (float64,)
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
                     a_ = decor(a)
                     self.assertEqual(jit_(foo)(a_), foo(a))
 
-    def __test_ns_overload(self):
+    def test_ns_overload(self):
         """Function is passed in via namespace scoping and called with
         different argument types.
 

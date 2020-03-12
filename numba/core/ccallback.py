@@ -17,8 +17,6 @@ class _CFuncCompiler(_FunctionCompiler):
 
     def _customize_flags(self, flags):
         flags.set('no_cpython_wrapper', True)
-        # TODO: enable cfunc wrapper generation from first-class
-        # function support:
         flags.set('no_cfunc_wrapper', False)
         # Disable compilation of the IR module, because we first want to
         # add the cfunc wrapper.

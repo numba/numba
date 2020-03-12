@@ -94,8 +94,7 @@ def lower_constant_function_type(context, builder, typ, pyval):
                                                 info=type(pyval).__name__)
         return sfunc._getvalue()
 
-    # TODO: implement support for WrapperAddressProtocol,
-    # and types.FunctionType, ctypes.CFUNCTYPE
+    # TODO: implement support for pytypes.FunctionType, ctypes.CFUNCTYPE
     raise NotImplementedError(
         'lower_constant_struct_function_type({}, {}, {}, {})'
         .format(context, builder, typ, pyval))
