@@ -52,7 +52,7 @@ from numba.core.withcontexts import objmode_context as objmode
 import numba.cpython.charseq
 
 # First-class function type support
-import numba.core.function
+import numba.core.function_type
 
 # Keep this for backward compatibility.
 test = runtests.main

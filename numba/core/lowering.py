@@ -950,7 +950,8 @@ class Lower(BaseLower):
         return res
 
     def __get_function_pointer(self, ftype, fname, sig=None):
-        from numba.core.function import _get_addr
+        from numba.core.function_type import lower_get_wrapper_address
+
         llty = self.context.get_value_type(ftype)
         fstruct = self.loadvar(fname)
         addr = self.builder.extract_value(fstruct, 0,
@@ -970,8 +971,9 @@ class Lower(BaseLower):
                 # cgutils.printf(self.builder, "pyaddr=%p\n", pyaddr)
                 # todo use self.api?
                 pyapi = self.context.get_python_api(self.builder)
-                addr1 = _get_addr(self.context, self.builder, pyaddr, sig,
-                                  failure_mode='ignore')
+                addr1 = lower_get_wrapper_address(
+                    self.context, self.builder, pyaddr, sig,
+                    failure_mode='ignore')
                 # cgutils.printf(self.builder, "addr1=%p\n", addr1)
                 with self.builder.if_then(
                         cgutils.is_null(self.builder, addr1), likely=False):

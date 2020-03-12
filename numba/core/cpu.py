@@ -59,7 +59,7 @@ class CPUContext(BaseContext):
         # Initialize additional implementations
         import numba.cpython.unicode
         import numba.typed.dictimpl
-        import numba.core.function
+        import numba.core.function_type
 
     def load_additional_registries(self):
         # Add target specific implementations
