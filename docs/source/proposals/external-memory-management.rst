@@ -538,7 +538,7 @@ The plugin implementation consists of additions to `python/rmm/rmm.py
 
        def get_memory_info(self):
            # Returns a tuple of (free, total) using RMM functionality.
-           return get_memory_info()
+           return get_info() # Function defined in rmm.py
 
        def initialize(self):
            # Nothing required to initialize RMM here, but this method is added
