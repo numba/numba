@@ -928,6 +928,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
             acc = 0
             l1 = [1, 2, 3, 4]
             l2 = [10, 20]
+            tup = (l1, l2)
             a1 = np.arange(20)
             a2 = np.ones(5, dtype=np.complex128)
             tup = (l1, a1, l2, a2)
