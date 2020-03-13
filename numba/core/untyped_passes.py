@@ -698,8 +698,10 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
                                     # check if this is a tuple slice
                                     if not isinstance(ty, self._accepted_types):
                                         extra = "operation %s" % to_unroll.op
+                                        loc = to_unroll.loc
                             elif isinstance(to_unroll, ir.Arg):
                                 extra = "non-const argument %s" % to_unroll.name
+                                loc = to_unroll.loc
                             else:
                                 if to_unroll is None:
                                     extra = ('multiple definitions of '
