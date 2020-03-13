@@ -838,3 +838,38 @@ class TestMiscIssues(TestCase):
 
         # this works because `sel` condition is optimized away:
         self.assertEqual(foo(f1, f1, sel=1), ([1], 2))
+
+    def test_unique_dispatcher(self):
+        # In general, the type of dispatcher instances is processed as
+        # UndefinedFunctionType because which overload to use is
+        # determined from type-inference. However, if a dispatcher
+        # instance contains exactly one overload and the compilation
+        # is disabled, then the dispatcher instance can be processed
+        # as FunctionType with defined signature and would minimizing
+        # using type-inference.
+
+        def foo_template(funcs, x):
+            r = x
+            for f in funcs:
+                r = f(r)
+            return r
+
+        # Problem:
+        a = jit(nopython=True)(lambda x: x + 1)
+        b = jit(nopython=True)(lambda x: x + 2)
+        foo = jit(nopython=True)(foo_template)
+        r = foo((a, b), 0)
+        self.assertEqual(r, 3)
+        # the Tuple type of foo first argument is UndefinedFunctionType:
+        self.assertEqual(foo.signatures[0][0].dtype.is_precise(), False)
+
+        # Solution:
+        a = jit(nopython=True)(lambda x: x + 1)
+        b = jit(nopython=True)(lambda x: x + 2)
+        foo = jit(nopython=True)(foo_template)
+        a(0)  # compile
+        a.disable_compile()
+        r = foo((a, b), 0)
+        self.assertEqual(r, 3)
+        # the Tuple type of foo first argument is FunctionType:
+        self.assertEqual(foo.signatures[0][0].dtype.is_precise(), True)

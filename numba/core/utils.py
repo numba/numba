@@ -548,7 +548,10 @@ def unified_function_type(numba_types):
             elif not (mnargs, mxargs) == (mnargs1, mxargs1):
                 return
             dispatchers.add(t.dispatcher)
-        elif isinstance(t, types.FunctionType):
+            t = t.dispatcher.get_function_type()
+            if t is None:
+                continue
+        if isinstance(t, types.FunctionType):
             if mnargs is None:
                 mnargs = mxargs = t.nargs
             elif not (mnargs == mxargs == t.nargs):
