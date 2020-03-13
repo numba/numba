@@ -240,10 +240,10 @@ class Interpreter(object):
             If ``None``, a name is created automatically.
         """
         gv_fn = ir.Global(gv_name, func, loc=self.loc)
-        self.store(value=gv_fn, name=gv_name)
+        self.store(value=gv_fn, name=gv_name, redefine=True)
         callres = ir.Expr.call(self.get(gv_name), (), (), loc=self.loc)
         res_name = res_name or '$callres_{}'.format(gv_name)
-        self.store(value=callres, name=res_name)
+        self.store(value=callres, name=res_name, redefine=True)
 
     def _insert_try_block_begin(self):
         """Insert IR-nodes to mark the start of a `try` block.
@@ -384,12 +384,16 @@ class Interpreter(object):
 
     # --- Scope operations ---
 
-    def store(self, value, name):
+    def store(self, value, name, redefine=False):
         """
         Store *value* (a Expr or Var instance) into the variable named *name*
         (a str object). Returns the target variable.
         """
-        target = self.current_scope.get_or_define(name, loc=self.loc)
+        if redefine or self.current_block_offset in self.cfa.backbone:
+            rename = not (name in self.code_cellvars)
+            target = self.current_scope.redefine(name, loc=self.loc, rename=rename)
+        else:
+            target = self.current_scope.get_or_define(name, loc=self.loc)
         if isinstance(value, ir.Var):
             value = self.assigner.assign(value, target)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
@@ -722,7 +726,7 @@ class Interpreter(object):
             for x in value:
                 nm = '$const_%s' % str(x)
                 val_const = ir.Const(x, loc=self.loc)
-                target = self.store(val_const, name=nm)
+                target = self.store(val_const, name=nm, redefine=True)
                 st.append(target)
             const = ir.Expr.build_tuple(st, loc=self.loc)
         else:
@@ -1135,7 +1139,7 @@ class Interpreter(object):
                 "exception_match", eh.exception_match, loc=self.loc,
             )
             exc_match_name = '$exc_match'
-            self.store(value=gv_fn, name=exc_match_name)
+            self.store(value=gv_fn, name=exc_match_name, redefine=True)
             lhs = self.get(lhs)
             rhs = self.get(rhs)
             exc = ir.Expr.call(
