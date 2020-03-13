@@ -135,6 +135,9 @@ class BaseTuple(ConstSized, Hashable):
                 else:
                     return NamedTuple(tys, pyclass)
         else:
+            dtype = utils.unified_function_type(tys)
+            if dtype is not None:
+                return UniTuple(dtype, len(tys))
             # non-named tuple
             homogeneous = is_homogeneous(*tys)
             if homogeneous:
