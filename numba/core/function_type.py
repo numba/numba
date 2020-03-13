@@ -69,6 +69,8 @@ def lower_constant_dispatcher(context, builder, typ, pyval):
 
 @lower_constant(FunctionType)
 def lower_constant_function_type(context, builder, typ, pyval):
+    typ = typ.get_precise()
+
     if isinstance(pyval, CFunc):
         addr = pyval._wrapper_address
         sfunc = cgutils.create_struct_proxy(typ)(context, builder)
@@ -202,6 +204,8 @@ def lower_get_wrapper_address(context, builder, func, sig,
 
 @unbox(FunctionType)
 def unbox_function_type(typ, obj, c):
+    typ = typ.get_precise()
+
     sfunc = cgutils.create_struct_proxy(typ)(c.context, c.builder)
 
     addr = lower_get_wrapper_address(
@@ -217,6 +221,8 @@ def unbox_function_type(typ, obj, c):
 
 @box(FunctionType)
 def box_function_type(typ, val, c):
+    typ = typ.get_precise()
+
     sfunc = cgutils.create_struct_proxy(typ)(c.context, c.builder, value=val)
     pyaddr_ptr = cgutils.alloca_once(c.builder, c.pyapi.pyobj)
     raw_ptr = c.builder.inttoptr(sfunc.pyaddr, c.pyapi.pyobj)
@@ -239,6 +245,8 @@ def lower_cast_function_type_to_function_type(
 
 @lower_cast(types.Dispatcher, FunctionType)
 def lower_cast_dispatcher_to_function_type(context, builder, fromty, toty, val):
+    toty = toty.get_precise()
+
     pyapi = context.get_python_api(builder)
     sfunc = cgutils.create_struct_proxy(toty)(context, builder)
 

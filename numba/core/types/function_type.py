@@ -15,17 +15,15 @@ class FunctionType(Type):
     cconv = None
 
     def __init__(self, signature):
-        self._reset_signature(signature)
-
-    def _reset_signature(self, sig):
-        sig = types.unliteral(sig)
+        sig = types.unliteral(signature)
         self.nargs = len(sig.args)
         self.signature = sig
         self.ftype = FunctionPrototype(sig.return_type, sig.args)
+        self._key = self.ftype.key
 
     @property
     def key(self):
-        return self.ftype.key
+        return self._key
 
     @property
     def name(self):
@@ -33,6 +31,9 @@ class FunctionType(Type):
 
     def is_precise(self):
         return self.signature.is_precise()
+
+    def get_precise(self):
+        return self
 
     def dump(self, tab=''):
         print(f'{tab}DUMP {type(self).__name__}[code={self._code}]')
@@ -95,31 +96,19 @@ class UndefinedFunctionType(FunctionType):
 
         self.dispatchers = dispatchers
 
+        # make the undefined function type instance unique
         type(self)._counter += 1
-        self._key_count = str(type(self)._counter)
-
-    @property
-    def key(self):
-        return self.ftype.key + self._key_count
+        self._key += str(type(self)._counter)
 
     def get_precise(self):
         """
         Return precise function type if possible.
         """
-        sig = None
         for dispatcher in self.dispatchers:
             for cres in dispatcher.overloads.values():
                 sig = types.unliteral(cres.signature)
-                break
-            else:
-                continue
-            break
-        if sig is None:
-            return self
-
-        self._reset_signature(sig)
-
-        return FunctionType(sig)
+                return FunctionType(sig)
+        return self
 
 
 class FunctionPrototype(Type):
