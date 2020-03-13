@@ -100,9 +100,13 @@ class TestSSA(TestCase):
                 c += 1
                 return c
 
-        with self.assertRaises(errors.NotDefinedError) as raises:
+        with self.assertWarns(errors.NumbaWarning) as warns:
+            # n=1 so we won't actually run the branch with the uninitialized
             self.check_func(foo, 1)
-        self.assertEqual(raises.exception.name, "c")
+        self.assertIn("Detected uninitialized variable c", str(warns.warning))
+
+        with self.assertRaises(UnboundLocalError):
+            foo.py_func(0)
 
     def test_phi_propagation(self):
         @njit

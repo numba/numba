@@ -3,6 +3,7 @@ Implement Dominance-Fronter-based SSA by Choi et al
 """
 import logging
 import operator
+import warnings
 from functools import reduce
 from copy import copy
 from pprint import pformat
@@ -163,6 +164,13 @@ class _GatherDefsHandler:
         pass
 
 
+class UndefinedVariable:
+    def __init__(self):
+        raise NotImplementedError("Not intended for instantiation")
+
+    target = ir.UNDEFINED
+
+
 class _FreshVarHandler:
     def on_assign(self, states, assign):
         if assign.target.name == states['varname']:
@@ -194,16 +202,17 @@ class _FixSSAVars:
                 states, assign, assign.value.list_vars(),
             )
             # Has a replacement that is not the current variable
-            if newdef is not None and states['varname'] != newdef.target.name:
-                replmap = {states['varname']: newdef.target}
-                rhs = copy(rhs)
+            if newdef is not None and newdef.target is not ir.UNDEFINED:
+                if states['varname'] != newdef.target.name:
+                    replmap = {states['varname']: newdef.target}
+                    rhs = copy(rhs)
 
-                ir_utils.replace_vars_inner(rhs, replmap)
-                return ir.Assign(
-                    target=assign.target,
-                    value=rhs,
-                    loc=assign.loc,
-                )
+                    ir_utils.replace_vars_inner(rhs, replmap)
+                    return ir.Assign(
+                        target=assign.target,
+                        value=rhs,
+                        loc=assign.loc,
+                    )
         elif isinstance(rhs, ir.Var):
             newdef = self._fix_var(states, assign, [rhs])
             # Has a replacement that is not the current variable
@@ -292,7 +301,15 @@ class _FixSSAVars:
         else:
             idom = cfg.immediate_dominators()[label]
             if idom == label:
-                raise errors.NotDefinedError(states['varname'], loc=loc)
+                # We are searched to the top of the idom tree.
+                # Since we still cannot find a definition,
+                # we will warn and let
+                warnings.warn(
+                    errors.NumbaWarning(
+                        f"Detected uninitialized variable {states['varname']}",
+                        loc=loc),
+                )
+                return UndefinedVariable
             _logger.debug("idom %s from label %s", idom, label)
             return self._find_def_from_bottom(states, idom, loc=loc)
 
