@@ -181,6 +181,11 @@ class CPUContext(BaseContext):
             pyapi = self.get_python_api(builder)
             gil_state = pyapi.gil_ensure()
             self.call_conv.raise_error(builder, pyapi, status)
+            cstr = self.insert_const_string(builder.module, repr(self))
+            strobj = pyapi.string_from_string(cstr)
+            pyapi.err_write_unraisable(strobj)
+            pyapi.decref(strobj)
+            pyapi.gil_release(gil_state)
 
         builder.ret(out)
         library.add_ir_module(wrapper_module)
