@@ -1097,11 +1097,17 @@ class Scope(EqualityCheckMixin):
             # means it could be captured in a closure.
             return self.localvars.get(name)
         else:
-            ct = self.redefined[name]
-            self.redefined[name] = ct + 1
-            newname = "%s.%d" % (name, ct + 1)
-            self.var_redefinitions[name].add(newname)
-            return self.define(newname, loc)
+            while True:
+                ct = self.redefined[name]
+                self.redefined[name] = ct + 1
+                newname = "%s.%d" % (name, ct + 1)
+                try:
+                    res = self.define(newname, loc)
+                except RedefinedError:
+                    continue
+                else:
+                    self.var_redefinitions[name].add(newname)
+                return res
 
     def make_temp(self, loc):
         n = len(self.localvars)

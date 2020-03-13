@@ -325,7 +325,7 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
     var_dict = {}
     for var in callee_scope.localvars._con.values():
         if not (var.name in callee_code.co_freevars):
-            new_var = scope.define(mk_unique_var(var.name), loc=var.loc)
+            new_var = scope.redefine(mk_unique_var(var.name), loc=var.loc)
             var_dict[var.name] = new_var
     debug_print("var_dict = ", var_dict)
     replace_vars(callee_blocks, var_dict)
