@@ -701,13 +701,19 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
                             elif isinstance(to_unroll, ir.Arg):
                                 extra = "non-const argument %s" % to_unroll.name
                             else:
-                                extra = "unknown problem"
-                            if extra:
-                                msg = ("Invalid use of literal_unroll, "
-                                       "argument should be a tuple or a list "
-                                       "of constant values, found %s" % extra)
-                                raise errors.UnsupportedError(msg,
-                                                              to_unroll.loc)
+                                if to_unroll is None:
+                                    extra = ('multiple definitions of '
+                                             'variable "%s".' % unroll_var.name)
+                                    loc = unroll_var.loc
+                                else:
+                                    loc = to_unroll.loc
+                                    extra = "unknown problem"
+
+                            msg = ("Invalid use of literal_unroll, "
+                                    "argument should be a tuple or a list "
+                                    "of constant values. Failure reason: "
+                                    "found %s" % extra)
+                            raise errors.UnsupportedError(msg, loc)
         return mutated
 
 

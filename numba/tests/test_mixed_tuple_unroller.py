@@ -928,7 +928,6 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
             acc = 0
             l1 = [1, 2, 3, 4]
             l2 = [10, 20]
-            tup = (l1, l2)
             a1 = np.arange(20)
             a2 = np.ones(5, dtype=np.complex128)
             tup = (l1, a1, l2, a2)
@@ -1203,6 +1202,30 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         pyfunc = get(consumer.py_func).py_func
 
         self.assertEqual(cfunc(), pyfunc())
+
+    def test_34(self):
+        # mixed bag, redefinition of tuple
+        @njit
+        def foo():
+            acc = 0
+            l1 = [1, 2, 3, 4]
+            l2 = [10, 20]
+            if acc - 2 > 3:
+                tup = (l1, l2)
+            else:
+                a1 = np.arange(20)
+                a2 = np.ones(5, dtype=np.complex128)
+                tup = (l1, a1, l2, a2)
+            for t in literal_unroll(tup):
+                acc += len(t)
+            return acc
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo()
+
+        self.assertIn("Invalid use of", str(raises.exception))
+        self.assertIn("found multiple definitions of variable",
+                      str(raises.exception))
 
 
 class TestConstListUnroll(MemoryLeakMixin, TestCase):
