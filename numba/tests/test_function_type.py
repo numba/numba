@@ -1,5 +1,5 @@
 import types as pytypes
-from numba import jit, cfunc, types, int64, float64, float32
+from numba import jit, cfunc, types, int64, float64, float32, errors
 import ctypes
 
 from .support import TestCase
@@ -813,3 +813,28 @@ class TestMiscIssues(TestCase):
         self.assertEqual(foo(a, 2.5), 3.5)
         self.assertEqual(foo(b, 1.5), 3.0)
         self.assertEqual(foo(b, 1), 2.5)
+
+    def test_signature_mismatch(self):
+        @jit(nopython=True)
+        def f1(x):
+            return x
+
+        @jit(nopython=True)
+        def f2(x):
+            return x
+
+        @jit(nopython=True)
+        def foo(disp1, disp2, sel):
+            if sel == 1:
+                fn = disp1
+            else:
+                fn = disp2
+            return fn([1]), fn(2)
+
+        with self.assertRaises(errors.UnsupportedError) as cm:
+            foo(f1, f2, sel=1)
+        self.assertRegex(
+            str(cm.exception), 'mismatch of function types:')
+
+        # this works because `sel` condition is optimized away:
+        self.assertEqual(foo(f1, f1, sel=1), ([1], 2))

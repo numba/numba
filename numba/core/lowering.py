@@ -941,7 +941,11 @@ class Lower(BaseLower):
     def _lower_call_FunctionType(self, fnty, expr, signature):
         self.debug_print("# calling first-class function type")
         sig = types.unliteral(signature)
-        assert fnty.check_signature(signature)
+        if not fnty.check_signature(signature):
+            # value dependent polymorphism?
+            raise UnsupportedError(
+                f'mismatch of function types:'
+                f' expected {fnty} but got {types.FunctionType(sig)}')
         ftype = fnty.ftype
         argvals = self.fold_call_args(
             fnty, sig, expr.args, expr.vararg, expr.kws,
