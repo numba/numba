@@ -1421,7 +1421,6 @@ def unicode_strip_right_bound(string, chars):
                 i += 1
                 break
 
-    print(string, str_len, chars, i)
     return i
 
 
