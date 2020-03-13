@@ -35,11 +35,12 @@ def validate_arg_type(arg, arg_name, valid_types, none_allowed=False,
     }
 
     valid_names = [None] * len(valid_types)
+
     # any defined name mapping takes precedence
     valid_names = [name_mapping.get(type_, name) if name is None
                    else name
                    for type_, name in zip(valid_types, valid_names)]
-    # if a concrete type is defined, its name takes precendence
+    # if a type instance is defined, it's name takes precendence
     valid_names = [getattr(type_, 'name', None) if name is None
                    else name
                    for type_, name in zip(valid_types, valid_names)]
@@ -47,38 +48,40 @@ def validate_arg_type(arg, arg_name, valid_types, none_allowed=False,
     valid_names = [getattr(type_, '__name__', None) if name is None
                    else name
                    for type_, name in zip(valid_types, valid_names)]
-    if any(x is None for x in valid_names):
-        print('Test')
+    for x in valid_names:
+        assert x is not None, f"Cannot find name for type {x}"
 
     if none_allowed is True:
         valid_types = valid_types + (types.NoneType, type(None))
 
-    have_type_spec = all(inspect.isclass(x) for x in valid_types)
+    have_type_class = all(inspect.isclass(x) for x in valid_types)
 
-    if have_type_spec:
+    def create_error_msg():
+        if len(valid_names) == 1:
+            msg = (f"{msg_prefix}argument '{arg_name}' must of type "
+                   f"{valid_names[0]}, got type {type(arg).__name__}")
+        else:
+            msg = (f"{msg_prefix}argument '{arg_name}' must of the "
+                   f"following types: {', '.join(valid_names)}; got type "
+                   f"{type(arg).__name__}")
+        return msg
+
+    if have_type_class:
+        # have type class
         if not isinstance(arg, valid_types):
-            if len(valid_names) == 1:
-                msg = f"{msg_prefix}argument '{arg_name}' must of type " \
-                      f"{valid_names[0]}, got type {type(arg).__name__}"
-            else:
-                msg = f"{msg_prefix}argument '{arg_name}' must of the " \
-                      f"following types: {', '.join(valid_names)}; got type " \
-                      f"{type(arg).__name__}"
+            msg = create_error_msg()
             if all(issubclass(x, types.Literal) for x in valid_types):
                 raise RequireLiteralValue(msg)
             else:
                 raise TypeError(msg)
     else:
-        # have specific type instance
+        # have instance of type class
         if arg not in valid_types:
-            if len(valid_names) == 1:
-                msg = f"{msg_prefix}argument '{arg_name}' must of type " \
-                      f"{valid_names[0]}, got type {type(arg).__name__}"
+            msg = create_error_msg()
+            if all(isinstance(x, types.Literal) for x in valid_types):
+                raise RequireLiteralValue(msg)
             else:
-                msg = f"{msg_prefix}argument '{arg_name}' must of the " \
-                      f"following types: {', '.join(valid_names)}; got type " \
-                      f"{type(arg).__name__}"
-            raise TypeError(msg)
+                raise TypeError(msg)
 
 
 @intrinsic
