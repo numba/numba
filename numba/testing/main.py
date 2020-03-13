@@ -321,17 +321,52 @@ class NumbaTestProgram(unittest.main):
             run_tests_real()
 
 
+# These are tests which are generated and injected into the test suite, what
+# gets injected depends on features of the test environment, e.g. TBB presence
+# it's important for doing the CI "slice tests" that these are run at the end
+# See notes in `_flatten_suite` for why. Simple substring matching is used to
+# determine a match.
+_GENERATED = ("numba.tests.test_num_threads",
+              "numba.tests.test_parallel_backend",
+              "numba.tests.test_svml",
+              "numba.tests.test_ufuncs",)
+
+
+def _flatten_suite_inner(test):
+    """
+    Workhorse for _flatten_suite
+    """
+    tests = []
+    if isinstance(test, (unittest.TestSuite, list, tuple)):
+        for x in test:
+            tests.extend(_flatten_suite_inner(x))
+    else:
+        tests.append(test)
+    return tests
+
+
 def _flatten_suite(test):
     """
     Expand nested suite into list of test cases.
     """
-    if isinstance(test, (unittest.TestSuite, list, tuple)):
-        tests = []
-        for x in test:
-            tests.extend(_flatten_suite(x))
-        return tests
-    else:
-        return [test]
+    tests = _flatten_suite_inner(test)
+    # Strip out generated tests and stick them at the end, this is to make sure
+    # that tests appear in a consistent order regardless of features available.
+    # This is so that a slice through the test suite e.g. (1::N) would likely be
+    # consistent up to the point of the generated tests, which rely on specific
+    # features.
+    generated = set()
+    for t in tests:
+        for g in _GENERATED:
+            if g in str(t):
+                generated.add(t)
+    normal = set(tests) - generated
+    def key(x):
+        return x.__module__, type(x).__name__, x._testMethodName
+    tests = sorted(normal, key=key)
+    tests.extend(sorted(list(generated), key=key))
+    return tests
+
 
 def _choose_gitdiff_tests(tests):
     try:
