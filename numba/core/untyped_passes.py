@@ -709,11 +709,12 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
                                     loc = to_unroll.loc
                                     extra = "unknown problem"
 
-                            msg = ("Invalid use of literal_unroll, "
-                                    "argument should be a tuple or a list "
-                                    "of constant values. Failure reason: "
-                                    "found %s" % extra)
-                            raise errors.UnsupportedError(msg, loc)
+                            if extra:
+                                msg = ("Invalid use of literal_unroll, "
+                                       "argument should be a tuple or a list "
+                                       "of constant values. Failure reason: "
+                                       "found %s" % extra)
+                                raise errors.UnsupportedError(msg, loc)
         return mutated
 
 
