@@ -1,10 +1,16 @@
 #!/bin/bash
 
-CC=gcc
-CXX=g++
+CC=""
+CXX=""
+
+
+if [ -z "$CC" ]; then
+    CC=gcc
+    CXX=g++
+fi
 
 function usage() {
-    echo "usage: ./build_for_conda.sh [ [-h | --help] | [-d | --debug] ]"
+    echo "usage: ./build_for_develop.sh [ [-h | --help] | [-d | --debug] ]"
 }
 
 DEBUG_FLAGS=""
