@@ -78,7 +78,6 @@ class FunctionDescriptor(object):
         It may not match the Module's globals if the function is created
         dynamically (i.e. exec)
         """
-        print(self.lookup_module())
         return self.global_dict or self.lookup_module().__dict__
 
     def lookup_module(self):
