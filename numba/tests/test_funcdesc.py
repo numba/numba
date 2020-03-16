@@ -12,16 +12,17 @@ class TestModule(unittest.TestCase):
         filename = 'test.py'
         name = 'mypackage'
         code = """
-        def f(x):
-            return x
-        """
+def f(x):
+    return x
+"""
 
         objs = dict(__file__=filename, __name__=name)
         compiled = compile(code, filename, 'exec')
         exec(compiled, objs)
 
         compiled_f = njit(objs['f'])
-        self.assertRaises(ModuleNotFoundError, compiled_f(0))
+        with self.assertRaises(ModuleNotFoundError):
+            compiled_f(0)
 
 
 if __name__ == '__main__':
