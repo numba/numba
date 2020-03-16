@@ -2012,7 +2012,7 @@ class TestPrange(TestPrangeBase):
             acc = 0
             X = np.ones(N)
             for i in range(-N, 5):
-                acc -= X[i]
+                acc += X[i]
                 for j in range(-4, N):
                     acc += X[j]
             return acc

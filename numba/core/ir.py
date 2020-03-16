@@ -1000,6 +1000,24 @@ class Var(EqualityCheckMixin, AbstractRHS):
     def is_temp(self):
         return self.name.startswith("$")
 
+    @property
+    def unversioned_name(self):
+        """The unversioned name of this variable, i.e. SSA renaming removed
+        """
+        return self.name.split('.')[0]
+
+    @property
+    def versioned_names(self):
+        """Known versioned names for this variable, i.e. know variable names in
+        the scope that have been formed from applying SSA to this variable
+        """
+        return self.scope.get_versions_of(self.unversioned_name)
+
+    @property
+    def all_names(self):
+        """All known versioned and unversioned names for this variable
+        """
+        return self.versioned_names | {self.unversioned_name,}
 
 class Intrinsic(EqualityCheckMixin):
     """
@@ -1108,6 +1126,20 @@ class Scope(EqualityCheckMixin):
                 else:
                     self.var_redefinitions[name].add(newname)
                 return res
+
+    def get_versions_of(self, name):
+        """
+        Gets all known versions of a given name
+        """
+        vers = set()
+        def walk(thename):
+            redefs = self.var_redefinitions.get(thename, None)
+            if redefs:
+                for v in redefs:
+                    vers.add(v)
+                    walk(v)
+        walk(name)
+        return vers
 
     def make_temp(self, loc):
         n = len(self.localvars)
