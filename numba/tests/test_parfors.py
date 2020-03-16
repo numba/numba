@@ -2231,7 +2231,7 @@ class TestPrange(TestPrangeBase):
         pfunc = self.generate_prange_func(test_impl, None)
         cres = self.compile_parallel_fastmath(pfunc, ())
         ir = self._get_gufunc_ir(cres)
-        _id = '%[A-Z]?.[0-9]+[.]?[i]?'
+        _id = '%[A-Z_0-9]?(.[0-9]+)+[.]?[i]?'
         recipr_str = '\s+%s = fmul fast double %s, 5.000000e-01'
         reciprocal_inst = re.compile(recipr_str % (_id, _id))
         fadd_inst = re.compile('\s+%s = fadd fast double %s, %s'
