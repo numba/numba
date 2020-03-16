@@ -78,18 +78,22 @@ class FunctionDescriptor(object):
         It may not match the Module's globals if the function is created
         dynamically (i.e. exec)
         """
+        print(self.lookup_module())
         return self.global_dict or self.lookup_module().__dict__
 
     def lookup_module(self):
         """
         Return the module in which this function is supposed to exist.
         This may be a dummy module if the function was dynamically
-        generated.
+        generated. Raise exception if the module can't be found.
         """
         if self.modname == _dynamic_modname:
             return _dynamic_module
         else:
-            return sys.modules[self.modname]
+            try:
+                return sys.modules[self.modname]
+            except:
+                raise ModuleNotFoundError(f"can't compile {self.qualname}: import of module {self.modname} failed")
 
     def lookup_function(self):
         """
