@@ -220,6 +220,15 @@ class TestTypes(TestCase):
         self.assertPreciseEqual(ty(5), np.timedelta64(5))
         self.assertPreciseEqual(ty('NaT'), np.timedelta64('NaT'))
 
+    def test_cant_modify_unit(self):
+        ty = types.NPDatetime('s')
+        with self.assertRaises(Exception):
+            ty.unit = ''
+
+        ty = types.NPTimedelta('s')
+        with self.assertRaises(Exception):
+            ty.unit = ''
+
     def test_list_type_getitem(self):
         for listty in (types.int64, types.Array(types.float64, 1, 'C')):
             l_int = types.List(listty)

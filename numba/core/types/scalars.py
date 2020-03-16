@@ -165,6 +165,17 @@ class _NPDatetimeBase(Type):
         self.unit_code = npdatetime_helpers.DATETIME_UNITS[self.unit]
         super(_NPDatetimeBase, self).__init__(name, *args, **kws)
 
+    @property
+    def unit(self):
+        return self.__unit
+
+    @unit.setter
+    def unit(self, unit):
+        if not hasattr(self, "_NPDatetimeBase__unit"):
+            self.__unit = unit
+        else:
+            raise Exception("Cannot redefine unit of _NPDatetimeBase")
+
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
             return NotImplemented
