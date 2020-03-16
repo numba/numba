@@ -1,9 +1,5 @@
 #!/bin/bash
 
-CC=""
-CXX=""
-
-
 if [ -z "$CC" ]; then
     CC=gcc
     CXX=g++

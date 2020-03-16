@@ -188,7 +188,8 @@ def get_ext_modules():
         tbb_root = check_file_at_path(['include', 'tbb', 'tbb.h'])
 
     # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
-    have_openmp = True
+    #RH TODO: Make have_openmp = True once conda packages are being shipped
+    have_openmp = False
     opeclliteflags = list()
     if sys.platform.startswith('win'):
         cpp11flags = []
