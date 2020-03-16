@@ -272,6 +272,13 @@ class TestNumbers(TestCase):
         self.assertIs(f(32), types.int32)
         self.assertIs(f(8, signed=False), types.uint8)
 
+    def test_cant_modify_Integer(self):
+        int16 = types.Integer.from_bitwidth(16)
+        with self.assertRaises(Exception):
+            int16.bitwidth = 32
+        with self.assertRaises(Exception):
+            int16.signed = False
+
     def test_ordering(self):
         def check_order(values):
             for i in range(len(values)):
