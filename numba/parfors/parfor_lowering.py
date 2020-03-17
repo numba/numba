@@ -393,6 +393,13 @@ def _lower_parfor_parallel(lowerer, parfor):
                     # reduction variable's name.  This fixes problems with
                     # cases where there are multiple assignments to the
                     # reduction variable in the parfor.
+                    reduction_var = scope.get_exact(name)
+                    if isinstance(inst, ir.Assign) and reduction_var.unversioned_name == inst.target.unversioned_name:
+                        lowerer.lower_inst(parfor_reddict[name][1][-1])
+                        if name != inst.target.name:
+                            pfbdr.assign_inplace(
+                                rhs=inst.target, typ=redvar_typ, name=name,
+                            )
                         break
 
                     if config.DEBUG_ARRAY_OPT_RUNTIME:
