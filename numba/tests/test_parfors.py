@@ -1628,6 +1628,21 @@ class TestParfors(TestParforsBase):
         x = np.arange(10)
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_tuple_concat(self):
+        def test_impl(a):
+            n = len(a)
+            array_shape = n, n
+            indices = np.zeros((1,) + array_shape, dtype=np.uint64)
+            k_list = indices[0, :]
+
+            for i, g in enumerate(a):
+                k_list[i, i] = i
+            return k_list
+
+        x = np.array([1, 1])
+        self.check(test_impl, x)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
