@@ -2434,11 +2434,23 @@ class ConvertLoopPass:
                         index_set.add(stmt.target.name)
                         added_indices.add(stmt.target.name)
                     # make sure parallel index is not overwritten
-                    elif stmt.target.name in index_set and stmt.target.name != stmt.value.name:
-                        raise errors.UnsupportedRewriteError(
-                            "Overwrite of parallel loop index",
-                            loc=stmt.target.loc,
-                        )
+                    else:
+                        scope = block.scope
+
+                        def unver(name):
+                            from numba.core import errors
+                            try:
+                                return scope.get_exact(name).unversioned_name
+                            except errors.NotDefinedError:
+                                return name
+
+                        if unver(stmt.target.name) in map(unver, index_set) and unver(stmt.target.name) != unver(stmt.value.name):
+                            raise errors.UnsupportedRewriteError(
+                                "Overwrite of parallel loop index",
+                                loc=stmt.target.loc,
+                            )
+
+
 
                 if is_get_setitem(stmt):
                     index = index_var_of_get_setitem(stmt)

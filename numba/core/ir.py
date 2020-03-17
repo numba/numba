@@ -1004,7 +1004,10 @@ class Var(EqualityCheckMixin, AbstractRHS):
     def unversioned_name(self):
         """The unversioned name of this variable, i.e. SSA renaming removed
         """
-        return self.name.split('.')[0]
+        for k, redef_set in self.scope.var_redefinitions.items():
+            if self.name in redef_set:
+                return k
+        return self.name
 
     @property
     def versioned_names(self):
