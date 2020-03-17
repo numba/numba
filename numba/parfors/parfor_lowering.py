@@ -388,6 +388,11 @@ def _lower_parfor_parallel(lowerer, parfor):
                             lowerer.fndesc.calltypes[rhs] = ct
                     lowerer.lower_inst(inst)
                     if isinstance(inst, ir.Assign) and name == inst.target.name:
+                    # Only process reduction statements post-gufunc execution
+                    # until we see an assignment with a left-hand side to the
+                    # reduction variable's name.  This fixes problems with
+                    # cases where there are multiple assignments to the
+                    # reduction variable in the parfor.
                         break
 
                     if config.DEBUG_ARRAY_OPT_RUNTIME:
