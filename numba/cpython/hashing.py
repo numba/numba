@@ -166,7 +166,11 @@ def _long_impl(val):
 def int_hash(val):
 
     _HASH_I64_MIN = -2 if sys.maxsize <= 2 ** 32 else -4
-    _SIGNED_MIN = _Py_hash_t(-(1 << (_hash_width - 1)))
+    _SIGNED_MIN = types.int64(-0x8000000000000000)
+
+    # Find a suitable type to hold a "big" value, i.e. iinfo(ty).min/max
+    # this is to ensure e.g. int32.min is handled ok as it's abs() is its value
+    _BIG =  types.int64 if getattr(val, 'signed', False) else types.uint64
 
     # this is a bit involved due to the CPython repr of ints
     def impl(val):
@@ -179,6 +183,7 @@ def int_hash(val):
         # If the magnitude is greater than PyHASH_MODULUS then... if the value
         # is negative then negate it switch the sign on the hash once computed
         # and use the standard wide unsigned hash implementation
+        val = _BIG(val)
         mag = abs(val)
         if mag < _PyHASH_MODULUS:
             if val == 0:
