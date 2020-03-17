@@ -687,6 +687,21 @@ class TestTupleBuild(TestCase):
         # Heterogeneous
         check(lambda a: tuple(a), (4, 5.5))
 
+    def test_empty_tuple_iteration(self):
+        try:
+            indices = tuple()
+
+            @njit
+            def testnumba():
+                for i in indices:
+                    pass
+                else:
+                    pass
+
+            testnumba()
+
+        except Exception:
+            self.fail("Fail on empty tuple iteration")
 
 
 if __name__ == '__main__':
