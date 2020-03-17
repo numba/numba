@@ -2056,7 +2056,7 @@ class ArrayAnalysis(object):
 
     def _analyze_op_arrayexpr(self, scope, equiv_set, expr):
         return self._analyze_broadcast(
-            scope, equiv_set, expr.loc, expr.list_vars(), expr.fn
+            scope, equiv_set, expr.loc, expr.list_vars(), None
         )
 
     def _analyze_op_build_tuple(self, scope, equiv_set, expr):
