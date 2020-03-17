@@ -2113,7 +2113,8 @@ class ArrayAnalysis(object):
             ".", "_"
         )
         if fname in UFUNC_MAP_OP:  # known numpy ufuncs
-            return self._analyze_broadcast(scope, equiv_set, expr.loc, args, None)
+            return self._analyze_broadcast(scope, equiv_set,
+                                           expr.loc, args, None)
         else:
             try:
                 fn = getattr(self, fname)
