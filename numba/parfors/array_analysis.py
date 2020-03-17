@@ -2045,18 +2045,18 @@ class ArrayAnalysis(object):
     def _analyze_op_binop(self, scope, equiv_set, expr):
         require(expr.fn in BINARY_MAP_OP)
         return self._analyze_broadcast(
-            scope, equiv_set, expr.loc, [expr.lhs, expr.rhs]
+            scope, equiv_set, expr.loc, [expr.lhs, expr.rhs], expr.fn
         )
 
     def _analyze_op_inplace_binop(self, scope, equiv_set, expr):
         require(expr.fn in INPLACE_BINARY_MAP_OP)
         return self._analyze_broadcast(
-            scope, equiv_set, expr.loc, [expr.lhs, expr.rhs]
+            scope, equiv_set, expr.loc, [expr.lhs, expr.rhs], expr.fn
         )
 
     def _analyze_op_arrayexpr(self, scope, equiv_set, expr):
         return self._analyze_broadcast(
-            scope, equiv_set, expr.loc, expr.list_vars()
+            scope, equiv_set, expr.loc, expr.list_vars(), expr.fn
         )
 
     def _analyze_op_build_tuple(self, scope, equiv_set, expr):
@@ -2113,7 +2113,7 @@ class ArrayAnalysis(object):
             ".", "_"
         )
         if fname in UFUNC_MAP_OP:  # known numpy ufuncs
-            return self._analyze_broadcast(scope, equiv_set, expr.loc, args)
+            return self._analyze_broadcast(scope, equiv_set, expr.loc, args, None)
         else:
             try:
                 fn = getattr(self, fname)
@@ -2796,7 +2796,7 @@ class ArrayAnalysis(object):
         require(len(args) >= 1)
         return equiv_set._get_shape(args[0]), []
 
-    def _analyze_broadcast(self, scope, equiv_set, loc, args):
+    def _analyze_broadcast(self, scope, equiv_set, loc, args, fn):
         """Infer shape equivalence of arguments based on Numpy broadcast rules
         and return shape of output
         https://docs.scipy.org/doc/numpy/user/basics.broadcasting.html
@@ -2808,10 +2808,10 @@ class ArrayAnalysis(object):
                 shapes = [equiv_set.get_shape(x) for x in tups]
                 concat_shapes = sum(shapes, ())
                 return (concat_shapes, [])
-            except GuardException:
+            # else arrays
+            except errors.GuardException:
                 return None
 
-        # else arrays
         arrs = list(filter(lambda a: self._isarray(a.name), args))
         require(len(arrs) > 0)
         names = [x.name for x in arrs]
@@ -3000,6 +3000,10 @@ class ArrayAnalysis(object):
     def _isarray(self, varname):
         typ = self.typemap[varname]
         return isinstance(typ, types.npytypes.Array) and typ.ndim > 0
+
+    def _istuple(self, varname):
+        typ = self.typemap[varname]
+        return isinstance(typ, types.UniTuple)
 
     def _sum_size(self, equiv_set, sizes):
         """Return the sum of the given list of sizes if they are all equivalent
