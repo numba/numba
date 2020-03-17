@@ -502,8 +502,12 @@ class TestConvertLoopPass(BaseTest):
                 arr[i - 1] = i
             return arr
 
-        self.run_parfor_sub_pass(test_impl, ())
-        self.run_parallel(test_impl)
+        with self.assertRaises(errors.UnsupportedRewriteError) as raises:
+            self.run_parfor_sub_pass(test_impl, ())
+        self.assertIn(
+            "Overwrite of parallel loop index",
+            str(raises.exception),
+        )
 
     def test_init_prange(self):
         def test_impl():
