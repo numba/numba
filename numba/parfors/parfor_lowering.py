@@ -387,7 +387,6 @@ def _lower_parfor_parallel(lowerer, parfor):
                             # Add calltype back in for the expr with updated signature.
                             lowerer.fndesc.calltypes[rhs] = ct
                     lowerer.lower_inst(inst)
-                    if isinstance(inst, ir.Assign) and name == inst.target.name:
                     # Only process reduction statements post-gufunc execution
                     # until we see an assignment with a left-hand side to the
                     # reduction variable's name.  This fixes problems with
