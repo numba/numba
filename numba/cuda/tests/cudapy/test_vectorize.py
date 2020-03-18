@@ -3,7 +3,7 @@ import numpy as np
 from numba import vectorize
 from numba import cuda, int32, float32, float64
 from numba.cuda.testing import skip_on_cudasim
-from numba.cuda.testing import CUDATestCase
+from numba.cuda.testing import SerialMixin
 from numba.core import config
 import unittest
 
@@ -21,7 +21,7 @@ test_dtypes = np.float32, np.int32
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestCUDAVectorize(CUDATestCase):
+class TestCUDAVectorize(SerialMixin, unittest.TestCase):
     N = 1000001
 
     def test_scalar(self):
