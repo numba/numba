@@ -246,6 +246,21 @@ class BaseLower(object):
 
         self.debug_print("# function begin: {0}".format(
             self.fndesc.unique_name))
+
+        # create slots for all the vars, irrespective of whether they are
+        # initialized, SSA will pick this up and warn users about using
+        # uninitialized variables. Slots are added as alloca in the first block
+        bb = self.blkmap[self.firstblk]
+        self.builder.position_at_end(bb)
+        all_names = set()
+        for block in self.blocks.values():
+            for x in block.find_insts(ir.Del):
+                if x.value not in all_names:
+                    all_names.add(x.value)
+        for name in all_names:
+            fetype = self.typeof(name)
+            self._alloca_var(name, fetype)
+
         # Lower all blocks
         for offset, block in sorted(self.blocks.items()):
             bb = self.blkmap[offset]
