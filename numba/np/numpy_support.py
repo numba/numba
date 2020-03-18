@@ -147,6 +147,8 @@ def as_dtype(nbtype):
         return np.dtype(spec)
     if isinstance(nbtype, types.PyObject):
         return np.dtype(object)
+    if nbtype is types.none:
+        return np.dtype(None)
     raise NotImplementedError("%r cannot be represented as a Numpy dtype"
                               % (nbtype,))
 
