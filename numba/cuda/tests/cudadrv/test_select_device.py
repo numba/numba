@@ -9,7 +9,7 @@ except:
 
 import numpy as np
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, ContextResettingTestCase
 
 
 def newthread(exception_queue):
@@ -26,7 +26,7 @@ def newthread(exception_queue):
         exception_queue.put(e)
 
 
-class TestSelectDevice(CUDATestCase):
+class TestSelectDevice(ContextResettingTestCase):
     def test_select_device(self):
         exception_queue = Queue()
         for i in range(10):

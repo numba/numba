@@ -11,10 +11,16 @@ from numba.core import config
 import unittest
 
 
-class CUDATestCase(SerialMixin, unittest.TestCase):
+class ContextResettingTestCase(SerialMixin, unittest.TestCase):
+    """
+    For tests where the context needs to be reset after each test. Typically
+    these inspect or modify parts of the context that would usually be expected
+    to be internal implementation details (such as the state of allocations and
+    deallocations, etc.).
+    """
+
     def tearDown(self):
         from numba.cuda.cudadrv.devices import reset
-
         reset()
 
 

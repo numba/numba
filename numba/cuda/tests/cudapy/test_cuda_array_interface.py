@@ -2,7 +2,7 @@ import numpy as np
 
 from numba import vectorize, guvectorize
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, ContextResettingTestCase
 from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
 
 
@@ -13,7 +13,7 @@ class MyArray(object):
 
 
 @skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
-class TestCudaArrayInterface(CUDATestCase):
+class TestCudaArrayInterface(ContextResettingTestCase):
     def test_as_cuda_array(self):
         h_arr = np.arange(10)
         self.assertFalse(cuda.is_cuda_array(h_arr))
