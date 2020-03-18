@@ -2,10 +2,7 @@
 # Test does not work on some cards.
 #
 import threading
-try:
-    from Queue import Queue  # Python 2
-except:
-    from queue import Queue  # Python 3
+from queue import Queue
 
 import numpy as np
 from numba import cuda

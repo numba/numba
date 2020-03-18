@@ -2,11 +2,7 @@ import threading
 from numba import cuda
 from numba.cuda.cudadrv.driver import driver
 from numba.cuda.testing import unittest, ContextResettingTestCase
-
-try:
-    from Queue import Queue  # Python 2
-except:
-    from queue import Queue  # Python 3
+from queue import Queue
 
 
 class TestResetDevice(ContextResettingTestCase):

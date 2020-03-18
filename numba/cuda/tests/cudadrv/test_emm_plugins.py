@@ -4,7 +4,7 @@ import weakref
 
 from numba import cuda
 from numba.core import config
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba.tests.support import linux_only
 
 if not config.ENABLE_CUDASIM:
@@ -98,7 +98,7 @@ if not config.ENABLE_CUDASIM:
 
 
 @skip_on_cudasim('EMM Plugins not supported on CUDA simulator')
-class TestDeviceOnlyEMMPlugin(unittest.TestCase, SerialMixin):
+class TestDeviceOnlyEMMPlugin(CUDATestCase):
     """
     Tests that the API of an EMM Plugin that implements device allocations
     only is used correctly by Numba.
@@ -175,7 +175,7 @@ class TestDeviceOnlyEMMPlugin(unittest.TestCase, SerialMixin):
 
 
 @skip_on_cudasim('EMM Plugins not supported on CUDA simulator')
-class TestBadEMMPluginVersion(unittest.TestCase, SerialMixin):
+class TestBadEMMPluginVersion(CUDATestCase):
     """
     Ensure that Numba rejects EMM Plugins with incompatible version
     numbers.
@@ -185,3 +185,7 @@ class TestBadEMMPluginVersion(unittest.TestCase, SerialMixin):
         with self.assertRaises(RuntimeError) as raises:
             cuda.set_memory_manager(BadVersionEMMPlugin)
         self.assertIn('version 1 required', str(raises.exception))
+
+
+if __name__ == '__main__':
+    unittest.main()

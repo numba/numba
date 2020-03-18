@@ -2,7 +2,7 @@ import os.path
 import numpy as np
 from numba.cuda.testing import unittest
 from numba.cuda.testing import skip_on_cudasim
-from numba.cuda.testing import SerialMixin
+from numba.cuda.testing import CUDATestCase
 from numba.cuda.cudadrv.driver import Linker
 from numba.cuda import require_context
 from numba import cuda
@@ -57,7 +57,7 @@ def function_with_lots_of_registers(x, a, b, c, d, e, f):
 
 
 @skip_on_cudasim('Linking unsupported in the simulator')
-class TestLinker(SerialMixin, unittest.TestCase):
+class TestLinker(CUDATestCase):
 
     @require_context
     def test_linker_basic(self):

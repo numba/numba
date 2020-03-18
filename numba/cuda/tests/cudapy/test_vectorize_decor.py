@@ -3,12 +3,12 @@ import numpy as np
 from numba import vectorize, cuda
 from numba.tests.npyufunc.test_vectorize_decor import BaseVectorizeDecor, \
     BaseVectorizeNopythonArg, BaseVectorizeUnrecognizedArg
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import unittest
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestVectorizeDecor(SerialMixin, BaseVectorizeDecor):
+class TestVectorizeDecor(CUDATestCase, BaseVectorizeDecor):
     def test_gpu_1(self):
         self._test_template_1('cuda')
 
@@ -20,7 +20,7 @@ class TestVectorizeDecor(SerialMixin, BaseVectorizeDecor):
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestGPUVectorizeBroadcast(SerialMixin, unittest.TestCase):
+class TestGPUVectorizeBroadcast(CUDATestCase):
     def test_broadcast_bug_90(self):
         """
         https://github.com/ContinuumIO/numbapro/issues/90
@@ -61,14 +61,14 @@ class TestGPUVectorizeBroadcast(SerialMixin, unittest.TestCase):
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestVectorizeNopythonArg(BaseVectorizeNopythonArg, SerialMixin):
+class TestVectorizeNopythonArg(BaseVectorizeNopythonArg, CUDATestCase):
     def test_target_cuda_nopython(self):
         warnings = ["nopython kwarg for cuda target is redundant"]
         self._test_target_nopython('cuda', warnings)
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestVectorizeUnrecognizedArg(BaseVectorizeUnrecognizedArg, SerialMixin):
+class TestVectorizeUnrecognizedArg(BaseVectorizeUnrecognizedArg, CUDATestCase):
     def test_target_cuda_unrecognized_arg(self):
         self._test_target_unrecognized_arg('cuda')
 

@@ -1,7 +1,7 @@
 import numpy as np
 import re
 from numba import cuda, int32, float32
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
 def simple_threadidx(ary):
@@ -110,7 +110,7 @@ def simple_warpsize(ary):
     ary[0] = cuda.warpsize
 
 
-class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
+class TestCudaIntrinsic(CUDATestCase):
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
         ary = np.ones(1, dtype=np.int32)
