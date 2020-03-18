@@ -51,6 +51,12 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
+        python -m numba.runtests -l
+      displayName: 'List discovered tests'
+
+    - script: |
+        call activate %CONDA_ENV%
+        echo "Running slice of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
         python -m numba.runtests -b -v -g -m 2 -- numba.tests
       displayName: 'Test modified test files'
 

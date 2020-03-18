@@ -19,15 +19,23 @@ class CUDATestCase(SerialMixin, unittest.TestCase):
 
 
 def skip_on_cudasim(reason):
+    """Skip this test if running on the CUDA simulator"""
     return unittest.skipIf(config.ENABLE_CUDASIM, reason)
 
 
 def skip_unless_cudasim(reason):
+    """Skip this test if running on CUDA hardware"""
     return unittest.skipUnless(config.ENABLE_CUDASIM, reason)
 
 
 def skip_unless_conda_cudatoolkit(reason):
+    """Skip test if the CUDA toolkit was not installed by Conda"""
     return unittest.skipUnless(get_conda_ctk() is not None, reason)
+
+
+def skip_if_external_memmgr(reason):
+    """Skip test if an EMM Plugin is in use"""
+    return unittest.skipIf(config.CUDA_MEMORY_MANAGER != 'default', reason)
 
 
 class CUDATextCapture(object):
