@@ -61,8 +61,8 @@ def cuda_sensitive_mtime(x):
     CUDA tests the key prioritises the test module and class ahead of the
     mtime.
     """
-    key = str(os.path.getmtime(inspect.getfile(x.__class__))) + str(x)
     cls = x.__class__
+    key = str(os.path.getmtime(inspect.getfile(cls))) + str(x)
 
     from numba.cuda.testing import CUDATestCase
     if CUDATestCase in cls.mro():
