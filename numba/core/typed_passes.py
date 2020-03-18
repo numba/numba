@@ -688,6 +688,20 @@ class PreLowerStripPhis(FunctionPass):
         # Rerun postprocessor to update metadata
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run(emit_dels=False)
+
+        if state.func_ir.generator_info is not None:
+            # Rebuild generator type
+            # XXX: move this into PostPrecessor
+            gentype = state.return_type
+            state_vars = state.func_ir.generator_info.state_vars
+            state_types = [state.typemap[k] for k in state_vars]
+            state.return_type = types.Generator(
+                gen_func=gentype.gen_func,
+                yield_type=gentype.yield_type,
+                arg_types=gentype.arg_types,
+                state_types=state_types,
+                has_finalizer=gentype.has_finalizer,
+            )
         return True
 
     def _strip_phi_nodes(self, fir):
