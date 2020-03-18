@@ -53,10 +53,6 @@ def make_tag_decorator(known_tags):
     return tag
 
 
-def test_mtime(x):
-    return str(os.path.getmtime(inspect.getfile(x.__class__))) + str(x)
-
-
 def parse_slice(useslice):
     """Parses the argument string "useslice" as the arguments to the `slice()`
     constructor and returns a slice object that's been instantiated with those
@@ -81,7 +77,6 @@ class TestLister(object):
         result = runner.TextTestResult(sys.stderr, descriptions=True, verbosity=1)
         self._test_list = _flatten_suite(test)
         masked_list = self._test_list[self.useslice]
-        self._test_list.sort(key=test_mtime)
         for t in masked_list:
             print(t.id())
         print('%d tests found. %s selected' % (len(self._test_list), len(masked_list)))
@@ -115,7 +110,6 @@ class BasicTestRunner(runner.TextTestRunner):
 
     def run(self, test):
         run = _flatten_suite(test)[self.useslice]
-        run.sort(key=test_mtime)
         wrapped = unittest.TestSuite(run)
         return super(BasicTestRunner, self).run(wrapped)
 
@@ -737,7 +731,6 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
         remaining_ids = set(t.id() for t in tests)
-        tests.sort(key=test_mtime)
         it = pool.imap_unordered(child_runner, tests)
         while True:
             try:
