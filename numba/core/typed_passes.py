@@ -689,7 +689,8 @@ class PreLowerStripPhis(FunctionPass):
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run(emit_dels=False)
 
-        if state.func_ir.generator_info is not None:
+        if (state.func_ir.generator_info is not None
+                and state.typemap is not None):
             # Rebuild generator type
             # XXX: move this into PostPrecessor
             gentype = state.return_type
