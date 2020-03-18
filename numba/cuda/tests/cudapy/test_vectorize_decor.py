@@ -9,14 +9,10 @@ import unittest
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
 class TestVectorizeDecor(CUDATestCase, BaseVectorizeDecor):
-    def test_gpu_1(self):
-        self._test_template_1('cuda')
-
-    def test_gpu_2(self):
-        self._test_template_2('cuda')
-
-    def test_gpu_3(self):
-        self._test_template_3('cuda')
+    """
+    Runs the tests from BaseVectorizeDecor with the CUDA target.
+    """
+    target = 'cuda'
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
