@@ -56,11 +56,12 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
-        echo "Running slice of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
+        echo "Running modified tests:
         python -m numba.runtests -b -v -g -m 2 -- numba.tests
       displayName: 'Test modified test files'
 
     - script: |
         call activate %CONDA_ENV%
-        python runtests.py -m 2 -b -j "%TEST_START_INDEX%,None,%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
+        echo "Running slice of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
+        python runtests.py -v -m 2 -b -j "%TEST_START_INDEX%,None,%TEST_COUNT%"  --exclude-tags='long_running'  -- numba.tests
       displayName: 'Test slice of test files'
