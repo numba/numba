@@ -44,6 +44,8 @@ class Flags(utils.ConfigOptions):
         'enable_pyobject': False,
         # Enable pyobject mode inside lifted loops
         'enable_pyobject_looplift': False,
+        # Enable SSA:
+        'enable_ssa': True,
         # Force pyobject mode inside the whole function
         'force_pyobject': False,
         # Release GIL inside the native function
@@ -461,7 +463,8 @@ class DefaultPassBuilder(object):
         pm.add_pass(FindLiterallyCalls, "find literally calls")
         pm.add_pass(LiteralUnroll, "handles literal_unroll")
 
-        pm.add_pass(ReconstructSSA, "ssa")
+        if state.flags.enable_ssa:
+            pm.add_pass(ReconstructSSA, "ssa")
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
         pm.add_pass(AnnotateTypes, "annotate types")
