@@ -49,7 +49,7 @@ def validate_arg_type(arg, arg_name, valid_types, none_allowed=False,
             return name
         raise ValueError(f"Cannot find name for type {type_}")
 
-    valid_names = [name_for_type(type_)  for type_ in valid_types]
+    valid_names = [name_for_type(type_) for type_ in valid_types]
 
     if none_allowed is True:
         valid_types = valid_types + (types.NoneType, type(None))
