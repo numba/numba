@@ -159,18 +159,22 @@ class PartialTypeInference(BaseTypeInference):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class AnnotateTypes(FunctionPass):
+class AnnotateTypes(AnalysisPass):
     _name = "annotate_types"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         """
         Create type annotation after type inference
         """
+        # add back in dels.
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run(emit_dels=True)
+
         state.type_annotation = type_annotations.TypeAnnotation(
-            func_ir=state.func_ir,
+            func_ir=state.func_ir.copy(),
             typemap=state.typemap,
             calltypes=state.calltypes,
             lifted=state.lifted,
@@ -186,6 +190,9 @@ class AnnotateTypes(FunctionPass):
         if config.HTML:
             with open(config.HTML, 'w') as fout:
                 state.type_annotation.html_annotate(fout)
+
+        # now remove dels
+        post_proc.remove_dels()
         return False
 
 
