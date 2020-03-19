@@ -34,22 +34,22 @@ def validate_arg_type(arg, arg_name, valid_types, none_allowed=False,
         types.IntegerLiteral: 'constant (literal) integer'
     }
 
-    valid_names = [None] * len(valid_types)
+    def name_for_type(type_):
+        # any defined name mapping takes precedence
+        name = name_mapping.get(type_)
+        if name is not None:
+            return name
+        # if a type instance is defined, it's name takes precendence
+        name = getattr(type_, 'name', None)
+        if name is not None:
+            return name
+        # fallback to type name
+        name = getattr(type_, '__name__', None)
+        if name is not None:
+            return name
+        raise ValueError(f"Cannot find name for type {type_}")
 
-    # any defined name mapping takes precedence
-    valid_names = [name_mapping.get(type_, name) if name is None
-                   else name
-                   for type_, name in zip(valid_types, valid_names)]
-    # if a type instance is defined, it's name takes precendence
-    valid_names = [getattr(type_, 'name', None) if name is None
-                   else name
-                   for type_, name in zip(valid_types, valid_names)]
-    # fallback to type name
-    valid_names = [getattr(type_, '__name__', None) if name is None
-                   else name
-                   for type_, name in zip(valid_types, valid_names)]
-    for x in valid_names:
-        assert x is not None, f"Cannot find name for type {x}"
+    valid_names = [name_for_type(type_)  for type_ in valid_types]
 
     if none_allowed is True:
         valid_types = valid_types + (types.NoneType, type(None))
