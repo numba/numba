@@ -140,7 +140,8 @@ class BaseTuple(ConstSized, Hashable):
             homogeneous = is_homogeneous(*tys)
             if homogeneous:
                 return UniTuple( tys[0] ,len_tys)
-            elif not len_tys and isinstance(tuple(), pyclass):
+            elif (pyclass and not len_tys
+                  and isinstance(tuple(), pyclass)):
                 return UniTuple( NoneType('none'), len_tys)
             else:
                 return Tuple(tys)
