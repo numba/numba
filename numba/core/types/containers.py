@@ -137,14 +137,13 @@ class BaseTuple(ConstSized, Hashable):
         else:
             # non-named tuple
             len_tys = len(tys)
-            if len_tys:
-                homogeneous = is_homogeneous(*tys)
-                if homogeneous:
-                    return UniTuple( tys[0] ,len_tys)
-                else:
-                    return Tuple(tys)
-            else:
+            homogeneous = is_homogeneous(*tys)
+            if homogeneous:
+                return UniTuple( tys[0] ,len_tys)
+            elif not len_tys and isinstance(tuple(), pyclass):
                 return UniTuple( NoneType('none'), len_tys)
+            else:
+                return Tuple(tys)
 
 
 class BaseAnonymousTuple(BaseTuple):
