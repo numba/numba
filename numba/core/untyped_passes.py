@@ -1467,6 +1467,8 @@ class SimplifyCFG(FunctionPass):
 @register_pass(mutates_CFG=False, analysis_only=False)
 class ReconstructSSA(FunctionPass):
     """Perform SSA-reconstruction
+
+    Produces minimal SSA.
     """
     _name = "reconstruct_ssa"
 

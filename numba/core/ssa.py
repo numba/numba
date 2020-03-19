@@ -1,5 +1,11 @@
 """
-Implement Dominance-Fronter-based SSA by Choi et al
+Implement Dominance-Fronter-based SSA by Choi et al described in Inria SSA book
+
+References:
+
+- Static Single Assignment Book by Inria
+  http://ssabook.gforge.inria.fr/latest/book.pdf
+- Choi at al. Incremental computation of static single assignment form.
 """
 import logging
 import operator
