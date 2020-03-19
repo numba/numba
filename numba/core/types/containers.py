@@ -5,7 +5,13 @@ from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
 from ..errors import TypingError
-from .scalars import Float
+
+from .scalars import Integer
+from numba.core import utils
+
+int32 = Integer('int32')
+int64 = Integer('int64')
+intp = int32 if utils.MACHINE_BITS == 32 else int64
 
 
 class Pair(Type):
@@ -144,7 +150,7 @@ class BaseTuple(ConstSized, Hashable):
             elif len_tys:
                 return Tuple(tys)
             else:
-                return UniTuple( Float('float64'), len_tys)
+                return UniTuple( intp, len_tys)
 
 
 class BaseAnonymousTuple(BaseTuple):
