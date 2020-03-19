@@ -5,7 +5,7 @@ from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
 from ..errors import TypingError
-from numba.core.types import intp
+from .scalars import Integer
 
 
 class Pair(Type):
@@ -144,7 +144,7 @@ class BaseTuple(ConstSized, Hashable):
             elif len_tys:
                 return Tuple(tys)
             else:
-                return UniTuple( intp, len_tys)
+                return UniTuple( Integer('int8'), len_tys)
 
 
 class BaseAnonymousTuple(BaseTuple):
