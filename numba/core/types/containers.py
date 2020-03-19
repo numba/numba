@@ -5,6 +5,7 @@ from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
 from ..errors import TypingError
+from numba.core.types import intp
 
 
 class Pair(Type):
@@ -140,11 +141,10 @@ class BaseTuple(ConstSized, Hashable):
             homogeneous = is_homogeneous(*tys)
             if homogeneous:
                 return UniTuple( tys[0] ,len_tys)
-            elif (pyclass and not len_tys
-                  and isinstance(tuple(), pyclass)):
-                return UniTuple( NoneType('none'), len_tys)
-            else:
+            elif len_tys:
                 return Tuple(tys)
+            else:
+                return UniTuple( intp, len_tys)
 
 
 class BaseAnonymousTuple(BaseTuple):

@@ -698,7 +698,15 @@ class TestTupleBuild(TestCase):
                 else:
                     pass
 
+            @njit
+            def testnumba2(indices):
+                for i in indices:
+                    pass
+                else:
+                    pass
+
             testnumba()
+            testnumba2(indices)
 
         except Exception:
             self.fail("Fail on empty tuple iteration")
