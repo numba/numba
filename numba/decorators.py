@@ -188,7 +188,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
             return func
         if target == 'dppy':
             from . import dppy
-            return dppy.jit(func)
+            return dppy.kernel(func)
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions,
                           **dispatcher_args)

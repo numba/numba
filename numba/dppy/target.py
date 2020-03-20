@@ -25,11 +25,12 @@ class DPPyTypingContext(typing.BaseContext):
     def load_additional_registries(self):
         # Declarations for OpenCL API functions and OpenCL Math functions
         from .ocl import ocldecl, mathdecl
-        from numba.typing import cmathdecl
+        from numba.typing import cmathdecl, npydecl
 
         self.install_registry(ocldecl.registry)
         self.install_registry(mathdecl.registry)
         self.install_registry(cmathdecl.registry)
+        self.install_registry(npydecl.registry)
         #self.install_registry(operatordecl.registry)
 
 

@@ -24,7 +24,7 @@ class DPPyPassBuilder(object):
     code-generation and optimization passes. This pass builder does
     not offer objectmode and interpreted passes.
     """
-    
+
     @staticmethod
     def default_numba_nopython_pipeline(state, pm):
         """Adds the default set of NUMBA passes to the pass manager
@@ -63,18 +63,18 @@ class DPPyPassBuilder(object):
 
         # optimisation
         pm.add_pass(InlineOverloads, "inline overloaded functions")
-        
+
         # legalise
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
 
 
     @staticmethod
-    def define_nopython_pipeline(state, name='nopython'):
+    def define_nopython_pipeline(state, name='dppy_nopython'):
         """Returns an nopython mode pipeline based PassManager
         """
         pm = PassManager(name)
         DPPyPassBuilder.default_numba_nopython_pipeline(state, pm)
-        
+
         # Intel GPU/CPU specific optimizations
         #if state.flags.auto_parallel.enabled:
         #    pm.add_pass(PreParforPass, "Preprocessing for parfors")
