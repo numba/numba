@@ -1023,30 +1023,47 @@ def _create_gufunc_for_parfor_body(
         if named_tup:
             # It is a named tuple so try to find the global that defines the
             # named tuple.
-            found = False
             func_def = guard(get_definition, lowerer.func_ir, tup_var)
+            named_tuple_def = None
             if config.DEBUG_ARRAY_OPT:
                 print("func_def:", func_def, type(func_def))
-            if (func_def is not None and
-                isinstance(func_def, ir.Expr) and
-                func_def.op == 'call'):
-                func_def = guard(get_definition, lowerer.func_ir, func_def.func)
-                if config.DEBUG_ARRAY_OPT:
-                    print("func definition:", func_def, type(func_def))
-                if func_def is not None:
-                    if isinstance(func_def, ir.Global) or isinstance(func_def, ir.FreeVar):
-                        gval = func_def.value
-                        globls[func_def.name] = gval
-                        #globls[func_def.name] = eval(gval.__module__ + "." + gval.__name__)
-                        found = True
-            if found is False and config.DEBUG_ARRAY_OPT:
+            if func_def is not None:
+                if (isinstance(func_def, ir.Expr) and
+                    func_def.op == 'call'):
+                    named_tuple_def = guard(get_definition, lowerer.func_ir, func_def.func)
+                    if config.DEBUG_ARRAY_OPT:
+                        print("named_tuple_def:", named_tuple_def, type(named_tuple_def))
+                elif isinstance(func_def, ir.Arg):
+                    named_tuple_def = typemap[func_def.name]
+                    if config.DEBUG_ARRAY_OPT:
+                        print("named_tuple_def:", named_tuple_def,
+                              type(named_tuple_def), named_tuple_def.name)
+            if named_tuple_def is not None:
+                if (isinstance(named_tuple_def, ir.Global) or
+                    isinstance(named_tuple_def, ir.FreeVar)):
+                    gval = named_tuple_def.value
+                    if config.DEBUG_ARRAY_OPT:
+                        print("gval:", gval, type(gval))
+                    globls[named_tuple_def.name] = gval
+                elif isinstance(named_tuple_def, types.containers.BaseNamedTuple):
+                    named_tuple_name = named_tuple_def.name.split('(')[0]
+                    if config.DEBUG_ARRAY_OPT:
+                        print("name:", named_tuple_name,
+                              named_tuple_def.instance_class,
+                              type(named_tuple_def.instance_class))
+                    globls[named_tuple_name] = named_tuple_def.instance_class
+            elif config.DEBUG_ARRAY_OPT:
                 print("Didn't find definition of namedtuple for globls.")
             gufunc_txt += " = " + tup_type.instance_class.__name__ + "("
             for name, field_name in zip(exp_names, tup_type.fields):
                 gufunc_txt += field_name + "=" + param_dict[name] + ","
         else:
             # Just a regular tuple so use (part0, part1, ...)
-            gufunc_txt += " = (" + ", ".join([param_dict[x] for x in exp_names]) + ", "
+            gufunc_txt += " = (" + ", ".join([param_dict[x] for x in exp_names])
+            if len(exp_names) == 1:
+                # Add comma for tuples with singular values.  We can't unilaterally
+                # add a comma alway because (,) isn't valid.
+                gufunc_txt += ","
 
         gufunc_txt += ")\n"
 
