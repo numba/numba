@@ -1,9 +1,9 @@
 import numpy as np
 from numba import cuda, float32, float64, int32
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class TestCudaIDiv(SerialMixin, unittest.TestCase):
+class TestCudaIDiv(CUDATestCase):
     def test_inplace_div(self):
 
         @cuda.jit(argtypes=[float32[:, :], int32, int32])

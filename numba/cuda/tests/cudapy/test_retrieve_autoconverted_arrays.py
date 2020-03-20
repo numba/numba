@@ -2,7 +2,7 @@ import numpy as np
 
 from numba import cuda
 from numba.cuda.args import wrap_arg
-from numba.cuda.testing import SerialMixin
+from numba.cuda.testing import CUDATestCase
 import unittest
 
 
@@ -30,7 +30,7 @@ recordtype = np.dtype(
 )
 
 
-class TestRetrieveAutoconvertedArrays(SerialMixin, unittest.TestCase):
+class TestRetrieveAutoconvertedArrays(CUDATestCase):
     def setUp(self):
         self.set_array_to_three = cuda.jit(set_array_to_three)
         self.set_array_to_three_nocopy = nocopy(cuda.jit(set_array_to_three))

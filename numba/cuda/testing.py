@@ -8,13 +8,29 @@ from numba.tests.support import (
 )
 from numba.cuda.cuda_paths import get_conda_ctk
 from numba.core import config
+from numba.tests.support import TestCase
 import unittest
 
 
-class CUDATestCase(SerialMixin, unittest.TestCase):
+class CUDATestCase(SerialMixin, TestCase):
+    """
+    For tests that use a CUDA device. Test methods in a CUDATestCase must not
+    be run out of module order, because the ContextResettingTestCase may reset
+    the context and destroy resources used by a normal CUDATestCase if any of
+    its tests are run between tests from a CUDATestCase.
+    """
+
+
+class ContextResettingTestCase(CUDATestCase):
+    """
+    For tests where the context needs to be reset after each test. Typically
+    these inspect or modify parts of the context that would usually be expected
+    to be internal implementation details (such as the state of allocations and
+    deallocations, etc.).
+    """
+
     def tearDown(self):
         from numba.cuda.cudadrv.devices import reset
-
         reset()
 
 

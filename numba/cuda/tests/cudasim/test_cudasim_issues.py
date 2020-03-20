@@ -4,13 +4,12 @@ import numpy as np
 
 import numba as nb
 from numba import cuda
-from numba.cuda.testing import SerialMixin, skip_unless_cudasim
+from numba.cuda.testing import CUDATestCase, skip_unless_cudasim
 import numba.cuda.simulator as simulator
 import unittest
 
 
-
-class TestCudaSimIssues(SerialMixin, unittest.TestCase):
+class TestCudaSimIssues(CUDATestCase):
 
 
     def test_record_access(self):

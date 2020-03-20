@@ -53,9 +53,22 @@ def make_tag_decorator(known_tags):
     return tag
 
 
-def test_mtime(x):
-    return str(os.path.getmtime(inspect.getfile(x.__class__))) + str(x)
+def cuda_sensitive_mtime(x):
+    """
+    Return a key for sorting tests bases on mtime and test name. For CUDA
+    tests, interleaving tests from different classes is dangerous as the CUDA
+    context might get reset unexpectedly between methods of a class, so for
+    CUDA tests the key prioritises the test module and class ahead of the
+    mtime.
+    """
+    cls = x.__class__
+    key = str(os.path.getmtime(inspect.getfile(cls))) + str(x)
 
+    from numba.cuda.testing import CUDATestCase
+    if CUDATestCase in cls.mro():
+        key = "%s.%s %s" % (str(cls.__module__), str(cls.__name__), key)
+
+    return key
 
 def parse_slice(useslice):
     """Parses the argument string "useslice" as the arguments to the `slice()`
@@ -81,7 +94,7 @@ class TestLister(object):
         result = runner.TextTestResult(sys.stderr, descriptions=True, verbosity=1)
         self._test_list = _flatten_suite(test)
         masked_list = self._test_list[self.useslice]
-        self._test_list.sort(key=test_mtime)
+        self._test_list.sort(key=cuda_sensitive_mtime)
         for t in masked_list:
             print(t.id())
         print('%d tests found. %s selected' % (len(self._test_list), len(masked_list)))
@@ -115,7 +128,7 @@ class BasicTestRunner(runner.TextTestRunner):
 
     def run(self, test):
         run = _flatten_suite(test)[self.useslice]
-        run.sort(key=test_mtime)
+        run.sort(key=cuda_sensitive_mtime)
         wrapped = unittest.TestSuite(run)
         return super(BasicTestRunner, self).run(wrapped)
 
@@ -737,7 +750,7 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
         remaining_ids = set(t.id() for t in tests)
-        tests.sort(key=test_mtime)
+        tests.sort(key=cuda_sensitive_mtime)
         it = pool.imap_unordered(child_runner, tests)
         while True:
             try:
