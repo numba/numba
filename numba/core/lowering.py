@@ -81,7 +81,6 @@ class BaseLower(object):
 
         # Internal states
         self.blkmap = {}
-        self.lastblkmap = {}
         self.pending_phis = {}
         self.varmap = {}
         self.firstblk = min(self.blocks.keys())
@@ -252,7 +251,6 @@ class BaseLower(object):
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
             self.lower_block(block)
-            self.lastblkmap[offset] = self.builder.basic_block
         self.post_lower()
         return entry_block_tail
 

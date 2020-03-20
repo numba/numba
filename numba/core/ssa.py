@@ -5,7 +5,7 @@ References:
 
 - Static Single Assignment Book by Inria
   http://ssabook.gforge.inria.fr/latest/book.pdf
-- Choi at al. Incremental computation of static single assignment form.
+- Choi et al. Incremental computation of static single assignment form.
 """
 import logging
 import operator
@@ -22,34 +22,44 @@ from numba.core.analysis import compute_cfg_from_blocks
 _logger = logging.getLogger(__name__)
 
 
-def reconstruct_ssa(fir):
+def reconstruct_ssa(func_ir):
+    """Apply SSA reconstruction algorithm on the given IR.
+
+    Produces minimal SSA using Choi et al algorithm.
+    """
     _logger.debug("BEFORE SSA".center(80, "-"))
-    _logger.debug(fir.dump_to_string())
+    _logger.debug(func_ir.dump_to_string())
     _logger.debug("=" * 80)
 
-    fir.blocks = _run_ssa(fir.blocks)
+    func_ir.blocks = _run_ssa(func_ir.blocks)
 
     _logger.debug("AFTER SSA".center(80, "-"))
-    _logger.debug(fir.dump_to_string())
+    _logger.debug(func_ir.dump_to_string())
     _logger.debug("=" * 80)
-    return fir
+    return func_ir
 
 
 def _run_ssa(blocks):
+    """Run SSA reconstruction on IR blocks of a function.
+    """
     if not blocks:
         # Empty blocks?
         return {}
 
+    # Find SSA violators
     violators = _find_defs_violators(blocks)
+    # Process one SSA-violating variable at a time
     for varname in violators:
         _logger.debug(
             "Fix SSA violator on var %s", varname,
         )
+        # Fix up the LHS
+        # Put fresh variables for all assignments to the variable
         blocks, defmap = _fresh_vars(blocks, varname)
         _logger.debug("Replaced assignments: %s", pformat(defmap))
-
+        # Fix up the RHS
+        # Re-associate the variable uses with the reaching definition
         blocks = _fix_ssa_vars(blocks, varname, defmap)
-        violators = _find_defs_violators(blocks)
     return blocks
 
 
@@ -72,6 +82,11 @@ def _fix_ssa_vars(blocks, varname, defmap):
 
 
 def _iterated_domfronts(cfg):
+    """Compute the iterated dominance frontiers (DF+ in literatures).
+
+    Returns a dictionary which maps block label to the set of labels of its
+    iterated dominance frontiers.
+    """
     domfronts = {k: set(vs) for k, vs in cfg.dominance_frontier().items()}
     keep_going = True
     while keep_going:
@@ -117,7 +132,7 @@ def _find_defs_violators(blocks):
 def _run_block_analysis(blocks, states, handler):
     for label, blk in blocks.items():
         _logger.debug("==== SSA block analysis pass on %s", label)
-        for _ in _run_sbaa_block_pass(states, blk, handler):
+        for _ in _run_ssa_block_pass(states, blk, handler):
             pass
 
 
@@ -130,7 +145,7 @@ def _run_block_rewrite(blocks, states, handler):
         newbody = []
         states['label'] = label
         states['block'] = blk
-        for stmt in _run_sbaa_block_pass(states, blk, handler):
+        for stmt in _run_ssa_block_pass(states, blk, handler):
             assert stmt is not None
             newbody.append(stmt)
         newblk.body = newbody
@@ -140,12 +155,11 @@ def _run_block_rewrite(blocks, states, handler):
 
 def _make_states(blocks):
     return dict(
-        # cfg=compute_cfg_from_blocks(blocks),
         scope=_get_scope(blocks),
     )
 
 
-def _run_sbaa_block_pass(states, blk, handler):
+def _run_ssa_block_pass(states, blk, handler):
     _logger.debug("Running %s", handler)
     for stmt in blk.body:
         _logger.debug("on stmt: %s", stmt)
@@ -158,16 +172,53 @@ def _run_sbaa_block_pass(states, blk, handler):
         yield ret
 
 
-class _GatherDefsHandler:
+class _BaseHandler:
+    """A base handler for all the passes used here for the SSA algorithm.
+    """
+    def on_assign(self, states, assign):
+        """
+        Called when the pass sees an ``ir.Assign``.
+
+        Subclasses should override this for custom behavior
+
+        Parameters
+        -----------
+        states : dict
+        assign : numba.ir.Assign
+
+        Returns
+        -------
+        stmt : numba.ir.Assign or None
+            For rewrite passes, the return value is used as the replacement
+            for the given statement.
+        """
+
+    def on_other(self, states, stmt):
+        """
+        Called when the pass sees an ``ir.Stmt`` that's not an assignment.
+
+        Subclasses should override this for custom behavior
+
+        Parameters
+        -----------
+        states : dict
+        assign : numba.ir.Stmt
+
+        Returns
+        -------
+        stmt : numba.ir.Stmt or None
+            For rewrite passes, the return value is used as the replacement
+            for the given statement.
+        """
+
+
+class _GatherDefsHandler(_BaseHandler):
     """Find all defs
 
     ``states`` is a Mapping[str, List[ir.Assign]]
     """
     def on_assign(self, states, assign):
         states[assign.target.name].append(assign)
-
-    def on_other(self, states, stmt):
-        pass
 
 
 class UndefinedVariable:
@@ -177,7 +228,9 @@ class UndefinedVariable:
     target = ir.UNDEFINED
 
 
-class _FreshVarHandler:
+class _FreshVarHandler(_BaseHandler):
+    """Replaces assignment target with new fresh variables.
+    """
     def on_assign(self, states, assign):
         if assign.target.name == states['varname']:
             scope = states['scope']
@@ -200,7 +253,14 @@ class _FreshVarHandler:
         return stmt
 
 
-class _FixSSAVars:
+class _FixSSAVars(_BaseHandler):
+    """Replace variable uses in IR nodes to the correct reaching variable
+    and introduce Phi nodes if necessary. This class contains the core of
+    the SSA reconstruction algorithm.
+
+    See Ch 5 of the Inria SSA book for reference. The method names used here
+    are similar to the names used in the pseudocode in the book.
+    """
     def on_assign(self, states, assign):
         rhs = assign.value
         if isinstance(rhs, ir.Inst):
@@ -242,12 +302,16 @@ class _FixSSAVars:
         return stmt
 
     def _fix_var(self, states, stmt, used_vars):
+        """Fix all variable uses in ``used_vars``.
+        """
         varnames = [k.name for k in used_vars]
         phivar = states['varname']
         if phivar in varnames:
             return self._find_def(states, stmt)
 
     def _find_def(self, states, stmt):
+        """Find definition of ``stmt`` for the statement ``stmt``
+        """
         _logger.debug("find_def var=%r stmt=%s", states['varname'], stmt)
         selected_def = None
         label = states['label']
@@ -274,6 +338,11 @@ class _FixSSAVars:
         return selected_def
 
     def _find_def_from_top(self, states, label, loc):
+        """Find definition reaching block of ``label``.
+
+        This method would look at all dominance frontiers.
+        Insert phi node if necessary.
+        """
         _logger.debug("find_def_from_top label %r", label)
         cfg = states['cfg']
         defmap = states['defmap']
@@ -285,8 +354,7 @@ class _FixSSAVars:
                 scope = states['scope']
                 loc = states['block'].loc
                 # fresh variable
-                freshvar = scope.redefine(states['varname'],
-                                          loc=loc)
+                freshvar = scope.redefine(states['varname'], loc=loc)
                 # insert phi
                 phinode = ir.Assign(
                     target=freshvar,
@@ -296,6 +364,7 @@ class _FixSSAVars:
                 _logger.debug("insert phi node %s at %s", phinode, label)
                 defmap[label].insert(0, phinode)
                 phimap[label].append(phinode)
+                # Find incoming values for the Phi node
                 for pred, _ in cfg.predecessors(label):
                     incoming_def = self._find_def_from_bottom(
                         states, pred, loc=loc,
@@ -320,6 +389,8 @@ class _FixSSAVars:
             return self._find_def_from_bottom(states, idom, loc=loc)
 
     def _find_def_from_bottom(self, states, label, loc):
+        """Find definition from within the block at ``label``.
+        """
         _logger.debug("find_def_from_bottom label %r", label)
         defmap = states['defmap']
         defs = defmap[label]
@@ -330,7 +401,7 @@ class _FixSSAVars:
             return self._find_def_from_top(states, label, loc=loc)
 
     def _stmt_index(self, defstmt, block, stop=-1):
-        """
+        """Find the postitional index of the statement at ``block``.
 
         Assumptions:
         - no two statements can point to the same object.

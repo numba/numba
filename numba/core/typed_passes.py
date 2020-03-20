@@ -702,10 +702,11 @@ class PreLowerStripPhis(FunctionPass):
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run(emit_dels=False)
 
+        # Ensure we are not in objectmode generator
         if (state.func_ir.generator_info is not None
                 and state.typemap is not None):
             # Rebuild generator type
-            # XXX: move this into PostPrecessor
+            # TODO: move this into PostProcessor
             gentype = state.return_type
             state_vars = state.func_ir.generator_info.state_vars
             state_types = [state.typemap[k] for k in state_vars]
@@ -718,11 +719,17 @@ class PreLowerStripPhis(FunctionPass):
             )
         return True
 
-    def _strip_phi_nodes(self, fir):
+    def _strip_phi_nodes(self, func_ir):
+        """Strip Phi nodes from ``func_ir``
+
+        For each phi node, put incoming value to their respective incoming
+        basic-block at possibly the latest position (i.e. after the latest
+        assignment to the corresponding variable).
+        """
         exporters = defaultdict(list)
         phis = set()
         # Find all variables that needs to be exported
-        for label, block in fir.blocks.items():
+        for label, block in func_ir.blocks.items():
             for assign in block.find_insts(ir.Assign):
                 if isinstance(assign.value, ir.Expr):
                     if assign.value.op == 'phi':
@@ -734,7 +741,7 @@ class PreLowerStripPhis(FunctionPass):
 
         # Rewrite the blocks with the new exporting assignments
         newblocks = {}
-        for label, block in fir.blocks.items():
+        for label, block in func_ir.blocks.items():
             newblk = copy(block)
             newblocks[label] = newblk
 
@@ -760,5 +767,5 @@ class PreLowerStripPhis(FunctionPass):
                     else:
                         newblk.prepend(assign)
 
-        fir.blocks = newblocks
-        return fir
+        func_ir.blocks = newblocks
+        return func_ir
