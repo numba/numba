@@ -39,7 +39,6 @@ class TestCudaTestGlobal(CUDATestCase):
 
         self.assertTrue(np.all(ary == np.arange(nelem, dtype=np.int32)))
 
-    @unittest.SkipTest
     def test_global_tuple_const(self):
         """Test coop_smem2d
         """
