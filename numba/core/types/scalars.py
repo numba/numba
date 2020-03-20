@@ -93,14 +93,16 @@ class IntegerLiteral(Literal, Integer):
 
 
 Literal.ctor_map[int] = IntegerLiteral
-Literal.ctor_map[np.int8] = IntegerLiteral
-Literal.ctor_map[np.uint8] = IntegerLiteral
-Literal.ctor_map[np.int16] = IntegerLiteral
-Literal.ctor_map[np.uint16] = IntegerLiteral
-Literal.ctor_map[np.int32] = IntegerLiteral
-Literal.ctor_map[np.uint32] = IntegerLiteral
-Literal.ctor_map[np.int64] = IntegerLiteral
-Literal.ctor_map[np.uint64] = IntegerLiteral
+Literal.ctor_map[np.byte] = IntegerLiteral
+Literal.ctor_map[np.ubyte] = IntegerLiteral
+Literal.ctor_map[np.short] = IntegerLiteral
+Literal.ctor_map[np.ushort] = IntegerLiteral
+Literal.ctor_map[np.intc] = IntegerLiteral
+Literal.ctor_map[np.uintc] = IntegerLiteral
+Literal.ctor_map[np.int_] = IntegerLiteral
+Literal.ctor_map[np.uint] = IntegerLiteral
+Literal.ctor_map[np.longlong] = IntegerLiteral
+Literal.ctor_map[np.ulonglong] = IntegerLiteral
 
 
 @total_ordering
