@@ -60,7 +60,7 @@ def compile_with_dppy(pyfunc, return_type, args, debug):
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
-    flags.unset('nrt')
+    flags.set('nrt')
     # Run compilation pipeline
     if isinstance(pyfunc, FunctionType):
         cres = compiler.compile_extra(typingctx=typingctx,
@@ -93,7 +93,7 @@ def compile_with_dppy(pyfunc, return_type, args, debug):
 def compile_kernel(device, pyfunc, args, access_types, debug=False):
     if DEBUG:
         print("compile_kernel", args)
-    cres = compile_with_dppy(pyfunc, types.void, args, debug=debug)
+    cres = compile_with_dppy(pyfunc, None, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
     oclkern = DPPyKernel(device_env=device,
@@ -113,7 +113,7 @@ def compile_kernel_parfor(device, func_ir, args, args_with_addrspaces,
             if isinstance(a, types.npytypes.Array):
                 print("addrspace:", a.addrspace)
 
-    cres = compile_with_dppy(func_ir, types.void, args_with_addrspaces,
+    cres = compile_with_dppy(func_ir, None, args_with_addrspaces,
                              debug=debug)
     #cres = compile_with_dppy(func_ir, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
@@ -433,7 +433,11 @@ class JitDPPyKernel(DPPyKernelBase):
     def __call__(self, *args, **kwargs):
         assert not kwargs, "Keyword Arguments are not supported"
         if self.device_env is None:
-            _raise_no_device_found_error()
+            try:
+                self.device_env = driver.runtime.get_gpu_device()
+            except:
+                _raise_no_device_found_error()
+
         kernel = self.specialize(*args)
         cfg = kernel.configure(self.device_env, self.global_size,
                                self.local_size)
