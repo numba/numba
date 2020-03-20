@@ -14,7 +14,7 @@ import unittest
 
 class CUDATestCase(SerialMixin, TestCase):
     """
-    For tests that use a CUDA device. Test methods in a CUDATest case must not
+    For tests that use a CUDA device. Test methods in a CUDATestCase must not
     be run out of module order, because the ContextResettingTestCase may reset
     the context and destroy resources used by a normal CUDATestCase if any of
     its tests are run between tests from a CUDATestCase.
