@@ -1011,7 +1011,7 @@ class Var(EqualityCheckMixin, AbstractRHS):
 
     @property
     def versioned_names(self):
-        """Known versioned names for this variable, i.e. know variable names in
+        """Known versioned names for this variable, i.e. known variable names in
         the scope that have been formed from applying SSA to this variable
         """
         return self.scope.get_versions_of(self.unversioned_name)

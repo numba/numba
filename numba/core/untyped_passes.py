@@ -1489,7 +1489,7 @@ class ReconstructSSA(FunctionPass):
         return True      # XXX detect if it actually got changed
 
     def _patch_locals(self, state):
-        # Fix locals type annotation
+        # Fix dispatcher locals dictionary type annotation
         locals_dict = state.get('locals')
         if locals_dict is None:
             return

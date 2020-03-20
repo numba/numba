@@ -685,8 +685,8 @@ class DeadCodeElimination(FunctionPass):
 class PreLowerStripPhis(FunctionPass):
     """Remove phi nodes (ir.Expr.phi) introduced by SSA.
 
-    This is needed before Lowering because the phi node in Numba IR does not
-    matches the semantic of phi node of LLVM IR. In Numba IR, phi node may
+    This is needed before Lowering because the phi nodes in Numba IR do not
+    match the semantics of phi nodes in LLVM IR. In Numba IR, phi nodes may
     expand into multiple LLVM instructions.
     """
 

@@ -104,7 +104,7 @@ def _find_defs_violators(blocks):
     Returns
     -------
     res : Set[str]
-        The violators in a dictionary of variable name.
+        The SSA violators in a dictionary of variable names.
     """
     defs = defaultdict(list)
     _run_block_analysis(blocks, defs, _GatherDefsHandler())
@@ -307,9 +307,9 @@ class _FixSSAVars:
         else:
             idom = cfg.immediate_dominators()[label]
             if idom == label:
-                # We are searched to the top of the idom tree.
+                # We have searched to the top of the idom tree.
                 # Since we still cannot find a definition,
-                # we will warn and let
+                # we will warn.
                 warnings.warn(
                     errors.NumbaWarning(
                         f"Detected uninitialized variable {states['varname']}",
