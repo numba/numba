@@ -21,7 +21,8 @@ from numba.core import (
     errors
 )
 from numba.core.registry import cpu_target
-from numba.tests.support import TestCase, is_parfors_unsupported
+from numba.tests.support import (TestCase, is_parfors_unsupported,
+                                 skip_ppc64le_issue4026)
 
 
 class MyPipeline(object):
@@ -191,6 +192,7 @@ class TestConvertSetItemPass(BaseTest):
 
         self.run_parallel(test_impl)
 
+    @skip_ppc64le_issue4026
     def test_setitem_gather_if_scalar(self):
         def test_impl():
             n = 10
@@ -207,6 +209,7 @@ class TestConvertSetItemPass(BaseTest):
 
         self.run_parallel(test_impl)
 
+    @skip_ppc64le_issue4026
     def test_setitem_gather_if_array(self):
         def test_impl():
             n = 10
