@@ -35,30 +35,16 @@ class Integer(Number):
             bitwidth = parse_integer_bitwidth(name)
         if signed is None:
             signed = parse_integer_signed(name)
-        self.bitwidth = bitwidth
-        self.signed = signed
+        self.__bitwidth = bitwidth
+        self.__signed = signed
 
     @property
     def bitwidth(self):
         return self.__bitwidth
 
-    @bitwidth.setter
-    def bitwidth(self, bitwidth):
-        if not hasattr(self, "_Integer__bitwidth"):
-            self.__bitwidth = bitwidth
-        else:
-            raise Exception("Cannot re-define bitwidth of integer")
-
     @property
     def signed(self):
         return self.__signed
-
-    @signed.setter
-    def signed(self, signed):
-        if not hasattr(self, "_Integer__signed"):
-            self.__signed = signed
-        else:
-            raise Exception("Cannot re-define sign of integer")
 
     @classmethod
     def from_bitwidth(cls, bitwidth, signed=True):
