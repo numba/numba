@@ -234,12 +234,17 @@ class List(MutableSequence):
                         .format(len(args))
                     )
                 iterable = args[0]
-                try:
-                    iter(iterable)
-                except TypeError:
-                    raise TypeError("List() argument must be iterable")
-                for i in args[0]:
-                    self.append(i)
+                # Special case Numpy scalars or anything that quacks like a
+                # NumPy Array.
+                if hasattr(iterable, "ndim") and iterable.ndim == 0:
+                    self.append(iterable.item())
+                else:
+                    try:
+                        iter(iterable)
+                    except TypeError:
+                        raise TypeError("List() argument must be iterable")
+                    for i in args[0]:
+                        self.append(i)
 
     def _parse_arg(self, lsttype, meminfo=None, allocated=DEFAULT_ALLOCATED):
         if not isinstance(lsttype, ListType):
@@ -468,6 +473,9 @@ def _guess_dtype(iterable):
     if not isinstance(iterable, types.IterableType):
         raise TypingError(
             "List() argument must be iterable")
+    # Special case for nested NumPy arrays.
+    elif isinstance(iterable, types.Array) and iterable.ndim > 1:
+        return iterable.copy(ndim=iterable.ndim - 1)
     elif hasattr(iterable, "dtype"):
         return iterable.dtype
     elif hasattr(iterable, "yield_type"):
@@ -569,13 +577,22 @@ def impl_numba_typeref_ctor(cls, *args):
 
     item_type = types.TypeRef(list_ty.item_type)
     if args:
-        def impl(cls, *args):
-            # Instatiate an empty list and populate it with values from the
-            # iterable.
-            r = List.empty_list(item_type)
-            for i in args[0]:
-                r.append(i)
-            return r
+        # special case 0d Numpy arrays
+        if isinstance(args[0], types.Array) and args[0].ndim == 0:
+            def impl(cls, *args):
+                # Instatiate an empty list and populate it with the single
+                # value from the array.
+                r = List.empty_list(item_type)
+                r.append(args[0].item())
+                return r
+        else:
+            def impl(cls, *args):
+                # Instatiate an empty list and populate it with values from the
+                # iterable.
+                r = List.empty_list(item_type)
+                for i in args[0]:
+                    r.append(i)
+                return r
     else:
         def impl(cls, *args):
             # Simply call .empty_list with the item type from *cls*

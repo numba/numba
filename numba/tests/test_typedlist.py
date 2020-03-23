@@ -1339,6 +1339,50 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             for func in (foo, foo.py_func):
                 self.assertEqual(func(), expected)
 
+    def test_ndarray_scalar(self):
+
+        @njit
+        def foo():
+            return List(np.ones(3))
+
+        expected = List()
+        for i in range(3):
+            expected.append(1)
+
+        self.assertEqual(expected, foo())
+        self.assertEqual(expected, foo.py_func())
+
+    def test_ndarray_oned(self):
+
+        @njit
+        def foo():
+            return List(np.array(1))
+
+        expected = List()
+        expected.append(1)
+
+        self.assertEqual(expected, foo())
+        self.assertEqual(expected, foo.py_func())
+
+    def test_ndarray_twod(self):
+
+        @njit
+        def foo():
+            return List(np.array([[1,2],[3,4]]))
+
+        expected = List()
+        expected.append(np.array([1,2]))
+        expected.append(np.array([3,4]))
+        received = foo()
+
+        np.testing.assert_equal(expected[0], received[0])
+        np.testing.assert_equal(expected[1], received[1])
+
+        pyreceived = foo.py_func()
+
+        np.testing.assert_equal(expected[0], pyreceived[0])
+        np.testing.assert_equal(expected[1], pyreceived[1])
+
     def test_exception_on_plain_int(self):
         @njit
         def foo():
