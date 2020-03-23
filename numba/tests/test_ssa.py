@@ -10,7 +10,7 @@ import numpy as np
 from numba import njit, types
 from numba.core import errors
 from numba.extending import overload
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, override_config
 
 
 _DEBUG = False
@@ -93,7 +93,7 @@ class TestSSA(SSABaseTest):
         self.check_func(foo, 0)
         self.check_func(foo, 10)
 
-    def test_undefined_var(self):
+    def check_undefined_var(self, should_warn):
         @njit
         def foo(n):
             if n:
@@ -105,13 +105,23 @@ class TestSSA(SSABaseTest):
                 c += 1
                 return c
 
-        with self.assertWarns(errors.NumbaWarning) as warns:
-            # n=1 so we won't actually run the branch with the uninitialized
+        if should_warn:
+            with self.assertWarns(errors.NumbaWarning) as warns:
+                # n=1 so we won't actually run the branch with the uninitialized
+                self.check_func(foo, 1)
+            self.assertIn("Detected uninitialized variable c",
+                          str(warns.warning))
+        else:
             self.check_func(foo, 1)
-        self.assertIn("Detected uninitialized variable c", str(warns.warning))
 
         with self.assertRaises(UnboundLocalError):
             foo.py_func(0)
+
+    def test_undefined_var(self):
+        with override_config('ALWAYS_WARN_UNINIT_VAR', 0):
+            self.check_undefined_var(should_warn=False)
+        with override_config('ALWAYS_WARN_UNINIT_VAR', 1):
+            self.check_undefined_var(should_warn=True)
 
     def test_phi_propagation(self):
         @njit

@@ -15,6 +15,7 @@ from copy import copy
 from pprint import pformat
 from collections import defaultdict
 
+from numba import config
 from numba.core import ir, ir_utils, errors
 from numba.core.analysis import compute_cfg_from_blocks
 
@@ -379,11 +380,7 @@ class _FixSSAVars(_BaseHandler):
                 # We have searched to the top of the idom tree.
                 # Since we still cannot find a definition,
                 # we will warn.
-                warnings.warn(
-                    errors.NumbaWarning(
-                        f"Detected uninitialized variable {states['varname']}",
-                        loc=loc),
-                )
+                _warn_about_uninitialized_variable(states['varname'], loc)
                 return UndefinedVariable
             _logger.debug("idom %s from label %s", idom, label)
             return self._find_def_from_bottom(states, idom, loc=loc)
@@ -410,3 +407,12 @@ class _FixSSAVars(_BaseHandler):
             return block.body.index(defstmt, 0, stop)
         except ValueError:
             return len(block.body)
+
+
+def _warn_about_uninitialized_variable(varname, loc):
+    if config.ALWAYS_WARN_UNINIT_VAR:
+        warnings.warn(
+            errors.NumbaWarning(
+                f"Detected uninitialized variable {varname}",
+                loc=loc),
+        )
