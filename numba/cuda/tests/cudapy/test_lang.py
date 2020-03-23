@@ -5,10 +5,10 @@ Test basic language features
 
 import numpy as np
 from numba import cuda, float64
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class TestLang(SerialMixin, unittest.TestCase):
+class TestLang(CUDATestCase):
     def test_enumerate(self):
         tup = (1., 2.5, 3.)
 

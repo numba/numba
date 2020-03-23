@@ -1,14 +1,14 @@
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
 def noop(x):
     pass
 
 
-class TestJitErrors(SerialMixin, unittest.TestCase):
+class TestJitErrors(CUDATestCase):
     """
     Test compile-time errors with @jit.
     """

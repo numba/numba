@@ -13,6 +13,8 @@ from numba.core import utils, config, cgutils
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
+from numba.misc.inspection import disassemble_elf_to_cfg
+
 
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
@@ -23,7 +25,7 @@ def _is_x86(triple):
     return arch in _x86arch
 
 
-def dump(header, body):
+def dump(header, body, lang):
     if config.HIGHLIGHT_DUMPS:
         try:
             import pygments
@@ -32,11 +34,16 @@ def dump(header, body):
             raise ValueError(msg)
         else:
             from pygments import highlight
-            from pygments.lexers import GasLexer as lexer
+            from pygments.lexers import GasLexer as gas_lexer
+            from pygments.lexers import LlvmLexer as llvm_lexer
             from pygments.formatters import Terminal256Formatter
+            from numba.misc.dump_style import by_colorscheme
+
+            lexer_map = {'llvm': llvm_lexer, 'asm': gas_lexer}
+            lexer = lexer_map[lang]
             def printer(arg):
                 print(highlight(arg, lexer(),
-                      Terminal256Formatter(style='solarized-light')))
+                      Terminal256Formatter(style=by_colorscheme())))
     else:
         printer = print
     print('=' * 80)
@@ -221,7 +228,8 @@ class CodeLibrary(object):
         self._raise_if_finalized()
 
         if config.DUMP_FUNC_OPT:
-            dump("FUNCTION OPTIMIZED DUMP %s" % self._name, self.get_llvm_str())
+            dump("FUNCTION OPTIMIZED DUMP %s" % self._name,
+                 self.get_llvm_str(), 'llvm')
 
         # Link libraries for shared code
         seen = set()
@@ -274,14 +282,14 @@ class CodeLibrary(object):
         self._finalized = True
 
         if config.DUMP_OPTIMIZED:
-            dump("OPTIMIZED DUMP %s" % self._name, self.get_llvm_str())
+            dump("OPTIMIZED DUMP %s" % self._name, self.get_llvm_str(), 'llvm')
 
         if config.DUMP_ASSEMBLY:
             # CUDA backend cannot return assembly this early, so don't
             # attempt to dump assembly if nothing is produced.
             asm = self.get_asm_str()
             if asm:
-                dump("ASSEMBLY %s" % self._name, self.get_asm_str())
+                dump("ASSEMBLY %s" % self._name, self.get_asm_str(), 'asm')
 
     def get_defined_functions(self):
         """
@@ -323,6 +331,17 @@ class CodeLibrary(object):
         fn = self.get_function(name)
         dot = ll.get_function_cfg(fn)
         return _CFG(dot)
+
+    def get_disasm_cfg(self):
+        """
+        Get the CFG of the disassembly of the ELF object
+
+        Requires python package: r2pipe
+        Requires radare2 binary on $PATH.
+        Notebook rendering requires python package: graphviz
+        """
+        elf = self._get_compiled_object()
+        return disassemble_elf_to_cfg(elf)
 
     #
     # Object cache hooks and serialization

@@ -7,10 +7,9 @@ import textwrap
 
 import numpy as np
 
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.core import types, utils
 from numba import cuda
-from numba.tests.support import TestCase, compile_function
 from numba.tests.complex_usecases import *
 from numba.np import numpy_support
 
@@ -53,7 +52,7 @@ def compile_scalar_func(pyfunc, argtypes, restype):
     return kernel_wrapper
 
 
-class BaseComplexTest(SerialMixin):
+class BaseComplexTest(CUDATestCase):
 
     def basic_values(self):
         reals = [-0.0, +0.0, 1, -1, +1.5, -3.5,
@@ -104,7 +103,7 @@ class BaseComplexTest(SerialMixin):
     run_binary = run_func
 
 
-class TestComplex(BaseComplexTest, TestCase):
+class TestComplex(BaseComplexTest):
 
     def check_real_image(self, pyfunc):
         values = self.basic_values()
@@ -127,7 +126,7 @@ class TestComplex(BaseComplexTest, TestCase):
                        values)
 
 
-class TestCMath(BaseComplexTest, TestCase):
+class TestCMath(BaseComplexTest):
     """
     Tests for cmath module support.
     """

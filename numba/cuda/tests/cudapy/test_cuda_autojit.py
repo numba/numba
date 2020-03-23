@@ -1,10 +1,10 @@
 from numba import cuda
 import numpy as np
-from numba.cuda.testing import SerialMixin
+from numba.cuda.testing import CUDATestCase
 import unittest
 
 
-class TestCudaAutojit(SerialMixin, unittest.TestCase):
+class TestCudaAutojit(CUDATestCase):
     def test_device_array(self):
         @cuda.autojit
         def foo(x, y):
