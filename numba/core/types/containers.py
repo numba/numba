@@ -529,7 +529,7 @@ class ListType(IterableType):
         """Refine to a precise list type
         """
         res = cls(itemty)
-        res.is_precise()
+        assert res.is_precise()
         return res
 
     def unify(self, typingctx, other):
@@ -611,7 +611,7 @@ class DictType(IterableType):
         """Refine to a precise dictionary type
         """
         res = cls(keyty, valty)
-        res.is_precise()
+        assert res.is_precise()
         return res
 
     def unify(self, typingctx, other):
