@@ -2031,8 +2031,12 @@ class ArrayAnalysis(object):
                 expr.index_var = result[0]
             return result[1]
         shape = equiv_set._get_shape(var)
-        require(isinstance(expr.index, int) and expr.index < len(shape))
-        return shape[expr.index], []
+        if isinstance(expr.index, int):
+            require(expr.index < len(shape))
+            return shape[expr.index], []
+        elif isinstance(expr.index, slice):
+            return shape[expr.index], []
+        require(False)
 
     def _analyze_op_unary(self, scope, equiv_set, expr):
         require(expr.fn in UNARY_MAP_OP)
@@ -3004,7 +3008,7 @@ class ArrayAnalysis(object):
 
     def _istuple(self, varname):
         typ = self.typemap[varname]
-        return isinstance(typ, types.UniTuple)
+        return isinstance(typ, types.BaseTuple)
 
     def _sum_size(self, equiv_set, sizes):
         """Return the sum of the given list of sizes if they are all equivalent
