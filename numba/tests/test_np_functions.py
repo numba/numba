@@ -2904,11 +2904,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 yield np.array([123, -321, "NaT"],
                                dtype='<datetime64[%s]' % unit)
                 yield np.array([123, -321, "NaT"],
-                               dtype='>datetime64[%s]' % unit)
-                yield np.array([123, -321, "NaT"],
                                dtype='<timedelta64[%s]' % unit)
-                yield np.array([123, -321, "NaT"],
-                               dtype='>timedelta64[%s]' % unit)
 
         pyfunc = isnat
         cfunc = jit(nopython=True)(pyfunc)

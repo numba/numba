@@ -1473,11 +1473,9 @@ def np_datetime_isfinite_impl(context, builder, sig, args):
     return builder.icmp_unsigned('!=', args[0], npdatetime.NAT)
 
 
-def np_isnat_impl(context, builder, sig, args):
+def np_datetime_isnat_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
-    return builder.or_(
-        builder.icmp_unsigned('==', args[0], npdatetime.NAT),
-        builder.icmp_unsigned('==', args[0], npdatetime.NAT_BIG_ENDIAN))
+    return builder.icmp_signed('==', args[0], npdatetime.NAT)
 
 
 def np_real_isfinite_impl(context, builder, sig, args):

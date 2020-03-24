@@ -16,7 +16,6 @@ from numba.np import npdatetime_helpers, numpy_support, npyfuncs
 # datetime64 and timedelta64 use the same internal representation
 DATETIME64 = TIMEDELTA64 = Type.int(64)
 NAT = Constant.int(TIMEDELTA64, npdatetime_helpers.NAT)
-NAT_BIG_ENDIAN = Constant.int(TIMEDELTA64, npdatetime_helpers.NAT.newbyteorder())
 
 TIMEDELTA_BINOP_SIG = (types.NPTimedelta,) * 2
 
@@ -788,4 +787,4 @@ def _cast_to_timedelta(context, builder, val):
 @lower_builtin(np.isnat, types.NPDatetime)
 @lower_builtin(np.isnat, types.NPTimedelta)
 def _np_isnat_impl(context, builder, sig, args):
-    return npyfuncs.np_isnat_impl(context, builder, sig, args)
+    return npyfuncs.np_datetime_isnat_impl(context, builder, sig, args)

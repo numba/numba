@@ -53,8 +53,8 @@ def _fill_ufunc_db(ufunc_db):
 
     ufunc_db[np.isnat] = {
         # datetime & timedelta
-        'M->?': npyfuncs.np_isnat_impl,
-        'm->?': npyfuncs.np_isnat_impl,
+        'M->?': npyfuncs.np_datetime_isnat_impl,
+        'm->?': npyfuncs.np_datetime_isnat_impl,
     }
 
     ufunc_db[np.negative] = {
