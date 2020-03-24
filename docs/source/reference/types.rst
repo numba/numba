@@ -113,11 +113,15 @@ functions, the functions can also be considered as objects, that is,
 functions can be passed around as arguments or return values, or used
 as items in sequences, in addition of being callable.
 
-To enable first-class function support, Numba :term:`JIT` compiled
-functions must specify ``firstclass=True`` ``jit`` option. Numba
-``cfunc``-decorated functions are first-class functions by
-default. Python generator functions cannot be used as first-class
-functions in :term:`nopython mode`.
+The first-class function support is enabled for all Numba :term:`JIT`
+compiled functions and Numba ``cfunc``-decorated functions except when
+- using a non-CPU compiler,
+- the decorated function is a Python generator,
+- the decorated function has Omitted arguments,
+- or the decorated function returns Optional value.
+
+To disable first class function support, use `no_cfunc_wrapper=True`
+decorator option.
 
 For instance, consider an example where the Numba jit compiled
 function applies user-specified functions as a composition to an input
@@ -134,7 +138,7 @@ argument::
     ... def a(x):
     ...     return x + 1.0
     ...
-    >>> @numba.njit(firstclass=True)
+    >>> @numba.njit
     ... def b(x):
     ...     return x * x
     ...
@@ -161,7 +165,7 @@ Namespace scoping          yes              yes             no
 Can be called              yes              yes             yes
 Can be used as items       yes              yes             yes
 Automatic overload         no               yes             no
-Can be returned            yes              yes             no
+Can be returned            yes              yes             yes
 ========================   ==============   ============    ===========
 
 Wrapper Address Protocol - WAP
