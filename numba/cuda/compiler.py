@@ -13,6 +13,7 @@ from numba.core import types, typing, utils, funcdesc, serialize, config, compil
 from numba.core.compiler_lock import global_compiler_lock
 
 from .cudadrv.devices import get_context
+from .cudadrv.libs import get_cudalib
 from .cudadrv import nvvm, devicearray, driver
 from .errors import normalize_kernel_dimensions
 from .api import get_current_device
@@ -248,7 +249,7 @@ class ExternFunction(object):
 
 
 class ForAll(object):
-    def __init__(self, kernel, ntasks, tpb, stream, sharedmem, cooperative):
+    def __init__(self, kernel, ntasks, tpb, stream, sharedmem):
         if ntasks < 0:
             raise ValueError("Can't create ForAll with negative task count: %s"
                              % ntasks)
@@ -257,7 +258,6 @@ class ForAll(object):
         self.thread_per_block = tpb
         self.stream = stream
         self.sharedmem = sharedmem
-        self.cooperative = cooperative
 
     def __call__(self, *args):
         if self.ntasks == 0:
@@ -273,8 +273,7 @@ class ForAll(object):
         blkct = (self.ntasks + tpbm1) // tpb
 
         return kernel.configure(blkct, tpb, stream=self.stream,
-                                sharedmem=self.sharedmem,
-                                cooperative=self.cooperative)(*args)
+                                sharedmem=self.sharedmem)(*args)
 
     def _compute_thread_per_block(self, kernel):
         tpb = self.thread_per_block
@@ -303,7 +302,6 @@ class CUDAKernelBase(object):
         self.blockdim = None
         self.sharedmem = 0
         self.stream = 0
-        self.cooperative = False
 
     def copy(self):
         """
@@ -317,7 +315,7 @@ class CUDAKernelBase(object):
         new.__dict__.update(self.__dict__)
         return new
 
-    def configure(self, griddim, blockdim, stream=0, sharedmem=0, cooperative=False):
+    def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
 
         clone = self.copy()
@@ -325,15 +323,14 @@ class CUDAKernelBase(object):
         clone.blockdim = tuple(blockdim)
         clone.stream = stream
         clone.sharedmem = sharedmem
-        clone.cooperative = cooperative
         return clone
 
     def __getitem__(self, args):
-        if len(args) not in [2, 3, 4, 5]:
+        if len(args) not in [2, 3, 4]:
             raise ValueError('must specify at least the griddim and blockdim')
         return self.configure(*args)
 
-    def forall(self, ntasks, tpb=0, stream=0, sharedmem=0, cooperative=False):
+    def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
         """Returns a configured kernel for 1D kernel of given number of tasks
         ``ntasks``.
 
@@ -342,21 +339,21 @@ class CUDAKernelBase(object):
         - the kernel must check if the thread id is valid."""
 
         return ForAll(self, ntasks, tpb=tpb, stream=stream,
-                      sharedmem=sharedmem, cooperative=cooperative)
+                      sharedmem=sharedmem)
 
     def _serialize_config(self):
         """
         Helper for serializing the grid, block and shared memory configuration.
         CUDA stream config is not serialized.
         """
-        return self.griddim, self.blockdim, self.sharedmem, self.cooperative
+        return self.griddim, self.blockdim, self.sharedmem
 
     def _deserialize_config(self, config):
         """
         Helper for deserializing the grid, block and shared memory
         configuration.
         """
-        self.griddim, self.blockdim, self.sharedmem, self.cooperative = config
+        self.griddim, self.blockdim, self.sharedmem = config
 
 
 class CachedPTX(object):
@@ -460,7 +457,7 @@ class CUDAKernel(CUDAKernelBase):
     specialized, and then launch the kernel on the device.
     '''
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
-                 link=(), debug=False, fastmath=False, type_annotation=None,
+                 link=None, debug=False, fastmath=False, type_annotation=None,
                  extensions=[], max_registers=None):
         super(CUDAKernel, self).__init__()
         # initialize CUfunction
@@ -470,9 +467,18 @@ class CUDAKernel(CUDAKernelBase):
                                 prec_sqrt=False,
                                 prec_div=False,
                                 fma=True))
+        if not link:
+            link = []
 
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
+
+        # A kernel needs cooperative launch if grid_sync is being used.
+        self.cooperative = 'cudaCGGetIntrinsicHandle' in ptx.llvmir
+        # We need to link against cudadevrt if grid sync is being used.
+        if self.cooperative:
+            link.append(get_cudalib('cudadevrt', platform='linux-static'))
         cufunc = CachedCUFunction(name, ptx, link, max_registers)
+
         # populate members
         self.entry_name = name
         self.argument_types = tuple(argtypes)
@@ -484,7 +490,8 @@ class CUDAKernel(CUDAKernelBase):
         self.extensions = list(extensions)
 
     @classmethod
-    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, extensions, config):
+    def _rebuild(cls, cooperative, name, argtypes, cufunc, link, debug,
+                 call_helper, extensions, config):
         """
         Rebuild an instance.
         """
@@ -492,6 +499,7 @@ class CUDAKernel(CUDAKernelBase):
         # invoke parent constructor
         super(cls, instance).__init__()
         # populate members
+        instance.cooperative = cooperative
         instance.entry_name = name
         instance.argument_types = tuple(argtypes)
         instance.linking = tuple(link)
@@ -513,9 +521,9 @@ class CUDAKernel(CUDAKernelBase):
         Stream information is discarded.
         """
         config = self._serialize_config()
-        args = (self.__class__, self.entry_name, self.argument_types,
-                self._func, self.linking, self.debug, self.call_helper,
-                self.extensions, config)
+        args = (self.__class__, self.cooperative, self.entry_name,
+                self.argument_types, self._func, self.linking, self.debug,
+                self.call_helper, self.extensions, config)
         return (serialize._rebuild_reduction, args)
 
     def __call__(self, *args, **kwargs):
@@ -576,8 +584,7 @@ class CUDAKernel(CUDAKernelBase):
         print(self._type_annotation, file=file)
         print('=' * 80, file=file)
 
-    def _kernel_call(self, args, griddim, blockdim, stream=0, sharedmem=0,
-                     cooperative=False):
+    def _kernel_call(self, args, griddim, blockdim, stream=0, sharedmem=0):
         # Prepare kernel
         cufunc = self._func.get()
 
@@ -599,7 +606,7 @@ class CUDAKernel(CUDAKernelBase):
         cu_func = cufunc.configure(griddim, blockdim,
                                    stream=stream,
                                    sharedmem=sharedmem,
-                                   cooperative=cooperative)
+                                   cooperative=self.cooperative)
         # Invoke kernel
         cu_func(*kernelargs)
 
