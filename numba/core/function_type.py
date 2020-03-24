@@ -80,12 +80,6 @@ def lower_constant_function_type(context, builder, typ, pyval):
                                                 info=type(pyval).__name__)
         return sfunc._getvalue()
 
-    if isinstance(pyval, Dispatcher):
-        sfunc = cgutils.create_struct_proxy(typ)(context, builder)
-        sfunc.pyaddr = context.add_dynamic_addr(builder, id(pyval),
-                                                info=type(pyval).__name__)
-        return sfunc._getvalue()
-
     if isinstance(pyval, WrapperAddressProtocol):
         addr = pyval.__wrapper_address__()
         assert typ.check_signature(pyval.signature())
