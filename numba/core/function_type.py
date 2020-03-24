@@ -168,7 +168,9 @@ def _get_wrapper_address(func, sig):
 
 def lower_get_wrapper_address(context, builder, func, sig,
                               failure_mode='return_exc'):
-    """Low-level call to _get_wrapper_address(func, sig)
+    """Low-level call to _get_wrapper_address(func, sig).
+
+    When calling this function, GIL must be acquired.
     """
     pyapi = context.get_python_api(builder)
 
@@ -250,11 +252,13 @@ def lower_cast_dispatcher_to_function_type(context, builder, fromty, toty, val):
     pyapi = context.get_python_api(builder)
     sfunc = cgutils.create_struct_proxy(toty)(context, builder)
 
+    gil_state = pyapi.gil_ensure()
     addr = lower_get_wrapper_address(
         context, builder, val, toty.signature,
         failure_mode='return_exc')
     sfunc.addr = pyapi.long_as_voidptr(addr)
     pyapi.decref(addr)
+    pyapi.gil_release(gil_state)
 
     llty = context.get_value_type(types.voidptr)
     sfunc.pyaddr = builder.ptrtoint(val, llty)
