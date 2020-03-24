@@ -521,6 +521,9 @@ def unbox_tuple(typ, obj, c):
     is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
     value_ptr = cgutils.alloca_once(c.builder, lty)
 
+    end_blk = c.builder.append_basic_block("end")
+    fail_blk = end_blk
+
     # Issue #1638: need to check the tuple size
     actual_size = c.pyapi.tuple_size(obj)
     size_matches = c.builder.icmp_unsigned('==', actual_size,
@@ -531,6 +534,7 @@ def unbox_tuple(typ, obj, c):
             "size mismatch for tuple, expected %d element(s) but got %%zd" % (n,),
             actual_size)
         c.builder.store(cgutils.true_bit, is_error_ptr)
+        c.builder.branch(fail_blk)
 
     # We unbox the items even if not `size_matches`, to avoid issues with
     # the generated IR (instruction doesn't dominate all uses)
@@ -538,21 +542,34 @@ def unbox_tuple(typ, obj, c):
         elem = c.pyapi.tuple_getitem(obj, i)
         native = c.unbox(eltype, elem)
         values.append(native.value)
+
         with c.builder.if_then(native.is_error, likely=False):
             c.builder.store(cgutils.true_bit, is_error_ptr)
+            c.builder.branch(fail_blk)
         if native.cleanup is not None:
             cleanups.append(native.cleanup)
+
+            # replace the failure block with one that cleans up this item, and
+            # then jumps to the previous failure block
+            cleanup_blk = c.builder.append_basic_block('cleanup')
+            with c.builder.goto_block(cleanup_blk):
+                native.cleanup()
+                c.builder.branch(fail_blk)
+            fail_blk = cleanup_blk
 
     value = c.context.make_tuple(c.builder, typ, values)
     c.builder.store(value, value_ptr)
 
     if cleanups:
-        with c.builder.if_then(size_matches, likely=True):
-            def cleanup():
-                for func in reversed(cleanups):
-                    func()
+        def cleanup():
+            for func in reversed(cleanups):
+                func()
     else:
         cleanup = None
+
+    # landing zone for jumps to fail_blk above
+    c.builder.branch(end_blk)
+    c.builder.position_at_end(end_blk)
 
     return NativeValue(c.builder.load(value_ptr), cleanup=cleanup,
                        is_error=c.builder.load(is_error_ptr))
