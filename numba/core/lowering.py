@@ -974,12 +974,12 @@ class Lower(BaseLower):
                 pyaddr = self.builder.extract_value(
                     fstruct, 1,
                     name='pyaddr_of_%s' % (fname))
-                # todo: check pyaddr == NULL ?
-                # cgutils.printf(self.builder, "pyaddr=%p\n", pyaddr)
+                # try to recover the function address, see
+                # test_zero_address BadToGood example in
+                # test_function_type.py
                 addr1 = lower_get_wrapper_address(
                     self.context, self.builder, pyaddr, sig,
                     failure_mode='ignore')
-                # cgutils.printf(self.builder, "addr1=%p\n", addr1)
                 with self.builder.if_then(
                         cgutils.is_null(self.builder, addr1), likely=False):
                     self.return_exception(
@@ -987,9 +987,6 @@ class Lower(BaseLower):
                         exc_args=(f"{ftype} function address is null",),
                         loc=self.loc)
                 addr2 = self.pyapi.long_as_voidptr(addr1)
-
-                # TODO: save addr2 to fstruct to avoid further calls
-                # to python and to avoid gil?? Need a test case..
                 self.builder.store(self.builder.bitcast(addr2, llty), fptr)
                 self.pyapi.decref(addr1)
                 self.pyapi.gil_release(gil_state)
