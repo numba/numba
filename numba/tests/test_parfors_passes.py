@@ -14,13 +14,15 @@ from numba.core import (
     typing,
     rewrites,
     typed_passes,
+    untyped_passes,
     inline_closurecall,
     compiler,
     cpu,
     errors
 )
 from numba.core.registry import cpu_target
-from numba.tests.support import TestCase, is_parfors_unsupported
+from numba.tests.support import (TestCase, is_parfors_unsupported,
+                                 skip_ppc64le_issue4026)
 
 
 class MyPipeline(object):
@@ -58,6 +60,8 @@ class BaseTest(TestCase):
 
             rewrites.rewrite_registry.apply("before-inference", tp.state)
 
+            untyped_passes.ReconstructSSA().run_pass(tp.state)
+
             (
                 tp.state.typemap,
                 tp.state.return_type,
@@ -65,6 +69,8 @@ class BaseTest(TestCase):
             ) = typed_passes.type_inference_stage(
                 tp.state.typingctx, tp.state.func_ir, tp.state.args, None
             )
+
+            typed_passes.PreLowerStripPhis().run_pass(tp.state)
 
             diagnostics = numba.parfors.parfor.ParforDiagnostics()
 
@@ -186,6 +192,7 @@ class TestConvertSetItemPass(BaseTest):
 
         self.run_parallel(test_impl)
 
+    @skip_ppc64le_issue4026
     def test_setitem_gather_if_scalar(self):
         def test_impl():
             n = 10
@@ -202,6 +209,7 @@ class TestConvertSetItemPass(BaseTest):
 
         self.run_parallel(test_impl)
 
+    @skip_ppc64le_issue4026
     def test_setitem_gather_if_array(self):
         def test_impl():
             n = 10
@@ -494,12 +502,15 @@ class TestConvertLoopPass(BaseTest):
             arr = np.ones(n)
             for i in prange(n):
                 i += 1
-                arr[i] = i
+                arr[i - 1] = i
             return arr
 
         with self.assertRaises(errors.UnsupportedRewriteError) as raises:
             self.run_parfor_sub_pass(test_impl, ())
-        self.assertIn("Overwrite of parallel loop index", str(raises.exception))
+        self.assertIn(
+            "Overwrite of parallel loop index",
+            str(raises.exception),
+        )
 
     def test_init_prange(self):
         def test_impl():

@@ -147,6 +147,11 @@ class _EnvReloader(object):
         # globally.
         BOUNDSCHECK = _readenv("NUMBA_BOUNDSCHECK", int, None)
 
+        # Whether to always warn about potential uninitialized variables
+        # because static controlflow analysis cannot find a definition
+        # in one or more of the incoming paths.
+        ALWAYS_WARN_UNINIT_VAR = _readenv("ALWAYS_WARN_UNINIT_VAR", int, 0)
+
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 

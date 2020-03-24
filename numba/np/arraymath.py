@@ -594,6 +594,8 @@ def array_argmin(context, builder, sig, args):
                 min_value = v
                 min_idx = 0
                 break
+            else:
+                raise RuntimeError('unreachable')
 
             idx = 0
             for v in arry.flat:
@@ -616,6 +618,8 @@ def array_argmax(context, builder, sig, args):
             max_value = v
             max_idx = 0
             break
+        else:
+            raise RuntimeError('unreachable')
 
         idx = 0
         for v in arry.flat:

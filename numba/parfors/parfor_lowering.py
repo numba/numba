@@ -21,7 +21,7 @@ from numba.core.ir_utils import add_offset_to_labels, replace_var_names, remove_
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
 from numba.parfors.parfor import print_wrapped, ensure_parallel_support
-from numba.core.errors import NumbaParallelSafetyWarning
+from numba.core.errors import NumbaParallelSafetyWarning, NotDefinedError
 from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
 
 
@@ -387,8 +387,36 @@ def _lower_parfor_parallel(lowerer, parfor):
                             # Add calltype back in for the expr with updated signature.
                             lowerer.fndesc.calltypes[rhs] = ct
                     lowerer.lower_inst(inst)
-                    if isinstance(inst, ir.Assign) and name == inst.target.name:
-                        break
+                    # Only process reduction statements post-gufunc execution
+                    # until we see an assignment with a left-hand side to the
+                    # reduction variable's name.  This fixes problems with
+                    # cases where there are multiple assignments to the
+                    # reduction variable in the parfor.
+                    if isinstance(inst, ir.Assign):
+                        try:
+                            reduction_var = scope.get_exact(name)
+                        except NotDefinedError:
+                            # Ideally, this shouldn't happen. The redvar name
+                            # missing from scope indicates an error from
+                            # other rewrite passes.
+                            is_same_source_var = name == inst.target.name
+                        else:
+                            # Because of SSA, the redvar and target var of
+                            # the current assignment would be different even
+                            # though they refer to the same source-level var.
+                            redvar_unver_name = reduction_var.unversioned_name
+                            target_unver_name = inst.target.unversioned_name
+                            is_same_source_var = redvar_unver_name == target_unver_name
+
+                        if is_same_source_var:
+                            # If redvar is different from target var, add an
+                            # assignment to put target var into redvar.
+                            if name != inst.target.name:
+                                pfbdr.assign_inplace(
+                                    rhs=inst.target, typ=redvar_typ,
+                                    name=name,
+                                )
+                            break
 
                     if config.DEBUG_ARRAY_OPT_RUNTIME:
                         res_print_str = "res_print2 for thread " + str(j) + ":"

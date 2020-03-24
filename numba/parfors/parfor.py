@@ -2434,11 +2434,23 @@ class ConvertLoopPass:
                         index_set.add(stmt.target.name)
                         added_indices.add(stmt.target.name)
                     # make sure parallel index is not overwritten
-                    elif stmt.target.name in index_set and stmt.target.name != stmt.value.name:
-                        raise errors.UnsupportedRewriteError(
-                            "Overwrite of parallel loop index",
-                            loc=stmt.target.loc,
-                        )
+                    else:
+                        scope = block.scope
+
+                        def unver(name):
+                            from numba.core import errors
+                            try:
+                                return scope.get_exact(name).unversioned_name
+                            except errors.NotDefinedError:
+                                return name
+
+                        if unver(stmt.target.name) in map(unver, index_set) and unver(stmt.target.name) != unver(stmt.value.name):
+                            raise errors.UnsupportedRewriteError(
+                                "Overwrite of parallel loop index",
+                                loc=stmt.target.loc,
+                            )
+
+
 
                 if is_get_setitem(stmt):
                     index = index_var_of_get_setitem(stmt)
@@ -3208,9 +3220,9 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
             if (isinstance(stmt, ir.Assign)
                     and (stmt.target.name in parfor_params
                       or stmt.target.name in var_to_param)):
-                lhs = stmt.target.name
+                lhs = stmt.target
                 rhs = stmt.value
-                cur_param = lhs if lhs in parfor_params else var_to_param[lhs]
+                cur_param = lhs if lhs.name in parfor_params else var_to_param[lhs.name]
                 used_vars = []
                 if isinstance(rhs, ir.Var):
                     used_vars = [rhs.name]
@@ -3233,8 +3245,9 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
         # a parameter is a reduction variable if its value is used to update it
         # check reduce_varnames since recursive parfors might have processed
         # param already
-        if param in used_vars and param not in reduce_varnames:
-            reduce_varnames.append(param)
+        param_name = param.name
+        if param_name in used_vars and param_name not in reduce_varnames:
+            reduce_varnames.append(param_name)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
             check_conflicting_reduction_operators(param, reduce_nodes)
@@ -3244,7 +3257,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
             else:
                 init_val = None
                 redop = None
-            reductions[param] = (init_val, reduce_nodes, redop)
+            reductions[param_name] = (init_val, reduce_nodes, redop)
 
     return reduce_varnames, reductions
 
@@ -3264,7 +3277,7 @@ def check_conflicting_reduction_operators(param, nodes):
             else:
                 if first_red_func != node.value.fn:
                     msg = ("Reduction variable %s has multiple conflicting "
-                           "reduction operators." % param)
+                           "reduction operators." % param.unversioned_name)
                     raise errors.UnsupportedRewriteError(msg, node.loc)
 
 def get_reduction_init(nodes):
@@ -3295,7 +3308,7 @@ def supported_reduction(x, func_ir):
             return True
     return False
 
-def get_reduce_nodes(name, nodes, func_ir):
+def get_reduce_nodes(reduction_node, nodes, func_ir):
     """
     Get nodes that combine the reduction variable with a sentinel variable.
     Recognizes the first node that combines the reduction variable with another
@@ -3310,7 +3323,8 @@ def get_reduce_nodes(name, nodes, func_ir):
             return lookup(val)
         else:
             return var if (varonly or val is None) else val
-
+    name = reduction_node.name
+    unversioned_name = reduction_node.unversioned_name
     for i, stmt in enumerate(nodes):
         lhs = stmt.target
         rhs = stmt.value
@@ -3321,13 +3335,14 @@ def get_reduce_nodes(name, nodes, func_ir):
             in_vars = set(lookup(v, True).name for v in rhs.list_vars())
             if name in in_vars:
                 next_node = nodes[i+1]
-                if not (isinstance(next_node, ir.Assign) and next_node.target.name == name):
-                    raise ValueError(("Use of reduction variable " + name +
+                target_name = next_node.target.unversioned_name
+                if not (isinstance(next_node, ir.Assign) and target_name == unversioned_name):
+                    raise ValueError(("Use of reduction variable " + unversioned_name +
                                       " other than in a supported reduction"
-                                      " function is not permitted."))
+                                      " function is not permitted."), "%s" % next_node, target_name, nonSSA_name, name)
 
                 if not supported_reduction(rhs, func_ir):
-                    raise ValueError(("Use of reduction variable " + name +
+                    raise ValueError(("Use of reduction variable " + unversioned_name +
                                       " in an unsupported reduction function."))
                 args = [ (x.name, lookup(x, True)) for x in get_expr_args(rhs) ]
                 non_red_args = [ x for (x, y) in args if y.name != name ]

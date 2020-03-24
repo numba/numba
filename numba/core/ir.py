@@ -528,6 +528,13 @@ class Expr(Inst):
         return cls(op=op, value=value, loc=loc)
 
     @classmethod
+    def phi(cls, loc):
+        """Phi node
+        """
+        assert isinstance(loc, Loc)
+        return cls(op='phi', incoming_values=[], incoming_blocks=[], loc=loc)
+
+    @classmethod
     def make_function(cls, name, code, closure, defaults, loc):
         """
         A node for making a function object.
@@ -993,6 +1000,27 @@ class Var(EqualityCheckMixin, AbstractRHS):
     def is_temp(self):
         return self.name.startswith("$")
 
+    @property
+    def unversioned_name(self):
+        """The unversioned name of this variable, i.e. SSA renaming removed
+        """
+        for k, redef_set in self.scope.var_redefinitions.items():
+            if self.name in redef_set:
+                return k
+        return self.name
+
+    @property
+    def versioned_names(self):
+        """Known versioned names for this variable, i.e. known variable names in
+        the scope that have been formed from applying SSA to this variable
+        """
+        return self.scope.get_versions_of(self.unversioned_name)
+
+    @property
+    def all_names(self):
+        """All known versioned and unversioned names for this variable
+        """
+        return self.versioned_names | {self.unversioned_name,}
 
 class Intrinsic(EqualityCheckMixin):
     """
@@ -1039,6 +1067,7 @@ class Scope(EqualityCheckMixin):
         self.localvars = VarMap()
         self.loc = loc
         self.redefined = defaultdict(int)
+        self.var_redefinitions = defaultdict(set)
 
     def define(self, name, loc):
         """
@@ -1089,10 +1118,31 @@ class Scope(EqualityCheckMixin):
             # means it could be captured in a closure.
             return self.localvars.get(name)
         else:
-            ct = self.redefined[name]
-            self.redefined[name] = ct + 1
-            newname = "%s.%d" % (name, ct + 1)
-            return self.define(newname, loc)
+            while True:
+                ct = self.redefined[name]
+                self.redefined[name] = ct + 1
+                newname = "%s.%d" % (name, ct + 1)
+                try:
+                    res = self.define(newname, loc)
+                except RedefinedError:
+                    continue
+                else:
+                    self.var_redefinitions[name].add(newname)
+                return res
+
+    def get_versions_of(self, name):
+        """
+        Gets all known versions of a given name
+        """
+        vers = set()
+        def walk(thename):
+            redefs = self.var_redefinitions.get(thename, None)
+            if redefs:
+                for v in redefs:
+                    vers.add(v)
+                    walk(v)
+        walk(name)
+        return vers
 
     def make_temp(self, loc):
         n = len(self.localvars)

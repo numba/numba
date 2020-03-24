@@ -81,6 +81,7 @@ class BaseLower(object):
 
         # Internal states
         self.blkmap = {}
+        self.pending_phis = {}
         self.varmap = {}
         self.firstblk = min(self.blocks.keys())
         self.loc = -1
@@ -244,12 +245,12 @@ class BaseLower(object):
 
         self.debug_print("# function begin: {0}".format(
             self.fndesc.unique_name))
+
         # Lower all blocks
         for offset, block in sorted(self.blocks.items()):
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
             self.lower_block(block)
-
         self.post_lower()
         return entry_block_tail
 
@@ -305,6 +306,22 @@ class Lower(BaseLower):
         from numba.core.unsafe import eh
 
         super(Lower, self).pre_block(block)
+
+        if block == self.firstblk:
+            # create slots for all the vars, irrespective of whether they are
+            # initialized, SSA will pick this up and warn users about using
+            # uninitialized variables. Slots are added as alloca in the first
+            # block
+            bb = self.blkmap[self.firstblk]
+            self.builder.position_at_end(bb)
+            all_names = set()
+            for block in self.blocks.values():
+                for x in block.find_insts(ir.Del):
+                    if x.value not in all_names:
+                        all_names.add(x.value)
+            for name in all_names:
+                fetype = self.typeof(name)
+                self._alloca_var(name, fetype)
 
         # Detect if we are in a TRY block by looking for a call to
         # `eh.exception_check`.
@@ -1162,6 +1179,9 @@ class Lower(BaseLower):
             castval = self.context.cast(self.builder, val, ty, resty)
             self.incref(resty, castval)
             return castval
+
+        elif expr.op == "phi":
+            raise LoweringError("PHI not stripped")
 
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)
