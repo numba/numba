@@ -827,6 +827,7 @@ class BaseContext(object):
                 flags = compiler.Flags()
             flags.set('no_compile')
             flags.set('no_cpython_wrapper')
+            flags.set('no_cfunc_wrapper')
             cres = compiler.compile_internal(self.typing_context, self,
                                              library,
                                              impl, sig.args,

@@ -142,6 +142,7 @@ class _ModuleCompiler(object):
         flags.set("no_compile")
         if not self.export_python_wrap:
             flags.set("no_cpython_wrapper")
+            flags.set("no_cfunc_wrapper")
         if self.use_nrt:
             flags.set("nrt")
             # Compile NRT helpers
