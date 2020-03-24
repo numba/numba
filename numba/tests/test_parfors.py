@@ -1643,10 +1643,11 @@ class TestParfors(TestParforsBase):
 
     @skip_parfors_unsupported
     def test_tuple_concat(self):
+        # issue5383
         def test_impl(a):
             n = len(a)
             array_shape = n, n
-            indices = np.zeros((1,) + array_shape, dtype=np.uint64)
+            indices = np.zeros(((1,) + array_shape + (1,))[:-1], dtype=np.uint64)
             k_list = indices[0, :]
 
             for i, g in enumerate(a):
