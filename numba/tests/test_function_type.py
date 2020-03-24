@@ -597,6 +597,39 @@ class TestFunctionTypeExtensions(TestCase):
                 self.assertEqual(jit_(myeval)(mycos, 0.0), 1.0)
                 self.assertEqual(jit_(myeval)(mysin, float32(0.0)), 0.0)
 
+    def test_compilation_results(self):
+        """Turn the existing compilation results of a dispatcher instance to
+        first-class functions with precise types.
+        """
+
+        @jit(nopython=True)
+        def add_template(x, y):
+            return x + y
+
+        # Trigger compilations
+        self.assertEqual(add_template(1, 2), 3)
+        self.assertEqual(add_template(1.2, 3.4), 4.6)
+
+        cres1, cres2 = add_template.overloads.values()
+
+        # Turn compilation results into first-class functions
+        iadd = types.CompileResultWAP(cres1)
+        fadd = types.CompileResultWAP(cres2)
+
+        @jit(nopython=True)
+        def foo(add, x, y):
+            return add(x, y)
+
+        @jit(forceobj=True)
+        def foo_obj(add, x, y):
+            return add(x, y)
+
+        self.assertEqual(foo(iadd, 3, 4), 7)
+        self.assertEqual(foo(fadd, 3.4, 4.5), 7.9)
+
+        self.assertEqual(foo_obj(iadd, 3, 4), 7)
+        self.assertEqual(foo_obj(fadd, 3.4, 4.5), 7.9)
+
 
 class TestMiscIssues(TestCase):
     """Test issues of using first-class functions in the context of Numba

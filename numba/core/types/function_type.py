@@ -1,6 +1,6 @@
 
 __all__ = ['FunctionType', 'UndefinedFunctionType', 'FunctionPrototype',
-           'WrapperAddressProtocol']
+           'WrapperAddressProtocol', 'CompileResultWAP']
 
 from abc import ABC, abstractmethod
 from .abstract import Type
@@ -168,8 +168,19 @@ class WrapperAddressProtocol(ABC):
 
 
 class CompileResultWAP(WrapperAddressProtocol):
+    """Wrapper of dispatcher instance compilation result to turn it a
+    first-class function.
+    """
 
     def __init__(self, cres):
+        """
+        Parameters
+        ----------
+        cres : CompileResult
+          Specify compilation result of a Numba jit-decorated function
+          (that is a value of dispatcher instance ``overloads``
+          attribute)
+        """
         self.cres = cres
         name = getattr(cres.fndesc, 'llvm_cfunc_wrapper_name')
         self.address = cres.library.get_pointer_to_function(name)

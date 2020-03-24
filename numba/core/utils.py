@@ -466,41 +466,6 @@ def get_nargs_range(pyfunc):
     return min_nargs, max_nargs
 
 
-def resolve_dispatcher_types(numba_types):
-    """Generate tuples of numba types by iterating over all the signatures
-    of available compilation results in the dispatcher types.
-    """
-    if not numba_types:
-        yield ()
-        return
-    t = numba_types[0]
-    for rest in resolve_dispatcher_types(numba_types[1:]):
-        if isinstance(t, types.Dispatcher):
-            for cres in t.dispatcher.overloads.values():
-                t_ = types.FunctionType.fromobject(cres.signature)
-                yield (t_, ) + rest
-        else:
-            yield (t, ) + rest
-
-
-def iter_multivalued_args(args):
-    from numba.core.dispatcher import Dispatcher
-    if len(args) == 0:
-        yield ()
-        return
-    a = args[0]
-    for rest in iter_multivalued_args(args[1:]):
-        if isinstance(a, Dispatcher):
-            for cres in a.overloads.values():
-                yield (types.function.CompileResultWAP(cres),) + rest
-        elif isinstance(a, (tuple, list, set)):
-            typ = type(a)
-            for a_ in iter_multivalued_args(tuple(a)):
-                yield (typ(a_),) + rest
-        else:
-            yield (a,) + rest
-
-
 def unify_function_types(numba_types):
     """Return a normalized tuple of Numba function types so that
 
