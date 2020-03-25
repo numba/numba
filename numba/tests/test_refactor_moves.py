@@ -875,6 +875,27 @@ class TestAPIMoves_Q1_2020(TestCase):
             with checker(fn):
                 getattr(numba.decorators, fn)
 
+    def test_numba_jitclass(self):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always", NumbaDeprecationWarning)
+            from numba import jitclass # SHOULD NOT WARN
+        for x in w:
+            if "numba.jitclass" in str(x.message):
+                raise ValueError("Unexpected warning encountered")
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always", NumbaDeprecationWarning)
+            @jitclass(spec=[])
+            class foo:
+                def __init__(self):
+                    pass
+            foo()
+        for x in w:
+            if "has moved to 'numba.experimental.jitclass'" in str(x.message):
+                break
+        else:
+            raise ValueError("Expected warning not found")
+
 
 if __name__ == "__main__":
     unittest.main()
