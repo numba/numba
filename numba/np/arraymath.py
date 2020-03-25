@@ -3885,9 +3885,20 @@ def np_asarray(a, dtype=None):
     return impl
 
 
-# @overload(np.asanyarray)
-# def np_asanyarray(a, dtype=None):
-#     return np_asarray(a, dtype=dtype)
+@overload(np.asfarray)
+def np_asfarray(a, dtype=types.float_):
+    if is_nonelike(dtype):
+        dt = types.float_
+    else:
+        dt = dtype.dtype
+        if not isinstance(dt, types.Float):
+            dt = types.float_
+
+    def impl(a, dtype=types.float_):
+        return np.asarray(a, dt)
+    return impl
+
+
 @overload(np.extract)
 def np_extract(condition, arr):
 
