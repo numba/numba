@@ -95,9 +95,9 @@ class NativeValue(object):
     recording whether the conversion was successful and how to cleanup.
     """
 
-    def __init__(self, value, is_error=None, cleanup=None):
+    def __init__(self, value, error_blk=None, cleanup=None):
         self.value = value
-        self.is_error = is_error if is_error is not None else cgutils.false_bit
+        self.error_blk = error_blk
         self.cleanup = cleanup
 
 

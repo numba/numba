@@ -57,10 +57,10 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
         # Release owned reference to arguments
         for elem in elems:
             pyapi.decref(elem)
-    # NOTE: if an error occurred, it will be caught by the Numpy machinery
+        # NOTE: if an error occurred, it will be caught by the Numpy machinery
 
-    # Store
-    store(retval)
+        # Store
+        store(retval)
 
     # increment indices
     for off, ary in zip(offsets, arrays):
@@ -111,6 +111,17 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
             assert native.cleanup is None
             # Store
             out.store_direct(native.value, builder.load(store_offset))
+
+            if native.error_blk is not None:
+                # If the conversion failed, then an exception should be set
+                # and numpy will detect it. We shouldn't attempt to store
+                # native.value, as accessing it via LLVM may be illegal
+                store_end_blk = builder.append_basic_block("store_end")
+                builder.branch(store_end_blk)
+                with builder.goto_block(native.error_blk):
+                    builder.branch(store_end_blk)
+                builder.position_at_end(store_end_blk)
+
             # Release owned reference
             pyapi.decref(retval)
 

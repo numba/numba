@@ -252,12 +252,17 @@ def box_dicttype(typ, val, c):
 
 @unbox(types.DictType)
 def unbox_dicttype(typ, val, c):
+    fail_blk = c.builder.append_basic_block('unbox_listtype.fail')
+
     context = c.context
 
     miptr = c.pyapi.object_getattr_string(val, '_opaque')
 
     mip_type = types.MemInfoPointer(types.voidptr)
     native = c.unbox(mip_type, miptr)
+    if native.error_blk:
+        with c.builder.goto_block(native.error_blk):
+            c.builder.branch(fail_blk)
 
     mi = native.value
 
@@ -274,7 +279,7 @@ def unbox_dicttype(typ, val, c):
     c.context.nrt.decref(c.builder, typ, dctobj)
 
     c.pyapi.decref(miptr)
-    return NativeValue(dctobj, is_error=is_error)
+    return NativeValue(dctobj, error_blk=fail_blk)
 
 
 #

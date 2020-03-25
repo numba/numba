@@ -31,8 +31,9 @@ class _ArgManager(object):
 
         # If an error occurred, go to the cleanup block for
         # the previous argument
-        with cgutils.if_unlikely(self.builder, native.is_error):
-            self.builder.branch(self.nextblk)
+        if native.error_blk is not None:
+            with self.builder.goto_block(native.error_blk):
+                self.builder.branch(self.nextblk)
 
         # Define the cleanup function for the argument
         def cleanup_arg():

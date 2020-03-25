@@ -413,12 +413,17 @@ def box_lsttype(typ, val, c):
 
 @unbox(types.ListType)
 def unbox_listtype(typ, val, c):
+    fail_blk = c.builder.append_basic_block('unbox_listtype.fail')
+
     context = c.context
     builder = c.builder
 
     miptr = c.pyapi.object_getattr_string(val, '_opaque')
 
     native = c.unbox(types.MemInfoPointer(types.voidptr), miptr)
+    if native.error_blk:
+        with c.builder.goto_block(native.error_blk):
+            c.builder.branch(fail_blk)
 
     mi = native.value
     ctor = cgutils.create_struct_proxy(typ)
@@ -436,7 +441,7 @@ def unbox_listtype(typ, val, c):
     lstobj = lstruct._getvalue()
     c.pyapi.decref(miptr)
 
-    return NativeValue(lstobj)
+    return NativeValue(lstobj, error_blk=fail_blk)
 
 
 #

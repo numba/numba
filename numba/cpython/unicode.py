@@ -175,8 +175,11 @@ def unbox_unicode_str(typ, obj, c):
     """
     Convert a unicode str object to a native unicode structure.
     """
+    fail_blk = c.builder.append_basic_block('unbox_unicode_str.fail')
+
     ok, data, length, kind, is_ascii, hashv = \
         c.pyapi.string_as_string_size_and_kind(obj)
+
     uni_str = cgutils.create_struct_proxy(typ)(c.context, c.builder)
     uni_str.data = data
     uni_str.length = length
@@ -189,8 +192,9 @@ def unbox_unicode_str(typ, obj, c):
     )
     uni_str.parent = obj
 
-    is_error = cgutils.is_not_null(c.builder, c.pyapi.err_occurred())
-    return NativeValue(uni_str._getvalue(), is_error=is_error)
+    with c.builder.if_then(c.pyapi.c_api_error(), likely=False):
+        c.builder.branch(fail_blk)
+    return NativeValue(uni_str._getvalue(), error_blk=fail_blk)
 
 
 @box(types.UnicodeType)

@@ -845,23 +845,23 @@ class Lower(BaseLower):
                     fnty.dispatcher.output_types,
                     ret_obj,
                 )
+
+                def cleanup():
+                    # Release objs
+                    self.pyapi.decref(ret_obj)
+                    for obj in argobjs:
+                        self.pyapi.decref(obj)
+
+                    # Release the GIL
+                    self.pyapi.gil_release(gil_state)
+
                 output = native.value
+                if native.error_blk is not None:
+                    with self.builder.goto_block(native.error_blk):
+                        cleanup()
+                        self.call_conv.return_exc(self.builder)
 
-                # Release objs
-                self.pyapi.decref(ret_obj)
-                for obj in argobjs:
-                    self.pyapi.decref(obj)
-
-                # cleanup output
-                if callable(native.cleanup):
-                    native.cleanup()
-
-                # Release the GIL
-                self.pyapi.gil_release(gil_state)
-
-                # Error during unboxing
-                with self.builder.if_then(native.is_error):
-                    self.call_conv.return_exc(self.builder)
+                cleanup()
 
                 return output
 

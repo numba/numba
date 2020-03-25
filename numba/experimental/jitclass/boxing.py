@@ -161,6 +161,8 @@ def _box_class_instance(typ, val, c):
 
 @unbox(types.ClassInstanceType)
 def _unbox_class_instance(typ, val, c):
+    fail_blk = c.builder.append_basic_block('_unbox_class_instance.fail')
+
     def access_member(member_offset):
         # Access member by byte offset
         offset = c.context.get_constant(types.uintp, member_offset)
@@ -184,4 +186,6 @@ def _unbox_class_instance(typ, val, c):
 
     c.context.nrt.incref(c.builder, typ, ret)
 
-    return NativeValue(ret, is_error=c.pyapi.c_api_error())
+    with c.builder.if_then(c.pyapi.c_api_error(), likely=False):
+        c.builder.branch(fail_blk)
+    return NativeValue(ret, error_blk=fail_blk)

@@ -217,22 +217,34 @@ def unbox_index(typ, obj, c):
     """
     data = c.pyapi.object_getattr_string(obj, "_data")
     index = make_index(c.context, c.builder, typ)
-    index.data = c.unbox(typ.as_array, data).value
+    native = c.unbox(typ.as_array, data)
+    index.data = native.value
 
-    return NativeValue(index._getvalue())
+    return NativeValue(index._getvalue(), error_blk=native.error_blk)
 
 @unbox(SeriesType)
 def unbox_series(typ, obj, c):
     """
     Convert a Series object to a native structure.
     """
+    fail_blk = c.builder.append_basic_block('unbox_series.fail')
     index = c.pyapi.object_getattr_string(obj, "_index")
     values = c.pyapi.object_getattr_string(obj, "_values")
     series = make_series(c.context, c.builder, typ)
-    series.index = c.unbox(typ.index, index).value
-    series.values = c.unbox(typ.values, values).value
 
-    return NativeValue(series._getvalue())
+    index_native = c.unbox(typ.index, index)
+    if index_native.error_blk is not None:
+        with c.builder.goto_block(index_native.error_blk):
+            c.builder.branch(fail_blk)
+    series.index = index_native.value
+
+    values_native =  c.unbox(typ.values, values)
+    if values_native.error_blk is not None:
+        with c.builder.goto_block(values_native.error_blk):
+            c.builder.branch(fail_blk)
+    series.values = values_native.value
+
+    return NativeValue(series._getvalue(), error_blk=fail_blk)
 
 
 @box(IndexType)

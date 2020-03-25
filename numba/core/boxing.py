@@ -21,10 +21,13 @@ def box_bool(typ, val, c):
 
 @unbox(types.Boolean)
 def unbox_boolean(typ, obj, c):
+    fail_blk = c.builder.append_basic_block('unbox_boolean.fail')
     istrue = c.pyapi.object_istrue(obj)
     zero = ir.Constant(istrue.type, 0)
     val = c.builder.icmp_signed('!=', istrue, zero)
-    return NativeValue(val, is_error=c.pyapi.c_api_error())
+    with c.builder.if_then(c.pyapi.c_api_error(), likely=False):
+        c.builder.branch(fail_blk)
+    return NativeValue(val, error_blk=fail_blk)
 
 
 @box(types.IntegerLiteral)
@@ -44,18 +47,25 @@ def box_integer(typ, val, c):
 
 @unbox(types.Integer)
 def unbox_integer(typ, obj, c):
+    fail_blk = c.builder.append_basic_block('unbox_integer.fail')
+
     ll_type = c.context.get_argument_type(typ)
     val = cgutils.alloca_once(c.builder, ll_type)
     longobj = c.pyapi.number_long(obj)
-    with c.pyapi.if_object_ok(longobj):
-        if typ.signed:
-            llval = c.pyapi.long_as_longlong(longobj)
-        else:
-            llval = c.pyapi.long_as_ulonglong(longobj)
-        c.pyapi.decref(longobj)
-        c.builder.store(c.builder.trunc(llval, ll_type), val)
-    return NativeValue(c.builder.load(val),
-                       is_error=c.pyapi.c_api_error())
+    with c.builder.if_then(cgutils.is_null(c.builder, longobj), likely=False):
+        c.builder.branch(fail_blk)
+
+    if typ.signed:
+        llval = c.pyapi.long_as_longlong(longobj)
+    else:
+        llval = c.pyapi.long_as_ulonglong(longobj)
+    c.pyapi.decref(longobj)
+    with c.builder.if_then(c.pyapi.c_api_error(), likely=False):
+        c.builder.branch(fail_blk)
+
+    c.builder.store(c.builder.trunc(llval, ll_type), val)
+
+    return NativeValue(c.builder.load(val), error_blk=fail_blk)
 
 
 @box(types.Float)
@@ -69,6 +79,8 @@ def box_float(typ, val, c):
 
 @unbox(types.Float)
 def unbox_float(typ, obj, c):
+    fail_blk = c.builder.append_basic_block('unbox_float.fail')
+
     fobj = c.pyapi.number_float(obj)
     dbval = c.pyapi.float_as_double(fobj)
     c.pyapi.decref(fobj)
@@ -78,7 +90,9 @@ def unbox_float(typ, obj, c):
     else:
         assert typ == types.float64
         val = dbval
-    return NativeValue(val, is_error=c.pyapi.c_api_error())
+    with c.builder.if_then(c.pyapi.c_api_error(), likely=False):
+        c.builder.branch(fail_blk)
+    return NativeValue(val, error_blk=fail_blk)
 
 
 @box(types.Complex)
@@ -95,6 +109,8 @@ def box_complex(typ, val, c):
 
 @unbox(types.Complex)
 def unbox_complex(typ, obj, c):
+    fail_blk = c.builder.append_basic_block('unbox_complex.fail')
+
     # First unbox to complex128, since that's what CPython gives us
     c128 = c.context.make_complex(c.builder, types.complex128)
     ok = c.pyapi.complex_adaptor(obj, c128._getpointer())
@@ -103,6 +119,7 @@ def unbox_complex(typ, obj, c):
     with cgutils.if_unlikely(c.builder, failed):
         c.pyapi.err_set_string("PyExc_TypeError",
                                "conversion to %s failed" % (typ,))
+        c.builder.branch(fail_blk)
 
     if typ == types.complex64:
         # Downcast to complex64 if necessary
@@ -114,7 +131,7 @@ def unbox_complex(typ, obj, c):
     else:
         assert typ == types.complex128
         cplx = c128
-    return NativeValue(cplx._getvalue(), is_error=failed)
+    return NativeValue(cplx._getvalue(), error_blk=fail_blk)
 
 
 @box(types.NoneType)
@@ -133,8 +150,11 @@ def box_npdatetime(typ, val, c):
 
 @unbox(types.NPDatetime)
 def unbox_npdatetime(typ, obj, c):
+    fail_blk = c.builder.append_basic_block('unbox_npdatetime.fail')
     val = c.pyapi.extract_np_datetime(obj)
-    return NativeValue(val, is_error=c.pyapi.c_api_error())
+    with c.builder.if_then(c.pyapi.c_api_error(), likely=False):
+        c.builder.branch(fail_blk)
+    return NativeValue(val, error_blk=fail_blk)
 
 
 @box(types.NPTimedelta)
@@ -143,8 +163,11 @@ def box_nptimedelta(typ, val, c):
 
 @unbox(types.NPTimedelta)
 def unbox_nptimedelta(typ, obj, c):
+    fail_blk = c.builder.append_basic_block('unbox_npdatetime.fail')
     val = c.pyapi.extract_np_timedelta(obj)
-    return NativeValue(val, is_error=c.pyapi.c_api_error())
+    with c.builder.if_then(c.pyapi.c_api_error(), likely=False):
+        c.builder.branch(fail_blk)
+    return NativeValue(val, error_blk=fail_blk)
 
 
 @box(types.RawPointer)
@@ -191,16 +214,19 @@ def box_record(typ, val, c):
 
 @unbox(types.Record)
 def unbox_record(typ, obj, c):
+    fail_blk = c.builder.append_basic_block('unbox_record.fail')
+
     buf = c.pyapi.alloca_buffer()
     ptr = c.pyapi.extract_record_data(obj, buf)
-    is_error = cgutils.is_null(c.builder, ptr)
+    with c.builder.if_then(cgutils.is_null(c.builder, ptr), likely=False):
+        c.builder.branch(fail_blk)
 
     ltyp = c.context.get_value_type(typ)
     val = c.builder.bitcast(ptr, ltyp)
 
     def cleanup():
         c.pyapi.release_buffer(buf)
-    return NativeValue(val, cleanup=cleanup, is_error=is_error)
+    return NativeValue(val, cleanup=cleanup, error_blk=fail_blk)
 
 
 @box(types.UnicodeCharSeq)
@@ -231,32 +257,36 @@ def box_unicodecharseq(typ, val, c):
 
 @unbox(types.UnicodeCharSeq)
 def unbox_unicodecharseq(typ, obj, c):
+    fail_blk = c.builder.append_basic_block('unbox_unicodecharseq.fail')
+
     lty = c.context.get_value_type(typ)
 
     ok, buffer, size, kind, is_ascii, hashv = \
         c.pyapi.string_as_string_size_and_kind(obj)
 
     # If conversion is ok, copy the buffer to the output storage.
-    with cgutils.if_likely(c.builder, ok):
-        # Check if the returned string size fits in the charseq
-        storage_size = ir.Constant(size.type, typ.count)
-        size_fits = c.builder.icmp_unsigned("<=", size, storage_size)
+    with c.builder.if_then(c.builder.not_(ok), likely=False):
+        c.builder.branch(fail_blk)
 
-        # Allow truncation of string
-        size = c.builder.select(size_fits, size, storage_size)
+    # Check if the returned string size fits in the charseq
+    storage_size = ir.Constant(size.type, typ.count)
+    size_fits = c.builder.icmp_unsigned("<=", size, storage_size)
 
-        # Initialize output to zero bytes
-        null_string = ir.Constant(lty, None)
-        outspace  = cgutils.alloca_once_value(c.builder, null_string)
+    # Allow truncation of string
+    size = c.builder.select(size_fits, size, storage_size)
 
-        # We don't need to set the NULL-terminator because the storage
-        # is already zero-filled.
-        cgutils.memcpy(c.builder,
-                        c.builder.bitcast(outspace, buffer.type),
-                        buffer, size)
+    # Initialize output to zero bytes
+    null_string = ir.Constant(lty, None)
+    outspace  = cgutils.alloca_once_value(c.builder, null_string)
+
+    # We don't need to set the NULL-terminator because the storage
+    # is already zero-filled.
+    cgutils.memcpy(c.builder,
+                    c.builder.bitcast(outspace, buffer.type),
+                    buffer, size)
 
     ret = c.builder.load(outspace)
-    return NativeValue(ret, is_error=c.builder.not_(ok))
+    return NativeValue(ret, error_blk=fail_blk)
 
 
 @box(types.Bytes)
@@ -290,30 +320,34 @@ def box_charseq(typ, val, c):
 
 @unbox(types.CharSeq)
 def unbox_charseq(typ, obj, c):
+    fail_blk = c.builder.append_basic_block('unbox_charseq.fail')
+
     lty = c.context.get_value_type(typ)
     ok, buffer, size = c.pyapi.string_as_string_and_size(obj)
 
+    with c.builder.if_then(c.builder.not_(ok), likely=False):
+        c.builder.branch(fail_blk)
+
     # If conversion is ok, copy the buffer to the output storage.
-    with cgutils.if_likely(c.builder, ok):
-        # Check if the returned string size fits in the charseq
-        storage_size = ir.Constant(size.type, typ.count)
-        size_fits = c.builder.icmp_unsigned("<=", size, storage_size)
+    # Check if the returned string size fits in the charseq
+    storage_size = ir.Constant(size.type, typ.count)
+    size_fits = c.builder.icmp_unsigned("<=", size, storage_size)
 
-        # Allow truncation of string
-        size = c.builder.select(size_fits, size, storage_size)
+    # Allow truncation of string
+    size = c.builder.select(size_fits, size, storage_size)
 
-        # Initialize output to zero bytes
-        null_string = ir.Constant(lty, None)
-        outspace  = cgutils.alloca_once_value(c.builder, null_string)
+    # Initialize output to zero bytes
+    null_string = ir.Constant(lty, None)
+    outspace  = cgutils.alloca_once_value(c.builder, null_string)
 
-        # We don't need to set the NULL-terminator because the storage
-        # is already zero-filled.
-        cgutils.memcpy(c.builder,
-                       c.builder.bitcast(outspace, buffer.type),
-                       buffer, size)
+    # We don't need to set the NULL-terminator because the storage
+    # is already zero-filled.
+    cgutils.memcpy(c.builder,
+                   c.builder.bitcast(outspace, buffer.type),
+                   buffer, size)
 
     ret = c.builder.load(outspace)
-    return NativeValue(ret, is_error=c.builder.not_(ok))
+    return NativeValue(ret, error_blk=fail_blk)
 
 
 @box(types.Optional)
@@ -346,7 +380,6 @@ def unbox_optional(typ, obj, c):
             just = c.context.make_optional_value(c.builder,
                                                  typ.type, native.value)
             c.builder.store(just, retptr)
-            c.builder.store(native.is_error, errptr)
 
         with orelse:
             c.builder.store(noneval, retptr)
@@ -359,8 +392,7 @@ def unbox_optional(typ, obj, c):
         cleanup = None
 
     ret = c.builder.load(retptr)
-    return NativeValue(ret, is_error=c.builder.load(errptr),
-                       cleanup=cleanup)
+    return NativeValue(ret, error_blk=native.error_blk, cleanup=cleanup)
 
 
 @unbox(types.SliceType)
@@ -368,13 +400,17 @@ def unbox_slice(typ, obj, c):
     """
     Convert object *obj* to a native slice structure.
     """
+    fail_blk = c.builder.append_basic_block('unbox_slice.fail')
+
     from numba.cpython import slicing
     ok, start, stop, step = c.pyapi.slice_as_ints(obj)
+    with c.builder.if_then(c.builder.not_(ok)):
+        c.builder.branch(fail_blk)
     sli = c.context.make_helper(c.builder, typ)
     sli.start = start
     sli.stop = stop
     sli.step = step
-    return NativeValue(sli._getvalue(), is_error=c.builder.not_(ok))
+    return NativeValue(sli._getvalue(), error_blk=fail_blk)
 
 
 @unbox(types.StringLiteral)
@@ -410,6 +446,8 @@ def unbox_buffer(typ, obj, c):
     """
     Convert a Py_buffer-providing object to a native array structure.
     """
+    fail_blk = c.builder.append_basic_block('unbox_buffer.fail')
+
     buf = c.pyapi.alloca_buffer()
     res = c.pyapi.get_buffer(obj, buf)
     is_error = cgutils.is_not_null(c.builder, res)
@@ -418,17 +456,19 @@ def unbox_buffer(typ, obj, c):
     nativeary = nativearycls(c.context, c.builder)
     aryptr = nativeary._getpointer()
 
-    with cgutils.if_likely(c.builder, c.builder.not_(is_error)):
-        ptr = c.builder.bitcast(aryptr, c.pyapi.voidptr)
-        if c.context.enable_nrt:
-            c.pyapi.nrt_adapt_buffer_from_python(buf, ptr)
-        else:
-            c.pyapi.numba_buffer_adaptor(buf, ptr)
+    with cgutils.if_unlikely(c.builder, is_error):
+        c.builder.branch(fail_blk)
+
+    ptr = c.builder.bitcast(aryptr, c.pyapi.voidptr)
+    if c.context.enable_nrt:
+        c.pyapi.nrt_adapt_buffer_from_python(buf, ptr)
+    else:
+        c.pyapi.numba_buffer_adaptor(buf, ptr)
 
     def cleanup():
         c.pyapi.release_buffer(buf)
 
-    return NativeValue(c.builder.load(aryptr), is_error=is_error,
+    return NativeValue(c.builder.load(aryptr), error_blk=fail_blk,
                        cleanup=cleanup)
 
 @unbox(types.Array)
@@ -436,6 +476,9 @@ def unbox_array(typ, obj, c):
     """
     Convert a Numpy array object to a native array structure.
     """
+    fail_blk = c.builder.append_basic_block('unbox_array.fail')
+
+
     # This is necessary because unbox_buffer() does not work on some
     # dtypes, e.g. datetime64 and timedelta64.
     # TODO check matching dtype.
@@ -466,17 +509,17 @@ def unbox_array(typ, obj, c):
             expected_itemsize,
             )
 
-    failed = c.builder.or_(
+    with c.builder.if_then(c.builder.or_(
         cgutils.is_not_null(c.builder, errcode),
         itemsize_mismatch,
-    )
-    # Handle error
-    with c.builder.if_then(failed, likely=False):
+    ), likely=False):
+        # Handle error
         c.pyapi.err_set_string("PyExc_TypeError",
                                "can't unbox array from PyObject into "
                                "native value.  The object maybe of a "
                                "different type")
-    return NativeValue(c.builder.load(aryptr), is_error=failed)
+        c.builder.branch(fail_blk)
+    return NativeValue(c.builder.load(aryptr), error_blk=fail_blk)
 
 
 @box(types.Tuple)
@@ -513,6 +556,8 @@ def unbox_tuple(typ, obj, c):
     """
     Convert tuple *obj* to a native array (if homogeneous) or structure.
     """
+    fail_blk = c.builder.append_basic_block('unbox_tuple.fail')
+
     n = len(typ)
     values = []
     cleanups = []
@@ -520,6 +565,7 @@ def unbox_tuple(typ, obj, c):
 
     is_error_ptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
     value_ptr = cgutils.alloca_once(c.builder, lty)
+
 
     # Issue #1638: need to check the tuple size
     actual_size = c.pyapi.tuple_size(obj)
@@ -530,7 +576,7 @@ def unbox_tuple(typ, obj, c):
             "PyExc_ValueError",
             "size mismatch for tuple, expected %d element(s) but got %%zd" % (n,),
             actual_size)
-        c.builder.store(cgutils.true_bit, is_error_ptr)
+        c.builder.branch(fail_blk)
 
     # We unbox the items even if not `size_matches`, to avoid issues with
     # the generated IR (instruction doesn't dominate all uses)
@@ -538,8 +584,9 @@ def unbox_tuple(typ, obj, c):
         elem = c.pyapi.tuple_getitem(obj, i)
         native = c.unbox(eltype, elem)
         values.append(native.value)
-        with c.builder.if_then(native.is_error, likely=False):
-            c.builder.store(cgutils.true_bit, is_error_ptr)
+        if native.error_blk is not None:
+            with c.builder.goto_block(native.error_blk):
+                c.builder.branch(fail_blk)
         if native.cleanup is not None:
             cleanups.append(native.cleanup)
 
@@ -555,7 +602,7 @@ def unbox_tuple(typ, obj, c):
         cleanup = None
 
     return NativeValue(c.builder.load(value_ptr), cleanup=cleanup,
-                       is_error=c.builder.load(is_error_ptr))
+                       error_blk=fail_blk)
 
 
 @box(types.List)
@@ -630,7 +677,7 @@ class _NumbaTypeHelper(object):
         return res
 
 
-def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
+def _python_list_to_native(typ, obj, c, size, listptr, fail_blk):
     """
     Construct a new native list from a Python list.
     """
@@ -641,62 +688,56 @@ def _python_list_to_native(typ, obj, c, size, listptr, errorptr):
                 cgutils.is_null(c.builder, typobj),
                 likely=False,
                 ):
-            c.builder.store(cgutils.true_bit, errorptr)
-            loop.do_break()
+            c.builder.branch(fail_blk)
         # Mandate that objects all have the same exact type
         type_mismatch = c.builder.icmp_signed('!=', typobj, expected_typobj)
 
         with c.builder.if_then(type_mismatch, likely=False):
-            c.builder.store(cgutils.true_bit, errorptr)
             c.pyapi.err_format(
                 "PyExc_TypeError",
                 "can't unbox heterogeneous list: %S != %S",
                 expected_typobj, typobj,
                 )
             c.pyapi.decref(typobj)
-            loop.do_break()
+            c.builder.branch(fail_blk)
         c.pyapi.decref(typobj)
 
     # Allocate a new native list
     ok, list = listobj.ListInstance.allocate_ex(c.context, c.builder, typ, size)
-    with c.builder.if_else(ok, likely=True) as (if_ok, if_not_ok):
-        with if_ok:
-            list.size = size
-            zero = ir.Constant(size.type, 0)
-            with c.builder.if_then(c.builder.icmp_signed('>', size, zero),
-                                   likely=True):
-                # Traverse Python list and unbox objects into native list
-                with _NumbaTypeHelper(c) as nth:
-                    # Note: *expected_typobj* can't be NULL
-                    expected_typobj = nth.typeof(c.pyapi.list_getitem(obj, zero))
-                    with cgutils.for_range(c.builder, size) as loop:
-                        itemobj = c.pyapi.list_getitem(obj, loop.index)
-                        check_element_type(nth, itemobj, expected_typobj)
-                        # XXX we don't call native cleanup for each
-                        # list element, since that would require keeping
-                        # of which unboxings have been successful.
-                        native = c.unbox(typ.dtype, itemobj)
-                        with c.builder.if_then(native.is_error, likely=False):
-                            c.builder.store(cgutils.true_bit, errorptr)
-                            loop.do_break()
-                        # The reference is borrowed so incref=False
-                        list.setitem(loop.index, native.value, incref=False)
-                    c.pyapi.decref(expected_typobj)
-            if typ.reflected:
-                list.parent = obj
-            # Stuff meminfo pointer into the Python object for
-            # later reuse.
-            with c.builder.if_then(c.builder.not_(c.builder.load(errorptr)),
-                                                  likely=False):
-                c.pyapi.object_set_private_data(obj, list.meminfo)
-            list.set_dirty(False)
-            c.builder.store(list.value, listptr)
+    with c.builder.if_then(c.builder.not_(ok), likely=False):
+        c.builder.branch(fail_blk)
 
-        with if_not_ok:
-            c.builder.store(cgutils.true_bit, errorptr)
+    list.size = size
+    zero = ir.Constant(size.type, 0)
+    with c.builder.if_then(c.builder.icmp_signed('>', size, zero),
+                           likely=True):
+        # Traverse Python list and unbox objects into native list
+        with _NumbaTypeHelper(c) as nth:
+            # Note: *expected_typobj* can't be NULL
+            expected_typobj = nth.typeof(c.pyapi.list_getitem(obj, zero))
+            with cgutils.for_range(c.builder, size) as loop:
+                itemobj = c.pyapi.list_getitem(obj, loop.index)
+                check_element_type(nth, itemobj, expected_typobj)
+                # XXX we don't call native cleanup for each
+                # list element, since that would require keeping
+                # of which unboxings have been successful.
+                native = c.unbox(typ.dtype, itemobj)
+                if native.error_blk is not None:
+                    with c.builder.goto_block(native.error_blk):
+                        c.builder.branch(fail_blk)
+                # The reference is borrowed so incref=False
+                list.setitem(loop.index, native.value, incref=False)
+            c.pyapi.decref(expected_typobj)
+    if typ.reflected:
+        list.parent = obj
+    # Stuff meminfo pointer into the Python object for
+    # later reuse.
+    c.pyapi.object_set_private_data(obj, list.meminfo)
+    list.set_dirty(False)
+    c.builder.store(list.value, listptr)
 
     # If an error occurred, drop the whole native list
-    with c.builder.if_then(c.builder.load(errorptr)):
+    with c.builder.goto_block(fail_blk):
         c.context.nrt.decref(c.builder, typ, list.value)
 
 
@@ -708,9 +749,10 @@ def unbox_list(typ, obj, c):
     If list was previously unboxed, we reuse the existing native list
     to ensure consistency.
     """
+    fail_blk = c.builder.append_basic_block('unbox_list.fail')
+
     size = c.pyapi.list_size(obj)
 
-    errorptr = cgutils.alloca_once_value(c.builder, cgutils.false_bit)
     listptr = cgutils.alloca_once(c.builder, c.context.get_value_type(typ))
 
     # See if the list was previously unboxed, if so, re-use the meminfo.
@@ -728,14 +770,14 @@ def unbox_list(typ, obj, c):
             c.builder.store(list.value, listptr)
 
         with otherwise:
-            _python_list_to_native(typ, obj, c, size, listptr, errorptr)
+            _python_list_to_native(typ, obj, c, size, listptr, fail_blk)
 
     def cleanup():
         # Clean up the associated pointer, as the meminfo is now invalid.
         c.pyapi.object_reset_private_data(obj)
 
     return NativeValue(c.builder.load(listptr),
-                       is_error=c.builder.load(errorptr),
+                       error_blk=fail_blk,
                        cleanup=cleanup)
 
 
@@ -790,62 +832,58 @@ def reflect_list(typ, val, c):
         list.set_dirty(False)
 
 
-def _python_set_to_native(typ, obj, c, size, setptr, errorptr):
+def _python_set_to_native(typ, obj, c, size, setptr, fail_blk):
     """
     Construct a new native set from a Python set.
     """
     # Allocate a new native set
     ok, inst = setobj.SetInstance.allocate_ex(c.context, c.builder, typ, size)
-    with c.builder.if_else(ok, likely=True) as (if_ok, if_not_ok):
-        with if_ok:
-            # Traverse Python set and unbox objects into native set
-            typobjptr = cgutils.alloca_once_value(c.builder,
-                                                  ir.Constant(c.pyapi.pyobj, None))
+    with c.builder.if_then(c.builder.not_(ok), likely=False):
+        c.builder.branch(fail_blk)
 
-            with c.pyapi.set_iterate(obj) as loop:
-                itemobj = loop.value
-                # Mandate that objects all have the same exact type
-                typobj = c.pyapi.get_type(itemobj)
-                expected_typobj = c.builder.load(typobjptr)
+    # Traverse Python set and unbox objects into native set
+    typobjptr = cgutils.alloca_once_value(c.builder,
+                                          ir.Constant(c.pyapi.pyobj, None))
 
-                with c.builder.if_else(
-                    cgutils.is_null(c.builder, expected_typobj),
-                    likely=False) as (if_first, if_not_first):
-                    with if_first:
-                        # First iteration => store item type
-                        c.builder.store(typobj, typobjptr)
-                    with if_not_first:
-                        # Otherwise, check item type
-                        type_mismatch = c.builder.icmp_signed('!=', typobj,
-                                                              expected_typobj)
-                        with c.builder.if_then(type_mismatch, likely=False):
-                            c.builder.store(cgutils.true_bit, errorptr)
-                            c.pyapi.err_set_string("PyExc_TypeError",
-                                                   "can't unbox heterogeneous set")
-                            loop.do_break()
+    with c.pyapi.set_iterate(obj) as loop:
+        itemobj = loop.value
+        # Mandate that objects all have the same exact type
+        typobj = c.pyapi.get_type(itemobj)
+        expected_typobj = c.builder.load(typobjptr)
 
-                # XXX we don't call native cleanup for each set element,
-                # since that would require keeping track
-                # of which unboxings have been successful.
-                native = c.unbox(typ.dtype, itemobj)
-                with c.builder.if_then(native.is_error, likely=False):
-                    c.builder.store(cgutils.true_bit, errorptr)
-                inst.add_pyapi(c.pyapi, native.value, do_resize=False)
+        with c.builder.if_else(
+            cgutils.is_null(c.builder, expected_typobj),
+            likely=False) as (if_first, if_not_first):
+            with if_first:
+                # First iteration => store item type
+                c.builder.store(typobj, typobjptr)
+            with if_not_first:
+                # Otherwise, check item type
+                type_mismatch = c.builder.icmp_signed('!=', typobj,
+                                                      expected_typobj)
+                with c.builder.if_then(type_mismatch, likely=False):
+                    c.pyapi.err_set_string("PyExc_TypeError",
+                                           "can't unbox heterogeneous set")
+                    c.builder.branch(fail_blk)
 
-            if typ.reflected:
-                inst.parent = obj
-            # Associate meminfo pointer with the Python object for later reuse.
-            with c.builder.if_then(c.builder.not_(c.builder.load(errorptr)),
-                                   likely=False):
-                c.pyapi.object_set_private_data(obj, inst.meminfo)
-            inst.set_dirty(False)
-            c.builder.store(inst.value, setptr)
+        # XXX we don't call native cleanup for each set element,
+        # since that would require keeping track
+        # of which unboxings have been successful.
+        native = c.unbox(typ.dtype, itemobj)
+        if native.error_blk is not None:
+            with c.builder.goto_block(native.error_blk):
+                c.builder.branch(fail_blk)
+        inst.add_pyapi(c.pyapi, native.value, do_resize=False)
 
-        with if_not_ok:
-            c.builder.store(cgutils.true_bit, errorptr)
+    if typ.reflected:
+        inst.parent = obj
+    # Associate meminfo pointer with the Python object for later reuse.
+    c.pyapi.object_set_private_data(obj, inst.meminfo)
+    inst.set_dirty(False)
+    c.builder.store(inst.value, setptr)
 
     # If an error occurred, drop the whole native set
-    with c.builder.if_then(c.builder.load(errorptr)):
+    with c.builder.goto_block(fail_blk):
         c.context.nrt.decref(c.builder, typ, inst.value)
 
 
@@ -865,6 +903,8 @@ def unbox_set(typ, obj, c):
     # See if the set was previously unboxed, if so, re-use the meminfo.
     ptr = c.pyapi.object_get_private_data(obj)
 
+    fail_blk = c.builder.append_basic_block('unbox_set.fail')
+
     with c.builder.if_else(cgutils.is_not_null(c.builder, ptr)) \
         as (has_meminfo, otherwise):
 
@@ -876,14 +916,14 @@ def unbox_set(typ, obj, c):
             c.builder.store(inst.value, setptr)
 
         with otherwise:
-            _python_set_to_native(typ, obj, c, size, setptr, errorptr)
+            _python_set_to_native(typ, obj, c, size, setptr, fail_blk)
 
     def cleanup():
         # Clean up the associated pointer, as the meminfo is now invalid.
         c.pyapi.object_reset_private_data(obj)
 
     return NativeValue(c.builder.load(setptr),
-                       is_error=c.builder.load(errorptr),
+                       error_blk=fail_blk,
                        cleanup=cleanup)
 
 
@@ -1008,6 +1048,7 @@ def unbox_pyobject(typ, obj, c):
 
 @unbox(types.ExternalFunctionPointer)
 def unbox_funcptr(typ, obj, c):
+    fail_blk = c.builder.append_basic_block('unbox_funcptr.fail')
     if typ.get_pointer is None:
         raise NotImplementedError(typ)
 
@@ -1018,16 +1059,15 @@ def unbox_funcptr(typ, obj, c):
                                     name='fnptr')
     ser = c.pyapi.serialize_object(typ.get_pointer)
     get_pointer = c.pyapi.unserialize(ser)
-    with cgutils.if_likely(c.builder,
-                           cgutils.is_not_null(c.builder, get_pointer)):
-        intobj = c.pyapi.call_function_objargs(get_pointer, (obj,))
-        c.pyapi.decref(get_pointer)
-        with cgutils.if_likely(c.builder,
-                               cgutils.is_not_null(c.builder, intobj)):
-            ptr = c.pyapi.long_as_voidptr(intobj)
-            c.pyapi.decref(intobj)
-            c.builder.store(c.builder.bitcast(ptr, ptrty), ret)
-    return NativeValue(c.builder.load(ret), is_error=c.pyapi.c_api_error())
+    with c.builder.if_then(cgutils.is_null(c.builder, get_pointer), likely=False):
+        c.builder.branch(fail_blk)
+
+    intobj = c.pyapi.call_function_objargs(get_pointer, (obj,))
+    c.pyapi.decref(get_pointer)
+    with c.builder.if_then(cgutils.is_null(c.builder, intobj), likely=False):
+        c.builder.branch(fail_blk)
+
+    return NativeValue(c.builder.load(ret), error_blk=fail_blk)
 
 @box(types.DeferredType)
 def box_deferred(typ, val, c):
@@ -1042,7 +1082,7 @@ def unbox_deferred(typ, obj, c):
     native_value = c.pyapi.to_native_value(typ.get(), obj)
     model = c.context.data_model_manager[typ]
     res = model.set(c.builder, model.make_uninitialized(), native_value.value)
-    return NativeValue(res, is_error=native_value.is_error,
+    return NativeValue(res, error_blk=native_value.error_blk,
                        cleanup=native_value.cleanup)
 
 
@@ -1057,7 +1097,10 @@ def unbox_unsupported(typ, obj, c):
     c.pyapi.err_set_string("PyExc_TypeError",
                            "can't unbox {!r} type".format(typ))
     res = c.context.get_constant_null(typ)
-    return NativeValue(res, is_error=cgutils.true_bit)
+    error_blk = c.builder.append_basic_block('unbox_unsupported.fail')
+    with c.builder.if_then(cgutils.true_bit):
+        c.builder.branch(error_blk)
+    return NativeValue(res, error_blk=error_blk)
 
 
 def box_unsupported(typ, val, c):
@@ -1083,11 +1126,13 @@ def box_meminfo_pointer(typ, val, c):
 
 @unbox(types.MemInfoPointer)
 def unbox_meminfo_pointer(typ, obj, c):
+    fail_blk = c.builder.append_basic_block('unbox_meminfo_pointer.fail')
     res = c.pyapi.nrt_meminfo_from_pyobject(obj)
-    errored = cgutils.is_null(c.builder, res)
-    return NativeValue(res, is_error=errored)
+    with c.builder.if_then(cgutils.is_null(c.builder, res), likely=False):
+        c.builder.branch(fail_blk)
+    return NativeValue(res, error_blk=fail_blk)
 
 @unbox(types.TypeRef)
 def unbox_typeref(typ, val, c):
-    return NativeValue(c.context.get_dummy_value(), is_error=cgutils.false_bit)
+    return NativeValue(c.context.get_dummy_value())
 
