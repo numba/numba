@@ -36,6 +36,14 @@ The following Python constructs are not supported:
 The ``raise`` and ``assert`` statements are supported.
 See :ref:`nopython language support <pysupported-language>`.
 
+Printing of strings and integers is supported (see :ref:`nopython builtin
+support <pysupported-builtin-functions>`), but printing is an asynchronous
+operation - in order to ensure that all output is printed after a kernel
+launch, it is necessary to call :func:`numba.cuda.synchronize`. Eliding the
+call to ``synchronize`` is acceptable, but output from a kernel may appear
+during other later driver operations (e.g. subsequent kernel launches, memory
+transfers, etc.), or fail to appear before the program execution completes.
+
 Built-in types
 ===============
 
