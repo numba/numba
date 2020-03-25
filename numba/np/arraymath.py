@@ -3885,6 +3885,9 @@ def np_asarray(a, dtype=None):
     return impl
 
 
+# @overload(np.asanyarray)
+# def np_asanyarray(a, dtype=None):
+#     return np_asarray(a, dtype=dtype)
 @overload(np.extract)
 def np_extract(condition, arr):
 

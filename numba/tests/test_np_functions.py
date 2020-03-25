@@ -236,6 +236,10 @@ def asarray_kws(a, dtype):
     return np.asarray(a, dtype=dtype)
 
 
+def asfarray(a, dtype=np.float_):
+    return np.asfarray(a, dtype=dtype)
+
+
 def extract(condition, arr):
     return np.extract(condition, arr)
 
@@ -3059,6 +3063,25 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     check_pass_through(cfunc, True, params)
                 else:
                     check_pass_through(cfunc, True, params)
+
+    def test_asfarray(self):
+        def inputs():
+            yield np.array([1, 2, 3]), None
+            yield np.array([2, 3], dtype=np.float32), np.float32
+            yield np.array([2, 3], dtype=np.int8), np.int8
+
+        pyfunc = asfarray
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, dt in inputs():
+            if dt is None:
+                expected = pyfunc(arr)
+                got = cfunc(arr)
+            else:
+                expected = pyfunc(arr, dtype=dt)
+                got = cfunc(arr, dtype=dt)
+            self.assertPreciseEqual(expected, got)
+            self.assertTrue(np.issubdtype(got.dtype, np.floating), got.dtype)
 
     def test_repeat(self):
         # np.repeat(a, repeats)
