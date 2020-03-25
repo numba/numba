@@ -90,7 +90,7 @@ f8 = float64
 c8 = complex64
 c16 = complex128
 
-float_ = float64
+float_ = float32
 double = float64
 void = none
 
