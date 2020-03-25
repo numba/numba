@@ -2921,6 +2921,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield make_list((1, 2, 3))
             yield make_list((1.0, 2.0, 3.0))
             yield make_list((1j, 2j, 3j))
+            yield make_list((True, False, True))
 
         # used to check that if the input is already an array and the dtype is
         # the same as that of the input/omitted then the array itself is
@@ -2969,7 +2970,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             with self.assertRaises(TypingError) as e:
                 cfunc(alist)
             self.assertIn(
-                "asarray support for List is limited to None and Number types",
+                "asarray support for List is limited "
+                "to Boolean and Number types",
                 str(e.exception))
 
         def make_none_typed_list():

@@ -3878,9 +3878,10 @@ def np_asarray(a, dtype=None):
         def impl(a, dtype=None):
             return np.array(a, ty)
     elif isinstance(a, types.containers.ListType):
-        if not isinstance(a.dtype, types.Number):
+        if not isinstance(a.dtype, (types.Number, types.Boolean)):
             raise TypingError(
-                "asarray support for List is limited to None and Number types")
+                "asarray support for List is limited "
+                "to Boolean and Number types")
 
         target_dtype = a.dtype if is_nonelike(dtype) else dtype
 
