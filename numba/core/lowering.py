@@ -955,7 +955,7 @@ class Lower(BaseLower):
         return res
 
     def __get_function_pointer(self, ftype, fname, sig=None):
-        from numba.core.function_type import lower_get_wrapper_address
+        from numba.experimental.function_type import lower_get_wrapper_address
 
         llty = self.context.get_value_type(ftype)
         fstruct = self.loadvar(fname)
