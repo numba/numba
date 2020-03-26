@@ -1,5 +1,7 @@
 from numba.core import types, config
+from numba.core import errors
 from numba.experimental.jitclass.base import register_class_type, ClassBuilder
+import warnings
 
 
 def jitclass(spec):
@@ -18,6 +20,17 @@ def jitclass(spec):
 
     A callable that takes a class object, which will be compiled.
     """
+    url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+           "deprecation.html#change-of-jitclass-location")
+
+    msg = ("The 'numba.jitclass' decorator has moved to "
+           "'numba.experimental.jitclass' to better reflect the experimental "
+           "nature of the functionality. Please update your imports to "
+           "accommodate this change and see {} for the time frame.".format(url))
+
+    warnings.warn(msg, category=errors.NumbaDeprecationWarning,
+                  stacklevel=2)
+
     def wrap(cls):
         if config.DISABLE_JIT:
             return cls
