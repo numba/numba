@@ -3881,6 +3881,20 @@ def np_asarray(a, dtype=None):
 
         def impl(a, dtype=None):
             return np.array(a, ty)
+    elif isinstance(a, types.containers.ListType):
+        if not isinstance(a.dtype, (types.Number, types.Boolean)):
+            raise TypingError(
+                "asarray support for List is limited "
+                "to Boolean and Number types")
+
+        target_dtype = a.dtype if is_nonelike(dtype) else dtype
+
+        def impl(a, dtype=None):
+            l = len(a)
+            ret = np.empty(l, dtype=target_dtype)
+            for i, v in enumerate(a):
+                ret[i] = v
+            return ret
 
     return impl
 
@@ -3975,12 +3989,12 @@ def np_select(condlist, choicelist, default=0):
 
     return np_select_arr_impl
 
-
 #----------------------------------------------------------------------------
 # Windowing functions
 #   - translated from the numpy implementations found in:
 #   https://github.com/numpy/numpy/blob/v1.16.1/numpy/lib/function_base.py#L2543-L3233    # noqa: E501
 #   at commit: f1c4c758e1c24881560dd8ab1e64ae750
+
 
 @register_jitable
 def np_bartlett_impl(M):

@@ -9,7 +9,7 @@ set -v -e
 if [ "$BUILD_DOC" == "yes" ]; then rstcheck README.rst; fi
 # Ensure that the documentation builds without warnings
 pushd docs
-if [ "$BUILD_DOC" == "yes" ]; then make SPHINXOPTS=-W clean html; fi
+if [ "$BUILD_DOC" == "yes" ]; then make clean html; fi
 popd
 # Run system info tool
 pushd bin
