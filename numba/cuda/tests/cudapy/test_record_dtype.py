@@ -3,7 +3,7 @@ import sys
 import numpy as np
 from numba import cuda
 from numba.core import types
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import unittest
 from numba.np import numpy_support
 
@@ -100,7 +100,7 @@ recordwith2darray = np.dtype([('i', np.int32),
                               ('j', np.float32, (3, 2))])
 
 
-class TestRecordDtype(SerialMixin, unittest.TestCase):
+class TestRecordDtype(CUDATestCase):
 
     def _createSampleArrays(self):
         self.sample1d = np.recarray(3, dtype=recordtype)

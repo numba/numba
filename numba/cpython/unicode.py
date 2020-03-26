@@ -1393,6 +1393,7 @@ def unicode_zfill(string, width):
 def unicode_strip_left_bound(string, chars):
     str_len = len(string)
 
+    i = 0
     if chars is not None:
         for i in range(str_len):
             if string[i] not in chars:
@@ -1408,7 +1409,7 @@ def unicode_strip_left_bound(string, chars):
 @register_jitable
 def unicode_strip_right_bound(string, chars):
     str_len = len(string)
-
+    i = 0
     if chars is not None:
         for i in range(str_len - 1, -1, -1):
             if string[i] not in chars:

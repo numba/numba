@@ -11,8 +11,8 @@ import versioneer
 min_python_version = "3.6"
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
-min_llvmlite_version = "0.31.0dev0"
-max_llvmlite_version = "0.32.0"
+min_llvmlite_version = "0.31.0.dev0"
+max_llvmlite_version = "0.32.0.dev0"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -304,7 +304,7 @@ packages = find_packages(include=["numba", "numba.*"])
 
 build_requires = [f'numpy >={min_numpy_build_version}']
 install_requires = [
-    f'llvmlite >={min_llvmlite_version},<{max_llvmlite_version}',
+    f'llvmlite >={min_llvmlite_version},<={max_llvmlite_version}',
     f'numpy >={min_numpy_run_version}',
     'setuptools',
 ]

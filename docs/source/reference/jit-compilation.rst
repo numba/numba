@@ -215,6 +215,60 @@ Dispatcher objects
         # opens the CFG in system default application
         foo.inspect_cfg(foo.signatures[0]).display(view=True)
 
+
+   .. method:: inspect_disasm_cfg(signature=None)
+
+      Return a dictionary keying compiled function signatures to the
+      control-flow graph of the disassembly of the underlying compiled ``ELF``
+      object.  If the signature keyword is specified a control-flow graph
+      corresponding to that individual signature is returned. This function is
+      execution environment aware and will produce SVG output in Jupyter
+      notebooks and ASCII in terminals.
+
+      Example::
+
+        @njit
+        def foo(x):
+            if x < 3:
+                return x + 1
+            return x + 2
+
+        foo(10)
+
+        print(foo.inspect_disasm_cfg(signature=foo.signatures[0]))
+
+      Gives::
+
+        [0x08000040]>  # method.__main__.foo_241_long_long (int64_t arg1, int64_t arg3);
+         ─────────────────────────────────────────────────────────────────────┐
+        │  0x8000040                                                          │
+        │ ; arg3 ; [02] -r-x section size 279 named .text                     │
+        │   ;-- section..text:                                                │
+        │   ;-- .text:                                                        │
+        │   ;-- __main__::foo$241(long long):                                 │
+        │   ;-- rip:                                                          │
+        │ 25: method.__main__.foo_241_long_long (int64_t arg1, int64_t arg3); │
+        │ ; arg int64_t arg1 @ rdi                                            │
+        │ ; arg int64_t arg3 @ rdx                                            │
+        │ ; 2                                                                 │
+        │ cmp rdx, 2                                                          │
+        │ jg 0x800004f                                                        │
+        └─────────────────────────────────────────────────────────────────────┘
+                f t
+                │ │
+                │ └──────────────────────────────┐
+                └──┐                             │
+                   │                             │
+            ┌─────────────────────────┐   ┌─────────────────────────┐
+            │  0x8000046              │   │  0x800004f              │
+            │ ; arg3                  │   │ ; arg3                  │
+            │ inc rdx                 │   │ add rdx, 2              │
+            │ ; arg3                  │   │ ; arg3                  │
+            │ mov qword [rdi], rdx    │   │ mov qword [rdi], rdx    │
+            │ xor eax, eax            │   │ xor eax, eax            │
+            │ ret                     │   │ ret                     │
+            └─────────────────────────┘   └─────────────────────────┘
+
    .. method:: recompile()
 
       Recompile all existing signatures.  This can be useful for example if

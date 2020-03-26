@@ -10,13 +10,14 @@ import numpy as np
 from numba.core.compiler import Flags
 from numba import jit, njit, typeof
 from numba.core import types
+from numba.typed import List, Dict
 from numba.np.numpy_support import numpy_version
 from numba.core.errors import TypingError
 from numba.core.config import IS_WIN32, IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.arraymath import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas)
+                                 needs_blas, skip_ppc64le_issue4026)
 import unittest
 
 
@@ -567,7 +568,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         )
 
     # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
-    @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
+    @skip_ppc64le_issue4026
     def test_delete(self):
 
         def arrays():
@@ -3021,6 +3022,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.arange(12).reshape(3, 4)
             yield np.arange(12).reshape(3, 4).T
 
+            # Test cases for `numba.typed.List`
+            def make_list(values):
+                a = List()
+                for i in values:
+                    a.append(i)
+                return a
+            yield make_list((1, 2, 3))
+            yield make_list((1.0, 2.0, 3.0))
+            yield make_list((1j, 2j, 3j))
+            yield make_list((True, False, True))
+
         # used to check that if the input is already an array and the dtype is
         # the same as that of the input/omitted then the array itself is
         # returned.
@@ -3059,6 +3071,48 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     check_pass_through(cfunc, True, params)
                 else:
                     check_pass_through(cfunc, True, params)
+
+    def test_asarray_rejects_List_with_illegal_dtype(self):
+        self.disable_leak_check()
+        cfunc = jit(nopython=True)(asarray)
+
+        def test_reject(alist):
+            with self.assertRaises(TypingError) as e:
+                cfunc(alist)
+            self.assertIn(
+                "asarray support for List is limited "
+                "to Boolean and Number types",
+                str(e.exception))
+
+        def make_none_typed_list():
+            l = List()
+            l.append(None)
+            return l
+
+        def make_nested_list():
+            l = List()
+            m = List()
+            m.append(1)
+            l.append(m)
+            return l
+
+        def make_nested_list_with_dict():
+            l = List()
+            d = Dict()
+            d[1] = "a"
+            l.append(d)
+            return l
+
+        def make_unicode_list():
+            l = List()
+            for i in ("a", "bc", "def"):
+                l.append(i)
+            return l
+
+        test_reject(make_none_typed_list())
+        test_reject(make_nested_list())
+        test_reject(make_nested_list_with_dict())
+        test_reject(make_unicode_list())
 
     def test_repeat(self):
         # np.repeat(a, repeats)

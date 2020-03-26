@@ -147,6 +147,11 @@ class _EnvReloader(object):
         # globally.
         BOUNDSCHECK = _readenv("NUMBA_BOUNDSCHECK", int, None)
 
+        # Whether to always warn about potential uninitialized variables
+        # because static controlflow analysis cannot find a definition
+        # in one or more of the incoming paths.
+        ALWAYS_WARN_UNINIT_VAR = _readenv("ALWAYS_WARN_UNINIT_VAR", int, 0)
+
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 
@@ -361,6 +366,10 @@ class _EnvReloader(object):
 
         # gdb binary location
         GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')
+
+        # CUDA Memory management
+        CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,
+                                       'default')
 
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():

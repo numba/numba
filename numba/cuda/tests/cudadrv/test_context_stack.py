@@ -3,11 +3,11 @@ from ctypes import byref
 import weakref
 
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba.cuda.cudadrv import driver
 
 
-class TestContextStack(SerialMixin, unittest.TestCase):
+class TestContextStack(CUDATestCase):
     def setUp(self):
         # Reset before testing
         cuda.close()
@@ -25,7 +25,7 @@ class TestContextStack(SerialMixin, unittest.TestCase):
         self.assertGreater(len(gpulist), 0)
 
 
-class TestContextAPI(SerialMixin, unittest.TestCase):
+class TestContextAPI(CUDATestCase):
 
     def tearDown(self):
         cuda.close()
@@ -68,7 +68,7 @@ class TestContextAPI(SerialMixin, unittest.TestCase):
 
 
 @skip_on_cudasim('CUDA HW required')
-class Test3rdPartyContext(SerialMixin, unittest.TestCase):
+class Test3rdPartyContext(CUDATestCase):
     def tearDown(self):
         cuda.close()
 

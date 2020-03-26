@@ -227,6 +227,11 @@ vary with target operating system and hardware. The following lists them all
     support
   * Compiler toolchain mentioned above, if you would like to use ``pycc`` for
     Ahead-of-Time (AOT) compilation
+  * ``r2pipe`` - required for assembly CFG inspection.
+  * ``radare2`` as an executable on the ``$PATH`` - required for assembly CFG
+    inspection. `See here <https://github.com/radareorg/radare2>`_ for
+    information on obtaining and installing.
+  * ``graphviz`` - for some CFG inspection functionality.
 
 * To build the documentation:
 
@@ -242,12 +247,12 @@ Checking your installation
 You should be able to import Numba from the Python prompt::
 
     $ python
-    Python 2.7.15 |Anaconda custom (x86_64)| (default, May  1 2018, 18:37:05)
-    [GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)] on darwin
+    Python 3.8.1 (default, Jan 8  2020, 16:15:59)
+    [Clang 4.0.1 (tags/RELEASE_401/final)] :: Anaconda, Inc. on darwin
     Type "help", "copyright", "credits" or "license" for more information.
     >>> import numba
     >>> numba.__version__
-    '0.39.0+0.g4e49566.dirty'
+    '0.48.0'
 
 You can also try executing the ``numba --sysinfo`` (or ``numba -s`` for short)
 command to report information about your system capabilities. See :ref:`cli` for

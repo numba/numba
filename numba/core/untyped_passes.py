@@ -19,6 +19,7 @@ from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels)
+from numba.core.ssa import reconstruct_ssa
 from numba.core import interpreter
 
 
@@ -697,16 +698,25 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
                                     # check if this is a tuple slice
                                     if not isinstance(ty, self._accepted_types):
                                         extra = "operation %s" % to_unroll.op
+                                        loc = to_unroll.loc
                             elif isinstance(to_unroll, ir.Arg):
                                 extra = "non-const argument %s" % to_unroll.name
+                                loc = to_unroll.loc
                             else:
-                                extra = "unknown problem"
+                                if to_unroll is None:
+                                    extra = ('multiple definitions of '
+                                             'variable "%s".' % unroll_var.name)
+                                    loc = unroll_var.loc
+                                else:
+                                    loc = to_unroll.loc
+                                    extra = "unknown problem"
+
                             if extra:
                                 msg = ("Invalid use of literal_unroll, "
                                        "argument should be a tuple or a list "
-                                       "of constant values, found %s" % extra)
-                                raise errors.UnsupportedError(msg,
-                                                              to_unroll.loc)
+                                       "of constant values. Failure reason: "
+                                       "found %s" % extra)
+                                raise errors.UnsupportedError(msg, loc)
         return mutated
 
 
@@ -1452,3 +1462,42 @@ class SimplifyCFG(FunctionPass):
         state.func_ir.blocks = new_blks
         mutated = blks != new_blks
         return mutated
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class ReconstructSSA(FunctionPass):
+    """Perform SSA-reconstruction
+
+    Produces minimal SSA.
+    """
+    _name = "reconstruct_ssa"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        state.func_ir = reconstruct_ssa(state.func_ir)
+        self._patch_locals(state)
+
+        # Rebuild definitions
+        state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+
+        # Rerun postprocessor to update metadata
+        # example generator_info
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run(emit_dels=False)
+        return True      # XXX detect if it actually got changed
+
+    def _patch_locals(self, state):
+        # Fix dispatcher locals dictionary type annotation
+        locals_dict = state.get('locals')
+        if locals_dict is None:
+            return
+
+        first_blk, *_ = state.func_ir.blocks.values()
+        scope = first_blk.scope
+        for parent, redefs in scope.var_redefinitions.items():
+            if parent in locals_dict:
+                typ = locals_dict[parent]
+                for derived in redefs:
+                    locals_dict[derived] = typ

@@ -1,6 +1,6 @@
 from numba import cuda, int32, float64
 
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 import numpy as np
 from numba.np import numpy_support as nps
@@ -10,7 +10,7 @@ recordwith2darray = np.dtype([('i', np.int32),
                               ('j', np.float32, (3, 2))])
 
 
-class TestSharedMemoryIssue(SerialMixin, unittest.TestCase):
+class TestSharedMemoryIssue(CUDATestCase):
     def test_issue_953_sm_linkage_conflict(self):
         @cuda.jit(device=True)
         def inner():
@@ -74,7 +74,7 @@ class TestSharedMemoryIssue(SerialMixin, unittest.TestCase):
         cuda.synchronize()
 
 
-class TestSharedMemory(SerialMixin, unittest.TestCase):
+class TestSharedMemory(CUDATestCase):
     def _test_shared(self, arr):
         # Use a kernel that copies via shared memory to check loading and
         # storing different dtypes with shared memory. All threads in a block

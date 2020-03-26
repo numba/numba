@@ -1565,6 +1565,12 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.constraints.append(Propagate(dst=target.name,
                                               src=expr.value.name,
                                               loc=inst.loc))
+        elif expr.op == 'phi':
+            for iv in expr.incoming_values:
+                if iv is not ir.UNDEFINED:
+                    self.constraints.append(Propagate(dst=target.name,
+                                                      src=iv.name,
+                                                      loc=inst.loc))
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)

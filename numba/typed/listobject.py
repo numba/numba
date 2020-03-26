@@ -12,6 +12,7 @@ from numba import _helperlib
 from numba.core.extending import (
     overload,
     overload_method,
+    overload_attribute,
     register_jitable,
     intrinsic,
     register_model,
@@ -49,6 +50,8 @@ _meminfo_listptr = types.MemInfoPointer(types.voidptr)
 INDEXTY = types.intp
 
 index_types = types.integer_domain
+
+DEFAULT_ALLOCATED = 0
 
 
 @register_model(ListType)
@@ -258,7 +261,7 @@ def _imp_dtor(context, module):
     return fn
 
 
-def new_list(item, allocated=0):
+def new_list(item, allocated=DEFAULT_ALLOCATED):
     """Construct a new list. (Not implemented in the interpreter yet)
 
     Parameters
@@ -369,7 +372,7 @@ def _list_new(typingctx, itemty, allocated):
 
 
 @overload(new_list)
-def impl_new_list(item, allocated=0):
+def impl_new_list(item, allocated=DEFAULT_ALLOCATED):
     """Creates a new list.
 
     Parameters
@@ -385,7 +388,7 @@ def impl_new_list(item, allocated=0):
 
     itemty = item
 
-    def imp(item, allocated=0):
+    def imp(item, allocated=DEFAULT_ALLOCATED):
         if allocated < 0:
             raise RuntimeError("expecting *allocated* to be >= 0")
         lp = _list_new(itemty, allocated)
@@ -1245,6 +1248,18 @@ def ol_list_sort(lst, key=None, reverse=False):
             for i in tmp:
                 ordered.append(lst[i])
             lst[:] = ordered
+    return impl
+
+
+@overload_attribute(types.ListType, '_dtype')
+def impl_dtype(l):
+    if not isinstance(l, types.ListType):
+        return
+    dt = l.dtype
+
+    def impl(l):
+        return dt
+
     return impl
 
 

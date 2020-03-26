@@ -138,9 +138,17 @@ class BaseTuple(ConstSized, Hashable):
             # non-named tuple
             homogeneous = is_homogeneous(*tys)
             if homogeneous:
-                return UniTuple(tys[0], len(tys))
+                return cls._make_homogeneous_tuple(tys[0], len(tys))
             else:
-                return Tuple(tys)
+                return cls._make_heterogeneous_tuple(tys)
+
+    @classmethod
+    def _make_homogeneous_tuple(cls, dtype, count):
+        return UniTuple(dtype, count)
+
+    @classmethod
+    def _make_heterogeneous_tuple(cls, tys):
+        return Tuple(tys)
 
 
 class BaseAnonymousTuple(BaseTuple):
@@ -303,7 +311,18 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
                 return Tuple(unified)
 
 
-class StarArgTuple(Tuple):
+class _StarArgTupleMixin:
+
+    @classmethod
+    def _make_homogeneous_tuple(cls, dtype, count):
+        return StarArgUniTuple(dtype, count)
+
+    @classmethod
+    def _make_heterogeneous_tuple(cls, tys):
+        return StarArgTuple(tys)
+
+
+class StarArgTuple(_StarArgTupleMixin, Tuple):
     """To distinguish from Tuple() used as argument to a `*args`.
     """
     def __new__(cls, types):
@@ -315,7 +334,7 @@ class StarArgTuple(Tuple):
             return object.__new__(StarArgTuple)
 
 
-class StarArgUniTuple(UniTuple):
+class StarArgUniTuple(_StarArgTupleMixin, UniTuple):
     """To distinguish from UniTuple() used as argument to a `*args`.
     """
 
@@ -624,6 +643,7 @@ class DictItemsIterableType(SimpleIterableType):
         self.parent = parent
         self.yield_type = self.parent.keyvalue_type
         name = "items[{}]".format(self.parent.name)
+        self.name = name
         iterator_type = DictIteratorType(self)
         super(DictItemsIterableType, self).__init__(name, iterator_type)
 
@@ -636,6 +656,7 @@ class DictKeysIterableType(SimpleIterableType):
         self.parent = parent
         self.yield_type = self.parent.key_type
         name = "keys[{}]".format(self.parent.name)
+        self.name = name
         iterator_type = DictIteratorType(self)
         super(DictKeysIterableType, self).__init__(name, iterator_type)
 
@@ -648,6 +669,7 @@ class DictValuesIterableType(SimpleIterableType):
         self.parent = parent
         self.yield_type = self.parent.value_type
         name = "values[{}]".format(self.parent.name)
+        self.name = name
         iterator_type = DictIteratorType(self)
         super(DictValuesIterableType, self).__init__(name, iterator_type)
 
@@ -657,5 +679,6 @@ class DictIteratorType(SimpleIteratorType):
         self.parent = iterable.parent
         self.iterable = iterable
         yield_type = iterable.yield_type
-        name = "iter[{}->{}]".format(iterable.parent, yield_type)
+        name = "iter[{}->{}],{}".format(iterable.parent, yield_type,
+                                        iterable.name)
         super(DictIteratorType, self).__init__(name, yield_type)

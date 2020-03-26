@@ -1,9 +1,9 @@
 import math
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class TestCudaMonteCarlo(SerialMixin, unittest.TestCase):
+class TestCudaMonteCarlo(CUDATestCase):
     def test_montecarlo(self):
         """Just make sure we can compile this
         """

@@ -30,10 +30,49 @@ class FakeShape(tuple):
     indexing, similar to the shape in CUDA Python. (Numpy shape arrays allow
     negative indexing)
     '''
+
     def __getitem__(self, k):
         if isinstance(k, int) and k < 0:
             raise IndexError('tuple index out of range')
         return super(FakeShape, self).__getitem__(k)
+
+
+class FakeWithinKernelCUDAArray(object):
+    '''
+    Created to emulate the behavior of arrays within kernels, where either
+    array.item or array['item'] is valid (that is, give all structured
+    arrays `numpy.recarray`-like semantics). This behaviour does not follow
+    the semantics of Python and NumPy with non-jitted code, and will be
+    deprecated and removed.
+    '''
+
+    def __init__(self, item):
+        assert isinstance(item, FakeCUDAArray)
+        self.__dict__['_item'] = item
+
+    def __wrap_if_fake(self, item):
+        if isinstance(item, FakeCUDAArray):
+            return FakeWithinKernelCUDAArray(item)
+        else:
+            return item
+
+    def __getattr__(self, attrname):
+        if attrname in dir(self._item._ary):  # For e.g. array size.
+            return self.__wrap_if_fake(getattr(self._item._ary, attrname))
+        else:
+            return self.__wrap_if_fake(self._item.__getitem__(attrname))
+
+    def __setattr__(self, nm, val):
+        self._item.__setitem__(nm, val)
+
+    def __getitem__(self, idx):
+        return self.__wrap_if_fake(self._item.__getitem__(idx))
+
+    def __setitem__(self, idx, val):
+        self._item.__setitem__(idx, val)
+
+    def __len__(self):
+        return len(self._item)
 
 
 class FakeCUDAArray(object):
@@ -42,11 +81,16 @@ class FakeCUDAArray(object):
     wraps a NumPy array.
     '''
 
-    __cuda_ndarray__ = True     # There must be gpu_data attribute
-
+    __cuda_ndarray__ = True  # There must be gpu_data attribute
 
     def __init__(self, ary, stream=0):
-        self._ary = ary.reshape(1) if ary.ndim == 0 else ary
+        # ary/ary_access needed for TestCudaNDArray.test_device_array_interface
+        if ary.ndim == 0:
+            self._ary = ary.reshape(1)
+            self._ary_access = self._ary[0]
+        else:
+            self._ary = ary
+            self._ary_access = self._ary
         self.stream = stream
 
     @property
@@ -77,13 +121,14 @@ class FakeCUDAArray(object):
         return FakeCUDAArray(np.transpose(self._ary, axes=axes))
 
     def __getitem__(self, idx):
-        item = self._ary.__getitem__(idx)
-        if isinstance(item, np.ndarray):
-            return FakeCUDAArray(item, stream=self.stream)
-        return item
+        ret = self._ary_access.__getitem__(idx)
+        if type(ret) not in [np.ndarray, np.void]:
+            return ret
+        else:
+            return FakeCUDAArray(ret, stream=self.stream)
 
     def __setitem__(self, idx, val):
-        return self._ary.__setitem__(idx, val)
+        return self._ary_access.__setitem__(idx, val)
 
     def copy_to_host(self, ary=None, stream=0):
         if ary is None:
@@ -172,6 +217,22 @@ def array_core(ary):
     return ary[tuple(core_index)]
 
 
+def is_contiguous(ary):
+    """
+    Returns True iff `ary` is C-style contiguous while ignoring
+    broadcasted and 1-sized dimensions.
+    As opposed to array_core(), it does not call require_context(),
+    which can be quite expensive.
+    """
+    size = ary.dtype.itemsize
+    for shape, stride in zip(reversed(ary.shape), reversed(ary.strides)):
+        if shape > 1 and stride != 0:
+            if size != stride:
+                return False
+            size *= shape
+    return True
+
+
 def sentry_contiguous(ary):
     core = array_core(ary)
     if not core.flags['C_CONTIGUOUS'] and not core.flags['F_CONTIGUOUS']:
@@ -238,8 +299,8 @@ def device_array_like(ary, stream=0):
 
     # Stride permuation. E.g. a stride array (4, -2, 12) becomes
     # [(1, -2), (0, 4), (2, 12)]
-    strideperm = [ x for x in enumerate(ary.strides) ]
-    strideperm.sort(key = lambda x: x[1])
+    strideperm = [x for x in enumerate(ary.strides)]
+    strideperm.sort(key=lambda x: x[1])
 
     # Compute new strides using permutation
     strides = [0] * len(ary.strides)
@@ -289,4 +350,3 @@ def require_cuda_ndarray(obj):
     "Raises ValueError is is_cuda_ndarray(obj) evaluates False"
     if not is_cuda_ndarray(obj):
         raise ValueError('require an cuda ndarray object')
-

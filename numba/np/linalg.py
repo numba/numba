@@ -2548,6 +2548,9 @@ def matrix_power_impl(a, n):
             acc = A
             exp = n
 
+            # Initialise ret, SSA cannot see the loop will execute, without this
+            # it appears as uninitialised.
+            ret = acc
             # tried a loop split and branchless using identity matrix as
             # input but it seems like having a "first entry" flag is quicker
             flag = True

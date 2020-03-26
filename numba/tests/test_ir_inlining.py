@@ -21,10 +21,11 @@ from numba.core.extending import (
 from numba.core.datamodel.models import OpaqueModel
 from numba.core.cpu import InlineOptions
 from numba.core.compiler import DefaultPassBuilder, CompilerBase
-from numba.core.typed_passes import DeadCodeElimination, IRLegalization
+from numba.core.typed_passes import IRLegalization
 from numba.core.untyped_passes import PreserveIR
 from itertools import product
-from numba.tests.support import TestCase, unittest, skip_py38_or_later
+from numba.tests.support import (TestCase, unittest, skip_py38_or_later,
+                                 MemoryLeakMixin)
 
 
 class InlineTestPipeline(CompilerBase):
@@ -39,8 +40,8 @@ class InlineTestPipeline(CompilerBase):
 
         # TODO: add a way to not do this! un-finalizing is not a good idea
         pipeline._finalized = False
-        pipeline.add_pass_after(DeadCodeElimination, IRLegalization)
-        pipeline.add_pass_after(PreserveIR, DeadCodeElimination)
+        pipeline.add_pass_after(PreserveIR, IRLegalization)
+
         pipeline.finalize()
         return [pipeline]
 
@@ -139,12 +140,14 @@ def _gen_involved():
         g = np.zeros(c, dtype=np.complex64)
         h = f + g
         i = 1j / d
+        # For SSA, zero init, n and t
+        n = 0
+        t = 0
         if np.abs(i) > 0:
             k = h / i
             l = np.arange(1, c + 1)
             m = np.sqrt(l - g) + e * k
             if np.abs(m[0]) < 1:
-                n = 0
                 for o in range(a):
                     n += 0
                     if np.abs(n) < 3:
@@ -166,7 +169,7 @@ def _gen_involved():
     return foo
 
 
-class TestFunctionInlining(InliningBase):
+class TestFunctionInlining(MemoryLeakMixin, InliningBase):
 
     def test_basic_inline_never(self):
         @njit(inline='never')
@@ -457,7 +460,7 @@ class TestFunctionInlining(InliningBase):
                                         'fortran': True}, block_count=37)
 
 
-class TestRegisterJitableInlining(InliningBase):
+class TestRegisterJitableInlining(MemoryLeakMixin, InliningBase):
 
     def test_register_jitable_inlines(self):
 
@@ -471,7 +474,7 @@ class TestRegisterJitableInlining(InliningBase):
         self.check(impl, inline_expect={'foo': True})
 
 
-class TestOverloadInlining(InliningBase):
+class TestOverloadInlining(MemoryLeakMixin, InliningBase):
 
     def test_basic_inline_never(self):
         def foo():
@@ -980,7 +983,7 @@ class TestOverloadMethsAttrsInlining(InliningBase):
         )
 
 
-class TestGeneralInlining(InliningBase):
+class TestGeneralInlining(MemoryLeakMixin, InliningBase):
 
     def test_with_inlined_and_noninlined_variants(self):
         # This test is contrived and was to demonstrate fixing a bug in the
