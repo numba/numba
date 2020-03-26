@@ -16,7 +16,7 @@ from functools import reduce
 import numpy as np
 from numpy.random import randn
 import operator
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 import numba.parfors.parfor
 from numba import njit, prange, set_num_threads, get_num_threads
@@ -47,6 +47,8 @@ x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 on
 
 _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
+
+TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
 
 class TestParforsBase(TestCase):
     """
@@ -129,6 +131,8 @@ class TestParforsBase(TestCase):
                 elif isinstance(x, np.number):
                     new_args.append(x.copy())
                 elif isinstance(x, numbers.Number):
+                    new_args.append(x)
+                elif isinstance(x, tuple):
                     new_args.append(x)
                 elif isinstance(x, list):
                     new_args.append(x[:])
@@ -1556,6 +1560,67 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countParfors(test_impl,
                                     (types.Array(types.float64, 1, 'C'),
                                      types.Array(types.float64, 1, 'C'))) == 1)
+
+    @skip_parfors_unsupported
+    def test_tuple1(self):
+        def test_impl(a):
+            atup = (3, 4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += atup[0] + atup[1] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_tuple2(self):
+        def test_impl(a):
+            atup = a.shape
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += atup[0] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_tuple3(self):
+        def test_impl(a):
+            atup = (np.arange(10), 4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += atup[0][5] + atup[1] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_namedtuple1(self):
+        def test_impl(a):
+            antup = TestNamedTuple(part0=3, part1=4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += antup.part0 + antup.part1 + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_namedtuple2(self):
+        TestNamedTuple2 = namedtuple('TestNamedTuple2', ('part0', 'part1'))
+        def test_impl(a):
+            antup = TestNamedTuple2(part0=3, part1=4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += antup.part0 + antup.part1 + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
 
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
@@ -3227,6 +3292,141 @@ class TestParforsMisc(TestParforsBase):
             # always set the sequential_parfor_lowering state back to the
             # original state
             numba.parfors.parfor.sequential_parfor_lowering = save_state
+
+    @skip_parfors_unsupported
+    def test_oversized_tuple_as_arg_to_kernel(self):
+
+        @njit(parallel=True)
+        def oversize_tuple():
+            big_tup = (1,2,3,4)
+            z = 0
+            for x in prange(10):
+                z += big_tup[0]
+            return z
+
+        with override_env_config('NUMBA_PARFOR_MAX_TUPLE_SIZE', '3'):
+            with self.assertRaises(errors.UnsupportedParforsError) as raises:
+                oversize_tuple()
+
+        errstr = str(raises.exception)
+        self.assertIn("Use of a tuple", errstr)
+        self.assertIn("in a parallel region", errstr)
+
+    @skip_parfors_unsupported
+    def test_issue5167(self):
+
+        def ndvi_njit(img_nir, img_red):
+            fillvalue = 0
+            out_img = np.full(img_nir.shape, fillvalue, dtype=img_nir.dtype)
+            dims = img_nir.shape
+            for y in prange(dims[0]):
+                for x in prange(dims[1]):
+                    out_img[y, x] = ((img_nir[y, x] - img_red[y, x]) /
+                                     (img_nir[y, x] + img_red[y, x]))
+            return out_img
+
+        tile_shape = (4, 4)
+        array1 = np.random.uniform(low=1.0, high=10000.0, size=tile_shape)
+        array2 = np.random.uniform(low=1.0, high=10000.0, size=tile_shape)
+        self.check(ndvi_njit, array1, array2)
+
+    @skip_parfors_unsupported
+    def test_issue5065(self):
+
+        def reproducer(a, dist, dist_args):
+            result = np.zeros((a.shape[0], a.shape[0]), dtype=np.float32)
+            for i in prange(a.shape[0]):
+                for j in range(i + 1, a.shape[0]):
+                    d = dist(a[i], a[j], *dist_args)
+                    result[i, j] = d
+                    result[j, i] = d
+            return result
+
+        @njit
+        def euclidean(x, y):
+            result = 0.0
+            for i in range(x.shape[0]):
+                result += (x[i] - y[i]) ** 2
+            return np.sqrt(result)
+
+        a = np.random.random(size=(5, 2))
+
+        got = njit(parallel=True)(reproducer)(a.copy(), euclidean,())
+        expected = reproducer(a.copy(), euclidean,())
+
+        np.testing.assert_allclose(got, expected)
+
+    @skip_parfors_unsupported
+    def test_issue5001(self):
+
+        def test_numba_parallel(myarray):
+            result = [0] * len(myarray)
+            for i in prange(len(myarray)):
+                result[i] = len(myarray[i])
+            return result
+
+        myarray = (np.empty(100),np.empty(50))
+        self.check(test_numba_parallel, myarray)
+
+    @skip_parfors_unsupported
+    def test_issue3169(self):
+
+        @njit
+        def foo(grids):
+            pass
+
+        @njit(parallel=True)
+        def bar(grids):
+            for x in prange(1):
+                foo(grids)
+
+        # returns nothing, just check it compiles
+        bar(([1],) * 2)
+
+    @disabled_test
+    def test_issue4846(self):
+
+        mytype = namedtuple("mytype", ("a", "b"))
+
+        def outer(mydata):
+            for k in prange(3):
+                inner(k, mydata)
+            return mydata.a
+
+        @njit(nogil=True)
+        def inner(k, mydata):
+            f = (k, mydata.a)
+            g = (k, mydata.b)
+
+        mydata = mytype(a="a", b="b")
+
+        self.check(outer, mydata)
+
+    @skip_parfors_unsupported
+    def test_issue3748(self):
+
+        def test1b():
+            x = (1, 2, 3, 4, 5)
+            a = 0
+            for i in prange(len(x)):
+                a += x[i]
+            return a
+
+        self.check(test1b,)
+
+    @skip_parfors_unsupported
+    def test_issue5277(self):
+
+        def parallel_test(size, arr):
+            for x in prange(size[0]):
+                for y in prange(size[1]):
+                    arr[y][x] = x * 4.5 + y
+            return arr
+
+        size = (10, 10)
+        arr = np.zeros(size, dtype=int)
+
+        self.check(parallel_test, size, arr)
 
 
 @skip_parfors_unsupported
