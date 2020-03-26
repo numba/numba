@@ -21,7 +21,7 @@ from numba.core.ir_utils import add_offset_to_labels, replace_var_names, remove_
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
 from numba.parfors.parfor import print_wrapped, ensure_parallel_support
-from numba.core.errors import NumbaParallelSafetyWarning
+from numba.core.errors import NumbaParallelSafetyWarning, CompilerError
 from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
 
 
@@ -1052,8 +1052,11 @@ def _create_gufunc_for_parfor_body(
                               named_tuple_def.instance_class,
                               type(named_tuple_def.instance_class))
                     globls[named_tuple_name] = named_tuple_def.instance_class
-            elif config.DEBUG_ARRAY_OPT:
-                print("Didn't find definition of namedtuple for globls.")
+            else:
+                if config.DEBUG_ARRAY_OPT:
+                    print("Didn't find definition of namedtuple for globls.")
+                raise CompilerError("Could not find definition of " + str(tup_var),
+                                     tup_var.loc)
             gufunc_txt += " = " + tup_type.instance_class.__name__ + "("
             for name, field_name in zip(exp_names, tup_type.fields):
                 gufunc_txt += field_name + "=" + param_dict[name] + ","
