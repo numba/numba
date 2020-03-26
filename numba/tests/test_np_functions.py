@@ -93,6 +93,10 @@ def machar(*args):
     return np.MachAr()
 
 
+def isnat(x):
+    return np.isnat(x)
+
+
 def iinfo(*args):
     return np.iinfo(*args)
 
@@ -2993,6 +2997,36 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             expected = pyfunc(x, xp, fp)
             got = cfunc(x, xp, fp)
             self.assertPreciseEqual(expected, got)
+
+    def test_isnat(self):
+        def values():
+            yield np.datetime64("2016-01-01")
+            yield np.datetime64("NaT")
+            yield np.datetime64('NaT', 'ms')
+            yield np.datetime64('NaT', 'ns')
+            yield np.datetime64('2038-01-19T03:14:07')
+
+            yield np.timedelta64('NaT', "ms")
+            yield np.timedelta64(34, "ms")
+
+            for unit in ['Y', 'M', 'W', 'D',
+                         'h', 'm', 's', 'ms', 'us',
+                         'ns', 'ps', 'fs', 'as']:
+                yield np.array([123, -321, "NaT"],
+                               dtype='<datetime64[%s]' % unit)
+                yield np.array([123, -321, "NaT"],
+                               dtype='<timedelta64[%s]' % unit)
+
+        pyfunc = isnat
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for x in values():
+            expected = pyfunc(x)
+            got = cfunc(x)
+            if isinstance(x, np.ndarray):
+                self.assertPreciseEqual(expected, got, (x,))
+            else:
+                self.assertEqual(expected, got, x)
 
     def test_asarray(self):
 

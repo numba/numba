@@ -3975,12 +3975,12 @@ def np_select(condlist, choicelist, default=0):
 
     return np_select_arr_impl
 
-
 #----------------------------------------------------------------------------
 # Windowing functions
 #   - translated from the numpy implementations found in:
 #   https://github.com/numpy/numpy/blob/v1.16.1/numpy/lib/function_base.py#L2543-L3233    # noqa: E501
 #   at commit: f1c4c758e1c24881560dd8ab1e64ae750
+
 
 @register_jitable
 def np_bartlett_impl(M):

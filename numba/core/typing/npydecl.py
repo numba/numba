@@ -299,6 +299,8 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
                         "frexp", "floor", "ceil", "trunc",
                         "spacing" ]
 
+_logic_functions = [ "isnat" ]
+
 
 # This is a set of the ufuncs that are not yet supported by Lowering. In order
 # to trigger no-python mode we must not register them until their Lowering is
@@ -329,7 +331,7 @@ def _numpy_ufunc(name):
 
 all_ufuncs = sum([_math_operations, _trigonometric_functions,
                   _bit_twiddling_functions, _comparison_functions,
-                  _floating_functions], [])
+                  _floating_functions, _logic_functions], [])
 
 supported_ufuncs = [x for x in all_ufuncs if x not in _unsupported]
 
