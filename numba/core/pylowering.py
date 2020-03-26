@@ -10,7 +10,7 @@ from llvmlite.llvmpy.core import Type, Constant
 import llvmlite.llvmpy.core as lc
 
 from numba.core import types, utils, ir, generators, cgutils
-from numba.core.errors import ForbiddenConstruct
+from numba.core.errors import ForbiddenConstruct, LoweringError
 from numba.core.lowering import BaseLower
 
 
@@ -398,6 +398,8 @@ class PyLower(BaseLower):
             val = self.loadvar(expr.value.name)
             self.incref(val)
             return val
+        elif expr.op == 'phi':
+            raise LoweringError("PHI not stripped")
 
         else:
             raise NotImplementedError(expr)

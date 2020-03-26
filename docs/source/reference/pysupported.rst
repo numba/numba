@@ -743,6 +743,7 @@ The following built-in functions are supported:
 
 * :func:`abs`
 * :class:`bool`
+* :func:`chr`
 * :class:`complex`
 * :func:`divmod`
 * :func:`enumerate`
@@ -756,6 +757,7 @@ The following built-in functions are supported:
 * :func:`map`
 * :func:`max`
 * :func:`next`: only the one-argument form
+* :func:`ord`
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
 * :class:`range`: The only permitted use of range is as a callable function
   (cannot pass range as an argument to a jitted function or return a range from

@@ -1,13 +1,13 @@
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, ContextResettingTestCase
 
 
 REPEAT = 25
 
 
-class TestPinned(CUDATestCase):
+class TestPinned(ContextResettingTestCase):
 
     def _run_copies(self, A):
         A0 = np.copy(A)

@@ -962,7 +962,7 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                             # some architectures (power, 32bit) for complex input
                             ulps = 3
                         npr, nbr = run_comparative(redFunc, testArray)
-                        self.assertPreciseEqual(npr, nbr, msg=test_name,
+                        self.assertPreciseEqual(npr, nbr, msg=testName,
                                                 prec="single", ulps=ulps)
 
                     # Install it into the class
@@ -992,6 +992,7 @@ class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as e:
             cfunc(self.zero_size)
         self.assertIn(msg, str(e.exception))
+        self.disable_leak_check()
 
     @classmethod
     def install(cls):

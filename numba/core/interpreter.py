@@ -1208,9 +1208,9 @@ class Interpreter(object):
         return self.store(inst, res)
 
     def op_MAKE_FUNCTION(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
-        if annotations != None:
+        if annotations is not None:
             raise NotImplementedError("op_MAKE_FUNCTION with annotations is not implemented")
-        if kwdefaults != None:
+        if kwdefaults is not None:
             raise NotImplementedError("op_MAKE_FUNCTION with kwdefaults is not implemented")
         if defaults:
             if isinstance(defaults, tuple):

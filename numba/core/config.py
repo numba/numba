@@ -147,6 +147,11 @@ class _EnvReloader(object):
         # globally.
         BOUNDSCHECK = _readenv("NUMBA_BOUNDSCHECK", int, None)
 
+        # Whether to always warn about potential uninitialized variables
+        # because static controlflow analysis cannot find a definition
+        # in one or more of the incoming paths.
+        ALWAYS_WARN_UNINIT_VAR = _readenv("ALWAYS_WARN_UNINIT_VAR", int, 0)
+
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 
@@ -172,6 +177,11 @@ class _EnvReloader(object):
         # How many recently deserialized functions to retain regardless
         # of external references
         FUNCTION_CACHE_SIZE = _readenv("NUMBA_FUNCTION_CACHE_SIZE", int, 128)
+
+        # Maximum tuple size that parfors will unpack and pass to
+        # internal gufunc.
+        PARFOR_MAX_TUPLE_SIZE = _readenv("NUMBA_PARFOR_MAX_TUPLE_SIZE",
+                                         int, 100)
 
         # Enable logging of cache operation
         DEBUG_CACHE = _readenv("NUMBA_DEBUG_CACHE", int, DEBUG)
@@ -322,8 +332,22 @@ class _EnvReloader(object):
         NUMBA_DEFAULT_NUM_THREADS = max(1, multiprocessing.cpu_count())
 
         # Numba thread pool size (defaults to number of CPUs on the system).
-        NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
-                                     NUMBA_DEFAULT_NUM_THREADS)
+        _NUMBA_NUM_THREADS = _readenv("NUMBA_NUM_THREADS", int,
+                                      NUMBA_DEFAULT_NUM_THREADS)
+        if ('NUMBA_NUM_THREADS' in globals()
+                and globals()['NUMBA_NUM_THREADS'] != _NUMBA_NUM_THREADS):
+
+            from numba.np.ufunc import parallel
+            if parallel._is_initialized:
+                raise RuntimeError("Cannot set NUMBA_NUM_THREADS to a "
+                                   "different value once the threads have been "
+                                   "launched (currently have %s, "
+                                   "trying to set %s)" %
+                                   (_NUMBA_NUM_THREADS,
+                                    globals()['NUMBA_NUM_THREADS']))
+
+        NUMBA_NUM_THREADS = _NUMBA_NUM_THREADS
+        del _NUMBA_NUM_THREADS
 
         # Profiling support
 
@@ -342,6 +366,10 @@ class _EnvReloader(object):
 
         # gdb binary location
         GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')
+
+        # CUDA Memory management
+        CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,
+                                       'default')
 
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():

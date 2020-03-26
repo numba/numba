@@ -57,11 +57,11 @@ class InlineTestPass(FunctionPass):
                 inline_closure_call(state.func_ir, {}, block, i, lambda: None,
                     state.typingctx, (), state.type_annotation.typemap,
                     state.type_annotation.calltypes)
-                # also fix up the IR so that ir.Dels appear correctly/in correct
-                # locations
-                post_proc = postproc.PostProcessor(state.func_ir)
-                post_proc.run()
                 break
+        # also fix up the IR
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run()
+        post_proc.remove_dels()
         return True
 
 

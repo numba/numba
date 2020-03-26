@@ -73,7 +73,7 @@ class DeviceNDArrayBase(object):
         strides
             array strides.
         dtype
-            data type as np.dtype.
+            data type as np.dtype coercible object.
         stream
             cuda stream.
         writeback
@@ -85,6 +85,7 @@ class DeviceNDArrayBase(object):
             shape = (shape,)
         if isinstance(strides, int):
             strides = (strides,)
+        dtype = np.dtype(dtype)
         self.ndim = len(shape)
         if len(strides) != self.ndim:
             raise ValueError('strides not match ndim')
@@ -92,7 +93,7 @@ class DeviceNDArrayBase(object):
                                                  dtype.itemsize)
         self.shape = tuple(shape)
         self.strides = tuple(strides)
-        self.dtype = np.dtype(dtype)
+        self.dtype = dtype
         self.size = int(functools.reduce(operator.mul, self.shape, 1))
         # prepare gpu memory
         if self.size > 0:
@@ -121,14 +122,9 @@ class DeviceNDArrayBase(object):
         else:
             ptr = 0
 
-        if array_core(self).flags['C_CONTIGUOUS']:
-            strides = None
-        else:
-            strides = tuple(self.strides)
-
         return {
             'shape': tuple(self.shape),
-            'strides': strides,
+            'strides': None if is_contiguous(self) else tuple(self.strides),
             'data': (ptr, False),
             'typestr': self.dtype.str,
             'version': 2,
@@ -354,15 +350,37 @@ class DeviceNDArrayBase(object):
         copy of the data.
         """
         dtype = np.dtype(dtype)
-        if dtype.itemsize != self.dtype.itemsize:
-            raise TypeError("new dtype itemsize doesn't match")
+        shape = list(self.shape)
+        strides = list(self.strides)
+
+        if self.dtype.itemsize != dtype.itemsize:
+            if not self.is_c_contiguous():
+                raise ValueError(
+                    "To change to a dtype of a different size,"
+                    " the array must be C-contiguous"
+                )
+
+            shape[-1], rem = divmod(
+                shape[-1] * self.dtype.itemsize,
+                dtype.itemsize
+            )
+
+            if rem != 0:
+                raise ValueError(
+                    "When changing to a larger dtype,"
+                    " its size must be a divisor of the total size in bytes"
+                    " of the last axis of the array."
+                )
+
+            strides[-1] = dtype.itemsize
+
         return DeviceNDArray(
-            shape=self.shape,
-            strides=self.strides,
+            shape=shape,
+            strides=strides,
             dtype=dtype,
             stream=self.stream,
             gpu_data=self.gpu_data,
-            )
+        )
 
     @property
     def nbytes(self):
@@ -685,6 +703,22 @@ def array_core(ary):
     for stride in ary.strides:
         core_index.append(0 if stride == 0 else slice(None))
     return ary[tuple(core_index)]
+
+
+def is_contiguous(ary):
+    """
+    Returns True iff `ary` is C-style contiguous while ignoring
+    broadcasted and 1-sized dimensions.
+    As opposed to array_core(), it does not call require_context(),
+    which can be quite expensive.
+    """
+    size = ary.dtype.itemsize
+    for shape, stride in zip(reversed(ary.shape), reversed(ary.strides)):
+        if shape > 1 and stride != 0:
+            if size != stride:
+                return False
+            size *= shape
+    return True
 
 
 errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "

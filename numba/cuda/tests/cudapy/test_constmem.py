@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.core.config import ENABLE_CUDASIM
 
 CONST_EMPTY = np.array([])
@@ -89,7 +89,7 @@ def cuconstAlign(z):
     z[i] = a[i] + b[i]
 
 
-class TestCudaConstantMemory(SerialMixin, unittest.TestCase):
+class TestCudaConstantMemory(CUDATestCase):
     def test_const_array(self):
         jcuconst = cuda.jit('void(float64[:])')(cuconst)
         A = np.zeros_like(CONST1D)

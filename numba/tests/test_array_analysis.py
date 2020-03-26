@@ -6,7 +6,16 @@ from collections import namedtuple
 from io import StringIO
 
 from numba import njit, typeof, prange
-from numba.core import types, typing, ir, bytecode, postproc, cpu, registry
+from numba.core import (
+    types,
+    typing,
+    ir,
+    bytecode,
+    postproc,
+    cpu,
+    registry,
+    utils,
+)
 from numba.tests.support import TestCase, tag, skip_parfors_unsupported
 from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
 from numba.core.compiler import Compiler, Flags, PassManager
@@ -177,7 +186,7 @@ class TestArrayAnalysis(TestCase):
             for func in equivs:
                 # only test the equiv_set of the first block
                 func(analysis.equiv_sets[0])
-        if asserts == None:
+        if asserts is None:
             self.assertTrue(self._has_no_assertcall(analysis.func_ir))
         else:
             for func in asserts:
@@ -998,6 +1007,23 @@ class TestArrayAnalysisParallelRequired(TestCase):
 
         data = np.arange(10.)
         np.testing.assert_array_equal(test_impl(data), test_impl.py_func(data))
+
+
+class TestArrayAnalysisInterface(TestCase):
+    def test_analyze_op_call_interface(self):
+        # gather _analyze_op_call_*
+        aoc = {}
+        for fname in dir(ArrayAnalysis):
+            if fname.startswith('_analyze_op_call_'):
+                aoc[fname] = getattr(ArrayAnalysis, fname)
+        # check interface
+        def iface_stub(self, scope, equiv_set, loc, args, kws):
+            pass
+        expected = utils.pysignature(iface_stub)
+        for k, v in aoc.items():
+            got = utils.pysignature(v)
+            with self.subTest(fname=k, sig=got):
+                self.assertEqual(got, expected)
 
 
 if __name__ == '__main__':

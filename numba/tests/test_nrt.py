@@ -482,6 +482,7 @@ br i1 %.294, label %B42, label %B160
         # no other lines
         self.assertEqual(len(list(pruned_lines.splitlines())), len(combined))
 
+    @unittest.skip("Pass removed as it was buggy. Re-enable when fixed.")
     def test_refct_pruning_with_branches(self):
         '''testcase from #2350'''
         @njit

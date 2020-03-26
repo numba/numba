@@ -7,7 +7,7 @@ from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from numba import _dynfunc
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
-                        generators, config, ir_utils, cgutils, removerefctpass)
+                        generators, config, ir_utils, cgutils)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError)
 from numba.core.funcdesc import default_mangler
@@ -81,6 +81,7 @@ class BaseLower(object):
 
         # Internal states
         self.blkmap = {}
+        self.pending_phis = {}
         self.varmap = {}
         self.firstblk = min(self.blocks.keys())
         self.loc = -1
@@ -192,21 +193,16 @@ class BaseLower(object):
                     from pygments import highlight
                     from pygments.lexers import LlvmLexer as lexer
                     from pygments.formatters import Terminal256Formatter
+                    from numba.misc.dump_style import by_colorscheme
                     print(highlight(self.module.__repr__(), lexer(),
                                     Terminal256Formatter(
-                                        style='solarized-light')))
+                                        style=by_colorscheme())))
                 except ImportError:
                     msg = "Please install pygments to see highlighted dumps"
                     raise ValueError(msg)
             else:
                 print(self.module)
             print('=' * 80)
-
-        # Special optimization to remove NRT on functions that do not need it.
-        if self.context.enable_nrt and self.generator_info is None:
-            removerefctpass.remove_unnecessary_nrt_usage(self.function,
-                                                         context=self.context,
-                                                         fndesc=self.fndesc)
 
         # Run target specific post lowering transformation
         self.context.post_lowering(self.module, self.library)
@@ -249,12 +245,12 @@ class BaseLower(object):
 
         self.debug_print("# function begin: {0}".format(
             self.fndesc.unique_name))
+
         # Lower all blocks
         for offset, block in sorted(self.blocks.items()):
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
             self.lower_block(block)
-
         self.post_lower()
         return entry_block_tail
 
@@ -310,6 +306,22 @@ class Lower(BaseLower):
         from numba.core.unsafe import eh
 
         super(Lower, self).pre_block(block)
+
+        if block == self.firstblk:
+            # create slots for all the vars, irrespective of whether they are
+            # initialized, SSA will pick this up and warn users about using
+            # uninitialized variables. Slots are added as alloca in the first
+            # block
+            bb = self.blkmap[self.firstblk]
+            self.builder.position_at_end(bb)
+            all_names = set()
+            for block in self.blocks.values():
+                for x in block.find_insts(ir.Del):
+                    if x.value not in all_names:
+                        all_names.add(x.value)
+            for name in all_names:
+                fetype = self.typeof(name)
+                self._alloca_var(name, fetype)
 
         # Detect if we are in a TRY block by looking for a call to
         # `eh.exception_check`.
@@ -740,7 +752,7 @@ class Lower(BaseLower):
                     pos_tys[i] = types.literal(pyval)
 
         fixed_sig = typing.signature(sig.return_type, *pos_tys)
-        fixed_sig.pysig = sig.pysig
+        fixed_sig = fixed_sig.replace(pysig=sig.pysig)
 
         argvals = self.fold_call_args(fnty, sig, pos_args, inst.vararg, {})
         impl = self.context.get_function(print, fixed_sig)
@@ -1167,6 +1179,9 @@ class Lower(BaseLower):
             castval = self.context.cast(self.builder, val, ty, resty)
             self.incref(resty, castval)
             return castval
+
+        elif expr.op == "phi":
+            raise LoweringError("PHI not stripped")
 
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)

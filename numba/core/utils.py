@@ -421,21 +421,6 @@ def benchmark(func, maxsec=1):
 RANGE_ITER_OBJECTS = (builtins.range,)
 
 
-def logger_hasHandlers(logger):
-    # Backport from python3.5 logging implementation of `.hasHandlers()`
-    c = logger
-    rv = False
-    while c:
-        if c.handlers:
-            rv = True
-            break
-        if not c.propagate:
-            break
-        else:
-            c = c.parent
-    return rv
-
-
 # A dummy module for dynamically-generated functions
 _dynamic_modname = '<dynamic>'
 _dynamic_module = ModuleType(_dynamic_modname)

@@ -39,7 +39,6 @@ exclude =
     numba/stencils/stencilparfor.py
     numba/core/ir.py
     numba/core/itanium_mangler.py
-    numba/parfors/array_analysis.py
     numba/core/generators.py
     numba/misc/appdirs.py
     numba/cffi_support.py
@@ -51,7 +50,6 @@ exclude =
     numba/core/dataflow.py
     numba/runtests.py
     numba/core/pythonapi.py
-    numba/extending.py
     numba/core/decorators.py
     numba/core/typeconv/typeconv.py
     numba/core/typeconv/rules.py
@@ -312,7 +310,6 @@ exclude =
     numba/tests/test_withlifting.py
     numba/tests/test_errorhandling.py
     numba/tests/test_parfors.py
-    numba/tests/test_pipeline.py
     numba/tests/test_sets.py
     numba/tests/test_dyn_array.py
     numba/tests/test_objects.py

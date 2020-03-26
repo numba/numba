@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 
 from numba.core.compiler import compile_isolated
-from numba import njit, jit
+from numba import njit, jit, typeof
 from numba.core import types, errors, utils
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
 import unittest
@@ -13,6 +13,8 @@ import unittest
 Rect = collections.namedtuple('Rect', ('width', 'height'))
 
 Point = collections.namedtuple('Point', ('x', 'y', 'z'))
+
+Point2 = collections.namedtuple('Point2', ('x', 'y', 'z'))
 
 Empty = collections.namedtuple('Empty', ())
 
@@ -519,6 +521,32 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
 
         r = foo()
         self.assertEqual(r, Rect(width=10, height='somestring'))
+
+    def test_dispatcher_mistreat(self):
+        # Test for issue #5215 that mistreat namedtuple as tuples
+        @jit(nopython=True)
+        def foo(x):
+            return x
+
+        in1 = (1, 2,  3)
+        out1 = foo(in1)
+        self.assertEqual(in1, out1)
+
+        in2 = Point(1, 2, 3)
+        out2 = foo(in2)
+        self.assertEqual(in2, out2)
+
+        # Check the signatures
+        self.assertEqual(len(foo.nopython_signatures), 2)
+        self.assertEqual(foo.nopython_signatures[0].args[0], typeof(in1))
+        self.assertEqual(foo.nopython_signatures[1].args[0], typeof(in2))
+
+        # Differently named
+        in3 = Point2(1, 2, 3)
+        out3 = foo(in3)
+        self.assertEqual(in3, out3)
+        self.assertEqual(len(foo.nopython_signatures), 3)
+        self.assertEqual(foo.nopython_signatures[2].args[0], typeof(in3))
 
 
 class TestTupleNRT(TestCase, MemoryLeakMixin):

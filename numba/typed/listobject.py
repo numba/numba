@@ -12,6 +12,7 @@ from numba import _helperlib
 from numba.core.extending import (
     overload,
     overload_method,
+    overload_attribute,
     register_jitable,
     intrinsic,
     register_model,
@@ -50,6 +51,8 @@ INDEXTY = types.intp
 
 index_types = types.integer_domain
 
+DEFAULT_ALLOCATED = 0
+
 
 @register_model(ListType)
 class ListModel(models.StructModel):
@@ -80,6 +83,7 @@ class ListStatus(IntEnum):
     LIST_ERR_NO_MEMORY = -2
     LIST_ERR_MUTATED = -3
     LIST_ERR_ITER_EXHAUSTED = -4
+    LIST_ERR_IMMUTABLE = -5
 
 
 class ErrorHandler(object):
@@ -257,7 +261,7 @@ def _imp_dtor(context, module):
     return fn
 
 
-def new_list(item, allocated=0):
+def new_list(item, allocated=DEFAULT_ALLOCATED):
     """Construct a new list. (Not implemented in the interpreter yet)
 
     Parameters
@@ -368,7 +372,7 @@ def _list_new(typingctx, itemty, allocated):
 
 
 @overload(new_list)
-def impl_new_list(item, allocated=0):
+def impl_new_list(item, allocated=DEFAULT_ALLOCATED):
     """Creates a new list.
 
     Parameters
@@ -384,7 +388,7 @@ def impl_new_list(item, allocated=0):
 
     itemty = item
 
-    def imp(item, allocated=0):
+    def imp(item, allocated=DEFAULT_ALLOCATED):
         if allocated < 0:
             raise RuntimeError("expecting *allocated* to be >= 0")
         lp = _list_new(itemty, allocated)
@@ -467,6 +471,85 @@ def _list_allocated(typingctx, l):
     return sig, codegen
 
 
+@overload_method(types.ListType, "_is_mutable")
+def impl_is_mutable(l):
+    """list._is_mutable()"""
+    if isinstance(l, types.ListType):
+        def impl(l):
+            return bool(_list_is_mutable(l))
+
+        return impl
+
+
+@intrinsic
+def _list_is_mutable(typingctx, l):
+    """Wrap numba_list_is_mutable
+
+    Returns the state of the is_mutable member
+    """
+    resty = types.int32
+    sig = resty(l)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_list_type],
+        )
+        fn = builder.module.get_or_insert_function(
+            fnty, name='numba_list_is_mutable')
+        [l] = args
+        [tl] = sig.args
+        lp = _container_get_data(context, builder, tl, l)
+        n = builder.call(fn, [lp])
+        return n
+
+    return sig, codegen
+
+
+@overload_method(types.ListType, "_make_mutable")
+def impl_make_mutable(l):
+    """list._make_mutable()"""
+    if isinstance(l, types.ListType):
+        def impl(l):
+            _list_set_is_mutable(l, 1)
+
+        return impl
+
+
+@overload_method(types.ListType, "_make_immutable")
+def impl_make_immutable(l):
+    """list._make_immutable()"""
+    if isinstance(l, types.ListType):
+        def impl(l):
+            _list_set_is_mutable(l, 0)
+
+        return impl
+
+
+@intrinsic
+def _list_set_is_mutable(typingctx, l, is_mutable):
+    """Wrap numba_list_set_mutable
+
+    Sets the state of the is_mutable member.
+    """
+    resty = types.void
+    sig = resty(l, is_mutable)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ir.VoidType(),
+            [ll_list_type, cgutils.intp_t],
+        )
+        fn = builder.module.get_or_insert_function(
+            fnty, name='numba_list_set_is_mutable')
+        [l, i] = args
+        [tl, ti] = sig.args
+        lp = _container_get_data(context, builder, tl, l)
+        builder.call(fn, [lp, i])
+
+    return sig, codegen
+
+
 @intrinsic
 def _list_append(typingctx, l, item):
     """Wrap numba_list_append
@@ -515,6 +598,8 @@ def impl_append(l, item):
         status = _list_append(l, casteditem)
         if status == ListStatus.LIST_OK:
             return
+        elif status == ListStatus.LIST_ERR_IMMUTABLE:
+            raise ValueError('list is immutable')
         elif status == ListStatus.LIST_ERR_NO_MEMORY:
             raise MemoryError('Unable to allocate memory to append item')
         else:
@@ -737,6 +822,8 @@ def impl_setitem(l, index, item):
             status = _list_setitem(l, castedindex, casteditem)
             if status == ListStatus.LIST_OK:
                 return
+            elif status == ListStatus.LIST_ERR_IMMUTABLE:
+                raise ValueError("list is immutable")
             else:
                 raise AssertionError("internal list error during settitem")
 
@@ -748,6 +835,8 @@ def impl_setitem(l, index, item):
                               "with assignment/setitem")
 
         def impl_slice(l, index, item):
+            if not l._is_mutable():
+                raise ValueError("list is immutable")
             # special case "a[i:j] = a", need to copy first
             if l is item:
                 item = item.copy()
@@ -816,6 +905,8 @@ def impl_pop(l, index=-1):
             status, item = _list_pop(l, castedindex)
             if status == ListStatus.LIST_OK:
                 return _nonoptional(item)
+            elif status == ListStatus.LIST_ERR_IMMUTABLE:
+                raise ValueError("list is immutable")
             else:
                 raise AssertionError("internal list error during pop")
         return impl
@@ -870,10 +961,13 @@ def impl_delitem(l, index):
     elif isinstance(index, types.SliceType):
         def slice_impl(l, index):
             slice_range = handle_slice(l, index)
-            _list_delete_slice(l,
-                               slice_range.start,
-                               slice_range.stop,
-                               slice_range.step)
+            status = _list_delete_slice(
+                l,
+                slice_range.start,
+                slice_range.stop,
+                slice_range.step)
+            if status == ListStatus.LIST_ERR_MUTATED:
+                raise ValueError("list is immutable")
         return slice_impl
 
     else:
@@ -925,11 +1019,13 @@ def impl_extend(l, iterable):
     if not isinstance(iterable, types.IterableType):
         raise TypingError("extend argument must be iterable")
 
-    _check_for_none_typed(l, 'insert')
+    _check_for_none_typed(l, 'extend')
 
     def select_impl():
         if isinstance(iterable, types.ListType):
             def impl(l, iterable):
+                if not l._is_mutable():
+                    raise ValueError("list is immutable")
                 # guard against l.extend(l)
                 if l is iterable:
                     iterable = iterable.copy()
@@ -956,6 +1052,8 @@ def impl_extend(l, iterable):
             ty = iterable.item_type
         elif hasattr(iterable, "yield_type"):  # iterators and generators
             ty = iterable.yield_type
+        elif isinstance(iterable, types.UnicodeType):
+            ty = iterable
         else:
             raise TypingError("unable to extend list, iterable is missing "
                               "either *dtype*, *item_type* or *yield_type*.")
@@ -1053,6 +1151,8 @@ def impl_reverse(l):
     _check_for_none_typed(l, 'reverse')
 
     def impl(l):
+        if not l._is_mutable():
+            raise ValueError("list is immutable")
         front = 0
         back = len(l) - 1
         while front < back:
@@ -1127,6 +1227,8 @@ def ol_list_sort(lst, key=None, reverse=False):
         sort_b = listobj.arg_sort_backwards
 
     def impl(lst, key=None, reverse=False):
+        if not lst._is_mutable():
+            raise ValueError("list is immutable")
         if KEY is True:
             # There's an unknown refct problem in reflected list.
             # Using an explicit loop with typedlist somehow "fixed" it.
@@ -1146,6 +1248,18 @@ def ol_list_sort(lst, key=None, reverse=False):
             for i in tmp:
                 ordered.append(lst[i])
             lst[:] = ordered
+    return impl
+
+
+@overload_attribute(types.ListType, '_dtype')
+def impl_dtype(l):
+    if not isinstance(l, types.ListType):
+        return
+    dt = l.dtype
+
+    def impl(l):
+        return dt
+
     return impl
 
 

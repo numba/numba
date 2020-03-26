@@ -269,6 +269,14 @@ def stream():
     """
     return current_context().create_stream()
 
+@require_context
+def default_stream():
+    """default_stream()
+
+    Get the default CUDA stream.
+    """
+    return current_context().get_default_stream()
+
 # Page lock
 @require_context
 @contextlib.contextmanager
@@ -404,8 +412,7 @@ def defer_cleanup():
 
     Note: this context manager can be nested.
     """
-    deallocs = current_context().deallocations
-    with deallocs.disable():
+    with current_context().defer_cleanup():
         yield
 
 

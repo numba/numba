@@ -2,7 +2,7 @@ import random
 import numpy as np
 
 from numba import cuda, uint32, uint64, float32, float64
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.core import config
 
 
@@ -181,7 +181,7 @@ def atomic_compare_and_swap(res, old, ary):
         old[gid] = out
 
 
-class TestCudaAtomics(SerialMixin, unittest.TestCase):
+class TestCudaAtomics(CUDATestCase):
     def test_atomic_add(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
         orig = ary.copy()

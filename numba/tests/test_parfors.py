@@ -16,32 +16,39 @@ from functools import reduce
 import numpy as np
 from numpy.random import randn
 import operator
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 import numba.parfors.parfor
-from numba import njit, prange
-from numba.core import types, utils, typing, errors, ir, rewrites, typed_passes, inline_closurecall, config, compiler, cpu
+from numba import njit, prange, set_num_threads, get_num_threads
+from numba.core import (types, utils, typing, errors, ir, rewrites,
+                        typed_passes, inline_closurecall, config, compiler, cpu)
+from numba.extending import (overload_method, register_model,
+                             typeof_impl, unbox, NativeValue, models)
 from numba.core.registry import cpu_target
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (find_callname, guard, build_definitions,
                             get_definition, is_getitem, is_setitem,
                             index_var_of_get_setitem)
 from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty
-from numba.core.compiler import compile_isolated, Flags
 from numba.core.bytecode import ByteCodeIter
+from numba.core.compiler import (compile_isolated, Flags, CompilerBase,
+                                 DefaultPassBuilder)
+from numba.core.compiler_machinery import register_pass, AnalysisPass
+from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack)
+                      needs_lapack, disabled_test)
 import cmath
 import unittest
 
 
-test_disabled = unittest.skipIf(True, 'Test disabled')
 x86_only = unittest.skipIf(platform.machine() not in ('i386', 'x86_64'), 'x86 only test')
 
 _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
+
+TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
 
 class TestParforsBase(TestCase):
     """
@@ -124,6 +131,8 @@ class TestParforsBase(TestCase):
                 elif isinstance(x, np.number):
                     new_args.append(x.copy())
                 elif isinstance(x, numbers.Number):
+                    new_args.append(x)
+                elif isinstance(x, tuple):
                     new_args.append(x)
                 elif isinstance(x, list):
                     new_args.append(x[:])
@@ -274,7 +283,7 @@ def lr_impl(Y, X, w, iterations):
         w -= np.dot(((1.0 / (1.0 + np.exp(-Y * np.dot(X, w))) - 1.0) * Y), X)
     return w
 
-def test_kmeans_example(A, numCenter, numIter, init_centroids):
+def example_kmeans_test(A, numCenter, numIter, init_centroids):
     centroids = init_centroids
     N, D = A.shape
 
@@ -571,14 +580,14 @@ class TestParfors(TestParforsBase):
         centers = 3
         A = np.random.ranf((N, D))
         init_centroids = np.random.ranf((centers, D))
-        self.check(test_kmeans_example, A, centers, 3, init_centroids,
+        self.check(example_kmeans_test, A, centers, 3, init_centroids,
                                                                     decimal=1)
         # TODO: count parfors after k-means fusion is working
         # requires recursive parfor counting
         arg_typs = (types.Array(types.float64, 2, 'C'), types.intp, types.intp,
                     types.Array(types.float64, 2, 'C'))
         self.assertTrue(
-            countNonParforArrayAccesses(test_kmeans_example, arg_typs) == 0)
+            countNonParforArrayAccesses(example_kmeans_test, arg_typs) == 0)
 
     @unittest.skipIf(not _32bit, "Only impacts 32 bit hardware")
     @needs_blas
@@ -748,7 +757,7 @@ class TestParfors(TestParforsBase):
             return np.sum(A[:, b])
         self.check(test_impl)
 
-    @test_disabled
+    @disabled_test
     def test_simple_operator_15(self):
         """same as corresponding test_simple_<n> case but using operator.add"""
         def test_impl(v1, v2, m1, m2):
@@ -756,14 +765,14 @@ class TestParfors(TestParforsBase):
 
         self.check(test_impl, *self.simple_args)
 
-    @test_disabled
+    @disabled_test
     def test_simple_operator_16(self):
         def test_impl(v1, v2, m1, m2):
             return operator.add(m1, m1)
 
         self.check(test_impl, *self.simple_args)
 
-    @test_disabled
+    @disabled_test
     def test_simple_operator_17(self):
         def test_impl(v1, v2, m1, m2):
             return operator.add(m2, v1)
@@ -1161,7 +1170,7 @@ class TestParfors(TestParforsBase):
                     i = m
 
         n = 211
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(errors.UnsupportedRewriteError) as raises:
             self.check(test_impl, n)
         self.assertIn("Overwrite of parallel loop index", str(raises.exception))
 
@@ -1231,7 +1240,7 @@ class TestParfors(TestParforsBase):
         self.assertEqual(countNonParforArrayAccesses(test_impl, (types.intp,)), 0)
 
     @skip_parfors_unsupported
-    @test_disabled # Test itself is problematic, see #3155
+    @disabled_test # Test itself is problematic, see #3155
     def test_parfor_hoist_setitem(self):
         # Make sure that read of out is not hoisted.
         def test_impl(out):
@@ -1476,7 +1485,7 @@ class TestParfors(TestParforsBase):
     @skip_parfors_unsupported
     def test_reshape_with_too_many_neg_one(self):
         # issue3314
-        with self.assertRaises(ValueError) as raised:
+        with self.assertRaises(errors.UnsupportedRewriteError) as raised:
             @njit(parallel=True)
             def test_impl(a, b):
                 rm = np.zeros((b, b, 1), dtype=np.float64)
@@ -1532,6 +1541,86 @@ class TestParfors(TestParforsBase):
             return parr.sum()
         x = np.ones(20)
         self.check(test_impl, x, True, check_scheduling=False)
+
+    @skip_parfors_unsupported
+    def test_prange_side_effects(self):
+        def test_impl(a, b):
+            data = np.empty(len(a), dtype=np.float64)
+            size = len(data)
+            for i in numba.prange(size):
+                data[i] = a[i]
+            for i in numba.prange(size):
+                data[i] = data[i] + b[i]
+            return data
+
+        x = np.arange(10 ** 2, dtype=float)
+        y = np.arange(10 ** 2, dtype=float)
+
+        self.check(test_impl, x, y)
+        self.assertTrue(countParfors(test_impl,
+                                    (types.Array(types.float64, 1, 'C'),
+                                     types.Array(types.float64, 1, 'C'))) == 1)
+
+    @skip_parfors_unsupported
+    def test_tuple1(self):
+        def test_impl(a):
+            atup = (3, 4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += atup[0] + atup[1] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_tuple2(self):
+        def test_impl(a):
+            atup = a.shape
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += atup[0] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_tuple3(self):
+        def test_impl(a):
+            atup = (np.arange(10), 4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += atup[0][5] + atup[1] + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_namedtuple1(self):
+        def test_impl(a):
+            antup = TestNamedTuple(part0=3, part1=4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += antup.part0 + antup.part1 + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_namedtuple2(self):
+        TestNamedTuple2 = namedtuple('TestNamedTuple2', ('part0', 'part1'))
+        def test_impl(a):
+            antup = TestNamedTuple2(part0=3, part1=4)
+            b = 7
+            for i in numba.prange(len(a)):
+                a[i] += antup.part0 + antup.part1 + b
+            return a
+
+        x = np.arange(10)
+        self.check(test_impl, x)
 
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
@@ -1988,7 +2077,7 @@ class TestPrange(TestPrangeBase):
             acc = 0
             X = np.ones(N)
             for i in range(-N, 5):
-                acc -= X[i]
+                acc += X[i]
                 for j in range(-4, N):
                     acc += X[j]
             return acc
@@ -2127,7 +2216,7 @@ class TestPrange(TestPrangeBase):
         self.assertIn(msg, str(raises.exception))
 
 #    @skip_parfors_unsupported
-    @test_disabled
+    @disabled_test
     def test_check_error_model(self):
         def test_impl():
             n = 32
@@ -2186,7 +2275,7 @@ class TestPrange(TestPrangeBase):
                 acc += 2
             return acc
 
-        with self.assertRaises(NotImplementedError) as raises:
+        with self.assertRaises(errors.UnsupportedRewriteError) as raises:
             self.prange_tester(test_impl, 1024)
         msg = 'Only constant step size of 1 is supported for prange'
         self.assertIn(msg, str(raises.exception))
@@ -2207,7 +2296,7 @@ class TestPrange(TestPrangeBase):
         pfunc = self.generate_prange_func(test_impl, None)
         cres = self.compile_parallel_fastmath(pfunc, ())
         ir = self._get_gufunc_ir(cres)
-        _id = '%[A-Z]?.[0-9]+[.]?[i]?'
+        _id = '%[A-Z_0-9]?(.[0-9]+)+[.]?[i]?'
         recipr_str = '\s+%s = fmul fast double %s, 5.000000e-01'
         reciprocal_inst = re.compile(recipr_str % (_id, _id))
         fadd_inst = re.compile('\s+%s = fadd fast double %s, %s'
@@ -2416,20 +2505,18 @@ class TestParforsVectorizer(TestPrangeBase):
     def get_gufunc_asm(self, func, schedule_type, *args, **kwargs):
 
         fastmath = kwargs.pop('fastmath', False)
-        nthreads = kwargs.pop('nthreads', 2)
         cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
         assertions = kwargs.pop('assertions', True)
 
         env_opts = {'NUMBA_CPU_NAME': cpu_name,
                     'NUMBA_CPU_FEATURES': '',
-                    'NUMBA_NUM_THREADS': str(nthreads)
                     }
 
         overrides = []
         for k, v in env_opts.items():
             overrides.append(override_env_config(k, v))
 
-        with overrides[0], overrides[1], overrides[2]:
+        with overrides[0], overrides[1]:
             sig = tuple([numba.typeof(x) for x in args])
             pfunc_vectorizable = self.generate_prange_func(func, None)
             if fastmath == True:
@@ -2447,7 +2534,7 @@ class TestParforsVectorizer(TestPrangeBase):
                 self.assertEqual(matches[0], schedule_type)
                 self.assertTrue(asm != {})
 
-        return asm
+            return asm
 
     # this is a common match pattern for something like:
     # \n\tvsqrtpd\t-192(%rbx,%rsi,8), %zmm0\n
@@ -2691,7 +2778,7 @@ class TestParforsSlice(TestParforsBase):
         self.assertIn("do not match", str(raises.exception))
 
 #    @skip_parfors_unsupported
-    @test_disabled
+    @disabled_test
     def test_parfor_slice8(self):
         def test_impl(a):
             (m,n) = a.shape
@@ -2702,7 +2789,7 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.arange(9).reshape((3,3)))
 
 #    @skip_parfors_unsupported
-    @test_disabled
+    @disabled_test
     def test_parfor_slice9(self):
         def test_impl(a):
             (m,n) = a.shape
@@ -2713,7 +2800,7 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.arange(12).reshape((3,4)))
 
 #    @skip_parfors_unsupported
-    @test_disabled
+    @disabled_test
     def test_parfor_slice10(self):
         def test_impl(a):
             (m,n) = a.shape
@@ -2775,7 +2862,7 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, np.arange(12).reshape((3,4)))
 
 
-    @test_disabled
+    @disabled_test
     def test_parfor_slice16(self):
         """ This test is disabled because if n is larger than the array size
             then n and n-1 will both be the end of the array and thus the
@@ -3096,6 +3183,251 @@ class TestParforsMisc(TestParforsBase):
             return data
 
         self.check(test_impl)
+
+    @skip_parfors_unsupported
+    def test_no_state_change_in_gufunc_lowering_on_error(self):
+        # tests #5098, if there's an exception arising in gufunc lowering the
+        # sequential_parfor_lowering global variable should remain as False on
+        # stack unwind.
+
+        @register_pass(mutates_CFG=True, analysis_only=False)
+        class BreakParfors(AnalysisPass):
+            _name = "break_parfors"
+
+            def __init__(self):
+                AnalysisPass.__init__(self)
+
+            def run_pass(self, state):
+                for blk in state.func_ir.blocks.values():
+                    for stmt in blk.body:
+                        if isinstance(stmt, numba.parfors.parfor.Parfor):
+                            # races should be a set(), that list is iterable
+                            # permits it to get through to the
+                            # _create_gufunc_for_parfor_body routine at which
+                            # point it needs to be a set so e.g. set.difference
+                            # can be computed, this therefore creates an error
+                            # in the right location.
+                            stmt.races = []
+                    return True
+
+
+        class BreakParforsCompiler(CompilerBase):
+
+            def define_pipelines(self):
+                pm = DefaultPassBuilder.define_nopython_pipeline(self.state)
+                pm.add_pass_after(BreakParfors, IRLegalization)
+                pm.finalize()
+                return [pm]
+
+
+        @njit(parallel=True, pipeline_class=BreakParforsCompiler)
+        def foo():
+            x = 1
+            for _ in prange(1):
+                x += 1
+            return x
+
+        # assert default state for global
+        self.assertFalse(numba.parfors.parfor.sequential_parfor_lowering)
+
+        with self.assertRaises(errors.LoweringError) as raises:
+            foo()
+
+        self.assertIn("'list' object has no attribute 'difference'",
+                      str(raises.exception))
+
+        # assert state has not changed
+        self.assertFalse(numba.parfors.parfor.sequential_parfor_lowering)
+
+    @skip_parfors_unsupported
+    def test_issue_5098(self):
+        class DummyType(types.Opaque):
+            pass
+
+        dummy_type = DummyType("my_dummy")
+        register_model(DummyType)(models.OpaqueModel)
+
+        class Dummy(object):
+            pass
+
+        @typeof_impl.register(Dummy)
+        def typeof_Dummy(val, c):
+            return dummy_type
+
+        @unbox(DummyType)
+        def unbox_index(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        @overload_method(DummyType, "method1", jit_options={"parallel":True})
+        def _get_method1(obj, arr, func):
+            def _foo(obj, arr, func):
+                def baz(a, f):
+                    c = a.copy()
+                    c[np.isinf(a)] = np.nan
+                    return f(c)
+
+                length = len(arr)
+                output_arr = np.empty(length, dtype=np.float64)
+                for i in prange(length):
+                    output_arr[i] = baz(arr[i], func)
+                for i in prange(length - 1):
+                    output_arr[i] += baz(arr[i], func)
+                return output_arr
+            return _foo
+
+        @njit
+        def bar(v):
+            return v.mean()
+
+        @njit
+        def test1(d):
+            return d.method1(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), bar)
+
+        save_state = numba.parfors.parfor.sequential_parfor_lowering
+        self.assertFalse(save_state)
+        try:
+            test1(Dummy())
+            self.assertFalse(numba.parfors.parfor.sequential_parfor_lowering)
+        finally:
+            # always set the sequential_parfor_lowering state back to the
+            # original state
+            numba.parfors.parfor.sequential_parfor_lowering = save_state
+
+    @skip_parfors_unsupported
+    def test_oversized_tuple_as_arg_to_kernel(self):
+
+        @njit(parallel=True)
+        def oversize_tuple():
+            big_tup = (1,2,3,4)
+            z = 0
+            for x in prange(10):
+                z += big_tup[0]
+            return z
+
+        with override_env_config('NUMBA_PARFOR_MAX_TUPLE_SIZE', '3'):
+            with self.assertRaises(errors.UnsupportedParforsError) as raises:
+                oversize_tuple()
+
+        errstr = str(raises.exception)
+        self.assertIn("Use of a tuple", errstr)
+        self.assertIn("in a parallel region", errstr)
+
+    @skip_parfors_unsupported
+    def test_issue5167(self):
+
+        def ndvi_njit(img_nir, img_red):
+            fillvalue = 0
+            out_img = np.full(img_nir.shape, fillvalue, dtype=img_nir.dtype)
+            dims = img_nir.shape
+            for y in prange(dims[0]):
+                for x in prange(dims[1]):
+                    out_img[y, x] = ((img_nir[y, x] - img_red[y, x]) /
+                                     (img_nir[y, x] + img_red[y, x]))
+            return out_img
+
+        tile_shape = (4, 4)
+        array1 = np.random.uniform(low=1.0, high=10000.0, size=tile_shape)
+        array2 = np.random.uniform(low=1.0, high=10000.0, size=tile_shape)
+        self.check(ndvi_njit, array1, array2)
+
+    @skip_parfors_unsupported
+    def test_issue5065(self):
+
+        def reproducer(a, dist, dist_args):
+            result = np.zeros((a.shape[0], a.shape[0]), dtype=np.float32)
+            for i in prange(a.shape[0]):
+                for j in range(i + 1, a.shape[0]):
+                    d = dist(a[i], a[j], *dist_args)
+                    result[i, j] = d
+                    result[j, i] = d
+            return result
+
+        @njit
+        def euclidean(x, y):
+            result = 0.0
+            for i in range(x.shape[0]):
+                result += (x[i] - y[i]) ** 2
+            return np.sqrt(result)
+
+        a = np.random.random(size=(5, 2))
+
+        got = njit(parallel=True)(reproducer)(a.copy(), euclidean,())
+        expected = reproducer(a.copy(), euclidean,())
+
+        np.testing.assert_allclose(got, expected)
+
+    @skip_parfors_unsupported
+    def test_issue5001(self):
+
+        def test_numba_parallel(myarray):
+            result = [0] * len(myarray)
+            for i in prange(len(myarray)):
+                result[i] = len(myarray[i])
+            return result
+
+        myarray = (np.empty(100),np.empty(50))
+        self.check(test_numba_parallel, myarray)
+
+    @skip_parfors_unsupported
+    def test_issue3169(self):
+
+        @njit
+        def foo(grids):
+            pass
+
+        @njit(parallel=True)
+        def bar(grids):
+            for x in prange(1):
+                foo(grids)
+
+        # returns nothing, just check it compiles
+        bar(([1],) * 2)
+
+    @disabled_test
+    def test_issue4846(self):
+
+        mytype = namedtuple("mytype", ("a", "b"))
+
+        def outer(mydata):
+            for k in prange(3):
+                inner(k, mydata)
+            return mydata.a
+
+        @njit(nogil=True)
+        def inner(k, mydata):
+            f = (k, mydata.a)
+            g = (k, mydata.b)
+
+        mydata = mytype(a="a", b="b")
+
+        self.check(outer, mydata)
+
+    @skip_parfors_unsupported
+    def test_issue3748(self):
+
+        def test1b():
+            x = (1, 2, 3, 4, 5)
+            a = 0
+            for i in prange(len(x)):
+                a += x[i]
+            return a
+
+        self.check(test1b,)
+
+    @skip_parfors_unsupported
+    def test_issue5277(self):
+
+        def parallel_test(size, arr):
+            for x in prange(size[0]):
+                for y in prange(size[1]):
+                    arr[y][x] = x * 4.5 + y
+            return arr
+
+        size = (10, 10)
+        arr = np.zeros(size, dtype=int)
+
+        self.check(parallel_test, size, arr)
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):

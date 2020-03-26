@@ -1431,7 +1431,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 raise TypingError("cannot type infer runaway recursion")
 
             sig = typing.signature(return_type, *args)
-            sig.pysig = pysig
+            sig = sig.replace(pysig=pysig)
             # Keep track of unique return_type
             frame.add_return_type(return_type)
             return sig
@@ -1478,6 +1478,11 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         if isinstance(typ, types.Array):
             # Global array in nopython mode is constant
             typ = typ.copy(readonly=True)
+
+        if isinstance(typ, types.BaseAnonymousTuple):
+            types_with_literals = (types.Integer, types.UnicodeType)
+            if all(isinstance(ty, types_with_literals) for ty in typ):
+                typ = types.Tuple([types.literal(val) for val in gvar.value])
 
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled
@@ -1560,6 +1565,12 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.constraints.append(Propagate(dst=target.name,
                                               src=expr.value.name,
                                               loc=inst.loc))
+        elif expr.op == 'phi':
+            for iv in expr.incoming_values:
+                if iv is not ir.UNDEFINED:
+                    self.constraints.append(Propagate(dst=target.name,
+                                                      src=iv.name,
+                                                      loc=inst.loc))
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)

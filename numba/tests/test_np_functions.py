@@ -10,13 +10,14 @@ import numpy as np
 from numba.core.compiler import Flags
 from numba import jit, njit, typeof
 from numba.core import types
+from numba.typed import List, Dict
 from numba.np.numpy_support import numpy_version
 from numba.core.errors import TypingError
 from numba.core.config import IS_WIN32, IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.arraymath import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas)
+                                 needs_blas, skip_ppc64le_issue4026)
 import unittest
 
 
@@ -124,6 +125,10 @@ def isposinf(x, out=None):
     return np.isposinf(x, out)
 
 
+def isnat(x):
+    return np.isnat(x)
+
+
 def iinfo(*args):
     return np.iinfo(*args)
 
@@ -134,6 +139,18 @@ def finfo(*args):
 
 def finfo_machar(*args):
     return np.finfo(*args).machar
+
+
+def fliplr(a):
+    return np.fliplr(a)
+
+
+def flipud(a):
+    return np.flipud(a)
+
+
+def flip(a):
+    return np.flip(a)
 
 
 def correlate(a, v):
@@ -318,6 +335,14 @@ def np_kaiser(M, beta):
 
 def np_cross(a, b):
     return np.cross(a, b)
+
+
+def flip_lr(a):
+    return np.fliplr(a)
+
+
+def flip_ud(a):
+    return np.flipud(a)
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -579,7 +604,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         )
 
     # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
-    @unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
+    @skip_ppc64le_issue4026
     def test_delete(self):
 
         def arrays():
@@ -2248,6 +2273,96 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         msg = "Boolean dtype is unsupported (as per NumPy)"
         assert msg in str(e.exception)
 
+    def test_fliplr_basic(self):
+        pyfunc = fliplr
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.arange(10).reshape(5, 2)
+            yield np.arange(20).reshape(5, 2, 2)
+            yield ((1, 2),)
+            yield ([1, 2], [3, 4],)
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+
+        self.assertIn("Cannot np.fliplr on %s type" % types.unicode_type,
+                      str(raises.exception))
+
+    def test_fliplr_exception(self):
+        pyfunc = fliplr
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.arange(3))
+
+        self.assertIn("cannot index array", str(raises.exception))
+        self.assertIn("with 2 indices", str(raises.exception))
+
+    def test_flipud_basic(self):
+        pyfunc = flipud
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield [1]
+            yield np.arange(10)
+            yield np.arange(10).reshape(5, 2)
+            yield np.arange(20).reshape(5, 2, 2)
+            yield ((1, 2),)
+            yield ([1, 2], [3, 4],)
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc("abc")
+
+        self.assertIn("Cannot np.flipud on %s type" % types.unicode_type,
+                      str(raises.exception))
+
+    def test_flipud_exception(self):
+        pyfunc = flipud
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(1)
+
+        self.assertIn("cannot index array", str(raises.exception))
+        self.assertIn("with 1 indices", str(raises.exception))
+
+    def test_flip_basic(self):
+        pyfunc = flip
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            yield np.array(1)
+            yield np.arange(10)
+            yield np.arange(10).reshape(5, 2)
+            yield np.arange(20).reshape(5, 2, 2)
+
+        for a in a_variations():
+            expected = pyfunc(a)
+            got = cfunc(a)
+            self.assertPreciseEqual(expected, got)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc((1, 2, 3))
+
+        self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
+
     def test_roll_basic(self):
         pyfunc = roll
         cfunc = jit(nopython=True)(pyfunc)
@@ -3071,6 +3186,36 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(x, xp, fp)
             self.assertPreciseEqual(expected, got)
 
+    def test_isnat(self):
+        def values():
+            yield np.datetime64("2016-01-01")
+            yield np.datetime64("NaT")
+            yield np.datetime64('NaT', 'ms')
+            yield np.datetime64('NaT', 'ns')
+            yield np.datetime64('2038-01-19T03:14:07')
+
+            yield np.timedelta64('NaT', "ms")
+            yield np.timedelta64(34, "ms")
+
+            for unit in ['Y', 'M', 'W', 'D',
+                         'h', 'm', 's', 'ms', 'us',
+                         'ns', 'ps', 'fs', 'as']:
+                yield np.array([123, -321, "NaT"],
+                               dtype='<datetime64[%s]' % unit)
+                yield np.array([123, -321, "NaT"],
+                               dtype='<timedelta64[%s]' % unit)
+
+        pyfunc = isnat
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for x in values():
+            expected = pyfunc(x)
+            got = cfunc(x)
+            if isinstance(x, np.ndarray):
+                self.assertPreciseEqual(expected, got, (x,))
+            else:
+                self.assertEqual(expected, got, x)
+
     def test_asarray(self):
 
         def input_variations():
@@ -3098,6 +3243,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.arange(4)
             yield np.arange(12).reshape(3, 4)
             yield np.arange(12).reshape(3, 4).T
+
+            # Test cases for `numba.typed.List`
+            def make_list(values):
+                a = List()
+                for i in values:
+                    a.append(i)
+                return a
+            yield make_list((1, 2, 3))
+            yield make_list((1.0, 2.0, 3.0))
+            yield make_list((1j, 2j, 3j))
+            yield make_list((True, False, True))
 
         # used to check that if the input is already an array and the dtype is
         # the same as that of the input/omitted then the array itself is
@@ -3137,6 +3293,48 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     check_pass_through(cfunc, True, params)
                 else:
                     check_pass_through(cfunc, True, params)
+
+    def test_asarray_rejects_List_with_illegal_dtype(self):
+        self.disable_leak_check()
+        cfunc = jit(nopython=True)(asarray)
+
+        def test_reject(alist):
+            with self.assertRaises(TypingError) as e:
+                cfunc(alist)
+            self.assertIn(
+                "asarray support for List is limited "
+                "to Boolean and Number types",
+                str(e.exception))
+
+        def make_none_typed_list():
+            l = List()
+            l.append(None)
+            return l
+
+        def make_nested_list():
+            l = List()
+            m = List()
+            m.append(1)
+            l.append(m)
+            return l
+
+        def make_nested_list_with_dict():
+            l = List()
+            d = Dict()
+            d[1] = "a"
+            l.append(d)
+            return l
+
+        def make_unicode_list():
+            l = List()
+            for i in ("a", "bc", "def"):
+                l.append(i)
+            return l
+
+        test_reject(make_none_typed_list())
+        test_reject(make_nested_list())
+        test_reject(make_nested_list_with_dict())
+        test_reject(make_unicode_list())
 
     def test_repeat(self):
         # np.repeat(a, repeats)

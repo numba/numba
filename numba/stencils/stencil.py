@@ -397,7 +397,7 @@ class StencilFunc(object):
                         ",".join(self.kernel_ir.arg_names), sig_extra))
         exec(dummy_text) in globals(), locals()
         dummy_func = eval("__numba_dummy_stencil")
-        sig.pysig = utils.pysignature(dummy_func)
+        sig = sig.replace(pysig=utils.pysignature(dummy_func))
         self._targetctx.insert_func_defn([(self._lower_me, self, argtys_extra)])
         self._type_cache[argtys_extra] = (sig, result, typemap, calltypes)
         return sig

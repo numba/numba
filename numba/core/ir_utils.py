@@ -22,7 +22,7 @@ from numba.core.analysis import (compute_live_map, compute_use_defs,
                             compute_cfg_from_blocks)
 from numba.core.errors import (TypingError, UnsupportedError,
                                NumbaPendingDeprecationWarning, NumbaWarning,
-                               feedback_details)
+                               feedback_details, CompilerError)
 
 import copy
 
@@ -511,7 +511,7 @@ def remove_args(blocks):
 def dead_code_elimination(func_ir, typemap=None, alias_map=None,
                           arg_aliases=None):
     """ Performs dead code elimination and leaves the IR in a valid state on
-    exit (ir.Dels are present in correct locations).
+    exit
     """
     do_post_proc = False
     while (remove_dead(func_ir.blocks, func_ir.arg_names, func_ir, typemap,
@@ -593,6 +593,8 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
             stmt = f(stmt, lives, lives_n_aliases, arg_aliases, alias_map, func_ir,
                      typemap)
             if stmt is None:
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("Statement was removed.")
                 removed = True
                 continue
 
@@ -602,21 +604,29 @@ def remove_dead_block(block, lives, call_table, arg_aliases, alias_map,
             rhs = stmt.value
             if lhs.name not in lives and has_no_side_effect(
                     rhs, lives_n_aliases, call_table):
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("Statement was removed.")
                 removed = True
                 continue
             if isinstance(rhs, ir.Var) and lhs.name == rhs.name:
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("Statement was removed.")
                 removed = True
                 continue
             # TODO: remove other nodes like SetItem etc.
 
         if isinstance(stmt, ir.Del):
             if stmt.value not in lives:
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("Statement was removed.")
                 removed = True
                 continue
 
         if isinstance(stmt, ir.SetItem):
             name = stmt.target.name
             if name not in lives_n_aliases:
+                if config.DEBUG_ARRAY_OPT >= 2:
+                    print("Statement was removed.")
                 continue
 
         if type(stmt) in analysis.ir_extension_usedefs:
@@ -662,6 +672,7 @@ def has_no_side_effect(rhs, lives, call_table):
             call_list == ['dtype', numpy] or
             call_list == [array_analysis.wrap_index] or
             call_list == [prange] or
+            call_list == ['prange', numba] or
             call_list == [parfor.internal_prange]):
             return True
         elif (isinstance(call_list[0], _Intrinsic) and
@@ -1633,7 +1644,7 @@ def _create_function_from_code_obj(fcode, func_env, func_arg, func_clo, glbls):
 
 def get_ir_of_code(glbls, fcode):
     """
-    Compile a code object to get its IR.
+    Compile a code object to get its IR, ir.Del nodes are emitted
     """
     nfree = len(fcode.co_freevars)
     func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
@@ -1665,7 +1676,7 @@ def get_ir_of_code(glbls, fcode):
         ir, numba.core.cpu.ParallelOptions(False), swapped)
     inline_pass.run()
     post_proc = postproc.PostProcessor(ir)
-    post_proc.run()
+    post_proc.run(True)
     return ir
 
 def replace_arg_nodes(block, args):
@@ -2056,20 +2067,36 @@ def resolve_func_from_module(func_ir, node):
         return None
 
 
+def enforce_no_dels(func_ir):
+    """
+    Enforce there being no ir.Del nodes in the IR.
+    """
+    for blk in func_ir.blocks.values():
+        dels = [x for x in blk.find_insts(ir.Del)]
+        if dels:
+            msg = "Illegal IR, del found at: %s" % dels[0]
+            raise CompilerError(msg, loc=dels[0].loc)
+
+def enforce_no_phis(func_ir):
+    """
+    Enforce there being no ir.Expr.phi nodes in the IR.
+    """
+    for blk in func_ir.blocks.values():
+        phis = [x for x in blk.find_exprs(op='phi')]
+        if phis:
+            msg = "Illegal IR, phi found at: %s" % phis[0]
+            raise CompilerError(msg, loc=phis[0].loc)
+
+
 def check_and_legalize_ir(func_ir):
     """
-    This checks that the IR presented is legal, warns and legalizes if not
+    This checks that the IR presented is legal
     """
-    orig_ir = func_ir.copy()
+    enforce_no_phis(func_ir)
+    enforce_no_dels(func_ir)
+    # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run()
-    msg = ("\nNumba has detected inconsistencies in its internal "
-           "representation of the code at %s. Numba can probably recover from "
-           "this problem and is attempting to do, however something inside "
-           "Numba needs fixing...\n%s\n") % (func_ir.loc, feedback_details)
-    if not func_ir.equal_ir(orig_ir):
-        msg +=  func_ir.diff_str(orig_ir)
-        warnings.warn(NumbaWarning(msg, loc=func_ir.loc))
+    post_proc.run(True)
 
 
 def convert_code_obj_to_function(code_obj, caller_ir):

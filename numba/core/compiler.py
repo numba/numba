@@ -19,13 +19,15 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        FindLiterallyCalls,
                                        MakeFunctionToJitFunction,
                                        CanonicalizeLoopExit,
-                                       CanonicalizeLoopEntry, LiteralUnroll,)
+                                       CanonicalizeLoopEntry, LiteralUnroll,
+                                       ReconstructSSA,
+                                       )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      NopythonRewrites, PreParforPass,
                                      ParforPass, DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
-                                     InlineOverloads)
+                                     InlineOverloads, PreLowerStripPhis)
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd, CompileInterpMode)
@@ -42,6 +44,8 @@ class Flags(utils.ConfigOptions):
         'enable_pyobject': False,
         # Enable pyobject mode inside lifted loops
         'enable_pyobject_looplift': False,
+        # Enable SSA:
+        'enable_ssa': True,
         # Force pyobject mode inside the whole function
         'force_pyobject': False,
         # Release GIL inside the native function
@@ -180,12 +184,13 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
                              flags, locals)
 
 
-def run_frontend(func, inline_closures=False):
+def run_frontend(func, inline_closures=False, emit_dels=False):
     """
     Run the compiler frontend over the given Python function, and return
     the function's canonical Numba IR.
 
     If inline_closures is Truthy then closure inlining will be run
+    If emit_dels is Truthy the ir.Del nodes will be emitted appropriately
     """
     # XXX make this a dedicated Pipeline?
     func_id = bytecode.FunctionIdentity.from_function(func)
@@ -197,7 +202,7 @@ def run_frontend(func, inline_closures=False):
                                             {}, False)
         inline_pass.run()
     post_proc = postproc.PostProcessor(func_ir)
-    post_proc.run()
+    post_proc.run(emit_dels)
     return func_ir
 
 
@@ -458,9 +463,14 @@ class DefaultPassBuilder(object):
         pm.add_pass(FindLiterallyCalls, "find literally calls")
         pm.add_pass(LiteralUnroll, "handles literal_unroll")
 
+        if state.flags.enable_ssa:
+            pm.add_pass(ReconstructSSA, "ssa")
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
         pm.add_pass(AnnotateTypes, "annotate types")
+
+        # strip phis
+        pm.add_pass(PreLowerStripPhis, "remove phis nodes")
 
         # optimisation
         pm.add_pass(InlineOverloads, "inline overloaded functions")
@@ -489,6 +499,10 @@ class DefaultPassBuilder(object):
         if state.func_ir is None:
             pm.add_pass(TranslateByteCode, "analyzing bytecode")
             pm.add_pass(FixupArgs, "fix up args")
+        else:
+            # Reaches here if it's a fallback from nopython mode.
+            # Strip the phi nodes.
+            pm.add_pass(PreLowerStripPhis, "remove phis nodes")
         pm.add_pass(IRProcessing, "processing IR")
 
         if utils.PYVERSION >= (3, 7):

@@ -1,4 +1,4 @@
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba import cuda
 from numba.core import config
 
@@ -8,11 +8,11 @@ class MyError(Exception):
 
 
 regex_pattern = (
-    r'In function [\'"]test_exc[\'"], file [\.\/\\\-a-zA-Z_0-9]+, line \d+'
+    r'In function [\'"]test_exc[\'"], file [\:\.\/\\\-a-zA-Z_0-9]+, line \d+'
 )
 
 
-class TestUserExc(SerialMixin, unittest.TestCase):
+class TestUserExc(CUDATestCase):
 
     def test_user_exception(self):
         @cuda.jit("void(int32)", debug=True)
@@ -22,14 +22,14 @@ class TestUserExc(SerialMixin, unittest.TestCase):
             elif x == 2:
                 raise MyError("foo")
 
-        test_exc(0)    # no raise
+        test_exc[1, 1](0)    # no raise
         with self.assertRaises(MyError) as cm:
-            test_exc(1)
+            test_exc[1, 1](1)
         if not config.ENABLE_CUDASIM:
             self.assertRegexpMatches(str(cm.exception), regex_pattern)
         self.assertIn("tid=[0, 0, 0] ctaid=[0, 0, 0]", str(cm.exception))
         with self.assertRaises(MyError) as cm:
-            test_exc(2)
+            test_exc[1, 1](2)
         if not config.ENABLE_CUDASIM:
             self.assertRegexpMatches(str(cm.exception), regex_pattern)
             self.assertRegexpMatches(str(cm.exception), regex_pattern)

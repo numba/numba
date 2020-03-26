@@ -1413,14 +1413,15 @@ def choice(a, size=None, replace=True):
                 if out.size > n:
                     raise ValueError("Cannot take a larger sample than "
                                      "population when 'replace=False'")
-                # Get a contiguous copy of the source so as to permute it
-                src = copy_source(a)
+                # Get a permuted copy of the source array
+                # we need this implementation in order to get the 
+                # np.random.choice inside numba to match the output
+                # of np.random.choice outside numba when np.random.seed
+                # is set to the same value
+                permuted_a = np.random.permutation(a)
                 fl = out.flat
                 for i in range(len(fl)):
-                    j = np.random.randint(i, n)
-                    fl[i] = src[j]
-                    # Move away selected element
-                    src[j] = src[i]
+                    fl[i] = permuted_a[i]
                 return out
 
     return choice_impl

@@ -99,16 +99,7 @@ class GetIter(AbstractTemplate):
         assert not kws
         [obj] = args
         if isinstance(obj, types.IterableType):
-            # Raise this here to provide a very specific message about this
-            # common issue, delaying the error until later leads to something
-            # less specific being noted as the problem (e.g. no support for
-            # getiter on array(<>, 2, 'C')).
-            if isinstance(obj, types.Array) and obj.ndim > 1:
-                msg = ("Direct iteration is not supported for arrays with "
-                       "dimension > 1. Try using indexing instead.")
-                raise errors.TypingError(msg)
-            else:
-                return signature(obj.iterator_type, obj)
+            return signature(obj.iterator_type, obj)
 
 
 @infer
@@ -791,9 +782,19 @@ class TypeRefAttribute(AttributeTemplate):
             # For example, see numba/typed/typeddict.py
             #   @type_callable(DictType)
             #   def typeddict_call(context):
-            def redirect(*args, **kwargs):
-                return self.context.resolve_function_type(ty, args, kwargs)
-            return types.Function(make_callable_template(key=ty, typer=redirect))
+            class Redirect(object):
+
+                def __init__(self, context):
+                    self.context =  context
+
+                def __call__(self, *args, **kwargs):
+                    result = self.context.resolve_function_type(ty, args, kwargs)
+                    if hasattr(result, "pysig"):
+                        self.pysig = result.pysig
+                    return result
+
+            return types.Function(make_callable_template(key=ty,
+                                                         typer=Redirect(self.context)))
 
 
 #------------------------------------------------------------------------------

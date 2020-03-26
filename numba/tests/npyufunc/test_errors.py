@@ -5,7 +5,7 @@ import numpy as np
 
 from numba import vectorize, guvectorize
 
-from ..support import TestCase, CheckWarningsMixin
+from numba.tests.support import TestCase, CheckWarningsMixin
 import unittest
 
 

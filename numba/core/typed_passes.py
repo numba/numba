@@ -1,4 +1,6 @@
 from contextlib import contextmanager
+from collections import defaultdict
+from copy import copy
 import warnings
 
 from numba.core import (errors, types, typing, ir, funcdesc, rewrites,
@@ -9,12 +11,14 @@ from numba.parfors.parfor import ParforPass as _parfor_ParforPass
 from numba.parfors.parfor import Parfor
 
 from numba.core.compiler_machinery import (FunctionPass, LoweringPass,
-                                           register_pass)
+                                           AnalysisPass, register_pass)
 from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
-                                 get_definition)
+                                 get_definition, remove_dels,
+                                 build_definitions)
+from numba.core import postproc
 
 
 @contextmanager
@@ -155,18 +159,22 @@ class PartialTypeInference(BaseTypeInference):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class AnnotateTypes(FunctionPass):
+class AnnotateTypes(AnalysisPass):
     _name = "annotate_types"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         """
         Create type annotation after type inference
         """
+        # add back in dels.
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run(emit_dels=True)
+
         state.type_annotation = type_annotations.TypeAnnotation(
-            func_ir=state.func_ir,
+            func_ir=state.func_ir.copy(),
             typemap=state.typemap,
             calltypes=state.calltypes,
             lifted=state.lifted,
@@ -182,6 +190,9 @@ class AnnotateTypes(FunctionPass):
         if config.HTML:
             with open(config.HTML, 'w') as fout:
                 state.type_annotation.html_annotate(fout)
+
+        # now remove dels
+        post_proc.remove_dels()
         return False
 
 
@@ -197,6 +208,11 @@ class NopythonRewrites(FunctionPass):
         Perform any intermediate representation rewrites after type
         inference.
         """
+        # a bunch of these passes are either making assumptions or rely on some
+        # very picky and slightly bizarre state particularly in relation to
+        # ir.Del presence. To accommodate, ir.Dels are added ahead of running
+        # this pass and stripped at the end.
+
         # Ensure we have an IR and type information.
         assert state.func_ir
         assert isinstance(getattr(state, 'typemap', None), dict)
@@ -204,8 +220,12 @@ class NopythonRewrites(FunctionPass):
         msg = ('Internal error in post-inference rewriting '
                'pass encountered during compilation of '
                'function "%s"' % (state.func_id.func_name,))
+
+        pp = postproc.PostProcessor(state.func_ir)
+        pp.run(True)
         with fallback_context(state, msg):
             rewrites.rewrite_registry.apply('after-inference', state)
+        pp.remove_dels()
         return True
 
 
@@ -268,6 +288,8 @@ class ParforPass(FunctionPass):
                                          state.parfor_diagnostics)
         parfor_pass.run()
 
+        remove_dels(state.func_ir.blocks)
+
         # check the parfor pass worked and warn if it didn't
         has_parfor = False
         for blk in state.func_ir.blocks.values():
@@ -298,12 +320,12 @@ class ParforPass(FunctionPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
-class DumpParforDiagnostics(FunctionPass):
+class DumpParforDiagnostics(AnalysisPass):
 
     _name = "dump_parfor_diagnostics"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         if state.flags.auto_parallel.enabled:
@@ -369,12 +391,12 @@ class NativeLowering(LoweringPass):
 
 
 @register_pass(mutates_CFG=False, analysis_only=True)
-class IRLegalization(FunctionPass):
+class IRLegalization(AnalysisPass):
 
     _name = "ir_legalization"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         raise_on_unsupported_feature(state.func_ir, state.typemap)
@@ -385,12 +407,12 @@ class IRLegalization(FunctionPass):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class NoPythonBackend(FunctionPass):
+class NoPythonBackend(LoweringPass):
 
     _name = "nopython_backend"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        LoweringPass.__init__(self)
 
     def run_pass(self, state):
         """
@@ -657,3 +679,93 @@ class DeadCodeElimination(FunctionPass):
     def run_pass(self, state):
         dead_code_elimination(state.func_ir, state.typemap)
         return True
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class PreLowerStripPhis(FunctionPass):
+    """Remove phi nodes (ir.Expr.phi) introduced by SSA.
+
+    This is needed before Lowering because the phi nodes in Numba IR do not
+    match the semantics of phi nodes in LLVM IR. In Numba IR, phi nodes may
+    expand into multiple LLVM instructions.
+    """
+
+    _name = "strip_phis"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        state.func_ir = self._strip_phi_nodes(state.func_ir)
+        state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+        # Rerun postprocessor to update metadata
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run(emit_dels=False)
+
+        # Ensure we are not in objectmode generator
+        if (state.func_ir.generator_info is not None
+                and state.typemap is not None):
+            # Rebuild generator type
+            # TODO: move this into PostProcessor
+            gentype = state.return_type
+            state_vars = state.func_ir.generator_info.state_vars
+            state_types = [state.typemap[k] for k in state_vars]
+            state.return_type = types.Generator(
+                gen_func=gentype.gen_func,
+                yield_type=gentype.yield_type,
+                arg_types=gentype.arg_types,
+                state_types=state_types,
+                has_finalizer=gentype.has_finalizer,
+            )
+        return True
+
+    def _strip_phi_nodes(self, func_ir):
+        """Strip Phi nodes from ``func_ir``
+
+        For each phi node, put incoming value to their respective incoming
+        basic-block at possibly the latest position (i.e. after the latest
+        assignment to the corresponding variable).
+        """
+        exporters = defaultdict(list)
+        phis = set()
+        # Find all variables that needs to be exported
+        for label, block in func_ir.blocks.items():
+            for assign in block.find_insts(ir.Assign):
+                if isinstance(assign.value, ir.Expr):
+                    if assign.value.op == 'phi':
+                        phis.add(assign)
+                        phi = assign.value
+                        for ib, iv in zip(phi.incoming_blocks,
+                                          phi.incoming_values):
+                            exporters[ib].append((assign.target, iv))
+
+        # Rewrite the blocks with the new exporting assignments
+        newblocks = {}
+        for label, block in func_ir.blocks.items():
+            newblk = copy(block)
+            newblocks[label] = newblk
+
+            # strip phis
+            newblk.body = [stmt for stmt in block.body if stmt not in phis]
+
+            # insert exporters
+            for target, rhs in exporters[label]:
+                if rhs is not ir.UNDEFINED:
+                    assign = ir.Assign(
+                        target=target,
+                        value=rhs,
+                        loc=target.loc
+                    )
+                    # Insert at the earliest possible location; i.e. after the
+                    # last assignment to rhs
+                    assignments = [stmt
+                                   for stmt in newblk.find_insts(ir.Assign)
+                                   if stmt.target == rhs]
+                    if assignments:
+                        last_assignment = assignments[-1]
+                        newblk.insert_after(assign, last_assignment)
+                    else:
+                        newblk.prepend(assign)
+
+        func_ir.blocks = newblocks
+        return func_ir

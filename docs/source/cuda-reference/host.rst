@@ -110,6 +110,9 @@ profiling, see the `NVidia Profiler User's Guide
 .. autofunction:: numba.cuda.profile_stop
 .. autofunction:: numba.cuda.profiling
 
+
+.. _events:
+
 Events
 ~~~~~~
 
@@ -130,6 +133,9 @@ Events are instances of the :class:`numba.cuda.cudadrv.driver.Event` class:
 .. autoclass:: numba.cuda.cudadrv.driver.Event
    :members: query, record, synchronize, wait
 
+
+.. _streams:
+
 Stream Management
 -----------------
 
@@ -141,9 +147,13 @@ transfers and kernel execution. For further details on streams, see the `CUDA C
 Programming Guide Streams section
 <http://docs.nvidia.com/cuda/cuda-c-programming-guide/#streams>`_.
 
-To create a stream:
+To create a new stream:
 
 .. autofunction:: numba.cuda.stream
+
+To get the default stream:
+
+.. autofunction:: numba.cuda.default_stream
 
 Streams are instances of :class:`numba.cuda.cudadrv.driver.Stream`:
 

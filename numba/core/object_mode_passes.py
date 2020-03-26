@@ -46,6 +46,7 @@ class ObjectModeFrontEnd(FunctionPass):
         loop_flags.unset('enable_looplift')
         if not state.flags.enable_pyobject_looplift:
             loop_flags.unset('enable_pyobject')
+        loop_flags.unset('enable_ssa')
 
         main, loops = transforms.loop_lifting(state.func_ir,
                                               typingctx=state.typingctx,
