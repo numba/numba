@@ -3326,10 +3326,8 @@ class TestParforsMisc(TestParforsBase):
             return out_img
 
         tile_shape = (4, 4)
-        array1 = np.random.default_rng().uniform(low=0.0, high=10000.0,
-                                                 size=tile_shape)
-        array2 = np.random.default_rng().uniform(low=0.0, high=10000.0,
-                                                 size=tile_shape)
+        array1 = np.random.uniform(low=1.0, high=10000.0, size=tile_shape)
+        array2 = np.random.uniform(low=1.0, high=10000.0, size=tile_shape)
         self.check(ndvi_njit, array1, array2)
 
     @skip_parfors_unsupported
@@ -3385,7 +3383,7 @@ class TestParforsMisc(TestParforsBase):
         # returns nothing, just check it compiles
         bar(([1],) * 2)
 
-    @skip_parfors_unsupported
+    @disabled_test
     def test_issue4846(self):
 
         mytype = namedtuple("mytype", ("a", "b"))
