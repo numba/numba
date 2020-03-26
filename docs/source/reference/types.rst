@@ -107,23 +107,23 @@ Functions
    The feature of considering functions as first-class type objects is
    under development.
 
-While functions are often considered as certain transformations of
-input arguments to output values then within Numba jit compiled
+Functions are often considered as certain transformations of
+input arguments to output values. Within Numba :term:`JIT` compiled
 functions, the functions can also be considered as objects, that is,
 functions can be passed around as arguments or return values, or used
-as items in sequences, in addition of being callable.
+as items in sequences, in addition to being callable.
 
-The first-class function support is enabled for all Numba :term:`JIT`
-compiled functions and Numba ``cfunc``-decorated functions except when
+First-class function support is enabled for all Numba :term:`JIT`
+compiled functions and Numba ``cfunc`` compiled functions except when:
 - using a non-CPU compiler,
-- the decorated function is a Python generator,
-- the decorated function has Omitted arguments,
-- or the decorated function returns Optional value.
+- the compiled function is a Python generator,
+- the compiled function has Omitted arguments,
+- or the compiled function returns Optional value.
 
-To disable first class function support, use `no_cfunc_wrapper=True`
+To disable first-class function support, use ``no_cfunc_wrapper=True``
 decorator option.
 
-For instance, consider an example where the Numba jit compiled
+For instance, consider an example where the Numba :term:`JIT` compiled
 function applies user-specified functions as a composition to an input
 argument::
 
@@ -147,15 +147,15 @@ argument::
     >>> composition((b, a, b, b, a), 0.5), b(a(b(b(a(0.5)))))
     (36.75390625, 36.75390625)
 
-Here, ``cfunc`` decorated functions ``a`` and ``b`` are considered as
+Here, ``cfunc`` compiled functions ``a`` and ``b`` are considered as
 first-class function objects because these are passed in to the Numba
-jit compiled function ``composition`` as arguments, that is, the
-``composition`` is jit compiled independently from its argument function
+:term:`JIT` compiled function ``composition`` as arguments, that is, the
+``composition`` is :term:`JIT` compiled independently from its argument function
 objects (that are collected in the input argument ``funcs``).
 
 Currently, first-class function objects can be Numba ``cfunc`` compiled
-functions, ``jit`` compiled functions, and objects that implement
-Wrapper Address Protocol (WAP) with the following restrictions:
+functions, :term:`JIT` compiled functions, and objects that implement the
+Wrapper Address Protocol (WAP, see below) with the following restrictions:
 
 ========================   ==============   ============    ===========
 Context                    cfunc compiled   jit compiled    WAP objects
@@ -172,31 +172,31 @@ Wrapper Address Protocol - WAP
 ++++++++++++++++++++++++++++++
 
 Wrapper Address Protocol provides an API for making any Python object
-as first-class function for Numba jit compiled functions. This assumes
+a first-class function for Numba :term:`JIT` compiled functions. This assumes
 that the Python object represents a compiled function that can be
-called via its memory address (function pointer value) from Numba jit
-compiled functions. Such the so-called WAP objects must define the
+called via its memory address (function pointer value) from Numba :term:`JIT`
+compiled functions. The so-called WAP objects must define the
 following two methods:
 
 .. method:: __wrapper_address__(self) -> int
 
             Return the memory address of a first-class function. This
-            method is used when Numba jit compiled function tries to
+            method is used when a Numba :term:`JIT` compiled function tries to
             call the given WAP instance.
 
 .. method:: signature(self) -> numba.typing.Signature
 
             Return the signature of the given first-class
             function. This method is used when passing in the given
-            WAP instance to Numba jit compiled function.
+            WAP instance to a Numba :term:`JIT` compiled function.
 
-In addition, to make WAP objects callable from Numba jit compiled
-function in object mode, the WAP object must also implement the
-``__call__`` method.
+In addition, the WAP object may implement the ``__call__``
+method. This is necessary when calling WAP objects from Numba
+:term:`JIT` compiled functions in :term:`object mode`.
 
 As an example, let us call the standard math library function ``cos``
-within a Numba jit compiled function. The memory address of ``cos`` can
-be established after loading the math library and using ctypes
+within a Numba :term:`JIT` compiled function. The memory address of ``cos`` can
+be established after loading the math library and using the ``ctypes``
 package::
 
     >>> import numba, ctypes, ctypes.util, math
