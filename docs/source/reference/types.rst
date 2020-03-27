@@ -157,16 +157,16 @@ Currently, first-class function objects can be Numba ``cfunc`` compiled
 functions, :term:`JIT` compiled functions, and objects that implement the
 Wrapper Address Protocol (WAP, see below) with the following restrictions:
 
-========================   ==============   ============    ===========
-Context                    cfunc compiled   jit compiled    WAP objects
-========================   ==============   ============    ===========
-Can be used as arguments   yes              yes             yes
-Namespace scoping          yes              yes             no
-Can be called              yes              yes             yes
-Can be used as items       yes              yes             yes
-Automatic overload         no               yes             no
-Can be returned            yes              yes             yes
-========================   ==============   ============    ===========
+========================   ============   ==============   ===========
+Context                    jit compiled   cfunc compiled   WAP objects
+========================   ============   ==============   ===========
+Can be used as arguments   yes            yes              yes
+Can be called              yes            yes              yes
+Can be used as items       yes            yes              yes
+Can be returned            yes            yes              yes
+Namespace scoping          yes            yes              no
+Automatic overload         yes            no               no
+========================   ============   ==============   ===========
 
 Wrapper Address Protocol - WAP
 ++++++++++++++++++++++++++++++
