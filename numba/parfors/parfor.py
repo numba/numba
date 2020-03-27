@@ -3373,9 +3373,11 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 next_node = nodes[i+1]
                 target_name = next_node.target.unversioned_name
                 if not (isinstance(next_node, ir.Assign) and target_name == unversioned_name):
-                    raise ValueError(("Use of reduction variable " + unversioned_name +
-                                      " other than in a supported reduction"
-                                      " function is not permitted."), "%s" % next_node, target_name, nonSSA_name, name)
+                    raise ValueError(
+                        f"Use of reduction variable {unversioned_name!r} other "
+                        "than in a supported reduction function is not "
+                        "permitted."
+                    )
 
                 if not supported_reduction(rhs, func_ir):
                     raise ValueError(("Use of reduction variable " + unversioned_name +
