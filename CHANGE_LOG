@@ -1,11 +1,5 @@
-Version 0.50.0dev
------------------
-
-In development
-
-
-Version 0.49.0 (April 9, 2020)
--------------------------------
+Version 0.49.0 (Apr 9, 2020)
+----------------------------
 
 This release is very large in terms of code changes. Large scale removal of
 unsupported Python and NumPy versions has taken place along with a significant
