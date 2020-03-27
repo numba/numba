@@ -782,6 +782,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield 1
             yield 1 + 0j
             yield np.asarray([3, 1 + 0j, True])
+            yield None
+            yield "hello world"
 
         pyfuncs = [iscomplexobj, isrealobj]
         for pyfunc in pyfuncs:
@@ -802,6 +804,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield (1 + 4j, 2 + 0j)
             yield np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
             yield 'string'
+            yield None
 
         pyfuncs = [iscomplex, isreal]
         for pyfunc in pyfuncs:

@@ -678,14 +678,13 @@ def _impl_iscomplex_isreal_arr(fn, x):
 
 @register_jitable
 def np_iscomplex_isreal(x, operator_fn, opt_ret):
-
     if type_can_asarray(x):
         return lambda x: _impl_iscomplex_isreal_arr(operator_fn, x)
     elif isinstance(x, types.Optional):
+        return None
+    elif is_nonelike(x):
         def impl(x):
-            if x is None:
-                return opt_ret
-            return _impl_iscomplex_isreal_arr(operator_fn, x)
+            return opt_ret
     else:
         def impl(x):
             return False
@@ -706,8 +705,10 @@ def np_isreal(x):
 def iscomplexobj(x):
     # Implementation based on NumPy
     # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
-    val = x.key if isinstance(x, types.Optional) else x
-    dt = determine_dtype(val)
+    if isinstance(x, types.Optional):
+        msg = 'Expected argument {} but got Optional[{}, None]'.format(x.key, x.key)
+        raise TypingError(msg)
+    dt = determine_dtype(x)
     iscmplx = np.issubdtype(dt, np.complexfloating)
     return lambda x: False if x is None else iscmplx
 
@@ -777,13 +778,7 @@ def is_np_inf_impl(x, out, fn):
     else:
         def impl(x, out=None):
             x = np.asarray(x)
-            out = np.asarray(out)
-            # https://github.com/numpy/numpy/blob/b7c27bd2a3817f59c84b004b87bba5db57d9a9b0/numpy/doc/broadcasting.py#L52
-            if (x.size == 1 and x.ndim < out.ndim) or (x.shape == out.shape):
-                np.logical_and(np.isinf(x), fn(np.signbit(x)), out)
-                return out
-
-            raise ValueError('"x" and "out" have different shapes')
+            return np.logical_and(np.isinf(x), fn(np.signbit(x)), out)
 
     return impl
 
