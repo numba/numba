@@ -164,7 +164,7 @@ Can be used as arguments   yes            yes              yes
 Can be called              yes            yes              yes
 Can be used as items       yes            yes              yes
 Can be returned            yes            yes              yes
-Namespace scoping          yes            yes              no
+Namespace scoping          yes            yes              yes
 Automatic overload         yes            no               no
 ========================   ============   ==============   ===========
 
