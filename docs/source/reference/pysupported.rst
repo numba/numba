@@ -736,8 +736,6 @@ retrieving the len(), and also the following attributes:
 * :attr:`~memoryview.strides`
 
 
-.. _pysupported-builtin-functions:
-
 Built-in functions
 ==================
 
