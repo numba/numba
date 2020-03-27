@@ -10,6 +10,7 @@ import math
 import sys
 import traceback
 import weakref
+import warnings
 from types import ModuleType
 from collections.abc import Mapping
 import numpy as np
@@ -464,9 +465,6 @@ def unify_function_types(numba_types):
     original input as given. For instance, if the input tuple contains
     types that are not function or dispatcher type, the transformation
     is considered incorrect.
-
-
-
     """
     dtype = unified_function_type(numba_types)
     if dtype is None:
@@ -480,10 +478,15 @@ def unified_function_type(numba_types):
     If any of the Numba function types is a Dispatcher type, the
     unified function type will be UndefinedFunctionType instance.
     """
+    from numba.core.errors import NumbaExperimentalFeatureWarning
+
     if not (numba_types
             and isinstance(numba_types[0],
                            (types.Dispatcher, types.FunctionType))):
         return
+
+    warnings.warn("First-class function type feature is experimental",
+                  category=NumbaExperimentalFeatureWarning)
 
     mnargs, mxargs = None, None
     dispatchers = set()
