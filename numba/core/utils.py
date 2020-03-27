@@ -1,6 +1,7 @@
 import atexit
 import builtins
 import functools
+import inspect
 import os
 import operator
 import threading
@@ -19,7 +20,7 @@ from inspect import Parameter as pyParameter # noqa: F401
 
 from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
-
+from numba.core import types
 
 INT_TYPES = (int,)
 longint = int
@@ -434,3 +435,99 @@ def chain_exception(new_exc, old_exc):
     if DEVELOPER_MODE:
         new_exc.__cause__ = old_exc
     return new_exc
+
+
+def get_nargs_range(pyfunc):
+    """Return the minimal and maximal number of Python function
+    positional arguments.
+    """
+    sig = pysignature(pyfunc)
+    min_nargs = 0
+    max_nargs = 0
+    for p in sig.parameters.values():
+        max_nargs += 1
+        if p.default == inspect._empty:
+            min_nargs += 1
+    return min_nargs, max_nargs
+
+
+def unify_function_types(numba_types):
+    """Return a normalized tuple of Numba function types so that
+
+        Tuple(numba_types)
+
+    becomes
+
+        UniTuple(dtype=<unified function type>, count=len(numba_types))
+
+    If the above transformation would be incorrect, return the
+    original input as given. For instance, if the input tuple contains
+    types that are not function or dispatcher type, the transformation
+    is considered incorrect.
+
+
+
+    """
+    dtype = unified_function_type(numba_types)
+    if dtype is None:
+        return numba_types
+    return (dtype,) * len(numba_types)
+
+
+def unified_function_type(numba_types):
+    """Return unified function type. When not possible, return None.
+
+    If any of the Numba function types is a Dispatcher type, the
+    unified function type will be UndefinedFunctionType instance.
+    """
+    if not (numba_types
+            and isinstance(numba_types[0],
+                           (types.Dispatcher, types.FunctionType))):
+        return
+
+    mnargs, mxargs = None, None
+    dispatchers = set()
+    function = None
+    undefined_function = None
+
+    for t in numba_types:
+        if isinstance(t, types.Dispatcher):
+            mnargs1, mxargs1 = get_nargs_range(t.dispatcher.py_func)
+            if mnargs is None:
+                mnargs, mxargs = mnargs1, mxargs1
+            elif not (mnargs, mxargs) == (mnargs1, mxargs1):
+                return
+            dispatchers.add(t.dispatcher)
+            t = t.dispatcher.get_function_type()
+            if t is None:
+                continue
+        if isinstance(t, types.FunctionType):
+            if mnargs is None:
+                mnargs = mxargs = t.nargs
+            elif not (mnargs == mxargs == t.nargs):
+                return numba_types
+            if isinstance(t, types.UndefinedFunctionType):
+                if undefined_function is None:
+                    undefined_function = t
+                else:
+                    assert undefined_function == t
+                dispatchers.update(t.dispatchers)
+            else:
+                if function is None:
+                    function = t
+                else:
+                    assert function == t
+        else:
+            return
+
+    if function is not None:
+        if undefined_function is not None:
+            assert function.nargs == undefined_function.nargs
+            function = undefined_function
+    elif undefined_function is not None:
+        undefined_function.dispatchers.update(dispatchers)
+        function = undefined_function
+    else:
+        function = types.UndefinedFunctionType(mnargs, dispatchers)
+
+    return function

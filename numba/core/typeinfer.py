@@ -338,7 +338,8 @@ class PairFirstConstraint(object):
                 if not isinstance(tp, types.Pair):
                     # XXX is this an error?
                     continue
-                assert tp.first_type.is_precise()
+                assert (isinstance(tp.first_type, types.UndefinedFunctionType)
+                        or tp.first_type.is_precise())
                 typeinfer.add_type(self.target, tp.first_type, loc=self.loc)
 
 
@@ -1090,6 +1091,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                     typdict[var] = types.unknown
                     return
             tp = tv.getone()
+
+            if isinstance(tp, types.UndefinedFunctionType):
+                tp = tp.get_precise()
+
             if not tp.is_precise():
                 offender = find_offender(name, exhaustive=True)
                 msg = ("Cannot infer the type of variable '%s'%s, "
@@ -1217,6 +1222,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
     def _unify_return_types(self, rettypes):
         if rettypes:
             unified = self.context.unify_types(*rettypes)
+            if isinstance(unified, types.FunctionType):
+                # unified is allowed to be UndefinedFunctionType
+                # instance (that is imprecise).
+                return unified
             if unified is None or not unified.is_precise():
                 def check_type(atype):
                     lst = []
@@ -1405,6 +1414,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         """
         Resolve a call to a given function type.  A signature is returned.
         """
+        if isinstance(fnty, types.FunctionType):
+            return fnty.get_call_type(self, pos_args, kw_args)
         if isinstance(fnty, types.RecursiveCall) and not self._skip_recursion:
             # Recursive call
             disp = fnty.dispatcher_type.dispatcher
