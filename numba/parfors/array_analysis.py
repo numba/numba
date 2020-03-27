@@ -100,13 +100,13 @@ def wrap_index(typingctx, idx, size):
     # Create the unified types to extend to while maintaining signedness
     # of the originals.
     unified_ty = types.scalars.Integer(
-                      "%sint%d" % ("" if size.signed else "u", unified_bitwidth),
-                       bitwidth=unified_bitwidth,
-                       signed=size.signed)
+                     "%sint%d" % ("" if size.signed else "u", unified_bitwidth),
+                     bitwidth=unified_bitwidth,
+                     signed=size.signed)
     idx_unified = types.scalars.Integer(
-                      "%sint%d" % ("" if idx.signed else "u", unified_bitwidth),
-                      bitwidth=unified_bitwidth,
-                      signed=idx.signed)
+                     "%sint%d" % ("" if idx.signed else "u", unified_bitwidth),
+                     bitwidth=unified_bitwidth,
+                     signed=idx.signed)
 
     def codegen(context, builder, sig, args):
         ll_idx_unified_ty = context.get_data_type(idx_unified)
