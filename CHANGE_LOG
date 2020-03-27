@@ -14,7 +14,7 @@ Highlights of core feature changes include:
   Python version to 3.6, the minimum supported NumPy version to 1.15 and the
   minimum supported SciPy version to 1.0. (Stuart Archibald).
 * Refactoring of the Numba code base. The code is now organised into submodules
-  by functionality, this cleaning Numba's top level namespace
+  by functionality. This cleans up Numba's top level namespace.
   (Stuart Archibald).
 * Introduction of an ``ir.Del`` free static single assignment form for Numba's
   intermediate representation (Siu Kwan Lam and Stuart Archibald).
@@ -40,7 +40,7 @@ Enhancements from user contributed PRs (with thanks!):
   working with Numba JIT compiled functions in #4476.
 * Arik Funke fixed error messages in ``test_array_reductions`` (#5278) and fixed
   an issue with test discovery (#5239).
-* Antonio Russo Fixed a SyntaxWarning in #5252.
+* Antonio Russo fixed a SyntaxWarning in #5252.
 * Eric Wieser added support for inferring the types of object arrays (#5348) and
   iterating over 2D arrays (#5115), also fixed some compiler warnings due to
   missing (void) in #5222.
