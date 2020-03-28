@@ -86,19 +86,31 @@ class FunctionType(Type):
 class UndefinedFunctionType(FunctionType):
 
     _counter = 0
+    instance_cache = {}
+
+    def __new__(cls, nargs, dispatchers):
+        inst = cls.instance_cache.get(frozenset(dispatchers), None)
+        if inst:
+            return inst
+        else:
+            self = super().__new__(cls)
+            from numba.core.typing.templates import Signature
+            signature = Signature(types.undefined,
+                                  (types.undefined,) * nargs, recvr=None)
+
+            super(UndefinedFunctionType, self).__init__(signature)
+
+            self.dispatchers = dispatchers
+
+            # make the undefined function type instance unique
+            type(self)._counter += 1
+            self._key += str(type(self)._counter)
+            self.instance_cache[frozenset(dispatchers)] = self
+            return self
 
     def __init__(self, nargs, dispatchers):
-        from numba.core.typing.templates import Signature
-        signature = Signature(types.undefined,
-                              (types.undefined,) * nargs, recvr=None)
-
-        super(UndefinedFunctionType, self).__init__(signature)
-
-        self.dispatchers = dispatchers
-
-        # make the undefined function type instance unique
-        type(self)._counter += 1
-        self._key += str(type(self)._counter)
+        # all initialization is done in __new__
+        pass
 
     def get_precise(self):
         """
