@@ -94,6 +94,7 @@ class UndefinedFunctionType(FunctionType):
             return inst
         else:
             self = super().__new__(cls)
+            # here we do what would normally go in __init__
             from numba.core.typing.templates import Signature
             signature = Signature(types.undefined,
                                   (types.undefined,) * nargs, recvr=None)
