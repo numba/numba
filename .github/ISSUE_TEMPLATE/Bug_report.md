@@ -30,6 +30,14 @@ Before submitting a bug report please ensure that you can check off these boxes:
 - [ ] I have included below a minimal working reproducer (if you are unsure how
  to write one see http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports).
 
+
+#### Scipy/Numpy/Python version information:
+<!-- You can simply run the following and paste the result in a code block
+```
+import sys, scipy, numpy; print(scipy.__version__, numpy.__version__, sys.version_info)
+```
+-->
+
 <!--
 
 Please include details of the bug here, including, if applicable, what you
