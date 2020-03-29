@@ -94,20 +94,20 @@ class UndefinedFunctionType(FunctionType):
             return inst
         else:
             self = super().__new__(cls)
-            # here we do what would normally go in __init__
-            from numba.core.typing.templates import Signature
-            signature = Signature(types.undefined,
-                                  (types.undefined,) * nargs, recvr=None)
+        # here we do what would normally go in __init__
+        from numba.core.typing.templates import Signature
+        signature = Signature(types.undefined,
+                              (types.undefined,) * nargs, recvr=None)
 
-            super(UndefinedFunctionType, self).__init__(signature)
+        super(UndefinedFunctionType, self).__init__(signature)
 
-            self.dispatchers = dispatchers
+        self.dispatchers = dispatchers
 
-            # make the undefined function type instance unique
-            type(self)._counter += 1
-            self._key += str(type(self)._counter)
-            self.instance_cache[frozenset(dispatchers)] = self
-            return self
+        # make the undefined function type instance unique
+        type(self)._counter += 1
+        self._key += str(type(self)._counter)
+        self.instance_cache[frozenset(dispatchers)] = self
+        return self
 
     def __init__(self, nargs, dispatchers):
         # all initialization is done in __new__
