@@ -20,15 +20,15 @@ lower_attr = registry.lower_getattr
 
 @lower_attr(types.Module(cuda), 'threadIdx')
 def cuda_threadIdx(context, builder, sig, args):
-    # ... need to implement getting thread idx here
-    print("threadIDX")
-    raise RuntimeError("Lowering cuda.threadIdx")
+    tidx = nvvmutils.call_sreg(builder, "tid.x")
+    tidy = nvvmutils.call_sreg(builder, "tid.y")
+    tidz = nvvmutils.call_sreg(builder, "tid.z")
+    return cgutils.pack_struct(builder, (tidx, tidy, tidz))
 
 
 @lower_attr(dim3_type, 'x')
 def threadIdx_x(context, builder, sig, args):
-    print("X")
-    raise RuntimeError("Lowering cuda.threadIdx")
+    return builder.extract_value(args, 0)
 
 
 @lower('ptx.grid.1d', types.intp)
