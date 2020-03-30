@@ -1021,7 +1021,7 @@ class TestMiscIssues(TestCase):
 class TestUndefinedFunction(TestCase):
     def test_type_consistency(self):
         """
-        Tests that UndefinedFunction returns a consistent instance.
+        Tests that UndefinedFunction returns a consistent instance for one function.
         This was not true before #5451
         """
         @njit_func
@@ -1029,3 +1029,34 @@ class TestUndefinedFunction(TestCase):
             return x + 1
 
         self.assertTrue(typeof((foo,)) == typeof((foo,)))
+
+    def test_type_consistency_set(self):
+        """
+        Tests that UndefinedFunction returns a consistent instance for a set
+        of functions, regardless of order.
+        This was not true before #5451
+        """
+        @njit_func
+        def foo1(x):
+            return x + 1
+
+        @njit_func
+        def foo2(x):
+            return x + 2
+
+        self.assertTrue(typeof((foo1, foo2)) == typeof((foo2, foo1)))
+
+    def test_types_differ(self):
+        """
+        Tests that UndefinedFunction returns a different instance for
+        different functions.
+        """
+        @njit_func
+        def foo1(x):
+            return x + 1
+
+        @njit_func
+        def foo2(x):
+            return x + 2
+
+        self.assertTrue(typeof((foo1,)) != typeof((foo2,)))
