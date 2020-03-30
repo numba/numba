@@ -26,6 +26,30 @@ def cuda_threadIdx(context, builder, sig, args):
     return cgutils.pack_struct(builder, (tidx, tidy, tidz))
 
 
+@lower_attr(types.Module(cuda), 'blockDim')
+def cuda_blockDim(context, builder, sig, args):
+    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
+    ntidy = nvvmutils.call_sreg(builder, "ntid.y")
+    ntidz = nvvmutils.call_sreg(builder, "ntid.z")
+    return cgutils.pack_struct(builder, (ntidx, ntidy, ntidz))
+
+
+@lower_attr(types.Module(cuda), 'blockIdx')
+def cuda_blockIdx(context, builder, sig, args):
+    ctaidx = nvvmutils.call_sreg(builder, "ctaid.x")
+    ctaidy = nvvmutils.call_sreg(builder, "ctaid.y")
+    ctaidz = nvvmutils.call_sreg(builder, "ctaid.z")
+    return cgutils.pack_struct(builder, (ctaidx, ctaidy, ctaidz))
+
+
+@lower_attr(types.Module(cuda), 'gridDim')
+def cuda_gridDim(context, builder, sig, args):
+    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
+    nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
+    nctaidz = nvvmutils.call_sreg(builder, "nctaid.z")
+    return cgutils.pack_struct(builder, (nctaidx, nctaidy, nctaidz))
+
+
 @lower_attr(dim3_type, 'x')
 def threadIdx_x(context, builder, sig, args):
     return builder.extract_value(args, 0)

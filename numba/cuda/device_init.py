@@ -1,6 +1,6 @@
 # Re export
 #from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
-from .stubs import (blockIdx, blockDim, gridDim, laneid,
+from .stubs import (laneid,
                     warpsize, syncthreads, syncthreads_count, syncwarp,
                     syncthreads_and, syncthreads_or, shared, local,
                     const, grid, gridsize, atomic, shfl_sync_intrinsic,

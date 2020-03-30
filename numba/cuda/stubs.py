@@ -26,43 +26,6 @@ class Stub(object):
 
 SREG_SIGNATURE = typing.signature(types.int32)
 
-
-class blockIdx(Stub):
-    '''
-    The block indices in the grid of thread blocks, accessed through the
-    attributes ``x``, ``y``, and ``z``. Each index is an integer spanning the
-    range from 0 inclusive to the corresponding value of the attribute in
-    :attr:`numba.cuda.gridDim` exclusive.
-    '''
-    _description_ = '<blockIdx.{x,y,z}>'
-
-    x = Macro('ctaid.x', SREG_SIGNATURE)
-    y = Macro('ctaid.y', SREG_SIGNATURE)
-    z = Macro('ctaid.z', SREG_SIGNATURE)
-
-
-class blockDim(Stub):
-    '''
-    The shape of a block of threads, as declared when instantiating the
-    kernel.  This value is the same for all threads in a given kernel, even
-    if they belong to different blocks (i.e. each block is "full").
-    '''
-    x = Macro('ntid.x', SREG_SIGNATURE)
-    y = Macro('ntid.y', SREG_SIGNATURE)
-    z = Macro('ntid.z', SREG_SIGNATURE)
-
-
-class gridDim(Stub):
-    '''
-    The shape of the grid of blocks, accressed through the attributes ``x``,
-    ``y``, and ``z``.
-    '''
-    _description_ = '<gridDim.{x,y,z}>'
-    x = Macro('nctaid.x', SREG_SIGNATURE)
-    y = Macro('nctaid.y', SREG_SIGNATURE)
-    z = Macro('nctaid.z', SREG_SIGNATURE)
-
-
 warpsize = Macro('warpsize', SREG_SIGNATURE)
 laneid = Macro('laneid', SREG_SIGNATURE)
 

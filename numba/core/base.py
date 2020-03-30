@@ -586,7 +586,8 @@ class BaseContext(object):
         The return value is a callable with the signature
         (context, builder, typ, val, attr).
         """
-        if isinstance(typ, types.Module) and attr != 'threadIdx':
+        special_attrs = ('threadIdx', 'blockDim', 'blockIdx', 'gridDim')
+        if isinstance(typ, types.Module) and attr not in special_attrs:
             # Implement getattr for module-level globals.
             # We are treating them as constants.
             # XXX We shouldn't have to retype this

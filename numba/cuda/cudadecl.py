@@ -24,42 +24,6 @@ class Cuda_gridsize(MacroTemplate):
     key = cuda.gridsize
 
 
-class Cuda_blockIdx_x(MacroTemplate):
-    key = cuda.blockIdx.x
-
-
-class Cuda_blockIdx_y(MacroTemplate):
-    key = cuda.blockIdx.y
-
-
-class Cuda_blockIdx_z(MacroTemplate):
-    key = cuda.blockIdx.z
-
-
-class Cuda_blockDim_x(MacroTemplate):
-    key = cuda.blockDim.x
-
-
-class Cuda_blockDim_y(MacroTemplate):
-    key = cuda.blockDim.y
-
-
-class Cuda_blockDim_z(MacroTemplate):
-    key = cuda.blockDim.z
-
-
-class Cuda_gridDim_x(MacroTemplate):
-    key = cuda.gridDim.x
-
-
-class Cuda_gridDim_y(MacroTemplate):
-    key = cuda.gridDim.y
-
-
-class Cuda_gridDim_z(MacroTemplate):
-    key = cuda.gridDim.z
-
-
 class Cuda_warpsize(MacroTemplate):
     key = cuda.warpsize
 
@@ -358,49 +322,6 @@ class Dim3_attrs(AttributeTemplate):
         return types.int32
 
 
-
-@intrinsic_attr
-class Cuda_blockIdx(AttributeTemplate):
-    key = types.Module(cuda.blockIdx)
-
-    def resolve_x(self, mod):
-        return types.Macro(Cuda_blockIdx_x)
-
-    def resolve_y(self, mod):
-        return types.Macro(Cuda_blockIdx_y)
-
-    def resolve_z(self, mod):
-        return types.Macro(Cuda_blockIdx_z)
-
-
-@intrinsic_attr
-class Cuda_blockDim(AttributeTemplate):
-    key = types.Module(cuda.blockDim)
-
-    def resolve_x(self, mod):
-        return types.Macro(Cuda_blockDim_x)
-
-    def resolve_y(self, mod):
-        return types.Macro(Cuda_blockDim_y)
-
-    def resolve_z(self, mod):
-        return types.Macro(Cuda_blockDim_z)
-
-
-@intrinsic_attr
-class Cuda_gridDim(AttributeTemplate):
-    key = types.Module(cuda.gridDim)
-
-    def resolve_x(self, mod):
-        return types.Macro(Cuda_gridDim_x)
-
-    def resolve_y(self, mod):
-        return types.Macro(Cuda_gridDim_y)
-
-    def resolve_z(self, mod):
-        return types.Macro(Cuda_gridDim_z)
-
-
 @intrinsic_attr
 class CudaSharedModuleTemplate(AttributeTemplate):
     key = types.Module(cuda.shared)
@@ -456,13 +377,13 @@ class CudaModuleTemplate(AttributeTemplate):
         return dim3_type
 
     def resolve_blockIdx(self, mod):
-        return types.Module(cuda.blockIdx)
+        return dim3_type
 
     def resolve_blockDim(self, mod):
-        return types.Module(cuda.blockDim)
+        return dim3_type
 
     def resolve_gridDim(self, mod):
-        return types.Module(cuda.gridDim)
+        return dim3_type
 
     def resolve_warpsize(self, mod):
         return types.Macro(Cuda_warpsize)
@@ -538,13 +459,3 @@ class CudaModuleTemplate(AttributeTemplate):
 
 
 intrinsic_global(cuda, types.Module(cuda))
-## Forces the use of the cuda namespace by not recognizing individual the
-## following as globals.
-# intrinsic_global(cuda.grid, types.Function(Cuda_grid))
-# intrinsic_global(cuda.gridsize, types.Function(Cuda_gridsize))
-# intrinsic_global(cuda.threadIdx, types.Module(cuda.threadIdx))
-# intrinsic_global(cuda.shared, types.Module(cuda.shared))
-# intrinsic_global(cuda.shared.array, types.Function(Cuda_shared_array))
-# intrinsic_global(cuda.syncthreads, types.Function(Cuda_syncthreads))
-# intrinsic_global(cuda.atomic, types.Module(cuda.atomic))
-

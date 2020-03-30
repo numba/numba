@@ -439,3 +439,6 @@ class Dim3:
         return self._z
 
 threadIdx = Dim3()
+blockDim = Dim3()
+blockIdx = Dim3()
+gridDim = Dim3()
