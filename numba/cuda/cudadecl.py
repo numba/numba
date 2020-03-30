@@ -24,18 +24,6 @@ class Cuda_gridsize(MacroTemplate):
     key = cuda.gridsize
 
 
-#class Cuda_threadIdx_x(MacroTemplate):
-#    key = cuda.threadIdx.x
-#
-#
-#class Cuda_threadIdx_y(MacroTemplate):
-#    key = cuda.threadIdx.y
-#
-#
-#class Cuda_threadIdx_z(MacroTemplate):
-#    key = cuda.threadIdx.z
-#
-
 class Cuda_blockIdx_x(MacroTemplate):
     key = cuda.blockIdx.x
 
@@ -345,6 +333,7 @@ dim3_type = Dim3Type()
 def typeof_dim3(val, c):
     return dim3_type
 
+
 @register_model(Dim3Type)
 class Dim3Model(models.StructModel):
     def __init__(self, dmm, fe_type):
@@ -356,7 +345,7 @@ class Dim3Model(models.StructModel):
         super().__init__(dmm, fe_type, members)
 
 @intrinsic_attr
-class Cuda_threadIdx(AttributeTemplate):
+class Dim3_attrs(AttributeTemplate):
     key = dim3_type
 
     def resolve_x(self, mod):
@@ -367,6 +356,7 @@ class Cuda_threadIdx(AttributeTemplate):
 
     def resolve_z(self, mod):
         return types.uint32
+
 
 
 @intrinsic_attr

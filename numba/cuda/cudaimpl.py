@@ -21,11 +21,13 @@ lower_attr = registry.lower_getattr
 @lower_attr(types.Module(cuda), 'threadIdx')
 def cuda_threadIdx(context, builder, sig, args):
     # ... need to implement getting thread idx here
+    print("threadIDX")
     raise RuntimeError("Lowering cuda.threadIdx")
 
 
 @lower_attr(dim3_type, 'x')
 def threadIdx_x(context, builder, sig, args):
+    print("X")
     raise RuntimeError("Lowering cuda.threadIdx")
 
 

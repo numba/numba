@@ -421,10 +421,10 @@ profile_start = require_context(driver.profile_start)
 profile_stop = require_context(driver.profile_stop)
 
 class Dim3:
-    def __init__(self, x, y, z):
-        self._x = x
-        self._y = y
-        self._z = z
+    def __init__(self):
+        self._x = '?'
+        self._y = '?'
+        self._z = '?'
 
     @property
     def x(self):
@@ -437,3 +437,5 @@ class Dim3:
     @property
     def z(self):
         return self._z
+
+threadIdx = Dim3()

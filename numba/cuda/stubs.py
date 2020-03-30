@@ -8,7 +8,6 @@ from numba.core.rewrites.macros import Macro
 from numba.core import types, typing, ir
 from .cudadrv import nvvm
 
-
 class Stub(object):
     '''A stub object to represent special objects which is meaningless
     outside the context of CUDA-python.
@@ -26,20 +25,6 @@ class Stub(object):
 # SREG
 
 SREG_SIGNATURE = typing.signature(types.int32)
-
-
-class threadIdx(Stub):
-    '''
-    The thread indices in the current thread block, accessed through the
-    attributes ``x``, ``y``, and ``z``. Each index is an integer spanning the
-    range from 0 inclusive to the corresponding value of the attribute in
-    :attr:`numba.cuda.blockDim` exclusive.
-    '''
-    _description_ = '<threadIdx.{x,y,z}>'
-
-    x = Macro('tid.x', SREG_SIGNATURE)
-    y = Macro('tid.y', SREG_SIGNATURE)
-    z = Macro('tid.z', SREG_SIGNATURE)
 
 
 class blockIdx(Stub):
