@@ -75,24 +75,14 @@ def threadIdx_z(context, builder, sig, args):
     return builder.extract_value(args, 2)
 
 
-@lower('ptx.grid.1d', types.intp)
-def ptx_grid1d(context, builder, sig, args):
-    assert len(args) == 1
-    return nvvmutils.get_global_id(builder, dim=1)
-
-
-@lower('ptx.grid.2d', types.intp)
-def ptx_grid2d(context, builder, sig, args):
-    assert len(args) == 1
-    r1, r2 = nvvmutils.get_global_id(builder, dim=2)
-    return cgutils.pack_array(builder, [r1, r2])
-
-
-@lower('ptx.grid.3d', types.intp)
-def ptx_grid3d(context, builder, sig, args):
-    assert len(args) == 1
-    r1, r2, r3 = nvvmutils.get_global_id(builder, dim=3)
-    return cgutils.pack_array(builder, [r1, r2, r3])
+@lower(cuda.grid, types.int32)
+def cuda_grid(context, builder, sig, args):
+    restype = sig.return_type
+    if restype == types.int32:
+        return nvvmutils.get_global_id(builder, dim=1)
+    elif isinstance(restype, types.UniTuple):
+        ids = nvvmutils.get_global_id(builder, dim=restype.count)
+        return cgutils.pack_array(builder, ids)
 
 
 @lower('ptx.gridsize.1d', types.intp)

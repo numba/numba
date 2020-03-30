@@ -22,47 +22,6 @@ class Stub(object):
     def __repr__(self):
         return self._description_
 
-#-------------------------------------------------------------------------------
-# Grid Macro
-
-def _ptx_grid1d(): pass
-
-
-def _ptx_grid2d(): pass
-
-
-def grid_expand(ndim):
-    """grid(ndim)
-
-    Return the absolute position of the current thread in the entire
-    grid of blocks.  *ndim* should correspond to the number of dimensions
-    declared when instantiating the kernel.  If *ndim* is 1, a single integer
-    is returned.  If *ndim* is 2 or 3, a tuple of the given number of
-    integers is returned.
-
-    Computation of the first integer is as follows::
-
-        cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
-
-    and is similar for the other two indices, but using the ``y`` and ``z``
-    attributes.
-    """
-    if ndim == 1:
-        fname = "ptx.grid.1d"
-        restype = types.int32
-    elif ndim == 2:
-        fname = "ptx.grid.2d"
-        restype = types.UniTuple(types.int32, 2)
-    elif ndim == 3:
-        fname = "ptx.grid.3d"
-        restype = types.UniTuple(types.int32, 3)
-    else:
-        raise ValueError('argument can only be 1, 2, 3')
-
-    return ir.Intrinsic(fname, typing.signature(restype, types.intp),
-                        args=[ndim])
-
-grid = Macro('ptx.grid', grid_expand, callable=True)
 
 #-------------------------------------------------------------------------------
 # Gridsize Macro

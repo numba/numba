@@ -444,3 +444,6 @@ blockIdx = Dim3()
 gridDim = Dim3()
 warpsize = 0
 laneid = 0
+
+def grid(ndim):
+    pass

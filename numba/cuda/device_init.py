@@ -1,7 +1,7 @@
 # Re export
 from .stubs import (syncthreads, syncthreads_count, syncwarp,
                     syncthreads_and, syncthreads_or, shared, local,
-                    const, grid, gridsize, atomic, shfl_sync_intrinsic,
+                    const, gridsize, atomic, shfl_sync_intrinsic,
                     vote_sync_intrinsic, match_any_sync, match_all_sync,
                     threadfence_block, threadfence_system,
                     threadfence, selp, popc, brev, clz, ffs, fma)

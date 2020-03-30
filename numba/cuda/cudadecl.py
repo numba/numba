@@ -2,6 +2,7 @@ from numba.core import types
 from numba.core.typing.npydecl import register_number_classes
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, MacroTemplate,
+                                         CallableTemplate,
                                          signature, Registry)
 from numba.core.extending import (typeof_impl, register_model, models,
                                   overload_attribute)
@@ -16,8 +17,21 @@ intrinsic_global = registry.register_global
 register_number_classes(intrinsic_global)
 
 
-class Cuda_grid(MacroTemplate):
+@intrinsic
+class Cuda_grid(CallableTemplate):
     key = cuda.grid
+
+    def generic(self):
+        def typer(ndim):
+            val = ndim.literal_value
+            if val == 1:
+                restype = types.int32
+            elif val in (2, 3):
+                restype = types.UniTuple(types.int32, val)
+            else:
+                raise ValueError('argument can only be 1, 2, 3')
+            return signature(restype, types.int32)
+        return typer
 
 
 class Cuda_gridsize(MacroTemplate):
@@ -360,7 +374,7 @@ class CudaModuleTemplate(AttributeTemplate):
     key = types.Module(cuda)
 
     def resolve_grid(self, mod):
-        return types.Macro(Cuda_grid)
+        return types.Function(Cuda_grid)
 
     def resolve_gridsize(self, mod):
         return types.Macro(Cuda_gridsize)
