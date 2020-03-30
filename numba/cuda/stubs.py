@@ -24,40 +24,6 @@ class Stub(object):
 
 
 #-------------------------------------------------------------------------------
-# Gridsize Macro
-
-def gridsize_expand(ndim):
-    """
-    Return the absolute size (or shape) in threads of the entire grid of
-    blocks. *ndim* should correspond to the number of dimensions declared when
-    instantiating the kernel.
-
-    Computation of the first integer is as follows::
-
-        cuda.blockDim.x * cuda.gridDim.x
-
-    and is similar for the other two indices, but using the ``y`` and ``z``
-    attributes.
-    """
-    if ndim == 1:
-        fname = "ptx.gridsize.1d"
-        restype = types.int32
-    elif ndim == 2:
-        fname = "ptx.gridsize.2d"
-        restype = types.UniTuple(types.int32, 2)
-    elif ndim == 3:
-        fname = "ptx.gridsize.3d"
-        restype = types.UniTuple(types.int32, 3)
-    else:
-        raise ValueError('argument can only be 1, 2 or 3')
-
-    return ir.Intrinsic(fname, typing.signature(restype, types.intp),
-                        args=[ndim])
-
-
-gridsize = Macro('ptx.gridsize', gridsize_expand, callable=True)
-
-#-------------------------------------------------------------------------------
 # syncthreads
 
 class syncthreads(Stub):

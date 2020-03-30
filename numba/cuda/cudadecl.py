@@ -17,10 +17,7 @@ intrinsic_global = registry.register_global
 register_number_classes(intrinsic_global)
 
 
-@intrinsic
-class Cuda_grid(CallableTemplate):
-    key = cuda.grid
-
+class GridFunction(CallableTemplate):
     def generic(self):
         def typer(ndim):
             val = ndim.literal_value
@@ -34,7 +31,13 @@ class Cuda_grid(CallableTemplate):
         return typer
 
 
-class Cuda_gridsize(MacroTemplate):
+@intrinsic
+class Cuda_grid(GridFunction):
+    key = cuda.grid
+
+
+@intrinsic
+class Cuda_gridsize(GridFunction):
     key = cuda.gridsize
 
 
@@ -377,7 +380,7 @@ class CudaModuleTemplate(AttributeTemplate):
         return types.Function(Cuda_grid)
 
     def resolve_gridsize(self, mod):
-        return types.Macro(Cuda_gridsize)
+        return types.Function(Cuda_gridsize)
 
     def resolve_threadIdx(self, mod):
         return dim3_type

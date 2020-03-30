@@ -83,48 +83,35 @@ def cuda_grid(context, builder, sig, args):
     elif isinstance(restype, types.UniTuple):
         ids = nvvmutils.get_global_id(builder, dim=restype.count)
         return cgutils.pack_array(builder, ids)
+    else:
+        raise ValueError('Unexpected return type %s from cuda.grid' % restype)
 
 
-@lower('ptx.gridsize.1d', types.intp)
-def ptx_gridsize1d(context, builder, sig, args):
-    assert len(args) == 1
+@lower(cuda.gridsize, types.int32)
+def cuda_gridsize(context, builder, sig, args):
+    restype = sig.return_type
+
     ntidx = nvvmutils.call_sreg(builder, "ntid.x")
     nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
+    nx = builder.mul(ntidx, nctaidx)
 
-    res = builder.mul(ntidx, nctaidx)
-    return res
+    if restype == types.int32:
+        return nx
+    elif isinstance(restype, types.UniTuple):
+        ntidy = nvvmutils.call_sreg(builder, "ntid.y")
+        nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
+        ny = builder.mul(ntidy, nctaidy)
 
+        if restype.count == 2:
+            return cgutils.pack_array(builder, (nx, ny))
+        elif restype.count == 3:
+            ntidz = nvvmutils.call_sreg(builder, "ntid.z")
+            nctaidz = nvvmutils.call_sreg(builder, "nctaid.z")
+            nz = builder.mul(ntidz, nctaidz)
+            return cgutils.pack_array(builder, (nx, ny, nz))
 
-@lower('ptx.gridsize.2d', types.intp)
-def ptx_gridsize2d(context, builder, sig, args):
-    assert len(args) == 1
-    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
-    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
-
-    ntidy = nvvmutils.call_sreg(builder, "ntid.y")
-    nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
-
-    r1 = builder.mul(ntidx, nctaidx)
-    r2 = builder.mul(ntidy, nctaidy)
-    return cgutils.pack_array(builder, [r1, r2])
-
-
-@lower('ptx.gridsize.3d', types.intp)
-def ptx_gridsize3d(context, builder, sig, args):
-    assert len(args) == 1
-    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
-    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
-
-    ntidy = nvvmutils.call_sreg(builder, "ntid.y")
-    nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
-
-    ntidz = nvvmutils.call_sreg(builder, "ntid.z")
-    nctaidz = nvvmutils.call_sreg(builder, "nctaid.z")
-
-    r1 = builder.mul(ntidx, nctaidx)
-    r2 = builder.mul(ntidy, nctaidy)
-    r3 = builder.mul(ntidz, nctaidz)
-    return cgutils.pack_array(builder, [r1, r2, r3])
+    # Fallthrough to here indicates unexpected return type or tuple length
+    raise ValueError('Unexpected return type %s of cuda.gridsize' % restype)
 
 
 # -----------------------------------------------------------------------------

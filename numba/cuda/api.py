@@ -447,3 +447,6 @@ laneid = 0
 
 def grid(ndim):
     pass
+
+def gridsize(ndim):
+    pass
