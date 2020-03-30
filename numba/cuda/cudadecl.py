@@ -3,6 +3,8 @@ from numba.core.typing.npydecl import register_number_classes
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, MacroTemplate,
                                          signature, Registry)
+from numba.core.extending import (typeof_impl, register_model, models,
+                                  overload_attribute)
 from numba import cuda
 
 
@@ -22,17 +24,17 @@ class Cuda_gridsize(MacroTemplate):
     key = cuda.gridsize
 
 
-class Cuda_threadIdx_x(MacroTemplate):
-    key = cuda.threadIdx.x
-
-
-class Cuda_threadIdx_y(MacroTemplate):
-    key = cuda.threadIdx.y
-
-
-class Cuda_threadIdx_z(MacroTemplate):
-    key = cuda.threadIdx.z
-
+#class Cuda_threadIdx_x(MacroTemplate):
+#    key = cuda.threadIdx.x
+#
+#
+#class Cuda_threadIdx_y(MacroTemplate):
+#    key = cuda.threadIdx.y
+#
+#
+#class Cuda_threadIdx_z(MacroTemplate):
+#    key = cuda.threadIdx.z
+#
 
 class Cuda_blockIdx_x(MacroTemplate):
     key = cuda.blockIdx.x
@@ -333,18 +335,38 @@ class Cuda_atomic_compare_and_swap(AbstractTemplate):
             return signature(dty, ary, dty, dty)
 
 
+class Dim3Type(types.Type):
+    def __init__(self):
+        super().__init__(name='Dim3')
+
+dim3_type = Dim3Type()
+
+@typeof_impl.register(cuda.Dim3)
+def typeof_dim3(val, c):
+    return dim3_type
+
+@register_model(Dim3Type)
+class Dim3Model(models.StructModel):
+    def __init__(self, dmm, fe_type):
+        members = [
+            ('x', types.uint32),
+            ('y', types.uint32),
+            ('z', types.uint32)
+        ]
+        super().__init__(dmm, fe_type, members)
+
 @intrinsic_attr
 class Cuda_threadIdx(AttributeTemplate):
-    key = types.Module(cuda.threadIdx)
+    key = dim3_type
 
     def resolve_x(self, mod):
-        return types.Macro(Cuda_threadIdx_x)
+        return types.uint32
 
     def resolve_y(self, mod):
-        return types.Macro(Cuda_threadIdx_y)
+        return types.uint32
 
     def resolve_z(self, mod):
-        return types.Macro(Cuda_threadIdx_z)
+        return types.uint32
 
 
 @intrinsic_attr
@@ -441,7 +463,7 @@ class CudaModuleTemplate(AttributeTemplate):
         return types.Macro(Cuda_gridsize)
 
     def resolve_threadIdx(self, mod):
-        return types.Module(cuda.threadIdx)
+        return dim3_type
 
     def resolve_blockIdx(self, mod):
         return types.Module(cuda.blockIdx)

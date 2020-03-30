@@ -9,10 +9,24 @@ import llvmlite.binding as ll
 from numba.core.imputils import Registry
 from numba.core import types, cgutils
 from .cudadrv import nvvm
+from numba import cuda
 from numba.cuda import nvvmutils, stubs
+from numba.cuda.cudadecl import dim3_type
 
 registry = Registry()
 lower = registry.lower
+lower_attr = registry.lower_getattr
+
+
+@lower_attr(types.Module(cuda), 'threadIdx')
+def cuda_threadIdx(context, builder, sig, args):
+    # ... need to implement getting thread idx here
+    raise RuntimeError("Lowering cuda.threadIdx")
+
+
+@lower_attr(dim3_type, 'x')
+def threadIdx_x(context, builder, sig, args):
+    raise RuntimeError("Lowering cuda.threadIdx")
 
 
 @lower('ptx.grid.1d', types.intp)
