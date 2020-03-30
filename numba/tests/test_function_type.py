@@ -1,5 +1,6 @@
 import types as pytypes
-from numba import jit, cfunc, types, int64, float64, float32, errors
+from numba import jit, cfunc, int64, float64, float32, errors, typeof
+from numba.core import types
 import ctypes
 import warnings
 
@@ -1015,3 +1016,17 @@ class TestMiscIssues(TestCase):
             str(cm.exception), r'.* function address is null')
 
         self.assertEqual(foo_bad2good(), 123)
+
+
+class TestUndefinedFunction(TestCase):
+    def test_type_consistency(self):
+        """
+        Tests that UndefinedFunction returns a consistent instance.
+        This was not true before #5451
+        """
+        @njit_func
+        def foo(x):
+            return x + 1
+
+        self.assertTrue(typeof((foo,)) == typeof((foo,)))
+
