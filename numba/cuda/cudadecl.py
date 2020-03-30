@@ -338,9 +338,9 @@ def typeof_dim3(val, c):
 class Dim3Model(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
-            ('x', types.uint32),
-            ('y', types.uint32),
-            ('z', types.uint32)
+            ('x', types.int32),
+            ('y', types.int32),
+            ('z', types.int32)
         ]
         super().__init__(dmm, fe_type, members)
 
@@ -349,13 +349,13 @@ class Dim3_attrs(AttributeTemplate):
     key = dim3_type
 
     def resolve_x(self, mod):
-        return types.uint32
+        return types.int32
 
     def resolve_y(self, mod):
-        return types.uint32
+        return types.int32
 
     def resolve_z(self, mod):
-        return types.uint32
+        return types.int32
 
 
 
