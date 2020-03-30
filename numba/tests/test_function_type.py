@@ -1021,8 +1021,8 @@ class TestMiscIssues(TestCase):
 class TestUndefinedFunction(TestCase):
     def test_type_consistency(self):
         """
-        Tests that UndefinedFunction returns a consistent instance for one function.
-        This was not true before #5451
+        Tests that UndefinedFunction returns a consistent instance for one
+        function. This was not true before #5451
         """
         @njit_func
         def foo(x):
@@ -1033,8 +1033,7 @@ class TestUndefinedFunction(TestCase):
     def test_type_consistency_set(self):
         """
         Tests that UndefinedFunction returns a consistent instance for a set
-        of functions, regardless of order.
-        This was not true before #5451
+        of functions, regardless of order. This was not true before #5451
         """
         @njit_func
         def foo1(x):
