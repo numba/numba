@@ -520,6 +520,15 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
+    def test_repr(self):
+        l = List()
+        expected = "ListType[UNTYPED]([])"
+        self.assertEqual(expected, repr(l))
+
+        l = List([int32(i) for i in (1, 2, 3)])
+        expected = "ListType[int32]([1, 2, 3])"
+        self.assertEqual(expected, repr(l))
+
 
 class TestNoneType(MemoryLeakMixin, TestCase):
 
