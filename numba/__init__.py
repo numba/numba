@@ -44,9 +44,6 @@ from numba.np.numpy_support import carray, farray, from_dtype
 # Re-export experimental
 from numba import experimental
 
-# Re-export experimental.jitclass as jitclass, this is deprecated
-from numba.experimental import jitclass
-
 # Initialize withcontexts
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
@@ -56,6 +53,25 @@ import numba.cpython.charseq
 
 # Keep this for backward compatibility.
 test = runtests.main
+
+
+def jitclass(spec):
+    """
+    Re-export of numba.experimental.jitclass with a warning.
+    This endpoint is deprecated.
+    """
+    url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+           "deprecation.html#change-of-jitclass-location")
+
+    msg = ("The 'numba.jitclass' decorator has moved to "
+           "'numba.experimental.jitclass' to better reflect the experimental "
+           "nature of the functionality. Please update your imports to "
+           "accommodate this change and see {} for the time frame.".format(url))
+
+    warnings.warn(msg, category=errors.NumbaDeprecationWarning,
+                  stacklevel=2)
+
+    return numba.experimental.jitclass(spec)
 
 
 __all__ = """
