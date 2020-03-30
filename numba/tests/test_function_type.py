@@ -1029,4 +1029,3 @@ class TestUndefinedFunction(TestCase):
             return x + 1
 
         self.assertTrue(typeof((foo,)) == typeof((foo,)))
-
