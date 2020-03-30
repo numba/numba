@@ -1193,7 +1193,7 @@ def simplify_CFG(blocks):
 
 
 arr_math = ['min', 'max', 'sum', 'prod', 'mean', 'var', 'std',
-            'cumsum', 'cumprod', 'argmin', 'argmax', # 'argsort',
+            'cumsum', 'cumprod', 'argmin', 'argmax',
             'nonzero', 'ravel']
 
 
@@ -2019,4 +2019,3 @@ def check_and_legalize_ir(func_ir):
     if not func_ir.equal_ir(orig_ir):
         msg +=  func_ir.diff_str(orig_ir)
         warnings.warn(NumbaWarning(msg, loc=func_ir.loc))
-
