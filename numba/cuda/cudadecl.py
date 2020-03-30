@@ -24,14 +24,6 @@ class Cuda_gridsize(MacroTemplate):
     key = cuda.gridsize
 
 
-class Cuda_warpsize(MacroTemplate):
-    key = cuda.warpsize
-
-
-class Cuda_laneid(MacroTemplate):
-    key = cuda.laneid
-
-
 class Cuda_shared_array(MacroTemplate):
     key = cuda.shared.array
 
@@ -386,10 +378,10 @@ class CudaModuleTemplate(AttributeTemplate):
         return dim3_type
 
     def resolve_warpsize(self, mod):
-        return types.Macro(Cuda_warpsize)
+        return types.int32
 
     def resolve_laneid(self, mod):
-        return types.Macro(Cuda_laneid)
+        return types.int32
 
     def resolve_shared(self, mod):
         return types.Module(cuda.shared)

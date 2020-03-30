@@ -50,6 +50,16 @@ def cuda_gridDim(context, builder, sig, args):
     return cgutils.pack_struct(builder, (nctaidx, nctaidy, nctaidz))
 
 
+@lower_attr(types.Module(cuda), 'laneid')
+def cuda_laneid(context, builder, sig, args):
+    return nvvmutils.call_sreg(builder, 'laneid')
+
+
+@lower_attr(types.Module(cuda), 'warpsize')
+def cuda_warpsize(context, builder, sig, args):
+    return nvvmutils.call_sreg(builder, 'warpsize')
+
+
 @lower_attr(dim3_type, 'x')
 def threadIdx_x(context, builder, sig, args):
     return builder.extract_value(args, 0)

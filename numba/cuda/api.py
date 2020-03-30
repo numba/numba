@@ -442,3 +442,5 @@ threadIdx = Dim3()
 blockDim = Dim3()
 blockIdx = Dim3()
 gridDim = Dim3()
+warpsize = 0
+laneid = 0

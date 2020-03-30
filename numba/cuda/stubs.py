@@ -8,6 +8,7 @@ from numba.core.rewrites.macros import Macro
 from numba.core import types, typing, ir
 from .cudadrv import nvvm
 
+
 class Stub(object):
     '''A stub object to represent special objects which is meaningless
     outside the context of CUDA-python.
@@ -20,14 +21,6 @@ class Stub(object):
 
     def __repr__(self):
         return self._description_
-
-#-------------------------------------------------------------------------------
-# SREG
-
-SREG_SIGNATURE = typing.signature(types.int32)
-
-warpsize = Macro('warpsize', SREG_SIGNATURE)
-laneid = Macro('laneid', SREG_SIGNATURE)
 
 #-------------------------------------------------------------------------------
 # Grid Macro
