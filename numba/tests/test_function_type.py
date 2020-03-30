@@ -5,6 +5,8 @@ import warnings
 
 from .support import TestCase
 
+is32bits = tuple.__itemsize__ == 4
+
 
 def dump(foo):  # FOR DEBUGGING, TO BE REMOVED
     from numba.core import function
@@ -582,9 +584,15 @@ class TestFunctionTypeExtensions(TestCase):
                 self._name = fname
                 if fname == 'cos':
                     addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
-                    signature = float64(float64)
+                    if os.name == 'nt' and is32bits:
+                        signature = float32(float32)
+                    else:
+                        signature = float64(float64)
                 elif fname == 'sinf':
-                    addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
+                    if os.name == 'nt' and is32bits:
+                        addr = ctypes.cast(self.lib.sin, ctypes.c_voidp).value
+                    else:
+                        addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
                     signature = float32(float32)
                 else:
                     raise NotImplementedError(
