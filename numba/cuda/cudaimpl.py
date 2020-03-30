@@ -31,6 +31,16 @@ def threadIdx_x(context, builder, sig, args):
     return builder.extract_value(args, 0)
 
 
+@lower_attr(dim3_type, 'y')
+def threadIdx_y(context, builder, sig, args):
+    return builder.extract_value(args, 1)
+
+
+@lower_attr(dim3_type, 'z')
+def threadIdx_z(context, builder, sig, args):
+    return builder.extract_value(args, 2)
+
+
 @lower('ptx.grid.1d', types.intp)
 def ptx_grid1d(context, builder, sig, args):
     assert len(args) == 1
