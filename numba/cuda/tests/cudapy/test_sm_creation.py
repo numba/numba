@@ -62,7 +62,7 @@ class TestSharedMemoryCreation(CUDATestCase):
         udt = cuda.jit((float32[:, :],))(udt_global_build_tuple)
         udt[1, 1](self.getarg2())
 
-    @skip_on_cudasim('Simulator does not perform macro expansion')
+    @skip_on_cudasim('Simulator does not validate shared array construction')
     def test_global_build_list(self):
         with self.assertRaises(TypingError) as raises:
             cuda.jit((float32[:, :],))(udt_global_build_list)
