@@ -146,33 +146,6 @@ class threadfence(Stub):
 
 
 #-------------------------------------------------------------------------------
-# const array
-
-
-def const_array_like(ndarray):
-    fname = "ptx.cmem.arylike"
-
-    from .descriptor import CUDATargetDesc
-    aryty = CUDATargetDesc.typingctx.resolve_argument_type(ndarray)
-
-    sig = typing.signature(aryty, aryty)
-    return ir.Intrinsic(fname, sig, args=[ndarray])
-
-
-class const(Stub):
-    '''
-    Constant memory namespace.
-    '''
-    _description_ = '<const>'
-
-    array_like = Macro('const.array_like', const_array_like,
-                             callable=True, argnames=['ary'])
-    '''
-    Create a const array from *ary*. The resulting const array will have the
-    same shape, type, and values as *ary*.
-    '''
-
-#-------------------------------------------------------------------------------
 # bit manipulation
 
 class popc(Stub):

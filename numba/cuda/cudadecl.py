@@ -1,7 +1,7 @@
 from numba.core import types
 from numba.core.typing.npydecl import register_number_classes
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                         AbstractTemplate, MacroTemplate,
+                                         AbstractTemplate,
                                          CallableTemplate,
                                          signature, Registry)
 from numba.core.extending import (typeof_impl, register_model, models,
@@ -78,8 +78,14 @@ class Cuda_local_array(Cuda_array_decl):
     key = cuda.local.array
 
 
-class Cuda_const_arraylike(MacroTemplate):
+@intrinsic
+class Cuda_const_array_like(CallableTemplate):
     key = cuda.const.array_like
+
+    def generic(self):
+        def typer(ndarray):
+            return ndarray
+        return typer
 
 
 @intrinsic
@@ -373,7 +379,7 @@ class CudaConstModuleTemplate(AttributeTemplate):
     key = types.Module(cuda.const)
 
     def resolve_array_like(self, mod):
-        return types.Macro(Cuda_const_arraylike)
+        return types.Function(Cuda_const_array_like)
 
 
 @intrinsic_attr

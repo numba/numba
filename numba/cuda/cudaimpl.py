@@ -131,48 +131,11 @@ for sreg in nvvmutils.SREG_MAPPING.keys():
 
 # -----------------------------------------------------------------------------
 
-@lower('ptx.cmem.arylike', types.Array)
-def ptx_cmem_arylike(context, builder, sig, args):
-    lmod = builder.module
-    [arr] = args
-    aryty = sig.return_type
-
-    constvals = [
-        context.get_constant(types.byte, i)
-        for i in iter(arr.tobytes(order='A'))
-    ]
-    constary = lc.Constant.array(Type.int(8), constvals)
-
-    addrspace = nvvm.ADDRSPACE_CONSTANT
-    gv = lmod.add_global_variable(constary.type, name="_cudapy_cmem",
-                                  addrspace=addrspace)
-    gv.linkage = lc.LINKAGE_INTERNAL
-    gv.global_constant = True
-    gv.initializer = constary
-
-    # Preserve the underlying alignment
-    lldtype = context.get_data_type(aryty.dtype)
-    align = context.get_abi_sizeof(lldtype)
-    gv.align = 2 ** (align - 1).bit_length()
-
-    # Convert to generic address-space
-    conv = nvvmutils.insert_addrspace_conv(lmod, Type.int(8), addrspace)
-    addrspaceptr = gv.bitcast(Type.pointer(Type.int(8), addrspace))
-    genptr = builder.call(conv, [addrspaceptr])
-
-    # Create array object
-    ary = context.make_array(aryty)(context, builder)
-    kshape = [context.get_constant(types.intp, s) for s in arr.shape]
-    kstrides = [context.get_constant(types.intp, s) for s in arr.strides]
-    context.populate_array(ary,
-                           data=builder.bitcast(genptr, ary.data.type),
-                           shape=cgutils.pack_array(builder, kshape),
-                           strides=cgutils.pack_array(builder, kstrides),
-                           itemsize=ary.itemsize,
-                           parent=ary.parent,
-                           meminfo=None)
-
-    return ary._getvalue()
+@lower(cuda.const.array_like, types.Array)
+def cuda_const_array_like(context, builder, sig, args):
+    # This is a no-op because CUDATargetContext.make_constant_array already
+    # created the constant array.
+    return args[0]
 
 
 _unique_smem_id = 0

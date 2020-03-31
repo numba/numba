@@ -459,3 +459,7 @@ class shared:
 class local:
     def array(shape, dtype):
         pass
+
+class const:
+    def array_like(ndarray):
+        pass
