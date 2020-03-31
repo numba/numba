@@ -188,18 +188,28 @@ def _get_unique_smem_id(name):
     return "{0}_{1}".format(name, _unique_smem_id)
 
 
-@lower('ptx.smem.alloc', types.intp, types.Any)
-def ptx_smem_alloc_intp(context, builder, sig, args):
-    length, dtype = args
+def _parse_dtype(dtype):
+    if isinstance(dtype, types.DTypeSpec):
+        return dtype.dtype
+    elif isinstance(dtype, types.TypeRef):
+        return dtype.instance_type
+
+
+@lower(cuda.shared.array, types.Integer, types.Any)
+def cuda_shared_array_integer(context, builder, sig, args):
+    length = sig.args[0].literal_value
+    dtype = _parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
                           symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
 
-@lower('ptx.smem.alloc', types.UniTuple, types.Any)
-def ptx_smem_alloc_array(context, builder, sig, args):
-    shape, dtype = args
+@lower(cuda.shared.array, types.Tuple, types.Any)
+@lower(cuda.shared.array, types.UniTuple, types.Any)
+def cuda_shared_array_tuple(context, builder, sig, args):
+    shape = [ s.literal_value for s in sig.args[0] ]
+    dtype = _parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=shape, dtype=dtype,
                           symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,

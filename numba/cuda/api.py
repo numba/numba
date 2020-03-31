@@ -450,3 +450,7 @@ def grid(ndim):
 
 def gridsize(ndim):
     pass
+
+class shared:
+    def array(shape, dtype):
+        pass

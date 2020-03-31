@@ -146,7 +146,7 @@ class threadfence(Stub):
 
 
 # -------------------------------------------------------------------------------
-# shared
+# local array
 
 def _legalize_shape(shape):
     if isinstance(shape, tuple):
@@ -155,38 +155,6 @@ def _legalize_shape(shape):
         return (shape,)
     else:
         raise TypeError("invalid type for shape; got {0}".format(type(shape)))
-
-
-def shared_array(shape, dtype):
-    shape = _legalize_shape(shape)
-    ndim = len(shape)
-    fname = "ptx.smem.alloc"
-    restype = types.Array(dtype, ndim, 'C')
-    sig = typing.signature(restype, types.UniTuple(types.intp, ndim), types.Any)
-    return ir.Intrinsic(fname, sig, args=(shape, dtype))
-
-
-class shared(Stub):
-    """
-    Shared memory namespace.
-    """
-    _description_ = '<shared>'
-
-    array = Macro('shared.array', shared_array, callable=True,
-                        argnames=['shape', 'dtype'])
-    '''
-    Allocate a shared array of the given *shape* and *type*. *shape* is either
-    an integer or a tuple of integers representing the array's dimensions.
-    *type* is a :ref:`Numba type <numba-types>` of the elements needing to be
-    stored in the array.
-
-    The returned array-like object can be read and written to like any normal
-    device array (e.g. through indexing).
-    '''
-
-
-#-------------------------------------------------------------------------------
-# local array
 
 
 def local_array(shape, dtype):

@@ -41,8 +41,34 @@ class Cuda_gridsize(GridFunction):
     key = cuda.gridsize
 
 
-class Cuda_shared_array(MacroTemplate):
+def _parse_shape(shape):
+    ndim = None
+    if isinstance(shape, types.Integer):
+        ndim = 1
+    elif isinstance(shape, (types.Tuple, types.UniTuple)):
+        if all(isinstance(s, types.Integer) for s in shape):
+            ndim = len(shape)
+    return ndim
+
+def _parse_dtype(dtype):
+    if isinstance(dtype, types.DTypeSpec):
+        return dtype.dtype
+    elif isinstance(dtype, types.TypeRef):
+        return dtype.instance_type
+
+
+@intrinsic
+class Cuda_shared_array(CallableTemplate):
     key = cuda.shared.array
+
+    def generic(self):
+        def typer(shape, dtype):
+            ndim = _parse_shape(shape)
+            nb_dtype = _parse_dtype(dtype)
+            if nb_dtype is not None and ndim is not None:
+                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
+        return typer
 
 
 class Cuda_local_array(MacroTemplate):
@@ -336,7 +362,7 @@ class CudaSharedModuleTemplate(AttributeTemplate):
     key = types.Module(cuda.shared)
 
     def resolve_array(self, mod):
-        return types.Macro(Cuda_shared_array)
+        return types.Function(Cuda_shared_array)
 
 
 @intrinsic_attr
