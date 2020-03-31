@@ -234,9 +234,17 @@ def hsail_atomic_add_tuple(context, builder, sig, args):
     return builder.atomic_rmw("add", ptr, val, ordering='monotonic')
 
 
-@lower('hsail.smem.alloc', types.UniTuple, types.Any)
+def _parse_dtype(dtype):
+    if isinstance(dtype, types.DTypeSpec):
+        return dtype.dtype
+    elif isinstance(dtype, types.TypeRef):
+        return dtype.instance_type
+
+
+@lower(roc.shared.array, types.UniTuple, types.Any)
 def hsail_smem_alloc_array(context, builder, sig, args):
-    shape, dtype = args
+    shape = [ s.literal_value for s in sig.args[0] ]
+    dtype = _parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=shape, dtype=dtype,
                           symbol_name='_hsapy_smem',
                           addrspace=target.SPIR_LOCAL_ADDRSPACE)
