@@ -47,7 +47,7 @@ def udt_invalid_2(A):
     A[i, j] = sa[i, j]
 
 
-class TestMacro(CUDATestCase):
+class TestSharedMemoryCreation(CUDATestCase):
     def getarg(self):
         return np.array(100, dtype=np.float32, ndmin=1)
 
