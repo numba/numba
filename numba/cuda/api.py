@@ -454,3 +454,8 @@ def gridsize(ndim):
 class shared:
     def array(shape, dtype):
         pass
+
+
+class local:
+    def array(shape, dtype):
+        pass

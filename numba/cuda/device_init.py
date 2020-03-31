@@ -1,6 +1,6 @@
 # Re export
 from .stubs import (syncthreads, syncthreads_count, syncwarp,
-                    syncthreads_and, syncthreads_or, local,
+                    syncthreads_and, syncthreads_or,
                     const, atomic, shfl_sync_intrinsic,
                     vote_sync_intrinsic, match_any_sync, match_all_sync,
                     threadfence_block, threadfence_system,

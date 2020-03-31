@@ -57,10 +57,7 @@ def _parse_dtype(dtype):
         return dtype.instance_type
 
 
-@intrinsic
-class Cuda_shared_array(CallableTemplate):
-    key = cuda.shared.array
-
+class Cuda_array_decl(CallableTemplate):
     def generic(self):
         def typer(shape, dtype):
             ndim = _parse_shape(shape)
@@ -71,7 +68,13 @@ class Cuda_shared_array(CallableTemplate):
         return typer
 
 
-class Cuda_local_array(MacroTemplate):
+@intrinsic
+class Cuda_shared_array(Cuda_array_decl):
+    key = cuda.shared.array
+
+
+@intrinsic
+class Cuda_local_array(Cuda_array_decl):
     key = cuda.local.array
 
 
@@ -378,7 +381,7 @@ class CudaLocalModuleTemplate(AttributeTemplate):
     key = types.Module(cuda.local)
 
     def resolve_array(self, mod):
-        return types.Macro(Cuda_local_array)
+        return types.Function(Cuda_local_array)
 
 
 @intrinsic_attr

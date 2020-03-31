@@ -145,42 +145,6 @@ class threadfence(Stub):
     _description_ = '<threadfence()>'
 
 
-# -------------------------------------------------------------------------------
-# local array
-
-def _legalize_shape(shape):
-    if isinstance(shape, tuple):
-        return shape
-    elif isinstance(shape, int):
-        return (shape,)
-    else:
-        raise TypeError("invalid type for shape; got {0}".format(type(shape)))
-
-
-def local_array(shape, dtype):
-    shape = _legalize_shape(shape)
-    ndim = len(shape)
-    fname = "ptx.lmem.alloc"
-    restype = types.Array(dtype, ndim, 'C')
-    sig = typing.signature(restype, types.UniTuple(types.intp, ndim), types.Any)
-    return ir.Intrinsic(fname, sig, args=(shape, dtype))
-
-
-class local(Stub):
-    '''
-    Local memory namespace.
-    '''
-    _description_ = '<local>'
-
-    array = Macro('local.array', local_array, callable=True,
-                        argnames=['shape', 'dtype'])
-    '''
-    Allocate a local array of the given *shape* and *type*. The array is private
-    to the current thread, and resides in global memory. An array-like object is
-    returned which can be read and written to like any standard array (e.g.
-    through indexing).
-    '''
-
 #-------------------------------------------------------------------------------
 # const array
 

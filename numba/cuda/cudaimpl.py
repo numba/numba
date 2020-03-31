@@ -216,18 +216,21 @@ def cuda_shared_array_tuple(context, builder, sig, args):
                           can_dynsized=True)
 
 
-@lower('ptx.lmem.alloc', types.intp, types.Any)
-def ptx_lmem_alloc_intp(context, builder, sig, args):
-    length, dtype = args
+@lower(cuda.local.array, types.Integer, types.Any)
+def cuda_local_array_integer(context, builder, sig, args):
+    length = sig.args[0].literal_value
+    dtype = _parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
                           symbol_name='_cudapy_lmem',
                           addrspace=nvvm.ADDRSPACE_LOCAL,
                           can_dynsized=False)
 
 
-@lower('ptx.lmem.alloc', types.UniTuple, types.Any)
+@lower(cuda.local.array, types.Tuple, types.Any)
+@lower(cuda.local.array, types.UniTuple, types.Any)
 def ptx_lmem_alloc_array(context, builder, sig, args):
-    shape, dtype = args
+    shape = [ s.literal_value for s in sig.args[0] ]
+    dtype = _parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=shape, dtype=dtype,
                           symbol_name='_cudapy_lmem',
                           addrspace=nvvm.ADDRSPACE_LOCAL,
