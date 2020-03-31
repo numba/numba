@@ -256,6 +256,10 @@ def _drop_ignored_attrs(dct):
     drop = set(['__weakref__',
                 '__module__',
                 '__dict__'])
+
+    if '__annotations__' in dct:
+        drop.add('__annotations__')
+
     for k, v in dct.items():
         if isinstance(v, (pytypes.BuiltinFunctionType,
                           pytypes.BuiltinMethodType)):

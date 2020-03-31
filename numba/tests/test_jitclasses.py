@@ -43,20 +43,28 @@ def _get_meminfo(box):
 
 class TestJitClass(TestCase, MemoryLeakMixin):
 
-    def _check_spec(self, spec):
-        @jitclass(spec)
-        class Test(object):
+    def _check_spec(self, spec, test_cls=None):
+        if test_cls is None:
+            @jitclass(spec)
+            class Test(object):
 
-            def __init__(self):
-                pass
+                def __init__(self):
+                    pass
+            test_cls = Test
 
-        clsty = Test.class_type.instance_type
+        clsty = test_cls.class_type.instance_type
         names = list(clsty.struct.keys())
         values = list(clsty.struct.values())
-        self.assertEqual(names[0], 'x')
-        self.assertEqual(names[1], 'y')
-        self.assertEqual(values[0], int32)
-        self.assertEqual(values[1], float32)
+
+        if isinstance(spec, OrderedDict):
+            all_expected = spec.items()
+        else:
+            all_expected = spec
+
+        self.assertEqual(len(names), len(spec))
+        for got, expected in zip(zip(names, values), all_expected):
+            self.assertEqual(got[0], expected[0])
+            self.assertEqual(got[1], expected[1])
 
     def test_ordereddict_spec(self):
         spec = OrderedDict()
@@ -68,6 +76,18 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [('x', int32),
                 ('y', float32)]
         self._check_spec(spec)
+
+    def test_type_annotations(self):
+        spec = [('x', int32)]
+
+        @jitclass(spec)
+        class Test(object):
+            y: int
+
+            def __init__(self):
+                pass
+
+        self._check_spec(spec, Test)
 
     def test_spec_errors(self):
         spec1 = [('x', int), ('y', float32[:])]
