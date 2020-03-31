@@ -3895,6 +3895,10 @@ def np_asarray(a, dtype=None):
             for i, v in enumerate(a):
                 ret[i] = v
             return ret
+    elif isinstance(a, types.UnicodeType):
+        def impl(a, dtype=None):
+            dt = 'U' + str(len(a))
+            return np.array(a, dtype=np.dtype('U10'))
 
     return impl
 

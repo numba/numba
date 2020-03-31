@@ -95,7 +95,6 @@ def from_dtype(dtype):
         return FROM_DTYPE[dtype]
     except KeyError:
         char = dtype.char
-
         if char in 'SU':
             return _from_str_dtype(dtype)
         if char in 'mM':
@@ -112,6 +111,7 @@ _as_dtype_letters = {
     types.NPTimedelta: 'm8',
     types.CharSeq: 'S',
     types.UnicodeCharSeq: 'U',
+    types.UnicodeType: 'U',
 }
 
 
@@ -134,6 +134,11 @@ def as_dtype(nbtype):
     if isinstance(nbtype, (types.CharSeq, types.UnicodeCharSeq)):
         letter = _as_dtype_letters[type(nbtype)]
         return np.dtype('%s%d' % (letter, nbtype.count))
+    if isinstance(nbtype, types.UnicodeType):
+        # XXX: fix this! The dtype should be 'U#len(str)'
+        # print('nbtype', nbtype)
+        letter = _as_dtype_letters[type(nbtype)]
+        return np.dtype('%s%d' % (letter, 0))
     if isinstance(nbtype, types.Record):
         return as_struct_dtype(nbtype)
     if isinstance(nbtype, types.EnumMember):
@@ -600,7 +605,7 @@ def type_can_asarray(arr):
     implementation, False otherwise.
     """
 
-    ok = (types.Array, types.Sequence, types.Tuple,
+    ok = (types.Array, types.Sequence, types.Tuple, types.UnicodeType,
           types.Number, types.Boolean, types.containers.ListType)
 
     return isinstance(arr, ok)

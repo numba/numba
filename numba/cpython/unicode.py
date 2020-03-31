@@ -2341,6 +2341,22 @@ def ol_chr(i):
             return _PyUnicode_FromOrdinal(i)
         return impl
 
+
+@overload(str)
+def str_overload(n):
+    impl = None
+    if isinstance(n, types.Integer):
+        def impl(n):
+            s = ''
+            while n > 0:
+                c = chr(ord('0') + (n % 10))
+                n = n // 10
+                s = c + s
+            return s
+    if isinstance(n, (types.UnicodeType, types.UnicodeCharSeq, types.CharSeq)):
+        def impl(n):
+            return n
+    return impl
 # ------------------------------------------------------------------------------
 # iteration
 # ------------------------------------------------------------------------------
