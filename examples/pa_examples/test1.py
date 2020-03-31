@@ -1,8 +1,8 @@
 from numba import njit, gdb
 import numpy as np
 
-@njit(target='dppy', parallel={'spirv':True})
-#@njit(parallel={'spirv':True})
+#@njit(target='dppy')
+@njit(parallel={'spirv':True})
 def f1(a, b):
     c = a + b
     return c

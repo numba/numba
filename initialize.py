@@ -9,8 +9,8 @@ def init_jit():
     return DPPyDispatcher
 
 def initialize_all():
-    from numba.targets.registry import dispatcher_registry
-    dispatcher_registry.ondemand['dppy'] = init_jit
+    #from numba.targets.registry import dispatcher_registry
+    #dispatcher_registry.ondemand['dppy'] = init_jit
     dir_path = os.path.dirname(os.path.realpath(__file__)) + "/dppy_driver"
     dpgluelib = 'libdpglue_so.so'
     if os.path.isfile(dir_path + "/libdpglue_so.so"):

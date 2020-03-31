@@ -6,13 +6,21 @@ from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba import dppy
 from numba.dppy import kernel, autojit
-from .descriptor import DPPyTargetDesc
-from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
-                                        GUFuncCallSteps)
+from .descriptor import dppy_target
+#from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
+ #                                       GUFuncCallSteps)
 
+from .. import dispatcher, utils, typing
+from .compiler import DPPyCompiler
 
-class DPPyDispatcher(object):
-    targetdescr = DPPyTargetDesc
+''' OLD IMPL '''
+'''
+class DPPyDispatcher(dispatcher.Dispatcher):
+    targetdescr = cpu_target
+
+    def __init__(self, py_func, locals={}, targetoptions={}):
+        dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
+                targetoptions=targetoptions, pipeline_class=DPPyCompiler)
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         assert not locals
@@ -54,7 +62,6 @@ class DPPyDispatcher(object):
 
     def __getattr__(self, key):
         return getattr(self.compiled, key)
-
 
 class DPPyUFuncDispatcher(object):
     """
@@ -223,3 +230,4 @@ class DPPyUFuncMechanism(UFuncMechanism):
                                          strides=strides,
                                          dtype=ary.dtype,
                                          gpu_data=ary.gpu_data)
+'''
