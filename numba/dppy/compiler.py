@@ -51,10 +51,10 @@ class DPPyCompiler(CompilerBase):
 
 def compile_with_dppy(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the OpenCL backend.
-    from .descriptor import DPPyTargetDesc
+    from .descriptor import dppy_target
 
-    typingctx = DPPyTargetDesc.typingctx
-    targetctx = DPPyTargetDesc.targetctx
+    typingctx = dppy_target.typing_context
+    targetctx = dppy_target.target_context
     # TODO handle debug flag
     flags = compiler.Flags()
     # Do not compile (generate native code), just lower (to LLVM)
@@ -426,9 +426,9 @@ class JitDPPyKernel(DPPyKernelBase):
         #self.definitions = {}
         self.access_types = access_types
 
-        from .descriptor import DPPyTargetDesc
+        from .descriptor import dppy_target
 
-        self.typingctx = DPPyTargetDesc.typingctx
+        self.typingctx = dppy_target.typing_context
 
     def __call__(self, *args, **kwargs):
         assert not kwargs, "Keyword Arguments are not supported"

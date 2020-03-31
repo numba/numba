@@ -341,6 +341,20 @@ lower_extensions = {}
 class Lower(BaseLower):
     GeneratorLower = generators.GeneratorLower
 
+    def __init__(self, context, library, fndesc, func_ir, metadata=None):
+        BaseLower.__init__(self, context, library, fndesc, func_ir, metadata)
+        from numba.npyufunc.parfor import (
+                _lower_parfor_parallel,
+                _lower_openmp_region_start,
+                _lower_openmp_region_end,
+                openmp_region_start,
+                openmp_region_end
+                )
+        from . import parfor
+        lower_extensions[parfor.Parfor] = _lower_parfor_parallel
+        lower_extensions[openmp_region_start] = _lower_openmp_region_start
+        lower_extensions[openmp_region_end] = _lower_openmp_region_end
+
     def pre_block(self, block):
         from numba.unsafe import eh
 

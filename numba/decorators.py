@@ -186,9 +186,7 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
             return cuda.jit(func)
         if config.DISABLE_JIT and not target == 'npyufunc':
             return func
-        if target == 'dppy':
-            from . import dppy
-            return dppy.kernel(func)
+
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions,
                           **dispatcher_args)

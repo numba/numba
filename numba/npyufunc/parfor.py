@@ -14,7 +14,7 @@ import llvmlite.ir as lir
 import llvmlite.binding as lb
 
 import numba
-from .. import compiler, ir, types, six, cgutils, sigutils, lowering, parfor, funcdesc
+from .. import compiler, ir, types, six, cgutils, sigutils, parfor, funcdesc
 from numba.ir_utils import (add_offset_to_labels, replace_var_names,
                             remove_dels, legalize_names, mk_unique_var,
                             rename_labels, get_name_var_table, visit_vars_inner,
@@ -219,8 +219,6 @@ def _lower_openmp_region_start(lowerer, prs):
 def _lower_openmp_region_end(lowerer, pre):
     pre.lower(lowerer)
 
-lowering.lower_extensions[openmp_region_start] = _lower_openmp_region_start
-lowering.lower_extensions[openmp_region_end] = _lower_openmp_region_end
 
 def apply_copies_openmp_region(region, var_dict, name_var_table, typemap, calltypes, save_copies):
     for i in range(len(region.tags)):
@@ -675,9 +673,6 @@ def _lower_parfor_parallel(lowerer, parfor):
     # Restore the original typemap of the function that was replaced temporarily at the
     # Beginning of this function.
     lowerer.fndesc.typemap = orig_typemap
-
-# A work-around to prevent circular imports
-lowering.lower_extensions[parfor.Parfor] = _lower_parfor_parallel
 
 
 def _create_shape_signature(

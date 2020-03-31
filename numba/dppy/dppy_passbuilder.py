@@ -16,7 +16,14 @@ from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                 DumpParforDiagnostics, IRLegalization,
                                 InlineOverloads)
 
-from .dppy_lowerer import SpirvFriendlyLowering, DPPyNoPythonBackend, dppy_lower_array_expr
+from .dppy_lowerer import dppy_lower_array_expr
+
+from .dppy_passes import (
+        DPPyPreParforPass,
+        DPPyParforPass,
+        SpirvFriendlyLowering,
+        DPPyNoPythonBackend
+        )
 
 class DPPyPassBuilder(object):
     """
@@ -75,16 +82,12 @@ class DPPyPassBuilder(object):
         pm = PassManager(name)
         DPPyPassBuilder.default_numba_nopython_pipeline(state, pm)
 
-        # Intel GPU/CPU specific optimizations
-        #if state.flags.auto_parallel.enabled:
-        #    pm.add_pass(PreParforPass, "Preprocessing for parfors")
-        #if state.flags.auto_parallel.enabled:
-        #    pm.add_pass(ParforPass, "convert to parfors")
 
+        # Intel GPU/CPU specific optimizations
+        pm.add_pass(DPPyPreParforPass, "Preprocessing for parfors")
         if not state.flags.no_rewrites:
             pm.add_pass(NopythonRewrites, "nopython rewrites")
-            state.targetctx.special_ops['arrayexpr'] =  dppy_lower_array_expr
-
+        pm.add_pass(DPPyParforPass, "convert to parfors")
 
         # lower
         pm.add_pass(SpirvFriendlyLowering, "SPIRV-friendly lowering pass")
