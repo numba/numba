@@ -472,7 +472,7 @@ def unify_function_types(numba_types):
     return (dtype,) * len(numba_types)
 
 
-def unified_function_type(numba_types):
+def unified_function_type(numba_types, require_precise=True):
     """Return unified function type. When not possible, return None.
 
     If any of the Numba function types is a Dispatcher type, the
@@ -522,7 +522,8 @@ def unified_function_type(numba_types):
                     assert function == t
         else:
             return
-
+    if require_precise and (function is None or undefined_function is not None):
+        return
     if function is not None:
         if undefined_function is not None:
             assert function.nargs == undefined_function.nargs

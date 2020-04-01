@@ -1,5 +1,5 @@
 import types as pytypes
-from numba import jit, cfunc, types, int64, float64, float32, errors
+from numba import jit, njit, cfunc, types, int64, float64, float32, errors
 import ctypes
 import warnings
 
@@ -1015,3 +1015,21 @@ class TestMiscIssues(TestCase):
             str(cm.exception), r'.* function address is null')
 
         self.assertEqual(foo_bad2good(), 123)
+
+    def test_issue_5470(self):
+
+        @njit()
+        def foo():
+            return 0
+
+        formulae_foo = (foo, foo)
+
+        @njit()
+        def bar_scalar(_, __):
+            return 0
+
+        @njit()
+        def bar():
+            return bar_scalar(*formulae_foo)
+
+        bar()
