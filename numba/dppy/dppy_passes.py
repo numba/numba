@@ -66,6 +66,12 @@ class DPPyPreParforPass(FunctionPass):
         )
 
         preparfor_pass.run()
+
+        if config.DEBUG or config.DUMP_IR:
+            name = state.func_ir.func_id.func_qualname
+            print(("IR DUMP: %s" % name).center(80, "-"))
+            state.func_ir.dump()
+
         return True
 
 
@@ -97,7 +103,13 @@ class DPPyParforPass(FunctionPass):
                                          state.flags.auto_parallel,
                                          state.flags,
                                          state.parfor_diagnostics)
+
         parfor_pass.run()
+
+        if config.DEBUG or config.DUMP_IR:
+            name = state.func_ir.func_id.func_qualname
+            print(("IR DUMP: %s" % name).center(80, "-"))
+            state.func_ir.dump()
 
         return True
 
