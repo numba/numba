@@ -98,6 +98,17 @@ class TestAPIMoves_Q1_2020(TestCase):
         with checker(fn):
             getattr(numba.untyped_passes, fn)
 
+    def test_numba_config(self):
+        checker = self.check_warning(
+            "numba.config", "numba.core.config"
+        )
+        with checker():
+            import numba.config
+
+        fn = "DISABLE_JIT"
+        with checker(fn):
+            getattr(numba.config, fn)
+
     def test_numba_unsafe(self):
         # this is a bit dubious, unsafe was largely split up and moved.
         # numba.unsafe.refcount is in use in external packages and is now in
