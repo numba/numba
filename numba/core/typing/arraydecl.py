@@ -428,10 +428,10 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.view")
     def resolve_view(self, ary, args, kws):
-        from .npydecl import _parse_dtype
+        from .npydecl import parse_dtype
         assert not kws
         dtype, = args
-        dtype = _parse_dtype(dtype)
+        dtype = parse_dtype(dtype)
         if dtype is None:
             return
         retty = ary.copy(dtype=dtype)
@@ -439,10 +439,10 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.astype")
     def resolve_astype(self, ary, args, kws):
-        from .npydecl import _parse_dtype
+        from .npydecl import parse_dtype
         assert not kws
         dtype, = args
-        dtype = _parse_dtype(dtype)
+        dtype = parse_dtype(dtype)
         if dtype is None:
             return
         if not self.context.can_convert(ary.dtype, dtype):
@@ -675,15 +675,15 @@ def sum_expand(self, args, kws):
     elif args_len == 1 and 'dtype' in kws:
         # No axis parameter so the return type of the summation is a scalar
         # of the dtype parameter.
-        from .npydecl import _parse_dtype
+        from .npydecl import parse_dtype
         dtype, = args
-        dtype = _parse_dtype(dtype)
+        dtype = parse_dtype(dtype)
         out = signature(dtype, *args, recvr=self.this)
 
     elif args_len == 2:
         # There is an axis and dtype parameter, either arg or kwarg
-        from .npydecl import _parse_dtype
-        dtype = _parse_dtype(args[1])
+        from .npydecl import parse_dtype
+        dtype = parse_dtype(args[1])
         return_type = dtype
         if self.this.ndim != 1:
             # 1d reduces to a scalar, 2d and above reduce dim by 1

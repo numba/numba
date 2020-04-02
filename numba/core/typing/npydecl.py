@@ -439,7 +439,10 @@ register_number_classes(infer_global)
 # -----------------------------------------------------------------------------
 # Numpy array constructors
 
-def _parse_shape(shape):
+def parse_shape(shape):
+    """
+    Given a shape, return the number of dimensions.
+    """
     ndim = None
     if isinstance(shape, types.Integer):
         ndim = 1
@@ -448,9 +451,15 @@ def _parse_shape(shape):
             ndim = len(shape)
     return ndim
 
-def _parse_dtype(dtype):
+def parse_dtype(dtype):
+    """
+    Return the dtype of a type, if it is either a DtypeSpec (used for most
+    dtypes) or a TypeRef (used for record types).
+    """
     if isinstance(dtype, types.DTypeSpec):
         return dtype.dtype
+    elif isinstance(dtype, types.TypeRef):
+        return dtype.instance_type
 
 def _parse_nested_sequence(context, typ):
     """
@@ -498,7 +507,7 @@ class NpArray(CallableTemplate):
             if dtype is None:
                 dtype = seq_dtype
             else:
-                dtype = _parse_dtype(dtype)
+                dtype = parse_dtype(dtype)
                 if dtype is None:
                     return
             return types.Array(dtype, ndim, 'C')
@@ -519,9 +528,9 @@ class NdConstructor(CallableTemplate):
             if dtype is None:
                 nb_dtype = types.double
             else:
-                nb_dtype = _parse_dtype(dtype)
+                nb_dtype = parse_dtype(dtype)
 
-            ndim = _parse_shape(shape)
+            ndim = parse_shape(shape)
             if nb_dtype is not None and ndim is not None:
                 return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
@@ -542,7 +551,7 @@ class NdConstructorLike(CallableTemplate):
         """
         def typer(arg, dtype=None):
             if dtype is not None:
-                nb_dtype = _parse_dtype(dtype)
+                nb_dtype = parse_dtype(dtype)
             elif isinstance(arg, types.Array):
                 nb_dtype = arg.dtype
             else:
@@ -568,9 +577,9 @@ class NdFull(CallableTemplate):
             if dtype is None:
                 nb_dtype = fill_value
             else:
-                nb_dtype = _parse_dtype(dtype)
+                nb_dtype = parse_dtype(dtype)
 
-            ndim = _parse_shape(shape)
+            ndim = parse_shape(shape)
             if nb_dtype is not None and ndim is not None:
                 return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
@@ -586,7 +595,7 @@ class NdFullLike(CallableTemplate):
         """
         def typer(arg, fill_value, dtype=None):
             if dtype is not None:
-                nb_dtype = _parse_dtype(dtype)
+                nb_dtype = parse_dtype(dtype)
             elif isinstance(arg, types.Array):
                 nb_dtype = arg.dtype
             else:
@@ -609,7 +618,7 @@ class NdIdentity(AbstractTemplate):
         if not isinstance(n, types.Integer):
             return
         if len(args) >= 2:
-            nb_dtype = _parse_dtype(args[1])
+            nb_dtype = parse_dtype(args[1])
         else:
             nb_dtype = types.float64
 
@@ -656,7 +665,7 @@ class NdFromBuffer(CallableTemplate):
             if dtype is None:
                 nb_dtype = types.float64
             else:
-                nb_dtype = _parse_dtype(dtype)
+                nb_dtype = parse_dtype(dtype)
 
             if nb_dtype is not None:
                 return types.Array(dtype=nb_dtype, ndim=1, layout='C',
@@ -1252,7 +1261,7 @@ class NumbaCArray(CallableTemplate):
                 raise TypeError("%s(): invalid dtype spec '%s'"
                                 % (func_name, dtype))
 
-            ndim = _parse_shape(shape)
+            ndim = parse_shape(shape)
             if ndim is None:
                 raise TypeError("%s(): invalid shape '%s'"
                                 % (func_name, shape))
