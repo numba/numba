@@ -695,8 +695,8 @@ def iscomplexobj(x):
     # Implementation based on NumPy
     # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
     if isinstance(x, types.Optional):
-        msg = 'Expected argument {} but got Optional[{}, None]'.format(x.key, x.key)
-        raise TypingError(msg)
+        msg = 'Expected argument {} but got Optional[{}, None]'
+        raise TypingError(msg.format(x.key, x.key))
     dt = determine_dtype(x)
     iscmplx = np.issubdtype(dt, np.complexfloating)
     return lambda x: False if x is None else iscmplx
