@@ -32,7 +32,7 @@ def init_all():
     _already_initialized = True
 
     for entry_point in importlib_metadata.entry_points().get(
-        "numba_extensions", tuple()
+        "numba_extensions", ()
     ):
         if entry_point.name == "init":
             logger.debug("Loading extension: %s", entry_point)
