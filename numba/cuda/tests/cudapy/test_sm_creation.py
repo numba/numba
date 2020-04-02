@@ -1,6 +1,6 @@
 import numpy as np
 from numba import cuda, float32
-from numba.core.errors import MacroError
+from numba.core.errors import TypingError
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
 
@@ -47,7 +47,7 @@ def udt_invalid_2(A):
     A[i, j] = sa[i, j]
 
 
-class TestMacro(CUDATestCase):
+class TestSharedMemoryCreation(CUDATestCase):
     def getarg(self):
         return np.array(100, dtype=np.float32, ndmin=1)
 
@@ -64,10 +64,13 @@ class TestMacro(CUDATestCase):
 
     @skip_on_cudasim('Simulator does not perform macro expansion')
     def test_global_build_list(self):
-        with self.assertRaises(MacroError) as raises:
+        with self.assertRaises(TypingError) as raises:
             cuda.jit((float32[:, :],))(udt_global_build_list)
 
-        self.assertIn("invalid type for shape; got {0}".format(list),
+        self.assertIn("Invalid use of Function(<function shared.array",
+                      str(raises.exception))
+        self.assertIn("with argument(s) of type(s): "
+                      "(dtype=class(float32), shape=list(int64)",
                       str(raises.exception))
 
     def test_global_constant_tuple(self):
@@ -76,18 +79,24 @@ class TestMacro(CUDATestCase):
 
     @skip_on_cudasim("Can't check for constants in simulator")
     def test_invalid_1(self):
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(TypingError) as raises:
             cuda.jit((float32[:],))(udt_invalid_1)
 
-        self.assertIn("Argument 'shape' must be a constant at",
+        self.assertIn("Invalid use of Function(<function shared.array",
+                      str(raises.exception))
+        self.assertIn("with argument(s) of type(s): "
+                      "(dtype=class(float32), shape=float32)",
                       str(raises.exception))
 
     @skip_on_cudasim("Can't check for constants in simulator")
     def test_invalid_2(self):
-        with self.assertRaises(ValueError) as raises:
+        with self.assertRaises(TypingError) as raises:
             cuda.jit((float32[:, :],))(udt_invalid_2)
 
-        self.assertIn("Argument 'shape' must be a constant at",
+        self.assertIn("Invalid use of Function(<function shared.array",
+                      str(raises.exception))
+        self.assertIn("with argument(s) of type(s): (dtype=class(float32), "
+                      "shape=Tuple(Literal[int](1), array(float32, 1d, A)))",
                       str(raises.exception))
 
 

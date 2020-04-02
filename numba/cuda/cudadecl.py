@@ -1,8 +1,10 @@
 from numba.core import types
-from numba.core.typing.npydecl import register_number_classes
+from numba.core.typing.npydecl import (parse_dtype, parse_shape,
+                                       register_number_classes)
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                         AbstractTemplate, MacroTemplate,
+                                         AbstractTemplate, CallableTemplate,
                                          signature, Registry)
+from numba.cuda.types import dim3
 from numba import cuda
 
 
@@ -14,80 +16,59 @@ register_global = registry.register_global
 register_number_classes(register_global)
 
 
-class Cuda_grid(MacroTemplate):
+class GridFunction(CallableTemplate):
+    def generic(self):
+        def typer(ndim):
+            val = ndim.literal_value
+            if val == 1:
+                restype = types.int32
+            elif val in (2, 3):
+                restype = types.UniTuple(types.int32, val)
+            else:
+                raise ValueError('argument can only be 1, 2, 3')
+            return signature(restype, types.int32)
+        return typer
+
+
+@register
+class Cuda_grid(GridFunction):
     key = cuda.grid
 
 
-class Cuda_gridsize(MacroTemplate):
+@register
+class Cuda_gridsize(GridFunction):
     key = cuda.gridsize
 
 
-class Cuda_threadIdx_x(MacroTemplate):
-    key = cuda.threadIdx.x
+class Cuda_array_decl(CallableTemplate):
+    def generic(self):
+        def typer(shape, dtype):
+            ndim = parse_shape(shape)
+            nb_dtype = parse_dtype(dtype)
+            if nb_dtype is not None and ndim is not None:
+                return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
+
+        return typer
 
 
-class Cuda_threadIdx_y(MacroTemplate):
-    key = cuda.threadIdx.y
-
-
-class Cuda_threadIdx_z(MacroTemplate):
-    key = cuda.threadIdx.z
-
-
-class Cuda_blockIdx_x(MacroTemplate):
-    key = cuda.blockIdx.x
-
-
-class Cuda_blockIdx_y(MacroTemplate):
-    key = cuda.blockIdx.y
-
-
-class Cuda_blockIdx_z(MacroTemplate):
-    key = cuda.blockIdx.z
-
-
-class Cuda_blockDim_x(MacroTemplate):
-    key = cuda.blockDim.x
-
-
-class Cuda_blockDim_y(MacroTemplate):
-    key = cuda.blockDim.y
-
-
-class Cuda_blockDim_z(MacroTemplate):
-    key = cuda.blockDim.z
-
-
-class Cuda_gridDim_x(MacroTemplate):
-    key = cuda.gridDim.x
-
-
-class Cuda_gridDim_y(MacroTemplate):
-    key = cuda.gridDim.y
-
-
-class Cuda_gridDim_z(MacroTemplate):
-    key = cuda.gridDim.z
-
-
-class Cuda_warpsize(MacroTemplate):
-    key = cuda.warpsize
-
-
-class Cuda_laneid(MacroTemplate):
-    key = cuda.laneid
-
-
-class Cuda_shared_array(MacroTemplate):
+@register
+class Cuda_shared_array(Cuda_array_decl):
     key = cuda.shared.array
 
 
-class Cuda_local_array(MacroTemplate):
+@register
+class Cuda_local_array(Cuda_array_decl):
     key = cuda.local.array
 
 
-class Cuda_const_arraylike(MacroTemplate):
+@register
+class Cuda_const_array_like(CallableTemplate):
     key = cuda.const.array_like
+
+    def generic(self):
+        def typer(ndarray):
+            return ndarray
+        return typer
 
 
 @register
@@ -334,59 +315,17 @@ class Cuda_atomic_compare_and_swap(AbstractTemplate):
 
 
 @register_attr
-class Cuda_threadIdx(AttributeTemplate):
-    key = types.Module(cuda.threadIdx)
+class Dim3_attrs(AttributeTemplate):
+    key = dim3
 
     def resolve_x(self, mod):
-        return types.Macro(Cuda_threadIdx_x)
+        return types.int32
 
     def resolve_y(self, mod):
-        return types.Macro(Cuda_threadIdx_y)
+        return types.int32
 
     def resolve_z(self, mod):
-        return types.Macro(Cuda_threadIdx_z)
-
-
-@register_attr
-class Cuda_blockIdx(AttributeTemplate):
-    key = types.Module(cuda.blockIdx)
-
-    def resolve_x(self, mod):
-        return types.Macro(Cuda_blockIdx_x)
-
-    def resolve_y(self, mod):
-        return types.Macro(Cuda_blockIdx_y)
-
-    def resolve_z(self, mod):
-        return types.Macro(Cuda_blockIdx_z)
-
-
-@register_attr
-class Cuda_blockDim(AttributeTemplate):
-    key = types.Module(cuda.blockDim)
-
-    def resolve_x(self, mod):
-        return types.Macro(Cuda_blockDim_x)
-
-    def resolve_y(self, mod):
-        return types.Macro(Cuda_blockDim_y)
-
-    def resolve_z(self, mod):
-        return types.Macro(Cuda_blockDim_z)
-
-
-@register_attr
-class Cuda_gridDim(AttributeTemplate):
-    key = types.Module(cuda.gridDim)
-
-    def resolve_x(self, mod):
-        return types.Macro(Cuda_gridDim_x)
-
-    def resolve_y(self, mod):
-        return types.Macro(Cuda_gridDim_y)
-
-    def resolve_z(self, mod):
-        return types.Macro(Cuda_gridDim_z)
+        return types.int32
 
 
 @register_attr
@@ -394,7 +333,7 @@ class CudaSharedModuleTemplate(AttributeTemplate):
     key = types.Module(cuda.shared)
 
     def resolve_array(self, mod):
-        return types.Macro(Cuda_shared_array)
+        return types.Function(Cuda_shared_array)
 
 
 @register_attr
@@ -402,7 +341,7 @@ class CudaConstModuleTemplate(AttributeTemplate):
     key = types.Module(cuda.const)
 
     def resolve_array_like(self, mod):
-        return types.Macro(Cuda_const_arraylike)
+        return types.Function(Cuda_const_array_like)
 
 
 @register_attr
@@ -410,7 +349,7 @@ class CudaLocalModuleTemplate(AttributeTemplate):
     key = types.Module(cuda.local)
 
     def resolve_array(self, mod):
-        return types.Macro(Cuda_local_array)
+        return types.Function(Cuda_local_array)
 
 
 @register_attr
@@ -435,28 +374,28 @@ class CudaModuleTemplate(AttributeTemplate):
     key = types.Module(cuda)
 
     def resolve_grid(self, mod):
-        return types.Macro(Cuda_grid)
+        return types.Function(Cuda_grid)
 
     def resolve_gridsize(self, mod):
-        return types.Macro(Cuda_gridsize)
+        return types.Function(Cuda_gridsize)
 
     def resolve_threadIdx(self, mod):
-        return types.Module(cuda.threadIdx)
+        return dim3
 
     def resolve_blockIdx(self, mod):
-        return types.Module(cuda.blockIdx)
+        return dim3
 
     def resolve_blockDim(self, mod):
-        return types.Module(cuda.blockDim)
+        return dim3
 
     def resolve_gridDim(self, mod):
-        return types.Module(cuda.gridDim)
+        return dim3
 
     def resolve_warpsize(self, mod):
-        return types.Macro(Cuda_warpsize)
+        return types.int32
 
     def resolve_laneid(self, mod):
-        return types.Macro(Cuda_laneid)
+        return types.int32
 
     def resolve_shared(self, mod):
         return types.Module(cuda.shared)
