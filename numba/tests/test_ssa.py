@@ -281,3 +281,19 @@ class TestReportedSSAIssues(SSABaseTest):
             return lin[0]
 
         self.check_func(foo, np.zeros((2, 2)))
+
+    def test_issue5482(self):
+        @njit("(intp, intp, intp)")
+        def foo(x, v, n):
+            for i in range(n):
+                if i == 0:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = v
+                else:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = problematic + v
+            return problematic
