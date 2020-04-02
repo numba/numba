@@ -655,9 +655,10 @@ class TraceRunner(object):
 
     def op_SETUP_WITH(self, state, inst):
         cm = state.pop()    # the context-manager
+        state.append(inst, contextmanager=cm)
 
         yielded = state.make_temp()
-        state.append(inst, contextmanager=cm)
+        state.push(yielded)
 
         state.push_block(
             state.make_block(
@@ -667,7 +668,6 @@ class TraceRunner(object):
         )
 
         state.push(cm)
-        state.push(yielded)
 
         state.push_block(
             state.make_block(
