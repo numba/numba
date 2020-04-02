@@ -3895,12 +3895,6 @@ def np_asarray(a, dtype=None):
             for i, v in enumerate(a):
                 ret[i] = v
             return ret
-    elif isinstance(a, types.Literal):
-        val = str(a.literal_value)
-        dt = 'U' + str(len(val))
-        def impl(a, dtype=None):
-            _val = str(val) # convert the literal value to a UnicodeCharSeq
-            return np.array(_val, dtype=np.dtype(dt))
     return impl
 
 
