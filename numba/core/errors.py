@@ -433,11 +433,17 @@ def deprecate_moved_module_getattr(old_module, new_module):
     locations
     """
     def wrapper(attr):
-        mod = import_module(new_module)
-        ret_attr = getattr(mod, attr)
-        msg = _moved_msg2.format(attr, old_module, new_module)
-        warnings.warn(msg, category=NumbaDeprecationWarning, stacklevel=2)
-        return ret_attr
+        if new_module is None:
+            msg = _moved_no_replacement
+            modnattr = '{}.{}'.format(old_module, attr)
+            raise AttributeError(_moved_no_replacement.format(modnattr))
+        else:
+            mod = import_module(new_module)
+            ret_attr = getattr(mod, attr)
+            msg = _moved_msg1.format(old_module, new_module)
+            msg = _moved_msg2.format(attr, old_module, new_module)
+            warnings.warn(msg, category=NumbaDeprecationWarning, stacklevel=2)
+            return ret_attr
     return wrapper
 
 

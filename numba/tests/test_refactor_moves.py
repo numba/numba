@@ -109,7 +109,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
             getattr(numba.unsafe, fn)
         for x in w:
-            if "No direct replacement available" in str(x.message):
+            if "No direct replacement for 'numba.unsafe'" in str(x.message):
                 break
         else:
             raise ValueError("Could not find expected warning message")
@@ -332,6 +332,13 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning("numba.targets", None)
         with checker():
             import numba.targets  # noqa: F401
+
+        import numba.targets  # noqa: F401
+        with self.assertRaises(AttributeError) as raises:
+            numba.targets.doesnotexist
+
+        self.assertIn("No direct replacement for 'numba.targets.doesnotexist'",
+                      str(raises.exception))
 
     def test_numba_targets_boxing(self):
         checker = self.check_warning(
