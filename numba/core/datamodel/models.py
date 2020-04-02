@@ -39,7 +39,7 @@ class DataModel(object):
         return self._fe_type
 
     def get_value_type(self):
-        raise NotImplementedError
+        raise NotImplementedError(self)
 
     def get_data_type(self):
         return self.get_value_type()
@@ -53,7 +53,7 @@ class DataModel(object):
         return self.get_value_type()
 
     def as_data(self, builder, value):
-        raise NotImplementedError
+        raise NotImplementedError(self)
 
     def as_argument(self, builder, value):
         """
@@ -76,7 +76,7 @@ class DataModel(object):
         raise NotImplementedError(self)
 
     def from_return(self, builder, value):
-        raise NotImplementedError
+        raise NotImplementedError(self)
 
     def load_from_data_pointer(self, builder, ptr, align=None):
         """

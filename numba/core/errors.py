@@ -71,6 +71,12 @@ class NumbaTypeSafetyWarning(NumbaWarning):
     Warning category for unsafe casting operations.
     """
 
+
+class NumbaExperimentalFeatureWarning(NumbaWarning):
+    """
+    Warning category for using an experimental feature.
+    """
+
 # These are needed in the color formatting of errors setup
 
 

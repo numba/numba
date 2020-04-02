@@ -33,8 +33,20 @@ The following Python constructs are not supported:
 * Comprehensions (either list, dict, set or generator comprehensions)
 * Generator (any ``yield`` statements)
 
-The ``raise`` and ``assert`` statements are supported.
-See :ref:`nopython language support <pysupported-language>`.
+The ``raise`` statement is supported.
+
+The ``assert`` statement is supported, but only has an effect when
+``debug=True`` is passed to the :func:`numba.cuda.jit` decorator. This is
+similar to the behavior of the ``assert`` keyword in CUDA C/C++, which is
+ignored unless compiling with device debug turned on.
+
+
+Printing of strings, integers, and floats is supported, but printing is an
+asynchronous operation - in order to ensure that all output is printed after a
+kernel launch, it is necessary to call :func:`numba.cuda.synchronize`. Eliding
+the call to ``synchronize`` is acceptable, but output from a kernel may appear
+during other later driver operations (e.g. subsequent kernel launches, memory
+transfers, etc.), or fail to appear before the program execution completes.
 
 Built-in types
 ===============

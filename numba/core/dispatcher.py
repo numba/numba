@@ -691,6 +691,12 @@ class Dispatcher(_DispatcherBase):
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
 
+    def dump(self, tab=''):
+        print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}, type code={self._type._code}]')
+        for cres in self.overloads.values():
+            cres.dump(tab = tab + '  ')
+        print(f'{tab}END DUMP {type(self).__name__}[{self.py_func.__name__}]')
+
     @property
     def _numba_type_(self):
         return types.Dispatcher(self)
@@ -779,7 +785,7 @@ class Dispatcher(_DispatcherBase):
                 # XXX fold this in add_overload()? (also see compiler.py)
                 if not cres.objectmode and not cres.interpmode:
                     self.targetctx.insert_user_function(cres.entry_point,
-                                                cres.fndesc, [cres.library])
+                                                        cres.fndesc, [cres.library])
                 self.add_overload(cres)
                 return cres.entry_point
 
@@ -793,6 +799,15 @@ class Dispatcher(_DispatcherBase):
             self.add_overload(cres)
             self._cache.save_overload(sig, cres)
             return cres.entry_point
+
+    def get_compile_result(self, sig):
+        """Compile (if needed) and return the compilation result with the
+        given signature.
+        """
+        atypes = tuple(sig.args)
+        if atypes not in self.overloads:
+            self.compile(atypes)
+        return self.overloads[atypes]
 
     def recompile(self):
         """
@@ -846,6 +861,18 @@ class Dispatcher(_DispatcherBase):
             return self.overloads[signature].metadata
         else:
             return dict((sig, self.overloads[sig].metadata) for sig in self.signatures)
+
+    def get_function_type(self):
+        """Return unique function type of dispatcher when possible, otherwise
+        return None.
+
+        A Dispatcher instance has unique function type when it
+        contains exactly one compilation result and its compilation
+        has been disabled (via its disable_compile method).
+        """
+        if not self._can_compile and len(self.overloads) == 1:
+            cres = tuple(self.overloads.values())[0]
+            return types.FunctionType(cres.signature)
 
 
 class LiftedCode(_DispatcherBase):
@@ -910,7 +937,6 @@ class LiftedCode(_DispatcherBase):
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:
                 raise cres.typing_error
-
             self.add_overload(cres)
             return cres.entry_point
 

@@ -6,7 +6,6 @@ import numpy as np
 
 from numba.core.utils import cached_property, add_metaclass
 
-
 # Types are added to a global registry (_typecache) in order to assign
 # them unique integer codes for fast matching in _dispatcher.c.
 # However, we also want types to be disposable, therefore we ensure
@@ -218,6 +217,9 @@ class Type(object):
         """ Returns True if this class is an internally defined Numba type by
         virtue of the module in which it is instantiated, False else."""
         return self._is_internal
+
+    def dump(self, tab=''):
+        print(f'{tab}DUMP {type(self).__name__}[code={self._code}, name={self.name}]')
 
 # XXX we should distinguish between Dummy (no meaningful
 # representation, e.g. None or a builtin function) and Opaque (has a
