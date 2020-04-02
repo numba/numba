@@ -401,6 +401,10 @@ class PyLower(BaseLower):
         elif expr.op == 'phi':
             raise LoweringError("PHI not stripped")
 
+        elif expr.op == 'null':
+            # TODO
+            raise LoweringError("Expr.null not stripped")
+
         else:
             raise NotImplementedError(expr)
 
