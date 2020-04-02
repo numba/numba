@@ -803,8 +803,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield 10 + 0j
             yield (1 + 4j, 2 + 0j)
             yield np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
-            yield 'string'
-            yield None
 
         pyfuncs = [iscomplex, isreal]
         for pyfunc in pyfuncs:
@@ -813,26 +811,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 expected = pyfunc(x)
                 got = cfunc(x)
                 self.assertPreciseEqual(expected, got)
-
-    def test_optional_input(self):
-
-        def optional(x):
-            arr = np.array(12j)
-            if x > 0:
-                arr = None
-
-            return np.asarray([
-                np.isreal(arr),
-                np.iscomplex(arr),
-                np.isrealobj(arr),
-                np.iscomplexobj(arr)])
-
-        pyfunc = optional
-        cfunc = jit(nopython=True)(pyfunc)
-        for x in [-1, 1]:
-            expected = pyfunc(x)
-            got = cfunc(x)
-            self.assertPreciseEqual(expected, got)
 
     def test_isneg_or_ispos_inf(self):
         def values():

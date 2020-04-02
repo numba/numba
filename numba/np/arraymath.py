@@ -671,34 +671,23 @@ def get_isnan(dtype):
 
 
 @register_jitable
-def _impl_iscomplex_isreal_arr(fn, x):
+def _impl_iscomplex_isreal_arr(x, fn):
     ax = np.asarray(x) # NumPy uses asanyarray here!
     return fn(ax.imag, 0)
 
 
-@register_jitable
-def np_iscomplex_isreal(x, operator_fn, opt_ret):
-    if type_can_asarray(x):
-        return lambda x: _impl_iscomplex_isreal_arr(operator_fn, x)
-    elif isinstance(x, types.Optional):
-        return None
-    elif is_nonelike(x):
-        def impl(x):
-            return opt_ret
-    else:
-        def impl(x):
-            return False
-    return impl
-
-
 @overload(np.iscomplex)
 def np_iscomplex(x):
-    return np_iscomplex_isreal(x, operator.ne, False)
+    if type_can_asarray(x):
+        return lambda x: _impl_iscomplex_isreal_arr(x, operator.ne)
+    return None
 
 
 @overload(np.isreal)
 def np_isreal(x):
-    return np_iscomplex_isreal(x, operator.eq, True)
+    if type_can_asarray(x):
+        return lambda x: _impl_iscomplex_isreal_arr(x, operator.eq)
+    return None
 
 
 @overload(np.iscomplexobj)
@@ -765,19 +754,10 @@ def is_np_inf_impl(x, out, fn):
         raise TypingError("First argument must be array-like")
 
     if is_nonelike(out):
-        if isinstance(x, (types.Array, types.Sequence, types.Tuple)):
-            def impl(x, out=None):
-                x = np.asarray(x)
-                out = np.zeros(x.shape, dtype=types.boolean)
-                np.logical_and(np.isinf(x), fn(np.signbit(x)), out)
-                return out
-        else:
-            def impl(x, out=None):
-                out = np.isinf(x) and fn(np.signbit(x))
-                return out
+        def impl(x, out=None):
+            return np.logical_and(np.isinf(x), fn(np.signbit(x)))
     else:
         def impl(x, out=None):
-            x = np.asarray(x)
             return np.logical_and(np.isinf(x), fn(np.signbit(x)), out)
 
     return impl
