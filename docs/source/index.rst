@@ -19,16 +19,22 @@ with Numba, we suggest you start with the :doc:`User manual <user/index>`.
 
 
 .. toctree::
-   :caption: For GPU users
+   :caption: For CUDA users
    :maxdepth: 2
 
    cuda/index.rst
    cuda-reference/index.rst
+
+
+.. toctree::
+   :caption: For ROCm users
+   :maxdepth: 2
+
    roc/index.rst
 
 
 .. toctree::
-   :caption: For advanced users and developers
+   :caption: For advanced users & developers
    :maxdepth: 2
 
    extending/index.rst
