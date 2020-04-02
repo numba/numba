@@ -543,6 +543,17 @@ class Expr(Inst):
         op = 'make_function'
         return cls(op=op, name=name, code=code, closure=closure, defaults=defaults, loc=loc)
 
+    @classmethod
+    def null(cls, loc):
+        """
+        A node for null value.
+
+        This node is not handled by type inference. It is only added by
+        post-typing passing.
+        """
+        op = 'null'
+        return cls(op=op, loc=loc)
+
     def __repr__(self):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)

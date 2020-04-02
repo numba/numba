@@ -1251,6 +1251,9 @@ class Lower(BaseLower):
         elif expr.op == "phi":
             raise LoweringError("PHI not stripped")
 
+        elif expr.op == 'null':
+            return self.context.get_constant_null(resty)
+
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)
             return res
