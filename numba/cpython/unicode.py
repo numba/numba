@@ -2343,20 +2343,24 @@ def ol_chr(i):
 
 
 @overload(str)
-def str_overload(n):
-    impl = None
+def integer_str(n):
     if isinstance(n, types.Integer):
         def impl(n):
             s = ''
+            flag = False
+            if n < 0:
+                n *= -1
+                flag = True
+            if n == 0:
+                return '0'
             while n > 0:
                 c = chr(ord('0') + (n % 10))
                 n = n // 10
                 s = c + s
+            if flag:
+                s = '-' + s
             return s
-    if isinstance(n, (types.UnicodeType, types.UnicodeCharSeq, types.CharSeq)):
-        def impl(n):
-            return n
-    return impl
+        return impl
 # ------------------------------------------------------------------------------
 # iteration
 # ------------------------------------------------------------------------------

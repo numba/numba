@@ -91,6 +91,9 @@ def globals_usecase():
 def hex_usecase(x):
     return hex(x)
 
+def str_usecase(x):
+    return str(x)
+
 def int_usecase(x, base):
     return int(x, base=base)
 
@@ -504,6 +507,24 @@ class TestBuiltins(TestCase):
     def test_hex_npm(self):
         with self.assertTypingError():
             self.test_hex(flags=no_pyobj_flags)
+
+    def test_str(self, flags=nrt_no_pyobj_flags):
+        pyfunc = str_usecase
+
+        cr = compile_isolated(pyfunc, (types.int64,), flags=flags)
+        cfunc = cr.entry_point
+
+        args = [
+            123456789,
+            2**32-1,
+            0,
+            33,
+            -33,
+        ]
+
+        for v in args:
+            self.assertPreciseEqual(cfunc(v), pyfunc(v))
+
 
     def test_int(self, flags=enable_pyobj_flags):
         pyfunc = int_usecase
