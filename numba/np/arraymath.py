@@ -3901,10 +3901,6 @@ def np_asarray(a, dtype=None):
         def impl(a, dtype=None):
             _val = str(val) # convert the literal value to a UnicodeCharSeq
             return np.array(_val, dtype=np.dtype(dt))
-    elif isinstance(a, types.UnicodeType):
-        def impl(a, dtype=None):
-            # dt = 'U' + str(a._length) # dt is UnicodeType
-            return np.array(a, dtype=np.dtype('U12'))
     return impl
 
 
