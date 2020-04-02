@@ -782,7 +782,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield 1
             yield 1 + 0j
             yield np.asarray([3, 1 + 0j, True])
-            yield None
             yield "hello world"
 
         pyfuncs = [iscomplexobj, isrealobj]
@@ -831,13 +830,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 expected = pyfunc(x, out)
                 got = cfunc(x, out)
                 self.assertPreciseEqual(expected, got)
-
-        for pyfunc in pyfuncs:
-            cfunc = jit(nopython=True)(pyfunc)
-            with self.assertRaises(TypingError) as raises:
-                cfunc(None)
-            self.assertIn("First argument must be array-like",
-                          str(raises.exception))
 
     def bincount_sequences(self):
         """

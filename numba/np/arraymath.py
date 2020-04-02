@@ -699,7 +699,7 @@ def iscomplexobj(x):
         raise TypingError(msg.format(x.key, x.key))
     dt = determine_dtype(x)
     iscmplx = np.issubdtype(dt, np.complexfloating)
-    return lambda x: False if x is None else iscmplx
+    return lambda x: iscmplx
 
 
 @overload(np.isrealobj)
@@ -749,9 +749,6 @@ def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
 
 def is_np_inf_impl(x, out, fn):
-
-    if not type_can_asarray(x):
-        raise TypingError("First argument must be array-like")
 
     if is_nonelike(out):
         def impl(x, out=None):
