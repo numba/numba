@@ -591,12 +591,14 @@ def _make_dtype_object(typingctx, desc):
         # Convert the str description into np.dtype then to numba type.
         nb_type = from_dtype(np.dtype(thestr))
         return from_nb_type(nb_type)
+    elif isinstance(desc, types.UnicodeType):
+        return from_nb_type(desc)
 
 @overload(np.dtype)
 def numpy_dtype(desc):
     """Provide an implementation so that numpy.dtype function can be lowered.
     """
-    if isinstance(desc, (types.Literal, types.functions.NumberClass)):
+    if isinstance(desc, (types.Literal, types.functions.NumberClass, types.UnicodeType)):
         def imp(desc):
             return _make_dtype_object(desc)
         return imp

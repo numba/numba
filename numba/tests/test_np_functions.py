@@ -3055,6 +3055,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.arange(4)
             yield np.arange(12).reshape(3, 4)
             yield np.arange(12).reshape(3, 4).T
+            yield 'hello world'
 
             # Test cases for `numba.typed.List`
             def make_list(values):

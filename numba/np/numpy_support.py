@@ -605,7 +605,7 @@ def type_can_asarray(arr):
     implementation, False otherwise.
     """
 
-    ok = (types.Array, types.Sequence, types.Tuple, types.UnicodeType,
+    ok = (types.Array, types.Sequence, types.Tuple, types.Literal, types.UnicodeType,
           types.Number, types.Boolean, types.containers.ListType)
 
     return isinstance(arr, ok)
