@@ -5,8 +5,6 @@ Implementation of compiled C callbacks (@cfunc).
 
 import ctypes
 
-from llvmlite import ir
-
 from numba.core import utils, compiler, registry
 from numba.core.caching import NullCache, FunctionCache
 from numba.core.dispatcher import _FunctionCompiler
@@ -19,6 +17,7 @@ class _CFuncCompiler(_FunctionCompiler):
 
     def _customize_flags(self, flags):
         flags.set('no_cpython_wrapper', True)
+        flags.set('no_cfunc_wrapper', False)
         # Disable compilation of the IR module, because we first want to
         # add the cfunc wrapper.
         flags.set('no_compile', True)
@@ -78,54 +77,8 @@ class CFunc(object):
     def _compile_uncached(self):
         sig = self._sig
 
-        # Compile native function
-        cres = self._compiler.compile(sig.args, sig.return_type)
-        assert not cres.objectmode  # disabled by compiler above
-        fndesc = cres.fndesc
-
-        # Compile C wrapper
-        # Note we reuse the same library to allow inlining the Numba
-        # function inside the wrapper.
-        library = cres.library
-        module = library.create_ir_module(fndesc.unique_name)
-        context = cres.target_context
-        ll_argtypes = [context.get_value_type(ty) for ty in sig.args]
-        ll_return_type = context.get_value_type(sig.return_type)
-
-        wrapty = ir.FunctionType(ll_return_type, ll_argtypes)
-        wrapfn = module.add_function(wrapty, fndesc.llvm_cfunc_wrapper_name)
-        builder = ir.IRBuilder(wrapfn.append_basic_block('entry'))
-
-        self._build_c_wrapper(context, builder, cres, wrapfn.args)
-
-        library.add_ir_module(module)
-        library.finalize()
-
-        return cres
-
-    def _build_c_wrapper(self, context, builder, cres, c_args):
-        sig = self._sig
-        pyapi = context.get_python_api(builder)
-
-        fnty = context.call_conv.get_function_type(sig.return_type, sig.args)
-        fn = builder.module.add_function(fnty, cres.fndesc.llvm_func_name)
-
-        # XXX no obvious way to freeze an environment
-        status, out = context.call_conv.call_function(
-            builder, fn, sig.return_type, sig.args, c_args)
-
-        with builder.if_then(status.is_error, likely=False):
-            # If (and only if) an error occurred, acquire the GIL
-            # and use the interpreter to write out the exception.
-            gil_state = pyapi.gil_ensure()
-            context.call_conv.raise_error(builder, pyapi, status)
-            cstr = context.insert_const_string(builder.module, repr(self))
-            strobj = pyapi.string_from_string(cstr)
-            pyapi.err_write_unraisable(strobj)
-            pyapi.decref(strobj)
-            pyapi.gil_release(gil_state)
-
-        builder.ret(out)
+        # Compile native function as well as cfunc wrapper
+        return self._compiler.compile(sig.args, sig.return_type)
 
     @property
     def native_name(self):
@@ -176,3 +129,6 @@ class CFunc(object):
 
     def __repr__(self):
         return "<Numba C callback %r>" % (self.__qualname__,)
+
+    def __call__(self, *args, **kwargs):
+        return self._pyfunc(*args, **kwargs)

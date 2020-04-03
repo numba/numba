@@ -51,7 +51,7 @@ from numba.experimental import jitclass
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 
-# Enable bytes/unicode array support
+# Bytes/unicode array support
 import numba.cpython.charseq
 
 # Keep this for backward compatibility.

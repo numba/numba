@@ -5,7 +5,7 @@ from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
 from ..errors import TypingError
-
+from .. import utils
 
 class Pair(Type):
     """
@@ -135,6 +135,9 @@ class BaseTuple(ConstSized, Hashable):
                 else:
                     return NamedTuple(tys, pyclass)
         else:
+            dtype = utils.unified_function_type(tys)
+            if dtype is not None:
+                return UniTuple(dtype, len(tys))
             # non-named tuple
             homogeneous = is_homogeneous(*tys)
             if homogeneous:
@@ -273,6 +276,11 @@ class UnionType(Type):
 class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
     def __new__(cls, types):
+
+        t = utils.unified_function_type(types)
+        if t is not None:
+            return UniTuple(dtype=t, count=len(types))
+
         _HeterogeneousTuple.is_types_iterable(types)
 
         if types and all(t == types[0] for t in types[1:]):
@@ -540,7 +548,7 @@ class ListType(IterableType):
         """Refine to a precise list type
         """
         res = cls(itemty)
-        res.is_precise()
+        assert res.is_precise()
         return res
 
     def unify(self, typingctx, other):
@@ -622,7 +630,7 @@ class DictType(IterableType):
         """Refine to a precise dictionary type
         """
         res = cls(keyty, valty)
-        res.is_precise()
+        assert res.is_precise()
         return res
 
     def unify(self, typingctx, other):

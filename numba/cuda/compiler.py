@@ -31,6 +31,7 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
+    flags.set('no_cfunc_wrapper')
     if debug:
         flags.set('debuginfo')
     if inline:
