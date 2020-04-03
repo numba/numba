@@ -1,7 +1,5 @@
 from numba.core import types, config
-from numba.core import errors
 from numba.experimental.jitclass.base import register_class_type, ClassBuilder
-import warnings
 
 
 def jitclass(spec):
