@@ -678,6 +678,18 @@ class TestMiscIssues(TestCase):
             res = cfunc(v)
             self.assertEqual(res, pyfunc(v))
 
+    def test_issue_5501(self):
+        # post SSA changes
+        @jit(nopython=True)
+        def foo(a):
+            trace = 0
+            for i in range(a.shape[0]):
+                trace += np.tanh(a[i, i])
+            return a + trace
+
+        args = [np.arange(5**2).reshape(5, 5)]
+        self.assertPreciseEqual(foo(*args), foo.py_func(*args))
+
 
 class TestFoldArguments(unittest.TestCase):
     def check_fold_arguments_list_inputs(self, func, args, kws):
