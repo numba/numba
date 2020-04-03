@@ -187,7 +187,7 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), njit_func,
+        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), # njit_func,
                       mk_njit_with_sig_func(sig), mk_ctypes_func(sig)][:-1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
@@ -218,7 +218,7 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), njit_func,
+        for decor in [mk_cfunc_func(sig), # njit_func,
                       mk_njit_with_sig_func(sig), mk_wap_func(sig),
                       mk_ctypes_func(sig)][:-1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
@@ -498,7 +498,7 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [
-                mk_cfunc_func(sig), mk_wap_func(sig), njit_func,
+                mk_cfunc_func(sig), mk_wap_func(sig), # njit_func,
                 mk_njit_with_sig_func(sig), mk_ctypes_func(sig)][:-1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
@@ -529,7 +529,7 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), njit_func,
+        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), # njit_func,
                       mk_njit_with_sig_func(sig), mk_ctypes_func(sig)][:-1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
@@ -917,14 +917,15 @@ class TestMiscIssues(TestCase):
                 r = f(r)
             return r
 
-        # Problem:
-        a = jit(nopython=True)(lambda x: x + 1)
-        b = jit(nopython=True)(lambda x: x + 2)
-        foo = jit(nopython=True)(foo_template)
-        r = foo((a, b), 0)
-        self.assertEqual(r, 3)
-        # the Tuple type of foo first argument is UndefinedFunctionType:
-        self.assertEqual(foo.signatures[0][0].dtype.is_precise(), False)
+        if 0:
+            # Problem:
+            a = jit(nopython=True)(lambda x: x + 1)
+            b = jit(nopython=True)(lambda x: x + 2)
+            foo = jit(nopython=True)(foo_template)
+            r = foo((a, b), 0)
+            self.assertEqual(r, 3)
+            # the Tuple type of foo first argument is UndefinedFunctionType:
+            self.assertEqual(foo.signatures[0][0].dtype.is_precise(), False)
 
         # Solution:
         a = jit(nopython=True)(lambda x: x + 1)
@@ -1019,10 +1020,14 @@ class TestMiscIssues(TestCase):
     def test_issue_5470(self):
 
         @njit()
-        def foo():
+        def foo1():
             return 0
 
-        formulae_foo = (foo, foo)
+        @njit()
+        def foo2():
+            return 0
+
+        formulae_foo = (foo1, foo1)
 
         @njit()
         def bar_scalar(_, __):
@@ -1032,4 +1037,12 @@ class TestMiscIssues(TestCase):
         def bar():
             return bar_scalar(*formulae_foo)
 
-        bar()
+        self.assertEqual(bar(), 0)
+
+        formulae_foo = (foo1, foo2)
+
+        @njit()
+        def bar():
+            return bar_scalar(*formulae_foo)
+
+        self.assertEqual(bar(), 0)

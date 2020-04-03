@@ -277,7 +277,7 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
     def __new__(cls, types):
 
-        t = utils.unified_function_type(types, require_precise=False)
+        t = utils.unified_function_type(types, require_precise=True)
         if t is not None:
             return UniTuple(dtype=t, count=len(types))
 
