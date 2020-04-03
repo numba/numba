@@ -549,7 +549,7 @@ class Expr(Inst):
         A node for null value.
 
         This node is not handled by type inference. It is only added by
-        post-typing passing.
+        post-typing passes.
         """
         op = 'null'
         return cls(op=op, loc=loc)
