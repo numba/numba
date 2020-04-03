@@ -282,7 +282,9 @@ class TestReportedSSAIssues(SSABaseTest):
 
         self.check_func(foo, np.zeros((2, 2)))
 
-    def test_issue5482(self):
+    def test_issue5482_missing_variable_init(self):
+        # Test error that lowering fails because variable is missing
+        # a definition before use.
         @njit("(intp, intp, intp)")
         def foo(x, v, n):
             for i in range(n):
@@ -299,6 +301,8 @@ class TestReportedSSAIssues(SSABaseTest):
             return problematic
 
     def test_issue5493_unneeded_phi(self):
+        # Test error that unneeded phi is inserted because variable does not
+        # have a dominance definition.
         data = (np.ones(2), np.ones(2))
         A = np.ones(1)
         B = np.ones((1,1))
@@ -309,7 +313,7 @@ class TestReportedSSAIssues(SSABaseTest):
                 v0 = data[0]
             else:
                 v0 = data[0]
-                # Unneeded PHI node here would be inserted here
+                # Unneeded PHI node for `problematic` would be placed here
                 for _ in range(1, len(data)):
                     v0 += A
 
