@@ -5,7 +5,6 @@ from contextlib import contextmanager
 
 from numba.core.errors import NumbaDeprecationWarning
 from numba.tests.support import TestCase
-from numba.core.utils import PYVERSION
 
 
 class TestAPIMoves_Q1_2020(TestCase):
@@ -26,38 +25,33 @@ class TestAPIMoves_Q1_2020(TestCase):
         @contextmanager
         def checker(fn=None):
             """
-            If fn is not None and Python version is >= 3.7 then a check will be
-            made to ensure the module level `__getattr__`
+            If fn is not None then a check will be made to ensure the module
+            level `__getattr__`
             """
-            if fn is not None and PYVERSION < (3, 7):
-                # nothing to check , there's no module __getattr__ to intercept
-                # in Python < 3.7
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always", NumbaDeprecationWarning)
                 yield
-            else:
-                with warnings.catch_warnings(record=True) as w:
-                    warnings.simplefilter("always", NumbaDeprecationWarning)
-                    yield
-                self.assertTrue(len(w) > 0)
-                _require = "requested from a module that has moved location"
-                for x in w:
-                    if to_mod is not None:
-                        c1 = _require in str(x.message)
-                        c2 = from_mod in str(x.message)
-                        c3 = to_mod in str(x.message)
-                    else:  # check for help link
-                        c1 = True
-                        c2 = from_mod in str(x.message)
-                        c3 = "gitter.im" in str(x.message)
-                    if fn is not None:
-                        c4 = "Import of '{}' requested".format(fn) in str(
-                            x.message
-                        )
-                    else:
-                        c4 = True
-                    if c1 and c2 and c3 and c4:
-                        break
+            self.assertTrue(len(w) > 0)
+            _require = "requested from a module that has moved location"
+            for x in w:
+                if to_mod is not None:
+                    c1 = _require in str(x.message)
+                    c2 = from_mod in str(x.message)
+                    c3 = to_mod in str(x.message)
+                else:  # check for help link
+                    c1 = True
+                    c2 = from_mod in str(x.message)
+                    c3 = "gitter.im" in str(x.message)
+                if fn is not None:
+                    c4 = "Import of '{}' requested".format(fn) in str(
+                        x.message
+                    )
                 else:
-                    raise ValueError("No valid warning message found")
+                    c4 = True
+                if c1 and c2 and c3 and c4:
+                    break
+            else:
+                raise ValueError("No valid warning message found")
 
         return checker
 

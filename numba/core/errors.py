@@ -15,6 +15,7 @@ from numba.core.utils import add_metaclass, reraise, chain_exception
 from functools import wraps
 from abc import abstractmethod
 from importlib import import_module
+from types import ModuleType
 
 # Filled at the end
 __all__ = []
@@ -416,7 +417,7 @@ _moved_no_replacement = ("No direct replacement for '{}' available. Visit "
                          "Thanks!")
 
 
-def deprecate_moved_module(old_module, new_module, stacklevel=3):
+def deprecate_moved_module(old_module, new_module, stacklevel=2):
     """Warn about a module level location move of some part of Numba's
     internals. stacklevel is 3 by default as most warning locations are
     from `numba.XYZ` shims.
@@ -425,20 +426,36 @@ def deprecate_moved_module(old_module, new_module, stacklevel=3):
         msg = _moved_no_replacement.format(old_module)
     else:
         msg = _moved_msg1.format(old_module, new_module)
-    warnings.warn(msg, category=NumbaDeprecationWarning, stacklevel=stacklevel)
+    warnings.warn(
+        msg, category=NumbaDeprecationWarning, stacklevel=stacklevel + 1)
 
 
-def deprecate_moved_module_getattr(old_module, new_module):
-    """For replacing module level __getattr__ to warn users above modules moving
-    locations
-    """
-    def wrapper(attr):
-        mod = import_module(new_module)
-        ret_attr = getattr(mod, attr)
-        msg = _moved_msg2.format(attr, old_module, new_module)
-        warnings.warn(msg, category=NumbaDeprecationWarning, stacklevel=2)
-        return ret_attr
-    return wrapper
+class _MovedModule(ModuleType):
+    def __init__(self, old_module_locals, new_module):
+        old_module = old_module_locals['__name__']
+        super().__init__(old_module)
+
+        # copy across dunders so that package imports work too
+        for attr, value in old_module_locals.items():
+            if attr.startswith('__') and attr.endswith('__'):
+                setattr(self, attr, value)
+
+        self.__new_module = new_module
+        deprecate_moved_module(old_module, new_module, stacklevel=3)
+
+    def __getattr__(self, attr):
+        """ warn users above modules moving locations """
+
+        # import from the moved module
+        if self.__new_module is not None:
+            mod = import_module(self.__new_module)
+            ret_attr = getattr(mod, attr)
+            msg = _moved_msg2.format(attr, self.__name__, self.__new_module)
+            warnings.warn(msg, category=NumbaDeprecationWarning, stacklevel=2)
+            return ret_attr
+        else:
+            # produce the usual error
+            return super().__getattribute__(attr)
 
 
 class WarningsFixer(object):

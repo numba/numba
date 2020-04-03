@@ -579,7 +579,6 @@ class ParallelTestResult(runner.TextTestResult):
         self.expectedFailures.extend(result.expectedFailures)
         self.unexpectedSuccesses.extend(result.unexpectedSuccesses)
 
-
 class _MinimalResult(object):
     """
     A minimal, picklable TestResult-alike object.
