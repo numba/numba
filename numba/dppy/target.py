@@ -81,11 +81,12 @@ class DPPyTargetContext(BaseContext):
 
     def load_additional_registries(self):
         from .ocl import oclimpl, mathimpl
-        from numba.targets import npyimpl
+        from numba.targets import npyimpl, cmathimpl
 
         self.insert_func_defn(oclimpl.registry.functions)
         self.insert_func_defn(mathimpl.registry.functions)
         self.insert_func_defn(npyimpl.registry.functions)
+        self.insert_func_defn(cmathimpl.registry.functions)
 
     @cached_property
     def call_conv(self):

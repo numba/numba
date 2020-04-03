@@ -56,7 +56,7 @@ class TestDPPYSumReduction(DPPYTestCase):
         device_env.copy_array_from_device(dR)
         result = A.sum()
         max_abs_err = result - R[0]
-        self.assertTrue(max_abs_err < 1e-13)
+        self.assertTrue(max_abs_err < 1e-4)
 
 
 if __name__ == '__main__':
