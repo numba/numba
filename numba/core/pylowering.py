@@ -402,8 +402,8 @@ class PyLower(BaseLower):
             raise LoweringError("PHI not stripped")
 
         elif expr.op == 'null':
-            # TODO
-            raise LoweringError("Expr.null not stripped")
+            # Make null value
+            return cgutils.get_null_value(self.pyapi.pyobj)
 
         else:
             raise NotImplementedError(expr)
