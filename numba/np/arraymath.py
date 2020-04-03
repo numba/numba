@@ -670,23 +670,19 @@ def get_isnan(dtype):
         return _trivial_isnan
 
 
-@register_jitable
-def _impl_iscomplex_isreal_arr(x, fn):
-    ax = np.asarray(x) # NumPy uses asanyarray here!
-    return fn(ax.imag, 0)
-
-
 @overload(np.iscomplex)
 def np_iscomplex(x):
     if type_can_asarray(x):
-        return lambda x: _impl_iscomplex_isreal_arr(x, operator.ne)
+        # NumPy uses asanyarray here!
+        return lambda x: np.asarray(x).imag != 0
     return None
 
 
 @overload(np.isreal)
 def np_isreal(x):
     if type_can_asarray(x):
-        return lambda x: _impl_iscomplex_isreal_arr(x, operator.eq)
+        # NumPy uses asanyarray here!
+        return lambda x: np.asarray(x).imag == 0
     return None
 
 
