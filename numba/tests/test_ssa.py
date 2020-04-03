@@ -297,3 +297,36 @@ class TestReportedSSAIssues(SSABaseTest):
                     else:
                         problematic = problematic + v
             return problematic
+
+    def test_issue5493_unneeded_phi(self):
+        data = (np.ones(2), np.ones(2))
+        A = np.ones(1)
+        B = np.ones((1,1))
+
+        @njit
+        def foo(m, n, data):
+            if len(data) == 1:
+                v0 = data[0]
+            else:
+                v0 = data[0]
+                # Unneeded PHI node here would be inserted here
+                for _ in range(1, len(data)):
+                    v0 += A
+
+            for t in range(1, m):
+                for idx in range(n):
+                    t = B
+
+                    if idx == 0:
+                        if idx == n - 1:
+                            pass
+                        else:
+                            problematic = t
+                    else:
+                        if idx == n - 1:
+                            pass
+                        else:
+                            problematic = problematic + t
+            return problematic
+
+        foo(10, 10, data)
