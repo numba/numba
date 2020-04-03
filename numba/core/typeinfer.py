@@ -50,6 +50,7 @@ class TypeVar(object):
         self.define_loc = None
         # Qualifiers
         self.literal_value = NOTSET
+        self.is_phi_node = False
 
     def add_type(self, tp, loc):
         assert isinstance(tp, types.Type), type(tp)
@@ -63,7 +64,8 @@ class TypeVar(object):
                                              self.define_loc),
                                       loc=loc)
         else:
-            if self.type is not None:
+            if self.type is not None and self.is_phi_node:
+                unified = tp
                 unified = self.context.unify_pairs(self.type, tp)
                 if unified is None:
                     msg = "Cannot unify %s and %s for '%s', defined at %s"
@@ -1577,6 +1579,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                                               src=expr.value.name,
                                               loc=inst.loc))
         elif expr.op == 'phi':
+            self.typevars[target.name].is_phi_node = True
             for iv in expr.incoming_values:
                 if iv is not ir.UNDEFINED:
                     self.constraints.append(Propagate(dst=target.name,
