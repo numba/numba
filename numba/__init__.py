@@ -58,6 +58,31 @@ import numba.cpython.charseq
 test = runtests.main
 
 
+# needed for compatibility until 0.50.0. Note that accessing members of
+# numpy_support will raise DeprecationWarning
+_auto_import_submodules = {
+    'numba.numpy_support': 'numba.core.numpy_support'
+}
+if sys.version_info < (3, 7):
+    import importlib
+    for _old_mod in _auto_import_submodules.keys():
+        importlib.import_module(_old_mod)
+else:
+    def __getattr__(attr):
+        submodule_name = 'numba.{}'.format(attr)
+        try:
+            new_name = _auto_import_submodules[submodule_name]
+        except KeyError:
+            pass
+        else:
+            errors.deprecate_moved_module(submodule_name, new_name)
+            return importlib.import_module(submodule_name)
+
+        # produce the normal error message
+        from types import ModuleType
+        ModuleType.__getattribute__(sys.modules[__name__], attr)
+
+
 __all__ = """
     cfunc
     from_dtype
