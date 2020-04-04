@@ -87,6 +87,19 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(str(raises.exception),
                          "spec keys should be strings, got 1")
 
+    def test_init_errors(self):
+
+        @jitclass([])
+        class Test:
+            def __init__(self):
+                return 7
+
+        with self.assertRaises(errors.TypingError) as raises:
+            Test()
+
+        self.assertIn("__init__() should return None, not",
+                      str(raises.exception))
+
     def _make_Float2AndArray(self):
         spec = OrderedDict()
         spec['x'] = float32
