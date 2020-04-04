@@ -84,7 +84,7 @@ def _specialize_box(typ):
         setter = _generate_setter(field)
         dct[field] = property(getter, setter)
     # Inject properties as class properties
-    for field, impdct in typ.jitprops.items():
+    for field, impdct in typ.jit_props.items():
         getter = None
         setter = None
         if 'get' in impdct:

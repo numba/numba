@@ -179,16 +179,19 @@ def register_class_type(cls, spec, class_ctor, builder):
     for basecls in reversed(inspect.getmro(cls)):
         clsdct.update(basecls.__dict__)
 
-    methods = dict((k, v) for k, v in clsdct.items()
-                   if isinstance(v, pytypes.FunctionType))
-    props = dict((k, v) for k, v in clsdct.items()
-                 if isinstance(v, property))
-
-    others = dict((k, v) for k, v in clsdct.items()
-                  if k not in methods and k not in props)
+    methods, props, static_methods, others = {}, {}, {}, {}
+    for k, v in clsdct.items():
+        if isinstance(v, pytypes.FunctionType):
+            methods[k] = v
+        elif isinstance(v, property):
+            props[k] = v
+        elif isinstance(v, staticmethod):
+            static_methods[k] = v
+        else:
+            others[k] = v
 
     # Check for name shadowing
-    shadowed = (set(methods) | set(props)) & set(spec)
+    shadowed = (set(methods) | set(props) | set(static_methods)) & set(spec)
     if shadowed:
         raise NameError("name shadowing: {0}".format(', '.join(shadowed)))
 
@@ -203,25 +206,31 @@ def register_class_type(cls, spec, class_ctor, builder):
         if v.fdel is not None:
             raise TypeError("deleter is not supported: {0}".format(k))
 
-    jitmethods = {}
-    for k, v in methods.items():
-        jitmethods[k] = njit(v)
+    jit_methods = {k: njit(v) for k, v in methods.items()}
 
-    jitprops = {}
+    jit_props = {}
     for k, v in props.items():
         dct = {}
         if v.fget:
             dct['get'] = njit(v.fget)
         if v.fset:
             dct['set'] = njit(v.fset)
-        jitprops[k] = dct
+        jit_props[k] = dct
+
+    jit_static_methods = {}
+
+    for k, v in static_methods.items():
+        jit_v = njit(v.__func__)
+        jit_static_methods[k] = jit_v
+        jit_methods[k] = njit(lambda _, *args: jit_v(*args))
 
     # Instantiate class type
-    class_type = class_ctor(cls, ConstructorTemplate, spec, jitmethods,
-                            jitprops)
+    class_type = class_ctor(cls, ConstructorTemplate, spec, jit_methods,
+                            jit_props, jit_static_methods)
 
-    cls = JitClassType(cls.__name__, (cls,), dict(class_type=class_type,
-                                                  __doc__=docstring))
+    jit_class_dct = dict(class_type=class_type, __doc__=docstring)
+    jit_class_dct.update(jit_static_methods)
+    cls = JitClassType(cls.__name__, (cls,), jit_class_dct)
 
     # Register resolution of the class object
     typingctx = cpu_target.typing_context
@@ -229,7 +238,7 @@ def register_class_type(cls, spec, class_ctor, builder):
 
     # Register class
     targetctx = cpu_target.target_context
-    builder(class_type, methods, typingctx, targetctx).register()
+    builder(class_type, typingctx, targetctx).register()
 
     return cls
 
@@ -242,7 +251,7 @@ class ConstructorTemplate(templates.AbstractTemplate):
     def generic(self, args, kws):
         # Redirect resolution to __init__
         instance_type = self.key.instance_type
-        ctor = instance_type.jitmethods['__init__']
+        ctor = instance_type.jit_methods['__init__']
         boundargs = (instance_type.get_reference_type(),) + args
         disp_type = types.Dispatcher(ctor)
         sig = disp_type.get_call_type(self.context, boundargs, kws)
@@ -275,9 +284,8 @@ class ClassBuilder(object):
     class_impl_registry = imputils.Registry()
     implemented_methods = set()
 
-    def __init__(self, class_type, methods, typingctx, targetctx):
+    def __init__(self, class_type, typingctx, targetctx):
         self.class_type = class_type
-        self.methods = methods
         self.typingctx = typingctx
         self.targetctx = targetctx
 
@@ -296,7 +304,7 @@ class ClassBuilder(object):
         """
         Register method implementations for the given instance type.
         """
-        for meth in instance_type.jitmethods:
+        for meth in instance_type.jit_methods:
 
             # There's no way to retrieve the particular method name
             # inside the implementation function, so we have to register a
@@ -310,7 +318,7 @@ class ClassBuilder(object):
         def get_imp():
             def imp(context, builder, sig, args):
                 instance_type = sig.args[0]
-                method = instance_type.jitmethods[attr]
+                method = instance_type.jit_methods[attr]
                 disp_type = types.Dispatcher(method)
                 call = context.get_function(disp_type, sig)
                 out = call(builder, args)
@@ -328,8 +336,8 @@ class ClassBuilder(object):
                 def generic(self, args, kws):
                     instance = args[0]
                     if isinstance(instance, types.ClassInstanceType) and \
-                            _dunder_meth in instance.jitmethods:
-                        meth = instance.jitmethods[_dunder_meth]
+                            _dunder_meth in instance.jit_methods:
+                        meth = instance.jit_methods[_dunder_meth]
                         disp_type = types.Dispatcher(meth)
                         sig = disp_type.get_call_type(self.context, args, kws)
                         return sig
@@ -361,9 +369,9 @@ class ClassAttribute(templates.AttributeTemplate):
             # It's a struct field => the type is well-known
             return instance.struct[attr]
 
-        elif attr in instance.jitmethods:
+        elif attr in instance.jit_methods:
             # It's a jitted method => typeinfer it
-            meth = instance.jitmethods[attr]
+            meth = instance.jit_methods[attr]
             disp_type = types.Dispatcher(meth)
 
             class MethodTemplate(templates.AbstractTemplate):
@@ -376,9 +384,9 @@ class ClassAttribute(templates.AttributeTemplate):
 
             return types.BoundFunction(MethodTemplate, instance)
 
-        elif attr in instance.jitprops:
+        elif attr in instance.jit_props:
             # It's a jitted property => typeinfer its getter
-            impdct = instance.jitprops[attr]
+            impdct = instance.jit_props[attr]
             getter = impdct['get']
             disp_type = types.Dispatcher(getter)
             sig = disp_type.get_call_type(self.context, (instance,), {})
@@ -399,9 +407,9 @@ def get_attr_impl(context, builder, typ, value, attr):
         return imputils.impl_ret_borrowed(context, builder,
                                           typ.struct[attr],
                                           getattr(data, _mangle_attr(attr)))
-    elif attr in typ.jitprops:
+    elif attr in typ.jit_props:
         # It's a jitted property
-        getter = typ.jitprops[attr]['get']
+        getter = typ.jit_props[attr]['get']
         sig = templates.signature(None, typ)
         dispatcher = types.Dispatcher(getter)
         sig = dispatcher.get_call_type(context.typing_context, [typ], {})
@@ -439,9 +447,9 @@ def set_attr_impl(context, builder, sig, args, attr):
         # Delete old value
         context.nrt.decref(builder, attr_type, oldvalue)
 
-    elif attr in typ.jitprops:
+    elif attr in typ.jit_props:
         # It's a jitted property
-        setter = typ.jitprops[attr]['set']
+        setter = typ.jit_props[attr]['set']
         disp_type = types.Dispatcher(setter)
         sig = disp_type.get_call_type(context.typing_context,
                                       (typ, valty), {})
@@ -511,7 +519,7 @@ def ctor_impl(context, builder, sig, args):
     # TODO: extract the following into a common util
     init_sig = (sig.return_type,) + sig.args
 
-    init = inst_typ.jitmethods['__init__']
+    init = inst_typ.jit_methods['__init__']
     disp_type = types.Dispatcher(init)
     call = context.get_function(disp_type, types.void(*init_sig))
     _add_linking_libs(context, call)

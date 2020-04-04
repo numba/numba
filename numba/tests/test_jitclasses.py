@@ -907,6 +907,24 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         pickled = pickle.dumps(ty)
         self.assertIs(pickle.loads(pickled), ty)
 
+    def test_static_methods(self):
+        @jitclass(spec=[("x", int32)])
+        class Test:
+            def __init__(self, x):
+                self.x = x
+
+            def increase(self, y):
+                self.x = self.add(self.x, y)
+                return self.x
+
+            @staticmethod
+            def add(a, b):
+                return a + b
+
+        t = Test(0)
+        self.assertEqual(1, t.increase(1))
+        self.assertEqual(3, Test.add(1, 2))
+
 
 if __name__ == '__main__':
     unittest.main()
