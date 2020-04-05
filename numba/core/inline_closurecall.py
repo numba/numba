@@ -36,6 +36,7 @@ from numba.np.unsafe.ndarray import empty_inferred as unsafe_empty_inferred
 import numpy as np
 import operator
 import numba.misc.special
+from itertools import chain
 
 """
 Variable enable_inline_arraycall is only used for testing purpose.
@@ -1123,14 +1124,30 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
         dtype_str = str(dtype)
         if dtype_str == 'bool':
             dtype_str = 'bool_'
-        # Get dtype attribute of numpy module.
-        np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
-        stmts.append(_new_definition(func_ir, typ_var, np_typ_getattr, loc))
+
+        # Get dtype attribute of numpy module, unless it's a Record dtype.
+        # in that case, args already contains the dtype, which cannot
+        # be retrieved from numpy module
+        if not isinstance(dtype, types.Record):
+            np_typ_getattr = ir.Expr.getattr(g_np_var, dtype_str, loc)
+            stmts.append(_new_definition(func_ir, typ_var, np_typ_getattr, loc))
+        else:
+            typ_var = expr.args[1]
 
         # Create the call to numpy.empty passing the size tuple and dtype var.
         empty_call = ir.Expr.call(empty_func, [size_var, typ_var], {}, loc=loc)
         calltypes[empty_call] = typing.signature(array_typ, size_typ, nptype)
         stmts.append(_new_definition(func_ir, array_var, empty_call, loc))
+
+        # if it's a record array, scan all field names and create variables
+        if isinstance(dtype, types.Record):
+            field_vars = {}
+            rec_vars = {}
+            for j, field_name in enumerate(dtype.fields):
+                field_var = ir.Var(scope, mk_unique_var("field"), loc)
+                field_vars[field_name] = field_var
+                typemap[field_var.name] = types.StringLiteral(field_name)
+                stmts.append(_new_definition(func_ir, field_var, ir.Const(field_name, loc), loc))
 
         # Fill in the new empty array one-by-one.
         for i in range(size):
@@ -1139,13 +1156,61 @@ def _inline_const_arraycall(block, func_ir, context, typemap, calltypes):
             typemap[index_var.name] = index_typ
             stmts.append(_new_definition(func_ir, index_var,
                     ir.Const(i, loc), loc))
-            setitem = ir.SetItem(array_var, index_var, seq[i], loc)
-            calltypes[setitem] = typing.signature(types.none, array_typ,
+            if isinstance(dtype, types.Record):
+                # Record arrays need a additional inner loop for their elements
+                new_stmt, rec_var = get_record_var(array_typ, array_var, dtype,
+                                                   i, index_typ, index_var, loc,
+                                                   rec_vars)
+                stmts.append(new_stmt)
+                tup_var = seq[i]
+                tup_seq, _ = find_build_sequence(func_ir, tup_var)
+                for j, field_name in enumerate(dtype.fields):
+                    tup_item = tup_seq[j]
+                    setitem = set_record_field(dtype, field_name, field_vars,
+                                               loc, rec_var, tup_item)
+                    stmts.append(setitem)
+                for var in chain(field_vars.values(), rec_vars.values()):
+                    dels.append(ir.Del(var.name, loc))
+
+            else:
+                setitem = ir.SetItem(array_var, index_var, seq[i], loc)
+                calltypes[setitem] = typing.signature(types.none, array_typ,
                                                   index_typ, dtype)
-            stmts.append(setitem)
+                stmts.append(setitem)
 
         stmts.extend(dels)
         return True
+
+    def set_record_field(dtype, field_name, field_vars, loc, rec_var, tup_item):
+        """
+        Prepare statement for setting field of record
+
+        :return: set item statement
+        """
+        field_var = field_vars[field_name]
+        setitem = ir.StaticSetItem(rec_var, field_name, field_var, tup_item,
+                                   loc)
+        fieldty = dtype.fields[field_name].type
+        calltypes[setitem] = typing.signature(types.none, dtype,
+                                              types.StringLiteral(field_name),
+                                              fieldty)
+        return setitem
+
+    def get_record_var(array_typ, array_var, dtype, i, index_typ, index_var,
+                       loc, rec_vars):
+        """
+        Extracts element i-th of a record array and returns a v
+
+        :returns variable and statement of the new variable
+        """
+        rec_var = ir.Var(scope, mk_unique_var("record"), loc)
+        rec_vars[i] = rec_var
+        typemap[rec_var.name] = dtype
+        get_record = ir.Expr.static_getitem(array_var, i, index_var, loc)
+        calltypes[get_record] = typing.signature(dtype, array_typ, index_typ)
+        ir.Assign(get_record, rec_var, loc)
+        new_stmt = _new_definition(func_ir, rec_var, get_record, loc)
+        return new_stmt, rec_var
 
     class State(object):
         """
