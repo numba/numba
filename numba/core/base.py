@@ -387,7 +387,11 @@ class BaseContext(object):
         for impl, sig in defns:
             self._get_constants.append(impl, sig)
 
-    def insert_user_function(self, func, fndesc, libs=()):
+    def insert_user_function(self, func, fndesc, libs=(), uncompiled=False):
+        if uncompiled:
+            # uncompiled functions are not supported but this allows custom
+            # subclasses that implement support for uncompiled functions
+            return
         impl = user_function(fndesc, libs)
         self._defns[func].append(impl, impl.signature)
 

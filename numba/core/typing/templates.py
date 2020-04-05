@@ -517,14 +517,14 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # NOTE: If lowering is failing on a `_EmptyImplementationEntry`,
             #       the inliner has failed to inline this entry corretly.
             impl_init = _EmptyImplementationEntry('always inlined')
-            self._compiled_overloads[sig.args] = impl_init
+            self._impl_keys[sig.args] = impl_init
             if not self._inline.is_always_inline:
                 # this branch is here because a user has supplied a function to
                 # determine whether to inline or not. As a result both compiled
                 # function and inliner info needed, delaying the computation of
                 # this leads to an internal state mess at present. TODO: Fix!
                 sig = disp_type.get_call_type(self.context, new_args, kws)
-                self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+                self._impl_keys[sig.args] = disp_type.get_impl_key(sig)
                 # store the inliner information, it's used later in the cost
                 # model function call
                 iinfo = _inline_info(ir, typemap, calltypes, sig)
@@ -532,7 +532,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                                                     'iinfo': iinfo}
         else:
             sig = disp_type.get_call_type(self.context, new_args, kws)
-            self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
+            self._impl_keys[sig.args] = disp_type.get_impl_key(sig)
         return sig
 
     def _get_impl(self, args, kws):
@@ -612,7 +612,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         Return the key for looking up the implementation for the given
         signature on the target context.
         """
-        return self._compiled_overloads[sig.args]
+        return self._impl_keys[sig.args]
 
     @classmethod
     def get_source_info(cls):
@@ -661,7 +661,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
     name = "OverloadTemplate_%s" % (func_name,)
     base = _OverloadFunctionTemplate
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
-               _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
+               _impl_cache={}, _impl_keys={}, _jit_options=jit_options,
                _strict=strict, _inline=staticmethod(InlineOptions(inline)),
                _inline_overloads={})
     return type(base)(name, (base,), dct)

@@ -316,6 +316,13 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         args, return_type = sigutils.normalize_signature(sig)
         return self.overloads[tuple(args)].entry_point
 
+    def get_impl_key(self, sig):
+        """
+        Get the implementation key (used by the target context) for the
+        given signature.
+        """
+        return self.get_overload(sig)
+
     @property
     def is_compiling(self):
         """

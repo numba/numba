@@ -390,6 +390,11 @@ class NativeLowering(LoweringPass):
 
             from numba.core.compiler import _LowerResult  # TODO: move this
             if flags.no_compile:
+                # Insert function for use by other jitted-functions.
+                # (BaseContext does not support uncompiled functions but this
+                # enables implementing custom contexts that do.)
+                targetctx.insert_user_function(None, fndesc, [library],
+                                               uncompiled=True)
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=None, env=env)
             else:

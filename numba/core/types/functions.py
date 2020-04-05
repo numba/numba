@@ -301,7 +301,7 @@ class Dispatcher(WeakType, Callable, Dummy):
         """
         Get the implementation key for the given signature.
         """
-        return self.get_overload(sig)
+        return self.dispatcher.get_impl_key(sig.args)
 
     def unify(self, context, other):
         return utils.unified_function_type((self, other))
