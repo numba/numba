@@ -495,6 +495,14 @@ class NpArray(CallableTemplate):
     def generic(self):
         def typer(object, dtype=None):
             ndim, seq_dtype = _parse_nested_sequence(self.context, object)
+            if isinstance(dtype.dtype, types.Record):
+                # a nested sequence should be interpreted as ndim=1 array,
+                # with the other dimension being part of the Record
+                if ndim == 2:
+                    ndim = 1
+                else:
+                    raise ValueError("Only two levels of nested sequences "
+                                     "allowed for Record arrays")
             if dtype is None:
                 dtype = seq_dtype
             else:
