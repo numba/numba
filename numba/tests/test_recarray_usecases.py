@@ -2,6 +2,7 @@ import sys
 
 import numpy as np
 
+from numba import njit
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.tests.support import captured_stdout, tag, TestCase
@@ -142,6 +143,19 @@ class TestRecordUsecase(TestCase):
     def test_usecase5(self):
         self._test_usecase2to5(usecase5, self.unaligned_dtype)
         self._test_usecase2to5(usecase5, self.aligned_dtype)
+
+
+class TestRecArrayCreation(unittest.TestCase):
+    def test_creation_from_tuple_list(self):
+        a_b_type = np.dtype([('a', 'i8'), ('b', 'f8')], align=True)
+        x = np.array([(1, 2.), (3, 4.)], a_b_type)
+
+        @njit
+        def create():
+            new = np.array([(1., 2.), (3., 4.)], a_b_type)
+            return new
+
+        self.assertTrue(np.array_equal(create(), x))
 
 
 if __name__ == '__main__':
