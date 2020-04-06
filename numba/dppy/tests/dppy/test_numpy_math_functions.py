@@ -145,6 +145,19 @@ class TestNumpy_math_functions(DPPYTestCase):
         c = f(input_arr)
         self.assertTrue(np.all(c == -input_arr))
 
+
+    def test_fabs(self):
+        @njit(target='dppy')
+        def f(a):
+            c = np.fabs(a)
+            return c
+
+        input_arr = 5 * np.random.random_sample(self.N) - 5
+
+        c = f(input_arr)
+        self.assertTrue(np.all(c == -input_arr))
+
+
     def test_sign(self):
         @njit(target='dppy')
         def f(a):
@@ -167,6 +180,81 @@ class TestNumpy_math_functions(DPPYTestCase):
         c = f(input_arr)
         d = np.conj(input_arr)
         self.assertTrue(np.all(c == d))
+
+    def test_exp(self):
+        @njit(target='dppy')
+        def f(a):
+            c = np.exp(a)
+            return c
+
+        input_arr = np.random.randint(self.N, size=(self.N))
+        c = f(input_arr)
+        d = np.exp(input_arr)
+        self.assertTrue(np.all(c == d))
+
+
+    def test_log(self):
+        @njit(target='dppy')
+        def f(a):
+            c = np.log(a)
+            return c
+
+        input_arr = np.random.randint(1, self.N, size=(self.N))
+        c = f(input_arr)
+        d = np.log(input_arr)
+        max_abs_err = c.sum() - d.sum()
+        self.assertTrue(max_abs_err < 1e-5)
+
+
+    def test_log10(self):
+        @njit(target='dppy')
+        def f(a):
+            c = np.log10(a)
+            return c
+
+        input_arr = np.random.randint(1, self.N, size=(self.N))
+        c = f(input_arr)
+        d = np.log10(input_arr)
+        max_abs_err = c.sum() - d.sum()
+        self.assertTrue(max_abs_err < 1e-5)
+
+
+    def test_expm1(self):
+        @njit(target='dppy')
+        def f(a):
+            c = np.expm1(a)
+            return c
+
+        input_arr = np.random.randint(1, self.N, size=(self.N))
+        c = f(input_arr)
+        d = np.expm1(input_arr)
+        max_abs_err = c.sum() - d.sum()
+        self.assertTrue(max_abs_err < 1e-5)
+
+
+    def test_log1p(self):
+        @njit(target='dppy')
+        def f(a):
+            c = np.log1p(a)
+            return c
+
+        input_arr = np.random.randint(1, self.N, size=(self.N))
+        c = f(input_arr)
+        d = np.log1p(input_arr)
+        max_abs_err = c.sum() - d.sum()
+        self.assertTrue(max_abs_err < 1e-5)
+
+    def test_sqrt(self):
+        @njit(target='dppy')
+        def f(a):
+            c = np.sqrt(a)
+            return c
+
+        c = f(self.a)
+        d = np.sqrt(self.a)
+        max_abs_err = c.sum() - d.sum()
+        self.assertTrue(max_abs_err < 1e-5)
+
 
     def test_square(self):
         @njit(target='dppy')
