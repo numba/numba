@@ -340,7 +340,6 @@ class TestReportedSSAIssues(SSABaseTest):
         A = np.ones(1)
         B = np.ones((1,1))
 
-        @njit
         def foo(m, n, data):
             if len(data) == 1:
                 v0 = data[0]
@@ -366,4 +365,8 @@ class TestReportedSSAIssues(SSABaseTest):
                             problematic = problematic + t
             return problematic
 
-        foo(10, 10, data)
+        expect = foo(10, 10, data)
+        res1 = njit(foo)(10, 10, data)
+        res2 = jit(forceobj=True, looplift=False)(foo)(10, 10, data)
+        np.testing.assert_array_equal(expect, res1)
+        np.testing.assert_array_equal(expect, res2)
