@@ -446,7 +446,8 @@ def dead_branch_prune(func_ir, called_args):
             # see if this is a branch on a constant value predicate
             resolved_const = Unknown()
             try:
-                resolved_const = find_const(func_ir, branch.cond)
+                pred_call = get_definition(func_ir, branch.cond)
+                resolved_const = find_const(func_ir, pred_call.args[0])
                 if resolved_const is None:
                     resolved_const = types.NoneType('none')
             except GuardException:
