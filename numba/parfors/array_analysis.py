@@ -1444,8 +1444,8 @@ class ArrayAnalysis(object):
                                           cond_def.args[0])
                         if (condition is not None and
                             isinstance(condition, ir.Expr) and
-                            condition.op == 'binop'):
-                                handle_call_binop(condition)
+                                condition.op == 'binop'):
+                            handle_call_binop(condition)
             else:
                 if isinstance(cond_def, ir.Const):
                     cond_def = cond_def.value
