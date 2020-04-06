@@ -8,6 +8,7 @@ from numba.core.compiler import compile_isolated
 from numba.tests.support import captured_stdout, tag, TestCase
 import unittest
 from numba.np import numpy_support
+from numba.core.errors import TypingError
 
 
 def usecase1(arr1, arr2):
@@ -145,8 +146,8 @@ class TestRecordUsecase(TestCase):
         self._test_usecase2to5(usecase5, self.aligned_dtype)
 
 
-class TestRecArrayCreation(unittest.TestCase):
-    def test_creation_from_tuple_list(self):
+class TestRecArrayCreation(TestCase):
+    def test_creation(self):
         a_b_type = np.dtype([('a', 'i8'), ('b', 'f8')], align=True)
         x = np.array([(1, 2.), (3, 4.)], a_b_type)
 
@@ -155,7 +156,37 @@ class TestRecArrayCreation(unittest.TestCase):
             new = np.array([(1., 2.), (3., 4.)], a_b_type)
             return new
 
-        self.assertTrue(np.array_equal(create(), x))
+        with self.subTest("creation from list of tuple"):
+            self.assertTrue(np.array_equal(create(), x))
+
+        @njit
+        def create():
+            new = np.array([[1., 2.], [3., 4.]], a_b_type)
+            return new
+
+        with self.subTest("creation from nested list"):
+            self.assertTrue(np.array_equal(create(), x))
+
+    def test_creation_negative(self):
+        a_b_type = np.dtype([('a', 'i8'), ('b', 'f8')], align=True)
+
+        @njit
+        def create():
+            new = np.array([3., 4.], a_b_type)
+            return new
+
+        with self.subTest("creation from flat list"):
+            with self.assertRaises(TypingError):
+                create()
+
+        @njit
+        def create():
+            new = np.array([[[3., 4.]]], a_b_type)
+            return new
+
+        with self.subTest("creation from too nested list"):
+            with self.assertRaises(TypingError):
+                create()
 
 
 if __name__ == '__main__':
