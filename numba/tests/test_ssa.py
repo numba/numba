@@ -7,7 +7,7 @@ import logging
 
 import numpy as np
 
-from numba import njit, types
+from numba import njit, jit, types
 from numba.core import errors
 from numba.extending import overload
 from numba.tests.support import TestCase, override_config
@@ -289,6 +289,39 @@ class TestReportedSSAIssues(SSABaseTest):
         def foo(x, v, n):
             for i in range(n):
                 if i == 0:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = v
+                else:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = problematic + v
+            return problematic
+
+    def test_issue5482_objmode_expr_null_lowering(self):
+        # Existing pipelines will not have the Expr.null in objmode.
+        # We have to create a custom pipeline to force a SSA reconstruction
+        # and stripping.
+        from numba.core.compiler import CompilerBase, DefaultPassBuilder
+        from numba.untyped_passes import ReconstructSSA, IRProcessing
+        from numba.typed_passes import PreLowerStripPhis
+
+        class CustomPipeline(CompilerBase):
+            def define_pipelines(self):
+                pm = DefaultPassBuilder.define_objectmode_pipeline(self.state)
+                # Force SSA reconstruction and stripping
+                pm.add_pass_after(ReconstructSSA, IRProcessing)
+                pm.add_pass_after(PreLowerStripPhis, ReconstructSSA)
+                pm.finalize()
+                return [pm]
+
+        @jit("(intp, intp, intp)", looplift=False,
+             pipeline_class=CustomPipeline)
+        def foo(x, v, n):
+            for i in range(n):
+                if i == n:
                     if i == x:
                         pass
                     else:
