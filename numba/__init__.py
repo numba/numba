@@ -45,7 +45,7 @@ from numba.np.numpy_support import carray, farray, from_dtype
 from numba import experimental
 
 # Re-export experimental.jitclass as jitclass, this is deprecated
-from numba.experimental import jitclass
+from numba.experimental.jitclass.decorators import _warning_jitclass as jitclass
 
 # Initialize withcontexts
 import numba.core.withcontexts
