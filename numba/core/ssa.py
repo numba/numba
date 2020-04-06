@@ -85,7 +85,7 @@ def _fix_ssa_vars(blocks, varname, defmap):
 
 
 def _remove_unneeded_phis(phimap):
-    """Remove unneeded PHis from the phimap
+    """Remove unneeded PHIs from the phimap
     """
     all_phis = []
     for philist in phimap.values():
@@ -95,7 +95,7 @@ def _remove_unneeded_phis(phimap):
     for phi in all_phis:
         ivs = phi.value.incoming_values
         # It's unneeded if the incomings are either undefined or
-        # the PHI node it self
+        # the PHI node target is itself
         if all(iv is ir.UNDEFINED or iv == phi.target for iv in ivs):
             unneeded_phis.add(phi)
     # Fix up references to unneeded PHIs
@@ -104,7 +104,7 @@ def _remove_unneeded_phis(phimap):
             if unneed is not phi:
                 # If the unneeded PHI is in the current phi's incoming values
                 if unneed.target in phi.value.incoming_values:
-                    # Replace the unneeded PHI with a UNDEFINED
+                    # Replace the unneeded PHI with an UNDEFINED
                     idx = phi.value.incoming_values.index(unneed.target)
                     phi.value.incoming_values[idx] = ir.UNDEFINED
     # Remove unneeded phis
