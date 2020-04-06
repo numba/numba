@@ -402,9 +402,18 @@ def array_cumprod(context, builder, sig, args):
 @lower_builtin(np.mean, types.Array)
 @lower_builtin("array.mean", types.Array)
 def array_mean(context, builder, sig, args):
+    ty = sig.args[0].dtype
     zero = sig.return_type(0)
 
+    mean_empty_array = np.nan
+    if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
+        mean_empty_array = ty('NaT')
+
     def array_mean_impl(arr):
+        # Handle empty arrays
+        if arr.size == 0:
+            return mean_empty_array
+
         # Can't use the naive `arr.sum() / arr.size`, as it would return
         # a wrong result on integer sum overflow.
         c = zero
