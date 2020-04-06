@@ -250,8 +250,8 @@ def write_reduction(s,ind_level,num_TMP,arr_names,contraction,operands_str,dict_
     num_TMP+=1
     arr_names.append(res_name)
     
-    #BLAS call is not considered beneficial if reduction size and outer sizes are bellow 20
-    if blas and sout1>=20 and sout2 >=20 and s_inner >=20 and len(rhs)>0:
+    #BLAS call is not considered beneficial if reduction size and outer sizes are bellow 10
+    if blas and len(rhs) >0 and (sout1>=10 or sout2 >=10 or s_inner >=10)
         red=tensordot(lhs,rhs,arr_names,inds,idx_rm,s0,s1)
         s,num_Ten=write_tensordot(s,ind_level,red,res_name,num_Ten)
     else:
