@@ -1164,8 +1164,7 @@ class Interpreter(object):
         truebr = brs[iftrue]
         falsebr = brs[not iftrue]
 
-        # elaborate rename due to no SSA
-        name = ir_utils.mk_unique_var("bool%s" % (inst.offset))
+        name = "bool%s" % (inst.offset)
         gv_fn = ir.Global("bool", bool, loc=self.loc)
         self.store(value=gv_fn, name=name)
 
