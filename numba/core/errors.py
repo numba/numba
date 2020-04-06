@@ -411,7 +411,7 @@ _moved_msg2 = ("An import was requested from a module that has moved location"
                "present in Numba version 0.50.0.")
 
 
-_moved_no_replacement = ("No direct replacement available. Visit "
+_moved_no_replacement = ("No direct replacement for '{}' available. Visit "
                          "https://gitter.im/numba/numba-dev to request help. "
                          "Thanks!")
 
@@ -422,7 +422,7 @@ def deprecate_moved_module(old_module, new_module, stacklevel=3):
     from `numba.XYZ` shims.
     """
     if new_module is None:
-        msg = _moved_no_replacement
+        msg = _moved_no_replacement.format(old_module)
     else:
         msg = _moved_msg1.format(old_module, new_module)
     warnings.warn(msg, category=NumbaDeprecationWarning, stacklevel=stacklevel)
