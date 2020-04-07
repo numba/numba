@@ -729,6 +729,17 @@ class TestExtend(MemoryLeakMixin, TestCase):
         got = impl()
         self.assertEqual(expected, got)
 
+    def test_extend_singleton(self):
+        @njit
+        def impl():
+            l = List()
+            l.extend((100,))
+            return l
+
+        expected = impl.py_func()
+        got = impl()
+        self.assertEqual(expected, got)
+
 
 @njit
 def cmp(a, b):

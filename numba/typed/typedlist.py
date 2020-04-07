@@ -361,7 +361,10 @@ class List(MutableSequence):
             # can not be sliced.
             self._initialise_list(iterable[0])
             self.append(iterable[0])
-            return _extend(self, iterable[1:])
+            if len(iterable) > 1:
+                return _extend(self, iterable[1:])
+            else:
+                return self
         return _extend(self, iterable)
 
     def remove(self, item):
