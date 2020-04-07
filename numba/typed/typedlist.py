@@ -356,12 +356,17 @@ class List(MutableSequence):
 
     def extend(self, iterable):
         if not self._typed:
+            iterable_length = len(iterable)
+            # Empty iterable, do nothing
+            if iterable_length == 0:
+                return self
             # Need to get the first element of the iterable to initialise the
             # type of the list. FIXME: this may be a problem if the iterable
             # can not be sliced.
             self._initialise_list(iterable[0])
             self.append(iterable[0])
-            if len(iterable) > 1:
+            # Iterable has more values to extend from
+            if iterable_length > 1:
                 return _extend(self, iterable[1:])
             else:
                 return self
