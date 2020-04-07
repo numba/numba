@@ -196,8 +196,6 @@ def staged_ipc_handle_test(handle, device_num, result_queue):
     def the_work():
         with cuda.gpus[device_num]:
             this_ctx = cuda.devices.get_context()
-            can_access = handle.can_access_peer(this_ctx)
-            print('can_access_peer {} {}'.format(this_ctx, can_access))
             deviceptr = handle.open_staged(this_ctx)
             arrsize = handle.size // np.dtype(np.intp).itemsize
             hostarray = np.zeros(arrsize, dtype=np.intp)
@@ -214,7 +212,6 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
     try:
         with cuda.gpus[device_num]:
             this_ctx = cuda.devices.get_context()
-            print(this_ctx.device)
             with ipcarr as darr:
                 arr = darr.copy_to_host()
                 try:
