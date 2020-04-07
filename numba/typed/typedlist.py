@@ -370,7 +370,10 @@ class List(MutableSequence):
                 return _extend(self, iterable[1:])
             else:
                 return self
-        return _extend(self, iterable)
+        elif len(iterable) == 0:
+            return self
+        else:
+            return _extend(self, iterable)
 
     def remove(self, item):
         return _remove(self, item)
