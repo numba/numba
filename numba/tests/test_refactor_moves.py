@@ -343,7 +343,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.boxing", "numba.core.boxing"
         )
         with checker():
-            import numba.targets.boxing
+            import numba.targets
+            numba.targets.boxing
 
         for fn in ("box_array", "_NumbaTypeHelper"):
             with checker(fn):
@@ -354,7 +355,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.callconv", "numba.core.callconv"
         )
         with checker():
-            import numba.targets.callconv
+            import numba.targets
+            numba.targets.callconv
 
         fn = "RETCODE_USEREXC"
         with checker(fn):
@@ -365,7 +367,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.hashing", "numba.cpython.hashing"
         )
         with checker():
-            import numba.targets.hashing
+            import numba.targets
+            numba.targets.hashing
 
         # some codebases claim to use these, but they are not present in 0.48:
         # '_Py_HashSecret_siphash_k0', '_Py_HashSecret_siphash_k1',
@@ -379,7 +382,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.ufunc_db", "numba.np.ufunc_db"
         )
         with checker():
-            import numba.targets.ufunc_db
+            import numba.targets
+            numba.targets.ufunc_db
 
         fn = "get_ufuncs"
         with checker(fn):
@@ -390,7 +394,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.slicing", "numba.cpython.slicing"
         )
         with checker():
-            import numba.targets.slicing
+            import numba.targets
+            numba.targets.slicing
 
         for fn in ("guard_invalid_slice", "get_slice_length", "fix_slice"):
             with checker(fn):
@@ -401,7 +406,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.setobj", "numba.cpython.setobj"
         )
         with checker():
-            import numba.targets.setobj
+            import numba.targets
+            numba.targets.setobj
 
         fn = "set_empty_constructor"
         with checker(fn):
@@ -412,7 +418,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.registry", "numba.core.registry"
         )
         with checker():
-            import numba.targets.registry
+            import numba.targets
+            numba.targets.registry
 
         for fn in ("dispatcher_registry", "cpu_target"):
             with checker(fn):
@@ -431,7 +438,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.options", "numba.core.options"
         )
         with checker():
-            import numba.targets.options
+            import numba.targets
+            numba.targets.options
 
         fn = "TargetOptions"
         with checker(fn):
@@ -442,7 +450,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.listobj", "numba.cpython.listobj"
         )
         with checker():
-            import numba.targets.listobj
+            import numba.targets
+            numba.targets.listobj
 
         fn = "ListInstance"
         with checker(fn):
@@ -460,7 +469,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.imputils", "numba.core.imputils"
         )
         with checker():
-            import numba.targets.imputils
+            import numba.targets
+            numba.targets.imputils
 
         for fn in (
             "lower_cast",
@@ -474,7 +484,8 @@ class TestAPIMoves_Q1_2020(TestCase):
     def test_numba_targets_cpu(self):
         checker = self.check_warning("numba.targets.cpu", "numba.core.cpu")
         with checker():
-            import numba.targets.cpu
+            import numba.targets
+            numba.targets.cpu
 
         for fn in ("ParallelOptions", "CPUTargetOptions", "CPUContext"):
             with checker(fn):
@@ -492,7 +503,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.builtins", "numba.cpython.builtins"
         )
         with checker():
-            import numba.targets.builtins
+            import numba.targets
+            numba.targets.builtins
 
         for fn in ("get_type_min_value", "get_type_max_value"):
             with checker(fn):
@@ -503,7 +515,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.arrayobj", "numba.np.arrayobj"
         )
         with checker():
-            import numba.targets.arrayobj
+            import numba.targets
+            numba.targets.arrayobj
 
         for fn in (
             "store_item",
@@ -528,7 +541,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.arraymath", "numba.np.arraymath"
         )
         with checker():
-            import numba.targets.arraymath
+            import numba.targets
+            numba.targets.arraymath
 
         fn = "get_isnan"
         with checker(fn):
@@ -640,7 +654,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             "numba.targets.npdatetime", "numba.np.npdatetime"
         )
         with checker():
-            import numba.targets.npdatetime
+            import numba.targets
+            numba.targets.npdatetime
 
         for fn in ("convert_datetime_for_arith",):
             with checker(fn):

@@ -446,16 +446,32 @@ class _MovedModule(ModuleType):
     def __getattr__(self, attr):
         """ warn users above modules moving locations """
 
-        # import from the moved module
-        if self.__new_module is not None:
-            mod = import_module(self.__new_module)
-            ret_attr = getattr(mod, attr)
-            msg = _moved_msg2.format(attr, self.__name__, self.__new_module)
-            warnings.warn(msg, category=NumbaDeprecationWarning, stacklevel=2)
-            return ret_attr
-        else:
-            # produce the usual error
-            return super().__getattribute__(attr)
+        try:
+            # import from the moved module
+            if self.__new_module is not None:
+                mod = import_module(self.__new_module)
+                ret_attr = getattr(mod, attr)
+                msg = _moved_msg2.format(attr, self.__name__, self.__new_module)
+                warnings.warn(
+                    msg, category=NumbaDeprecationWarning, stacklevel=2)
+                return ret_attr
+            else:
+                # produce the usual error
+                return super().__getattribute__(attr)
+        except AttributeError:
+            # not a package, so no submodules to attempt to import.
+            # can't use hasattr here because that would recurse.
+            if '__path__' not in self.__dict__:
+                raise
+
+            # perhaps this is a submodule name that was previous importer, but
+            # is no longer
+            try:
+                return import_module("." + attr, package=self.__name__)
+            except ModuleNotFoundError:
+                raise AttributeError(
+                    "Moved module {!r} has no attribute or submodule {!r}"
+                    .format(self.__name__, attr))
 
 
 class WarningsFixer(object):
