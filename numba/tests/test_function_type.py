@@ -909,9 +909,12 @@ class TestMiscIssues(TestCase):
         a = jit(nopython=True)(lambda x: x + 1)
         b = jit(nopython=True)(lambda x: x + 2)
         foo = jit(nopython=True)(foo_template)
-        a(0)  # compiling `a` is sufficient, `b` will inherit its type
-              # from the container Tuple type
+
+        # compiling and disabling compilation for `a` is sufficient,
+        # `b` will inherit its type from the container Tuple type
+        a(0)
         a.disable_compile()
+
         r = foo((a, b), 0)
         self.assertEqual(r, 3)
         # the Tuple type of foo first argument is precise FunctionType:
