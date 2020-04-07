@@ -162,11 +162,15 @@ Context                    jit compiled   cfunc compiled   WAP objects
 ========================   ============   ==============   ===========
 Can be used as arguments   yes            yes              yes
 Can be called              yes            yes              yes
-Can be used as items       yes            yes              yes
+Can be used as items       yes1           yes              yes
 Can be returned            yes            yes              yes
 Namespace scoping          yes            yes              yes
 Automatic overload         yes            no               no
 ========================   ============   ==============   ===========
+
+Here ``yes1`` means that at least one of the items in a sequence of
+first-class function objects has a precise type.
+
 
 Wrapper Address Protocol - WAP
 ++++++++++++++++++++++++++++++

@@ -129,14 +129,10 @@ class TestFunctionType(TestCase):
         def foo(f):
             return f(123)
 
-        for f, sig in [
-                (a_i64, int64(int64)), (a_f64, float64(int64)),
-                # fails due to limited unicode support:
-                # (a_str, types.unicode_type(int64)),
-        ]:
+        for f, sig in [(a_i64, int64(int64)), (a_f64, float64(int64))]:
             for decor in [mk_cfunc_func(sig), njit_func,
                           mk_njit_with_sig_func(sig),
-                          mk_wap_func(sig), mk_ctypes_func(sig)][:-1]:
+                          mk_wap_func(sig)]:
                 for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                     jit_ = jit(**jit_opts)
                     with self.subTest(
@@ -158,8 +154,7 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), njit_func,
-                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
-                      mk_ctypes_func(sig)][:-1]:
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig)]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -187,8 +182,8 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), # njit_func,
-                      mk_njit_with_sig_func(sig), mk_ctypes_func(sig)][:-1]:
+        for decor in [mk_cfunc_func(sig), mk_wap_func(sig),
+                      mk_njit_with_sig_func(sig)]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -218,7 +213,7 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), # njit_func,
+        for decor in [mk_cfunc_func(sig),
                       mk_njit_with_sig_func(sig), mk_wap_func(sig),
                       mk_ctypes_func(sig)][:-1]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
@@ -244,8 +239,7 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), njit_func,
-                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
-                      mk_ctypes_func(sig)][:-1]:
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig)]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -362,8 +356,7 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), njit_func,
-                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
-                      mk_ctypes_func(sig)][:-1]:
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig)]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -398,8 +391,7 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), njit_func,
-                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
-                      mk_ctypes_func(sig)][:-1]:
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig)]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -431,8 +423,7 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), njit_func,
-                      mk_njit_with_sig_func(sig), mk_wap_func(sig),
-                      mk_ctypes_func(sig)][:-1]:
+                      mk_njit_with_sig_func(sig), mk_wap_func(sig)]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -466,8 +457,7 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), mk_wap_func(sig), njit_func,
-                      mk_njit_with_sig_func(sig),
-                      mk_ctypes_func(sig)][:-1]:
+                      mk_njit_with_sig_func(sig)]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -497,9 +487,8 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [
-                mk_cfunc_func(sig), mk_wap_func(sig), # njit_func,
-                mk_njit_with_sig_func(sig), mk_ctypes_func(sig)][:-1]:
+        for decor in [mk_cfunc_func(sig), mk_wap_func(sig),
+                      mk_njit_with_sig_func(sig)]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -529,8 +518,8 @@ class TestFunctionType(TestCase):
 
         sig = int64(int64)
 
-        for decor in [mk_cfunc_func(sig), mk_wap_func(sig), # njit_func,
-                      mk_njit_with_sig_func(sig), mk_ctypes_func(sig)][:-1]:
+        for decor in [mk_cfunc_func(sig), mk_wap_func(sig),
+                      mk_njit_with_sig_func(sig)]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -899,17 +888,17 @@ class TestMiscIssues(TestCase):
         self.assertRegex(
             str(cm.exception), 'mismatch of function types:')
 
-        # this works because `sel` condition is optimized away:
+        # this works because `sel == 1` condition is optimized away:
         self.assertEqual(foo(f1, f1, sel=1), ([1], 2))
 
     def test_unique_dispatcher(self):
-        # In general, the type of dispatcher instances is processed as
-        # UndefinedFunctionType because which overload to use is
-        # determined from type-inference. However, if a dispatcher
-        # instance contains exactly one overload and the compilation
-        # is disabled, then the dispatcher instance can be processed
-        # as FunctionType with defined signature and would minimizing
-        # using type-inference.
+        # In general, the type of a dispatcher instance is imprecise
+        # and when used as an input to type-inference, the typing will
+        # likely fail. However, if a dispatcher instance contains
+        # exactly one overload and the compilation the dispatcher is
+        # disabled, then the type of dispatcher instance is
+        # interpreted as precise and is transformed to a FunctionType
+        # instance with the defined signature of the single overload.
 
         def foo_template(funcs, x):
             r = x
@@ -917,25 +906,15 @@ class TestMiscIssues(TestCase):
                 r = f(r)
             return r
 
-        if 0:
-            # Problem:
-            a = jit(nopython=True)(lambda x: x + 1)
-            b = jit(nopython=True)(lambda x: x + 2)
-            foo = jit(nopython=True)(foo_template)
-            r = foo((a, b), 0)
-            self.assertEqual(r, 3)
-            # the Tuple type of foo first argument is UndefinedFunctionType:
-            self.assertEqual(foo.signatures[0][0].dtype.is_precise(), False)
-
-        # Solution:
         a = jit(nopython=True)(lambda x: x + 1)
         b = jit(nopython=True)(lambda x: x + 2)
         foo = jit(nopython=True)(foo_template)
-        a(0)  # compile
+        a(0)  # compiling `a` is sufficient, `b` will inherit its type
+              # from the container Tuple type
         a.disable_compile()
         r = foo((a, b), 0)
         self.assertEqual(r, 3)
-        # the Tuple type of foo first argument is FunctionType:
+        # the Tuple type of foo first argument is precise FunctionType:
         self.assertEqual(foo.signatures[0][0].dtype.is_precise(), True)
 
     def test_zero_address(self):
