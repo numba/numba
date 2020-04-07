@@ -77,7 +77,8 @@ def _replace_numpy_ufunc_with_opencl_supported_functions():
               ("tan", np.tan), ("asin", np.arcsin), ("acos", np.arccos),
               ("atan", np.arctan), ("atan2", np.arctan2), ("sinh", np.sinh),
               ("cosh", np.cosh), ("tanh", np.tanh), ("asinh", np.arcsinh),
-              ("acosh", np.arccosh), ("atanh", np.arctanh)]
+              ("acosh", np.arccosh), ("atanh", np.arctanh), ("ldexp", np.ldexp),
+              ("floor", np.floor), ("ceil", np.ceil), ("trunc", np.trunc)]
 
     for name, ufunc in ufuncs:
         for sig in ufunc_db[ufunc].keys():
