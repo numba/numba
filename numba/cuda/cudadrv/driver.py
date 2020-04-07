@@ -23,7 +23,7 @@ import threading
 from itertools import product
 from abc import ABCMeta, abstractmethod
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
-                    c_void_p, c_float)
+                    c_void_p, c_float, c_uint)
 import contextlib
 import importlib
 import numpy as np
@@ -827,6 +827,26 @@ class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
         self.allocations[ptr.value] = mem
         return mem.own()
 
+    def memallocmanaged(self, size, attach_global):
+        ptr = drvapi.cu_device_ptr()
+
+        def allocator():
+            flags = c_uint()
+            if attach_global:
+                flags = enums.CU_MEM_ATTACH_GLOBAL
+            else:
+                flags = enums.CU_MEM_ATTACH_HOST
+
+            driver.cuMemAllocManaged(byref(ptr), size, flags)
+
+        self._attempt_allocation(allocator)
+
+        finalizer = _alloc_finalizer(self, ptr, size)
+        ctx = weakref.proxy(self.context)
+        mem = AutoFreePointer(ctx, ptr, size, finalizer=finalizer)
+        self.allocations[ptr.value] = mem
+        return mem.own()
+
     def get_memory_info(self):
         free = c_size_t()
         total = c_size_t()
@@ -1082,6 +1102,9 @@ class Context(object):
 
     def memalloc(self, bytesize):
         return self.memory_manager.memalloc(bytesize)
+
+    def memallocmanaged(self, bytesize, attach_global=True):
+        return self.memory_manager.memallocmanaged(bytesize, attach_global)
 
     def memhostalloc(self, bytesize, mapped=False, portable=False, wc=False):
         return self.memory_manager.memhostalloc(bytesize, mapped, portable, wc)

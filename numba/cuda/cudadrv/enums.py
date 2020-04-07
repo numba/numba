@@ -115,6 +115,15 @@ CU_MEMHOSTREGISTER_PORTABLE = 0x01
 CU_MEMHOSTREGISTER_DEVICEMAP = 0x02
 
 
+# If set, managed memory is accessible from all streams on
+# all devices.
+CU_MEM_ATTACH_GLOBAL = 0x01
+
+# If set, managed memory is not accessible from all streams on
+# all devices.
+CU_MEM_ATTACH_HOST = 0x02
+
+
 # Default event flag
 CU_EVENT_DEFAULT        = 0x0
 # Event uses blocking synchronization

@@ -127,6 +127,22 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 
 
 @require_context
+def managed_array(shape, dtype=np.float, strides=None, order='C'):
+    """managed_array(shape, dtype=np.float, strides=None, order='C')
+
+    Allocate a np.ndarray with a buffer that is managed.
+    Similar to np.empty().
+    """
+    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
+                                                         order)
+    bytesize = driver.memory_size_from_info(shape, strides,
+                                            dtype.itemsize)
+    buffer = current_context().memallocmanaged(bytesize)
+    return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
+                      buffer=buffer)
+
+
+@require_context
 def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     """pinned_array(shape, dtype=np.float, strides=None, order='C')
 
