@@ -548,6 +548,21 @@ class TestAPIMoves_Q1_2020(TestCase):
         with checker(fn):
             getattr(numba.targets.arraymath, fn)
 
+    def test_numba_targets_nonexistant(self):
+        # not testing for this warning
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter("always", NumbaDeprecationWarning)
+            import numba.targets
+
+        with self.assertRaises(AttributeError) as raises:
+            numba.targets.does_not_exist
+        exc = raises.exception
+        self.assertIn("no attribute or submodule", str(exc))
+
+        # chain shows both the moved attribute lookup and import failing
+        self.assertIsInstance(exc.__context__, ModuleNotFoundError)
+        self.assertIsInstance(exc.__context__.__context__, AttributeError)
+
     def test_numba_stencilparfor(self):
         checker = self.check_warning(
             "numba.stencilparfor", "numba.stencils.stencilparfor"
