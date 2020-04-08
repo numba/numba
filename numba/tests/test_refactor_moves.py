@@ -1013,6 +1013,18 @@ class TestAPIMoves_Q1_2020(TestCase):
                 self.assertIn("NumbaDeprecationWarning", out)
                 self.assertIn(f"Import requested from: '{mod}'", out)
 
+    def test_top_level_export_as_import(self):
+        for mod in _pre_49_top_level_modules:
+            if mod in {'unsafe'}:
+                # SKIP.
+                # different behavior and tested elsewhere.
+                continue
+            mod = f'numba.{mod}'
+            with self.subTest(mod):
+                out = self.run_in_fresh_python(f'import {mod}')
+                self.assertIn("NumbaDeprecationWarning", out)
+                self.assertIn(f"Import requested from: '{mod}'", out)
+
 
 if __name__ == "__main__":
     unittest.main()
