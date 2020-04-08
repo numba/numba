@@ -304,7 +304,7 @@ class Dispatcher(WeakType, Callable, Dummy):
         return self.get_overload(sig)
 
     def unify(self, context, other):
-        return utils.unified_function_type((self, other))
+        return utils.unified_function_type((self, other), require_precise=False)
 
 
 class ObjModeDispatcher(Dispatcher):
