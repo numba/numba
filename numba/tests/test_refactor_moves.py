@@ -1036,6 +1036,81 @@ class TestAPIMoves_Q1_2020(TestCase):
                 ]
                 self.run_in_fresh_python('; '.join(code))
 
+    def test_issue_5528(self):
+        # Check specific issues from the ticket.
+        code = """
+import numba
+numba.numpy_support.from_dtype
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+import numba.numpy_support
+numba.numpy_support.from_dtype
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba.numpy_support import from_dtype
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba.targets import quicksort
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+import numba
+numba.special
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba.special import literally
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba.special import prange
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba import postproc
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+import numba
+numba.analysis.ir_extension_usedefs
+
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba import consts
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+import numba
+numba.extending.lower_builtin
+
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba.config import IS_32BITS
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+import numba
+numba.datamodel.register_default
+"""
+        self.run_in_fresh_python(code)
+
 
 if __name__ == "__main__":
     unittest.main()
