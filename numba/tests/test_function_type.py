@@ -895,10 +895,10 @@ class TestMiscIssues(TestCase):
         # In general, the type of a dispatcher instance is imprecise
         # and when used as an input to type-inference, the typing will
         # likely fail. However, if a dispatcher instance contains
-        # exactly one overload and the compilation the dispatcher is
-        # disabled, then the type of dispatcher instance is
-        # interpreted as precise and is transformed to a FunctionType
-        # instance with the defined signature of the single overload.
+        # exactly one overload and compilation is disabled the dispatcher,
+        # then the type of dispatcher instance is interpreted as precise
+        # and is transformed to a FunctionType instance with the defined
+        # signature of the single overload.
 
         def foo_template(funcs, x):
             r = x
@@ -917,7 +917,7 @@ class TestMiscIssues(TestCase):
 
         r = foo((a, b), 0)
         self.assertEqual(r, 3)
-        # the Tuple type of foo first argument is precise FunctionType:
+        # the Tuple type of foo's first argument is a precise FunctionType:
         self.assertEqual(foo.signatures[0][0].dtype.is_precise(), True)
 
     def test_zero_address(self):
