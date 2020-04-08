@@ -1025,6 +1025,17 @@ class TestAPIMoves_Q1_2020(TestCase):
                 self.assertIn("NumbaDeprecationWarning", out)
                 self.assertIn(f"Import requested from: '{mod}'", out)
 
+    def test_top_level_export_attr_matches_import(self):
+        for mod in _pre_49_top_level_modules:
+            mod = f'numba.{mod}'
+            with self.subTest(mod):
+                code = [
+                    'import numba',
+                    f'import {mod} as ref',
+                    f'assert {mod} is ref',
+                ]
+                self.run_in_fresh_python('; '.join(code))
+
 
 if __name__ == "__main__":
     unittest.main()
