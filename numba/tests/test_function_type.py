@@ -895,7 +895,7 @@ class TestMiscIssues(TestCase):
         # In general, the type of a dispatcher instance is imprecise
         # and when used as an input to type-inference, the typing will
         # likely fail. However, if a dispatcher instance contains
-        # exactly one overload and compilation is disabled the dispatcher,
+        # exactly one overload and compilation is disabled for the dispatcher,
         # then the type of dispatcher instance is interpreted as precise
         # and is transformed to a FunctionType instance with the defined
         # signature of the single overload.
