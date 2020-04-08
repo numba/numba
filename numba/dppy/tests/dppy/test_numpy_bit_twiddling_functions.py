@@ -106,7 +106,5 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
         self.assertTrue(np.all(c == d))
 
 
-
-
 if __name__ == '__main__':
     unittest.main()
