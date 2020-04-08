@@ -1,10 +1,78 @@
+import sys
 import unittest
 import warnings
+import subprocess
 from importlib import import_module
 from contextlib import contextmanager
 
 from numba.core.errors import NumbaDeprecationWarning
 from numba.tests.support import TestCase
+
+# All pre0.49 top-level module re-export that will be removed.
+_pre_49_top_level_modules = [
+    'analysis',
+    'annotations',
+    'appdirs',
+    'array_analysis',
+    'bytecode',
+    'byteflow',
+    'caching',
+    'callwrapper',
+    'cgutils',
+    'charseq',
+    'compiler',
+    'compiler_lock',
+    'compiler_machinery',
+    'consts',
+    'controlflow',
+    # 'ctypes_support', # removed
+    'dataflow',
+    'datamodel',
+    'debuginfo',
+    'decorators',
+    'dictobject',
+    'dispatcher',
+    'entrypoints',
+    'funcdesc',
+    'generators',
+    'inline_closurecall',
+    'interpreter',
+    # 'io_support', # removed
+    'ir',
+    'ir_utils',
+    'itanium_mangler',
+    'listobject',
+    'lowering',
+    'npdatetime',
+    # 'npyufunc', # removed
+    'numpy_support',
+    'object_mode_passes',
+    'parfor',
+    'postproc',
+    'pylowering',
+    'pythonapi',
+    'rewrites',
+    'runtime',
+    'serialize',
+    'sigutils',
+    # 'six', # removed
+    'special',
+    'stencilparfor',
+    # 'targets', # removed
+    'tracing',
+    'transforms',
+    'typeconv',
+    'typed_passes',
+    'typedobjectutils',
+    'typeinfer',
+    'typing',
+    'unicode',
+    'unicode_support',
+    'unsafe',
+    'untyped_passes',
+    'utils',
+    'withcontexts',
+]
 
 
 class TestAPIMoves_Q1_2020(TestCase):
@@ -930,6 +998,20 @@ class TestAPIMoves_Q1_2020(TestCase):
                 break
         else:
             raise ValueError("Expected warning not found")
+
+    def run_in_fresh_python(self, code):
+        return subprocess.check_output(
+            [sys.executable, '-c', code],
+            stderr=subprocess.STDOUT,
+        ).decode()
+
+    def test_top_level_export_as_attr(self):
+        for mod in _pre_49_top_level_modules:
+            mod = f'numba.{mod}'
+            with self.subTest(mod):
+                out = self.run_in_fresh_python(f'import numba; {mod}')
+                self.assertIn("NumbaDeprecationWarning", out)
+                self.assertIn(f"Import requested from: '{mod}'", out)
 
 
 if __name__ == "__main__":
