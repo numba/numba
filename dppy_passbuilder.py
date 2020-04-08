@@ -16,8 +16,6 @@ from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                 DumpParforDiagnostics, IRLegalization,
                                 InlineOverloads)
 
-from .dppy_lowerer import dppy_lower_array_expr
-
 from .dppy_passes import (
         DPPyPreParforPass,
         DPPyParforPass,
