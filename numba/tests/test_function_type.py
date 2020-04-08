@@ -1003,23 +1003,23 @@ class TestMiscIssues(TestCase):
 
         @njit()
         def foo1():
-            return 0
+            return 10
 
         @njit()
         def foo2():
-            return 0
+            return 20
 
         formulae_foo = (foo1, foo1)
 
         @njit()
-        def bar_scalar(_, __):
-            return 0
+        def bar_scalar(f1, f2):
+            return f1() + f2()
 
         @njit()
         def bar():
             return bar_scalar(*formulae_foo)
 
-        self.assertEqual(bar(), 0)
+        self.assertEqual(bar(), 20)
 
         formulae_foo = (foo1, foo2)
 
@@ -1027,4 +1027,4 @@ class TestMiscIssues(TestCase):
         def bar():
             return bar_scalar(*formulae_foo)
 
-        self.assertEqual(bar(), 0)
+        self.assertEqual(bar(), 30)
