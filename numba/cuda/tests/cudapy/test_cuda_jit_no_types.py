@@ -33,11 +33,9 @@ class TestCudaJitNoTypes(CUDATestCase):
             a, b, c = args
             return a + b + c
 
-
         @cuda.jit(device=True)
         def reducer(a, b):
             return a + b
-
 
         @cuda.jit
         def driver(A, B):
