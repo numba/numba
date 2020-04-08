@@ -112,6 +112,7 @@ _as_dtype_letters = {
     types.NPTimedelta: 'm8',
     types.CharSeq: 'S',
     types.UnicodeCharSeq: 'U',
+    types.UnicodeType: 'U',
 }
 
 
@@ -120,6 +121,10 @@ def as_dtype(nbtype):
     Return a numpy dtype instance corresponding to the given Numba type.
     NotImplementedError is if no correspondence is known.
     """
+    if isinstance(nbtype, types.Literal) and \
+       isinstance(types.unliteral(nbtype), types.UnicodeType):
+        sz = len(nbtype.literal_value)
+
     nbtype = types.unliteral(nbtype)
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
         return np.dtype(str(nbtype))
@@ -134,6 +139,9 @@ def as_dtype(nbtype):
     if isinstance(nbtype, (types.CharSeq, types.UnicodeCharSeq)):
         letter = _as_dtype_letters[type(nbtype)]
         return np.dtype('%s%d' % (letter, nbtype.count))
+    if isinstance(nbtype, types.UnicodeType):
+        letter = _as_dtype_letters[type(nbtype)]
+        return np.dtype('%s%d' % (letter, sz))
     if isinstance(nbtype, types.Record):
         return as_struct_dtype(nbtype)
     if isinstance(nbtype, types.EnumMember):
@@ -600,7 +608,7 @@ def type_can_asarray(arr):
     implementation, False otherwise.
     """
 
-    ok = (types.Array, types.Sequence, types.Tuple,
+    ok = (types.Array, types.Sequence, types.Tuple, types.Literal,
           types.Number, types.Boolean, types.containers.ListType)
 
     return isinstance(arr, ok)

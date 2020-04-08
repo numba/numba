@@ -3895,6 +3895,12 @@ def np_asarray(a, dtype=None):
             for i, v in enumerate(a):
                 ret[i] = v
             return ret
+    elif isinstance(a, types.Literal):
+        val = a.literal_value
+        dt = 'U' + str(len(val))
+
+        def impl(a, dtype=None):
+            return np.array(val, dtype=np.dtype(dt))
 
     return impl
 

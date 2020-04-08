@@ -3106,6 +3106,23 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 else:
                     check_pass_through(cfunc, True, params)
 
+    def test_asarray_literal(self):
+
+        def case1():
+            return np.asarray("hello world")
+
+        def case2():
+            s = "hello world"
+            return np.asarray(s)
+
+        funcs = [case1, case2]
+
+        for pyfunc in funcs:
+            cfunc = jit(nopython=True)(pyfunc)
+            expected = pyfunc()
+            got = cfunc()
+            self.assertEqual(expected, got)
+
     def test_asarray_rejects_List_with_illegal_dtype(self):
         self.disable_leak_check()
         cfunc = jit(nopython=True)(asarray)

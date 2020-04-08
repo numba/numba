@@ -249,6 +249,36 @@ def _unicode_to_bytes(typingctx, s):
     return sig, codegen
 
 
+@lower_cast(types.StringLiteral, types.UnicodeCharSeq)
+def cast_from_literal(context, builder, fromty, toty, val):
+    from .unicode import compile_time_get_string_data
+    literal_value = fromty.literal_value
+
+    databytes, length, kind, is_ascii, hashv = \
+        compile_time_get_string_data(literal_value)
+    mod = builder.module
+
+    # src
+    gv = context.insert_const_bytes(mod, databytes)
+    src = builder.bitcast(gv, ir.IntType(8).as_pointer())
+
+    # size
+    lty = context.get_value_type(toty)
+    size = ir.Constant(ir.IntType(8), len(literal_value))
+
+    # dest
+    dstint_t = ir.IntType(8 * unicode_byte_width)
+    dst_ptr = cgutils.alloca_once(builder, lty, size=length)
+    dst = builder.bitcast(dst_ptr, ir.IntType(32).as_pointer())
+
+    with cgutils.for_range(builder, size) as loop:
+        in_ptr = builder.gep(src, [loop.index])
+        in_val = builder.zext(builder.load(in_ptr), dstint_t)
+        builder.store(in_val, builder.gep(dst, [loop.index]))
+
+    return builder.load(dst_ptr)
+
+
 @lower_cast(types.UnicodeType, types.UnicodeCharSeq)
 def unicode_to_unicode_charseq(context, builder, fromty, toty, val):
     uni_str = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
