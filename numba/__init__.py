@@ -122,8 +122,13 @@ _auto_import_submodules = {
 }
 
 if sys.version_info < (3, 7):
-    for _old_mod in _auto_import_submodules.keys():
-        importlib.import_module(_old_mod)
+    with warnings.catch_warnings():
+        # Ignore warnings from making top-level alias.
+        warnings.simplefilter(
+            "ignore", category=errors.NumbaDeprecationWarning,
+        )
+        for _old_mod, _new_mod in _auto_import_submodules.items():
+            importlib.import_module(_old_mod)
 else:
     def __getattr__(attr):
         submodule_name = 'numba.{}'.format(attr)
