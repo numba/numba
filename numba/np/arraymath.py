@@ -4255,6 +4255,8 @@ def cross2d(a, b):
 
 @overload(np.trim_zeros)
 def np_trim_zeros(a, trim='fb'):
+    if not type_can_asarray(a):
+        raise TypingError("Input must be array-like.")
     if hasattr(a, 'ndim') and a.ndim > 1:
         raise TypingError('array must be 1D')
 
