@@ -4,8 +4,8 @@ Version 0.50.0
 In development
 
 
-Version 0.49.0 (Apr 9, 2020)
-----------------------------
+Version 0.49.0 (Apr 16, 2020)
+-----------------------------
 
 This release is very large in terms of code changes. Large scale removal of
 unsupported Python and NumPy versions has taken place along with a significant
@@ -13,6 +13,12 @@ amount of refactoring to simplify the Numba code base to make it easier for
 contributors. Numba's intermediate representation has also undergone some
 important changes to solve a number of long standing issues. In addition some
 new features have been added and a large number of bugs have been fixed!
+
+IMPORTANT: In this release Numba's internals have moved about a lot. A backwards
+compatibility "shim" is provided for this release so as to not immediately break
+projects using Numba's internals. If a module is imported from a moved location
+the shim will issue a deprecation warning and suggest how to update the import
+statement for the new location. The shim will be removed in 0.50.0!
 
 Highlights of core feature changes include:
 
@@ -44,18 +50,23 @@ Enhancements from user contributed PRs (with thanks!):
 * Aaron Meurer added support for thread masking at runtime in #4615.
 * Andreas Sodeur fixed a long standing bug that was preventing ``cProfile`` from
   working with Numba JIT compiled functions in #4476.
-* Arik Funke fixed error messages in ``test_array_reductions`` (#5278) and fixed
-  an issue with test discovery (#5239).
+* Arik Funke fixed error messages in ``test_array_reductions`` (#5278), fixed
+  an issue with test discovery (#5239), made it so the documentation would build
+  again on windows (#5453) and fixed a nested list problem in the docs in #5489.
 * Antonio Russo fixed a SyntaxWarning in #5252.
 * Eric Wieser added support for inferring the types of object arrays (#5348) and
   iterating over 2D arrays (#5115), also fixed some compiler warnings due to
-  missing (void) in #5222.
+  missing (void) in #5222. Also helped improved the "shim" and associated
+  warnings in #5485, #5488, #5498 and partly #5532.
+* Ethan Pronovost fixed a problem with the shim erroneously warning for jitclass
+  use in #5454.
 * Gabriel Majeri added SciPy 2019 talks to the docs in #5106.
 * Graham Markall changed the Numba HTML documentation theme to resolve a number
   of long standing issues in #5346. Also contributed were a large number of CUDA
   enhancements and fixes, namely:
 
   * #5443: Fix #5196: Docs: assert in CUDA only enabled for debug
+  * #5423: Fix #5421: Add notes on printing in CUDA kernels
   * #5400: Fix #4954, and some other small CUDA testsuite fixes
   * #5328: NBEP 7: External Memory Management Plugin Interface
   * #5144: Fix #4875: Make #2655 test with debug expect to pass
@@ -81,14 +92,15 @@ Enhancements from user contributed PRs (with thanks!):
 * Leo Fang added a list of libraries that support ``__cuda_array_interface__``
   in #5104.
 * Lucio Fernandez-Arjona added ``getitem`` for the NumPy record type when the
-  index is a ``StringLiteral`` type in #5182
+  index is a ``StringLiteral`` type in #5182 and improved the documentation
+  rendering via additions to the TOC and removal of numbering in #5450.
 * Mads R. B. Kristensen fixed an issue with ``__cuda_array_interface__`` not
   requiring the context in #5189.
 * Marcin Tolysz added support for nested modules in AOT compilation in #5174.
 * Mike Williams fixed some issues with NumPy records and ``getitem`` in the CUDA
   simulator in #5343.
 * Pearu Peterson added experimental support for first-class function types in
-  #5287.
+  #5287 (and fixes in #5473/#5429).
 * Ravi Teja Gutta added support for ``np.flip`` in #4376/#5313.
 * Rohit Sanjay fixed an issue with type refinement for unicode input supplied to
   typed-list ``extend()`` (#5295) and fixed unicode ``.strip()`` to strip all
@@ -139,6 +151,7 @@ General Enhancements:
 * PR #5428: Wip/deprecate jitclass location
 * PR #5287: First-class function type
 * PR #5441: Additional changes to first class function
+* PR #5455: Move to llvmlite 0.32.*
 
 Fixes:
 
@@ -173,6 +186,15 @@ Fixes:
 * PR #5431: Add tolerance to numba extension module entrypoints.
 * PR #5432: Fix code causing compiler warnings.
 * PR #5445: Remove undefined variable
+* PR #5454: Don't warn for numba.experimental.jitclass
+* PR #5480: Fix for #5477, literal_unroll KeyError searching for getitems
+* PR #5485: Show the offending module in "no direct replacement" error message
+* PR #5488: Add missing ``numba.config`` shim
+* PR #5495: Fix missing null initializer for variable after phi strip
+* PR #5498: Make the shim deprecation warnings work on python 3.6 too
+* PR #5527: Attempt to fix #5518
+* PR #5529: PR #5473 continued
+* PR #5532: Make ``numba.<mod>`` available without an import
 
 CUDA Enhancements/Fixes:
 
@@ -209,9 +231,13 @@ Documentation Updates:
 * PR #5326: Update installation docs with OpenMP requirements.
 * PR #5346: Docs: use sphinx_rtd_theme
 * PR #5366: Remove reference to Python 2.7 in install check output
+* PR #5423: Fix #5421: Add notes on printing in CUDA kernels
 * PR #5438: Update package deps for doc building.
 * PR #5440: Bump deprecation notices.
 * PR #5443: Fix #5196: Docs: assert in CUDA only enabled for debug
+* PR #5450: Docs: remove numbers and add titles to TOC
+* PR #5453: fix building docs on windows
+* PR #5489: docs: fix rendering of nested bulleted list
 
 CI updates:
 
@@ -225,6 +251,7 @@ Authors:
 * Andreas Sodeur
 * Antonio Russo
 * Eric Wieser
+* Ethan Pronovost
 * Gabriel Majeri
 * Graham Markall
 * Greg Jennings
