@@ -3643,7 +3643,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             got = cfunc(arr)
             self.assertPreciseEqual(expected, got)
 
-    def test_trim_zeros_exception(self):
+    def test_trim_zeros_exceptions(self):
         cfunc = jit(nopython=True)(np_trim_zeros)
 
         with self.assertRaises(TypingError) as raises:
@@ -3655,6 +3655,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as raises:
             cfunc(3)
+        self.assertIn(
+            'The first argument must be an array-like',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc({0, 1, 2})
         self.assertIn(
             'The first argument must be an array-like',
             str(raises.exception)
