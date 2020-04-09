@@ -60,7 +60,7 @@ test = runtests.main
 
 
 # needed for compatibility until 0.50.0. Note that accessing members of
-# any of these modules, or the moduels themselves, will raise DeprecationWarning
+# any of these modules, or the modules themselves, will raise DeprecationWarning
 _auto_import_submodules = {
     'numba.numpy_support': 'numba.np.numpy_support',
     'numba.special': 'numba.misc.special',
