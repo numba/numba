@@ -763,22 +763,25 @@ class PreLowerStripPhis(FunctionPass):
 
             # insert exporters
             for target, rhs in exporters[label]:
-                if rhs is not ir.UNDEFINED:
-                    assign = ir.Assign(
-                        target=target,
-                        value=rhs,
-                        loc=target.loc
-                    )
-                    # Insert at the earliest possible location; i.e. after the
-                    # last assignment to rhs
-                    assignments = [stmt
-                                   for stmt in newblk.find_insts(ir.Assign)
-                                   if stmt.target == rhs]
-                    if assignments:
-                        last_assignment = assignments[-1]
-                        newblk.insert_after(assign, last_assignment)
-                    else:
-                        newblk.prepend(assign)
+                # If RHS is undefined
+                if rhs is ir.UNDEFINED:
+                    # Put in a NULL initializer
+                    rhs = ir.Expr.null(loc=target.loc)
+
+                assign = ir.Assign(
+                    target=target,
+                    value=rhs,
+                    loc=target.loc
+                )
+                # Insert at the earliest possible location; i.e. after the
+                # last assignment to rhs
+                assignments = [stmt for stmt in newblk.find_insts(ir.Assign)
+                               if stmt.target == rhs]
+                if assignments:
+                    last_assignment = assignments[-1]
+                    newblk.insert_after(assign, last_assignment)
+                else:
+                    newblk.prepend(assign)
 
         func_ir.blocks = newblocks
         return func_ir

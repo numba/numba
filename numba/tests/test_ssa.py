@@ -7,7 +7,7 @@ import logging
 
 import numpy as np
 
-from numba import njit, types
+from numba import njit, jit, types
 from numba.core import errors
 from numba.extending import overload
 from numba.tests.support import TestCase, override_config
@@ -281,3 +281,92 @@ class TestReportedSSAIssues(SSABaseTest):
             return lin[0]
 
         self.check_func(foo, np.zeros((2, 2)))
+
+    def test_issue5482_missing_variable_init(self):
+        # Test error that lowering fails because variable is missing
+        # a definition before use.
+        @njit("(intp, intp, intp)")
+        def foo(x, v, n):
+            for i in range(n):
+                if i == 0:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = v
+                else:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = problematic + v
+            return problematic
+
+    def test_issue5482_objmode_expr_null_lowering(self):
+        # Existing pipelines will not have the Expr.null in objmode.
+        # We have to create a custom pipeline to force a SSA reconstruction
+        # and stripping.
+        from numba.core.compiler import CompilerBase, DefaultPassBuilder
+        from numba.untyped_passes import ReconstructSSA, IRProcessing
+        from numba.typed_passes import PreLowerStripPhis
+
+        class CustomPipeline(CompilerBase):
+            def define_pipelines(self):
+                pm = DefaultPassBuilder.define_objectmode_pipeline(self.state)
+                # Force SSA reconstruction and stripping
+                pm.add_pass_after(ReconstructSSA, IRProcessing)
+                pm.add_pass_after(PreLowerStripPhis, ReconstructSSA)
+                pm.finalize()
+                return [pm]
+
+        @jit("(intp, intp, intp)", looplift=False,
+             pipeline_class=CustomPipeline)
+        def foo(x, v, n):
+            for i in range(n):
+                if i == n:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = v
+                else:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = problematic + v
+            return problematic
+
+    def test_issue5493_unneeded_phi(self):
+        # Test error that unneeded phi is inserted because variable does not
+        # have a dominance definition.
+        data = (np.ones(2), np.ones(2))
+        A = np.ones(1)
+        B = np.ones((1,1))
+
+        def foo(m, n, data):
+            if len(data) == 1:
+                v0 = data[0]
+            else:
+                v0 = data[0]
+                # Unneeded PHI node for `problematic` would be placed here
+                for _ in range(1, len(data)):
+                    v0 += A
+
+            for t in range(1, m):
+                for idx in range(n):
+                    t = B
+
+                    if idx == 0:
+                        if idx == n - 1:
+                            pass
+                        else:
+                            problematic = t
+                    else:
+                        if idx == n - 1:
+                            pass
+                        else:
+                            problematic = problematic + t
+            return problematic
+
+        expect = foo(10, 10, data)
+        res1 = njit(foo)(10, 10, data)
+        res2 = jit(forceobj=True, looplift=False)(foo)(10, 10, data)
+        np.testing.assert_array_equal(expect, res1)
+        np.testing.assert_array_equal(expect, res2)
