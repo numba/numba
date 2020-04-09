@@ -1,10 +1,82 @@
+import sys
 import unittest
 import warnings
+import subprocess
 from importlib import import_module
 from contextlib import contextmanager
 
 from numba.core.errors import NumbaDeprecationWarning
 from numba.tests.support import TestCase
+from numba.core.utils import PYVERSION
+
+IS_PY36 = PYVERSION[:2] == (3, 6)
+NOT_PY36 = not IS_PY36
+
+# All pre0.49 top-level module re-export that will be removed.
+_pre_49_top_level_modules = [
+    'analysis',
+    'annotations',
+    'appdirs',
+    'array_analysis',
+    'bytecode',
+    'byteflow',
+    'caching',
+    'callwrapper',
+    'cgutils',
+    'charseq',
+    'compiler',
+    'compiler_lock',
+    'compiler_machinery',
+    'consts',
+    'controlflow',
+    # 'ctypes_support', # removed
+    'dataflow',
+    'datamodel',
+    'debuginfo',
+    'decorators',
+    'dictobject',
+    'dispatcher',
+    'entrypoints',
+    'funcdesc',
+    'generators',
+    'inline_closurecall',
+    'interpreter',
+    # 'io_support', # removed
+    'ir',
+    'ir_utils',
+    'itanium_mangler',
+    'listobject',
+    'lowering',
+    'npdatetime',
+    # 'npyufunc', # removed
+    'numpy_support',
+    'object_mode_passes',
+    'parfor',
+    'postproc',
+    'pylowering',
+    'pythonapi',
+    'rewrites',
+    'runtime',
+    'serialize',
+    'sigutils',
+    # 'six', # removed
+    'special',
+    'stencilparfor',
+    # 'targets', # removed
+    'tracing',
+    'transforms',
+    'typeconv',
+    'typed_passes',
+    'typedobjectutils',
+    'typeinfer',
+    'typing',
+    'unicode',
+    'unicode_support',
+    'unsafe',
+    'untyped_passes',
+    'utils',
+    'withcontexts',
+]
 
 
 class TestAPIMoves_Q1_2020(TestCase):
@@ -23,7 +95,7 @@ class TestAPIMoves_Q1_2020(TestCase):
             import_module(to_mod)
 
         @contextmanager
-        def checker(fn=None):
+        def checker(fn=None, skip=False):
             """
             If fn is not None then a check will be made to ensure the module
             level `__getattr__`
@@ -31,6 +103,8 @@ class TestAPIMoves_Q1_2020(TestCase):
             with warnings.catch_warnings(record=True) as w:
                 warnings.simplefilter("always", NumbaDeprecationWarning)
                 yield
+            if skip:
+                return
             self.assertTrue(len(w) > 0)
             _require = "requested from a module that has moved location"
             for x in w:
@@ -74,7 +148,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_utils(self):
         checker = self.check_warning("numba.utils", "numba.core.utils")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.utils
 
         for fn in ("pysignature", "OPERATORS_TO_BUILTINS"):
@@ -85,7 +159,7 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.untyped_passes", "numba.core.untyped_passes"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.untyped_passes
 
         fn = "InlineClosureLikes"
@@ -96,7 +170,7 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.config", "numba.core.config"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.config
 
         fn = "DISABLE_JIT"
@@ -113,11 +187,13 @@ class TestAPIMoves_Q1_2020(TestCase):
             import numba.unsafe
 
             getattr(numba.unsafe, fn)
-        for x in w:
-            if "No direct replacement for 'numba.unsafe'" in str(x.message):
-                break
-        else:
-            raise ValueError("Could not find expected warning message")
+
+        if NOT_PY36:
+            for x in w:
+                if "No direct replacement for 'numba.unsafe'" in str(x.message):
+                    break
+            else:
+                self.fail("Could not find expected warning message")
 
     def test_numba_unsafe_ndarray(self):
         checker = self.check_warning(
@@ -132,7 +208,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_unicode(self):
         checker = self.check_warning("numba.unicode", "numba.cpython.unicode")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.unicode
 
         for fn in (
@@ -154,7 +230,8 @@ class TestAPIMoves_Q1_2020(TestCase):
         # once and the `TestAPIMoves_Q1_2020` hits numba.typing.* so this needs
         # to run first
         checker = self.check_warning("numba.typing", "numba.core.typing")
-        with checker():
+
+        with checker(skip=IS_PY36):
             import numba.typing
 
         for fn in (
@@ -273,7 +350,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_typeinfer(self):
         checker = self.check_warning("numba.typeinfer", "numba.core.typeinfer")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.typeinfer
 
         fn = "IntrinsicCallConstraint"
@@ -284,7 +361,7 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.typedobjectutils", "numba.typed.typedobjectutils"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.typedobjectutils
 
         fn = "_cast"
@@ -295,7 +372,7 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.typed_passes", "numba.core.typed_passes"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.typed_passes
 
         for fn in ("type_inference_stage", "AnnotateTypes"):
@@ -314,7 +391,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_typeconv(self):
         checker = self.check_warning("numba.typeconv", "numba.core.typeconv")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.typeconv
 
         fn = "Conversion"
@@ -567,7 +644,7 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.stencilparfor", "numba.stencils.stencilparfor"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.stencilparfor
 
         fn = "_compute_last_ind"
@@ -596,7 +673,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_runtime(self):
         checker = self.check_warning("numba.runtime", "numba.core.runtime")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.runtime
 
         fn = "nrt"
@@ -605,11 +682,11 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_rewrites(self):
         checker = self.check_warning("numba.rewrites", "numba.core.rewrites")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.rewrites
 
         fn = "rewrite_registry"
-        with checker(fn):
+        with checker(skip=IS_PY36):
             getattr(numba.rewrites, fn)
 
         # want to check this works, not that it warns
@@ -621,7 +698,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_pythonapi(self):
         checker = self.check_warning("numba.pythonapi", "numba.core.pythonapi")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.pythonapi
 
         for fn in (
@@ -633,7 +710,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_parfor(self):
         checker = self.check_warning("numba.parfor", "numba.parfors.parfor")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.parfor
 
         for fn in (
@@ -657,9 +734,10 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.numpy_support", "numba.np.numpy_support"
         )
-        with checker():
-            import numba.numpy_support
-
+        if NOT_PY36:
+            with checker():
+                import numba.numpy_support
+        import numba
         for fn in ("map_layout", "from_dtype", "as_dtype"):
             with checker(fn):
                 getattr(numba.numpy_support, fn)
@@ -682,7 +760,7 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.npdatetime", "numba.np.npdatetime_helpers"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.npdatetime
 
         for fn in ("DATETIME_UNITS",):
@@ -691,12 +769,12 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_lowering(self):
         checker = self.check_warning("numba.lowering", "numba.core.lowering")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.lowering  # noqa: F401
 
     def test_numba_ir_utils(self):
         checker = self.check_warning("numba.ir_utils", "numba.core.ir_utils")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.ir_utils
 
         for fn in (
@@ -724,7 +802,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_ir(self):
         checker = self.check_warning("numba.ir", "numba.core.ir")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.ir
 
         for fn in ("Assign", "Const", "Expr", "Var"):
@@ -735,7 +813,7 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.inline_closurecall", "numba.core.inline_closurecall"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.inline_closurecall
 
         for fn in (
@@ -749,7 +827,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_errors(self):
         checker = self.check_warning("numba.errors", "numba.core.errors")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.errors
 
         for fn in (
@@ -765,7 +843,7 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.dispatcher", "numba.core.dispatcher"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.dispatcher
 
         for fn in (
@@ -779,7 +857,7 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.dictobject", "numba.typed.dictobject"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.dictobject
 
         fn = "DictModel"
@@ -788,7 +866,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_datamodel(self):
         checker = self.check_warning("numba.datamodel", "numba.core.datamodel")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.datamodel
 
         for fn in (
@@ -819,12 +897,12 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.compiler_machinery", "numba.core.compiler_machinery"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.compiler_machinery  # noqa: F401
 
     def test_numba_compiler(self):
         checker = self.check_warning("numba.compiler", "numba.core.compiler")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.compiler
 
         for fn in (
@@ -847,7 +925,7 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_cgutils(self):
         checker = self.check_warning("numba.cgutils", "numba.core.cgutils")
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.cgutils
         for fn in (
             "unpack_tuple",
@@ -867,7 +945,7 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.array_analysis", "numba.parfors.array_analysis"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.array_analysis
 
         for fn in ("ArrayAnalysis", "array_analysis_extensions"):
@@ -885,8 +963,10 @@ class TestAPIMoves_Q1_2020(TestCase):
 
     def test_numba_analysis(self):
         checker = self.check_warning("numba.analysis", "numba.core.analysis")
-        with checker():
-            import numba.analysis
+        if NOT_PY36:
+            with checker():
+                import numba.analysis
+        import numba
         for fn in (
             "ir_extension_usedefs",
             "compute_use_defs",
@@ -900,7 +980,7 @@ class TestAPIMoves_Q1_2020(TestCase):
         checker = self.check_warning(
             "numba.decorators", "numba.core.decorators"
         )
-        with checker():
+        with checker(skip=IS_PY36):
             import numba.decorators
         for fn in (
             "njit",
@@ -930,6 +1010,120 @@ class TestAPIMoves_Q1_2020(TestCase):
                 break
         else:
             raise ValueError("Expected warning not found")
+
+    def run_in_fresh_python(self, code):
+        return subprocess.check_output(
+            [sys.executable, '-c', code],
+            stderr=subprocess.STDOUT,
+        ).decode()
+
+    def test_top_level_export_as_attr(self):
+        for mod in _pre_49_top_level_modules:
+            mod = f'numba.{mod}'
+            with self.subTest(mod):
+                out = self.run_in_fresh_python(f'import numba; {mod}')
+                if NOT_PY36:
+                    self.assertIn("NumbaDeprecationWarning", out)
+                    self.assertIn(f"Import requested from: '{mod}'", out)
+
+    def test_top_level_export_as_import(self):
+        for mod in _pre_49_top_level_modules:
+            if mod in {'unsafe'}:
+                # SKIP.
+                # different behavior and tested elsewhere.
+                continue
+            mod = f'numba.{mod}'
+            with self.subTest(mod):
+                out = self.run_in_fresh_python(f'import {mod}')
+                if NOT_PY36:
+                    self.assertIn("NumbaDeprecationWarning", out)
+                    self.assertIn(f"Import requested from: '{mod}'", out)
+
+    def test_top_level_export_attr_matches_import(self):
+        for mod in _pre_49_top_level_modules:
+            mod = f'numba.{mod}'
+            with self.subTest(mod):
+                code = [
+                    'import numba',
+                    f'import {mod} as ref',
+                    f'assert {mod} is ref',
+                ]
+                self.run_in_fresh_python('; '.join(code))
+
+    def test_issue_5528(self):
+        # Check specific issues from the ticket.
+        code = """
+import numba
+numba.numpy_support.from_dtype
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+import numba.numpy_support
+numba.numpy_support.from_dtype
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba.numpy_support import from_dtype
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba.targets import quicksort
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+import numba
+numba.special
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba.special import literally
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba.special import prange
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba import postproc
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+import numba
+numba.analysis.ir_extension_usedefs
+
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba import consts
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+import numba
+numba.extending.lower_builtin
+
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+from numba.config import IS_32BITS
+"""
+        self.run_in_fresh_python(code)
+
+        code = """
+import numba
+numba.datamodel.register_default
+"""
+        self.run_in_fresh_python(code)
 
 
 if __name__ == "__main__":
