@@ -4255,27 +4255,52 @@ def cross2d(a, b):
 
 @overload(np.trim_zeros)
 def np_trim_zeros(a, trim='fb'):
-    if not type_can_asarray(a):
-        raise TypingError("Input must be array-like.")
+    if not isinstance(a, (types.Array, types.Sequence, types.Tuple)):
+        raise TypeError('The first argument must be an array-like')
     if hasattr(a, 'ndim') and a.ndim > 1:
         raise TypingError('array must be 1D')
 
-    def impl(a, trim='fb'):
-        a = np.ravel(np.asarray(a))
-        first = 0
-        if 'f' in trim:
-            for i in a:
-                if i != 0:
-                    break
-                else:
-                    first = first + 1
-        last = len(a)
-        if 'b' in trim:
-            for i in a[::-1]:
-                if i != 0:
-                    break
-                else:
-                    last = last - 1
-        return np.ravel(np.asarray(a[first:last]))
+    if isinstance(a, types.Array):
 
-    return impl
+        def impl(a, trim='fb'):
+            a = np.ravel(np.asarray(a))
+            first = 0
+            if 'f' in trim:
+                for i in a:
+                    if i != 0:
+                        break
+                    else:
+                        first = first + 1
+            last = len(a)
+            if 'b' in trim:
+                for i in a[::-1]:
+                    if i != 0:
+                        break
+                    else:
+                        last = last - 1
+            return np.ravel(a[first:last])
+
+        return impl
+
+    elif isinstance(a, (types.Sequence, types.Sequence)):
+
+        def impl(a, trim='fb'):
+
+            first = 0
+            if 'f' in trim:
+                for i in a:
+                    if i != 0:
+                        break
+                    else:
+                        first = first + 1
+            last = len(a)
+            if 'b' in trim:
+                for i in a[::-1]:
+                    if i != 0:
+                        break
+                    else:
+                        last = last - 1
+
+            return a
+
+        return impl
