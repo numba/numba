@@ -1017,6 +1017,27 @@ class TestAPIMoves_Q1_2020(TestCase):
             stderr=subprocess.STDOUT,
         ).decode()
 
+    def test_top_level_export(self):
+        import importlib
+        for mod in _pre_49_top_level_modules:
+            if mod in {'unsafe'}:
+                # SKIP.
+                # different behavior and tested elsewhere.
+                continue
+            oldmodname = f'numba.{mod}'
+            with self.subTest(oldmodname):
+                oldmod = importlib.import_module(oldmodname)
+                # Make sure the target module is available
+                newmodname = oldmod._MovedModule__new_module
+                newmod = importlib.import_module(newmodname)
+                checker = self.check_warning(oldmodname, newmodname)
+                for k in dir(newmod):
+                    if k.startswith('_'):
+                        continue
+                    with checker():  # must warn
+                        obj = getattr(oldmod, k)
+                    self.assertIs(getattr(newmod, k), obj)
+
     def test_top_level_export_as_attr(self):
         for mod in _pre_49_top_level_modules:
             mod = f'numba.{mod}'
