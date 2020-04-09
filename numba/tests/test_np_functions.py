@@ -305,6 +305,10 @@ def np_cross(a, b):
     return np.cross(a, b)
 
 
+def np_trim_zeros(a, trim='fb'):
+    return np.trim_zeros(a, trim)
+
+
 def flip_lr(a):
     return np.fliplr(a)
 
@@ -3618,6 +3622,41 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             )
         self.assertIn(
             'Inputs must be array-like.',
+            str(raises.exception)
+        )
+
+    def test_trim_zeros(self):
+
+        def arrays():
+            yield np.array([])
+            yield np.zeros(5)
+            yield np.zeros(1)
+            yield np.array([1, 2, 3])
+            yield np.array([0, 1, 2, 3])
+            yield np.array([0, 1, 2, 0, 0])
+
+        pyfunc = np_trim_zeros
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr in arrays():
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertPreciseEqual(expected, got)
+
+    def test_trim_zeros_exception(self):
+        cfunc = jit(nopython=True)(np_trim_zeros)
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([[1, 2, 3], [4, 5, 6]]))
+        self.assertIn(
+            'array must be 1D',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(3)
+        self.assertIn(
+            'The first argument must be an array-like',
             str(raises.exception)
         )
 
