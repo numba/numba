@@ -60,7 +60,7 @@ test = runtests.main
 
 
 # needed for compatibility until 0.50.0. Note that accessing members of
-# numpy_support will raise DeprecationWarning
+# any of these modules, or the moduels themselves, will raise DeprecationWarning
 _auto_import_submodules = {
     'numba.numpy_support': 'numba.np.numpy_support',
     'numba.special': 'numba.misc.special',
@@ -137,7 +137,7 @@ else:
         except KeyError:
             raise AttributeError(
                 f"module {__name__!r} has no attribute {attr!r}",
-            )
+            ) from None
         else:
             errors.deprecate_moved_module(submodule_name, new_name)
             return importlib.import_module(new_name)
