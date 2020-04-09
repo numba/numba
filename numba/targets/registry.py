@@ -80,10 +80,14 @@ class CPUDispatcher(dispatcher.Dispatcher):
         dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
                 targetoptions=targetoptions, impl_kind=impl_kind, pipeline_class=DPPyCompiler)
 
+        #dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
+        #        targetoptions=targetoptions, impl_kind=impl_kind)
+
 class DPPyDispatcher(dispatcher.Dispatcher):
     targetdescr = cpu_target
 
     def __init__(self, py_func, locals={}, targetoptions={}):
+        targetoptions['parallel'] = {'spirv': True}
         dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
                 targetoptions=targetoptions, pipeline_class=DPPyCompiler)
 
