@@ -1036,7 +1036,9 @@ def _lower_parfor_dppy(lowerer, parfor):
     numba.parfor.sequential_parfor_lowering = True
     loop_ranges = [(l.start, l.stop, l.step) for l in parfor.loop_nests]
 
-    target = 'spirv'
+    target = 'cpu'
+    if targetctx.auto_parallel.gen_spirv:
+        target = 'spirv'
 
     func, func_args, func_sig, redargstartdim, func_arg_types = _create_gufunc_for_parfor_body(
         lowerer, parfor, target, typemap, typingctx, targetctx, flags, loop_ranges, {},
