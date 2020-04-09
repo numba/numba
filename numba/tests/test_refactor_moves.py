@@ -1030,12 +1030,10 @@ class TestAPIMoves_Q1_2020(TestCase):
                 # Make sure the target module is available
                 newmodname = oldmod._MovedModule__new_module
                 newmod = importlib.import_module(newmodname)
-                checker = self.check_warning(oldmodname, newmodname)
                 for k in dir(newmod):
                     if k.startswith('_'):
                         continue
-                    with checker():  # must warn
-                        obj = getattr(oldmod, k)
+                    obj = getattr(oldmod, k)
                     self.assertIs(getattr(newmod, k), obj)
 
     def test_top_level_export_as_attr(self):
