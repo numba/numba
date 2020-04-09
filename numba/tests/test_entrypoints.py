@@ -106,7 +106,7 @@ class TestEntrypoints(TestCase):
             else:
                 raise ValueError("Expected warning message not found")
 
-            # was our init function called?
+            # was our init function called ?
             self.assertEqual(counters['init'], 1)
 
         finally:
