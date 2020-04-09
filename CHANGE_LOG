@@ -191,7 +191,7 @@ Fixes:
 * PR #5485: Show the offending module in "no direct replacement" error message
 * PR #5488: Add missing ``numba.config`` shim
 * PR #5495: Fix missing null initializer for variable after phi strip
-* PR #5498:  Make the shim deprecation warnings work on python 3.6 too
+* PR #5498: Make the shim deprecation warnings work on python 3.6 too
 * PR #5527: Attempt to fix #5518
 * PR #5529: PR #5473 continued
 * PR #5532: Make ``numba.<mod>`` available without an import
