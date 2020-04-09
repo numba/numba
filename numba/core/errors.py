@@ -431,7 +431,7 @@ def deprecate_moved_module(old_module, new_module, stacklevel=2):
 
 
 class _MovedModule(ModuleType):
-    def __init__(self, old_module_locals, new_module, extra_alias={}):
+    def __init__(self, old_module_locals, new_module):
         old_module = old_module_locals['__name__']
         super().__init__(old_module)
 
@@ -441,18 +441,10 @@ class _MovedModule(ModuleType):
                 setattr(self, attr, value)
 
         self.__new_module = new_module
-        self.__extra_alias = extra_alias
         deprecate_moved_module(old_module, new_module, stacklevel=3)
 
     def __getattr__(self, attr):
         """ warn users above modules moving locations """
-
-        try:
-            # use extra alias
-            return self.__extra_alias[attr]
-        except KeyError:
-            pass
-
         try:
             # import from the moved module
             if self.__new_module is not None:
