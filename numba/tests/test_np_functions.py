@@ -312,6 +312,9 @@ def flip_lr(a):
 def flip_ud(a):
     return np.flipud(a)
 
+def np_union1d(a, b):
+    return np.union1d(a,b)
+
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
@@ -3618,6 +3621,66 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             )
         self.assertIn(
             'Inputs must be array-like.',
+            str(raises.exception)
+        )
+
+    def test_union1d(self):
+        pyfunc = np_union1d
+        cfunc = jit(nopython=True)(pyfunc)
+        arrays = [
+            # Test 1d arrays
+            (
+                np.array([1, 2, 3]),
+                np.array([2, 3, 4])
+            ),
+            # Test 2d with 1d array
+            (
+                np.array([[1, 2, 3], [2, 3, 4]]),
+                np.array([2, 5, 6])
+            ),
+            # Test 3d with 1d array
+            (
+                np.arange(0, 20).reshape(2,2,5),
+                np.array([1, 20, 21])
+            ),
+            # Test 2d with 3d array
+            (
+                np.arange(0, 10).reshape(2,5),
+                np.arange(0, 20).reshape(2,5,2)
+            ),
+            # Test other array-like
+            (
+                np.array([False, True, 7]),
+                np.array([1, 2, 3])
+            )
+        ]
+
+        for a, b in arrays:
+            expected = pyfunc(a,b)
+            got = cfunc(a,b)
+            self.assertPreciseEqual(expected, got)
+
+    def test_union1d_exceptions(self):
+        cfunc = jit(nopython=True)(np_union1d)
+        self.disable_leak_check()
+
+        # Test inputs not array-like
+        with self.assertRaises(TypingError) as raises:
+            cfunc("Hello", np.array([1,2]))
+        self.assertIn(
+            "The arguments to np.union1d must be array-like",
+            str(raises.exception)
+        )
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([1,2]), "Hello")
+        self.assertIn(
+            "The arguments to np.union1d must be array-like",
+            str(raises.exception)
+        )
+        with self.assertRaises(TypingError) as raises:
+            cfunc("Hello", "World")
+        self.assertIn(
+            "The arguments to np.union1d must be array-like",
             str(raises.exception)
         )
 
