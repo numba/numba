@@ -3644,6 +3644,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
 
     def test_trim_zeros_exceptions(self):
+        self.disable_leak_check()
         cfunc = jit(nopython=True)(np_trim_zeros)
 
         with self.assertRaises(TypingError) as raises:
