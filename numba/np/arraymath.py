@@ -3975,16 +3975,17 @@ def np_select(condlist, choicelist, default=0):
 
     return np_select_arr_impl
 
+
 @overload(np.union1d)
 def np_union1d(arr1, arr2):
     if not type_can_asarray(arr1) or not type_can_asarray(arr2):
         raise TypingError("The arguments to np.union1d must be array-like")
-    
+
     def union_impl(arr1, arr2):
         a = np.ravel(np.asarray(arr1))
         b = np.ravel(np.asarray(arr2))
         return np.unique(np.concatenate((a, b)))
-        
+
     return union_impl
 
 #----------------------------------------------------------------------------
