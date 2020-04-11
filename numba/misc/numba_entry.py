@@ -95,7 +95,7 @@ def get_sys_info():
         print(fmt % ("Version", platform.version()))
         try:
             if system_name == 'Linux':
-                info = platform.linux_distribution()
+                info = ()
             elif system_name == 'Windows':
                 info = platform.win32_ver()
             elif system_name == 'Darwin':
