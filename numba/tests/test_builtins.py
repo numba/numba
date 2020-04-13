@@ -522,8 +522,22 @@ class TestBuiltins(TestCase):
             -33,
         ]
 
-        for v in args:
-            self.assertPreciseEqual(cfunc(v), pyfunc(v))
+        tp = [
+            types.int32,
+            types.int64,
+            types.uint,
+            types.uint8,
+            types.uint16,
+            types.uint32,
+            types.uint64,
+            types.uintp,
+            types.ushort,
+            types.ulong,
+            types.ulonglong,
+        ]
+
+        for v, t in zip(args, tp):
+            self.assertPreciseEqual(cfunc(t(v)), pyfunc(t(v)))
 
 
     def test_int(self, flags=enable_pyobj_flags):
