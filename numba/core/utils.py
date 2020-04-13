@@ -500,9 +500,10 @@ def unified_function_type(numba_types, require_precise=True):
     """
     from numba.core.errors import NumbaExperimentalFeatureWarning
 
-    if not (numba_types
-            and isinstance(numba_types[0],
-                           (types.Dispatcher, types.FunctionType))):
+    if not (isinstance(numba_types, tuple) and
+            len(numba_types) > 0 and
+            isinstance(numba_types[0],
+                       (types.Dispatcher, types.FunctionType))):
         return
 
     warnings.warn("First-class function type feature is experimental",
