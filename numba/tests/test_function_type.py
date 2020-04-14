@@ -582,14 +582,13 @@ class TestFunctionTypeExtensions(TestCase):
                 self._name = fname
                 if fname == 'cos':
                     # test for double-precision math function
-                    addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
                     if IS_WIN32 and IS_32BITS:
                         # 32-bit Windows math library does not provide
-                        # a double-precision cos function, so falling
-                        # back to single-precision cos function to
-                        # pass the test
-                        signature = float32(float32)
+                        # a double-precision cos function, so
+                        # disabling the function
+                        signature = None
                     else:
+                        addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
                         signature = float64(float64)
                 elif fname == 'sinf':
                     # test for single-precision math function
@@ -630,8 +629,10 @@ class TestFunctionTypeExtensions(TestCase):
         for jit_opts in [dict(nopython=True)]:
             jit_ = jit(**jit_opts)
             with self.subTest(jit=jit_opts):
-                self.assertEqual(jit_(myeval)(mycos, 0.0), 1.0)
-                self.assertEqual(jit_(myeval)(mysin, float32(0.0)), 0.0)
+                if mycos.signature is not None:
+                    self.assertEqual(jit_(myeval)(mycos, 0.0), 1.0)
+                if mysin.signature is not None:
+                    self.assertEqual(jit_(myeval)(mysin, float32(0.0)), 0.0)
 
     def test_compilation_results(self):
         """Turn the existing compilation results of a dispatcher instance to
