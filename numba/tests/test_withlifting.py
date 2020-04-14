@@ -528,7 +528,8 @@ class TestLiftObj(MemoryLeak, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             cfoo(x)
         self.assertIn(
-            "missing type annotation on outgoing variables",
+            "missing type annotation on outgoing variables: {'t'}"
+            "Example code: with objmode({'t'}=<add_type_as_str_here>):",
             str(raises.exception),
             )
 
