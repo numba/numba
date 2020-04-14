@@ -111,11 +111,6 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
             return kernel_jit
 
 
-def autojit(*args, **kwargs):
-    warn('autojit is deprecated and will be removed in a future release. Use jit instead.')
-    return jit(*args, **kwargs)
-
-
 def declare_device(name, restype=None, argtypes=None):
     restype, argtypes = convert_types(restype, argtypes)
     return declare_device_function(name, restype, argtypes)
