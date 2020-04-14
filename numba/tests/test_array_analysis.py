@@ -1025,6 +1025,7 @@ class TestArrayAnalysisInterface(TestCase):
             with self.subTest(fname=k, sig=got):
                 self.assertEqual(got, expected)
 
+    @skip_unsupported
     def test_array_analysis_extensions(self):
         # Test that the `array_analysis` object in `array_analysis_extensions`
         # can perform analysis on the scope using `equiv_sets`.
@@ -1045,9 +1046,9 @@ class TestArrayAnalysisInterface(TestCase):
                         break
             else:
                 return
-            
-            variable_A = func_ir.get_assignee(call) 
-            # n must be equiv to 
+
+            variable_A = func_ir.get_assignee(call)
+            # n must be equiv to
             es = array_analysis.equiv_sets[0]
             self.assertTrue(es.is_equiv('n', variable_A.name))
             shared['counter'] += 1
@@ -1067,7 +1068,7 @@ class TestArrayAnalysisInterface(TestCase):
 
             empty = np.empty   # avoid scanning a getattr in the IR
             def f(n):
-                A = empty(n)  
+                A = empty(n)
                 for i in prange(n):
                     S = np.arange(i)
                     A[i] = S.sum()
