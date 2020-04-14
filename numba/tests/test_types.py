@@ -184,7 +184,9 @@ class TestTypes(TestCase):
         def check_index_error(callable):
             with self.assertRaises(KeyError) as raises:
                 callable()
-            self.assertIn("Can only index numba types with slices with no start or stop, got", str(raises.exception))
+            self.assertIn(
+                "Can only index numba types with slices with no start or "
+                "stop, got", str(raises.exception))
 
         scalar = types.int32
         check(scalar[:], scalar, 1, 'A')
