@@ -7,6 +7,7 @@ else:
     from .device_init import *
     from .device_init import _auto_device
 
+from numba.cuda.compiler import compile_ptx
 
 def test(*args, **kwargs):
     if not is_available():

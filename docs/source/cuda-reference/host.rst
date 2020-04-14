@@ -91,6 +91,20 @@ the functionality of the selected device:
       Delete the context for the device. This will destroy all memory
       allocations, events, and streams created within the context.
 
+
+Compilation
+-----------
+
+Numba provides an entry point for compiling a Python function to PTX without
+invoking any of the driver API. This can be useful for generating PTX that is to
+be inlined into other PTX code (e.g. from outside the Numba / Python ecosystem).
+
+.. note:: It is the user's responsiblity to manage any ABI issues arising from
+    the use of compilation to PTX.
+
+.. autofunction:: numba.cuda.compile_ptx
+
+
 Measurement
 -----------
 
