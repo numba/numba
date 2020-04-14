@@ -534,10 +534,11 @@ class Device(object):
 
     def release_primary_context(self):
         """
-        Release reference to primary context
+        Release reference to primary context if it has been retained.
         """
-        driver.cuDevicePrimaryCtxRelease(self.id)
-        self.primary_context = None
+        if self.primary_context:
+            driver.cuDevicePrimaryCtxRelease(self.id)
+            self.primary_context = None
 
     def reset(self):
         try:
