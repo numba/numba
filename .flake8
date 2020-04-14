@@ -100,7 +100,6 @@ exclude =
     numba/cuda/printimpl.py
     numba/cuda/libdevice.py
     numba/cuda/device_init.py
-    numba/cuda/compiler.py
     numba/cuda/initialize.py
     numba/cuda/simulator_init.py
     numba/cuda/random.py

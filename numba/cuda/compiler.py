@@ -1,19 +1,16 @@
 import ctypes
 import os
-from functools import reduce, wraps
-import operator
 import sys
-import threading
-import warnings
 
 import numpy as np
 
 from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
-from numba.core import types, typing, utils, funcdesc, serialize, config, compiler, sigutils
+from numba.core import (types, typing, utils, funcdesc, serialize, config,
+                        compiler, sigutils)
 from numba.core.compiler_lock import global_compiler_lock
 
 from .cudadrv.devices import get_context
-from .cudadrv import nvvm, devicearray, driver
+from .cudadrv import nvvm, driver
 from .errors import normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
@@ -215,7 +212,7 @@ class DeviceFunction(object):
         cres = compile_cuda(self.py_func, self.return_type, self.args,
                             debug=self.debug, inline=self.inline)
         self.cres = cres
-        # Register
+
         class device_function_template(ConcreteTemplate):
             key = self
             cases = [cres.signature]
@@ -438,7 +435,8 @@ class CachedCUFunction(object):
             msg = ('cannot pickle CUDA kernel function with additional '
                    'libraries to link against')
             raise RuntimeError(msg)
-        args = (self.__class__, self.entry_name, self.ptx, self.linking, self.max_registers)
+        args = (self.__class__, self.entry_name, self.ptx, self.linking,
+                self.max_registers)
         return (serialize._rebuild_reduction, args)
 
     @classmethod
@@ -480,7 +478,8 @@ class CUDAKernel(CUDAKernelBase):
         self.extensions = list(extensions)
 
     @classmethod
-    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, extensions, config):
+    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper,
+                 extensions, config):
         """
         Rebuild an instance.
         """
@@ -516,7 +515,8 @@ class CUDAKernel(CUDAKernelBase):
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
-        griddim, blockdim = normalize_kernel_dimensions(self.griddim, self.blockdim)
+        griddim, blockdim = normalize_kernel_dimensions(self.griddim,
+                                                        self.blockdim)
         self._kernel_call(args=args,
                           griddim=griddim,
                           blockdim=blockdim,
@@ -619,13 +619,14 @@ class CUDAKernel(CUDAKernelBase):
                 else:
                     sym, filepath, lineno = loc
                     filepath = os.path.abspath(filepath)
-                    locinfo = 'In function %r, file %s, line %s, ' % (
-                        sym, filepath, lineno,
-                        )
+                    locinfo = 'In function %r, file %s, line %s, ' % (sym,
+                                                                      filepath,
+                                                                      lineno,)
                 # Prefix the exception message with the thread position
                 prefix = "%stid=%s ctaid=%s" % (locinfo, tid, ctaid)
                 if exc_args:
-                    exc_args = ("%s: %s" % (prefix, exc_args[0]),) + exc_args[1:]
+                    exc_args = ("%s: %s" % (prefix, exc_args[0]),) + \
+                        exc_args[1:]
                 else:
                     exc_args = prefix,
                 raise exccls(*exc_args)
