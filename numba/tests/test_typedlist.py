@@ -729,7 +729,7 @@ class TestExtend(MemoryLeakMixin, TestCase):
         got = impl()
         self.assertEqual(expected, got)
 
-    def test_extend_singleton(self):
+    def test_extend_single_value_container(self):
         @njit
         def impl():
             l = List()
