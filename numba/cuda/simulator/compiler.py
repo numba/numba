@@ -4,3 +4,5 @@ to allow tests to import successfully.
 '''
 
 compile_kernel = None
+
+compile_ptx = None
