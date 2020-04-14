@@ -1,11 +1,10 @@
 import types as pytypes
 from numba import jit, njit, cfunc, types, int64, float64, float32, errors
+from numba.core.config import IS_32BITS, IS_WIN32
 import ctypes
 import warnings
 
 from .support import TestCase
-
-is32bits = tuple.__itemsize__ == 4
 
 
 def dump(foo):  # FOR DEBUGGING, TO BE REMOVED
@@ -569,13 +568,12 @@ class TestFunctionTypeExtensions(TestCase):
         """Call cos and sinf from standard math library.
 
         """
-        import os
         import ctypes.util
 
         class LibM(types.WrapperAddressProtocol):
 
             def __init__(self, fname):
-                if os.name == 'nt':
+                if IS_WIN32:
                     lib = ctypes.cdll.msvcrt
                 else:
                     libpath = ctypes.util.find_library('m')
@@ -583,15 +581,26 @@ class TestFunctionTypeExtensions(TestCase):
                 self.lib = lib
                 self._name = fname
                 if fname == 'cos':
+                    # test for double-precision math function
                     addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
-                    if os.name == 'nt' and is32bits:
+                    if IS_WIN32 and IS_32BITS:
+                        # 32-bit Windows math library does not provide
+                        # a double-precision cos function, so falling
+                        # back to single-precision cos function to
+                        # pass the test
                         signature = float32(float32)
                     else:
                         signature = float64(float64)
                 elif fname == 'sinf':
-                    if os.name == 'nt' and is32bits:
+                    # test for single-precision math function
+                    if IS_WIN32 and IS_32BITS:
+                        # 32-bit Windows math library provides sin
+                        # (instead of sinf) that is a single-precision
+                        # sin function
                         addr = ctypes.cast(self.lib.sin, ctypes.c_voidp).value
                     else:
+                        # Other 32/64 bit platforms define sinf as the
+                        # single-precision sin function
                         addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
                     signature = float32(float32)
                 else:
