@@ -11,6 +11,7 @@ from numba.core.errors import TypingError
 from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
+from numba.tests.support import TestCase
 
 
 _FS = ('e', 'f')
@@ -1075,6 +1076,23 @@ class TestRecordArrayGetItem(unittest.TestCase):
             jitfunc(arr[0])
         self.assertIn("Field 'f' was not found in record with fields "
                       "('first', 'second')", str(raises.exception))
+
+
+class TestSubtyping(TestCase):
+    def test_common_field(self):
+        """
+        Test that subtypes do not require new compilations
+        """
+        arr1 = np.array([1], dtype=[('a', 'f8')])
+        arr2 = np.array([(2, 3)], dtype=[('a', 'f8'), ('b', 'f8')])
+
+        @njit
+        def foo(rec):
+            return rec['a']
+
+        x = foo(arr1[0])
+        foo.disable_compile()
+        self.assertEqual(x, foo(arr2[0]))
 
 
 if __name__ == '__main__':
