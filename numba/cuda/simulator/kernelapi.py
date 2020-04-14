@@ -109,24 +109,10 @@ class FakeCUDAAtomic(object):
 
     def max(self, array, index, val):
         with maxlock:
-            # CUDA Python's semantics for max differ from Numpy's Python's,
-            # so we have special handling here (CUDA Python treats NaN as
-            # missing data).
-            if np.isnan(array[index]):
-                array[index] = val
-            elif np.isnan(val):
-                return
             array[index] = max(array[index], val)
 
     def min(self, array, index, val):
         with minlock:
-            # CUDA Python's semantics for min differ from Numpy's Python's,
-            # so we have special handling here (CUDA Python treats NaN as
-            # missing data).
-            if np.isnan(array[index]):
-                array[index] = val
-            elif np.isnan(val):
-                return
             array[index] = min(array[index], val)
 
     def compare_and_swap(self, array, old, val):

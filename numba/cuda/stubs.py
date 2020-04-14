@@ -450,10 +450,7 @@ class atomic(Stub):
     class max(Stub):
         """max(ary, idx, val)
 
-        Perform atomic ary[idx] = max(ary[idx], val). NaN is treated as a
-        missing value, so max(NaN, n) == max(n, NaN) == n. Note that this
-        differs from Python and Numpy behaviour, where max(a, b) is always
-        a when either a or b is a NaN.
+        Perform atomic ary[idx] = max(ary[idx], val).
 
         Supported on int32, int64, uint32, uint64, float32, float64 operands only.
 
@@ -464,12 +461,12 @@ class atomic(Stub):
     class min(Stub):
         """min(ary, idx, val)
 
-        Perform atomic ary[idx] = min(ary[idx], val). NaN is treated as a
-        missing value, so min(NaN, n) == min(n, NaN) == n. Note that this
-        differs from Python and Numpy behaviour, where min(a, b) is always
-        a when either a or b is a NaN.
+        Perform atomic ary[idx] = min(ary[idx], val).
 
         Supported on int32, int64, uint32, uint64, float32, float64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
         """
 
     class compare_and_swap(Stub):

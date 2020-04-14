@@ -391,23 +391,47 @@ class TestCudaAtomics(CUDATestCase):
         gold = np.max(vals)
         np.testing.assert_equal(res, gold)
 
-    def test_atomic_max_nan_location(self):
+    # Taken together, _test_atomic_minmax_nan_location and
+    # _test_atomic_minmax_nan_val check that NaNs are treated similarly to the
+    # way they are in Python / NumPy - that is, {min,max}(a, b) == a if either
+    # a or b is a NaN. For the atomics, this means that the max is taken as the
+    # value stored in the memory location rather than the value supplied - i.e.
+    # for:
+    #
+    #    cuda.atomic.{min,max}(ary, idx, val)
+    #
+    # the result will be ary[idx] for either of ary[idx] or val being NaN.
+
+    def _test_atomic_minmax_nan_location(self, func):
+
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(func)
+
         vals = np.random.randint(0, 128, size=(1,1)).astype(np.float64)
-        gold = vals.copy().reshape(1)
         res = np.zeros(1, np.float64) + np.nan
-        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max)
         cuda_func[1, 1](res, vals)
+        np.testing.assert_equal(res, [np.nan])
 
-        np.testing.assert_equal(res, gold)
+    def _test_atomic_minmax_nan_val(self, func):
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(func)
 
-    def test_atomic_max_nan_val(self):
         res = np.random.randint(0, 128, size=1).astype(np.float64)
         gold = res.copy()
         vals = np.zeros((1, 1), np.float64) + np.nan
-        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max)
         cuda_func[1, 1](res, vals)
 
         np.testing.assert_equal(res, gold)
+
+    def test_atomic_min_nan_location(self):
+        self._test_atomic_minmax_nan_location(atomic_min)
+
+    def test_atomic_max_nan_location(self):
+        self._test_atomic_minmax_nan_location(atomic_max)
+
+    def test_atomic_min_nan_val(self):
+        self._test_atomic_minmax_nan_val(atomic_min)
+
+    def test_atomic_max_nan_val(self):
+        self._test_atomic_minmax_nan_val(atomic_max)
 
     def test_atomic_max_double_shared(self):
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
