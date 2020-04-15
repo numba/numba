@@ -193,7 +193,7 @@ Fixes:
 * PR #5432: Fix code causing compiler warnings.
 * PR #5445: Remove undefined variable
 * PR #5454: Don't warn for numba.experimental.jitclass
-* PR #5459: Fixes issue 5448 [WIP]
+* PR #5459: Fixes issue 5448
 * PR #5480: Fix for #5477, literal_unroll KeyError searching for getitems
 * PR #5485: Show the offending module in "no direct replacement" error message
 * PR #5488: Add missing ``numba.config`` shim
