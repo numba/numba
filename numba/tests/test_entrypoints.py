@@ -1,12 +1,15 @@
 import sys
 import types
+import unittest
 import warnings
 
 import pkg_resources
 
 from numba.tests.support import TestCase
+from numba.core import config
 
 
+@unittest.skipIf(config.IS_WIN32, "Tests are broken on windows, conda problem?")
 class TestEntrypoints(TestCase):
     """
     Test registration of init() functions from Numba extensions
