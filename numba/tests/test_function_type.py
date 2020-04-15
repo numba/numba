@@ -586,6 +586,7 @@ class TestFunctionTypeExtensions(TestCase):
                         # 32-bit Windows math library does not provide
                         # a double-precision cos function, so
                         # disabling the function
+                        addr = None
                         signature = None
                     else:
                         addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
@@ -629,9 +630,9 @@ class TestFunctionTypeExtensions(TestCase):
         for jit_opts in [dict(nopython=True)]:
             jit_ = jit(**jit_opts)
             with self.subTest(jit=jit_opts):
-                if mycos.signature is not None:
+                if mycos.signature() is not None:
                     self.assertEqual(jit_(myeval)(mycos, 0.0), 1.0)
-                if mysin.signature is not None:
+                if mysin.signature() is not None:
                     self.assertEqual(jit_(myeval)(mysin, float32(0.0)), 0.0)
 
     def test_compilation_results(self):
