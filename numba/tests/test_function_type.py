@@ -1,5 +1,6 @@
 import types as pytypes
 from numba import jit, njit, cfunc, types, int64, float64, float32, errors
+from numba.core.config import IS_32BITS, IS_WIN32
 import ctypes
 import warnings
 
@@ -567,13 +568,12 @@ class TestFunctionTypeExtensions(TestCase):
         """Call cos and sinf from standard math library.
 
         """
-        import os
         import ctypes.util
 
         class LibM(types.WrapperAddressProtocol):
 
             def __init__(self, fname):
-                if os.name == 'nt':
+                if IS_WIN32:
                     lib = ctypes.cdll.msvcrt
                 else:
                     libpath = ctypes.util.find_library('m')
@@ -581,10 +581,27 @@ class TestFunctionTypeExtensions(TestCase):
                 self.lib = lib
                 self._name = fname
                 if fname == 'cos':
-                    addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
-                    signature = float64(float64)
+                    # test for double-precision math function
+                    if IS_WIN32 and IS_32BITS:
+                        # 32-bit Windows math library does not provide
+                        # a double-precision cos function, so
+                        # disabling the function
+                        addr = None
+                        signature = None
+                    else:
+                        addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
+                        signature = float64(float64)
                 elif fname == 'sinf':
-                    addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
+                    # test for single-precision math function
+                    if IS_WIN32 and IS_32BITS:
+                        # 32-bit Windows math library provides sin
+                        # (instead of sinf) that is a single-precision
+                        # sin function
+                        addr = ctypes.cast(self.lib.sin, ctypes.c_voidp).value
+                    else:
+                        # Other 32/64 bit platforms define sinf as the
+                        # single-precision sin function
+                        addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
                     signature = float32(float32)
                 else:
                     raise NotImplementedError(
@@ -613,8 +630,10 @@ class TestFunctionTypeExtensions(TestCase):
         for jit_opts in [dict(nopython=True)]:
             jit_ = jit(**jit_opts)
             with self.subTest(jit=jit_opts):
-                self.assertEqual(jit_(myeval)(mycos, 0.0), 1.0)
-                self.assertEqual(jit_(myeval)(mysin, float32(0.0)), 0.0)
+                if mycos.signature() is not None:
+                    self.assertEqual(jit_(myeval)(mycos, 0.0), 1.0)
+                if mysin.signature() is not None:
+                    self.assertEqual(jit_(myeval)(mysin, float32(0.0)), 0.0)
 
     def test_compilation_results(self):
         """Turn the existing compilation results of a dispatcher instance to
