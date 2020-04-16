@@ -11,11 +11,12 @@ from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
 from numba import njit, typeof
 from numba.core import types, errors
-from numba.tests.support import TestCase, MemoryLeakMixin
-from numba.experimental.jitclass import _box
-from numba.core.runtime.nrt import MemInfo
+from numba.core.dispatcher import Dispatcher
 from numba.core.errors import LoweringError
+from numba.core.runtime.nrt import MemInfo
 from numba.experimental import jitclass
+from numba.experimental.jitclass import _box
+from numba.tests.support import TestCase, MemoryLeakMixin
 import unittest
 
 
@@ -596,6 +597,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         @jitclass([])
         class Apple(object):
             "Class docstring"
+
             def __init__(self):
                 "init docstring"
 
@@ -910,8 +912,8 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertIs(pickle.loads(pickled), ty)
 
     def test_static_methods(self):
-        @jitclass(spec=[("x", int32)])
-        class Test:
+        @jitclass([("x", int32)])
+        class Test1:
             def __init__(self, x):
                 self.x = x
 
@@ -923,9 +925,49 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def add(a, b):
                 return a + b
 
-        t = Test(0)
-        self.assertEqual(1, t.increase(1))
-        self.assertEqual(3, Test.add(1, 2))
+            @staticmethod
+            def sub(a, b):
+                return a - b
+
+        @jitclass([("x", int32)])
+        class Test2:
+            def __init__(self, x):
+                self.x = x
+
+            def increase(self, y):
+                self.x = self.add(self.x, y)
+                return self.x
+
+            @staticmethod
+            def add(a, b):
+                return a - b
+
+        self.assertIsInstance(Test1.add, Dispatcher)
+        self.assertIsInstance(Test1.sub, Dispatcher)
+        self.assertIsInstance(Test2.add, Dispatcher)
+        self.assertNotEqual(Test1.add, Test2.add)
+
+        self.assertEqual(3, Test1.add(1, 2))
+        self.assertEqual(-1, Test2.add(1, 2))
+        self.assertEqual(4, Test1.sub(6, 2))
+
+        t1 = Test1(0)
+        t2 = Test2(0)
+        self.assertEqual(1, t1.increase(1))
+        self.assertEqual(-1, t2.increase(1))
+        self.assertEqual(2, t1.add(1, 1))
+        self.assertEqual(0, t1.sub(1, 1))
+        self.assertEqual(0, t2.add(1, 1))
+
+        with self.assertRaises(AttributeError) as raises:
+            Test2.sub(3, 1)
+        self.assertIn("has no attribute 'sub'",
+                      str(raises.exception))
+
+        with self.assertRaises(TypeError) as raises:
+            Test1.add(3)
+        self.assertIn("not enough arguments: expected 2, got 1",
+                      str(raises.exception))
 
     def test_import_warnings(self):
         class Test:

@@ -101,6 +101,11 @@ def _specialize_box(typ):
                 (not (name.startswith('__') and name.endswith('__'))):
 
             dct[name] = _generate_method(name, func)
+
+    # Inject static methods as class members
+    for name, func in typ.static_methods.items():
+        dct[name] = _generate_method(name, func)
+
     # Create subclass
     subcls = type(typ.classname, (_box.Box,), dct)
     # Store to cache

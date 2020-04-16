@@ -217,16 +217,17 @@ def register_class_type(cls, spec, class_ctor, builder):
             dct['set'] = njit(v.fset)
         jit_props[k] = dct
 
-    jit_static_methods = {}
-
-    for k, v in static_methods.items():
-        jit_v = njit(v.__func__)
-        jit_static_methods[k] = jit_v
-        jit_methods[k] = njit(lambda _, *args: jit_v(*args))
+    jit_static_methods = {
+        k: njit(v.__func__) for k, v in static_methods.items()}
 
     # Instantiate class type
-    class_type = class_ctor(cls, ConstructorTemplate, spec, jit_methods,
-                            jit_props, jit_static_methods)
+    class_type = class_ctor(
+        cls,
+        ConstructorTemplate,
+        spec,
+        jit_methods,
+        jit_props,
+        jit_static_methods)
 
     jit_class_dct = dict(class_type=class_type, __doc__=docstring)
     jit_class_dct.update(jit_static_methods)
@@ -302,9 +303,14 @@ class ClassBuilder(object):
 
     def _register_methods(self, registry, instance_type):
         """
-        Register method implementations for the given instance type.
+        Register method implementations.
+        This simply registers that the method names are valid methods.  Inside
+        of imp() below we retrieve the actual method to run from the type of
+        the reciever argument (i.e. self).
         """
-        for meth in instance_type.jit_methods:
+        to_register = list(instance_type.jit_methods) + \
+            list(instance_type.jit_static_methods)
+        for meth in to_register:
 
             # There's no way to retrieve the particular method name
             # inside the implementation function, so we have to register a
@@ -318,7 +324,16 @@ class ClassBuilder(object):
         def get_imp():
             def imp(context, builder, sig, args):
                 instance_type = sig.args[0]
-                method = instance_type.jit_methods[attr]
+
+                if attr in instance_type.jit_methods:
+                    method = instance_type.jit_methods[attr]
+                elif attr in instance_type.jit_static_methods:
+                    method = instance_type.jit_static_methods[attr]
+                    # imp gets called as a method, where the first argument is
+                    # self.  We drop this for a static method.
+                    sig = sig.replace(args=sig.args[1:])
+                    args = args[1:]
+
                 disp_type = types.Dispatcher(method)
                 call = context.get_function(disp_type, sig)
                 out = call(builder, args)
@@ -383,6 +398,26 @@ class ClassAttribute(templates.AttributeTemplate):
                     return sig.as_method()
 
             return types.BoundFunction(MethodTemplate, instance)
+
+        elif attr in instance.jit_static_methods:
+            # It's a jitted method => typeinfer it
+            meth = instance.jit_static_methods[attr]
+            disp_type = types.Dispatcher(meth)
+
+            class StaticMethodTemplate(templates.AbstractTemplate):
+                key = (self.key, attr)
+
+                def generic(self, args, kws):
+                    # Don't add instance as the first argument for a static
+                    # method.
+                    sig = disp_type.get_call_type(self.context, args, kws)
+                    # sig itself does not include ClassInstanceType as it's
+                    # first argument, so instead of calling sig.as_method()
+                    # we insert the recvr. This is equivalent to
+                    # sig.replace(args=(instance,) + sig.args).as_method().
+                    return sig.replace(recvr=instance)
+
+            return types.BoundFunction(StaticMethodTemplate, instance)
 
         elif attr in instance.jit_props:
             # It's a jitted property => typeinfer its getter
