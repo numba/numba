@@ -207,7 +207,8 @@ Fixes:
 * PR #5548: Fix #5537 Removed reference to ``platform.linux_distribution``
 * PR #5555: Fix #5515 by reverting changes to ArrayAnalysis
 * PR #5557: First-class function call cannot use keyword arguments
-* PR #5568: Add skip to entrypoint test on windows
+* PR #5569: Fix RewriteConstGetitems not registering calltype for new expr
+* PR #5571: Pin down llvmlite requirement
 
 CUDA Enhancements/Fixes:
 
