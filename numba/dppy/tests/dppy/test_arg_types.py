@@ -5,7 +5,7 @@ import numpy as np
 from numba import dppy
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
-from numba.dppy.dppy_driver import driver as ocldrv
+import dppy.core as ocldrv
 
 @dppy.kernel
 def mul_kernel(A, test):

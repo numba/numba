@@ -18,7 +18,7 @@ from .ocl.stubs import (
 from . import initialize
 
 from .decorators import kernel, autojit
-from .dppy_driver.driver import runtime
+from dppy.core import runtime
 from . import target
 
 

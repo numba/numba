@@ -190,7 +190,6 @@ def get_ext_modules():
     # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
     #RH TODO: Make have_openmp = True once conda packages are being shipped
     have_openmp = False
-    opeclliteflags = list()
     if sys.platform.startswith('win'):
         cpp11flags = []
         ompcompileflags = ['-openmp']
@@ -241,30 +240,6 @@ def get_ext_modules():
     else:
         print("TBB not found")
 
-    '''
-    # Search for OpenCL, first check env var OPENCLROOT then conda locations
-    opencl_root = os.getenv('OPENCLROOT')
-    if not opencl_root:
-        #opencl_root = check_file_at_path(['include', 'opencl', 'cl.h', "CL.h"])
-        opencl_root = "/usr"
-
-    print("Building opencllite")
-    ext_dppy = Extension(
-        name='numba.dppy.dppy_driver.libdpglue',
-        sources=[
-            'numba/dppy/dppy_driver/opencllite.c'
-        ],
-        depends=['numba/dppy/dppy_driver/dp_glue.h'],
-        include_dirs=[os.path.join(opencl_root, 'include')],
-        extra_compile_args=openclliteflags,
-        libraries=['OpenCL'],  # TODO: if --debug or -g, use 'tbb_debug'
-            library_dirs=[
-                # for Linux
-                os.path.join(opencl_root, 'lib', 'x86_64-linux-gnu'),
-            ],
-    )
-    ext_dppy_impls.append(ext_dppy)
-    '''
 
     # Disable OpenMP if we are building a wheel or
     # forced by user with NUMBA_NO_OPENMP=1
@@ -331,14 +306,13 @@ def get_ext_modules():
 
 packages = find_packages(include=["numba", "numba.*"])
 
-build_requires = ['numpy', 'cffi>=1.0.0']
+build_requires = [f'numpy >={min_numpy_build_version}']
 
-install_requires = ['llvmlite>=0.31.0dev0', 'numpy', 'setuptools', 'cffi>=1.0.0']
-install_requires.extend(['enum34; python_version < "3.4"'])
-install_requires.extend(['singledispatch; python_version < "3.4"'])
-install_requires.extend(['funcsigs; python_version < "3.5"'])
-
-modules_with_cffi=['./numba/dppy/dppy_driver/driverapi.py:ffibuilder']
+install_requires = [
+    f'llvmlite >={min_llvmlite_version},<{max_llvmlite_version}',
+    f'numpy >={min_numpy_run_version}',
+    'setuptools',
+]
 
 metadata = dict(
     name='numba',
@@ -377,7 +351,6 @@ metadata = dict(
     packages=packages,
     setup_requires=build_requires,
     install_requires=install_requires,
-    cffi_modules=modules_with_cffi,
     python_requires=f">={min_python_version}",
     license="BSD",
     cmdclass=cmdclass,

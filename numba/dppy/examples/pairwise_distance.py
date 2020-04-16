@@ -7,7 +7,7 @@ import argparse
 import timeit
 
 from numba import dppy
-from numba.dppy.dppy_driver import driver as ocldrv
+import dppy.core as ocldrv
 
 parser = argparse.ArgumentParser(description='Program to compute pairwise distance')
 

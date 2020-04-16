@@ -37,6 +37,8 @@ import operator
 import warnings
 from ..errors import NumbaParallelSafetyWarning
 
+import dppy.core as driver
+
 #multi_tile = True
 multi_tile = False
 
@@ -1617,7 +1619,7 @@ def _create_gufunc_for_parfor_body(
 
     if target=='spirv':
         kernel_func = numba.dppy.compiler.compile_kernel_parfor(
-            numba.dppy.dppy_driver.driver.runtime.get_gpu_device(),
+            driver.runtime.get_gpu_device(),
             gufunc_ir,
             gufunc_param_types,
             param_types_addrspaces)
@@ -2148,13 +2150,13 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
     builder.store(builder.inttoptr(context.get_constant(types.uintp, 0), void_ptr_t), null_ptr)
     #builder.store(cgutils.get_null_value(byte_ptr_t), null_ptr)
 
-    gpu_device = numba.dppy.dppy_driver.driver.runtime.get_gpu_device()
+    gpu_device = driver.runtime.get_gpu_device()
     gpu_device_env = gpu_device.get_env_ptr()
     max_work_group_size = gpu_device.get_max_work_group_size()
-    gpu_device_int = int(numba.dppy.dppy_driver.driver.ffi.cast("uintptr_t", gpu_device_env))
+    gpu_device_int = int(driver.ffi.cast("uintptr_t", gpu_device_env))
     #print("gpu_device_env", gpu_device_env, type(gpu_device_env), gpu_device_int)
     kernel_t_obj = cres.kernel._kernel_t_obj[0]
-    kernel_int = int(numba.dppy.dppy_driver.driver.ffi.cast("uintptr_t", kernel_t_obj))
+    kernel_int = int(driver.ffi.cast("uintptr_t", kernel_t_obj))
     #print("kernel_t_obj", kernel_t_obj, type(kernel_t_obj), kernel_int)
     keep_alive_kernels.append(cres)
 

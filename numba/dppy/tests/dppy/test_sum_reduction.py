@@ -7,7 +7,7 @@ import time
 from numba import dppy
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
-from numba.dppy.dppy_driver import driver as ocldrv
+import dppy.core as ocldrv
 
 @dppy.kernel
 def reduction_kernel(A, R, stride):
@@ -56,7 +56,7 @@ class TestDPPYSumReduction(DPPYTestCase):
         device_env.copy_array_from_device(dR)
         result = A.sum()
         max_abs_err = result - R[0]
-        self.assertTrue(max_abs_err < 1e-10)
+        self.assertTrue(max_abs_err < 1e-4)
 
 
 if __name__ == '__main__':
