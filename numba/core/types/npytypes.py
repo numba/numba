@@ -206,15 +206,21 @@ class Record(Type):
     def can_convert_to(self, typingctx, other):
         """
         Convert this Record to the *other*.
+
+        This method only implements width subtyping for records.
         """
         if isinstance(other, Record):
             if len(other.fields) > len(self.fields):
                 return Conversion.nil
-            for other_fd_name, self_fd_name in zip(other.fields, self.fields):
-                other_fd_info = other.fields[other_fd_name]
-                self_fd_info = self.fields[self_fd_name]
-                if not (other_fd_name == self_fd_name and
-                        other_fd_info == self_fd_info):
+            # for other_fd_name, self_fd_name in zip(other.fields, self.fields):
+            #     other_fd_info = other.fields[other_fd_name]
+            #     self_fd_info = self.fields[self_fd_name]
+            #     if not (other_fd_name == self_fd_name and
+            #             other_fd_info == self_fd_info):
+            #         return Conversion.nil
+            for other_fd, self_fd in zip(other.fields.items(),
+                                         self.fields.items()):
+                if not other_fd == self_fd:
                     return Conversion.nil
             return Conversion.safe
 
