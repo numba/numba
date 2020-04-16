@@ -1091,7 +1091,7 @@ class TestSubtyping(TestCase):
         def foo(rec):
             return rec['a']
 
-        x = foo(arr1[0])
+        foo(arr1[0])
         foo.disable_compile()
         y = foo(arr2[0])
         self.assertEqual(a, y)
