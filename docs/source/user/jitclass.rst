@@ -45,8 +45,12 @@ Here's an example of a jitclass::
 
       def increment(self, val):
           for i in range(self.size):
-              self.array[i] = val
+              self.array[i] = self.add(self.array[i], val)
           return self.array
+
+      @staticmethod
+      def add(x, y):
+          return x + y
 
 
 (see full example at `examples/jitclass.py` from the source tree)
@@ -152,6 +156,8 @@ compiled functions:
   (e.g. ``mybag = Bag(123)``);
 * read/write access to attributes and properties (e.g. ``mybag.value``);
 * calling methods (e.g. ``mybag.increment(3)``);
+* calling static methods as instance attributes (e.g. ``mybag.add(1, 1)``);
+* calling static methods as class attributes (e.g. ``Bag.add(1, 2)``);
 
 Using jitclasses in Numba compiled function is more efficient.
 Short methods can be inlined (at the discretion of LLVM inliner).
@@ -162,6 +168,9 @@ must be unboxed or boxed between Python objects and native representation.
 Values encapsulated by a jitclass does not get boxed into Python object when
 the jitclass instance is handed to the interpreter.  It is during attribute
 access to the field values that they are boxed.
+Calling static methods as class attributes is only supported outside of the
+class definition (i.e. you can't call ``Bag.add()`` from within another method
+of ``Bag``).
 
 
 Limitations
