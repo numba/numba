@@ -5,7 +5,6 @@ import contextlib
 from . import cpu
 from .descriptors import TargetDescriptor
 from .. import dispatcher, utils, typing
-from numba.dppy.compiler import DPPyCompiler
 
 # -----------------------------------------------------------------------------
 # Default CPU target descriptors
@@ -73,27 +72,6 @@ class CPUTarget(TargetDescriptor):
 cpu_target = CPUTarget()
 
 
-class CPUDispatcher(dispatcher.Dispatcher):
-    targetdescr = cpu_target
-
-    def __init__(self, py_func, locals={}, targetoptions={}, impl_kind='direct'):
-        if ('parallel' in targetoptions and isinstance(targetoptions['parallel'], dict) and
-                'spirv' in targetoptions['parallel'] and  targetoptions['parallel']['spirv'] == True):
-            dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
-                    targetoptions=targetoptions, impl_kind=impl_kind, pipeline_class=DPPyCompiler)
-        else:
-            dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
-                targetoptions=targetoptions, impl_kind=impl_kind)
-
-class DPPyDispatcher(dispatcher.Dispatcher):
-    targetdescr = cpu_target
-
-    def __init__(self, py_func, locals={}, targetoptions={}):
-        targetoptions['parallel'] = {'spirv': True}
-        dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
-                targetoptions=targetoptions, pipeline_class=DPPyCompiler)
-
-
 class TargetRegistry(utils.UniqueDict):
     """
     A registry of API implementations for various backends.
@@ -118,5 +96,3 @@ class TargetRegistry(utils.UniqueDict):
 
 
 dispatcher_registry = TargetRegistry()
-dispatcher_registry['cpu'] = CPUDispatcher
-dispatcher_registry['dppy'] = DPPyDispatcher

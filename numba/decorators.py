@@ -12,6 +12,7 @@ import logging
 from . import config, sigutils
 from .errors import DeprecationError, NumbaDeprecationWarning
 from .targets import registry
+from .targets import cpu_dispatcher
 from .stencil import stencil
 
 
