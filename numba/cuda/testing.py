@@ -1,4 +1,5 @@
 import contextlib
+import os
 import sys
 
 from numba.tests.support import (
@@ -52,6 +53,10 @@ def skip_unless_conda_cudatoolkit(reason):
 def skip_if_external_memmgr(reason):
     """Skip test if an EMM Plugin is in use"""
     return unittest.skipIf(config.CUDA_MEMORY_MANAGER != 'default', reason)
+
+
+def skip_under_cuda_memcheck(reason):
+    return unittest.skipIf(os.environ.get('CUDA_MEMCHECK') is not None, reason)
 
 
 class CUDATextCapture(object):
