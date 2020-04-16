@@ -1083,8 +1083,9 @@ class TestSubtyping(TestCase):
         """
         Test that subtypes do not require new compilations
         """
+        a = 2
         arr1 = np.array([1], dtype=[('a', 'f8')])
-        arr2 = np.array([(2, 3)], dtype=[('a', 'f8'), ('b', 'f8')])
+        arr2 = np.array([(a, 3)], dtype=[('a', 'f8'), ('b', 'f8')])
 
         @njit
         def foo(rec):
@@ -1092,7 +1093,8 @@ class TestSubtyping(TestCase):
 
         x = foo(arr1[0])
         foo.disable_compile()
-        self.assertEqual(x, foo(arr2[0]))
+        y = foo(arr2[0])
+        self.assertEqual(a, y)
 
 
 if __name__ == '__main__':
