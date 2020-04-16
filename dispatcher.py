@@ -2,9 +2,9 @@ from __future__ import absolute_import, print_function
 
 import numpy as np
 
-from numba.targets.descriptors import TargetDescriptor
-from numba.targets.options import TargetOptions
-from numba import dppy
+#from numba.targets.descriptors import TargetDescriptor
+#from numba.targets.options import TargetOptions
+#from numba import dppy
 from numba.dppy import kernel, autojit
 from .descriptor import dppy_target
 #from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
@@ -13,14 +13,9 @@ from .descriptor import dppy_target
 from .. import dispatcher, utils, typing
 from .compiler import DPPyCompiler
 
-''' OLD IMPL '''
-'''
 class DPPyDispatcher(dispatcher.Dispatcher):
-    targetdescr = cpu_target
+    targetdescr = dppy_target
 
-    def __init__(self, py_func, locals={}, targetoptions={}):
-        dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
-                targetoptions=targetoptions, pipeline_class=DPPyCompiler)
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         assert not locals
@@ -34,7 +29,7 @@ class DPPyDispatcher(dispatcher.Dispatcher):
         assert not locals
         options = self.targetoptions.copy()
         options.update(targetoptions)
-        kernel = jit(sig, **options)(self.py_func)
+        kernel = kernel(sig, **options)(self.py_func)
         self._compiled = kernel
         if hasattr(kernel, "_npm_context_"):
             self._npm_context_ = kernel._npm_context_
@@ -230,4 +225,3 @@ class DPPyUFuncMechanism(UFuncMechanism):
                                          strides=strides,
                                          dtype=ary.dtype,
                                          gpu_data=ary.gpu_data)
-'''
