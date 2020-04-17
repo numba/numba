@@ -3123,7 +3123,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             s = '大处着眼，小处着手。🐍⚡'
             return np.asarray(s)
 
-
         funcs = [case1, case2, case3, case4]
 
         for pyfunc in funcs:
