@@ -4,6 +4,7 @@ from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
 from .misc import unliteral
 from numba.core import errors, utils, types
+from numba.core.typeconv import Conversion
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -305,6 +306,22 @@ class Dispatcher(WeakType, Callable, Dummy):
 
     def unify(self, context, other):
         return utils.unified_function_type((self, other), require_precise=False)
+
+    def can_convert_to(self, typingctx, other):
+        if isinstance(other, types.FunctionType):
+            if self.dispatcher.get_compile_result(other.signature):
+                return Conversion.safe
+            # for ovrld in self.dispatcher.overloads.values():
+            #     if ovrld.signature == other.signature:
+            #         return Conversion.safe
+            # if self.dispatcher._can_compile:
+            #     try:
+            #         self.dispatcher.compile(other.signature)
+            #     except:
+            #         raise
+            #     else:
+            #         return Conversion.safe
+
 
 
 class ObjModeDispatcher(Dispatcher):

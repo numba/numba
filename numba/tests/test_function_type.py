@@ -1072,3 +1072,90 @@ class TestMiscIssues(TestCase):
         self.assertRegex(
             str(cm.exception),
             r'.*first-class function call cannot use keyword arguments')
+
+
+class TestBasicSubtyping(TestCase):
+    def test_basic(self):
+        """
+        Test that a dispatcher object *with* a pre-compiled overload
+        can be used as input to another function with locked-down signature
+        """
+        a = 1
+        @njit
+        def foo(x):
+            return x + 1
+
+        foo(a)
+        from numba.core.typing.templates import Signature
+        int_int_fc = types.FunctionType(types.int64(types.int64,))
+
+        @njit(types.int64(int_int_fc))
+        def bar(fc):
+            return fc(a)
+
+        self.assertEqual(bar(foo), foo(a))
+
+    def test_basic2(self):
+        """
+        Test that a dispatcher object *without* a pre-compiled overload
+        can be used as input to another function with locked-down signature
+        """
+        a = 1
+        @njit
+        def foo(x):
+            return x + 1
+
+        int_int_fc = types.FunctionType(types.int64(types.int64,))
+
+        @njit(types.int64(int_int_fc))
+        def bar(fc):
+            return fc(a)
+
+        self.assertEqual(bar(foo), foo(a))
+
+    def test_basic3(self):
+        """
+        Test that a dispatcher object *without* a pre-compiled overload
+        can be used as input to another function with locked-down signature and
+        that it behaves as a truly generic function (foo1 does not get locked)
+        """
+        a = 1
+        @njit
+        def foo1(x):
+            return x + 1
+
+        @njit
+        def foo2(x):
+            return x + 2
+
+        int_int_fc = types.FunctionType(types.int64(types.int64,))
+
+        @njit(types.int64(int_int_fc))
+        def bar(fc):
+            return fc(a)
+
+        self.assertEqual(bar(foo1)+1, bar(foo2))
+
+    def test_basic4(self):
+        """
+        Test that a dispatcher object *without* a pre-compiled overload
+        can be used as input to another function with locked-down signature
+        """
+        a = 1
+        @njit
+        def foo1(x):
+            return x + 1
+
+        @njit
+        def foo2(x):
+            return x + 2
+
+        tup = (foo1, foo2)
+        from numba.core.typing.templates import Signature
+        int_int_fc = types.FunctionType(types.int64(types.int64,))
+
+        @njit(types.int64(types.UniTuple(int_int_fc, 2)))
+        def bar(fcs):
+            return fcs[0](a)
+
+        self.assertEqual(bar(tup), foo1(a))
