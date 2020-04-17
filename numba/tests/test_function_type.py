@@ -1086,7 +1086,6 @@ class TestBasicSubtyping(TestCase):
             return x + 1
 
         foo(a)
-        from numba.core.typing.templates import Signature
         int_int_fc = types.FunctionType(types.int64(types.int64,))
 
         @njit(types.int64(int_int_fc))
@@ -1101,6 +1100,7 @@ class TestBasicSubtyping(TestCase):
         can be used as input to another function with locked-down signature
         """
         a = 1
+
         @njit
         def foo(x):
             return x + 1
@@ -1138,10 +1138,11 @@ class TestBasicSubtyping(TestCase):
 
     def test_basic4(self):
         """
-        Test that a dispatcher object *without* a pre-compiled overload
-        can be used as input to another function with locked-down signature
+        Test that a dispatcher object can be used as input to another
+         function with signature as part of a tuple
         """
         a = 1
+
         @njit
         def foo1(x):
             return x + 1
@@ -1151,11 +1152,13 @@ class TestBasicSubtyping(TestCase):
             return x + 2
 
         tup = (foo1, foo2)
-        from numba.core.typing.templates import Signature
         int_int_fc = types.FunctionType(types.int64(types.int64,))
 
         @njit(types.int64(types.UniTuple(int_int_fc, 2)))
         def bar(fcs):
-            return fcs[0](a)
+            x = 0
+            for i in range(2):
+                x += fcs[i](a)
+            return x
 
-        self.assertEqual(bar(tup), foo1(a))
+        self.assertEqual(bar(tup), foo1(a)+foo2(a))
