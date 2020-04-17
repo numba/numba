@@ -4,9 +4,8 @@ import warnings
 import subprocess
 from importlib import import_module
 from contextlib import contextmanager
-from types import ModuleType
 
-from numba.core.errors import NumbaDeprecationWarning, _MovedModule
+from numba.core.errors import NumbaDeprecationWarning
 from numba.tests.support import TestCase
 from numba.core.utils import PYVERSION
 
@@ -1017,32 +1016,6 @@ class TestAPIMoves_Q1_2020(TestCase):
             [sys.executable, '-c', code],
             stderr=subprocess.STDOUT,
         ).decode()
-
-    def test_top_level_export(self):
-        def compare_mod(left, right):
-            if isinstance(left, _MovedModule):
-                self.assertIsInstance(right, ModuleType)
-            elif isinstance(right, _MovedModule):
-                self.assertIsInstance(left, ModuleType)
-            else:
-                self.assertIs(left, right)
-
-        for mod in _pre_49_top_level_modules:
-            if mod in {'unsafe'}:
-                # SKIP.
-                # different behavior and tested elsewhere.
-                continue
-            oldmodname = f'numba.{mod}'
-            with self.subTest(oldmodname):
-                oldmod = import_module(oldmodname)
-                # Make sure the target module is available
-                newmodname = oldmod._MovedModule__new_module
-                newmod = import_module(newmodname)
-                for k in dir(newmod):
-                    if k.startswith('_'):
-                        continue
-                    obj = getattr(oldmod, k)
-                    compare_mod(getattr(newmod, k), obj)
 
     def test_top_level_export_as_attr(self):
         for mod in _pre_49_top_level_modules:

@@ -1,3 +1,3 @@
 import sys
 from numba.core.errors import _MovedModule
-sys.modules[__name__] = _MovedModule(locals(), "numba.core.postproc")
+sys.modules[__name__] = _MovedModule(locals(), "numba.misc.postproc")
