@@ -150,7 +150,7 @@ def math_fmod(A, B, C):
 
 def math_modf(A, B, C):
     i = cuda.grid(1)
-    C[i] = math.modf(A[i], B[i])
+    B[i], C[i] = math.modf(A[i])
 
 
 def math_isnan(A, B):
@@ -492,6 +492,41 @@ class TestCudaMath(CUDATestCase):
         self.binary_template_float64(math_copysign, np.copysign, start=-1)
 
     #------------------------------------------------------------------------------
+    # test_math_modf
+
+
+    def test_math_modf(self):
+        def modf_template_nan(dtype, arytype):
+            A = np.array([np.nan], dtype=dtype)
+            B = np.zeros_like(A)
+            C = np.zeros_like(A)
+            cfunc = cuda.jit((arytype, arytype, arytype))(math_modf)
+            cfunc[1, nelem](A, B, C)
+            self.assertTrue(np.isnan(B))
+            self.assertTrue(np.isnan(C))
+
+        def modf_template_compare(A, dtype, arytype):
+            A = A.astype(dtype)
+            B = np.zeros_like(A)
+            C = np.zeros_like(A)
+            cfunc = cuda.jit((arytype, arytype, arytype))(math_modf)
+            cfunc[1, nelem](A, B, C)
+            D, E =np.modf(A)
+            self.assertTrue(np.array_equal(B,D))
+            self.assertTrue(np.array_equal(C,E))
+
+        nelem = 50
+        #32 bit float
+        modf_template_compare(np.linspace(0, 10, nelem), dtype=np.float32, arytype = float32[:])
+        modf_template_compare(np.array([np.inf, -np.inf]), dtype=np.float32, arytype = float32[:])
+        modf_template_nan(dtype=np.float32, arytype = float32[:])
+
+        #64 bit float
+        modf_template_compare(np.linspace(0, 10, nelem), dtype=np.float64, arytype = float64[:])
+        modf_template_compare(np.array([np.inf, -np.inf]), dtype=np.float64, arytype = float64[:])
+        modf_template_nan(dtype=np.float64, arytype = float64[:])
+
+    #------------------------------------------------------------------------------
     # test_math_fmod
 
 
@@ -540,4 +575,3 @@ class TestCudaMath(CUDATestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
