@@ -258,23 +258,46 @@ def cast_from_literal(context, builder, fromty, toty, val):
         compile_time_get_string_data(literal_value)
     mod = builder.module
 
+    i8 = ir.IntType(8)
+    i16 = ir.IntType(16)
+    i32 = ir.IntType(32)
+
     # src
     gv = context.insert_const_bytes(mod, databytes)
-    src = builder.bitcast(gv, ir.IntType(8).as_pointer())
+    src1 = builder.bitcast(gv, i8.as_pointer())
+    src2 = builder.bitcast(gv, i16.as_pointer())
+    src4 = builder.bitcast(gv, i32.as_pointer())
+
+    kind1 = builder.icmp_unsigned('==', i8(kind), i8(1))
+    kind2 = builder.icmp_unsigned('==', i8(kind), i8(2))
+    kind4 = builder.icmp_unsigned('==', i8(kind), i8(4))
 
     # size
     lty = context.get_value_type(toty)
-    size = ir.Constant(ir.IntType(8), len(literal_value))
+    size = i8(len(literal_value))
 
     # dest
     dstint_t = ir.IntType(8 * unicode_byte_width)
     dst_ptr = cgutils.alloca_once(builder, lty, size=length)
-    dst = builder.bitcast(dst_ptr, ir.IntType(32).as_pointer())
+    dst = builder.bitcast(dst_ptr, i32.as_pointer())
 
-    with cgutils.for_range(builder, size) as loop:
-        in_ptr = builder.gep(src, [loop.index])
-        in_val = builder.zext(builder.load(in_ptr), dstint_t)
-        builder.store(in_val, builder.gep(dst, [loop.index]))
+    with builder.if_then(kind1):
+        with cgutils.for_range(builder, size) as loop:
+            in_ptr = builder.gep(src1, [loop.index])
+            in_val = builder.zext(builder.load(in_ptr), dstint_t)
+            builder.store(in_val, builder.gep(dst, [loop.index]))
+
+    with builder.if_then(kind2):
+        with cgutils.for_range(builder, size) as loop:
+            in_ptr = builder.gep(src2, [loop.index])
+            in_val = builder.zext(builder.load(in_ptr), dstint_t)
+            builder.store(in_val, builder.gep(dst, [loop.index]))
+
+    with builder.if_then(kind4):
+        with cgutils.for_range(builder, size) as loop:
+            in_ptr = builder.gep(src4, [loop.index])
+            in_val = builder.zext(builder.load(in_ptr), dstint_t)
+            builder.store(in_val, builder.gep(dst, [loop.index]))
 
     return builder.load(dst_ptr)
 

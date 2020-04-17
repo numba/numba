@@ -3895,7 +3895,7 @@ def np_asarray(a, dtype=None):
             for i, v in enumerate(a):
                 ret[i] = v
             return ret
-    elif isinstance(a, types.Literal):
+    elif isinstance(a, types.StringLiteral):
         val = a.literal_value
         dt = 'U' + str(len(val))
 
