@@ -3897,7 +3897,8 @@ def np_asarray(a, dtype=None):
             return ret
     elif isinstance(a, types.StringLiteral):
         val = a.literal_value
-        dt = 'U' + str(len(val))
+        l = '1' if len(val) == 0 else str(len(val))
+        dt = 'U' + l
 
         def impl(a, dtype=None):
             return np.array(val, dtype=np.dtype(dt))
