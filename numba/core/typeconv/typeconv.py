@@ -51,6 +51,8 @@ class TypeManager(object):
 
     def set_compatible(self, fromty, toty, by):
         code = self._conversion_codes[by]
+        if isinstance(fromty[0], types.Dispatcher) and isinstance(toty.dtype, types.FunctionType):
+            print("loading dispatcher->FunctionType in set_compatible. tuple type: ", fromty, " code: ", fromty._code)
         _typeconv.set_compatible(self._ptr, fromty._code, toty._code, code)
         # Ensure the types don't die, otherwise they may be recreated with
         # other type codes and pollute the hash table.
