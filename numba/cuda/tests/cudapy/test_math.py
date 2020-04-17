@@ -501,7 +501,7 @@ class TestCudaMath(CUDATestCase):
             B = np.zeros_like(A)
             C = np.zeros_like(A)
             cfunc = cuda.jit((arytype, arytype, arytype))(math_modf)
-            cfunc[1, nelem](A, B, C)
+            cfunc[1, len(A)](A, B, C)
             self.assertTrue(np.isnan(B))
             self.assertTrue(np.isnan(C))
 
@@ -510,7 +510,7 @@ class TestCudaMath(CUDATestCase):
             B = np.zeros_like(A)
             C = np.zeros_like(A)
             cfunc = cuda.jit((arytype, arytype, arytype))(math_modf)
-            cfunc[1, nelem](A, B, C)
+            cfunc[1, len(A)](A, B, C)
             D, E =np.modf(A)
             self.assertTrue(np.array_equal(B,D))
             self.assertTrue(np.array_equal(C,E))
