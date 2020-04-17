@@ -8,7 +8,7 @@ import numba
 from numba import unittest_support as unittest
 from numba import jit, njit, types, ir, compiler
 from numba.ir_utils import guard, find_callname, find_const, get_definition
-from numba.targets.registry import CPUDispatcher
+from numba.targets.cpu_dispatcher import CPUDispatcher
 from numba.inline_closurecall import inline_closure_call
 from .test_parfors import skip_unsupported
 
