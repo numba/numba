@@ -57,9 +57,10 @@ class CmdLine(object):
         # The opt step is needed for:
         #     a) generate a bitcode file from the text IR file
         #     b) hoist all allocas to the enty block of the module
-        check_call(["opt","-O3","-o",ipath+'.bc',ipath])
+        check_call(["opt","-O1","-o",ipath+'.bc',ipath])
         check_call(["llvm-spirv","-o",opath,ipath+'.bc'])
-        os.unlink(ipath + '.bc')
+        if config.SAVE_DPPY_IR_FILES == 0:
+            os.unlink(ipath + '.bc')
 
 
 class Module(object):
@@ -75,12 +76,12 @@ class Module(object):
     def __del__(self):
         # Remove all temporary files
         for afile in self._tempfiles:
-            if config.SAVE_DPPY_IR_FILES == 1:
+            if config.SAVE_DPPY_IR_FILES != 0:
                 print(afile)
             else:
                 os.unlink(afile)
         # Remove directory
-        if config.SAVE_DPPY_IR_FILES != 1:
+        if config.SAVE_DPPY_IR_FILES == 0:
             os.rmdir(self._tmpdir)
 
     def _create_temp_file(self, name, mode='wb'):
@@ -116,24 +117,25 @@ class Module(object):
         self._cmd.generate(ipath=self._llvmfile, opath=spirv_path)
 
         # Validate the SPIR-V code
-        try:
-            self._cmd.validate(ipath=spirv_path)
-        except CalledProcessError:
-            print("SPIR-V Validation failed...")
-            pass
-        else:
-            # Optimize SPIR-V code
-            opt_path = self._track_temp_file("optimized-spirv")
-            self._cmd.optimize(ipath=spirv_path, opath=opt_path)
+        if config.SPIRV_VAL == 1:
+            try:
+                self._cmd.validate(ipath=spirv_path)
+            except CalledProcessError:
+                print("SPIR-V Validation failed...")
+                pass
+            else:
+                # Optimize SPIR-V code
+                opt_path = self._track_temp_file("optimized-spirv")
+                self._cmd.optimize(ipath=spirv_path, opath=opt_path)
 
-            if config.DUMP_ASSEMBLY:
-                # Disassemble optimized SPIR-V code
-                dis_path = self._track_temp_file("disassembled-spirv")
-                self._cmd.disassemble(ipath=opt_path, opath=dis_path)
-                with open(dis_path, 'rb') as fin_opt:
-                    print("ASSEMBLY".center(80, "-"))
-                    print(fin_opt.read())
-                    print("".center(80, "="))
+                if config.DUMP_ASSEMBLY:
+                    # Disassemble optimized SPIR-V code
+                    dis_path = self._track_temp_file("disassembled-spirv")
+                    self._cmd.disassemble(ipath=opt_path, opath=dis_path)
+                    with open(dis_path, 'rb') as fin_opt:
+                        print("ASSEMBLY".center(80, "-"))
+                        print(fin_opt.read())
+                        print("".center(80, "="))
 
         # Read and return final SPIR-V (not optimized!)
         with open(spirv_path, 'rb') as fin:

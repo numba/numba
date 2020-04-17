@@ -12,12 +12,7 @@ def initialize_all():
     from numba.targets.registry import dispatcher_registry
     dispatcher_registry.ondemand['dppy'] = init_jit
 
-    dir_path = os.path.dirname(os.path.realpath(__file__)) + "/dppy_driver"
-    dpgluelib = 'libdpglue_so.so'
-    if os.path.isfile(dir_path + "/libdpglue_so.so"):
-        dpgluelib = dir_path + "/libdpglue_so.so"
-    #dpgluelib = dir_path + "/libdpglue" +  sysconfig.get_config_var('EXT_SUFFIX')
-    ll.load_library_permanently(dpgluelib)
+    ll.load_library_permanently('libdpglue.so')
     ll.load_library_permanently('libOpenCL.so')
 
 def _initialize_ufunc():

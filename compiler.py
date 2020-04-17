@@ -5,11 +5,13 @@ from collections import namedtuple
 from .dppy_passbuilder import DPPyPassBuilder
 from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler, ir
-from .dppy_driver import driver
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
-from numba.dppy.dppy_driver import spirv_generator
 from types import FunctionType
+
+import dppy.core as driver
+from . import spirv_generator
+
 import os
 from numba.compiler import DefaultPassBuilder, CompilerBase
 
@@ -25,7 +27,7 @@ def _raise_no_device_found_error():
 
 def _raise_invalid_kernel_enqueue_args():
     error_message = ("Incorrect number of arguments for enquing dppy.kernel. "
-                     "Usage: dppy_driver.device_env, global size, local size. "
+                     "Usage: device_env, global size, local size. "
                      "The local size argument is optional.")
     raise ValueError(error_message)
 
@@ -204,7 +206,7 @@ class DPPyKernelBase(object):
     def __getitem__(self, args):
         """Mimick CUDA python's square-bracket notation for configuration.
         This assumes the argument to be:
-            `dppy_driver.device_env, global size, local size`
+            `device_env, global size, local size`
         """
         ls = None
         nargs = len(args)

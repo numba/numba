@@ -4,9 +4,10 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppy, njit
-from numba.dppy.dppy_driver import driver as ocldrv
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
+
+import dppy.core as ocldrv
 
 class TestNumpy_floating_functions(DPPYTestCase):
     def test_isfinite(self):
