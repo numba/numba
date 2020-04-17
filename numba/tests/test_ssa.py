@@ -305,8 +305,8 @@ class TestReportedSSAIssues(SSABaseTest):
         # We have to create a custom pipeline to force a SSA reconstruction
         # and stripping.
         from numba.core.compiler import CompilerBase, DefaultPassBuilder
-        from numba.untyped_passes import ReconstructSSA, IRProcessing
-        from numba.typed_passes import PreLowerStripPhis
+        from numba.core.untyped_passes import ReconstructSSA, IRProcessing
+        from numba.core.typed_passes import PreLowerStripPhis
 
         class CustomPipeline(CompilerBase):
             def define_pipelines(self):
