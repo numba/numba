@@ -2,7 +2,7 @@ import sys
 
 import numpy as np
 import ctypes
-from numba import jit, literal_unroll, njit
+from numba import jit, literal_unroll, njit, typeof
 from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
@@ -1096,6 +1096,20 @@ class TestSubtyping(TestCase):
         y = foo(arr2[0])
         self.assertEqual(a, y)
 
+    def test_common_field_compiled(self):
+        """
+        Test that subtypes can work with declared signatures
+        """
+        a = 2
+        rec1 = np.array([1], dtype=[('a', 'f8')])[0]
+        rec2 = np.array([(a, 3)], dtype=[('a', 'f8'), ('b', 'f8')])[0]
+
+        @njit(types.float64(typeof(rec1)))
+        def foo(rec):
+            return rec['a']
+
+        y = foo(rec2)
+        self.assertEqual(a, y)
 
 if __name__ == '__main__':
     unittest.main()
