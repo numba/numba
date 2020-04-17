@@ -445,6 +445,7 @@ class _MovedModule(ModuleType):
 
     def __getattr__(self, attr):
         """ warn users above modules moving locations """
+
         try:
             # import from the moved module
             if self.__new_module is not None:
