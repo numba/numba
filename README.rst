@@ -7,7 +7,7 @@
 
 DPPy proof-of-concept backend for NUMBA to support compilation for Intel CPU and
 GPU architectures. The present implementation of DPPy is based on OpenCL 2.1,
-but is likely to change in the future to reply on Sycl/DPC++ or Intel Level-0
+but is likely to change in the future to rely on Sycl/DPC++ or Intel Level-0
 driver API.
 
 ================

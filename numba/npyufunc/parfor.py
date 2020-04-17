@@ -37,6 +37,8 @@ import operator
 import warnings
 from ..errors import NumbaParallelSafetyWarning
 
+import dppy.core as driver
+
 #multi_tile = True
 multi_tile = False
 
@@ -1140,8 +1142,8 @@ def _create_gufunc_for_parfor_body(
                     addrspaces.append(None)
             return addrspaces
 
-        print(dir(numba.dppy))
-        print(numba.dppy.compiler.DEBUG)
+        #print(dir(numba.dppy))
+        #print(numba.dppy.compiler.DEBUG)
         addrspaces = addrspace_from(parfor_params, numba.dppy.target.SPIR_GLOBAL_ADDRSPACE)
 
         # Pass in the initial value as a simple var.
@@ -1192,10 +1194,10 @@ def _create_gufunc_for_parfor_body(
         assert(len(param_types_addrspaces) == len(addrspaces))
         for i in range(len(param_types_addrspaces)):
             if addrspaces[i] is not None:
-                print("before:", id(param_types_addrspaces[i]))
+                #print("before:", id(param_types_addrspaces[i]))
                 assert(isinstance(param_types_addrspaces[i], types.npytypes.Array))
                 param_types_addrspaces[i] = param_types_addrspaces[i].copy(addrspace=addrspaces[i])
-                print("setting param type", i, param_types[i], id(param_types[i]), "to addrspace", param_types_addrspaces[i].addrspace)
+                #print("setting param type", i, param_types[i], id(param_types[i]), "to addrspace", param_types_addrspaces[i].addrspace)
         # the output reduction array has the same types as the local reduction reduction arrays
         func_arg_types.extend(parfor_redvar_types)
         func_arg_types.extend(parfor_red_arg_types)
@@ -1612,7 +1614,7 @@ def _create_gufunc_for_parfor_body(
 
     if target=='spirv':
         kernel_func = numba.dppy.compiler.compile_kernel_parfor(
-            numba.dppy.dppy_driver.driver.runtime.get_gpu_device(),
+            driver.runtime.get_gpu_device(),
             gufunc_ir,
             gufunc_param_types,
             param_types_addrspaces)
@@ -2143,13 +2145,13 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
     builder.store(builder.inttoptr(context.get_constant(types.uintp, 0), void_ptr_t), null_ptr)
     #builder.store(cgutils.get_null_value(byte_ptr_t), null_ptr)
 
-    gpu_device = numba.dppy.dppy_driver.driver.runtime.get_gpu_device()
+    gpu_device = driver.runtime.get_gpu_device()
     gpu_device_env = gpu_device.get_env_ptr()
     max_work_group_size = gpu_device.get_max_work_group_size()
-    gpu_device_int = int(numba.dppy.dppy_driver.driver.ffi.cast("uintptr_t", gpu_device_env))
+    gpu_device_int = int(driver.ffi.cast("uintptr_t", gpu_device_env))
     #print("gpu_device_env", gpu_device_env, type(gpu_device_env), gpu_device_int)
     kernel_t_obj = cres.kernel._kernel_t_obj[0]
-    kernel_int = int(numba.dppy.dppy_driver.driver.ffi.cast("uintptr_t", kernel_t_obj))
+    kernel_int = int(driver.ffi.cast("uintptr_t", kernel_t_obj))
     #print("kernel_t_obj", kernel_t_obj, type(kernel_t_obj), kernel_int)
     keep_alive_kernels.append(cres)
 
@@ -2416,7 +2418,7 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
 
     for read_buf in read_bufs_after_enqueue:
         buffer_ptr, array_size_member, data_member = read_buf
-        print("read_buf:", buffer_ptr, "array_size_member:", array_size_member, "data_member:", data_member)
+        #print("read_buf:", buffer_ptr, "array_size_member:", array_size_member, "data_member:", data_member)
         builder.call(
             read_mem_buffer_from_device, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
                                           builder.load(buffer_ptr),

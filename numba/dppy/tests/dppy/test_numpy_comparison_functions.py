@@ -5,9 +5,10 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppy, njit
-from numba.dppy.dppy_driver import driver as ocldrv
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
+
+import dppy.core as ocldrv
 
 class TestNumpy_comparison_functions(DPPYTestCase):
     a = np.array([4,5,6])

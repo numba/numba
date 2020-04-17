@@ -16,6 +16,8 @@ from .typeof import typeof, Purpose
 from numba import utils
 from numba.six import Sequence
 
+import dppy.core as driver
+
 
 class Rating(object):
     __slots__ = 'promote', 'safe_convert', "unsafe_convert"
@@ -357,7 +359,7 @@ class BaseContext(object):
         try:
             return typeof(val, Purpose.argument)
         except ValueError:
-            if(type(val) == numba.dppy.dppy_driver.driver.DeviceArray):
+            if(type(val) == driver.DeviceArray):
                 return typeof(val._ndarray, Purpose.argument)
             # DRD : Hmmm... is the assumption that this error is encountered
             # when someone is using cuda, and already has done an import
