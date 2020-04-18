@@ -22,6 +22,8 @@ def _autoincr():
     return n
 
 _typecache = {}
+from weakref import WeakKeyDictionary
+_typecodecache ={}
 
 def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
@@ -47,14 +49,27 @@ class _TypeMetaclass(ABCMeta):
     def _intern(cls, inst):
         # Try to intern the created instance
         wr = weakref.ref(inst, _on_type_disposal)
+        from numba.core import types
+        if isinstance(inst, types.Tuple) and isinstance(inst[0], types.Dispatcher):
+            print("Creating new tuple ",
+                  "\n\t Type:", inst,
+                  "\n\t id:", id(inst), "\n\t hash:", hash(inst),
+                  "\n\t Found in typecache:", wr in _typecache,
+                  )
         orig = _typecache.get(wr)
         orig = orig and orig()
+
         if orig is not None:
             return orig
         else:
-            inst._code = _autoincr()
+            if isinstance(inst, types.Tuple) and isinstance(inst[0], types.Dispatcher)\
+                    and hash(inst) in _typecodecache:
+                print("\t Found in typecodecache. re-using code", _typecodecache[hash(inst)])
+            code = _typecodecache.setdefault(hash(inst), _autoincr())
+            inst._code = code
             _typecache[wr] = wr
             return inst
+
 
     def __call__(cls, *args, **kwargs):
         """
