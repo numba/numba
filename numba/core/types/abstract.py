@@ -22,7 +22,6 @@ def _autoincr():
     return n
 
 _typecache = {}
-from weakref import WeakKeyDictionary
 _typecodecache ={}
 
 def _on_type_disposal(wr, _pop=_typecache.pop):
