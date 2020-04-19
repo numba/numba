@@ -1,10 +1,9 @@
-from __future__ import print_function, absolute_import
-
 import re
 
-from .support import TestCase, override_config, tag
-from numba import unittest_support as unittest
-from numba import jit, types
+from numba.tests.support import TestCase, override_config
+from numba import jit
+from numba.core import types
+import unittest
 
 
 class TestDebugInfo(TestCase):
@@ -28,7 +27,6 @@ class TestDebugInfo(TestCase):
 
         self._check(foo, sig=(types.int32,), expect=False)
 
-    @tag('important')
     def test_debuginfo_in_asm(self):
         @jit(nopython=True, debug=True)
         def foo(x):

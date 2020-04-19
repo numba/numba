@@ -2,16 +2,14 @@
 Tests for practical lowering specific errors.
 """
 
-
-from __future__ import print_function
-
 import numpy as np
-from numba import njit, types, ir
-from numba.compiler import CompilerBase, DefaultPassBuilder
-from numba.typed_passes import NopythonTypeInference
-from numba.compiler_machinery import register_pass, FunctionPass
+from numba import njit
+from numba.core import types, ir
+from numba.core.compiler import CompilerBase, DefaultPassBuilder
+from numba.core.typed_passes import NopythonTypeInference
+from numba.core.compiler_machinery import register_pass, FunctionPass
 
-from .support import MemoryLeakMixin, TestCase
+from numba.tests.support import MemoryLeakMixin, TestCase
 
 
 class TestLowering(MemoryLeakMixin, TestCase):

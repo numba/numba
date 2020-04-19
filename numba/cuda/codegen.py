@@ -1,8 +1,8 @@
 from llvmlite import binding as ll
 from llvmlite.llvmpy import core as lc
 
-from numba.targets.codegen import BaseCPUCodegen, CodeLibrary
-from numba import utils
+from numba.core.codegen import BaseCPUCodegen, CodeLibrary
+from numba.core import utils
 from .cudadrv import nvvm
 
 

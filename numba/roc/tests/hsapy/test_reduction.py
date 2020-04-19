@@ -1,9 +1,7 @@
-from __future__ import print_function, absolute_import, division
-
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import roc, intp
+import unittest
 
 WAVESIZE = 64
 

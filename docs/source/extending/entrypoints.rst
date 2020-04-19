@@ -44,3 +44,22 @@ as long as it matches what is listed in ``setup.py``) that takes no arguments,
 and the return value is ignored.  This function should register types,
 overloads, or call other Numba extension APIs.  The order of initialization of
 extensions is undefined.
+
+Testing your Entry Point
+------------------------
+
+Numba loads all entry points when the first function is compiled. To test your
+entry point, it is not sufficient to just ``import numba``; you have to define
+and run a small function, like this:
+
+.. code-block:: python
+
+    import numba; numba.njit(lambda x: x + 1)(123)
+
+It is not necessary to import your module: entry points are identified by the
+``entry_points.txt`` file in your library's ``*.egg-info`` directory.
+
+The ``setup.py build`` command does not create eggs, but ``setup.py sdist``
+(for testing in a local directory) and ``setup.py install`` do. All entry points
+registered in eggs that are on the Python path are loaded. Be sure to check for
+stale ``entry_points.txt`` when debugging.

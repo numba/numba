@@ -1,8 +1,7 @@
-from __future__ import print_function, division, absolute_import
 import numpy as np
 from numba import cuda, float32
-from numba.errors import MacroError
-from numba.cuda.testing import unittest, SerialMixin
+from numba.core.errors import MacroError
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
 
 GLOBAL_CONSTANT = 5
@@ -48,7 +47,7 @@ def udt_invalid_2(A):
     A[i, j] = sa[i, j]
 
 
-class TestMacro(SerialMixin, unittest.TestCase):
+class TestMacro(CUDATestCase):
     def getarg(self):
         return np.array(100, dtype=np.float32, ndmin=1)
 
@@ -57,11 +56,11 @@ class TestMacro(SerialMixin, unittest.TestCase):
 
     def test_global_constants(self):
         udt = cuda.jit((float32[:],))(udt_global_constants)
-        udt(self.getarg())
+        udt[1, 1](self.getarg())
 
     def test_global_build_tuple(self):
         udt = cuda.jit((float32[:, :],))(udt_global_build_tuple)
-        udt(self.getarg2())
+        udt[1, 1](self.getarg2())
 
     @skip_on_cudasim('Simulator does not perform macro expansion')
     def test_global_build_list(self):
@@ -73,7 +72,7 @@ class TestMacro(SerialMixin, unittest.TestCase):
 
     def test_global_constant_tuple(self):
         udt = cuda.jit((float32[:, :],))(udt_global_constant_tuple)
-        udt(self.getarg2())
+        udt[1, 1](self.getarg2())
 
     @skip_on_cudasim("Can't check for constants in simulator")
     def test_invalid_1(self):

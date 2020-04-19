@@ -1,9 +1,7 @@
-from __future__ import print_function, absolute_import, division
-
 import numpy as np
 
 from numba import cuda, int32, complex128
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
 def culocal(A, B):
@@ -30,13 +28,13 @@ def culocal1tuple(A, B):
         B[i] = C[i]
 
 
-class TestCudaLocalMem(SerialMixin, unittest.TestCase):
+class TestCudaLocalMem(CUDATestCase):
     def test_local_array(self):
         jculocal = cuda.jit('void(int32[:], int32[:])')(culocal)
         self.assertTrue('.local' in jculocal.ptx)
         A = np.arange(1000, dtype='int32')
         B = np.zeros_like(A)
-        jculocal(A, B)
+        jculocal[1, 1](A, B)
         self.assertTrue(np.all(A == B))
 
     def test_local_array_1_tuple(self):
@@ -47,7 +45,7 @@ class TestCudaLocalMem(SerialMixin, unittest.TestCase):
         # may reduce it to registers.
         A = np.arange(5, dtype='int32')
         B = np.zeros_like(A)
-        jculocal(A, B)
+        jculocal[1, 1](A, B)
         self.assertTrue(np.all(A == B))
 
     def test_local_array_complex(self):
@@ -57,7 +55,7 @@ class TestCudaLocalMem(SerialMixin, unittest.TestCase):
         # self.assertTrue('.local' in jculocalcomplex.ptx)
         A = (np.arange(100, dtype='complex128') - 1) / 2j
         B = np.zeros_like(A)
-        jculocalcomplex(A, B)
+        jculocalcomplex[1, 1](A, B)
         self.assertTrue(np.all(A == B))
 
 

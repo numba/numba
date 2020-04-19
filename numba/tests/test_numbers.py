@@ -1,11 +1,11 @@
 # (Some) Tests for targets/numbers.py
-from __future__ import print_function, absolute_import, division
 
 import numpy as np
 
-from numba import njit, types
-from numba.errors import TypingError
-from .support import TestCase
+from numba import njit
+from numba.core import types
+from numba.core.errors import TypingError
+from numba.tests.support import TestCase
 
 
 def gen_view(a,b):

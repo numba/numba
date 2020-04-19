@@ -1,17 +1,14 @@
-from __future__ import print_function, absolute_import
-
 import re
 
 from llvmlite.llvmpy import core as lc
 from llvmlite import ir as llvmir
 from llvmlite import binding as ll
 
-from numba import typing, types, utils, cgutils
-from numba.utils import cached_property
-from numba import datamodel
-from numba.targets.base import BaseContext
-from numba.targets.callconv import MinimalCallConv
-from . import codegen
+from numba.core import typing, types, utils, datamodel, cgutils
+from numba.core.utils import cached_property
+from numba.core.base import BaseContext
+from numba.core.callconv import MinimalCallConv
+from numba.roc import codegen
 from .hlc import DATALAYOUT
 
 CC_SPIR_KERNEL = "spir_kernel"

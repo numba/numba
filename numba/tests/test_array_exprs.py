@@ -1,15 +1,14 @@
-from __future__ import print_function, division, absolute_import
-
 import gc
+from io import StringIO
 
 import numpy as np
 
 from numba import njit, vectorize
-from numba import unittest_support as unittest
-from numba import compiler, typing, typeof, ir, utils, types
-from numba.compiler import Compiler, Flags
-from numba.targets import cpu
-from .support import MemoryLeakMixin, TestCase
+from numba import typeof
+from numba.core import utils, types, typing, ir, compiler, cpu
+from numba.core.compiler import Compiler, Flags
+from numba.tests.support import MemoryLeakMixin, TestCase
+import unittest
 
 
 class Namespace(dict):
@@ -462,7 +461,7 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
         a = np.linspace(0, 1, 10)
         cfunc(a, a, a, a)
 
-        buf = utils.StringIO()
+        buf = StringIO()
         cfunc.inspect_types(buf)
         res = buf.getvalue()
         self.assertIn("#   u.1 = ", res)

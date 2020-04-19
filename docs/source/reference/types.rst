@@ -100,6 +100,126 @@ the beginning or the end of the index specification::
    >>> numba.float32[::1, :, :]
    array(float32, 3d, F)
 
+Functions
+---------
+
+.. warning::
+   The feature of considering functions as first-class type objects is
+   under development.
+
+Functions are often considered as certain transformations of
+input arguments to output values. Within Numba :term:`JIT` compiled
+functions, the functions can also be considered as objects, that is,
+functions can be passed around as arguments or return values, or used
+as items in sequences, in addition to being callable.
+
+First-class function support is enabled for all Numba :term:`JIT`
+compiled functions and Numba ``cfunc`` compiled functions except when:
+- using a non-CPU compiler,
+- the compiled function is a Python generator,
+- the compiled function has Omitted arguments,
+- or the compiled function returns Optional value.
+
+To disable first-class function support, use ``no_cfunc_wrapper=True``
+decorator option.
+
+For instance, consider an example where the Numba :term:`JIT` compiled
+function applies user-specified functions as a composition to an input
+argument::
+
+    >>> @numba.njit
+    ... def composition(funcs, x):
+    ...     r = x
+    ...     for f in funcs[::-1]:
+    ...         r = f(r)
+    ...     return r
+    ...
+    >>> @numba.cfunc("double(double)")
+    ... def a(x):
+    ...     return x + 1.0
+    ...
+    >>> @numba.njit
+    ... def b(x):
+    ...     return x * x
+    ...
+    >>> composition((a, b), 0.5), 0.5 ** 2 + 1
+    (1.25, 1.25)
+    >>> composition((b, a, b, b, a), 0.5), b(a(b(b(a(0.5)))))
+    (36.75390625, 36.75390625)
+
+Here, ``cfunc`` compiled functions ``a`` and ``b`` are considered as
+first-class function objects because these are passed in to the Numba
+:term:`JIT` compiled function ``composition`` as arguments, that is, the
+``composition`` is :term:`JIT` compiled independently from its argument function
+objects (that are collected in the input argument ``funcs``).
+
+Currently, first-class function objects can be Numba ``cfunc`` compiled
+functions, :term:`JIT` compiled functions, and objects that implement the
+Wrapper Address Protocol (WAP, see below) with the following restrictions:
+
+========================   ============   ==============   ===========
+Context                    JIT compiled   cfunc compiled   WAP objects
+========================   ============   ==============   ===========
+Can be used as arguments   yes            yes              yes
+Can be called              yes            yes              yes
+Can be used as items       yes\*          yes              yes
+Can be returned            yes            yes              yes
+Namespace scoping          yes            yes              yes
+Automatic overload         yes            no               no
+========================   ============   ==============   ===========
+
+\* at least one of the items in a sequence of first-class function objects must
+have a precise type.
+
+
+Wrapper Address Protocol - WAP
+++++++++++++++++++++++++++++++
+
+Wrapper Address Protocol provides an API for making any Python object
+a first-class function for Numba :term:`JIT` compiled functions. This assumes
+that the Python object represents a compiled function that can be
+called via its memory address (function pointer value) from Numba :term:`JIT`
+compiled functions. The so-called WAP objects must define the
+following two methods:
+
+.. method:: __wrapper_address__(self) -> int
+
+            Return the memory address of a first-class function. This
+            method is used when a Numba :term:`JIT` compiled function tries to
+            call the given WAP instance.
+
+.. method:: signature(self) -> numba.typing.Signature
+
+            Return the signature of the given first-class
+            function. This method is used when passing in the given
+            WAP instance to a Numba :term:`JIT` compiled function.
+
+In addition, the WAP object may implement the ``__call__``
+method. This is necessary when calling WAP objects from Numba
+:term:`JIT` compiled functions in :term:`object mode`.
+
+As an example, let us call the standard math library function ``cos``
+within a Numba :term:`JIT` compiled function. The memory address of ``cos`` can
+be established after loading the math library and using the ``ctypes``
+package::
+
+    >>> import numba, ctypes, ctypes.util, math
+    >>> libm = ctypes.cdll.LoadLibrary(ctypes.util.find_library('m'))
+    >>> class LibMCos(numba.types.WrapperAddressProtocol):
+    ...     def __wrapper_address__(self):
+    ...         return ctypes.cast(libm.cos, ctypes.c_voidp).value
+    ...     def signature(self):
+    ...         return numba.float64(numba.float64)
+    ...
+    >>> @numba.njit
+    ... def foo(f, x):
+    ...     return f(x)
+    ...
+    >>> foo(LibMCos(), 0.0)
+    1.0
+    >>> foo(LibMCos(), 0.5), math.cos(0.5)
+    (0.8775825618903728, 0.8775825618903728)
+
 Miscellaneous Types
 -------------------
 

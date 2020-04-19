@@ -1,12 +1,10 @@
-from __future__ import print_function, absolute_import
-
 import tempfile
 import os
 import numpy as np
 
-import numba.unittest_support as unittest
+import unittest
 from numba import roc
-from numba import types
+from numba.core import types
 from numba.roc import compiler
 from numba.roc.hsadrv.driver import hsa as hsart
 from numba.roc.hsadrv.driver import BrigModule, Executable, Program

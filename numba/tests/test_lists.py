@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 from collections import namedtuple
 import contextlib
 import itertools
@@ -8,11 +6,13 @@ import sys
 import ctypes as ct
 import numpy as np
 
-from numba.compiler import compile_isolated, Flags
-from numba import jit, types, utils, typeof, jitclass
-import numba.unittest_support as unittest
-from numba import testing, errors
-from .support import TestCase, MemoryLeakMixin, tag
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit, typeof
+import unittest
+from numba import testing
+from numba.core import types, utils, errors
+from numba.tests.support import TestCase, MemoryLeakMixin, tag
+from numba.experimental import jitclass
 
 
 enable_pyobj_flags = Flags()
@@ -442,21 +442,18 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_append(self):
         self.check_unary_with_size(list_append)
 
-    @tag('important')
     def test_append_heterogeneous(self):
         self.check_unary_with_size(list_append_heterogeneous, precise=False)
 
     def test_extend(self):
         self.check_unary_with_size(list_extend)
 
-    @tag('important')
     def test_extend_heterogeneous(self):
         self.check_unary_with_size(list_extend_heterogeneous, precise=False)
 
     def test_pop0(self):
         self.check_unary_with_size(list_pop0)
 
-    @tag('important')
     def test_pop1(self):
         pyfunc = list_pop1
         cfunc = jit(nopython=True)(pyfunc)
@@ -488,11 +485,9 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_len(self):
         self.check_unary_with_size(list_len)
 
-    @tag('important')
     def test_getitem(self):
         self.check_unary_with_size(list_getitem)
 
-    @tag('important')
     def test_setitem(self):
         self.check_unary_with_size(list_setitem)
 
@@ -518,7 +513,6 @@ class TestLists(MemoryLeakMixin, TestCase):
                 expected = pyfunc(n, n_src, start, stop)
                 self.assertPreciseEqual(cfunc(n, n_src, start, stop), expected)
 
-    @tag('important')
     def test_getslice3(self):
         pyfunc = list_getslice3
         cfunc = jit(nopython=True)(pyfunc)
@@ -529,7 +523,6 @@ class TestLists(MemoryLeakMixin, TestCase):
                 expected = pyfunc(n, start, stop, step)
                 self.assertPreciseEqual(cfunc(n, start, stop, step), expected)
 
-    @tag('important')
     def test_setslice3(self):
         pyfunc = list_setslice3
         cfunc = jit(nopython=True)(pyfunc)
@@ -558,7 +551,6 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_delslice1(self):
         self.check_slicing2(list_delslice1)
 
-    @tag('important')
     def test_delslice2(self):
         self.check_slicing2(list_delslice2)
 
@@ -573,7 +565,6 @@ class TestLists(MemoryLeakMixin, TestCase):
     def test_iteration(self):
         self.check_unary_with_size(list_iteration)
 
-    @tag('important')
     def test_reverse(self):
         self.check_unary_with_size(list_reverse)
 
@@ -638,13 +629,9 @@ class TestLists(MemoryLeakMixin, TestCase):
         for v in range(5):
             self.assertPreciseEqual(cfunc(18, v), pyfunc(18, v))
 
-    @unittest.skipUnless(sys.version_info >= (3, 3),
-                         "list.clear() needs Python 3.3+")
     def test_clear(self):
         self.check_unary_with_size(list_clear)
 
-    @unittest.skipUnless(sys.version_info >= (3, 3),
-                         "list.copy() needs Python 3.3+")
     def test_copy(self):
         self.check_unary_with_size(list_copy)
 
@@ -798,7 +785,6 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         check([(1, 2j), (3, 4j)])
         check([(), (), ()])
 
-    @tag('important')
     def test_list_inside_tuple(self):
         check = self.check_unary(unbox_usecase3)
         check((1, [2, 3, 4]))
@@ -830,15 +816,10 @@ class TestUnboxing(MemoryLeakMixin, TestCase):
         lst = [(1,), (2, 3)]
         with self.assertRaises(TypeError) as raises:
             cfunc(lst)
-        if utils.IS_PY3:
-            msg = ("can't unbox heterogeneous list: "
-                   "UniTuple({0} x 1) != UniTuple({0} x 2)")
-            self.assertEqual(str(raises.exception), msg.format(types.intp))
-        else:
-            self.assertEqual(
-                str(raises.exception),
-                "can't unbox heterogeneous list",
-                )
+        msg = ("can't unbox heterogeneous list: "
+                "UniTuple({0} x 1) != UniTuple({0} x 2)")
+        self.assertEqual(str(raises.exception), msg.format(types.intp))
+
 
 
 class TestListReflection(MemoryLeakMixin, TestCase):
@@ -881,7 +862,6 @@ class TestListReflection(MemoryLeakMixin, TestCase):
                 cfunc(l)
             self.assertPreciseEqual(l, [1, 2, 3, 42])
 
-    @tag('important')
     def test_reflect_same_list(self):
         """
         When the same list object is reflected twice, behaviour should
@@ -1277,7 +1257,6 @@ class TestListOfList(ManagedListTestCase):
             str(raises.exception),
             )
 
-    @unittest.skipUnless(utils.IS_PY3, "Py3 only due to ordering of error")
     @expect_reflection_failure
     def test_c05(self):
         def bar(x):
@@ -1288,7 +1267,6 @@ class TestListOfList(ManagedListTestCase):
         r = [[np.arange(3).astype(np.intp)]]
         self.compile_and_test(bar, r)
 
-    @unittest.skipUnless(utils.IS_PY3, "Py3 only due to ordering of error")
     def test_c06(self):
         def bar(x):
             f = x

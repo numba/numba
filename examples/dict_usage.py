@@ -6,7 +6,7 @@ def ex_typed_dict_from_cpython():
     # magictoken.ex_typed_dict_from_cpython.begin
     import numpy as np
     from numba import njit
-    from numba import types
+    from numba.core import types
     from numba.typed import Dict
 
     # The Dict.empty() constructs a typed dictionary.
@@ -48,7 +48,7 @@ def ex_typed_dict_njit():
     # magictoken.ex_typed_dict_njit.begin
     import numpy as np
     from numba import njit
-    from numba import types
+    from numba.core import types
     from numba.typed import Dict
 
     # Make array type.  Type-expression is not supported in jit functions.

@@ -1,16 +1,15 @@
-from __future__ import print_function
-
 import random
 import numpy as np
 
-from .support import TestCase, captured_stdout
-from numba import njit, types
-from numba.unsafe.tuple import tuple_setitem
-from numba.unsafe.ndarray import to_fixed_tuple, empty_inferred
-from numba.unsafe.bytes import memcpy_region
-from numba.unsafe.refcount import dump_refcount
-from numba.unsafe.numbers import trailing_zeros, leading_zeros
-from numba.errors import TypingError
+from numba.tests.support import TestCase, captured_stdout
+from numba import njit
+from numba.core import types
+from numba.cpython.unsafe.tuple import tuple_setitem
+from numba.np.unsafe.ndarray import to_fixed_tuple, empty_inferred
+from numba.core.unsafe.bytes import memcpy_region
+from numba.core.unsafe.refcount import dump_refcount
+from numba.cpython.unsafe.numbers import trailing_zeros, leading_zeros
+from numba.core.errors import TypingError
 
 
 class TestTupleIntrinsic(TestCase):

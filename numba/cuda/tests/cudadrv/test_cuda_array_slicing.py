@@ -1,14 +1,12 @@
-from __future__ import print_function
-
 from itertools import product
 
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class CudaArrayIndexing(SerialMixin, unittest.TestCase):
+class CudaArrayIndexing(CUDATestCase):
     def test_index_1d(self):
         arr = np.arange(10)
         darr = cuda.to_device(arr)
@@ -58,7 +56,7 @@ class CudaArrayIndexing(SerialMixin, unittest.TestCase):
             darr[0, 0, z]
 
 
-class CudaArrayStridedSlice(SerialMixin, unittest.TestCase):
+class CudaArrayStridedSlice(CUDATestCase):
 
     def test_strided_index_1d(self):
         arr = np.arange(10)
@@ -87,7 +85,7 @@ class CudaArrayStridedSlice(SerialMixin, unittest.TestCase):
                         darr[i::2, j::2, k::2].copy_to_host())
 
 
-class CudaArraySlicing(SerialMixin, unittest.TestCase):
+class CudaArraySlicing(CUDATestCase):
     def test_prefix_1d(self):
         arr = np.arange(5)
         darr = cuda.to_device(arr)
@@ -207,7 +205,7 @@ class CudaArraySlicing(SerialMixin, unittest.TestCase):
                                       arr[:0][-1:])
 
 
-class CudaArraySetting(SerialMixin, unittest.TestCase):
+class CudaArraySetting(CUDATestCase):
     """
     Most of the slicing logic is tested in the cases above, so these
     tests focus on the setting logic.

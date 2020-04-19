@@ -4,13 +4,13 @@ exercise caching compiled Numba functions.
 
 See test_dispatcher.py.
 """
-from __future__ import division, print_function, absolute_import
 
 import sys
 
 import numpy as np
 
-from numba import jit, generated_jit, types, prange
+from numba import jit, generated_jit, prange
+from numba.core import types
 
 from numba.tests.ctypes_usecases import c_sin
 from numba.tests.support import TestCase, captured_stderr

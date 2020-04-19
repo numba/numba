@@ -1,12 +1,10 @@
-from __future__ import print_function, division, absolute_import
-
 import math
 import sys
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated
+from numba.core.compiler import compile_isolated
+import unittest
 
 
 class TestAutoConstants(unittest.TestCase):

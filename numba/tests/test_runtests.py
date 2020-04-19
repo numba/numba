@@ -1,10 +1,8 @@
-from __future__ import division, print_function
-
 import sys
 import subprocess
 
-from numba import unittest_support as unittest
 from numba import cuda
+import unittest
 
 
 class TestCase(unittest.TestCase):
@@ -67,17 +65,15 @@ class TestCase(unittest.TestCase):
         self.check_listing_prefix('numba.cuda.tests.cudasim')
 
     def test_module(self):
-        self.check_testsuite_size(['numba.tests.test_utils'], 3)
-        self.check_testsuite_size(['numba.tests.test_nested_calls'], 5)
+        self.check_testsuite_size(['numba.tests.test_storeslice'], 2)
+        self.check_testsuite_size(['numba.tests.test_nested_calls'], 10)
         # Several modules
         self.check_testsuite_size(['numba.tests.test_nested_calls',
-                                   'numba.tests.test_utils'], 13)
+                                   'numba.tests.test_storeslice'], 12)
 
     def test_subpackage(self):
         self.check_testsuite_size(['numba.tests.npyufunc'], 50)
 
-    @unittest.skipIf(sys.version_info < (3, 4),
-                     "'--random' only supported on Python 3.4 or higher")
     def test_random(self):
         self.check_testsuite_size(
             ['--random', '0.1', 'numba.tests.npyufunc'], 5)

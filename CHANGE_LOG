@@ -1,7 +1,422 @@
-Version 0.48.0dev
------------------
+Version 0.50.0
+--------------
 
 In development
+
+
+Version 0.49.0 (Apr 16, 2020)
+-----------------------------
+
+This release is very large in terms of code changes. Large scale removal of
+unsupported Python and NumPy versions has taken place along with a significant
+amount of refactoring to simplify the Numba code base to make it easier for
+contributors. Numba's intermediate representation has also undergone some
+important changes to solve a number of long standing issues. In addition some
+new features have been added and a large number of bugs have been fixed!
+
+IMPORTANT: In this release Numba's internals have moved about a lot. A backwards
+compatibility "shim" is provided for this release so as to not immediately break
+projects using Numba's internals. If a module is imported from a moved location
+the shim will issue a deprecation warning and suggest how to update the import
+statement for the new location. The shim will be removed in 0.50.0!
+
+Highlights of core feature changes include:
+
+* Removal of all Python 2 related code and also updating the minimum supported
+  Python version to 3.6, the minimum supported NumPy version to 1.15 and the
+  minimum supported SciPy version to 1.0. (Stuart Archibald).
+* Refactoring of the Numba code base. The code is now organised into submodules
+  by functionality. This cleans up Numba's top level namespace.
+  (Stuart Archibald).
+* Introduction of an ``ir.Del`` free static single assignment form for Numba's
+  intermediate representation (Siu Kwan Lam and Stuart Archibald).
+* An OpenMP-like thread masking API has been added for use with code using the
+  parallel CPU backends (Aaron Meurer and Stuart Archibald).
+* For the CUDA target, all kernel launches now require a configuration, this
+  preventing accidental launches of kernels with the old default of a single
+  thread in a single block. The hard-coded autotuner is also now removed, such
+  tuning is deferred to CUDA API calls that provide the same functionality
+  (Graham Markall).
+* The CUDA target also gained an External Memory Management plugin interface to
+  allow Numba to use another CUDA-aware library for all memory allocations and
+  deallocations (Graham Markall).
+* The Numba Typed List container gained support for construction from iterables
+  (Valentin Haenel).
+* Experimental support was added for first-class function types
+  (Pearu Peterson).
+
+Enhancements from user contributed PRs (with thanks!):
+
+* Aaron Meurer added support for thread masking at runtime in #4615.
+* Andreas Sodeur fixed a long standing bug that was preventing ``cProfile`` from
+  working with Numba JIT compiled functions in #4476.
+* Arik Funke fixed error messages in ``test_array_reductions`` (#5278), fixed
+  an issue with test discovery (#5239), made it so the documentation would build
+  again on windows (#5453) and fixed a nested list problem in the docs in #5489.
+* Antonio Russo fixed a SyntaxWarning in #5252.
+* Eric Wieser added support for inferring the types of object arrays (#5348) and
+  iterating over 2D arrays (#5115), also fixed some compiler warnings due to
+  missing (void) in #5222. Also helped improved the "shim" and associated
+  warnings in #5485, #5488, #5498 and partly #5532.
+* Ethan Pronovost fixed a problem with the shim erroneously warning for jitclass
+  use in #5454 and also prevented illegal return values in jitclass ``__init__``
+  in #5505.
+* Gabriel Majeri added SciPy 2019 talks to the docs in #5106.
+* Graham Markall changed the Numba HTML documentation theme to resolve a number
+  of long standing issues in #5346. Also contributed were a large number of CUDA
+  enhancements and fixes, namely:
+
+  * #5519: CUDA: Silence the test suite - Fix #4809, remove autojit, delete
+    prints
+  * #5443: Fix #5196: Docs: assert in CUDA only enabled for debug
+  * #5436: Fix #5408: test_set_registers_57 fails on Maxwell
+  * #5423: Fix #5421: Add notes on printing in CUDA kernels
+  * #5400: Fix #4954, and some other small CUDA testsuite fixes
+  * #5328: NBEP 7: External Memory Management Plugin Interface
+  * #5144: Fix #4875: Make #2655 test with debug expect to pass
+  * #5323: Document lifetime semantics of CUDA Array Interface
+  * #5061: Prevent kernel launch with no configuration, remove autotuner
+  * #5099: Fix #5073: Slices of dynamic shared memory all alias
+  * #5136: CUDA: Enable asynchronous operations on the default stream
+  * #5085: Support other itemsizes with view
+  * #5059: Docs: Explain how to use Memcheck with Numba, fixups in CUDA
+    documentation
+  * #4957: Add notes on overwriting gufunc inputs to docs
+
+* Greg Jennings fixed an issue with ``np.random.choice`` not acknowledging the
+  RNG seed correctly in #3897/#5310.
+* Guilherme Leobas added support for ``np.isnat`` in #5293.
+* Henry Schreiner made the llvmlite requirements more explicit in
+  requirements.txt in #5150.
+* Ivan Butygin helped fix an issue with parfors sequential lowering in
+  #5114/#5250.
+* Jacques Gaudin fixed a bug for Python >= 3.8 in ``numba -s`` in #5548.
+* Jim Pivarski added some hints for debugging entry points in #5280.
+* John Kirkham added ``numpy.dtype`` coercion for the ``dtype`` argument to CUDA
+  device arrays in #5252.
+* Leo Fang added a list of libraries that support ``__cuda_array_interface__``
+  in #5104.
+* Lucio Fernandez-Arjona added ``getitem`` for the NumPy record type when the
+  index is a ``StringLiteral`` type in #5182 and improved the documentation
+  rendering via additions to the TOC and removal of numbering in #5450.
+* Mads R. B. Kristensen fixed an issue with ``__cuda_array_interface__`` not
+  requiring the context in #5189.
+* Marcin Tolysz added support for nested modules in AOT compilation in #5174.
+* Mike Williams fixed some issues with NumPy records and ``getitem`` in the CUDA
+  simulator in #5343.
+* Pearu Peterson added experimental support for first-class function types in
+  #5287 (and fixes in #5459, #5473/#5429, and #5557).
+* Ravi Teja Gutta added support for ``np.flip`` in #4376/#5313.
+* Rohit Sanjay fixed an issue with type refinement for unicode input supplied to
+  typed-list ``extend()`` (#5295) and fixed unicode ``.strip()`` to strip all
+  whitespace characters in #5213.
+* Vladimir Lukyanov fixed an awkward bug in ``typed.dict`` in #5361, added a fix
+  to ensure the LLVM and assembly dumps are highlighted correctly in #5357 and
+  implemented a Numba IR Lexer and added highlighting to Numba IR dumps in
+  #5333.
+* hdf fixed an issue with the ``boundscheck`` flag in the CUDA jit target in
+  #5257.
+
+General Enhancements:
+
+* PR #4615: Allow masking threads out at runtime 
+* PR #4798: Add branch pruning based on raw predicates.
+* PR #5115: Add support for iterating over 2D arrays
+* PR #5117: Implement ord()/chr()
+* PR #5122: Remove Python 2.
+* PR #5127: Calling convention adaptor for boxer/unboxer to call jitcode
+* PR #5151: implement None-typed typed-list
+* PR #5174: Nested modules https://github.com/numba/numba/issues/4739
+* PR #5182: Add getitem for Record type when index is StringLiteral
+* PR #5185: extract code-gen utilities from closures
+* PR #5197: Refactor Numba, part I
+* PR #5210: Remove more unsupported Python versions from build tooling.
+* PR #5212: Adds support for viewing the CFG of the ELF disassembly.
+* PR #5227: Immutable typed-list
+* PR #5231: Added support for ``np.asarray`` to be used with
+  ``numba.typed.List``
+* PR #5235: Added property ``dtype`` to ``numba.typed.List``
+* PR #5272: Refactor parfor: split up ParforPass
+* PR #5281: Make IR ir.Del free until legalized.
+* PR #5287: First-class function type
+* PR #5293: np.isnat
+* PR #5294: Create typed-list from iterable
+* PR #5295: refine typed-list on unicode input to extend
+* PR #5296: Refactor parfor: better exception from passes
+* PR #5308: Provide ``numba.extending.is_jitted``
+* PR #5320: refactor array_analysis
+* PR #5325: Let literal_unroll accept types.Named*Tuple
+* PR #5330: refactor common operation in parfor lowering into a new util
+* PR #5333: Add: highlight Numba IR dump
+* PR #5342: Support for tuples passed to parfors.
+* PR #5348: Add support for inferring the types of object arrays
+* PR #5351: SSA again
+* PR #5352: Add shim to accommodate refactoring.
+* PR #5356: implement allocated parameter in njit
+* PR #5369: Make test ordering more consistent across feature availability
+* PR #5428: Wip/deprecate jitclass location
+* PR #5441: Additional changes to first class function
+* PR #5455: Move to llvmlite 0.32.*
+* PR #5457: implement repr for untyped lists
+
+Fixes:
+
+* PR #4476: Another attempt at fixing frame injection in the dispatcher tracing
+  path
+* PR #4942: Prevent some parfor aliasing.  Rename copied function var to prevent
+  recursive type locking.
+* PR #5092: Fix 5087
+* PR #5150: More explicit llvmlite requirement in requirements.txt
+* PR #5172: fix version spec for llvmlite
+* PR #5176: Normalize kws going into fold_arguments.
+* PR #5183: pass 'inline' explicitly to overload
+* PR #5193: Fix CI failure due to missing files when installed
+* PR #5213: Fix ``.strip()`` to strip all whitespace characters
+* PR #5216: Fix namedtuple mistreated by dispatcher as simple tuple
+* PR #5222: Fix compiler warnings due to missing (void)
+* PR #5232: Fixes a bad import that breaks master
+* PR #5239: fix test discovery for unittest
+* PR #5247: Continue PR #5126
+* PR #5250: Part fix/5098
+* PR #5252: Trivially fix SyntaxWarning
+* PR #5276: Add prange variant to has_no_side_effect.
+* PR #5278: fix error messages in test_array_reductions
+* PR #5310: PR #3897 continued
+* PR #5313: Continues PR #4376
+* PR #5318: Remove AUTHORS file reference from MANIFEST.in
+* PR #5327: Add warning if FNV hashing is found as the default for CPython.
+* PR #5338: Remove refcount pruning pass
+* PR #5345: Disable test failing due to removed pass.
+* PR #5357: Small fix to have llvm and asm highlighted properly
+* PR #5361: 5081 typed.dict
+* PR #5431: Add tolerance to numba extension module entrypoints.
+* PR #5432: Fix code causing compiler warnings.
+* PR #5445: Remove undefined variable
+* PR #5454: Don't warn for numba.experimental.jitclass
+* PR #5459: Fixes issue 5448
+* PR #5480: Fix for #5477, literal_unroll KeyError searching for getitems
+* PR #5485: Show the offending module in "no direct replacement" error message
+* PR #5488: Add missing ``numba.config`` shim
+* PR #5495: Fix missing null initializer for variable after phi strip
+* PR #5498: Make the shim deprecation warnings work on python 3.6 too
+* PR #5505: Better error message if __init__ returns value
+* PR #5527: Attempt to fix #5518
+* PR #5529: PR #5473 continued
+* PR #5532: Make ``numba.<mod>`` available without an import
+* PR #5542: Fixes RC2 module shim bug
+* PR #5548: Fix #5537 Removed reference to ``platform.linux_distribution``
+* PR #5555: Fix #5515 by reverting changes to ArrayAnalysis
+* PR #5557: First-class function call cannot use keyword arguments
+* PR #5569: Fix RewriteConstGetitems not registering calltype for new expr
+* PR #5571: Pin down llvmlite requirement
+
+CUDA Enhancements/Fixes:
+
+* PR #5061: Prevent kernel launch with no configuration, remove autotuner
+* PR #5085: Support other itemsizes with view
+* PR #5099: Fix #5073: Slices of dynamic shared memory all alias
+* PR #5104: Add a list of libraries that support __cuda_array_interface__
+* PR #5136: CUDA: Enable asynchronous operations on the default stream
+* PR #5144: Fix #4875: Make #2655 test with debug expect to pass
+* PR #5189: __cuda_array_interface__ not requiring context
+* PR #5253: Coerce ``dtype`` to ``numpy.dtype``
+* PR #5257: boundscheck fix
+* PR #5319: Make user facing error string use abs path not rel.
+* PR #5323: Document lifetime semantics of CUDA Array Interface
+* PR #5328: NBEP 7: External Memory Management Plugin Interface
+* PR #5343: Fix cuda spoof
+* PR #5400: Fix #4954, and some other small CUDA testsuite fixes
+* PR #5436: Fix #5408: test_set_registers_57 fails on Maxwell
+* PR #5519: CUDA: Silence the test suite - Fix #4809, remove autojit, delete
+  prints
+
+Documentation Updates:
+
+* PR #4957: Add notes on overwriting gufunc inputs to docs
+* PR #5059: Docs: Explain how to use Memcheck with Numba, fixups in CUDA
+  documentation
+* PR #5106: Add SciPy 2019 talks to docs
+* PR #5147: Update master for 0.48.0 updates
+* PR #5155: Explain what inlining at Numba IR level will do
+* PR #5161: Fix README.rst formatting
+* PR #5207: Remove AUTHORS list
+* PR #5249: fix target path for See also
+* PR #5262: fix typo in inlining docs
+* PR #5270: fix 'see also' in typeddict docs
+* PR #5280: Added some hints for debugging entry points.
+* PR #5297: Update docs with intro to {g,}ufuncs.
+* PR #5326: Update installation docs with OpenMP requirements.
+* PR #5346: Docs: use sphinx_rtd_theme
+* PR #5366: Remove reference to Python 2.7 in install check output
+* PR #5423: Fix #5421: Add notes on printing in CUDA kernels
+* PR #5438: Update package deps for doc building.
+* PR #5440: Bump deprecation notices.
+* PR #5443: Fix #5196: Docs: assert in CUDA only enabled for debug
+* PR #5450: Docs: remove numbers and add titles to TOC
+* PR #5453: fix building docs on windows
+* PR #5489: docs: fix rendering of nested bulleted list
+
+CI updates:
+
+* PR #5314: Update the image used in Azure CI for OSX.
+* PR #5360: Remove Travis CI badge.
+
+Authors:
+
+* Aaron Meurer
+* Andreas Sodeur
+* Antonio Russo
+* Arik Funke
+* Eric Wieser
+* Ethan Pronovost
+* Gabriel Majeri
+* Graham Markall
+* Greg Jennings
+* Guilherme Leobas
+* hdf
+* Henry Schreiner
+* Ivan Butygin
+* Jacques Gaudin
+* Jim Pivarski
+* John Kirkham
+* Leo Fang
+* Lucio Fernandez-Arjona
+* Mads R. B. Kristensen
+* Marcin Tolysz
+* Mike Williams
+* Pearu Peterson
+* Ravi Teja Gutta
+* Rohit Sanjay
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+* Vladimir Lukyanov
+
+
+Version 0.48.0 (Jan 27, 2020)
+-----------------------------
+
+This release is particularly small as it was present to catch anything that
+missed the 0.47.0 deadline (the deadline deliberately coincided with the end of
+support for Python 2.7). The next release will be considerably larger.
+
+The core changes in this release are dominated by the start of the clean up
+needed for the end of Python 2.7 support, improvements to the CUDA target and
+support for numerous additional unicode string methods.
+
+Enhancements from user contributed PRs (with thanks!):
+
+* Brian Wignall fixed more spelling typos in #4998.
+* Denis Smirnov added support for string methods ``capitalize`` (#4823),
+  ``casefold`` (#4824), ``swapcase`` (#4825), ``rsplit`` (#4834), ``partition``
+  (#4845) and ``splitlines`` (#4849).
+* Elena Totmenina extended support for string methods ``startswith`` (#4867) and
+  added ``endswith`` (#4868).
+* Eric Wieser made ``type_callable`` return the decorated function itself in
+  #4760
+* Ethan Pronovost added support for ``np.argwhere`` in #4617
+* Graham Markall contributed a large number of CUDA enhancements and fixes,
+  namely:
+
+  * #5068: Remove Python 3.4 backports from utils
+  * #4975: Make ``device_array_like`` create contiguous arrays (Fixes #4832)
+  * #5023: Don't launch ForAll kernels with 0 elements (Fixes #5017)
+  * #5016: Fix various issues in CUDA library search (Fixes #4979)
+  * #5014: Enable use of records and bools for shared memory, remove ddt, add
+    additional transpose tests
+  * #4964: Fix #4628: Add more appropriate typing for CUDA device arrays
+  * #5007: test_consuming_strides: Keep dev array alive
+  * #4997: State that CUDA Toolkit 8.0 required in docs
+
+* James Bourbeau added the Python 3.8 classifier to setup.py in #5027.
+* John Kirkham added a clarification to the ``__cuda_array_interface__``
+  documentation in #5049.
+* Leo Fang Fixed an indexing problem in ``dummyarray`` in #5012.
+* Marcel Bargull fixed a build and test issue for Python 3.8 in #5029.
+* Maria Rubtsov added support for string methods ``isdecimal`` (#4842),
+  ``isdigit`` (#4843), ``isnumeric`` (#4844) and ``replace`` (#4865).
+
+General Enhancements:
+
+* PR #4760: Make type_callable return the decorated function
+* PR #5010: merge string prs
+
+  This merge PR included the following:
+
+  * PR #4823: Implement str.capitalize() based on CPython
+  * PR #4824: Implement str.casefold() based on CPython
+  * PR #4825: Implement str.swapcase() based on CPython
+  * PR #4834: Implement str.rsplit() based on CPython
+  * PR #4842: Implement str.isdecimal
+  * PR #4843: Implement str.isdigit
+  * PR #4844: Implement str.isnumeric
+  * PR #4845: Implement str.partition() based on CPython
+  * PR #4849: Implement str.splitlines() based on CPython
+  * PR #4865: Implement str.replace
+  * PR #4867: Functionality extension str.startswith() based on CPython
+  * PR #4868: Add functionality for str.endswith()
+
+* PR #5039: Disable help messages.
+* PR #4617: Add coverage for ``np.argwhere``
+
+Fixes:
+
+* PR #4724: Only use lives (and not aliases) to create post parfor live set.
+* PR #4998: Fix more spelling typos
+* PR #5024: Propagate semantic constants ahead of static rewrites.
+* PR #5027: Add Python 3.8 classifier to setup.py
+* PR #5046: Update setup.py and buildscripts for dependency requirements
+* PR #5053: Convert from arrays to names in define() and don't invalidate for
+  multiple consistent defines.
+* PR #5058: Permit mixed int types in wrap_index
+* PR #5078: Catch the use of global typed-list in JITed functions
+* PR #5092: Fix #5087, bug in bytecode analysis.
+
+CUDA Enhancements/Fixes:
+
+* PR #4964: Fix #4628: Add more appropriate typing for CUDA device arrays
+* PR #4975: Make ``device_array_like`` create contiguous arrays (Fixes #4832)
+* PR #4997: State that CUDA Toolkit 8.0 required in docs
+* PR #5007: test_consuming_strides: Keep dev array alive
+* PR #5012: Fix IndexError when accessing the "-1" element of dummyarray
+* PR #5014: Enable use of records and bools for shared memory, remove ddt, add
+  additional transpose tests
+* PR #5016: Fix various issues in CUDA library search (Fixes #4979)
+* PR #5023: Don't launch ForAll kernels with 0 elements (Fixes #5017)
+* PR #5068: Remove Python 3.4 backports from utils
+
+Documentation Updates:
+
+* PR #5049: Clarify what dictionary means
+* PR #5062: Update docs for updated version requirements
+* PR #5090: Update deprecation notices for 0.48.0
+
+CI updates:
+
+* PR #5029: Install optional dependencies for Python 3.8 tests
+* PR #5040: Drop Py2.7 and Py3.5 from public CI
+* PR #5048: Fix CI py38
+
+Authors:
+
+* Brian Wignall
+* Denis Smirnov
+* Elena Totmenina
+* Eric Wieser
+* Ethan Pronovost
+* Graham Markall
+* James Bourbeau
+* John Kirkham
+* Leo Fang
+* Marcel Bargull
+* Maria Rubtsov
+* Siu Kwan Lam (core dev)
+* Stan Seibert (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
 
 
 Version 0.47.0  (Jan 2, 2020)

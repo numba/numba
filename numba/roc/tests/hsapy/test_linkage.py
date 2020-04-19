@@ -1,6 +1,4 @@
-from __future__ import print_function, absolute_import
-
-import numba.unittest_support as unittest
+import unittest
 from numba import roc
 
 
