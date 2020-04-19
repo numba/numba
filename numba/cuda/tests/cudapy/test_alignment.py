@@ -1,9 +1,9 @@
 import numpy as np
 from numba import from_dtype, cuda
-from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
+import unittest
 
-class TestAlignment(SerialMixin, unittest.TestCase):
+class TestAlignment(CUDATestCase):
     def test_record_alignment(self):
         rec_dtype = np.dtype([('a', 'int32'), ('b', 'float64')], align=True)
         rec = from_dtype(rec_dtype)

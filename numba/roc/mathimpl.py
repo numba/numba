@@ -1,10 +1,9 @@
-from __future__ import print_function, absolute_import, division
 import math
 import warnings
 
-from numba.targets.imputils import Registry
-from numba import types
-from numba.itanium_mangler import mangle
+from numba.core.imputils import Registry
+from numba.core import types
+from numba.core.itanium_mangler import mangle
 from .hsaimpl import _declare_function
 
 registry = Registry()

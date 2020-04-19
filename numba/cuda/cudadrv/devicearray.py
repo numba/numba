@@ -3,23 +3,23 @@ A CUDA ND Array is recognized by checking the __cuda_memory__ attribute
 on the object.  If it exists and evaluate to True, it must define shape,
 strides, dtype and size attributes similar to a NumPy ndarray.
 """
-from __future__ import print_function, absolute_import, division
 
 import warnings
 import math
 import functools
 import operator
 import copy
-from numba import six
 from ctypes import c_void_p
 
 import numpy as np
 
 import numba
-from . import driver as _driver
-from . import devices
-from numba import dummyarray, types, numpy_support
-from numba.unsafe.ndarray import to_fixed_tuple
+from numba.cuda.cudadrv import driver as _driver
+from numba.cuda.cudadrv import devices
+from numba.core import types
+from numba.np.unsafe.ndarray import to_fixed_tuple
+from numba.misc import dummyarray
+from numba.np import numpy_support
 
 try:
     lru_cache = getattr(functools, 'lru_cache')(None)
@@ -47,7 +47,7 @@ def verify_cuda_ndarray_interface(obj):
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
     requires_attr('dtype', np.dtype)
-    requires_attr('size', six.integer_types)
+    requires_attr('size', int)
 
 
 def require_cuda_ndarray(obj):
@@ -73,7 +73,7 @@ class DeviceNDArrayBase(object):
         strides
             array strides.
         dtype
-            data type as np.dtype.
+            data type as np.dtype coercible object.
         stream
             cuda stream.
         writeback
@@ -81,10 +81,11 @@ class DeviceNDArrayBase(object):
         gpu_data
             user provided device memory for the ndarray data buffer
         """
-        if isinstance(shape, six.integer_types):
+        if isinstance(shape, int):
             shape = (shape,)
-        if isinstance(strides, six.integer_types):
+        if isinstance(strides, int):
             strides = (strides,)
+        dtype = np.dtype(dtype)
         self.ndim = len(shape)
         if len(strides) != self.ndim:
             raise ValueError('strides not match ndim')
@@ -92,7 +93,7 @@ class DeviceNDArrayBase(object):
                                                  dtype.itemsize)
         self.shape = tuple(shape)
         self.strides = tuple(strides)
-        self.dtype = np.dtype(dtype)
+        self.dtype = dtype
         self.size = int(functools.reduce(operator.mul, self.shape, 1))
         # prepare gpu memory
         if self.size > 0:
@@ -121,14 +122,9 @@ class DeviceNDArrayBase(object):
         else:
             ptr = 0
 
-        if array_core(self).flags['C_CONTIGUOUS']:
-            strides = None
-        else:
-            strides = tuple(self.strides)
-
         return {
             'shape': tuple(self.shape),
-            'strides': strides,
+            'strides': None if is_contiguous(self) else tuple(self.strides),
             'data': (ptr, False),
             'typestr': self.dtype.str,
             'version': 2,
@@ -166,8 +162,30 @@ class DeviceNDArrayBase(object):
         Magic attribute expected by Numba to get the numba type that
         represents this object.
         """
+        # Typing considerations:
+        #
+        # 1. The preference is to use 'C' or 'F' layout since this enables
+        # hardcoding stride values into compiled kernels, which is more
+        # efficient than storing a passed-in value in a register.
+        #
+        # 2. If an array is both C- and F-contiguous, prefer 'C' layout as it's
+        # the more likely / common case.
+        #
+        # 3. If an array is broadcast then it must be typed as 'A' - using 'C'
+        # or 'F' does not apply for broadcast arrays, because the strides, some
+        # of which will be 0, will not match those hardcoded in for 'C' or 'F'
+        # layouts.
+
+        broadcast = 0 in self.strides
+        if self.flags['C_CONTIGUOUS'] and not broadcast:
+            layout = 'C'
+        elif self.flags['F_CONTIGUOUS'] and not broadcast:
+            layout = 'F'
+        else:
+            layout = 'A'
+
         dtype = numpy_support.from_dtype(self.dtype)
-        return types.Array(dtype, self.ndim, 'A')
+        return types.Array(dtype, self.ndim, layout)
 
     @property
     def device_ctypes_pointer(self):
@@ -332,15 +350,37 @@ class DeviceNDArrayBase(object):
         copy of the data.
         """
         dtype = np.dtype(dtype)
-        if dtype.itemsize != self.dtype.itemsize:
-            raise TypeError("new dtype itemsize doesn't match")
+        shape = list(self.shape)
+        strides = list(self.strides)
+
+        if self.dtype.itemsize != dtype.itemsize:
+            if not self.is_c_contiguous():
+                raise ValueError(
+                    "To change to a dtype of a different size,"
+                    " the array must be C-contiguous"
+                )
+
+            shape[-1], rem = divmod(
+                shape[-1] * self.dtype.itemsize,
+                dtype.itemsize
+            )
+
+            if rem != 0:
+                raise ValueError(
+                    "When changing to a larger dtype,"
+                    " its size must be a divisor of the total size in bytes"
+                    " of the last axis of the array."
+                )
+
+            strides[-1] = dtype.itemsize
+
         return DeviceNDArray(
-            shape=self.shape,
-            strides=self.strides,
+            shape=shape,
+            strides=strides,
             dtype=dtype,
             stream=self.stream,
             gpu_data=self.gpu_data,
-            )
+        )
 
     @property
     def nbytes(self):
@@ -663,6 +703,22 @@ def array_core(ary):
     for stride in ary.strides:
         core_index.append(0 if stride == 0 else slice(None))
     return ary[tuple(core_index)]
+
+
+def is_contiguous(ary):
+    """
+    Returns True iff `ary` is C-style contiguous while ignoring
+    broadcasted and 1-sized dimensions.
+    As opposed to array_core(), it does not call require_context(),
+    which can be quite expensive.
+    """
+    size = ary.dtype.itemsize
+    for shape, stride in zip(reversed(ary.shape), reversed(ary.strides)):
+        if shape > 1 and stride != 0:
+            if size != stride:
+                return False
+            size *= shape
+    return True
 
 
 errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "

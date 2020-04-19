@@ -1,27 +1,26 @@
-from __future__ import print_function, absolute_import, division
-
-import sys
+from collections import namedtuple
 import numpy as np
 
 from numba.tests.support import (TestCase, MemoryLeakMixin,
-                                 skip_parfors_unsupported)
-from numba import njit, types, typed, ir, errors, literal_unroll, prange
+                                 skip_parfors_unsupported, captured_stdout)
+from numba import njit, typed, literal_unroll, prange
+from numba.core import types, errors, ir
 from numba.testing import unittest
-from numba.extending import overload
-from numba.compiler_machinery import PassManager, register_pass, FunctionPass
-from numba.compiler import CompilerBase
-from numba.untyped_passes import (FixupArgs, TranslateByteCode, IRProcessing,
-                                  InlineClosureLikes, SimplifyCFG,
-                                  IterLoopCanonicalization, LiteralUnroll)
-from numba.typed_passes import (NopythonTypeInference, IRLegalization,
-                                NoPythonBackend, PartialTypeInference)
-from numba.ir_utils import (compute_cfg_from_blocks, flatten_labels)
+from numba.core.extending import overload
+from numba.core.compiler_machinery import (PassManager, register_pass,
+                                           FunctionPass, AnalysisPass)
+from numba.core.compiler import CompilerBase
+from numba.core.untyped_passes import (FixupArgs, TranslateByteCode,
+                                       IRProcessing, InlineClosureLikes,
+                                       SimplifyCFG, IterLoopCanonicalization,
+                                       LiteralUnroll, PreserveIR)
+from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
+                                     NoPythonBackend, PartialTypeInference)
+from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
 
-_lt_py_36 = sys.version_info[:2] < (3, 6)
-skip_lt_py36 = unittest.skipIf(_lt_py_36, "Unsupported on < Python 3.6")
+_X_GLOBAL = (10, 11)
 
 
-@skip_lt_py36
 class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):
 
     def check(self, func, var):
@@ -62,18 +61,6 @@ class TestLiteralTupleInterpretation(MemoryLeakMixin, TestCase):
         self.assertIn("non literal", str(e.exception))
 
 
-@register_pass(mutates_CFG=False, analysis_only=True)
-class PreserveIR(FunctionPass):
-    _name = "preserve_ir"
-
-    def __init__(self):
-        FunctionPass.__init__(self)
-
-    def run_pass(self, state):
-        state.metadata['func_ir'] = state.func_ir
-        return False
-
-
 @register_pass(mutates_CFG=False, analysis_only=False)
 class ResetTypeInfo(FunctionPass):
     _name = "reset_the_type_information"
@@ -88,7 +75,6 @@ class ResetTypeInfo(FunctionPass):
         return True
 
 
-@skip_lt_py36
 class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
 
     def get_pipeline(use_canonicaliser, use_partial_typing=False):
@@ -148,7 +134,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['func_ir']
+            func_ir = cres.metadata['preserved_ir']
             return func_ir, cres.fndesc
 
         ignore_loops_ir, ignore_loops_fndesc = \
@@ -206,7 +192,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
 
             self.assertEqual(foo(), foo.py_func())
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['func_ir']
+            func_ir = cres.metadata['preserved_ir']
             return func_ir, cres.fndesc
 
         ignore_loops_ir, ignore_loops_fndesc = \
@@ -330,7 +316,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['func_ir']
+            func_ir = cres.metadata['preserved_ir']
             return func_ir, cres.fndesc
 
         ignore_loops_ir, ignore_loops_fndesc = \
@@ -399,7 +385,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['func_ir']
+            func_ir = cres.metadata['preserved_ir']
             return func_ir, cres.fndesc
 
         ignore_loops_ir, ignore_loops_fndesc = \
@@ -444,7 +430,7 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
             x = (1, 2, 3)
             self.assertEqual(foo(x), foo.py_func(x))
             cres = foo.overloads[foo.signatures[0]]
-            func_ir = cres.metadata['func_ir']
+            func_ir = cres.metadata['preserved_ir']
             return func_ir, cres.fndesc
 
         ignore_loops_ir, ignore_loops_fndesc = \
@@ -469,7 +455,6 @@ class TestLoopCanonicalisation(MemoryLeakMixin, TestCase):
                          len(canonicalise_loops_fndesc.calltypes))
 
 
-@skip_lt_py36
 class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
 
     def test_01(self):
@@ -1219,8 +1204,31 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
 
         self.assertEqual(cfunc(), pyfunc())
 
+    def test_34(self):
+        # mixed bag, redefinition of tuple
+        @njit
+        def foo():
+            acc = 0
+            l1 = [1, 2, 3, 4]
+            l2 = [10, 20]
+            if acc - 2 > 3:
+                tup = (l1, l2)
+            else:
+                a1 = np.arange(20)
+                a2 = np.ones(5, dtype=np.complex128)
+                tup = (l1, a1, l2, a2)
+            for t in literal_unroll(tup):
+                acc += len(t)
+            return acc
 
-@skip_lt_py36
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo()
+
+        self.assertIn("Invalid use of", str(raises.exception))
+        self.assertIn("found multiple definitions of variable",
+                      str(raises.exception))
+
+
 class TestConstListUnroll(MemoryLeakMixin, TestCase):
 
     def test_01(self):
@@ -1515,27 +1523,6 @@ class TestConstListUnroll(MemoryLeakMixin, TestCase):
                       str(raises.exception))
 
 
-@unittest.skipIf(not _lt_py_36, "Python < 3.6 only test")
-class TestLiteralUnrollPy2(TestCase):
-
-    def test_py_lt_36_not_supported(self):
-
-        @njit
-        def foo():
-            x = (1000, 2000, 3000, 4000)
-            acc = 0
-            for a in literal_unroll(x):
-                acc += a
-            return acc
-
-        with self.assertRaises(errors.TypingError) as raises:
-            foo()
-
-        self.assertIn("literal_unroll is only support in Python > 3.5",
-                      str(raises.exception))
-
-
-@skip_lt_py36
 class TestMore(TestCase):
     def test_invalid_use_of_unroller(self):
         @njit
@@ -1666,7 +1653,7 @@ class TestMore(TestCase):
         self.assertRegexpMatches(str(raises.exception), re)
 
     def test_unroll_tuple_of_dict(self):
-        from numba.tests.support import captured_stdout
+
         @njit
         def foo():
             x = {}
@@ -1688,12 +1675,138 @@ class TestMore(TestCase):
             ['a 1', 'b 2', '3 c', '4 d'],
         )
 
+    def test_unroll_named_tuple(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo():
+            abc = ABC(1, 2j, 3.4)
+            out = 0
+            for i in literal_unroll(abc):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_named_tuple_arg(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo(x):
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        abc = ABC(1, 2j, 3.4)
+
+        self.assertEqual(foo(abc), foo.py_func(abc))
+
+    def test_unroll_named_unituple(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo():
+            abc = ABC(1, 2, 3)
+            out = 0
+            for i in literal_unroll(abc):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_named_unituple_arg(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo(x):
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        abc = ABC(1, 2, 3)
+
+        self.assertEqual(foo(abc), foo.py_func(abc))
+
+    def test_unroll_global_tuple(self):
+
+        @njit
+        def foo():
+            out = 0
+            for i in literal_unroll(_X_GLOBAL):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_freevar_tuple(self):
+        x = (10, 11)
+
+        @njit
+        def foo():
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_function_tuple(self):
+        @njit
+        def a():
+            return 1
+
+        @njit
+        def b():
+            return 2
+
+        x = (a, b)
+
+        @njit
+        def foo():
+            out = 0
+            for f in literal_unroll(x):
+                out += f()
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_indexing_list(self):
+        # See issue #5477
+        @njit
+        def foo(cont):
+            i = 0
+            acc = 0
+            normal_list = [a for a in cont]
+            heter_tuple = ('a', 25, 0.23, None)
+            for item in literal_unroll(heter_tuple):
+                acc += normal_list[i]
+                i += 1
+                print(item)
+            return i, acc
+
+        data = [j for j in range(4)]
+
+        # send stdout to nowhere, just check return values
+        with captured_stdout():
+            self.assertEqual(foo(data), foo.py_func(data))
+
+        # now capture stdout for jit function and check
+        with captured_stdout() as stdout:
+            foo(data)
+        lines = stdout.getvalue().splitlines()
+        self.assertEqual(
+            lines,
+            ['a', '25', '0.23', 'None'],
+        )
+
 
 def capture(real_pass):
     """ Returns a compiler pass that captures the mutation state reported
     by the pass used in the argument"""
     @register_pass(mutates_CFG=False, analysis_only=True)
-    class ResultCapturer(FunctionPass):
+    class ResultCapturer(AnalysisPass):
         _name = "capture_%s" % real_pass._name
         _real_pass = real_pass
 
@@ -1736,7 +1849,6 @@ class CapturingCompiler(CompilerBase):
         return [pm]
 
 
-@skip_lt_py36
 class TestLiteralUnrollPassTriggering(TestCase):
 
     def test_literal_unroll_not_invoked(self):

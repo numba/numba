@@ -1,39 +1,62 @@
-from __future__ import print_function
-
 from itertools import product
 
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class CudaArrayIndexing(SerialMixin, unittest.TestCase):
+class CudaArrayIndexing(CUDATestCase):
     def test_index_1d(self):
         arr = np.arange(10)
         darr = cuda.to_device(arr)
-        for i in range(arr.size):
+        x, = arr.shape
+        for i in range(-x, x):
             self.assertEqual(arr[i], darr[i])
+        with self.assertRaises(IndexError):
+            darr[-x - 1]
+        with self.assertRaises(IndexError):
+            darr[x]
 
     def test_index_2d(self):
         arr = np.arange(3 * 4).reshape(3, 4)
         darr = cuda.to_device(arr)
-
-        for i in range(arr.shape[0]):
-            for j in range(arr.shape[1]):
+        x, y = arr.shape
+        for i in range(-x, x):
+            for j in range(-y, y):
                 self.assertEqual(arr[i, j], darr[i, j])
+        with self.assertRaises(IndexError):
+            darr[-x - 1, 0]
+        with self.assertRaises(IndexError):
+            darr[x, 0]
+        with self.assertRaises(IndexError):
+            darr[0, -y - 1]
+        with self.assertRaises(IndexError):
+            darr[0, y]
 
     def test_index_3d(self):
         arr = np.arange(3 * 4 * 5).reshape(3, 4, 5)
         darr = cuda.to_device(arr)
-
-        for i in range(arr.shape[0]):
-            for j in range(arr.shape[1]):
-                for k in range(arr.shape[2]):
+        x, y, z = arr.shape
+        for i in range(-x, x):
+            for j in range(-y, y):
+                for k in range(-z, z):
                     self.assertEqual(arr[i, j, k], darr[i, j, k])
+        with self.assertRaises(IndexError):
+            darr[-x - 1, 0, 0]
+        with self.assertRaises(IndexError):
+            darr[x, 0, 0]
+        with self.assertRaises(IndexError):
+            darr[0, -y - 1, 0]
+        with self.assertRaises(IndexError):
+            darr[0, y, 0]
+        with self.assertRaises(IndexError):
+            darr[0, 0, -z - 1]
+        with self.assertRaises(IndexError):
+            darr[0, 0, z]
 
 
-class CudaArrayStridedSlice(SerialMixin, unittest.TestCase):
+class CudaArrayStridedSlice(CUDATestCase):
 
     def test_strided_index_1d(self):
         arr = np.arange(10)
@@ -62,7 +85,7 @@ class CudaArrayStridedSlice(SerialMixin, unittest.TestCase):
                         darr[i::2, j::2, k::2].copy_to_host())
 
 
-class CudaArraySlicing(SerialMixin, unittest.TestCase):
+class CudaArraySlicing(CUDATestCase):
     def test_prefix_1d(self):
         arr = np.arange(5)
         darr = cuda.to_device(arr)
@@ -182,7 +205,7 @@ class CudaArraySlicing(SerialMixin, unittest.TestCase):
                                       arr[:0][-1:])
 
 
-class CudaArraySetting(SerialMixin, unittest.TestCase):
+class CudaArraySetting(CUDATestCase):
     """
     Most of the slicing logic is tested in the cases above, so these
     tests focus on the setting logic.

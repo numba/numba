@@ -48,17 +48,16 @@ source activate $CONDA_ENV
 set -v
 
 # gitpython needed for CI testing
-if [ $PYTHON \< "3.8" ]; then
-    $CONDA_INSTALL gitpython
-else
-    $PIP_INSTALL gitpython
-fi
+$CONDA_INSTALL gitpython
 
 # Install optional packages into activated env
 if [ "${VANILLA_INSTALL}" != "yes" ]; then
     # Scipy, CFFI, jinja2, IPython and pygments are optional dependencies, but exercised in the test suite
-    if [ $PYTHON \< "3.8" ]; then
-        $CONDA_INSTALL ${EXTRA_CHANNELS} cffi scipy jinja2 ipython pygments
+    $CONDA_INSTALL ${EXTRA_CHANNELS} cffi jinja2 ipython pygments
+    if [[ "$PYTHON" == "3.8" &&  $(uname) == Darwin ]]; then
+        $PIP_INSTALL scipy
+    else
+        $CONDA_INSTALL ${EXTRA_CHANNELS}  scipy
     fi
 fi
 
@@ -78,26 +77,15 @@ fi
 # Install latest llvmlite build
 $CONDA_INSTALL -c numba llvmlite
 
-# Install enum34 and singledispatch for Python < 3.4
-if [ $PYTHON \< "3.4" ]; then $CONDA_INSTALL enum34; fi
-if [ $PYTHON \< "3.4" ]; then $PIP_INSTALL singledispatch; fi
-# Install funcsigs for Python < 3.3
-if [ $PYTHON \< "3.3" ]; then $CONDA_INSTALL -c numba funcsigs; fi
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx pygments numpydoc; fi
-if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL sphinx_bootstrap_theme; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx sphinx_rtd_theme pygments numpydoc; fi
+if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL tbb tbb-devel; fi
-# install the faulthandler for Python 2.x, but not on armv7l as it doesn't exist
-# in berryconda
-archstr=`uname -m`
-if [[ "$archstr" != 'armv7l' ]]; then
-    if [ $PYTHON \< "3.0" ]; then $CONDA_INSTALL faulthandler; fi
-fi
 
 # environment dump for debug
 echo "DEBUG ENV:"

@@ -1,9 +1,8 @@
-from __future__ import print_function, division, absolute_import
 import numpy as np
 
 import numba
 from numba import roc
-import numba.unittest_support as unittest
+import unittest
 
 
 def atomic_add(ary):

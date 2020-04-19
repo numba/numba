@@ -1,11 +1,8 @@
-from __future__ import print_function, absolute_import
-
 from llvmlite import ir, binding as ll
 
-from numba import types
-from numba import unittest_support as unittest
-from numba import datamodel
-from numba.datamodel.testing import test_factory
+from numba.core import types, datamodel
+from numba.core.datamodel.testing import test_factory
+import unittest
 
 
 class TestBool(test_factory()):

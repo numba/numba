@@ -1,14 +1,13 @@
 """
 Testing C implementation of the numba dictionary
 """
-from __future__ import print_function, absolute_import, division
 
 import ctypes
 import random
 
-from .support import TestCase
+from numba.tests.support import TestCase
 from numba import _helperlib
-from numba.config import IS_32BITS
+from numba.core.config import IS_32BITS
 
 
 DKIX_EMPTY = -1

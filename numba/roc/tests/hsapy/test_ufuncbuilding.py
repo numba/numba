@@ -1,11 +1,9 @@
-from __future__ import print_function, absolute_import
-
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import vectorize
 from numba.roc.vectorizers import HsaVectorize
 from numba.roc.dispatch import HsaUFuncDispatcher
+import unittest
 
 
 def ufunc_add_core(a, b):

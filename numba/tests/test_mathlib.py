@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import, division
-
 import itertools
 import math
 import sys
@@ -7,11 +5,12 @@ import warnings
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba.compiler import compile_isolated, Flags, utils
-from numba import types, numpy_support
-from numba.config import PYVERSION, IS_WIN32, IS_32BITS
-from .support import TestCase, CompilationCache, tag
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import utils, types
+from numba.core.config import IS_WIN32, IS_32BITS
+from numba.tests.support import TestCase, CompilationCache, tag
+import unittest
+from numba.np import numpy_support
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -222,7 +221,6 @@ class TestMathLib(TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_sin_npm(self):
         self.test_sin(flags=no_pyobj_flags)
 
@@ -236,7 +234,6 @@ class TestMathLib(TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_cos_npm(self):
         self.test_cos(flags=no_pyobj_flags)
 
@@ -248,7 +245,6 @@ class TestMathLib(TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_tan_npm(self):
         self.test_tan(flags=no_pyobj_flags)
 
@@ -260,7 +256,6 @@ class TestMathLib(TestCase):
         x_values = [2, 1, 2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_sqrt_npm(self):
         self.test_sqrt(flags=no_pyobj_flags)
 
@@ -286,7 +281,6 @@ class TestMathLib(TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_exp_npm(self):
         self.test_exp(flags=no_pyobj_flags)
 
@@ -298,7 +292,6 @@ class TestMathLib(TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_expm1_npm(self):
         self.test_expm1(flags=no_pyobj_flags)
 
@@ -310,7 +303,6 @@ class TestMathLib(TestCase):
         x_values = [1, 10, 100, 1000, 100000, 1000000, 0.1, 1.1]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_log_npm(self):
         self.test_log(flags=no_pyobj_flags)
 
@@ -322,7 +314,6 @@ class TestMathLib(TestCase):
         x_values = [1, 10, 100, 1000, 100000, 1000000, 0.1, 1.1]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_log1p_npm(self):
         self.test_log1p(flags=no_pyobj_flags)
 
@@ -334,7 +325,6 @@ class TestMathLib(TestCase):
         x_values = [1, 10, 100, 1000, 100000, 1000000, 0.1, 1.1]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_log10_npm(self):
         self.test_log10(flags=no_pyobj_flags)
 
@@ -346,7 +336,6 @@ class TestMathLib(TestCase):
         x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_asin_npm(self):
         self.test_asin(flags=no_pyobj_flags)
 
@@ -358,7 +347,6 @@ class TestMathLib(TestCase):
         x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_acos_npm(self):
         self.test_acos(flags=no_pyobj_flags)
 
@@ -370,7 +358,6 @@ class TestMathLib(TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_atan_npm(self):
         self.test_atan(flags=no_pyobj_flags)
 
@@ -383,7 +370,6 @@ class TestMathLib(TestCase):
         y_values = [x * 2 for x in x_values]
         self.run_binary(pyfunc, x_types, x_values, y_values, flags)
 
-    @tag('important')
     def test_atan2_npm(self):
         self.test_atan2(flags=no_pyobj_flags)
 
@@ -395,7 +381,6 @@ class TestMathLib(TestCase):
         x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
         self.run_unary(pyfunc, x_types, x_values, flags, prec='double')
 
-    @tag('important')
     def test_asinh_npm(self):
         self.test_asinh(flags=no_pyobj_flags)
 
@@ -407,7 +392,6 @@ class TestMathLib(TestCase):
         x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_acosh_npm(self):
         self.test_acosh(flags=no_pyobj_flags)
 
@@ -419,7 +403,6 @@ class TestMathLib(TestCase):
         x_values = [0, 0, 0, 0, 0, 0, 0.1, 0.1]
         self.run_unary(pyfunc, x_types, x_values, flags, prec='double')
 
-    @tag('important')
     def test_atanh_npm(self):
         self.test_atanh(flags=no_pyobj_flags)
 
@@ -431,7 +414,6 @@ class TestMathLib(TestCase):
         x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_sinh_npm(self):
         self.test_sinh(flags=no_pyobj_flags)
 
@@ -443,7 +425,6 @@ class TestMathLib(TestCase):
         x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_cosh_npm(self):
         self.test_cosh(flags=no_pyobj_flags)
 
@@ -455,7 +436,6 @@ class TestMathLib(TestCase):
         x_values = [0, 0, 0, 0, 0, 0, 0.1, 0.1]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_tanh_npm(self):
         self.test_tanh(flags=no_pyobj_flags)
 
@@ -467,7 +447,6 @@ class TestMathLib(TestCase):
         x_values = [0, 0, 0, 0, 0, 0, 0.1, 1.9]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_floor_npm(self):
         self.test_floor(flags=no_pyobj_flags)
 
@@ -479,7 +458,6 @@ class TestMathLib(TestCase):
         x_values = [0, 0, 0, 0, 0, 0, 0.1, 1.9]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_ceil_npm(self):
         self.test_ceil(flags=no_pyobj_flags)
 
@@ -491,29 +469,24 @@ class TestMathLib(TestCase):
         x_values = [0, 0, 0, 0, 0, 0, 0.1, 1.9]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @tag('important')
     def test_trunc_npm(self):
         self.test_trunc(flags=no_pyobj_flags)
 
     def test_isnan(self):
         self.check_predicate_func(isnan, flags=enable_pyobj_flags)
 
-    @tag('important')
     def test_isnan_npm(self):
         self.check_predicate_func(isnan, flags=no_pyobj_flags)
 
     def test_isinf(self):
         self.check_predicate_func(isinf, flags=enable_pyobj_flags)
 
-    @tag('important')
     def test_isinf_npm(self):
         self.check_predicate_func(isinf, flags=no_pyobj_flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
     def test_isfinite(self):
         self.check_predicate_func(isfinite, flags=enable_pyobj_flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
     def test_isfinite_npm(self):
         self.check_predicate_func(isfinite, flags=no_pyobj_flags)
 
@@ -546,7 +519,6 @@ class TestMathLib(TestCase):
                                         'overflow encountered in .*_scalars',
                                         naive_hypot, val, val)
 
-    @tag('important')
     def test_hypot_npm(self):
         self.test_hypot(flags=no_pyobj_flags)
 
@@ -592,8 +564,6 @@ class TestMathLib(TestCase):
     def test_erfc_npm(self):
         self.test_erfc(flags=no_pyobj_flags)
 
-    @unittest.skipIf(PYVERSION == (2, 7) and IS_WIN32 and not IS_32BITS,
-                     'unknown error with tgamma')
     def test_gamma(self, flags=enable_pyobj_flags):
         pyfunc = gamma
         x_values = [1., -0.9, -0.5, 0.5]
@@ -625,7 +595,6 @@ class TestMathLib(TestCase):
         y_values = [x * 2 for x in x_values]
         self.run_binary(pyfunc, x_types, x_values, y_values, flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 5), "gcd added in Python 3.5")
     def test_gcd(self, flags=enable_pyobj_flags):
         from itertools import product, repeat, chain
         pyfunc = gcd
@@ -638,11 +607,9 @@ class TestMathLib(TestCase):
         x_types, x_values, y_values = zip(*chain(signed_args, unsigned_args))
         self.run_binary(pyfunc, x_types, x_values, y_values, flags)
 
-    @unittest.skipIf(utils.PYVERSION < (3, 5), "gcd added in Python 3.5")
     def test_gcd_npm(self):
         self.test_gcd(flags=no_pyobj_flags)
 
-    @tag('important')
     def test_pow_npm(self):
         self.test_pow(flags=no_pyobj_flags)
 
@@ -655,7 +622,6 @@ class TestMathLib(TestCase):
             *itertools.product(value_types, values, values)))
         self.run_binary(pyfunc, x_types, x_values, y_values, flags)
 
-    @tag('important')
     def test_copysign_npm(self):
         self.test_copysign(flags=no_pyobj_flags)
 

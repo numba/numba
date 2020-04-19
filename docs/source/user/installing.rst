@@ -5,8 +5,7 @@ Installation
 Compatibility
 -------------
 
-Numba is compatible with Python 2.7 and 3.5 or later, and Numpy versions 1.7 to
-1.16.
+Numba is compatible with Python 3.6 or later, and Numpy versions 1.15 or later.
 
 Our supported platforms are:
 
@@ -19,8 +18,7 @@ Our supported platforms are:
 * ARMv7 (32-bit little-endian, such as Raspberry Pi 2 and 3)
 * ARMv8 (64-bit little-endian, such as the NVIDIA Jetson)
 
-:ref:`numba-parallel` is only available on 64-bit platforms,
-and is not supported in Python 2.7 on Windows.
+:ref:`numba-parallel` is only available on 64-bit platforms.
 
 Installing using conda on x86/x86_64/POWER Platforms
 ----------------------------------------------------
@@ -186,9 +184,10 @@ vary with target operating system and hardware. The following lists them all
   * ``setuptools``
   * ``numpy``
   * ``llvmlite``
-  * ``funcsigs`` (Python 2)
-  * ``singledispatch`` (Python 2)
   * Compiler toolchain mentioned above
+  * OpenMP C headers and runtime libraries compatible with the compiler
+    toolchain mentioned above and accessible to the compiler via standard flags
+    (Linux, Windows).
 
 * Optional build time:
 
@@ -204,8 +203,6 @@ vary with target operating system and hardware. The following lists them all
   * ``setuptools``
   * ``numpy``
   * ``llvmlite``
-  * ``funcsigs`` (Python 2)
-  * ``singledispatch`` (Python 2)
 
 * Optional runtime are:
 
@@ -230,12 +227,17 @@ vary with target operating system and hardware. The following lists them all
     support
   * Compiler toolchain mentioned above, if you would like to use ``pycc`` for
     Ahead-of-Time (AOT) compilation
+  * ``r2pipe`` - required for assembly CFG inspection.
+  * ``radare2`` as an executable on the ``$PATH`` - required for assembly CFG
+    inspection. `See here <https://github.com/radareorg/radare2>`_ for
+    information on obtaining and installing.
+  * ``graphviz`` - for some CFG inspection functionality.
 
 * To build the documentation:
 
   * ``sphinx``
   * ``pygments``
-  * ``sphinx-bootstrap``
+  * ``sphinx_rtd_theme``
   * ``numpydoc``
   * ``make`` as an executable on the ``$PATH``
 
@@ -245,12 +247,12 @@ Checking your installation
 You should be able to import Numba from the Python prompt::
 
     $ python
-    Python 2.7.15 |Anaconda custom (x86_64)| (default, May  1 2018, 18:37:05)
-    [GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)] on darwin
+    Python 3.8.1 (default, Jan 8  2020, 16:15:59)
+    [Clang 4.0.1 (tags/RELEASE_401/final)] :: Anaconda, Inc. on darwin
     Type "help", "copyright", "credits" or "license" for more information.
     >>> import numba
     >>> numba.__version__
-    '0.39.0+0.g4e49566.dirty'
+    '0.48.0'
 
 You can also try executing the ``numba --sysinfo`` (or ``numba -s`` for short)
 command to report information about your system capabilities. See :ref:`cli` for
@@ -295,5 +297,4 @@ further information.
                                   pci bus id: 1
 
 (output truncated due to length)
-
 

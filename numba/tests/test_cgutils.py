@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import contextlib
 import ctypes
 import struct
@@ -8,11 +6,10 @@ import sys
 import llvmlite.llvmpy.core as lc
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba import cgutils, types, typing
-from numba.compiler_lock import global_compiler_lock
-from numba.targets import cpu
-from .support import TestCase
+import unittest
+from numba.core import types, typing, cgutils, cpu
+from numba.core.compiler_lock import global_compiler_lock
+from numba.tests.support import TestCase
 
 
 machine_int = lc.Type.int(types.intp.bitwidth)

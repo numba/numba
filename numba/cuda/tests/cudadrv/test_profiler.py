@@ -1,12 +1,11 @@
-from __future__ import absolute_import, print_function
-import numba.unittest_support as unittest
-from numba.cuda.testing import CUDATestCase
+import unittest
+from numba.cuda.testing import ContextResettingTestCase
 from numba import cuda
 from numba.cuda.testing import skip_on_cudasim
 
 
 @skip_on_cudasim('CUDA Profiler unsupported in the simulator')
-class TestProfiler(CUDATestCase):
+class TestProfiler(ContextResettingTestCase):
     def test_profiling(self):
         with cuda.profiling():
             a = cuda.device_array(10)

@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 import math
 import operator
 import sys
@@ -11,14 +9,15 @@ import re
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import njit, jit, types, errors, typing, compiler
-from numba.typed_passes import type_inference_stage
-from numba.targets.registry import cpu_target
-from numba.compiler import compile_isolated
-from .support import (TestCase, captured_stdout, tag, temp_directory,
+from numba import njit, jit, vectorize, guvectorize
+from numba.core import types, errors, typing, compiler, cgutils
+from numba.core.typed_passes import type_inference_stage
+from numba.core.registry import cpu_target
+from numba.core.compiler import compile_isolated
+from numba.tests.support import (TestCase, captured_stdout, tag, temp_directory,
                       override_config)
-from numba.errors import LoweringError
+from numba.core.errors import LoweringError
+import unittest
 
 from numba.extending import (typeof_impl, type_callable,
                              lower_builtin, lower_cast,
@@ -29,15 +28,16 @@ from numba.extending import (typeof_impl, type_callable,
                              make_attribute_wrapper,
                              intrinsic, _Intrinsic,
                              register_jitable,
-                             get_cython_function_address
+                             get_cython_function_address,
+                             is_jitted,
                              )
-from numba.typing.templates import (
+from numba.core.typing.templates import (
     ConcreteTemplate, signature, infer, infer_global, AbstractTemplate)
 
-_IS_PY3 = sys.version_info >= (3,)
 
 # Pandas-like API implementation
 from .pdlike_usecase import Index, Series
+
 
 try:
     import scipy
@@ -58,7 +58,7 @@ class MyDummy(object):
 class MyDummyType(types.Opaque):
     def can_convert_to(self, context, toty):
         if isinstance(toty, types.Number):
-            from numba.typeconv import Conversion
+            from numba.core.typeconv import Conversion
             return Conversion.safe
 
 mydummy_type = MyDummyType('mydummy')
@@ -88,24 +88,25 @@ def unbox_index(typ, obj, c):
 # -----------------------------------------------------------------------
 # Define a second custom type but w/o implicit cast to Number
 
-class MyDummy2(object):
-    pass
+def base_dummy_type_factory(name):
+    class DynType(object):
+        pass
 
-class MyDummyType2(types.Opaque):
-    pass
+    class DynTypeType(types.Opaque):
+        pass
 
-mydummy_type_2 = MyDummyType2('mydummy_2')
-mydummy_2 = MyDummy2()
+    dyn_type_type = DynTypeType(name)
 
-@typeof_impl.register(MyDummy2)
-def typeof_mydummy(val, c):
-    return mydummy_type_2
+    @typeof_impl.register(DynType)
+    def typeof_mydummy(val, c):
+        return dyn_type_type
+
+    register_model(DynTypeType)(models.OpaqueModel)
+    return DynTypeType, DynType, dyn_type_type
 
 
-def get_dummy_2():
-    return mydummy_2
+MyDummyType2, MyDummy2, mydummy_type_2 = base_dummy_type_factory('mydummy2')
 
-register_model(MyDummyType2)(models.OpaqueModel)
 
 @unbox(MyDummyType2)
 def unbox_index(typ, obj, c):
@@ -119,8 +120,7 @@ def unbox_index(typ, obj, c):
 def func1(x=None):
     raise NotImplementedError
 
-@type_callable(func1)
-def type_func1(context):
+def type_func1_(context):
     def typer(x=None):
         if x in (None, types.none):
             # 0-arg or 1-arg with None
@@ -130,6 +130,10 @@ def type_func1(context):
             return x
 
     return typer
+
+
+type_func1 = type_callable(func1)(type_func1_)
+
 
 @lower_builtin(func1)
 @lower_builtin(func1, types.none)
@@ -449,6 +453,10 @@ class TestLowLevelExtending(TestCase):
         cr = compile_isolated(pyfunc, (types.float64,))
         self.assertPreciseEqual(cr.entry_point(18.0), 6.0)
 
+    def test_type_callable_keeps_function(self):
+        self.assertIs(type_func1, type_func1_)
+        self.assertIsNotNone(type_func1)
+
     def test_cast_mydummy(self):
         pyfunc = get_dummy
         cr = compile_isolated(pyfunc, (), types.float64)
@@ -513,14 +521,12 @@ class TestPandasLike(TestCase):
             got = cfunc(i)
             self.assertEqual(got, expected)
 
-    @tag('important')
     def test_series_len(self):
         i = Index(np.int32([2, 4, 3]))
         s = Series(np.float64([1.5, 4.0, 2.5]), i)
         cfunc = jit(nopython=True)(len_usecase)
         self.assertPreciseEqual(cfunc(s), 3)
 
-    @tag('important')
     def test_series_get_index(self):
         i = Index(np.int32([2, 4, 3]))
         s = Series(np.float64([1.5, 4.0, 2.5]), i)
@@ -542,7 +548,6 @@ class TestPandasLike(TestCase):
         self.assertIs(ss._index._data, i._data)
         self.assertPreciseEqual(ss._values, np.cos(np.sin(s._values)))
 
-    @tag('important')
     def test_series_constructor(self):
         i = Index(np.int32([42, 8, -5]))
         d = np.float64([1.5, 4.0, 2.5])
@@ -553,7 +558,6 @@ class TestPandasLike(TestCase):
         self.assertIs(got._index._data, i._data)
         self.assertIs(got._values, d)
 
-    @tag('important')
     def test_series_clip(self):
         i = Index(np.int32([42, 8, -5]))
         s = Series(np.float64([1.5, 4.0, 2.5]), i)
@@ -570,7 +574,6 @@ class TestHighLevelExtending(TestCase):
     Test the high-level combined API.
     """
 
-    @tag('important')
     def test_where(self):
         """
         Test implementing a function with @overload.
@@ -594,7 +597,6 @@ class TestHighLevelExtending(TestCase):
         self.assertIn("x and y should have the same dtype",
                       str(raises.exception))
 
-    @tag('important')
     def test_len(self):
         """
         Test re-implementing len() for a custom type with @overload.
@@ -754,9 +756,8 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument default values", msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "kw=12">', msg)
-            self.assertIn('<Parameter "kw=None">', msg)
+        self.assertIn('<Parameter "kw=12">', msg)
+        self.assertIn('<Parameter "kw=None">', msg)
 
         # kwarg name is different
         def impl2(a, b, c, kwarg=None):
@@ -770,9 +771,8 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument names", msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "kwarg=None">', msg)
-            self.assertIn('<Parameter "kw=None">', msg)
+        self.assertIn('<Parameter "kwarg=None">', msg)
+        self.assertIn('<Parameter "kw=None">', msg)
 
         # arg name is different
         def impl3(z, b, c, kw=None):
@@ -787,29 +787,26 @@ class TestHighLevelExtending(TestCase):
         self.assertIn(sentinel, msg)
         self.assertIn("argument names", msg)
         self.assertFalse("keyword" in msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "a">', msg)
-            self.assertIn('<Parameter "z">', msg)
+        self.assertIn('<Parameter "a">', msg)
+        self.assertIn('<Parameter "z">', msg)
 
-        # impl4/5 has invalid syntax for python < 3
-        if _IS_PY3:
-            from .overload_usecases import impl4, impl5
-            with self.assertRaises(errors.TypingError) as e:
-                gen_ol(impl4)(1, 2, 3, 4)
-            msg = str(e.exception)
-            self.assertIn(sentinel, msg)
-            self.assertIn("argument names", msg)
-            self.assertFalse("keyword" in msg)
-            self.assertIn("First difference: 'z'", msg)
+        from .overload_usecases import impl4, impl5
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl4)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        self.assertIn("First difference: 'z'", msg)
 
-            with self.assertRaises(errors.TypingError) as e:
-                gen_ol(impl5)(1, 2, 3, 4)
-            msg = str(e.exception)
-            self.assertIn(sentinel, msg)
-            self.assertIn("argument names", msg)
-            self.assertFalse("keyword" in msg)
-            self.assertIn('<Parameter "a">', msg)
-            self.assertIn('<Parameter "z">', msg)
+        with self.assertRaises(errors.TypingError) as e:
+            gen_ol(impl5)(1, 2, 3, 4)
+        msg = str(e.exception)
+        self.assertIn(sentinel, msg)
+        self.assertIn("argument names", msg)
+        self.assertFalse("keyword" in msg)
+        self.assertIn('<Parameter "a">', msg)
+        self.assertIn('<Parameter "z">', msg)
 
         # too many args
         def impl6(a, b, c, d, e, kw=None):
@@ -824,9 +821,8 @@ class TestHighLevelExtending(TestCase):
         self.assertIn(sentinel, msg)
         self.assertIn("argument names", msg)
         self.assertFalse("keyword" in msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "d">', msg)
-            self.assertIn('<Parameter "e">', msg)
+        self.assertIn('<Parameter "d">', msg)
+        self.assertIn('<Parameter "e">', msg)
 
         # too few args
         def impl7(a, b, kw=None):
@@ -841,8 +837,7 @@ class TestHighLevelExtending(TestCase):
         self.assertIn(sentinel, msg)
         self.assertIn("argument names", msg)
         self.assertFalse("keyword" in msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "c">', msg)
+        self.assertIn('<Parameter "c">', msg)
 
         # too many kwargs
         def impl8(a, b, c, kw=None, extra_kwarg=None):
@@ -856,8 +851,7 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument names", msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "extra_kwarg=None">', msg)
+        self.assertIn('<Parameter "extra_kwarg=None">', msg)
 
         # too few kwargs
         def impl9(a, b, c):
@@ -871,10 +865,8 @@ class TestHighLevelExtending(TestCase):
         msg = str(e.exception)
         self.assertIn(sentinel, msg)
         self.assertIn("keyword argument names", msg)
-        if _IS_PY3:
-            self.assertIn('<Parameter "kw=None">', msg)
+        self.assertIn('<Parameter "kw=None">', msg)
 
-    @unittest.skipUnless(_IS_PY3, "Python 3+ only syntax")
     def test_typing_vs_impl_signature_mismatch_handling_var_positional(self):
         """
         Tests that an overload which has a differing typing and implementing
@@ -1435,6 +1427,171 @@ class TestJitOptionsNoNRT(TestCase):
             return x.attr_jit_option_check_no_nrt
 
         self.check_error_no_nrt(udt, mydummy)
+
+
+class TestBoxingCallingJIT(TestCase):
+    def setUp(self):
+        super().setUp()
+        many = base_dummy_type_factory('mydummy2')
+        self.DynTypeType, self.DynType, self.dyn_type_type = many
+        self.dyn_type = self.DynType()
+
+    def test_unboxer_basic(self):
+        # Implements an unboxer on DynType that calls an intrinsic into the
+        # unboxer code.
+        magic_token = 0xcafe
+        magic_offset = 123
+
+        @intrinsic
+        def my_intrinsic(typingctx, val):
+            # An intrinsic that returns `val + magic_offset`
+            def impl(context, builder, sig, args):
+                [val] = args
+                return builder.add(val, val.type(magic_offset))
+            sig = signature(val, val)
+            return sig, impl
+
+
+        @unbox(self.DynTypeType)
+        def unboxer(typ, obj, c):
+            # The unboxer that calls some jitcode
+            def bridge(x):
+                # proof that this is a jit'ed context by calling jit only
+                # intrinsic
+                return my_intrinsic(x)
+
+            args = [c.context.get_constant(types.intp, magic_token)]
+            sig = signature(types.voidptr, types.intp)
+            is_error, res = c.pyapi.call_jit_code(bridge, sig, args)
+            return NativeValue(res, is_error=is_error)
+
+        @box(self.DynTypeType)
+        def boxer(typ, val, c):
+            # The boxer that returns an integer representation
+            res = c.builder.ptrtoint(val, cgutils.intp_t)
+            return c.pyapi.long_from_ssize_t(res)
+
+        @njit
+        def passthru(x):
+            return x
+
+        out = passthru(self.dyn_type)
+        self.assertEqual(out, magic_token + magic_offset)
+
+    def test_unboxer_raise(self):
+        # Testing exception raising in jitcode called from unboxing.
+        @unbox(self.DynTypeType)
+        def unboxer(typ, obj, c):
+            # The unboxer that calls some jitcode
+            def bridge(x):
+                if x > 0:
+                    raise ValueError('cannot be x > 0')
+                return x
+
+            args = [c.context.get_constant(types.intp, 1)]
+            sig = signature(types.voidptr, types.intp)
+            is_error, res = c.pyapi.call_jit_code(bridge, sig, args)
+            return NativeValue(res, is_error=is_error)
+
+        @box(self.DynTypeType)
+        def boxer(typ, val, c):
+            # The boxer that returns an integer representation
+            res = c.builder.ptrtoint(val, cgutils.intp_t)
+            return c.pyapi.long_from_ssize_t(res)
+
+        @njit
+        def passthru(x):
+            return x
+
+        with self.assertRaises(ValueError) as raises:
+            out = passthru(self.dyn_type)
+        self.assertIn(
+            "cannot be x > 0",
+            str(raises.exception),
+        )
+
+    def test_boxer(self):
+        # Call jitcode inside the boxer
+        magic_token = 0xcafe
+        magic_offset = 312
+
+        @intrinsic
+        def my_intrinsic(typingctx, val):
+            # An intrinsic that returns `val + magic_offset`
+            def impl(context, builder, sig, args):
+                [val] = args
+                return builder.add(val, val.type(magic_offset))
+            sig = signature(val, val)
+            return sig, impl
+
+        @unbox(self.DynTypeType)
+        def unboxer(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        @box(self.DynTypeType)
+        def boxer(typ, val, c):
+            # Note: this doesn't do proper error handling
+            def bridge(x):
+                return my_intrinsic(x)
+
+            args = [c.context.get_constant(types.intp, magic_token)]
+            sig = signature(types.intp, types.intp)
+            is_error, res = c.pyapi.call_jit_code(bridge, sig, args)
+            return c.pyapi.long_from_ssize_t(res)
+
+        @njit
+        def passthru(x):
+            return x
+
+        r = passthru(self.dyn_type)
+        self.assertEqual(r, magic_token + magic_offset)
+
+    def test_boxer_raise(self):
+        # Call jitcode inside the boxer
+        @unbox(self.DynTypeType)
+        def unboxer(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        @box(self.DynTypeType)
+        def boxer(typ, val, c):
+            def bridge(x):
+                if x > 0:
+                    raise ValueError("cannot do x > 0")
+                return x
+
+            args = [c.context.get_constant(types.intp, 1)]
+            sig = signature(types.intp, types.intp)
+            is_error, res = c.pyapi.call_jit_code(bridge, sig, args)
+            # The error handling
+            retval = cgutils.alloca_once(c.builder, c.pyapi.pyobj, zfill=True)
+            with c.builder.if_then(c.builder.not_(is_error)):
+                obj = c.pyapi.long_from_ssize_t(res)
+                c.builder.store(obj, retval)
+            return c.builder.load(retval)
+
+        @njit
+        def passthru(x):
+            return x
+
+        with self.assertRaises(ValueError) as raises:
+            passthru(self.dyn_type)
+        self.assertIn(
+            "cannot do x > 0",
+            str(raises.exception),
+        )
+
+
+class TestMisc(TestCase):
+
+    def test_is_jitted(self):
+        def foo(x):
+            pass
+
+        self.assertFalse(is_jitted(foo))
+        self.assertTrue(is_jitted(njit(foo)))
+        self.assertFalse(is_jitted(vectorize(foo)))
+        self.assertFalse(is_jitted(vectorize(parallel=True)(foo)))
+        self.assertFalse(is_jitted(guvectorize('void(float64[:])', '(m)')(foo)))
 
 
 if __name__ == '__main__':

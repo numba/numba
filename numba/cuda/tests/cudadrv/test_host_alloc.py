@@ -1,13 +1,12 @@
-from __future__ import print_function, division, absolute_import
 import numpy as np
 from numba.cuda.cudadrv import driver
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, ContextResettingTestCase
 from numba.cuda.testing import skip_on_cudasim
 
 
 @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
-class TestHostAlloc(CUDATestCase):
+class TestHostAlloc(ContextResettingTestCase):
     def test_host_alloc_driver(self):
         n = 32
         mem = cuda.current_context().memhostalloc(n, mapped=True)

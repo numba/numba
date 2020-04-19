@@ -3,10 +3,46 @@
 Notes on Inlining
 =================
 
-There are occasions where it is useful to be able to inline a function
-at its call site, at the Numba IR level of representation. The decorators
-:func:`numba.jit` and :func:`numba.extending.overload` both
-support the keyword argument ``inline``, to facilitate this behaviour.
+There are occasions where it is useful to be able to inline a function at its
+call site, at the Numba IR level of representation. The decorators such as
+:func:`numba.jit`, :func:`numba.extending.overload` and
+:func:`register_jitable` support the keyword argument ``inline``, to facilitate
+this behaviour.
+
+When attempting to inline at this level, it is important to understand what
+purpose this serves and what effect this will have. In contrast to the inlining
+performed by LLVM, which is aimed at improving performance, the main reason to
+inline at the Numba IR level is to allow type inference to cross function
+boundaries.
+
+As an example, consider the following snippet:
+
+.. code:: python
+
+    from numba import njit
+
+
+    @njit
+    def bar(a):
+        a.append(10)
+
+
+    @njit
+    def foo():
+        z = []
+        bar(z)
+
+
+    foo()
+
+This will fail to compile and run, because the type of ``z`` can not be inferred
+as it will only be refined within ``bar``. If we now add ``inline=True`` to the
+decorator for ``bar`` the snippet will compile and run. This is because inlining
+the call to ``a.append(10)`` will mean that ``z`` will be refined to hold integers
+and so type inference will succeed.
+
+So, to recap, inlining at the Numba IR level is unlikely to have a performance
+benefit. Whereas inlining at the LLVM level stands a better chance.
 
 The ``inline`` keyword argument can be one of three values:
 
@@ -40,6 +76,9 @@ The ``inline`` keyword argument can be one of three values:
   In all cases the function should return True to inline and return False to not
   inline, this essentially permitting custom inlining rules (typical use might
   be cost models).
+* Recursive functions with ``inline='always'`` will result in a non-terminating
+  compilation. If you wish to avoid this, supply a function to limit the
+  recursion depth (see below).
 
 .. note:: No guarantee is made about the order in which functions are assessed
           for inlining or about the order in which they are inlined.
@@ -211,3 +250,32 @@ Things to note in the above:
    the argument was an ``Complex`` type instance.
 4. That dead code elimination has not been performed and as a result there are
    superfluous statements present in the IR.
+
+Using a function to limit the inlining depth of a recursive function
+====================================================================
+
+When using recursive inlines, you can terminate the compilation by using
+a cost model.
+
+.. code:: python
+
+    from numba import njit
+    import numpy as np
+
+    class CostModel(object):
+        def __init__(self, max_inlines):
+            self._count = 0
+            self._max_inlines = max_inlines
+
+        def __call__(self, expr, caller, callee):
+            ret = self._count < self._max_inlines
+            self._count += 1
+            return ret
+
+    @njit(inline=CostModel(3))
+    def factorial(n):
+        if n <= 0:
+            return 1
+        return n * factorial(n - 1)
+
+    factorial(5)

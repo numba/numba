@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function, division
-
 from llvmlite.llvmpy.core import Module, Type, Builder
 from numba.cuda.cudadrv.nvvm import (NVVM, CompilationUnit, llvm_to_ptx,
                                      set_cuda_kernel, fix_data_layout,

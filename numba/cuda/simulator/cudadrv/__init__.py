@@ -1,1 +1,1 @@
-from . import devicearray, devices, driver, drvapi, nvvm
+from numba.cuda.simulator.cudadrv import devicearray, devices, driver, drvapi, nvvm

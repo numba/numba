@@ -123,23 +123,23 @@ Using the NRT from C code
 
 Externally compiled C code should use the ``NRT_api_functions`` struct as a
 function table to access the NRT API. The struct is defined in
-:ghfile:`numba/runtime/nrt_external.h`. Users can use the utility function
+:ghfile:`numba/core/runtime/nrt_external.h`. Users can use the utility function
 ``numba.extending.include_path()`` to determine the include directory for
 Numba provided C headers.
 
-.. literalinclude:: ../../../numba/runtime/nrt_external.h
+.. literalinclude:: ../../../numba/core/runtime/nrt_external.h
   :language: C
-  :caption: `numba/runtime/nrt_external.h`
+  :caption: `numba/core/runtime/nrt_external.h`
 
-Inside Numba compiled code, the ``numba.unsafe.nrt.NRT_get_api()`` intrinsic
-can be used to obtain a pointer to the ``NRT_api_functions``.
+Inside Numba compiled code, the ``numba.core.unsafe.nrt.NRT_get_api()``
+intrinsic can be used to obtain a pointer to the ``NRT_api_functions``.
 
 Here is an example that uses the ``nrt_external.h``:
 
 .. code-block:: C
 
   #include <stdio.h>
-  #include "numba/runtime/nrt_external.h"
+  #include "numba/core/runtime/nrt_external.h"
 
   void my_dtor(void *ptr) {
       free(ptr);

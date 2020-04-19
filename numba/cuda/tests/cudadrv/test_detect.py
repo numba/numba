@@ -1,14 +1,13 @@
-from __future__ import absolute_import, print_function
 import os
 import sys
 import subprocess
 import threading
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba.tests.support import captured_stdout
 
 
-class TestCudaDetect(SerialMixin, unittest.TestCase):
+class TestCudaDetect(CUDATestCase):
     def test_cuda_detect(self):
         # exercise the code path
         with captured_stdout() as out:
@@ -18,7 +17,7 @@ class TestCudaDetect(SerialMixin, unittest.TestCase):
         self.assertIn('CUDA devices', output)
 
 
-class TestCUDAFindLibs(SerialMixin, unittest.TestCase):
+class TestCUDAFindLibs(CUDATestCase):
 
     def run_cmd(self, cmdline, env):
         popen = subprocess.Popen(cmdline,
