@@ -355,25 +355,15 @@ class List(MutableSequence):
         return _pop(self, i)
 
     def extend(self, iterable):
+        # Empty iterable, do nothing
+        if len(iterable) == 0:
+            return self
         if not self._typed:
-            iterable_length = len(iterable)
-            # Empty iterable, do nothing
-            if iterable_length == 0:
-                return self
             # Need to get the first element of the iterable to initialise the
             # type of the list. FIXME: this may be a problem if the iterable
             # can not be sliced.
             self._initialise_list(iterable[0])
-            self.append(iterable[0])
-            # Iterable has more values to extend from
-            if iterable_length > 1:
-                return _extend(self, iterable[1:])
-            else:
-                return self
-        elif len(iterable) == 0:
-            return self
-        else:
-            return _extend(self, iterable)
+        return _extend(self, iterable)
 
     def remove(self, item):
         return _remove(self, item)
