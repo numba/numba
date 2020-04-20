@@ -36,7 +36,7 @@ The relevant source files referenced in this document are
   well as the code that loads the above libraries into Python and launches the
   threadpool.
 
-- ``numba/np/ufunc/parfor.py``
+- ``numba/parfors/parfor_lowering.py``
 
   This file contains the main logic for generating code for the parallel
   backend. The thread mask is accessed in this file in the code that generates
@@ -47,7 +47,7 @@ Thread masking
 --------------
 
 As part of its design, Numba never launches new threads beyond the threads
-that are launched initially with ``numba.np/ufunc.parallel._launch_threads()``
+that are launched initially with ``numba.np.ufunc.parallel._launch_threads()``
 when the first parallel execution is run. This is due to the way threads were
 already implemented in Numba prior to thread masking being implemented. This
 restriction was kept to keep the design simple, although it could be removed
