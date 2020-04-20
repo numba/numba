@@ -395,7 +395,7 @@ def get_sysinfo():
         return "Unknown import problem."
 
     try:
-        from numba.np.ufunc import tbbpool
+        from numba.np.ufunc import tbbpool  # NOQA
         sys_info[_tbb_thread] = True
     except ImportError as e:
         # might be a missing symbol due to e.g. tbb libraries missing
@@ -411,7 +411,7 @@ def get_sysinfo():
         sys_info[_openmp_error] = parse_error(e, 'omppool')
 
     try:
-        from numba.np.ufunc import workqueue
+        from numba.np.ufunc import workqueue  # NOQA
         sys_info[_wkq_thread] = True
     except ImportError as e:
         sys_info[_wkq_thread] = True
