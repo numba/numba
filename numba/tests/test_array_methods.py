@@ -984,8 +984,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5
-             ]
+             np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
         for arr_list in all_test_arrays:
             for arr in arr_list:
@@ -1013,8 +1012,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         out_dtypes = {np.dtype('int32'): np.int64, np.dtype('uint32'): np.uint64,
                       np.dtype('int64'): np.int64,
                       np.dtype('timedelta64[M]'): np.dtype('timedelta64[M]')}
-        # timedelta test cannot be enabled until issue #4540 is fixed
-        # all_dtypes += [np.timedelta64]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
