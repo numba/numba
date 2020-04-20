@@ -389,10 +389,12 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             unit = inputs[0].unit
             new_outputs = []
             for out in outputs:
-                if out.unit == "":
+                if isinstance(out, types.NPTimedelta) and out.unit == "":
                     new_outputs.append(types.NPTimedelta(unit))
                 else:
                     new_outputs.append(out)
+        else:
+            return outputs
         return new_outputs
 
     # In NumPy, the loops are evaluated from first to last. The first one
@@ -436,7 +438,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             try:
                 inputs = choose_types(input_types, ufunc_inputs)
                 outputs = choose_types(output_types, ufunc_outputs)
-                if outer.char in 'm' and inner in 'm':
+                if ufunc_inputs == 'mm':
                     outputs = set_output_dt_units(inputs, outputs)
 
             except NotImplementedError:
