@@ -100,7 +100,7 @@ def get_os_spec_info(os_name):
                               '/sys/fs/cgroup/cpuacct/cpu.cfs_quota_us')),
                 CmdBufferOut(('tail', '-vn', '+1',
                               '/sys/fs/cgroup/cpuacct/cpu.cfs_period_us')),
-                ),
+            ),
             'kwds': {
                 # output string fragment -> result dict key
                 'MemTotal:': _mem_total,
@@ -109,35 +109,35 @@ def get_os_spec_info(os_name):
                 'Cpus_allowed_list:': _cpus_list,
                 '/sys/fs/cgroup/cpuacct/cpu.cfs_quota_us': _cfs_quota,
                 '/sys/fs/cgroup/cpuacct/cpu.cfs_period_us': _cfs_period,
-                },
             },
+        },
         'Windows': {
             'cmd': (
                 CmdBufferOut(('wmic', 'OS', 'get', 'TotalVirtualMemorySize')),
                 CmdBufferOut(('wmic', 'OS', 'get', 'FreeVirtualMemory')),
-                ),
+            ),
             'kwds': {
                 # output string fragment -> result dict key
                 'TotalVirtualMemorySize': _mem_total,
                 'FreeVirtualMemory': _mem_available,
-                },
             },
+        },
         'Darwin': {
             'cmd': (
                 ('sysctl', 'hw.memsize'),
                 ('vm_stat'),
-                ),
+            ),
             'kwds': {
                 # output string fragment -> result dict key
                 'hw.memsize:': _mem_total,
                 'free:': _mem_available,
-                },
+            },
             'units': {
                 _mem_total: 1,  # Size is given in bytes.
                 _mem_available: 4096,  # Size is given in 4kB pages.
-                },
             },
-        }
+        },
+    }
 
     # Assuming the shell cmd returns a unique (k, v) pair per line
     # or a unique (k, v) pair spread over several lines:
@@ -204,11 +204,11 @@ def get_os_spec_info(os_name):
         },
         'Windows': {
             _os_spec_version: lambda: ' '.join(
-                    s for s in platform.win32_ver()),
+                s for s in platform.win32_ver()),
         },
         'Darwin': {
             _os_spec_version: lambda: ''.join(
-                    i or ' ' for s in tuple(platform.mac_ver()) for i in s),
+                i or ' ' for s in tuple(platform.mac_ver()) for i in s),
         },
     }
     key_func = os_specific_funcs.get(os_name, {})
@@ -316,12 +316,12 @@ def get_sysinfo():
     try:
         libhlc.HLC()
         toolchains.append('librocmlite library')
-    except:
+    except Exception:
         pass
     try:
         cmd = hlc.CmdLine().check_tooling()
         toolchains.append('ROC command line tools')
-    except:
+    except Exception:
         pass
     sys_info[_roc_toolchains] = toolchains
 
@@ -341,7 +341,7 @@ def get_sysinfo():
                 'Vendor': decode(agent.vendor_name),
                 'Name': decode(agent.name),
                 'Type': agent.device,
-                }
+            }
         sys_info[_hsa_agents] = agents
 
         _dgpus = []
@@ -369,17 +369,17 @@ def get_sysinfo():
             llvmbind.load_library_permanently("svml_dispmd")
         else:
             svml_lib_loaded = False
-    except:
+    except Exception:
         svml_lib_loaded = False
     func = getattr(llvmbind.targets, "has_svml", None)
     sys_info[_llvm_svml_patched] = func() if func else False
     sys_info[_svml_state] = config.USING_SVML
     sys_info[_svml_loaded] = svml_lib_loaded
     sys_info[_svml_operational] = all((
-            sys_info[_svml_state],
-            sys_info[_svml_loaded],
-            sys_info[_llvm_svml_patched],
-            ))
+        sys_info[_svml_state],
+        sys_info[_svml_loaded],
+        sys_info[_llvm_svml_patched],
+    ))
 
     # Check which threading backends are available.
     def parse_error(e, backend):
@@ -440,7 +440,7 @@ def get_sysinfo():
             'platform': _conda_platform,
             'python_version': _conda_python_ver,
             'root_writable': _conda_root_writable,
-            }
+        }
         for conda_k, sysinfo_k in keys.items():
             sys_info[sysinfo_k] = jsond.get(conda_k, 'N/A')
 
@@ -583,6 +583,7 @@ def display_sysinfo():
             print(fmt % t)
         else:
             print(*t)
+
 
 if __name__ == '__main__':
     display_sysinfo()
