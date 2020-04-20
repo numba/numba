@@ -80,6 +80,10 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     :param args: A tuple of argument types to compile for.
     :param debug: Whether to include debug info in the generated PTX.
     :type debug: bool
+    :param device: Whether to compile a device function. Equivalent to `nvcc`'s
+                   `-rdc` flag when generating PTX (i.e. `--device-c`). Defaults
+                   to ``False``, to compile global kernel functions.
+    :type device: bool
     :param fastmath: Whether to enable fast math flags (ftz=1, prec_sqrt=0,
                      prec_div=, and fma=1)
     :type fastmath: bool
