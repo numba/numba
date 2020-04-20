@@ -241,7 +241,7 @@ def typeof_typeref(val, c):
 def typeof_typeref(val, c):
     if isinstance(val, types.BaseFunction):
         return val
-    elif isinstance(val, (types.Number, types.Boolean)):
+    elif isinstance(val, (types.Number, types.Boolean, types.NPTimedelta)):
         return types.NumberClass(val)
     else:
         return types.TypeRef(val)

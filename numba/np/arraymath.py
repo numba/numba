@@ -416,7 +416,7 @@ def array_mean(arr, axis=None):
         # determine accumulator type
         if isinstance(arr.dtype, (types.Integer, types.Boolean)):
             ret_dtype = np.float64
-        elif isinstance(arr.dtype, (types.Float, types.Complex)):
+        elif isinstance(arr.dtype, (types.Float, types.Complex, types.NPTimedelta)):
             ret_dtype = arr.dtype
         else:
             raise TypeError(("np.mean is not supported on {} arrays. "

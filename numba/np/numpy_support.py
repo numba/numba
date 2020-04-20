@@ -382,6 +382,39 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                   for letter in ufunc_letters[len(numba_types):]]
         return types
 
+    def set_output_dt_units(inputs, outputs, ufunc_inputs):
+        """
+        Refines the output of a functino from  timedelta64[] to a more specific
+        timedelta64[?] where ? is the right time unit depending on the inputs
+        """
+
+        def make_specific(outputs, unit):
+            new_outputs = []
+            for out in outputs:
+                if isinstance(out, types.NPTimedelta) and out.unit == "":
+                    new_outputs.append(types.NPTimedelta(unit))
+                else:
+                    new_outputs.append(out)
+            return new_outputs
+
+
+        if ufunc_inputs == 'mm':
+            if all(inp.unit == inputs[0].unit for inp in inputs):
+                # Case with operation on same units. Operations on different units
+                # not adjusted for now but might need to be added in the future
+                unit = inputs[0].unit
+                new_outputs = make_specific(outputs, unit)
+            else:
+                return outputs
+            return new_outputs
+        if ufunc_inputs[0] == 'm':
+            # case where the left operand has timedelta type
+            unit = inputs[0].unit
+            new_outputs = make_specific(outputs, unit)
+            return new_outputs
+
+
+
     # In NumPy, the loops are evaluated from first to last. The first one
     # that is viable is the one used. One loop is viable if it is possible
     # to cast every input operand to the one expected by the ufunc.
@@ -423,6 +456,10 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             try:
                 inputs = choose_types(input_types, ufunc_inputs)
                 outputs = choose_types(output_types, ufunc_outputs)
+                #if ufunc_inputs == 'mm':
+                if ufunc_inputs[0] == 'm':
+                    outputs = set_output_dt_units(inputs, outputs, ufunc_inputs)
+
             except NotImplementedError:
                 # One of the selected dtypes isn't supported by Numba
                 # (e.g. float16), try other candidates
