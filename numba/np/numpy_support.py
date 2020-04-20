@@ -382,6 +382,19 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                   for letter in ufunc_letters[len(numba_types):]]
         return types
 
+    def set_output_dt_units(inputs, outputs):
+        if all(inp.unit == inputs[0].unit for inp in inputs):
+            # Case with operation on same units. Operations on different units
+            # not adjusted for now but might need to be added in the future
+            unit = inputs[0].unit
+            new_outputs = []
+            for out in outputs:
+                if out.unit == "":
+                    new_outputs.append(types.NPTimedelta(unit))
+                else:
+                    new_outputs.append(out)
+        return new_outputs
+
     # In NumPy, the loops are evaluated from first to last. The first one
     # that is viable is the one used. One loop is viable if it is possible
     # to cast every input operand to the one expected by the ufunc.
@@ -423,6 +436,9 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             try:
                 inputs = choose_types(input_types, ufunc_inputs)
                 outputs = choose_types(output_types, ufunc_outputs)
+                if outer.char in 'm' and inner in 'm':
+                    outputs = set_output_dt_units(inputs, outputs)
+
             except NotImplementedError:
                 # One of the selected dtypes isn't supported by Numba
                 # (e.g. float16), try other candidates

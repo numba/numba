@@ -175,7 +175,8 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
         return _ArrayHelper(ctxt, bld, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
-    elif types.unliteral(tyinp) in types.number_domain | set([types.boolean]):
+    elif (types.unliteral(tyinp) in types.number_domain | {types.boolean}
+          or isinstance(tyinp, types.NPTimedelta)):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
         raise NotImplementedError('unsupported type for {0}: {1}'.format(where, str(tyinp)))

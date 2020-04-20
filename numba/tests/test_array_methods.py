@@ -984,10 +984,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5]
+             np.ones((7, 3), arr_dtype) * -5
+             ]
             for arr_dtype in all_dtypes]
-        del all_test_arrays[-1][-2] #remove this line after issue #xxx is fixed, as it is currently a known problem
-
         for arr_list in all_test_arrays:
             for arr in arr_list:
                 for axis in (0, 1, 2):
@@ -1021,7 +1020,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
              np.ones(1, arr_dtype),
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
-        del all_test_arrays[-1][-2]  # remove this line after issue #xxx is fixed, as it is currently a known problem
 
         for arr_list in all_test_arrays:
             for arr in arr_list:
@@ -1051,7 +1049,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
              np.ones(1, arr_dtype),
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
-        del all_test_arrays[-1][-2]  # remove this line after issue #xxx is fixed, as it is currently a known problem
 
         out_dtypes = {np.dtype('float64'): [np.float64],
                       np.dtype('float32'): [np.float64, np.float32],
@@ -1083,7 +1080,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
              np.ones(1, arr_dtype),
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
-        del all_test_arrays[-1][-2]  # remove this line after issue #xxx is fixed, as it is currently a known problem
 
         out_dtypes = {np.dtype('float64'): [np.float64],
                       np.dtype('float32'): [np.float64, np.float32],
