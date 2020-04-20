@@ -352,7 +352,7 @@ numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
     // obtain item and decref if needed
     loc = lp->items + lp->item_size * index;
     copy_item(lp, out, loc);
-    list_decref_item(lp, loc);
+    // list_decref_item(lp, loc);
     if (index != lp->size - 1) {
         // pop from somewhere other than the end, incur the dreaded memory copy
         leftover_bytes = (lp->size - 1 - index) * lp->item_size;
