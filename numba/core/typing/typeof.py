@@ -2,6 +2,7 @@ from collections import namedtuple
 from functools import singledispatch
 import ctypes
 import enum
+import typing as py_typing
 
 import numpy as np
 
@@ -101,6 +102,60 @@ def _typeof_type(val, c):
     from numba.typed import List
     if issubclass(val, List):
         return types.TypeRef(types.ListType)
+
+    if val in (int, float, complex):
+        return typeof_impl(val(0), c)
+
+    if val is str:
+        return typeof_impl(str("numba"), c)
+
+
+@typeof_impl.register(py_typing.GenericMeta)
+def _typeof_typing(val, c):
+    if issubclass(val, py_typing.List):
+        (element_py,) = val.__args__
+        element_nb = typeof_impl(element_py, c)
+        if element_nb is None:
+            raise ValueError(
+                f"Cannot type list element type {element_py}")
+        return types.List(element_nb)
+
+    if issubclass(val, py_typing.Dict):
+        key_py, value_py = val.__args__
+        key_nb = typeof_impl(key_py, c)
+        value_nb = typeof_impl(value_py, c)
+        if key_nb is None:
+            raise ValueError(f"Cannot type dict key type {key_py}")
+        if value_nb is None:
+            raise ValueError(f"Cannot type dict value type {value_py}")
+        return types.DictType(key_nb, value_nb)
+
+    if issubclass(val, py_typing.Set):
+        (element_py,) = val.__args__
+        element_nb = typeof_impl(element_py, c)
+        if element_nb is None:
+            raise ValueError(
+                f"Cannot type set element type {element_py}")
+        return types.Set(element_nb)
+
+    if issubclass(val, py_typing.Tuple):
+        tys = tuple(typeof_impl(elem, c) for elem in val.__args__)
+        if any(ty is None for ty in tys):
+            return
+        return types.BaseTuple.from_types(tys)
+
+
+@typeof_impl.register(type(py_typing.Union))
+def _typeof_optional(val, c):
+    (arg_1_py, arg_2_py) = val.__args__
+    if arg_2_py is not type(None): # noqa: E721
+        raise ValueError(
+            "Cannot type Union that is not an Optional "
+            f"(second type {arg_2_py} is not NoneType")
+    arg_1_nb = typeof_impl(arg_1_py, c)
+    if arg_1_nb is None:
+        raise ValueError(f"Cannot type optional inner type {arg_1_py}")
+    return types.Optional(arg_1_nb)
 
 
 @typeof_impl.register(bool)
