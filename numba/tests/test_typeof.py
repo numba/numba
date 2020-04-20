@@ -186,12 +186,18 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         v = [1.0] * 100
         self.assertEqual(typeof(v), types.List(types.float64, reflected=True))
 
+        bad_v = [{1: 3}]
+        with self.assertRaises(ValueError) as raises:
+            typeof(bad_v)
+        self.assertIn("Cannot type list element type", str(raises.exception))
+
     def test_sets(self):
         v = set([1.0, 2.0, 3.0])
         self.assertEqual(typeof(v), types.Set(types.float64, reflected=True))
         v = frozenset(v)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             typeof(v)
+        self.assertIn("Cannot determine Numba type of", str(raises.exception))
 
     def test_namedtuple(self):
         v = Point(1, 2)
