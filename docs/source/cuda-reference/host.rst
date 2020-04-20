@@ -96,13 +96,23 @@ Compilation
 -----------
 
 Numba provides an entry point for compiling a Python function to PTX without
-invoking any of the driver API. This can be useful for generating PTX that is to
-be inlined into other PTX code (e.g. from outside the Numba / Python ecosystem).
+invoking any of the driver API. This can be useful for:
+
+- Generating PTX that is to be inlined into other PTX code (e.g. from outside
+  the Numba / Python ecosystem).
+- Generating code when there is no device present.
+- Generating code prior to a fork without initializing CUDA.
 
 .. note:: It is the user's responsiblity to manage any ABI issues arising from
     the use of compilation to PTX.
 
 .. autofunction:: numba.cuda.compile_ptx
+
+
+If PTX for the compute capability of the current device is required, the
+``compile_ptx_for_current_device`` function can be used:
+
+.. autofunction:: numba.cuda.compile_ptx_for_current_device
 
 
 Measurement

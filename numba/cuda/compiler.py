@@ -74,7 +74,7 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
 @global_compiler_lock
 def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
                 cc=None, opt=True):
-    """Compile a Python function to PTX for the given arguments.
+    """Compile a Python function to PTX for a given set of argument types.
 
     :param pyfunc: The Python function to compile.
     :param args: A tuple of argument types to compile for.
@@ -121,7 +121,17 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
     arch = nvvm.get_arch_option(*cc)
     llvmir = str(llvm_module)
     ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **options)
-    return ptx, resty
+    return ptx.decode('utf-8'), resty
+
+
+def compile_ptx_for_current_device(pyfunc, args, debug=False, device=False,
+                                   fastmath=False, opt=True):
+    """Compile a Python function to PTX for a given set of argument types for
+    the current device's compute capabilility. This calls :func:`compile_ptx`
+    with an appropriate ``cc`` value for the current device."""
+    cc = get_current_device().compute_capability
+    return compile_ptx(pyfunc, args, debug=-debug, device=device,
+                       fastmath=fastmath, cc=cc, opt=True)
 
 
 class DeviceFunctionTemplate(object):
