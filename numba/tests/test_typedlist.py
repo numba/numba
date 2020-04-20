@@ -1014,6 +1014,20 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         # Need to compare the nested arrays
         self.assertTrue(np.all(expected[0] == got[0]))
 
+    def test_array_pop_from_single_value_list(self):
+        @njit
+        def foo():
+            l = List((np.zeros((1,)),))
+            l.pop()
+            return l
+
+        expected, got = foo.py_func(), foo()
+        # Need to compare the nested arrays
+        self.assertEqual(len(expected), 0)
+        self.assertEqual(len(got), 0)
+        # FIXME comparison of empty array-typed lists fails
+        # self.assertEqual(expected, got)
+
     def test_jitclass_as_item_in_list(self):
 
         spec = [
