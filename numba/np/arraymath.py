@@ -695,7 +695,9 @@ def iscomplexobj(x):
         raise TypingError(msg.format(x.key, x.key))
     dt = determine_dtype(x)
     iscmplx = np.issubdtype(dt, np.complexfloating)
-    return lambda x: iscmplx
+    def impl(x):
+        return iscmplx
+    return impl
 
 
 @overload(np.isrealobj)
