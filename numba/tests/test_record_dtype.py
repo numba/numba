@@ -12,7 +12,6 @@ from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
 from numba.tests.support import TestCase
-from numba.typed import List
 
 _FS = ('e', 'f')
 
@@ -1095,9 +1094,9 @@ class TestSubtyping(TestCase):
         """
         njit_sig = njit(types.float64(typeof(self.a_rec1)))
         functions = [
-            njit(self.func), # jitted function with open njit
-            njit_sig(self.func) # jitted fc with closed signature
-            ]
+            njit(self.func),  # jitted function with open njit
+            njit_sig(self.func)  # jitted fc with closed signature
+        ]
 
         for fc in functions:
             fc(self.a_rec1)
@@ -1117,7 +1116,7 @@ class TestSubtyping(TestCase):
         foo((self.a_rec1, self.a_rec2))
         foo.disable_compile()
         y = foo((self.ab_rec1, self.ab_rec2))
-        self.assertEqual(2*self.value+1, y)
+        self.assertEqual(2 * self.value + 1, y)
 
     def test_array_field(self):
         """
@@ -1148,7 +1147,6 @@ class TestSubtyping(TestCase):
         @njit
         def foo(rec):
             return rec['c']
-
 
         foo(c_rec1)
         foo.disable_compile()
