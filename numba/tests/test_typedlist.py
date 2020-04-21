@@ -619,6 +619,7 @@ class TestNoneType(MemoryLeakMixin, TestCase):
             return njit(context["bar"])
         for line1, line2 in (
                 ("lst.append(None)", "lst.pop()"),
+                ("lst.append(None)", "del lst[0]"),
                 ("lst.append(None)", "lst.count(None)"),
                 ("lst.append(None)", "lst.index(None)"),
                 ("lst.append(None)", "lst.insert(0, None)"),

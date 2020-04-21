@@ -900,19 +900,36 @@ def impl_pop(l, index=-1):
         def impl(l, index=-1):
             if len(l) == 0:
                 raise IndexError("pop from empty list")
-            index = handle_index(l, index)
-            castedindex = _cast(index, indexty)
-            status, item = _list_pop(l, castedindex)
-            if status == ListStatus.LIST_OK:
-                return _nonoptional(item)
-            elif status == ListStatus.LIST_ERR_IMMUTABLE:
-                raise ValueError("list is immutable")
-            else:
-                raise AssertionError("internal list error during pop")
+            cindex = _cast(handle_index(l, index), indexty)
+            item = l[cindex]
+            del l[cindex]
+            return item
         return impl
 
     else:
         raise TypingError("argument for pop must be an integer")
+
+
+@intrinsic
+def _list_delitem(typingctx, l, index):
+    resty = types.int32
+    sig = resty(l, index)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_list_type, ll_ssize_t],
+        )
+        [tl, tindex] = sig.args
+        [l, index] = args
+        fn = builder.module.get_or_insert_function(
+            fnty, name='numba_list_delitem')
+
+        lp = _container_get_data(context, builder, tl, l)
+        status = builder.call(fn, [lp, index])
+        return status
+
+    return sig, codegen
 
 
 @intrinsic
@@ -952,10 +969,18 @@ def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_none_typed(l, 'delitem')
+
     if index in index_types:
         def integer_impl(l, index):
-            l.pop(index)
-
+            cindex = _cast(handle_index(l, index), INDEXTY)
+            status = _list_delitem(l, cindex)
+            if status == ListStatus.LIST_OK:
+                return
+            elif status == ListStatus.LIST_ERR_IMMUTABLE:
+                raise ValueError("list is immutable")
+            else:
+                raise AssertionError("internal list error during delitem")
         return integer_impl
 
     elif isinstance(index, types.SliceType):
