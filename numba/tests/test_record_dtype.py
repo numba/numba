@@ -1085,7 +1085,7 @@ class TestSubtyping(TestCase):
         self.a_rec1 = np.array([1], dtype=a_dtype)[0]
         self.a_rec2 = np.array([2], dtype=a_dtype)[0]
         self.ab_rec1 = np.array([(self.value, 3)], dtype=ab_dtype)[0]
-        self.ab_rec2 = np.array([(self.value+1, 3)], dtype=ab_dtype)[0]
+        self.ab_rec2 = np.array([(self.value + 1, 3)], dtype=ab_dtype)[0]
         self.func = lambda rec: rec['a']
 
     def test_common_field(self):
