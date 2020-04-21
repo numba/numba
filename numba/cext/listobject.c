@@ -402,7 +402,7 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
 /* Delete a single item.
  *
  * lp: a list
- * index: the index of the item to get
+ * index: the index of the item to delete
  *
  * */
 int
