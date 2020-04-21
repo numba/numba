@@ -47,39 +47,61 @@ class Numpy_rules_ufunc(AbstractTemplate):
             msg = "ufunc '{0}': too many arguments ({1} found, {2} maximum)"
             raise TypingError(msg=msg.format(ufunc.__name__, len(args), nargs))
 
-        args = [a.as_array if isinstance(a, types.ArrayCompatible) else a
-                for a in args]
-        arg_ndims = [a.ndim if isinstance(a, types.ArrayCompatible) else 0
-                     for a in args]
-        ndims = max(arg_ndims)
+        # add the implied `None` output arguments
+        args = args + (types.none,)*(nargs - len(args))
+
+        # inputs must be arrays, and are convertible
+        in_args = [
+            (a, a.as_array) if isinstance(a, types.ArrayCompatible) else (a, None)
+            for a in args[:nin]
+        ]
 
         # explicit outputs must be arrays (no explicit scalar return values supported)
-        explicit_outputs = args[nin:]
+        out_args = []
+        for out in args[nin:]:
+            out_arr = out
+            if isinstance(out, types.Optional):
+                out_arr = out_arr.type
+            if isinstance(out_arr, types.ArrayCompatible):
+                pass
+            elif isinstance(out_arr, types.NoneType):
+                out_arr = None
+            else:
+                msg = "ufunc '{0}' called with an explicit output that is not an array"
+                raise TypingError(msg=msg.format(ufunc.__name__))
+
+            out_args.append((out, out_arr))
+
+
+        ndims = max(in_arr.ndim if in_arr is not None else 0 for in_, in_arr in in_args)
+
+        args = in_args + out_args
 
         # all the explicit outputs must match the number max number of dimensions
-        if not all(d == ndims for d in arg_ndims[nin:]):
+        if not all(out_arr.ndim == ndims for out, out_arr in out_args if out_arr is not None):
             msg = "ufunc '{0}' called with unsuitable explicit output arrays."
             raise TypingError(msg=msg.format(ufunc.__name__))
 
-        if not all(isinstance(output, types.ArrayCompatible)
-                   for output in explicit_outputs):
-            msg = "ufunc '{0}' called with an explicit output that is not an array"
-            raise TypingError(msg=msg.format(ufunc.__name__))
-
-        if not all(output.mutable for output in explicit_outputs):
+        if not all(out_arr.mutable for out, out_arr in out_args if out_arr is not None):
             msg = "ufunc '{0}' called with an explicit output that is read-only"
             raise TypingError(msg=msg.format(ufunc.__name__))
 
-        # find the kernel to use, based only in the input types (as does NumPy)
-        base_types = [x.dtype if isinstance(x, types.ArrayCompatible) else x
-                      for x in args]
+        # find the kernel to use (as does NumPy)
+        base_types = [
+            arg_arr.dtype if arg_arr is not None else arg
+            for arg, arg_arr in in_args
+        ] + [
+            arg_arr.dtype if arg_arr is not None else None
+            for arg, arg_arr in out_args
+        ]
 
         # Figure out the output array layout, if needed.
         layout = None
-        if ndims > 0 and (len(explicit_outputs) < ufunc.nout):
+        if any(out_arr is None for out, out_arr in out_args):
             layout = 'C'
-            layouts = [x.layout if isinstance(x, types.ArrayCompatible) else ''
-                       for x in args]
+            layouts = [
+                arg_arr.layout if arg_arr is not None else ''
+                for arg, arg_arr in args]
 
             # Prefer C contig if any array is C contig.
             # Next, prefer F contig.
@@ -87,7 +109,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
             if 'C' not in layouts and 'F' in layouts:
                 layout = 'F'
 
-        return base_types, explicit_outputs, ndims, layout
+        return base_types, out_args, ndims, layout
 
     @property
     def ufunc(self):
@@ -107,30 +129,37 @@ class Numpy_rules_ufunc(AbstractTemplate):
             raise TypingError(msg=msg.format(ufunc.__name__, ufunc_loop.ufunc_sig))
 
         # if there is any explicit output type, check that it is valid
-        explicit_outputs_np = [as_dtype(tp.dtype) for tp in explicit_outputs]
+        explicit_outputs_np = [
+            as_dtype(out_arr.dtype) if out_arr is not None else None
+            for out, out_arr in explicit_outputs
+        ]
 
         # Numpy will happily use unsafe conversions (although it will actually warn)
-        if not all (np.can_cast(fromty, toty, 'unsafe') for (fromty, toty) in
-                    zip(ufunc_loop.numpy_outputs, explicit_outputs_np)):
+        if not all (
+            np.can_cast(fromty, toty, 'unsafe')
+            for (fromty, toty) in zip(ufunc_loop.numpy_outputs, explicit_outputs_np)
+            if toty is not None
+        ):
             msg = "ufunc '{0}' can't cast result to explicit result type"
             raise TypingError(msg=msg.format(ufunc.__name__))
 
         # A valid loop was found that is compatible. The result of type inference should
         # be based on the explicit output types, and when not available with the type given
         # by the selected NumPy loop
-        out = list(explicit_outputs)
-        implicit_output_count = ufunc.nout - len(explicit_outputs)
-        if implicit_output_count > 0:
+        out_tys = []
+        for (out, out_arr), out_loop in zip(explicit_outputs, ufunc_loop.outputs):
+            if out_arr is not None:
+                out_tys.append(out_arr)
             # XXX this is sometimes wrong for datetime64 and timedelta64,
             # as ufunc_find_matching_loop() doesn't do any type inference
-            ret_tys = ufunc_loop.outputs[-implicit_output_count:]
-            if ndims > 0:
+            elif ndims == 0:
+                out_tys.append(out_loop)
+            else:
                 assert layout is not None
-                ret_tys = [types.Array(dtype=ret_ty, ndim=ndims, layout=layout)
-                           for ret_ty in ret_tys]
-                ret_tys = [resolve_output_type(self.context, args, ret_ty)
-                           for ret_ty in ret_tys]
-            out.extend(ret_tys)
+                out_arr = types.Array(dtype=out_loop, ndim=ndims, layout=layout)
+                out_arr = resolve_output_type(self.context, args, out_arr)
+
+            out_tys.append(out_arr)
 
         return _ufunc_loop_sig(out, args)
 

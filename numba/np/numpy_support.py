@@ -239,7 +239,6 @@ def select_array_wrapper(inputs):
             selected_index = index
             max_prio = ty.array_priority
 
-    assert selected_index is not None
     return selected_index
 
 
@@ -252,7 +251,12 @@ def resolve_output_type(context, inputs, formal_output):
     This uses a mechanism compatible with Numpy's __array_priority__ /
     __array_wrap__.
     """
-    selected_input = inputs[select_array_wrapper(inputs)]
+    selected_index = select_array_wrapper(inputs)
+    if selected_index is None:
+        # no input arrays, leave the output unchanged
+        return formal_output
+
+    selected_input = inputs[selected_index]
     args = selected_input, formal_output
     sig = context.resolve_function_type('__array_wrap__', args, {})
     if sig is None:
@@ -367,7 +371,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     except NotImplementedError:
         return None
     try:
-        np_output_types = [as_dtype(x) for x in output_types]
+        np_output_types = [as_dtype(x) if x is not None else None for x in output_types]
     except NotImplementedError:
         return None
 
@@ -382,12 +386,9 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         except when the letter designates a datetime64 or timedelta64,
         in which case the type is taken from *numba_types*.
         """
-        assert len(ufunc_letters) >= len(numba_types)
-        types = [tp if letter in 'mM' else from_dtype(np.dtype(letter))
+        assert len(ufunc_letters) == len(numba_types)
+        types = [tp if letter in 'mM' and tp is not None else from_dtype(np.dtype(letter))
                  for tp, letter in zip(numba_types, ufunc_letters)]
-        # Add missing types (presumably implicit outputs)
-        types += [from_dtype(np.dtype(letter))
-                  for letter in ufunc_letters[len(numba_types):]]
         return types
 
     def set_output_dt_units(inputs, outputs, ufunc_inputs):
@@ -470,6 +471,8 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         if found:
             # Can we cast the inner result to the outer result type?
             for outer, inner in zip(np_output_types, ufunc_outputs):
+                if outer is None:
+                    continue
                 if (outer.char not in 'mM' and not
                     ufunc_can_cast(inner, outer.char,
                                    has_mixed_inputs, 'same_kind')):

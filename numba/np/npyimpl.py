@@ -479,12 +479,14 @@ def register_ufunc_kernel(ufunc, kernel):
         return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
 
     _any = types.Any
-    in_args = (_any,) * ufunc.nin
+
+    in_tys = [_any] * ufunc.nin
+    out_tys = [types.Optional(types.Array)] * ufunc.nout
 
     # Add a lowering for each out argument that is missing.
-    for n_explicit_out in range(ufunc.nout + 1):
-        out_args = (types.Array,) * n_explicit_out
-        lower(ufunc, *in_args, *out_args)(do_ufunc)
+    lower(ufunc, *in_tys, *out_tys)(ufunc_outputs)
+    # (array or scalar)
+    lower(ufunc, *in_tys)(ufunc_no_explicit_output)
 
     return kernel
 
