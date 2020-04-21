@@ -266,12 +266,6 @@ class TestListImpl(TestCase):
             ctypes.c_int,
             [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
         )
-        # numba_list_pop(NB_List *l,  Py_ssize_t i, char *out)
-        self.numba_list_pop = wrap(
-            'list_pop',
-            ctypes.c_int,
-            [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
-        )
         # numba_list_delitem(NB_List *l,  Py_ssize_t i)
         self.numba_list_delitem = wrap(
             'list_delitem',

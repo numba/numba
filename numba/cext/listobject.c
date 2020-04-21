@@ -32,8 +32,8 @@
  * - Appending to the list    numba_list_append
  * - Getting an item          numba_list_setitem
  * - Setting an item          numba_list_getitem
- * - Poping an item           numba_list_pop
  * - Resizing the list        numba_list_resize
+ * - Deleting an item         numba_list_delitem
  * - Deleting a slice         numba_list_delete_slice
  *
  * As you can see, only a single function for slices is implemented. The rest
@@ -329,48 +329,6 @@ numba_list_append(NB_List *lp, const char *item) {
     return LIST_OK;
 }
 
-/* Pop (get and delete) an item from a list at a given location.
- *
- * lp: a list
- * index: the index of the item to pop
- * out: a pointer to hold the item
- */
-int
-numba_list_pop(NB_List *lp, Py_ssize_t index, char *out) {
-    char *loc, *new_loc;
-    int result;
-    // check for mutability
-    if (!lp->is_mutable) {
-        return LIST_ERR_IMMUTABLE;
-    }
-    Py_ssize_t leftover_bytes;
-    // check index is valid
-    // FIXME: this can be (and probably is) checked at the compiler level
-    if (!valid_index(index, lp->size)) {
-        return LIST_ERR_INDEX;
-    }
-    // obtain item and decref if needed
-    loc = lp->items + lp->item_size * index;
-    copy_item(lp, out, loc);
-    list_decref_item(lp, loc);
-    if (index != lp->size - 1) {
-        // pop from somewhere other than the end, incur the dreaded memory copy
-        leftover_bytes = (lp->size - 1 - index) * lp->item_size;
-        new_loc = lp->items + (lp->item_size * (index + 1));
-        // use memmove instead of memcpy since we may be dealing with
-        // overlapping regions of memory and the behaviour of memcpy is
-        // undefined in such situation (C99).
-        memmove(loc, new_loc, leftover_bytes);
-    }
-    // finally, shrink list by one
-    result = numba_list_resize(lp, lp->size - 1);
-    if(result < LIST_OK) {
-         // Since we are decreasing the size, this should never happen
-        return result;
-    }
-    return LIST_OK;
-
-}
 /* Resize a list.
  *
  * lp: a list

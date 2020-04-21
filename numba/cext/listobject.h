@@ -103,9 +103,6 @@ numba_list_getitem(NB_List *lp, Py_ssize_t index, char *out);
 NUMBA_EXPORT_FUNC(int)
 numba_list_append(NB_List *lp, const char *item);
 
-NUMBA_EXPORT_FUNC(int)
-numba_list_pop(NB_List *lp, Py_ssize_t index, char *out);
-
 // FIXME: should this be public?
 NUMBA_EXPORT_FUNC(int)
 numba_list_resize(NB_List *lp, Py_ssize_t newsize);
