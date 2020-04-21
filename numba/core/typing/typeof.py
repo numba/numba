@@ -103,11 +103,16 @@ def _typeof_type(val, c):
     if issubclass(val, List):
         return types.TypeRef(types.ListType)
 
-    if val in (int, float, complex):
-        return typeof_impl(val(0), c)
+    if c.purpose == Purpose.argument:
+        # We only return for argument contexts.
+        # For situations like x = int(y), we want typeof(int) to return None,
+        # so that Context.resolve_value_type calls Context._get_global_type.
 
-    if val is str:
-        return typeof_impl(str("numba"), c)
+        if val in (int, float, complex):
+            return typeof_impl(val(0), c)
+
+        if val is str:
+            return typeof_impl(str("numba"), c)
 
 
 @typeof_impl.register(py_typing.GenericMeta)
