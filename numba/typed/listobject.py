@@ -661,24 +661,11 @@ def handle_slice(l, s):
 
 @intrinsic
 def _list_getitem(typingctx, l, index):
-    return _list_getitem_pop_helper(typingctx, l, index, 'getitem')
-
-
-@intrinsic
-def _list_pop(typingctx, l, index):
-    return _list_getitem_pop_helper(typingctx, l, index, 'pop')
-
-
-def _list_getitem_pop_helper(typingctx, l, index, op):
-    """Wrap numba_list_getitem and numba_list_pop
+    """Wrap numba_list_getitem
 
     Returns 2-tuple of (int32, ?item_type)
 
-    This is a helper that is parametrized on the type of operation, which can
-    be either 'pop' or 'getitem'. This is because, signature wise, getitem and
-    pop and are the same.
     """
-    assert(op in ("pop", "getitem"))
     IS_NOT_NONE = not isinstance(l.item_type, types.NoneType)
     resty = types.Tuple([types.int32,
                          types.Optional(l.item_type
@@ -694,7 +681,7 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
         [tl, tindex] = sig.args
         [l, index] = args
         fn = builder.module.get_or_insert_function(
-            fnty, name='numba_list_{}'.format(op))
+            fnty, name='numba_list_getitem')
 
         dm_item = context.data_model_manager[tl.item_type]
         ll_item = context.get_data_type(tl.item_type)
