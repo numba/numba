@@ -12,7 +12,7 @@ from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
 from numba.tests.support import TestCase
-
+from numba.typed import List
 
 _FS = ('e', 'f')
 
@@ -1079,37 +1079,103 @@ class TestRecordArrayGetItem(unittest.TestCase):
 
 
 class TestSubtyping(TestCase):
+    def setUp(self):
+        self.value = 2
+        a_dtype = np.dtype([('a', 'f8')])
+        ab_dtype = np.dtype([('a', 'f8'), ('b', 'f8')])
+        self.a_rec1 = np.array([1], dtype=a_dtype)[0]
+        self.a_rec2 = np.array([2], dtype=a_dtype)[0]
+        self.ab_rec1 = np.array([(self.value, 3)], dtype=ab_dtype)[0]
+        self.ab_rec2 = np.array([(self.value+1, 3)], dtype=ab_dtype)[0]
+        self.func = lambda rec: rec['a']
+
     def test_common_field(self):
         """
         Test that subtypes do not require new compilations
         """
-        a = 2
-        arr1 = np.array([1], dtype=[('a', 'f8')])
-        arr2 = np.array([(a, 3)], dtype=[('a', 'f8'), ('b', 'f8')])
+        njit_sig = njit(types.float64(typeof(self.a_rec1)))
+        functions = [
+            njit(self.func), # jitted function with open njit
+            njit_sig(self.func) # jitted fc with closed signature
+            ]
+
+        for fc in functions:
+            fc(self.a_rec1)
+            fc.disable_compile()
+            y = fc(self.ab_rec1)
+            self.assertEqual(self.value, y)
+
+    def test_tuple_of_records(self):
+
+        @njit
+        def foo(rec_tup):
+            x = 0
+            for i in range(len(rec_tup)):
+                x += rec_tup[i]['a']
+            return x
+
+        foo((self.a_rec1, self.a_rec2))
+        foo.disable_compile()
+        y = foo((self.ab_rec1, self.ab_rec2))
+        self.assertEqual(2*self.value+1, y)
+
+    def test_array_field(self):
+        """
+        Tests subtyping with array fields
+        """
+        rec1 = np.empty(1, dtype=[('a', 'f8', (4,))])[0]
+        rec1['a'][0] = 1
+        rec2 = np.empty(1, dtype=[('a', 'f8', (4,)), ('b', 'f8')])[0]
+        rec2['a'][0] = self.value
 
         @njit
         def foo(rec):
-            return rec['a']
+            return rec['a'][0]
 
-        foo(arr1[0])
+        foo(rec1)
         foo.disable_compile()
-        y = foo(arr2[0])
-        self.assertEqual(a, y)
-
-    def test_common_field_compiled(self):
-        """
-        Test that subtypes can work with declared signatures
-        """
-        a = 2
-        rec1 = np.array([1], dtype=[('a', 'f8')])[0]
-        rec2 = np.array([(a, 3)], dtype=[('a', 'f8'), ('b', 'f8')])[0]
-
-        @njit(types.float64(typeof(rec1)))
-        def foo(rec):
-            return rec['a']
-
         y = foo(rec2)
-        self.assertEqual(a, y)
+        self.assertEqual(self.value, y)
+
+    def test_no_subtyping1(self):
+        """
+        test that conversion rules don't allow subtypes with different field
+        names
+        """
+        c_dtype = np.dtype([('c', 'f8')])
+        c_rec1 = np.array([1], dtype=c_dtype)[0]
+
+        @njit
+        def foo(rec):
+            return rec['c']
+
+
+        foo(c_rec1)
+        foo.disable_compile()
+        with self.assertRaises(TypeError):
+            foo(self.a_rec1)
+
+    def test_no_subtyping2(self):
+        """
+        test that conversion rules don't allow smaller records as subtypes
+        """
+        jit_fc = njit(self.func)
+        jit_fc(self.ab_rec1)
+        jit_fc.disable_compile()
+        with self.assertRaises(TypeError):
+            jit_fc(self.a_rec1)
+
+    def test_no_subtyping3(self):
+        """
+        test that conversion rules don't allow records with fields with same
+        name but incompatible type
+        """
+        other_a_rec = np.array(['a'], dtype=np.dtype([('a', 'U25')]))[0]
+        jit_fc = njit(self.func)
+        jit_fc(self.a_rec1)
+        jit_fc.disable_compile()
+        with self.assertRaises(TypeError):
+            jit_fc(other_a_rec)
 
 
 if __name__ == '__main__':

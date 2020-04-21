@@ -211,17 +211,11 @@ class Record(Type):
         """
         if isinstance(other, Record):
             if len(other.fields) > len(self.fields):
-                return Conversion.nil
-            # for other_fd_name, self_fd_name in zip(other.fields, self.fields):
-            #     other_fd_info = other.fields[other_fd_name]
-            #     self_fd_info = self.fields[self_fd_name]
-            #     if not (other_fd_name == self_fd_name and
-            #             other_fd_info == self_fd_info):
-            #         return Conversion.nil
+                return
             for other_fd, self_fd in zip(other.fields.items(),
                                          self.fields.items()):
                 if not other_fd == self_fd:
-                    return Conversion.nil
+                    return
             return Conversion.safe
 
 
