@@ -441,6 +441,22 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
     return LIST_OK;
 }
 
+/* Delete a single item.
+ *
+ * lp: a list
+ * index: the index of the item to get
+ *
+ * */
+int
+numba_list_delitem(NB_List *lp, Py_ssize_t index) {
+    // check index is valid
+    // FIXME: this can be (and probably is) checked at the compiler level
+    if (!valid_index(index, lp->size)) {
+        return LIST_ERR_INDEX;
+    }
+    return numba_list_delete_slice(lp, index, index+1, 1);
+}
+
 /* Delete a slice
  *
  * start: the start index of ths slice
@@ -679,16 +695,18 @@ numba_test_list(void) {
     CHECK(status == LIST_OK);
     CHECK(memcmp(got_item, "pqr", 4) == 0);
 
-    // pop 1st item, check item shift
-    status = numba_list_pop(lp, 0, got_item);
+    // get and del 1st item, check item shift
+    status = numba_list_getitem(lp, 0, got_item);
+    status = numba_list_delitem(lp, 0);
     CHECK(status == LIST_OK);
     CHECK(lp->size == 4);
     CHECK(lp->allocated == 8);
     CHECK(memcmp(got_item, "pqr", 4) == 0);
     CHECK(memcmp(lp->items, "def\x00ghi\x00jkl\x00mno\x00", 16) == 0);
 
-    // pop last (4th) item, no shift since only last item affected
-    status = numba_list_pop(lp, 3, got_item);
+    // get and del last (4th) item, no shift since only last item affected
+    status = numba_list_getitem(lp, 3, got_item);
+    status = numba_list_delitem(lp, 3);
     CHECK(status == LIST_OK);
     CHECK(lp->size == 3);
     CHECK(lp->allocated == 6);  // this also shrinks the allocation
@@ -703,7 +721,7 @@ numba_test_list(void) {
     // ensure that any attempts to mutate an immutable list fail
     CHECK(numba_list_setitem(lp, 0, "zzz") == LIST_ERR_IMMUTABLE);
     CHECK(numba_list_append(lp, "zzz") == LIST_ERR_IMMUTABLE);
-    CHECK(numba_list_pop(lp, 0, got_item) == LIST_ERR_IMMUTABLE);
+    CHECK(numba_list_delitem(lp, 0) == LIST_ERR_IMMUTABLE);
     CHECK(numba_list_resize(lp, 23) == LIST_ERR_IMMUTABLE);
     CHECK(numba_list_delete_slice(lp, 0, 3, 1) == LIST_ERR_IMMUTABLE);
 
@@ -740,7 +758,7 @@ numba_test_list(void) {
     // free existing list
     numba_list_free(lp);
 
-    // test growth upon append and shrink during pop
+    // test growth upon append and shrink during delitem
     status = numba_list_new(&lp, 1, 0);
     CHECK(status == LIST_OK);
     CHECK(lp->item_size == 1);
@@ -774,10 +792,10 @@ numba_test_list(void) {
     test_items_2  = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10";
     CHECK(memcmp(lp->items, test_items_2, 17) == 0);
 
-    // Now, pop them again and check that list shrinks
+    // Now, delete them again and check that list shrinks
     for (i = 17; i > 0 ; i--) {
         switch(i) {
-             // Check the allocation before pop
+             // Check the allocation before delitem
              case 17:  CHECK(lp->allocated == 25); break;
              case 12:  CHECK(lp->allocated == 25); break;
              case 9:   CHECK(lp->allocated == 18); break;
@@ -787,7 +805,8 @@ numba_test_list(void) {
              case 2:   CHECK(lp->allocated == 5); break;
              case 1:   CHECK(lp->allocated == 4); break;
         }
-        status = numba_list_pop(lp, i-1, got_item);
+        status = numba_list_getitem(lp, i-1, got_item);
+        status = numba_list_delitem(lp, i-1);
         CHECK(status == LIST_OK);
         switch(i) {
              // Check that the shrink happened accordingly

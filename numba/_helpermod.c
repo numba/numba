@@ -157,6 +157,7 @@ build_c_helpers_dict(void)
     declmethod(list_getitem);
     declmethod(list_append);
     declmethod(list_pop);
+    declmethod(list_delitem);
     declmethod(list_delete_slice);
     declmethod(list_iter_sizeof);
     declmethod(list_iter);
