@@ -1111,5 +1111,6 @@ class TestSubtyping(TestCase):
         y = foo(rec2)
         self.assertEqual(a, y)
 
+
 if __name__ == '__main__':
     unittest.main()
