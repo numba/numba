@@ -472,11 +472,31 @@ def unify_function_types(numba_types):
     return (dtype,) * len(numba_types)
 
 
-def unified_function_type(numba_types):
-    """Return unified function type. When not possible, return None.
+def unified_function_type(numba_types, require_precise=True):
+    """Returns a unified Numba function type if possible.
 
-    If any of the Numba function types is a Dispatcher type, the
-    unified function type will be UndefinedFunctionType instance.
+    Parameters
+    ----------
+    numba_types : tuple
+      Numba type instances.
+    require_precise : bool
+      If True, the returned Numba function type must be precise.
+
+    Returns
+    -------
+    typ : {numba.core.types.Type, None}
+      A unified Numba function type. Or ``None`` when the Numba types
+      cannot be unified, e.g. when the ``numba_types`` contains at
+      least two different Numba function type instances.
+
+    If ``numba_types`` contains a Numba dispatcher type, the unified
+    Numba function type will be an imprecise ``UndefinedFunctionType``
+    instance, or None when ``require_precise=True`` is specified.
+
+    Specifying ``require_precise=False`` enables unifying imprecise
+    Numba dispatcher instances when used in tuples or if-then branches
+    when the precise Numba function cannot be determined on the first
+    occurrence that is not a call expression.
     """
     from numba.core.errors import NumbaExperimentalFeatureWarning
 
@@ -522,7 +542,8 @@ def unified_function_type(numba_types):
                     assert function == t
         else:
             return
-
+    if require_precise and (function is None or undefined_function is not None):
+        return
     if function is not None:
         if undefined_function is not None:
             assert function.nargs == undefined_function.nargs

@@ -397,7 +397,7 @@ class List(MutableSequence):
 
     def __repr__(self):
         body = str(self)
-        prefix = str(self._list_type)
+        prefix = str(self._list_type) if self._typed else "ListType[Undefined]"
         return "{prefix}({body})".format(prefix=prefix, body=body)
 
 

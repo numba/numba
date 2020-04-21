@@ -45,11 +45,11 @@ class TestJitErrors(CUDATestCase):
         self.assertIn("launch configuration was not specified",
                       str(raises.exception))
 
-    def test_unconfigured_cudakernel(self):
+    def test_unconfigured_typed_cudakernel(self):
         kernfunc = cuda.jit("void(int32)")(noop)
         self._test_unconfigured(kernfunc)
 
-    def test_unconfigured_autojitcudakernel(self):
+    def test_unconfigured_untyped_cudakernel(self):
         kernfunc = cuda.jit(noop)
         self._test_unconfigured(kernfunc)
 

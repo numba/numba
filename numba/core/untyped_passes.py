@@ -1054,7 +1054,10 @@ class MixedContainerUnroller(FunctionPass):
                                                     stmt.value.value)
                                         if dfn is None:
                                             continue
-                                        args = getattr(dfn, 'args', False)
+                                        try:
+                                            args = getattr(dfn, 'args', False)
+                                        except KeyError:
+                                            continue
                                         if not args:
                                             continue
                                         if not args[0] == arg:
@@ -1127,7 +1130,10 @@ class MixedContainerUnroller(FunctionPass):
                         # try a couple of spellings... a[i] and ref(a)[i]
                         if stmt.value.value != getitem_target:
                             dfn = func_ir.get_definition(stmt.value.value)
-                            args = getattr(dfn, 'args', False)
+                            try:
+                                args = getattr(dfn, 'args', False)
+                            except KeyError:
+                                continue
                             if not args:
                                 continue
                             if not args[0] == getitem_target:
