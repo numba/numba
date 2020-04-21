@@ -407,12 +407,40 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
  * */
 int
 numba_list_delitem(NB_List *lp, Py_ssize_t index) {
+    // FIXME the following line is the lazy implementation
+    //result = numba_list_delete_slice(lp, index, index+1, 1);
+    int result;
+    char *loc, *new_loc;
+    Py_ssize_t leftover_bytes;
+    // check for mutability
+    if (!lp->is_mutable) {
+        return LIST_ERR_IMMUTABLE;
+    }
     // check index is valid
     // FIXME: this can be (and probably is) checked at the compiler level
     if (!valid_index(index, lp->size)) {
         return LIST_ERR_INDEX;
     }
-    return numba_list_delete_slice(lp, index, index+1, 1);
+    // obtain item and decref if needed
+    loc = lp->items + lp->item_size * index;
+    list_decref_item(lp, loc);
+    if (index != lp->size - 1) {
+        // delitem from somewhere other than the end, incur the dreaded memory copy
+        leftover_bytes = (lp->size - 1 - index) * lp->item_size;
+        new_loc = lp->items + (lp->item_size * (index + 1));
+        // use memmove instead of memcpy since we may be dealing with
+        // overlapping regions of memory and the behaviour of memcpy is
+        // undefined in such situation (C99).
+        memmove(loc, new_loc, leftover_bytes);
+    }
+    // finally, shrink list by one
+    result = numba_list_resize(lp, lp->size - 1);
+    if(result < LIST_OK) {
+         // Since we are decreasing the size, this should never happen
+        return result;
+    }
+    return LIST_OK;
+
 }
 
 /* Delete a slice
