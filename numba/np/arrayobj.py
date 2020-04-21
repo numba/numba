@@ -4333,15 +4333,27 @@ def np_array(context, builder, sig, args):
     seqty = sig.args[0]
     seq = args[0]
 
-    shapes = compute_sequence_shape(context, builder, ndim, seqty, seq)
-    assert len(shapes) == ndim
+    if isinstance(seqty, types.Array):
+        # Redirect to array.astype to copy the input into the correct dtype.
+        dtype = arrty.dtype
 
-    check_sequence_shape(context, builder, seqty, seq, shapes)
-    arr = _empty_nd_impl(context, builder, arrty, shapes)
-    assign_sequence_to_array(context, builder, arr.data, shapes, arr.strides,
-                             arrty, seqty, seq)
+        def call_astype(ary):
+            return ary.astype(dtype)
 
-    return impl_ret_new_ref(context, builder, sig.return_type, arr._getvalue())
+        sig = arrty(seqty)
+        args = [seq]
+        return context.compile_internal(builder, call_astype, sig, args)
+    else:
+        # Handle non-Array Sequences
+        shapes = compute_sequence_shape(context, builder, ndim, seqty, seq)
+        assert len(shapes) == ndim
+
+        check_sequence_shape(context, builder, seqty, seq, shapes)
+        arr = _empty_nd_impl(context, builder, arrty, shapes)
+        assign_sequence_to_array(context, builder, arr.data, shapes,
+                                 arr.strides, arrty, seqty, seq)
+        return impl_ret_new_ref(context, builder, sig.return_type,
+                                arr._getvalue())
 
 
 def _normalize_axis(context, builder, func_name, ndim, axis):

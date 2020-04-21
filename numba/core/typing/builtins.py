@@ -751,6 +751,9 @@ class NumberClassAttribute(AttributeTemplate):
                 sig = self.context.resolve_function_type(
                     np.array, (val,), {'dtype': types.DType(ty)})
                 return sig.return_type
+            elif isinstance(val, types.Array):
+                # An array cast
+                return val.copy(dtype=ty)
             else:
                 # Scalar constructor, e.g. np.int32(42)
                 return ty

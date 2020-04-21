@@ -400,7 +400,7 @@ def bool_sequence(x):
         types.UnicodeType,
         types.Set,
     )
-    
+
     if isinstance(x, valid_types):
         def bool_impl(x):
             return len(x) > 0

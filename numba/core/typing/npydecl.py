@@ -494,6 +494,13 @@ class NpArray(CallableTemplate):
 
     def generic(self):
         def typer(object, dtype=None):
+            # Handle Array
+            if isinstance(object, types.Array):
+                if dtype is None:
+                    return object.copy(dtype=dtype)
+                else:
+                    return object
+            # Handle other sequence
             ndim, seq_dtype = _parse_nested_sequence(self.context, object)
             if dtype is None:
                 dtype = seq_dtype
