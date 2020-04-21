@@ -26,7 +26,6 @@ from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
 from numba.core.errors import RequireLiteralValue, TypingError
-import operator
 
 
 def _check_blas():
