@@ -1135,7 +1135,7 @@ def impl_remove(l, item):
         casteditem = _cast(item, itemty)
         for i, n in enumerate(l):
             if casteditem == n:
-                l.pop(i)
+                del l[i]
                 return
         else:
             raise ValueError("list.remove(x): x not in list")
@@ -1150,7 +1150,7 @@ def impl_clear(l):
 
     def impl(l):
         while len(l):
-            l.pop()
+            del l[-1]
 
     return impl
 
