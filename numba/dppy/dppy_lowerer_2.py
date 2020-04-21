@@ -911,8 +911,8 @@ def _create_shape_signature(
 keep_alive_kernels = []
 
 def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, expr_arg_types,
-                loop_ranges,
-                init_block, index_var_typ, races):
+              loop_ranges,
+              init_block, index_var_typ, races):
     '''
     Adds the call to the gufunc function from the main function.
     '''
@@ -920,22 +920,6 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
     builder = lowerer.builder
     sin, sout = gu_signature
     num_dim = len(loop_ranges)
-
-    # Commonly used LLVM types and constants
-    byte_t = lc.Type.int(8)
-    byte_ptr_t = lc.Type.pointer(byte_t)
-    byte_ptr_ptr_t = lc.Type.pointer(byte_ptr_t)
-    intp_t = context.get_value_type(types.intp)
-    uintp_t = context.get_value_type(types.uintp)
-    intp_ptr_t = lc.Type.pointer(intp_t)
-    uintp_ptr_t = lc.Type.pointer(uintp_t)
-    zero = context.get_constant(types.uintp, 0)
-    one = context.get_constant(types.uintp, 1)
-    one_type = one.type
-    sizeof_intp = context.get_abi_sizeof(intp_t)
-    void_ptr_t = context.get_value_type(types.voidptr)
-    void_ptr_ptr_t = lc.Type.pointer(void_ptr_t)
-    sizeof_void_ptr = context.get_abi_sizeof(intp_t)
 
     if config.DEBUG_ARRAY_OPT:
         print("call_dppy")
@@ -952,6 +936,9 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
 #        print("cres.library", cres.library, type(cres.library))
 #        print("cres.fndesc", cres.fndesc, type(cres.fndesc))
 
+    # get dppy_cpu_portion_lowerer object
+    dppy_cpu_lowerer = DPPyCPUPortionLowerer(lowerer, cres, num_inputs)
+
     # Compute number of args ------------------------------------------------
     num_expanded_args = 0
 
@@ -963,51 +950,10 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
 
     if config.DEBUG_ARRAY_OPT:
         print("num_expanded_args = ", num_expanded_args)
-    # -----------------------------------------------------------------------
 
-    # Create functions that we need to call ---------------------------------
+    # now that we know the total number of kernel args, lets allcate a kernel_arg array
+    dppy_cpu_lowerer.allocate_kenrel_arg_array(num_expanded_args)
 
-    create_dppy_kernel_arg_fnty = lc.Type.function(
-        intp_t, [void_ptr_ptr_t, intp_t, void_ptr_ptr_t])
-    create_dppy_kernel_arg = builder.module.get_or_insert_function(create_dppy_kernel_arg_fnty,
-                                                          name="create_dp_kernel_arg")
-
-    create_dppy_kernel_arg_from_buffer_fnty = lc.Type.function(
-        intp_t, [void_ptr_ptr_t, void_ptr_ptr_t])
-    create_dppy_kernel_arg_from_buffer = builder.module.get_or_insert_function(
-                                               create_dppy_kernel_arg_from_buffer_fnty,
-                                               name="create_dp_kernel_arg_from_buffer")
-
-    create_dppy_rw_mem_buffer_fnty = lc.Type.function(
-        intp_t, [void_ptr_t, intp_t, void_ptr_ptr_t])
-    create_dppy_rw_mem_buffer = builder.module.get_or_insert_function(
-                                      create_dppy_rw_mem_buffer_fnty,
-                                      name="create_dp_rw_mem_buffer")
-
-    write_mem_buffer_to_device_fnty = lc.Type.function(
-        intp_t, [void_ptr_t, void_ptr_t, intp_t, intp_t, intp_t, void_ptr_t])
-    write_mem_buffer_to_device = builder.module.get_or_insert_function(
-                                      write_mem_buffer_to_device_fnty,
-                                      name="write_dp_mem_buffer_to_device")
-
-    read_mem_buffer_from_device_fnty = lc.Type.function(
-        intp_t, [void_ptr_t, void_ptr_t, intp_t, intp_t, intp_t, void_ptr_t])
-    read_mem_buffer_from_device = builder.module.get_or_insert_function(
-                                    read_mem_buffer_from_device_fnty,
-                                    name="read_dp_mem_buffer_from_device")
-
-    enqueue_kernel_fnty = lc.Type.function(
-        intp_t, [void_ptr_t, void_ptr_t, intp_t, void_ptr_ptr_t,
-                 intp_t, intp_ptr_t, intp_ptr_t])
-    enqueue_kernel = builder.module.get_or_insert_function(
-                                  enqueue_kernel_fnty,
-                                  name="set_args_and_enqueue_dp_kernel_auto_blocking")
-
-    kernel_arg_array = cgutils.alloca_once(
-        builder, void_ptr_t, size=context.get_constant(
-            types.uintp, num_expanded_args), name="kernel_arg_array")
-
-    # -----------------------------------------------------------------------
     ninouts = len(expr_args)
 
     def getvar_or_none(lowerer, x):
@@ -1032,229 +978,22 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
     all_val_types = [val_type_or_none(context, lowerer, x) for x in expr_args[:ninouts]]
     all_args = [loadvar_or_none(lowerer, x) for x in expr_args[:ninouts]]
 
-    # Create a NULL void * pointer for meminfo and parent parts of ndarrays.
-    null_ptr = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="null_ptr")
-    builder.store(builder.inttoptr(context.get_constant(types.uintp, 0), void_ptr_t), null_ptr)
-    #builder.store(cgutils.get_null_value(byte_ptr_t), null_ptr)
-
-    gpu_device = driver.runtime.get_gpu_device()
-    gpu_device_env = gpu_device.get_env_ptr()
-    max_work_group_size = gpu_device.get_max_work_group_size()
-    gpu_device_int = int(driver.ffi.cast("uintptr_t", gpu_device_env))
-    #print("gpu_device_env", gpu_device_env, type(gpu_device_env), gpu_device_int)
-    kernel_t_obj = cres.kernel._kernel_t_obj[0]
-    kernel_int = int(driver.ffi.cast("uintptr_t", kernel_t_obj))
-    #print("kernel_t_obj", kernel_t_obj, type(kernel_t_obj), kernel_int)
     keep_alive_kernels.append(cres)
 
     # -----------------------------------------------------------------------
     # Call clSetKernelArg for each arg and create arg array for the enqueue function.
-    cur_arg = 0
-    read_bufs_after_enqueue = []
     # Put each part of each argument into kernel_arg_array.
-#    for var, arg, llvm_arg, arg_type, gu_sig, val_type, index in zip(expr_args, all_args, all_llvm_args,
-#                                     expr_arg_types, sin + sout, all_val_types, range(len(expr_args))):
     for var, llvm_arg, arg_type, gu_sig, val_type, index in zip(expr_args, all_llvm_args,
                                      expr_arg_types, sin + sout, all_val_types, range(len(expr_args))):
         if config.DEBUG_ARRAY_OPT:
             print("var:", var, type(var),
-#                  "\n\targ:", arg, type(arg),
                   "\n\tllvm_arg:", llvm_arg, type(llvm_arg),
                   "\n\targ_type:", arg_type, type(arg_type),
                   "\n\tgu_sig:", gu_sig,
                   "\n\tval_type:", val_type, type(val_type),
                   "\n\tindex:", index)
 
-        if isinstance(arg_type, types.npytypes.Array):
-            # --------------------------------------------------------------------------------------
-            if llvm_arg is not None:
-                # Handle meminfo.  Not used by kernel so just write a null pointer.
-                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-
-                builder.call(
-                    create_dppy_kernel_arg, [null_ptr,
-                                               context.get_constant(types.uintp, sizeof_void_ptr),
-                                               kernel_arg])
-                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                cur_arg += 1
-                builder.store(builder.load(kernel_arg), dst)
-
-                #cgutils.printf(builder, "dst0 = ")
-                #cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
-                #cgutils.printf(builder, "\n")
-
-                # Handle parent.  Not used by kernel so just write a null pointer.
-                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                builder.call(
-                    create_dppy_kernel_arg, [null_ptr,
-                                               context.get_constant(types.uintp, sizeof_void_ptr),
-                                               kernel_arg])
-                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                cur_arg += 1
-                builder.store(builder.load(kernel_arg), dst)
-
-                #cgutils.printf(builder, "dst1 = ")
-                #cgutils.printf(builder, "%p->%p ", dst, builder.load(kernel_arg))
-                #cgutils.printf(builder, "\n")
-
-                # Handle array size
-                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                array_size_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 2)])
-                builder.call(
-                    create_dppy_kernel_arg, [builder.bitcast(array_size_member, void_ptr_ptr_t),
-                                               context.get_constant(types.uintp, sizeof_intp),
-                                               kernel_arg])
-                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                cur_arg += 1
-                builder.store(builder.load(kernel_arg), dst)
-                # Handle itemsize
-                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                item_size_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 3)])
-                builder.call(
-                    create_dppy_kernel_arg, [builder.bitcast(item_size_member, void_ptr_ptr_t),
-                                               context.get_constant(types.uintp, sizeof_intp),
-                                               kernel_arg])
-                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                cur_arg += 1
-                builder.store(builder.load(kernel_arg), dst)
-                # Calculate total buffer size
-                total_size = cgutils.alloca_once(builder, intp_t, size=context.get_constant(types.uintp, 1), name="total_size" + str(cur_arg))
-                builder.store(builder.sext(builder.mul(builder.load(array_size_member), builder.load(item_size_member)), intp_t), total_size)
-                # Handle data
-                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                data_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 4)])
-                buffer_name = "buffer_ptr" + str(cur_arg)
-                buffer_ptr = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name=buffer_name)
-                # env, buffer_size, buffer_ptr
-                builder.call(
-                    create_dppy_rw_mem_buffer, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
-                                                  builder.load(total_size),
-                                                  buffer_ptr])
-
-                if index < num_inputs:
-                    builder.call(
-                        write_mem_buffer_to_device, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
-                                                     builder.load(buffer_ptr),
-                                                     context.get_constant(types.uintp, 1),
-                                                     context.get_constant(types.uintp, 0),
-                                                     builder.load(total_size),
-                                                     builder.bitcast(builder.load(data_member), void_ptr_t)])
-                else:
-                    read_bufs_after_enqueue.append((buffer_ptr, total_size, data_member))
-
-                builder.call(create_dppy_kernel_arg_from_buffer, [buffer_ptr, kernel_arg])
-                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                cur_arg += 1
-                builder.store(builder.load(kernel_arg), dst)
-                # Handle shape
-                shape_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 5)])
-                for this_dim in range(arg_type.ndim):
-                    kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                    shape_entry = builder.gep(shape_member, [context.get_constant(types.int32, 0), context.get_constant(types.int32, this_dim)])
-                    builder.call(
-                        create_dppy_kernel_arg, [builder.bitcast(shape_entry, void_ptr_ptr_t),
-                                                   context.get_constant(types.uintp, sizeof_intp),
-                                                   kernel_arg])
-                    dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                    cur_arg += 1
-                    builder.store(builder.load(kernel_arg), dst)
-                # Handle strides
-                stride_member = builder.gep(llvm_arg, [context.get_constant(types.int32, 0), context.get_constant(types.int32, 6)])
-                for this_stride in range(arg_type.ndim):
-                    kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                    stride_entry = builder.gep(stride_member, [context.get_constant(types.int32, 0), context.get_constant(types.int32, this_dim)])
-                    builder.call(
-                        create_dppy_kernel_arg, [builder.bitcast(stride_entry, void_ptr_ptr_t),
-                                                   context.get_constant(types.uintp, sizeof_intp),
-                                                   kernel_arg])
-                    dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                    cur_arg += 1
-                    builder.store(builder.load(kernel_arg), dst)
-            else:
-                # --------------------------------------------------------------------------------------
-                # Handle meminfo.  Not used by kernel so just write a null pointer.
-                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-
-                builder.call(
-                    create_dppy_kernel_arg, [null_ptr,
-                                               context.get_constant(types.uintp, sizeof_void_ptr),
-                                               kernel_arg])
-                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                cur_arg += 1
-                builder.store(builder.load(kernel_arg), dst)
-
-                # Handle parent.  Not used by kernel so just write a null pointer.
-                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                builder.call(
-                    create_dppy_kernel_arg, [null_ptr,
-                                               context.get_constant(types.uintp, sizeof_void_ptr),
-                                               kernel_arg])
-                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                cur_arg += 1
-                builder.store(builder.load(kernel_arg), dst)
-
-                # Handle array size.  Equal to the max number of items in a work group.  We might not need the whole thing.
-                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                dtype_itemsize = context.get_abi_sizeof(context.get_data_type(arg_type.dtype))
-                local_size = max_work_group_size * dtype_itemsize
-                #print("dtype:", arg_type.dtype, type(arg_type.dtype), dtype_itemsize, local_size, max_work_group_size)
-
-                builder.call(
-                    create_dppy_kernel_arg, [builder.inttoptr(context.get_constant(types.uintp, max_work_group_size), void_ptr_ptr_t),
-                                               context.get_constant(types.uintp, sizeof_intp),
-                                               kernel_arg])
-                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                cur_arg += 1
-                builder.store(builder.load(kernel_arg), dst)
-                # Handle itemsize
-                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                builder.call(
-                    create_dppy_kernel_arg, [builder.inttoptr(context.get_constant(types.uintp, dtype_itemsize), void_ptr_ptr_t),
-                                               context.get_constant(types.uintp, sizeof_intp),
-                                               kernel_arg])
-                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                cur_arg += 1
-                builder.store(builder.load(kernel_arg), dst)
-                # Handle data.  Pass null for local data.
-                kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                builder.call(
-                    create_dppy_kernel_arg, [null_ptr,
-                                               context.get_constant(types.uintp, local_size),
-                                               kernel_arg])
-                dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                cur_arg += 1
-                builder.store(builder.load(kernel_arg), dst)
-                # Handle shape
-                for this_dim in range(arg_type.ndim):
-                    kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                    builder.call(
-                        create_dppy_kernel_arg, [builder.inttoptr(context.get_constant(types.uintp, max_work_group_size), void_ptr_ptr_t),
-                                                   context.get_constant(types.uintp, sizeof_intp),
-                                                   kernel_arg])
-                    dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                    cur_arg += 1
-                    builder.store(builder.load(kernel_arg), dst)
-                # Handle strides
-                for this_stride in range(arg_type.ndim):
-                    kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-                    builder.call(
-                        create_dppy_kernel_arg, [builder.inttoptr(context.get_constant(types.uintp, 1), void_ptr_ptr_t),
-                                                   context.get_constant(types.uintp, sizeof_intp),
-                                                   kernel_arg])
-                    dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-                    cur_arg += 1
-                    builder.store(builder.load(kernel_arg), dst)
-        else:
-            kernel_arg = cgutils.alloca_once(builder, void_ptr_t, size=context.get_constant(types.uintp, 1), name="kernel_arg" + str(cur_arg))
-            # Handle non-arrays
-            builder.call(
-                create_dppy_kernel_arg, [builder.bitcast(llvm_arg, void_ptr_ptr_t),
-                                           context.get_constant(types.uintp, context.get_abi_sizeof(val_type)),
-                                           kernel_arg])
-            dst = builder.gep(kernel_arg_array, [context.get_constant(types.intp, cur_arg)])
-            cur_arg += 1
-            builder.store(builder.load(kernel_arg), dst)
-
+        dppy_cpu_lowerer.process_kernel_arg(var, llvm_arg, arg_type, gu_sig, val_type, index)
     # -----------------------------------------------------------------------
 
     # loadvars for loop_ranges
@@ -1273,50 +1012,268 @@ def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, exp
         step = load_range(step)
         loop_ranges[i] = (start, stop, step)
 
-    # Package dim start and stops for auto-blocking enqueue.
-    dim_starts = cgutils.alloca_once(
-        builder, uintp_t, size=context.get_constant(
-            types.uintp, num_dim), name="dims")
-    dim_stops = cgutils.alloca_once(
-        builder, uintp_t, size=context.get_constant(
-            types.uintp, num_dim), name="dims")
-    for i in range(num_dim):
-        start, stop, step = loop_ranges[i]
-        if start.type != one_type:
-            start = builder.sext(start, one_type)
-        if stop.type != one_type:
-            stop = builder.sext(stop, one_type)
-        if step.type != one_type:
-            step = builder.sext(step, one_type)
-        # substract 1 because do-scheduling takes inclusive ranges
-        stop = builder.sub(stop, one)
-        builder.store(
-            start, builder.gep(
-                dim_starts, [
-                    context.get_constant(
-                        types.uintp, i)]))
-        builder.store(stop, builder.gep(dim_stops,
-                                        [context.get_constant(types.uintp, i)]))
+    dppy_cpu_lowerer.enqueue_kernel_and_read_back(loop_ranges)
 
-    builder.call(
-        enqueue_kernel, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
-                         builder.inttoptr(context.get_constant(types.uintp, kernel_int), void_ptr_t),
-                         context.get_constant(types.uintp, num_expanded_args),
-                         kernel_arg_array,
-                         #builder.bitcast(kernel_arg_array, void_ptr_ptr_t),
-                         context.get_constant(types.uintp, num_dim),
-                         dim_starts,
-                         dim_stops])
 
-    for read_buf in read_bufs_after_enqueue:
-        buffer_ptr, array_size_member, data_member = read_buf
-        print("read_buf:", buffer_ptr, "array_size_member:", array_size_member, "data_member:", data_member)
-        builder.call(
-            read_mem_buffer_from_device, [builder.inttoptr(context.get_constant(types.uintp, gpu_device_int), void_ptr_t),
-                                          builder.load(buffer_ptr),
-                                          context.get_constant(types.uintp, 1),
-                                          context.get_constant(types.uintp, 0),
-                                          builder.load(array_size_member),
-                                          builder.bitcast(builder.load(data_member), void_ptr_t)])
-                                          #builder.load(data_member)])
+class DPPyCPUPortionLowerer(object):
+    def __init__(self, lowerer, cres, num_inputs):
+        self.lowerer = lowerer
+        self.context = self.lowerer.context
+        self.builder = self.lowerer.builder
 
+        self.gpu_device = driver.runtime.get_gpu_device()
+        self.gpu_device_env = self.gpu_device.get_env_ptr()
+        self.gpu_device_int = int(driver.ffi.cast("uintptr_t", self.gpu_device_env))
+
+        self.kernel_t_obj = cres.kernel._kernel_t_obj[0]
+        self.kernel_int = int(driver.ffi.cast("uintptr_t", self.kernel_t_obj))
+
+        # Initialize commonly used LLVM types and constant
+        self._init_llvm_types_and_constants()
+        # Create functions that we need to call
+        self._declare_functions()
+        # Create a NULL void * pointer for meminfo and parent parts of ndarray type args
+        self.null_ptr = self._create_null_ptr()
+
+        self.total_kernel_args = 0
+        self.cur_arg           = 0
+        self.num_inputs        = num_inputs
+
+        # list of buffer that needs to comeback to host
+        self.read_bufs_after_enqueue = []
+
+
+    def _create_null_ptr(self):
+        null_ptr = cgutils.alloca_once(self.builder, self.void_ptr_t,
+                size=self.context.get_constant(types.uintp, 1), name="null_ptr")
+        self.builder.store(self.builder.inttoptr(self.context.get_constant(types.uintp, 0), self.void_ptr_t),
+                null_ptr)
+        return null_ptr
+
+
+    def _init_llvm_types_and_constants(self):
+        self.byte_t          = lc.Type.int(8)
+        self.byte_ptr_t      = lc.Type.pointer(self.byte_t)
+        self.byte_ptr_ptr_t  = lc.Type.pointer(self.byte_ptr_t)
+        self.intp_t          = self.context.get_value_type(types.intp)
+        self.uintp_t         = self.context.get_value_type(types.uintp)
+        self.intp_ptr_t      = lc.Type.pointer(self.intp_t)
+        self.uintp_ptr_t     = lc.Type.pointer(self.uintp_t)
+        self.zero            = self.context.get_constant(types.uintp, 0)
+        self.one             = self.context.get_constant(types.uintp, 1)
+        self.one_type        = self.one.type
+        self.sizeof_intp     = self.context.get_abi_sizeof(self.intp_t)
+        self.void_ptr_t      = self.context.get_value_type(types.voidptr)
+        self.void_ptr_ptr_t  = lc.Type.pointer(self.void_ptr_t)
+        self.sizeof_void_ptr = self.context.get_abi_sizeof(self.intp_t)
+        self.gpu_device_int_const = self.context.get_constant(types.uintp, self.gpu_device_int)
+
+
+    def _declare_functions(self):
+        create_dppy_kernel_arg_fnty = lc.Type.function(
+            self.intp_t, [self.void_ptr_ptr_t, self.intp_t, self.void_ptr_ptr_t])
+        self.create_dppy_kernel_arg = self.builder.module.get_or_insert_function(create_dppy_kernel_arg_fnty,
+                                                              name="create_dp_kernel_arg")
+
+        create_dppy_kernel_arg_from_buffer_fnty = lc.Type.function(
+            self.intp_t, [self.void_ptr_ptr_t, self.void_ptr_ptr_t])
+        self.create_dppy_kernel_arg_from_buffer = self.builder.module.get_or_insert_function(
+                                                   create_dppy_kernel_arg_from_buffer_fnty,
+                                                   name="create_dp_kernel_arg_from_buffer")
+
+        create_dppy_rw_mem_buffer_fnty = lc.Type.function(
+            self.intp_t, [self.void_ptr_t, self.intp_t, self.void_ptr_ptr_t])
+        self.create_dppy_rw_mem_buffer = self.builder.module.get_or_insert_function(
+                                          create_dppy_rw_mem_buffer_fnty,
+                                          name="create_dp_rw_mem_buffer")
+
+        write_mem_buffer_to_device_fnty = lc.Type.function(
+            self.intp_t, [self.void_ptr_t, self.void_ptr_t, self.intp_t, self.intp_t, self.intp_t, self.void_ptr_t])
+        self.write_mem_buffer_to_device = self.builder.module.get_or_insert_function(
+                                          write_mem_buffer_to_device_fnty,
+                                          name="write_dp_mem_buffer_to_device")
+
+        read_mem_buffer_from_device_fnty = lc.Type.function(
+            self.intp_t, [self.void_ptr_t, self.void_ptr_t, self.intp_t, self.intp_t, self.intp_t, self.void_ptr_t])
+        self.read_mem_buffer_from_device = self.builder.module.get_or_insert_function(
+                                        read_mem_buffer_from_device_fnty,
+                                        name="read_dp_mem_buffer_from_device")
+
+        enqueue_kernel_fnty = lc.Type.function(
+            self.intp_t, [self.void_ptr_t, self.void_ptr_t, self.intp_t, self.void_ptr_ptr_t,
+                     self.intp_t, self.intp_ptr_t, self.intp_ptr_t])
+        self.enqueue_kernel = self.builder.module.get_or_insert_function(
+                                      enqueue_kernel_fnty,
+                                      name="set_args_and_enqueue_dp_kernel_auto_blocking")
+
+
+    def allocate_kenrel_arg_array(self, num_kernel_args):
+        self.total_kernel_args = num_kernel_args
+
+        # we need a kernel arg array to enqueue
+        self.kernel_arg_array = cgutils.alloca_once(
+            self.builder, self.void_ptr_t, size=self.context.get_constant(
+                types.uintp, num_kernel_args), name="kernel_arg_array")
+
+
+    def _call_dppy_kernel_arg_fn(self, args):
+        kernel_arg = cgutils.alloca_once(self.builder, self.void_ptr_t,
+                                         size=self.one, name="kernel_arg" + str(self.cur_arg))
+
+        args.append(kernel_arg)
+        self.builder.call(self.create_dppy_kernel_arg, args)
+        dst = self.builder.gep(self.kernel_arg_array, [self.context.get_constant(types.intp, self.cur_arg)])
+        self.cur_arg += 1
+        self.builder.store(self.builder.load(kernel_arg), dst)
+
+
+    def process_kernel_arg(self, var, llvm_arg, arg_type, gu_sig, val_type, index):
+
+        if isinstance(arg_type, types.npytypes.Array):
+            if llvm_arg is None:
+                raise NotImplementedError(arg_type, var)
+
+            # Handle meminfo.  Not used by kernel so just write a null pointer.
+            args = [self.null_ptr, self.context.get_constant(types.uintp, self.sizeof_void_ptr)]
+            self._call_dppy_kernel_arg_fn(args)
+
+            # Handle parent.  Not used by kernel so just write a null pointer.
+            args = [self.null_ptr, self.context.get_constant(types.uintp, self.sizeof_void_ptr)]
+            self._call_dppy_kernel_arg_fn(args)
+
+            # Handle array size
+            array_size_member = self.builder.gep(llvm_arg,
+                    [self.context.get_constant(types.int32, 0), self.context.get_constant(types.int32, 2)])
+            args = [self.builder.bitcast(array_size_member, self.void_ptr_ptr_t),
+                    self.context.get_constant(types.uintp, self.sizeof_intp)]
+            self._call_dppy_kernel_arg_fn(args)
+
+            # Handle itemsize
+            item_size_member = self.builder.gep(llvm_arg,
+                    [self.context.get_constant(types.int32, 0), self.context.get_constant(types.int32, 3)])
+            args = [self.builder.bitcast(item_size_member, self.void_ptr_ptr_t),
+                    self.context.get_constant(types.uintp, self.sizeof_intp)]
+            self._call_dppy_kernel_arg_fn(args)
+
+            # Calculate total buffer size
+            total_size = cgutils.alloca_once(self.builder, self.intp_t,
+                    size=self.one, name="total_size" + str(self.cur_arg))
+            self.builder.store(self.builder.sext(self.builder.mul(self.builder.load(array_size_member),
+                               self.builder.load(item_size_member)), self.intp_t), total_size)
+
+            # Handle data
+            kernel_arg = cgutils.alloca_once(self.builder, self.void_ptr_t,
+                    size=self.one, name="kernel_arg" + str(self.cur_arg))
+            data_member = self.builder.gep(llvm_arg,
+                    [self.context.get_constant(types.int32, 0), self.context.get_constant(types.int32, 4)])
+
+            buffer_name = "buffer_ptr" + str(self.cur_arg)
+            buffer_ptr = cgutils.alloca_once(self.builder, self.void_ptr_t,
+                                             size=self.one, name=buffer_name)
+
+            # env, buffer_size, buffer_ptr
+            args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
+                    self.builder.load(total_size),
+                    buffer_ptr]
+            self.builder.call(self.create_dppy_rw_mem_buffer, args)
+
+            if index < self.num_inputs:
+                args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
+                        self.builder.load(buffer_ptr),
+                        self.one,
+                        self.zero,
+                        self.builder.load(total_size),
+                        self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t)]
+
+                self.builder.call(self.write_mem_buffer_to_device, args)
+            else:
+                self.read_bufs_after_enqueue.append((buffer_ptr, total_size, data_member))
+
+            self.builder.call(self.create_dppy_kernel_arg_from_buffer, [buffer_ptr, kernel_arg])
+            dst = self.builder.gep(self.kernel_arg_array, [self.context.get_constant(types.intp, self.cur_arg)])
+            self.cur_arg += 1
+            self.builder.store(self.builder.load(kernel_arg), dst)
+
+            # Handle shape
+            shape_member = self.builder.gep(llvm_arg,
+                    [self.context.get_constant(types.int32, 0),
+                     self.context.get_constant(types.int32, 5)])
+
+            for this_dim in range(arg_type.ndim):
+                shape_entry = self.builder.gep(shape_member,
+                                [self.context.get_constant(types.int32, 0),
+                                 self.context.get_constant(types.int32, this_dim)])
+
+                args = [self.builder.bitcast(shape_entry, self.void_ptr_ptr_t),
+                        self.context.get_constant(types.uintp, self.sizeof_intp)]
+                self._call_dppy_kernel_arg_fn(args)
+
+            # Handle strides
+            stride_member = self.builder.gep(llvm_arg,
+                    [self.context.get_constant(types.int32, 0),
+                     self.context.get_constant(types.int32, 6)])
+
+            for this_stride in range(arg_type.ndim):
+                stride_entry = self.builder.gep(stride_member,
+                                [self.context.get_constant(types.int32, 0),
+                                 self.context.get_constant(types.int32, this_dim)])
+
+                args = [self.builder.bitcast(stride_entry, self.void_ptr_ptr_t),
+                        self.context.get_constant(types.uintp, self.sizeof_intp)]
+                self._call_dppy_kernel_arg_fn(args)
+
+        else:
+            args = [self.builder.bitcast(llvm_arg, self.void_ptr_ptr_t),
+                    self.context.get_constant(types.uintp, self.context.get_abi_sizeof(val_type))]
+            self._call_dppy_kernel_arg_fn(args)
+
+    def enqueue_kernel_and_read_back(self, loop_ranges):
+        num_dim = len(loop_ranges)
+        # the assumption is loop_ranges will always be less than or equal to 3 dimensions
+
+        # Package dim start and stops for auto-blocking enqueue.
+        dim_starts = cgutils.alloca_once(
+                        self.builder, self.uintp_t,
+                        size=self.context.get_constant(types.uintp, num_dim), name="dims")
+
+        dim_stops = cgutils.alloca_once(
+                        self.builder, self.uintp_t,
+                        size=self.context.get_constant(types.uintp, num_dim), name="dims")
+
+        for i in range(num_dim):
+            start, stop, step = loop_ranges[i]
+            if start.type != self.one_type:
+                start = self.builder.sext(start, self.one_type)
+            if stop.type != self.one_type:
+                stop = self.builder.sext(stop, self.one_type)
+            if step.type != self.one_type:
+                step = self.builder.sext(step, self.one_type)
+
+            # substract 1 because do-scheduling takes inclusive ranges
+            stop = self.builder.sub(stop, self.one)
+
+            self.builder.store(start,
+                               self.builder.gep(dim_starts, [self.context.get_constant(types.uintp, i)]))
+            self.builder.store(stop,
+                               self.builder.gep(dim_stops, [self.context.get_constant(types.uintp, i)]))
+
+        args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
+                self.builder.inttoptr(self.context.get_constant(types.uintp, self.kernel_int), self.void_ptr_t),
+                self.context.get_constant(types.uintp, self.total_kernel_args),
+                self.kernel_arg_array,
+                self.context.get_constant(types.uintp, num_dim),
+                dim_starts,
+                dim_stops]
+
+        self.builder.call(self.enqueue_kernel, args)
+
+        # read buffers back to host
+        for read_buf in self.read_bufs_after_enqueue:
+            buffer_ptr, array_size_member, data_member = read_buf
+            args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
+                    self.builder.load(buffer_ptr),
+                    self.one,
+                    self.zero,
+                    self.builder.load(array_size_member),
+                    self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t)]
+            self.builder.call(self.read_mem_buffer_from_device, args)
