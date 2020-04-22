@@ -40,6 +40,24 @@ initializing each defined fields.  Uninitialized fields contains garbage data.
 Methods and properties (getters and setters only) can be defined.  They will be
 automatically compiled.
 
+Any type annotations on the class will be used to extend the spec if not already
+present.  For example, if we have the class
+
+  @jitclass([("x", int32)])
+  class Foo:
+      x: int
+      y: float
+      z: T
+
+      def __init__(self, x, y, z):
+          ...
+
+then the full spec used for ``Foo`` will be:
+
+* ``"x": int32`` (specified in the original `spec` passed to `jitclass`)
+* ``"y": float64`` (added from type annotation)
+* ``"z": numba.typeof(T)`` (added from type annotation)
+
 Specifying ``numba.typed`` containers as class members
 ======================================================
 It is often desirable to use a ``numba.typed.Dict`` or a ``numba.typed.List`` as
