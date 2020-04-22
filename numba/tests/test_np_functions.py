@@ -3120,7 +3120,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             return np.asarray(s)
 
         def case4(): # kind4
-            s = '大处着眼，小处着手。🐍⚡'
+            s = '🐍'
             return np.asarray(s)
 
         def case5():
