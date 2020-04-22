@@ -90,7 +90,7 @@ def stackarray_getitem(a, i):
 
 
 @overload(len)
-def omnisci_array_len(x):
+def stack_array_len(x):
     if isinstance(x, StackArrayType):
         def impl(x):
             return x.size
