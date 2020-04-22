@@ -3119,15 +3119,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             s = '大处 着眼，小处着手。大大大处'
             return np.asarray(s)
 
-        def case4(): # kind4
-            s = '🐍'
-            return np.asarray(s)
-
-        def case5():
+        def case4():
             s = ''
             return np.asarray(s)
 
-        funcs = [case1, case2, case3, case4, case5]
+        funcs = [case1, case2, case3, case4]
 
         for pyfunc in funcs:
             cfunc = jit(nopython=True)(pyfunc)
