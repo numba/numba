@@ -115,7 +115,8 @@ def _typeof_type(val, c):
             return typeof_impl(str("numba"), c)
 
 
-@typeof_impl.register(py_typing.GenericMeta)
+# type(py_typing.List) is different in Python 3.6 vs. 3.7+.
+@typeof_impl.register(type(py_typing.List))
 def _typeof_typing(val, c):
     if issubclass(val, py_typing.List):
         (element_py,) = val.__args__
@@ -150,7 +151,7 @@ def _typeof_typing(val, c):
         return types.BaseTuple.from_types(tys)
 
 
-@typeof_impl.register(type(py_typing.Union))
+@typeof_impl.register(type(py_typing.Optional))
 def _typeof_optional(val, c):
     (arg_1_py, arg_2_py) = val.__args__
     if arg_2_py is not type(None): # noqa: E721
