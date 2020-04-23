@@ -6,7 +6,7 @@ from numba import njit
 class TestModule(unittest.TestCase):
     def test_module_not_in_namespace(self):
         """ Test of trying to run a compiled function
-        where the module which the function is being compiled
+        where the module from which the function is being compiled
         doesn't exist in the namespace.
         """
         filename = 'test.py'
