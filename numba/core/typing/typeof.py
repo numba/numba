@@ -124,13 +124,24 @@ def _typeof_typing(val, c):
         dict_check = lambda x: issubclass(x, py_typing.Dict)
         set_check = lambda x: issubclass(x, py_typing.Set)
         tuple_check = lambda x: issubclass(x, py_typing.Tuple)
-        union_check = lambda x: issubclass(x, py_typing.Union)
+        union_check = lambda x: x.__origin__ == py_typing.Union
     else:
         list_check = lambda x: x.__origin__ is list
         dict_check = lambda x: x.__origin__ is dict
         set_check = lambda x: x.__origin__ is set
         tuple_check = lambda x: x.__origin__ is tuple
         union_check = lambda x: x.__origin__ is py_typing.Union
+
+    if union_check(val):
+        (arg_1_py, arg_2_py) = val.__args__
+        if arg_2_py is not type(None): # noqa: E721
+            raise ValueError(
+                "Cannot type Union that is not an Optional "
+                f"(second type {arg_2_py} is not NoneType")
+        arg_1_nb = typeof_impl(arg_1_py, c)
+        if arg_1_nb is None:
+            raise ValueError(f"Cannot type optional inner type {arg_1_py}")
+        return types.Optional(arg_1_nb)
 
     if list_check(val):
         (element_py,) = val.__args__
@@ -164,21 +175,10 @@ def _typeof_typing(val, c):
             return
         return types.BaseTuple.from_types(tys)
 
-    if union_check(val):
-        (arg_1_py, arg_2_py) = val.__args__
-        if arg_2_py is not type(None): # noqa: E721
-            raise ValueError(
-                "Cannot type Union that is not an Optional "
-                f"(second type {arg_2_py} is not NoneType")
-        arg_1_nb = typeof_impl(arg_1_py, c)
-        if arg_1_nb is None:
-            raise ValueError(f"Cannot type optional inner type {arg_1_py}")
-        return types.Optional(arg_1_nb)
-
 
 # Before Python 3.7, there is not a common shared metaclass for typing.
 if utils.PYVERSION < (3, 7):
-    typeof_impl.register(type(py_typing.Optional), _typeof_typing)
+    typeof_impl.register(type(py_typing.Union), _typeof_typing)
 
 
 @typeof_impl.register(bool)
