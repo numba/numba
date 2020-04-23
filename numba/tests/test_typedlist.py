@@ -738,6 +738,33 @@ class TestExtend(MemoryLeakMixin, TestCase):
         got = impl()
         self.assertEqual(expected, got)
 
+    def test_extend_single_value_container(self):
+        @njit
+        def impl():
+            l = List()
+            l.extend((100,))
+            return l
+
+        expected = impl.py_func()
+        got = impl()
+        self.assertEqual(expected, got)
+
+    def test_extend_empty_unrefined(self):
+        # Extending an unrefined list with an empty iterable doesn't work in a
+        # jit compiled function as the list remains untyped.
+        l = List()
+        l.extend(tuple())
+        self.assertEqual(len(l), 0)
+        self.assertFalse(l._typed)
+
+    def test_extend_empty_refiend(self):
+        # Extending a refined list with an empty iterable doesn't work in a
+        # jit compiled function as the (empty) argument can't be typed
+        l = List((1,))
+        l.extend(tuple())
+        self.assertEqual(len(l), 1)
+        self.assertTrue(l._typed)
+
 
 @njit
 def cmp(a, b):
