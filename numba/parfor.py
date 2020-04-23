@@ -3343,7 +3343,7 @@ def _lower_parfor(parfor, block_label, block, block_index, new_blocks, typemap, 
 
     parfor_outputs = get_parfor_outputs(parfor, parfor.params)
     parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
-        parfor, parfor.params, calltypes)
+        func_ir, parfor, parfor.params, calltypes)
     parfor_inputs = sorted(
         list(
             set(parfor.params) -

@@ -1,7 +1,7 @@
 from numba.testing import SerialSuite
 from numba.testing import load_testsuite
 from os.path import dirname, join
-from numba.dppy.dppy_driver import driver as ocldrv
+import dppy.core as ocldrv
 
 def load_tests(loader, tests, pattern):
 

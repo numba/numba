@@ -5,13 +5,15 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppy, njit
-from numba.dppy.dppy_driver import driver as ocldrv
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
 
+import dppy.core as ocldrv
+
+
 class TestNumpy_bit_twiddling_functions(DPPYTestCase):
     def test_bitwise_and(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.bitwise_and(a, b)
             return c
@@ -25,7 +27,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_bitwise_or(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.bitwise_or(a, b)
             return c
@@ -39,7 +41,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_bitwise_xor(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.bitwise_xor(a, b)
             return c
@@ -53,7 +55,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_bitwise_not(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.bitwise_not(a)
             return c
@@ -66,7 +68,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_invert(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.invert(a)
             return c
@@ -79,7 +81,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_left_shift(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.left_shift(a, b)
             return c
@@ -93,7 +95,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_right_shift(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.right_shift(a, b)
             return c
@@ -104,8 +106,6 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
         c = f(a, b)
         d = np.right_shift(a, b)
         self.assertTrue(np.all(c == d))
-
-
 
 
 if __name__ == '__main__':

@@ -5,7 +5,7 @@ import numpy as np
 from numba import dppy
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
-from numba.dppy.dppy_driver import driver as ocldrv
+import dppy.core as ocldrv
 
 @dppy.kernel(access_types={"read_only": ['a', 'b'], "write_only": ['c'], "read_write": []})
 def sum_with_accessor(a, b, c):
