@@ -397,6 +397,7 @@ def dead_branch_prune(func_ir, called_args):
     # at least one an arg of the condition is a const
     # if the condition is met it will replace the branch with a jump
     branch_info = find_branches(func_ir)
+    nullified = namedtuple('nullified', 'condition, taken_br, rewrite_stmt')
     nullified_conditions = [] # stores conditions that have no impact post prune
 
     for branch, condition, blk in branch_info:
@@ -429,7 +430,8 @@ def dead_branch_prune(func_ir, called_args):
                 prune_stat, taken = prune(branch, condition, blk, *const_conds)
                 if(prune_stat):
                     # add the condition to the list of nullified conditions
-                    nullified_conditions.append((condition, taken))
+                    nullified_conditions.append(nullified(condition, taken,
+                                                          True))
         else:
             # see if this is a branch on a constant value predicate
             resolved_const = Unknown()
@@ -444,7 +446,8 @@ def dead_branch_prune(func_ir, called_args):
                 prune_stat, taken = prune_by_predicate(branch, condition, blk)
                 if(prune_stat):
                     # add the condition to the list of nullified conditions
-                    nullified_conditions.append((condition, taken))
+                    nullified_conditions.append(nullified(condition, taken,
+                                                          False))
 
     # 'ERE BE DRAGONS...
     # It is the evaluation of the condition expression that often trips up type
@@ -461,18 +464,22 @@ def dead_branch_prune(func_ir, called_args):
     # completeness the func_ir._definitions and ._consts are also updated to
     # make the IR state self consistent.
 
-    deadcond = [x[0] for x in nullified_conditions]
+    deadcond = [x.condition for x in nullified_conditions]
     for _, cond, blk in branch_info:
         if cond in deadcond:
             for x in blk.body:
                 if isinstance(x, ir.Assign) and x.value is cond:
                     # rewrite the condition as a true/false bit
-                    branch_bit = nullified_conditions[deadcond.index(cond)][1]
-                    x.value = ir.Const(branch_bit, loc=x.loc)
-                    # update the specific definition to the new const
-                    defns = func_ir._definitions[x.target.name]
-                    repl_idx = defns.index(cond)
-                    defns[repl_idx] = x.value
+                    nullified_info = nullified_conditions[deadcond.index(cond)]
+                    # only do a rewrite of conditions, predicates need to retain
+                    # their value as they may be used later.
+                    if nullified_info.rewrite_stmt:
+                        branch_bit = nullified_info.taken_br
+                        x.value = ir.Const(branch_bit, loc=x.loc)
+                        # update the specific definition to the new const
+                        defns = func_ir._definitions[x.target.name]
+                        repl_idx = defns.index(cond)
+                        defns[repl_idx] = x.value
 
     # Remove dead blocks, this is safe as it relies on the CFG only.
     cfg = compute_cfg_from_blocks(func_ir.blocks)
