@@ -43,14 +43,16 @@ automatically compiled.
 Any type annotations on the class will be used to extend the spec if not already
 present.  For example, if we have the class
 
-  @jitclass([("x", int32)])
-  class Foo:
-      x: int
-      y: float
-      z: T
+.. code-block:: python
 
-      def __init__(self, x, y, z):
-          ...
+    @jitclass([("x", int32)])
+    class Foo:
+        x: int
+        y: float
+        z: T
+
+        def __init__(self, x, y, z):
+            ...
 
 then the full spec used for ``Foo`` will be:
 

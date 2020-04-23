@@ -11,56 +11,54 @@ def jitclass(cls_or_spec=None, spec=None):
 
     Different use cases will cause different arguments to be set.
 
-    1) cls_or_spec = None, spec = None
+    If specified, ``spec`` gives the types of class fields.
+    It must be a dictionary or sequence.
+    With a dictionary, use collections.OrderedDict for stable ordering.
+    With a sequence, it must contain 2-tuples of (fieldname, fieldtype).
 
-        @jitclass()
-        class Foo:
-            ...
+    Any class annotations for field names not listed in spec will be added.
+    For class annotation `x: T` we will append `("x", numba.typeof(T))` to
+    spec if x is not already a key in spec.
 
-    2) cls_or_spec = None, spec = spec
 
-        @jitclass(spec=spec)
-        class Foo:
-            ...
+    Examples
+    --------
 
-    3) cls_or_spec = Foo, spec = None
+    1) ``cls_or_spec = None``, ``spec = None``
 
-        @jitclass
-        class Foo:
-            ...
+    >>> @jitclass()
+    ... class Foo:
+    ...     ...
 
-    4) cls_or_spec = spec, spec = None
+    2) ``cls_or_spec = None``, ``spec = spec``
 
-        @jitclass(spec)
-        class Foo:
-            ...
+    >>> @jitclass(spec=spec)
+    ... class Foo:
+    ...     ...
 
-        In this case we update `cls_or_spec, spec = None, cls_or_spec`.
+    3) ``cls_or_spec = Foo``, ``spec = None``
 
-    5) cls_or_spec = Foo, spec = spec
+    >>> @jitclass
+    ... class Foo:
+    ...     ...
 
-        JitFoo = jitclass(Foo, spec)
+    4) ``cls_or_spec = spec``, ``spec = None``
+    In this case we update ``cls_or_spec, spec = None, cls_or_spec``.
 
-    Args
-    ----
-    spec:
-        Specifies the types of class fields.
-        Must be a dictionary or sequence.
-        With a dictionary, use collections.OrderedDict for stable ordering.
-        With a sequence, it must contain 2-tuples of (fieldname, fieldtype).
+    >>> @jitclass(spec)
+    ... class Foo:
+    ...     ...
 
-        Any class annotations for field names not listed in spec will be added.
-        For class annotation
-            x: T
-        we will append
-            ("x", numba.typeof(T))
-        to spec if x is not already a key in spec.
+    5) ``cls_or_spec = Foo``, ``spec = spec``
+
+    >>> JitFoo = jitclass(Foo, spec)
 
     Returns
     -------
     If used as a decorator, returns a callable that takes a class object and
     returns a compiled version.
-    If used as a function, returns the compiled class.
+    If used as a function, returns the compiled class (an instance of
+    ``JitClassType``).
     """
 
     if (cls_or_spec is not None and
