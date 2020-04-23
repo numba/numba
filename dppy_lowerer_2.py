@@ -314,7 +314,9 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     find_setitems_body(setitems, itemsset, loop_body, typemap)
     dep_on_param = list(set(dep_on_param).difference(setitems))
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("hoist - def_once:", def_once, "setitems:", setitems, "itemsset:", itemsset, "dep_on_param:", dep_on_param, "parfor_params:", parfor_params)
+        print("hoist - def_once:", def_once, "setitems:",
+              setitems, "itemsset:", itemsset, "dep_on_param:",
+              dep_on_param, "parfor_params:", parfor_params)
 
     for label, block in loop_body.items():
         new_block = []
@@ -844,7 +846,7 @@ def _lower_parfor_dppy_no_gufunc(lowerer, parfor):
     # call the func in parallel by wrapping it with ParallelGUFuncBuilder
     if config.DEBUG_ARRAY_OPT:
         print("loop_nests = ", parfor.loop_nests)
-    print("loop_ranges = ", loop_ranges)
+        print("loop_ranges = ", loop_ranges)
 
     gu_signature = _create_shape_signature(
         parfor.get_shape_classes,
@@ -991,7 +993,8 @@ def call_dppy(lowerer, cres,
     if config.DEBUG_ARRAY_OPT:
         print("num_expanded_args = ", num_expanded_args)
 
-    # now that we know the total number of kernel args, lets allcate a kernel_arg array
+    # now that we know the total number of kernel args, lets allocate
+    # a kernel_arg array
     dppy_cpu_lowerer.allocate_kenrel_arg_array(num_expanded_args)
 
     ninouts = len(expr_args)
@@ -1015,16 +1018,19 @@ def call_dppy(lowerer, cres,
             return None
 
     all_llvm_args = [getvar_or_none(lowerer, x) for x in expr_args[:ninouts]]
-    all_val_types = [val_type_or_none(context, lowerer, x) for x in expr_args[:ninouts]]
+    all_val_types = ([val_type_or_none(context, lowerer, x)
+                     for x in expr_args[:ninouts]])
     all_args = [loadvar_or_none(lowerer, x) for x in expr_args[:ninouts]]
 
     keep_alive_kernels.append(cres)
 
     # -----------------------------------------------------------------------
-    # Call clSetKernelArg for each arg and create arg array for the enqueue function.
-    # Put each part of each argument into kernel_arg_array.
-    for var, llvm_arg, arg_type, gu_sig, val_type, index in zip(expr_args, all_llvm_args,
-                                     expr_arg_types, sin + sout, all_val_types, range(len(expr_args))):
+    # Call clSetKernelArg for each arg and create arg array for
+    # the enqueue function. Put each part of each argument into
+    # kernel_arg_array.
+    for var, llvm_arg, arg_type, gu_sig, val_type, index in zip(
+        expr_args, all_llvm_args, expr_arg_types, sin + sout, all_val_types,
+        range(len(expr_args))):
         if config.DEBUG_ARRAY_OPT:
             print("var:", var, type(var),
                   "\n\tllvm_arg:", llvm_arg, type(llvm_arg),
@@ -1033,7 +1039,8 @@ def call_dppy(lowerer, cres,
                   "\n\tval_type:", val_type, type(val_type),
                   "\n\tindex:", index)
 
-        dppy_cpu_lowerer.process_kernel_arg(var, llvm_arg, arg_type, gu_sig, val_type, index)
+        dppy_cpu_lowerer.process_kernel_arg(var, llvm_arg, arg_type, gu_sig,
+                                            val_type, index)
     # -----------------------------------------------------------------------
 
     # loadvars for loop_ranges
@@ -1063,16 +1070,19 @@ class DPPyCPUPortionLowerer(object):
 
         self.gpu_device = driver.runtime.get_gpu_device()
         self.gpu_device_env = self.gpu_device.get_env_ptr()
-        self.gpu_device_int = int(driver.ffi.cast("uintptr_t", self.gpu_device_env))
+        self.gpu_device_int = int(driver.ffi.cast("uintptr_t",
+                                                  self.gpu_device_env))
 
         self.kernel_t_obj = cres.kernel._kernel_t_obj[0]
-        self.kernel_int = int(driver.ffi.cast("uintptr_t", self.kernel_t_obj))
+        self.kernel_int = int(driver.ffi.cast("uintptr_t",
+                                              self.kernel_t_obj))
 
         # Initialize commonly used LLVM types and constant
         self._init_llvm_types_and_constants()
         # Create functions that we need to call
         self._declare_functions()
-        # Create a NULL void * pointer for meminfo and parent parts of ndarray type args
+        # Create a NULL void * pointer for meminfo and parent
+        # parts of ndarray type args
         self.null_ptr = self._create_null_ptr()
 
         self.total_kernel_args = 0
@@ -1086,7 +1096,9 @@ class DPPyCPUPortionLowerer(object):
     def _create_null_ptr(self):
         null_ptr = cgutils.alloca_once(self.builder, self.void_ptr_t,
                 size=self.context.get_constant(types.uintp, 1), name="null_ptr")
-        self.builder.store(self.builder.inttoptr(self.context.get_constant(types.uintp, 0), self.void_ptr_t),
+        self.builder.store(
+            self.builder.inttoptr(
+                self.context.get_constant(types.uintp, 0), self.void_ptr_t),
                 null_ptr)
         return null_ptr
 
@@ -1106,7 +1118,8 @@ class DPPyCPUPortionLowerer(object):
         self.void_ptr_t      = self.context.get_value_type(types.voidptr)
         self.void_ptr_ptr_t  = lc.Type.pointer(self.void_ptr_t)
         self.sizeof_void_ptr = self.context.get_abi_sizeof(self.intp_t)
-        self.gpu_device_int_const = self.context.get_constant(types.uintp, self.gpu_device_int)
+        self.gpu_device_int_const = self.context.get_constant(
+                                        types.uintp, self.gpu_device_int)
 
 
     def _declare_functions(self):
