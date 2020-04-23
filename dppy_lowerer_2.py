@@ -55,6 +55,40 @@ from numba.dppy.target import SPIR_GENERIC_ADDRSPACE
 import dppy.core as driver
 
 
+def _dbgprint_after_each_array_assignments(lowerer, loop_body, typemap):
+    for label, block in loop_body.items():
+        new_block = block.copy()
+        new_block.clear()
+        loc = block.loc
+        scope = block.scope
+        for inst in block.body:
+            new_block.append(inst)
+            # Append print after assignment
+            if isinstance(inst, ir.Assign):
+                # Only apply to numbers
+                if typemap[inst.target.name] not in types.number_domain:
+                    continue
+
+                # Make constant string
+                strval = "{} =".format(inst.target.name)
+                strconsttyp = types.StringLiteral(strval)
+
+                lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
+                assign_lhs = ir.Assign(value=ir.Const(value=strval, loc=loc),
+                                       target=lhs, loc=loc)
+                typemap[lhs.name] = strconsttyp
+                new_block.append(assign_lhs)
+
+                # Make print node
+                print_node = ir.Print(args=[lhs, inst.target], vararg=None,
+                                      loc=loc)
+                new_block.append(print_node)
+                sig = numba.typing.signature(types.none, typemap[lhs.name],
+                                             typemap[inst.target.name])
+                lowerer.fndesc.calltypes[print_node] = sig
+        loop_body[label] = new_block
+
+
 def replace_var_with_array_in_block(vars, block, typemap, calltypes):
     new_block = []
     for inst in block.body:
@@ -338,7 +372,6 @@ def to_scalar_from_0d(x):
 def _create_gufunc_for_parfor_body(
         lowerer,
         parfor,
-        target,
         typemap,
         typingctx,
         targetctx,
@@ -547,9 +580,7 @@ def _create_gufunc_for_parfor_body(
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
         sys.stdout.flush()
     # Force gufunc outline into existence.
-    globls = {"np": np, "numba": numba}
-    if target=='spirv':
-        globls["dppy"] = dppy
+    globls = {"np": np, "numba": numba, "dppy": dppy}
     locls = {}
     exec_(gufunc_txt, globls, locls)
     gufunc_func = locls[gufunc_name]
@@ -601,37 +632,7 @@ def _create_gufunc_for_parfor_body(
 
     # If enabled, add a print statement after every assignment.
     if config.DEBUG_ARRAY_OPT_RUNTIME:
-        for label, block in loop_body.items():
-            new_block = block.copy()
-            new_block.clear()
-            loc = block.loc
-            scope = block.scope
-            for inst in block.body:
-                new_block.append(inst)
-                # Append print after assignment
-                if isinstance(inst, ir.Assign):
-                    # Only apply to numbers
-                    if typemap[inst.target.name] not in types.number_domain:
-                        continue
-
-                    # Make constant string
-                    strval = "{} =".format(inst.target.name)
-                    strconsttyp = types.StringLiteral(strval)
-
-                    lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
-                    assign_lhs = ir.Assign(value=ir.Const(value=strval, loc=loc),
-                                           target=lhs, loc=loc)
-                    typemap[lhs.name] = strconsttyp
-                    new_block.append(assign_lhs)
-
-                    # Make print node
-                    print_node = ir.Print(args=[lhs, inst.target], vararg=None, loc=loc)
-                    new_block.append(print_node)
-                    sig = numba.typing.signature(types.none,
-                                           typemap[lhs.name],
-                                           typemap[inst.target.name])
-                    lowerer.fndesc.calltypes[print_node] = sig
-            loop_body[label] = new_block
+        _dbgprint_after_each_array_assignments(lowerer, loop_body, typemap)
 
     if config.DEBUG_ARRAY_OPT:
         print("parfor loop body")
@@ -814,11 +815,19 @@ def _lower_parfor_dppy_no_gufunc(lowerer, parfor):
     numba.parfor.sequential_parfor_lowering = True
     loop_ranges = [(l.start, l.stop, l.step) for l in parfor.loop_nests]
 
-    target = 'spirv'
-
-    func, func_args, func_sig, func_arg_types = _create_gufunc_for_parfor_body(
-        lowerer, parfor, target, typemap, typingctx, targetctx, flags, loop_ranges, {},
-        bool(alias_map), index_var_typ, parfor.races)
+    func, func_args, func_sig, func_arg_types =(
+    _create_gufunc_for_parfor_body(
+        lowerer,
+        parfor,
+        typemap,
+        typingctx,
+        targetctx,
+        flags,
+        loop_ranges,
+        {},
+        bool(alias_map),
+        index_var_typ,
+        parfor.races))
     numba.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
