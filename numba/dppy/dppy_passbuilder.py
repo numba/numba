@@ -20,7 +20,8 @@ from .dppy_passes import (
         DPPyPreParforPass,
         DPPyParforPass,
         SpirvFriendlyLowering,
-        DPPyNoPythonBackend
+        DPPyNoPythonBackend,
+        InlineParforVectorize
         )
 
 class DPPyPassBuilder(object):
@@ -86,6 +87,7 @@ class DPPyPassBuilder(object):
         if not state.flags.no_rewrites:
             pm.add_pass(NopythonRewrites, "nopython rewrites")
         pm.add_pass(DPPyParforPass, "convert to parfors")
+        #pm.add_pass(InlineParforVectorize, "inline vectorize inside parfors ")
 
         # lower
         pm.add_pass(SpirvFriendlyLowering, "SPIRV-friendly lowering pass")
