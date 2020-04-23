@@ -5,7 +5,7 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppy
-from numba.dppy.dppy_driver import driver as ocldrv
+import dppy.core as ocldrv
 
 
 @dppy.kernel(access_types={"read_only": ['a', 'b'], "write_only": ['c'], "read_write": []})

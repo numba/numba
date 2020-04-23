@@ -5,9 +5,10 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppy, njit
-from numba.dppy.dppy_driver import driver as ocldrv
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
+
+import dppy.core as ocldrv
 
 class TestNumpy_math_functions(DPPYTestCase):
     N = 10
@@ -15,7 +16,7 @@ class TestNumpy_math_functions(DPPYTestCase):
     b = np.array(np.random.random(N), dtype=np.float32)
 
     def test_add(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.add(a, b)
             return c
@@ -25,7 +26,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == d))
 
     def test_subtract(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.subtract(a, b)
             return c
@@ -35,7 +36,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == d))
 
     def test_multiply(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.multiply(a, b)
             return c
@@ -45,7 +46,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == d))
 
     def test_divide(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.divide(a, b)
             return c
@@ -56,7 +57,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(max_abs_err < 1e-5)
 
     def test_true_divide(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.true_divide(a, b)
             return c
@@ -67,7 +68,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(max_abs_err < 1e-5)
 
     def test_negative(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.negative(a)
             return c
@@ -76,7 +77,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == -self.a))
 
     def test_power(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.power(a, b)
             return c
@@ -88,7 +89,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == input_arr * input_arr))
 
     def test_remainder(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.remainder(a, b)
             return c
@@ -100,7 +101,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == 1))
 
     def test_mod(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.mod(a, b)
             return c
@@ -112,7 +113,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == 1))
 
     def test_fmod(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a, b):
             c = np.fmod(a, b)
             return c
@@ -124,7 +125,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == 1.))
 
     def test_abs(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.abs(a)
             return c
@@ -135,7 +136,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == -input_arr))
 
     def test_absolute(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.absolute(a)
             return c
@@ -147,7 +148,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_fabs(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.fabs(a)
             return c
@@ -159,7 +160,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_sign(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.sign(a)
             return c
@@ -170,7 +171,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == -1.))
 
     def test_conj(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.conj(a)
             return c
@@ -182,7 +183,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == d))
 
     def test_exp(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.exp(a)
             return c
@@ -194,7 +195,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_log(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.log(a)
             return c
@@ -207,7 +208,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_log10(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.log10(a)
             return c
@@ -220,7 +221,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_expm1(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.expm1(a)
             return c
@@ -233,7 +234,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_log1p(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.log1p(a)
             return c
@@ -245,7 +246,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(max_abs_err < 1e-5)
 
     def test_sqrt(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.sqrt(a)
             return c
@@ -257,7 +258,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_square(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.square(a)
             return c
@@ -268,7 +269,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == input_arr * input_arr))
 
     def test_reciprocal(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.reciprocal(a)
             return c
@@ -279,7 +280,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(np.all(c == 1/input_arr))
 
     def test_conjugate(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.conjugate(a)
             return c

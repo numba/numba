@@ -7,7 +7,7 @@ import time
 from numba import dppy
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
-from numba.dppy.dppy_driver import driver as ocldrv
+import dppy.core as ocldrv
 
 RISKFREE = 0.02
 VOLATILITY = 0.30

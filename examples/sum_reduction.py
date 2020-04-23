@@ -5,7 +5,7 @@ import math
 import time
 
 from numba import dppy
-from numba.dppy.dppy_driver import driver as ocldrv
+import dppy.core as ocldrv
 
 @dppy.kernel
 def reduction_kernel(A, R, stride):

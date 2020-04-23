@@ -4,13 +4,14 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppy, njit
-from numba.dppy.dppy_driver import driver as ocldrv
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
 
+import dppy.core as ocldrv
+
 class TestNumpy_floating_functions(DPPYTestCase):
     def test_isfinite(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.isfinite(a)
             return c
@@ -24,7 +25,7 @@ class TestNumpy_floating_functions(DPPYTestCase):
 
 
     def test_isinf(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.isinf(a)
             return c
@@ -37,7 +38,7 @@ class TestNumpy_floating_functions(DPPYTestCase):
         self.assertTrue(np.all(c == d))
 
     def test_isnan(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.isnan(a)
             return c
@@ -51,7 +52,7 @@ class TestNumpy_floating_functions(DPPYTestCase):
 
 
     def test_floor(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.floor(a)
             return c
@@ -64,7 +65,7 @@ class TestNumpy_floating_functions(DPPYTestCase):
 
 
     def test_ceil(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.ceil(a)
             return c
@@ -77,7 +78,7 @@ class TestNumpy_floating_functions(DPPYTestCase):
 
 
     def test_trunc(self):
-        @njit(target='dppy')
+        @njit(parallel={'spirv':True})
         def f(a):
             c = np.trunc(a)
             return c
