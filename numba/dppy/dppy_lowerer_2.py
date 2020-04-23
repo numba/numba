@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 
-
 import ast
 import copy
 from collections import OrderedDict
@@ -15,13 +14,32 @@ import llvmlite.ir as lir
 import llvmlite.binding as lb
 
 import numba
-from .. import compiler, ir, types, six, cgutils, sigutils, lowering, parfor, funcdesc
-from numba.ir_utils import (add_offset_to_labels, replace_var_names,
-                            remove_dels, legalize_names, mk_unique_var,
-                            rename_labels, get_name_var_table, visit_vars_inner,
-                            guard, find_callname, remove_dead,
-                            get_call_table, is_pure, build_definitions, get_np_ufunc_typ,
-                            get_unused_var_name, find_potential_aliases,
+from .. import (compiler,
+                ir,
+                types,
+                six,
+                cgutils,
+                sigutils,
+                lowering,
+                parfor,
+                funcdesc)
+from numba.ir_utils import (add_offset_to_labels,
+                            replace_var_names,
+                            remove_dels,
+                            legalize_names,
+                            mk_unique_var,
+                            rename_labels,
+                            get_name_var_table,
+                            visit_vars_inner,
+                            guard,
+                            find_callname,
+                            remove_dead,
+                            get_call_table,
+                            is_pure,
+                            build_definitions,
+                            get_np_ufunc_typ,
+                            get_unused_var_name,
+                            find_potential_aliases,
                             is_const_call)
 from ..typing import signature
 from numba import config, dppy
@@ -331,23 +349,28 @@ def _create_gufunc_for_parfor_body(
         index_var_typ,
         races):
     '''
-    Takes a parfor and creates a gufunc function for its body.
-    There are two parts to this function.
-    1) Code to iterate across the iteration space as defined by the schedule.
-    2) The parfor body that does the work for a single point in the iteration space.
-    Part 1 is created as Python text for simplicity with a sentinel assignment to mark the point
-    in the IR where the parfor body should be added.
-    This Python text is 'exec'ed into existence and its IR retrieved with run_frontend.
-    The IR is scanned for the sentinel assignment where that basic block is split and the IR
-    for the parfor body inserted.
+    Takes a parfor and creates a gufunc function for its body. There
+    are two parts to this function:
+
+        1) Code to iterate across the iteration space as defined by
+           the schedule.
+        2) The parfor body that does the work for a single point in
+           the iteration space.
+
+    Part 1 is created as Python text for simplicity with a sentinel
+    assignment to mark the point in the IR where the parfor body
+    should be added. This Python text is 'exec'ed into existence and its
+    IR retrieved with run_frontend. The IR is scanned for the sentinel
+    assignment where that basic block is split and the IR for the parfor
+    body inserted.
     '''
 
     loc = parfor.init_block.loc
 
     # The parfor body and the main function body share ir.Var nodes.
-    # We have to do some replacements of Var names in the parfor body to make them
-    # legal parameter names.  If we don't copy then the Vars in the main function also
-    # would incorrectly change their name.
+    # We have to do some replacements of Var names in the parfor body
+    # to make them legal parameter names. If we don't copy then the
+    # Vars in the main function also would incorrectly change their name.
     loop_body = copy.copy(parfor.loop_body)
     remove_dels(loop_body)
 
@@ -390,7 +413,6 @@ def _create_gufunc_for_parfor_body(
     # Reorder all the params so that inputs go first then outputs.
     parfor_params = parfor_inputs + parfor_outputs
 
-    #if target=='spirv':
     def addrspace_from(params, def_addr):
         addrspaces = []
         for p in params:
@@ -401,9 +423,8 @@ def _create_gufunc_for_parfor_body(
                 addrspaces.append(None)
         return addrspaces
 
-    #print(dir(numba.dppy))
-    #print(numba.dppy.compiler.DEBUG)
-    addrspaces = addrspace_from(parfor_params, numba.dppy.target.SPIR_GLOBAL_ADDRSPACE)
+    addrspaces = addrspace_from(parfor_params,
+                                numba.dppy.target.SPIR_GLOBAL_ADDRSPACE)
 
 
     if config.DEBUG_ARRAY_OPT >= 1:
@@ -412,23 +433,22 @@ def _create_gufunc_for_parfor_body(
         print("loop_body = ", loop_body, type(loop_body))
         _print_body(loop_body)
 
-    # Some Var are not legal parameter names so create a dict of potentially illegal
-    # param name to guaranteed legal name.
+    # Some Var are not legal parameter names so create a dict of
+    # potentially illegal param name to guaranteed legal name.
     param_dict = legalize_names_with_typemap(parfor_params, typemap)
     if config.DEBUG_ARRAY_OPT >= 1:
         print("param_dict = ", sorted(param_dict.items()), type(param_dict))
 
-    # Some loop_indices are not legal parameter names so create a dict of potentially illegal
-    # loop index to guaranteed legal name.
+    # Some loop_indices are not legal parameter names so create a dict
+    # of potentially illegal loop index to guaranteed legal name.
     ind_dict = legalize_names_with_typemap(loop_indices, typemap)
     # Compute a new list of legal loop index names.
     legal_loop_indices = [ind_dict[v] for v in loop_indices]
+
     if config.DEBUG_ARRAY_OPT >= 1:
         print("ind_dict = ", sorted(ind_dict.items()), type(ind_dict))
-        print(
-            "legal_loop_indices = ",
-            legal_loop_indices,
-            type(legal_loop_indices))
+        print("legal_loop_indices = ", legal_loop_indices,
+              type(legal_loop_indices))
         for pd in parfor_params:
             print("pd = ", pd)
             print("pd type = ", typemap[pd], type(typemap[pd]))
@@ -445,8 +465,10 @@ def _create_gufunc_for_parfor_body(
         if addrspaces[i] is not None:
             print("before:", id(param_types_addrspaces[i]))
             assert(isinstance(param_types_addrspaces[i], types.npytypes.Array))
-            param_types_addrspaces[i] = param_types_addrspaces[i].copy(addrspace=addrspaces[i])
-            print("setting param type", i, param_types[i], id(param_types[i]), "to addrspace", param_types_addrspaces[i].addrspace)
+            param_types_addrspaces[i] = (param_types_addrspaces[i]
+                                        .copy(addrspace=addrspaces[i]))
+            print("setting param type", i, param_types[i], id(param_types[i]),
+                  "to addrspace", param_types_addrspaces[i].addrspace)
 
 
     def print_arg_with_addrspaces(args):
@@ -490,9 +512,9 @@ def _create_gufunc_for_parfor_body(
 
 
     # Determine the unique names of the scheduling and gufunc functions.
-    # sched_func_name = "__numba_parfor_sched_%s" % (hex(hash(parfor)).replace("-", "_"))
     gufunc_name = "__numba_parfor_gufunc_%s" % (
         hex(hash(parfor)).replace("-", "_"))
+
     if config.DEBUG_ARRAY_OPT:
         # print("sched_func_name ", type(sched_func_name), sched_func_name)
         print("gufunc_name ", type(gufunc_name), gufunc_name)
@@ -510,7 +532,8 @@ def _create_gufunc_for_parfor_body(
 
 
     for eachdim in range(parfor_dim):
-        gufunc_txt += "    " + legal_loop_indices[eachdim] + " = " + "dppy.get_global_id(" + str(eachdim) + ")\n"
+        gufunc_txt += ("    " + legal_loop_indices[eachdim] + " = "
+                       + "dppy.get_global_id(" + str(eachdim) + ")\n")
 
     # Add the sentinel assignment so that we can find the loop body position
     # in the IR.
@@ -615,7 +638,8 @@ def _create_gufunc_for_parfor_body(
         _print_body(loop_body)
 
     wrapped_blocks = wrap_loop_body(loop_body)
-    hoisted, not_hoisted = hoist(parfor_params, loop_body, typemap, wrapped_blocks)
+    hoisted, not_hoisted = hoist(parfor_params, loop_body, typemap,
+                                 wrapped_blocks)
     start_block = gufunc_ir.blocks[min(gufunc_ir.blocks.keys())]
     start_block.body = start_block.body[:-1] + hoisted + [start_block.body[-1]]
     unwrap_loop_body(loop_body)
@@ -837,8 +861,8 @@ def _lower_parfor_dppy_no_gufunc(lowerer, parfor):
     if config.DEBUG_ARRAY_OPT:
         sys.stdout.flush()
 
-   # Restore the original typemap of the function that was replaced temporarily at the
-    # Beginning of this function.
+    # Restore the original typemap of the function that was replaced
+    # temporarily at the beginning of this function.
     lowerer.fndesc.typemap = orig_typemap
 
 
@@ -910,9 +934,16 @@ def _create_shape_signature(
 # Keep all the dppy kernels and programs created alive indefinitely.
 keep_alive_kernels = []
 
-def call_dppy(lowerer, cres, gu_signature, outer_sig, expr_args, num_inputs, expr_arg_types,
+def call_dppy(lowerer, cres,
+              gu_signature,
+              outer_sig,
+              expr_args,
+              num_inputs,
+              expr_arg_types,
               loop_ranges,
-              init_block, index_var_typ, races):
+              init_block,
+              index_var_typ,
+              races):
     '''
     Adds the call to the gufunc function from the main function.
     '''
