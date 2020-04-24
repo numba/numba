@@ -308,9 +308,11 @@ def _legalize_parameter_names(var_list):
     var_map = OrderedDict()
     for var in var_list:
         old_name = var.name
-        new_name = old_name.replace("$", "_").replace(".", "_")
+        new_name = var.scope.redefine(old_name, loc=var.loc).name
+        new_name = new_name.replace("$", "_").replace(".", "_")
         # Caller should ensure the names are unique
-        assert new_name not in var_map
+        if new_name in var_map:
+            raise AssertionError(f"{new_name!r} not unique")
         var_map[new_name] = var, old_name
         var.name = new_name
     param_names = list(var_map)
