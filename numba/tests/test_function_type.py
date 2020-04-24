@@ -1072,3 +1072,28 @@ class TestMiscIssues(TestCase):
         self.assertRegex(
             str(cm.exception),
             r'.*first-class function call cannot use keyword arguments')
+
+    def test_issue_5615(self):
+        @njit
+        def foo1(x):
+            return x + 1
+
+        @njit
+        def foo2(x):
+            return x + 2
+
+        from numba import literal_unroll
+
+        @njit
+        def bar(fcs):
+            x = 0
+            a = 10
+            i, j = fcs[0]
+            x += i(j(a))
+            for t in literal_unroll(fcs):
+                i, j = t
+                x += i(j(a))
+            return x
+
+        tup = ((foo1, foo2), (foo2, foo1))
+        print(bar(tup))
