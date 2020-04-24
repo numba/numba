@@ -3428,6 +3428,26 @@ class TestParforsMisc(TestParforsBase):
 
         self.check(parallel_test, size, arr)
 
+    @skip_parfors_unsupported
+    def test_issue5570_ssa_races(self):
+        @njit(parallel=True)
+        def foo(src, method, out):
+            for i in prange(1):
+                for j in range(1):
+                    out[i, j] = 1
+            if method:
+                out += 1
+            return out
+
+        src = np.zeros((5,5))
+        method = 57
+        out = np.zeros((2, 2))
+
+        self.assertPreciseEqual(
+            foo(src, method, out),
+            foo.py_func(src, method, out)
+        )
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):
