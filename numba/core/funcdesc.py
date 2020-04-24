@@ -92,7 +92,9 @@ class FunctionDescriptor(object):
             try:
                 return sys.modules[self.modname]
             except:
-                raise ModuleNotFoundError(f"can't compile {self.qualname}: import of module {self.modname} failed")
+                raise ModuleNotFoundError(
+                    f"can't compile {self.qualname}: "
+                    f"import of module {self.modname} failed")
 
     def lookup_function(self):
         """
