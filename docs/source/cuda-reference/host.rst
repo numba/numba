@@ -103,8 +103,8 @@ invoking any of the driver API. This can be useful for:
 - Generating code when there is no device present.
 - Generating code prior to a fork without initializing CUDA.
 
-.. note:: It is the user's responsiblity to manage any ABI issues arising from
-    the use of compilation to PTX.
+.. note:: It is the user's responsibility to manage any ABI issues arising from
+   the use of compilation to PTX.
 
 .. autofunction:: numba.cuda.compile_ptx
 

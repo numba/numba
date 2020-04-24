@@ -467,6 +467,14 @@ def _replace_datalayout(llvmir):
 
 
 def llvm_to_ptx(llvmir, **opts):
+    if opts.pop('fastmath', False):
+        opts.update({
+            'ftz': True,
+            'fma': True,
+            'prec_div': False,
+            'prec_sqrt': False,
+        })
+
     cu = CompilationUnit()
     libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
     # New LLVM generate a shorthand for datalayout that NVVM does not know
