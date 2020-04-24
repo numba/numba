@@ -2,7 +2,9 @@ import sys
 import argparse
 import os
 import subprocess
-from .numba_sysinfo import display_sysinfo
+import json
+
+from .numba_sysinfo import display_sysinfo, get_sysinfo
 
 def make_parser():
     parser = argparse.ArgumentParser()
@@ -22,6 +24,8 @@ def make_parser():
                         help='Output source annotation as html')
     parser.add_argument('-s', '--sysinfo', action="store_true",
                         help='Output system information for bug reporting')
+    parser.add_argument('--sys-json', nargs=1,
+                        help='Saves the system info dict as a json file')
     parser.add_argument('filename', nargs='?', help='Python source filename')
     return parser
 
@@ -40,6 +44,13 @@ def main():
     if args.sysinfo:
         print("System info:")
         display_sysinfo()
+        sys.exit(0)
+
+    if args.sys_json:
+        info = get_sysinfo()
+        info.update({'Start': info['Start'].isoformat()})
+        with open(args.sys_json[0], 'w') as f:
+            json.dump(info, f, indent=4)
         sys.exit(0)
 
     os.environ['NUMBA_DUMP_ANNOTATION'] = str(int(args.annotate))
