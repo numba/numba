@@ -40,9 +40,7 @@ from numba.ir_utils import (add_offset_to_labels,
                             get_np_ufunc_typ,
                             get_unused_var_name,
                             find_potential_aliases,
-                            is_const_call,
-                            dead_code_elimination,
-                            simplify_CFG)
+                            is_const_call)
 from ..typing import signature
 from numba import config, dppy
 from numba.targets.cpu import ParallelOptions
@@ -53,7 +51,8 @@ import operator
 import warnings
 from ..errors import NumbaParallelSafetyWarning
 
-from numba.dppy.target import SPIR_GENERIC_ADDRSPACE
+from .target import SPIR_GENERIC_ADDRSPACE
+from .dufunc_inliner import dufunc_inliner
 import dppy.core as driver
 
 
@@ -729,15 +728,17 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         sys.stdout.flush()
 
-    print('before vectorize inline'.center(80, '-'))
-    gufunc_ir.dump()
+    if config.DEBUG_ARRAY_OPT:
+        print('before DUFunc inlining'.center(80, '-'))
+        gufunc_ir.dump()
 
     # Inlining all DUFuncs
-    dppy_dufunc_inliner(gufunc_ir, lowerer.fndesc.calltypes, typemap, lowerer.context.typing_context)
+    dufunc_inliner(gufunc_ir, lowerer.fndesc.calltypes, typemap, 
+                   lowerer.context.typing_context)
 
-
-    print('after vectorize inline'.center(80, '-'))
-    gufunc_ir.dump()
+    if config.DEBUG_ARRAY_OPT:
+        print('after DUFunc inline'.center(80, '-'))
+        gufunc_ir.dump()
 
     kernel_func = numba.dppy.compiler.compile_kernel_parfor(
         driver.runtime.get_gpu_device(),
@@ -993,7 +994,7 @@ def call_dppy(lowerer, cres,
 #        print("cres.fndesc", cres.fndesc, type(cres.fndesc))
 
     # get dppy_cpu_portion_lowerer object
-    dppy_cpu_lowerer = DPPyCPUPortionLowerer(lowerer, cres, num_inputs)
+    dppy_cpu_lowerer = DPPyHostWrapperLowerer(lowerer, cres, num_inputs)
 
     # Compute number of args ------------------------------------------------
     num_expanded_args = 0
@@ -1077,7 +1078,7 @@ def call_dppy(lowerer, cres,
     dppy_cpu_lowerer.enqueue_kernel_and_read_back(loop_ranges)
 
 
-class DPPyCPUPortionLowerer(object):
+class DPPyHostWrapperLowerer(object):
     def __init__(self, lowerer, cres, num_inputs):
         self.lowerer = lowerer
         self.context = self.lowerer.context
@@ -1344,118 +1345,3 @@ class DPPyCPUPortionLowerer(object):
                     self.builder.load(array_size_member),
                     self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t)]
             self.builder.call(self.read_mem_buffer_from_device, args)
-
-
-def dppy_dufunc_inliner(func_ir, calltypes, typemap, typingctx):
-    _DEBUG = False
-    modified = False
-    work_list = list(func_ir.blocks.items())
-    # use a work list, look for call sites via `ir.Expr.op == call` and
-    # then pass these to `self._do_work` to make decisions about inlining.
-    while work_list:
-        label, block = work_list.pop()
-        for i, instr in enumerate(block.body):
-
-            #if isinstance(instr, Parfor):
-                # work through the loop body
-                #for (l, b) in instr.loop_body.items():
-                    #for j, inst in enumerate(b.body):
-            if isinstance(instr, ir.Assign):
-                expr = instr.value
-                if isinstance(expr, ir.Expr):
-                    if expr.op == 'call':
-                        find_assn = block.find_variable_assignment(expr.func.name).value
-                        if isinstance(find_assn, ir.Global):
-                            # because of circular import, find better solution
-                            if (find_assn.value.__class__.__name__ == "DUFunc"):
-                                py_func = find_assn.value.py_func
-                                workfn = _do_work_call(func_ir, work_list,
-                                                       block, i, expr, py_func, typemap, calltypes, typingctx)
-
-                                print("Found call ", str(expr))
-                    else:
-                        continue
-
-                    #if guard(workfn, state, work_list, b, j, expr):
-                    if workfn:
-                        modified = True
-                        break  # because block structure changed
-
-
-    if _DEBUG:
-        print('after vectorize inline'.center(80, '-'))
-        print(func_ir.dump())
-        print(''.center(80, '-'))
-
-    if modified:
-        # clean up blocks
-        dead_code_elimination(func_ir,
-                              typemap=typemap)
-        # clean up unconditional branches that appear due to inlined
-        # functions introducing blocks
-        func_ir.blocks = simplify_CFG(func_ir.blocks)
-
-    if _DEBUG:
-        print('after vectorize inline DCE'.center(80, '-'))
-        print(func_ir.dump())
-        print(''.center(80, '-'))
-
-    return True
-
-def _do_work_call(func_ir, work_list, block, i, expr, py_func, typemap, calltypes, typingctx):
-    # try and get a definition for the call, this isn't always possible as
-    # it might be a eval(str)/part generated awaiting update etc. (parfors)
-    to_inline = None
-    try:
-        to_inline = func_ir.get_definition(expr.func)
-    except Exception:
-        return False
-
-    # do not handle closure inlining here, another pass deals with that.
-    if getattr(to_inline, 'op', False) == 'make_function':
-        return False
-
-    # check this is a known and typed function
-    try:
-        func_ty = typemap[expr.func.name]
-    except KeyError:
-        # e.g. Calls to CUDA Intrinsic have no mapped type so KeyError
-        return False
-    if not hasattr(func_ty, 'get_call_type'):
-        return False
-
-    sig = calltypes[expr]
-    is_method = False
-
-    templates = getattr(func_ty, 'templates', None)
-    arg_typs = sig.args
-
-    if templates is None:
-        return False
-
-    assert(len(templates) == 1)
-
-    # at this point we know we maybe want to inline something and there's
-    # definitely something that could be inlined.
-    return _run_inliner(
-        func_ir, sig, templates[0], arg_typs, expr, i, py_func, block,
-        work_list, typemap, calltypes, typingctx
-    )
-
-def _run_inliner(
-    func_ir, sig, template, arg_typs, expr, i, py_func, block,
-    work_list, typemap, calltypes, typingctx
-):
-    from numba.inline_closurecall import (inline_closure_call,
-                                          callee_ir_validator)
-
-    # pass is typed so use the callee globals
-    inline_closure_call(func_ir, py_func.__globals__,
-                        block, i, py_func, typingctx=typingctx,
-                        arg_typs=arg_typs,
-                        typemap=typemap,
-                        calltypes=calltypes,
-                        work_list=work_list,
-                        replace_freevars=False,
-                        callee_validator=callee_ir_validator)
-    return True
