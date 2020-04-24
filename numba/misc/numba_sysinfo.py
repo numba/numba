@@ -96,12 +96,14 @@ def get_os_spec_info(os_name):
     shell_params = {
         'Linux': {
             'cmd': (
-                ('cat', '/proc/meminfo'),
-                ('cat', '/proc/self/status'),
                 CmdBufferOut(('tail', '-vn', '+1',
                               '/sys/fs/cgroup/cpuacct/cpu.cfs_quota_us')),
                 CmdBufferOut(('tail', '-vn', '+1',
                               '/sys/fs/cgroup/cpuacct/cpu.cfs_period_us')),
+            ),
+            'cmd_optional': (
+                ('cat', '/proc/meminfo'),
+                ('cat', '/proc/self/status'),
             ),
             'kwds': {
                 # output string fragment -> result dict key
@@ -114,7 +116,8 @@ def get_os_spec_info(os_name):
             },
         },
         'Windows': {
-            'cmd': (
+            'cmd': (),
+            'cmd_optional': (
                 CmdBufferOut(('wmic', 'OS', 'get', 'TotalVirtualMemorySize')),
                 CmdBufferOut(('wmic', 'OS', 'get', 'FreeVirtualMemory')),
             ),
@@ -125,7 +128,8 @@ def get_os_spec_info(os_name):
             },
         },
         'Darwin': {
-            'cmd': (
+            'cmd': (),
+            'cmd_optional': (
                 ('sysctl', 'hw.memsize'),
                 ('vm_stat'),
             ),
@@ -141,12 +145,33 @@ def get_os_spec_info(os_name):
         },
     }
 
+    os_spec_info, psutil_import = {}, False
+    params = shell_params.get(os_name, {})
+    cmd_selected = params.get('cmd', ())
+    try:
+        import psutil
+    except ImportError:
+        _warning_log.append(
+            "Warning (psutil): psutil cannot be imported. "
+            "For more accuracy, consider installing it.")
+        # Fallback to internal heuristics
+        cmd_selected += params.get('cmd_optional', ())
+    else:
+        psutil_import = True
+        vm = psutil.virtual_memory()
+        cpus_allowed = psutil.Process().cpu_affinity()
+        os_spec_info.update({
+            _mem_total: vm.total,
+            _mem_available: vm.available,
+            _cpus_allowed: len(cpus_allowed),
+            _cpus_list: ' '.join(str(n) for n in cpus_allowed),
+        })
+
     # Assuming the shell cmd returns a unique (k, v) pair per line
     # or a unique (k, v) pair spread over several lines:
     # Gather output in a list of strings containing a keyword and some value.
-    params = shell_params.get(os_name, {})
     output = []
-    for cmd in params.get('cmd', ()):
+    for cmd in cmd_selected:
         try:
             out = check_output(cmd, stderr=PIPE)
         except (OSError, CalledProcessError) as e:
@@ -157,7 +182,6 @@ def get_os_spec_info(os_name):
         output.extend(out.decode().splitlines())
 
     # Extract (k, output) pairs by searching for keywords in output
-    os_spec_info = {}
     kwds = params.get('kwds', {})
     for line in output:
         match = kwds.keys() & line.split()
@@ -168,7 +192,21 @@ def get_os_spec_info(os_name):
             print(f'Ambiguous output: {line}')
 
     # Try to extract something meaningful from output string
-    try:
+    def format():
+        # CFS restrictions
+        split = os_spec_info.get(_cfs_quota, '').split()
+        if split:
+            os_spec_info[_cfs_quota] = float(split[-1])
+        split = os_spec_info.get(_cfs_period, '').split()
+        if split:
+            os_spec_info[_cfs_period] = float(split[-1])
+        if os_spec_info.get(_cfs_quota, -1) != -1:
+            cfs_quota = os_spec_info.get(_cfs_quota, '')
+            cfs_period = os_spec_info.get(_cfs_period, '')
+            runtime_amount = cfs_quota / cfs_period
+            os_spec_info[_cfs_restrict] = runtime_amount
+
+    def format_optional():
         # Memory
         units = {_mem_total: 1024, _mem_available: 1024}
         units.update(params.get('units', {}))
@@ -183,19 +221,11 @@ def get_os_spec_info(os_name):
         split = os_spec_info.get(_cpus_list, '').split()
         if split:
             os_spec_info[_cpus_list] = split[-1]
-        # CFS restrictions
-        split = os_spec_info.get(_cfs_quota, '').split()
-        if split:
-            os_spec_info[_cfs_quota] = float(split[-1])
-        split = os_spec_info.get(_cfs_period, '').split()
-        if split:
-            os_spec_info[_cfs_period] = float(split[-1])
-        if os_spec_info.get(_cfs_quota, -1) != -1:
-            cfs_quota = os_spec_info.get(_cfs_quota, '')
-            cfs_period = os_spec_info.get(_cfs_period, '')
-            runtime_amount = cfs_quota / cfs_period
-            os_spec_info[_cfs_restrict] = runtime_amount
 
+    try:
+        format()
+        if not psutil_import:
+            format_optional()
     except Exception as e:
         _error_log.append(f'Error (format shell output): {e}')
 
