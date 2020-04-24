@@ -18,6 +18,14 @@ from numba.cuda import cudadrv
 from numba.cuda.cudadrv.driver import driver as cudriver
 from numba.core import config
 
+_psutil_import = False
+try:
+    import psutil
+except ImportError:
+    pass
+else:
+    _psutil_import = True
+
 __all__ = ['get_sysinfo', 'display_sysinfo']
 
 # Keys of a `sysinfo` dictionary
@@ -49,7 +57,7 @@ _cu_dev_init = 'CUDA Device Init'
 _cu_drv_ver = 'CUDA Driver Version'
 _cu_detect_out, _cu_lib_test = 'CUDA Detect Output', 'CUDA Lib Test'
 # ROC information
-_roc_available, _roc_toolchains = 'ROC Available', 'ROC Toolchain'
+_roc_available, _roc_toolchains = 'ROC Available', 'ROC Toolchains'
 _hsa_agents_count, _hsa_agents = 'HSA Agents Count', 'HSA Agents'
 _hsa_gpus_count, _hsa_gpus = 'HSA Discrete GPUs Count', 'HSA Discrete GPUs'
 # SVML info
@@ -145,19 +153,11 @@ def get_os_spec_info(os_name):
         },
     }
 
-    os_spec_info, psutil_import = {}, False
+    os_spec_info = {}
     params = shell_params.get(os_name, {})
     cmd_selected = params.get('cmd', ())
-    try:
-        import psutil
-    except ImportError:
-        _warning_log.append(
-            "Warning (psutil): psutil cannot be imported. "
-            "For more accuracy, consider installing it.")
-        # Fallback to internal heuristics
-        cmd_selected += params.get('cmd_optional', ())
-    else:
-        psutil_import = True
+
+    if _psutil_import:
         vm = psutil.virtual_memory()
         cpus_allowed = psutil.Process().cpu_affinity()
         os_spec_info.update({
@@ -166,6 +166,12 @@ def get_os_spec_info(os_name):
             _cpus_allowed: len(cpus_allowed),
             _cpus_list: ' '.join(str(n) for n in cpus_allowed),
         })
+    else:
+        _warning_log.append(
+            "Warning (psutil): psutil cannot be imported. "
+            "For more accuracy, consider installing it.")
+        # Fallback to internal heuristics
+        cmd_selected += params.get('cmd_optional', ())
 
     # Assuming the shell cmd returns a unique (k, v) pair per line
     # or a unique (k, v) pair spread over several lines:
@@ -224,7 +230,7 @@ def get_os_spec_info(os_name):
 
     try:
         format()
-        if not psutil_import:
+        if not _psutil_import:
             format_optional()
     except Exception as e:
         _error_log.append(f'Error (format shell output): {e}')
@@ -263,7 +269,7 @@ def get_sysinfo():
         _python_comp: platform.python_compiler(),
         _python_impl: platform.python_implementation(),
         _python_version: platform.python_version(),
-        _numba_env_vars: {(k, v) for (k, v) in os.environ.items()
+        _numba_env_vars: {k: v for (k, v) in os.environ.items()
                           if k.startswith('NUMBA_')},
         _llvm_version: '.'.join(str(i) for i in llvmbind.llvm_version_info),
         _roc_available: roc.is_available(),
