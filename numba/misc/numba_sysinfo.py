@@ -18,10 +18,12 @@ from numba.cuda import cudadrv
 from numba.cuda.cudadrv.driver import driver as cudriver
 from numba.core import config
 
-__ALL__ = ['get_sysinfo', 'display_sysinfo']
+__all__ = ['get_sysinfo', 'display_sysinfo']
 
 # Keys of a `sysinfo` dictionary
 
+# Time info
+_start, _runtime = 'Start', 'Runtime'
 # Hardware info
 _machine = 'Machine'
 _cpu_name, _cpu_count = 'CPU Name', 'CPU Count'
@@ -217,16 +219,16 @@ def get_os_spec_info(os_name):
 
 
 def get_sysinfo():
-    os_name = platform.system()
 
     # Gather the information that shouldn't raise exceptions
     sys_info = {
+        _start: datetime.utcnow(),
         _machine: platform.machine(),
         _cpu_name: llvmbind.get_host_cpu_name(),
         _cpu_count: multiprocessing.cpu_count(),
         _platform_name: platform.platform(aliased=True),
         _platform_release: platform.release(),
-        _os_name: os_name,
+        _os_name: platform.system(),
         _os_version: platform.version(),
         _python_comp: platform.python_compiler(),
         _python_impl: platform.python_implementation(),
@@ -454,9 +456,10 @@ def get_sysinfo():
             data = conda_out.decode().splitlines()
             sys_info[_inst_pkg] = [l for l in data if not l.startswith('#')]
 
-    sys_info.update(get_os_spec_info(os_name))
+    sys_info.update(get_os_spec_info(sys_info[_os_name]))
     sys_info[_errors] = _error_log
     sys_info[_warnings] = _warning_log
+    sys_info[_runtime] = (datetime.utcnow() - sys_info[_start]).total_seconds()
     return sys_info
 
 
@@ -470,17 +473,15 @@ def display_sysinfo():
     class DisplaySeqMaps(tuple):
         display_seqmaps_flag = True
 
-    start = datetime.utcnow()
     info = get_sysinfo()
-    delta = datetime.utcnow() - start
 
     fmt = "%-45s : %-s"
     MB = 1024**2
     template = (
         ("-" * 80,),
         ("__Time Stamp__",),
-        ("Report started", start),
-        ("Running time (s)", delta.total_seconds()),
+        ("Report started", info[_start]),
+        ("Running time (s)", info[_runtime]),
         ("",),
         ("__Hardware Information__",),
         ("Machine", info[_machine]),
