@@ -20,8 +20,7 @@ from .dppy_passes import (
         DPPyPreParforPass,
         DPPyParforPass,
         SpirvFriendlyLowering,
-        DPPyNoPythonBackend,
-        InlineParforVectorize
+        DPPyNoPythonBackend
         )
 
 class DPPyPassBuilder(object):

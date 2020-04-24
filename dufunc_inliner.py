@@ -61,17 +61,24 @@ def _inline(func_ir, work_list, block, i, expr,py_func, typemap, calltypes,
         work_list, typemap, calltypes, typingctx
     )
 
+
 def _is_dufunc_callsite(expr, block):
     if expr.op == 'call':
         call_node = block.find_variable_assignment(expr.func.name).value
-        if (isinstance(call_node, ir.Global) and 
-            call_node.value.__class__.__name__ == "DUFunc"):
+        # due to circular import we can not import DUFunc, TODO: Fix it
+        if(call_node.value.__class__.__name__ == "DUFunc"):
             return call_node
     return None
+
 
 def dufunc_inliner(func_ir, calltypes, typemap, typingctx):
     _DEBUG = False
     modified = False
+
+    if _DEBUG:
+        print('GUFunc before inlining DUFunc'.center(80, '-'))
+        print(func_ir.dump())
+
     work_list = list(func_ir.blocks.items())
     # use a work list, look for call sites via `ir.Expr.op == call` and
     # then pass these to `self._do_work` to make decisions about inlining.
@@ -93,7 +100,7 @@ def dufunc_inliner(func_ir, calltypes, typemap, typingctx):
                     else:
                         continue
     if _DEBUG:
-        print('after inlining DUFunc'.center(80, '-'))
+        print('GUFunc after inlining DUFunc'.center(80, '-'))
         print(func_ir.dump())
         print(''.center(80, '-'))
 
@@ -106,7 +113,7 @@ def dufunc_inliner(func_ir, calltypes, typemap, typingctx):
         func_ir.blocks = simplify_CFG(func_ir.blocks)
 
     if _DEBUG:
-        print('after inlining DUFunc, DCE, SimplyCFG'.center(80, '-'))
+        print('GUFunc after inlining DUFunc, DCE, SimplyCFG'.center(80, '-'))
         print(func_ir.dump())
         print(''.center(80, '-'))
 
