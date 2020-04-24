@@ -61,13 +61,16 @@ def _inline(func_ir, work_list, block, i, expr,py_func, typemap, calltypes,
         work_list, typemap, calltypes, typingctx
     )
 
+
 def _is_dufunc_callsite(expr, block):
     if expr.op == 'call':
         call_node = block.find_variable_assignment(expr.func.name).value
-        if (isinstance(call_node, ir.Global) and 
+        if (isinstance(call_node, ir.Global) and
+            # due to circular import we can not import DUFunc, TODO: Fix it
             call_node.value.__class__.__name__ == "DUFunc"):
             return call_node
     return None
+
 
 def dufunc_inliner(func_ir, calltypes, typemap, typingctx):
     _DEBUG = False
