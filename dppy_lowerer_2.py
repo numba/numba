@@ -56,6 +56,49 @@ from .dufunc_inliner import dufunc_inliner
 import dppy.core as driver
 
 
+# This loop scheduler is pretty basic, there is only
+# 3 dimension allowed in OpenCL, so to make the backend
+# functional we will schedule the first 3 dimensions
+# through OpenCL and generate for loops for the remaining
+# dimensions
+def _schedule_loop(parfor_dim, legal_loop_indices, loop_ranges, param_dict):
+    gufunc_txt    = ""
+    global_id_dim = 0
+    for_loop_dim  = parfor_dim
+    inserted_loop = False
+
+    if parfor_dim > 3:
+        global_id_dim = 3
+    else:
+        global_id_dim = parfor_dim
+
+    for eachdim in range(global_id_dim):
+        gufunc_txt += ("    " + legal_loop_indices[eachdim] + " = "
+                       + "dppy.get_global_id(" + str(eachdim) + ")\n")
+
+
+    indent_count = for_loop_dim - global_id_dim
+    for eachdim in range(global_id_dim, for_loop_dim):
+        inserted_loop = True
+        for indent in range(indent_count):
+            gufunc_txt += "    "
+
+        start, stop, step = loop_ranges[eachdim]
+        start = param_dict.get(str(start), start)
+        stop = param_dict.get(str(stop), stop)
+        gufunc_txt += ("for " +
+                   legal_loop_indices[eachdim] +
+                   " in range(" + str(start) +
+                   ", " + str(stop) +
+                   " + 1):\n")
+
+    if inserted_loop:
+        for indent in range(indent_count):
+            gufunc_txt += "    "
+
+    return gufunc_txt
+
+
 def _dbgprint_after_each_array_assignments(lowerer, loop_body, typemap):
     for label, block in loop_body.items():
         new_block = block.copy()
@@ -561,14 +604,8 @@ def _create_gufunc_for_parfor_body(
     gufunc_txt += "def " + gufunc_name
     gufunc_txt += "(" + (", ".join(parfor_params)) + "):\n"
 
-#    for pindex in range(len(parfor_inputs)):
-#        if ascontig and isinstance(param_types[pindex], types.npytypes.Array):
-#            gufunc_txt += ("    " + parfor_params_orig[pindex]
-#                + " = np.ascontiguousarray(" + parfor_params[pindex] + ")\n")
 
-    for eachdim in range(parfor_dim):
-        gufunc_txt += ("    " + legal_loop_indices[eachdim] + " = "
-                       + "dppy.get_global_id(" + str(eachdim) + ")\n")
+    gufunc_txt += _schedule_loop(parfor_dim, legal_loop_indices, loop_ranges, param_dict)
 
     # Add the sentinel assignment so that we can find the loop body position
     # in the IR.
@@ -1302,8 +1339,8 @@ class DPPyHostWrapperGenerator(object):
             self._call_dppy_kernel_arg_fn(args)
 
     def enqueue_kernel_and_read_back(self, loop_ranges):
-        num_dim = len(loop_ranges)
         # the assumption is loop_ranges will always be less than or equal to 3 dimensions
+        num_dim = len(loop_ranges) if len(loop_ranges) < 4 else 3
 
         # Package dim start and stops for auto-blocking enqueue.
         dim_starts = cgutils.alloca_once(
