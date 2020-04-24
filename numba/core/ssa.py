@@ -430,13 +430,17 @@ class _FixSSAVars(_BaseHandler):
             return self._find_def_from_top(states, label, loc=loc)
 
     def _stmt_index(self, defstmt, block, stop=-1):
-        """Find the postitional index of the statement at ``block``.
+        """Find the positional index of the statement at ``block``.
 
         Assumptions:
         - no two statements can point to the same object.
         """
+        # Compare using id() as IR node equality is for semantic equivalence
+        # opposed to direct equality (the location and scope are not considered
+        # as part of the equality measure, this is important here).
+        stmtids = [id(x) for x in block.body]
         try:
-            return block.body.index(defstmt, 0, stop)
+            return stmtids.index(id(defstmt), 0, stop)
         except ValueError:
             return len(block.body)
 
