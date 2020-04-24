@@ -641,7 +641,8 @@ def _create_gufunc_for_parfor_body(
         _print_body(loop_body)
 
     wrapped_blocks = wrap_loop_body(loop_body)
-    #hoisted, not_hoisted = hoist(parfor_params, loop_body, typemap, wrapped_blocks)
+    #hoisted, not_hoisted = hoist(parfor_params, loop_body,
+    #                             typemap, wrapped_blocks)
     hoisted = []
     not_hoisted = []
 
@@ -733,7 +734,7 @@ def _create_gufunc_for_parfor_body(
         gufunc_ir.dump()
 
     # Inlining all DUFuncs
-    dufunc_inliner(gufunc_ir, lowerer.fndesc.calltypes, typemap, 
+    dufunc_inliner(gufunc_ir, lowerer.fndesc.calltypes, typemap,
                    lowerer.context.typing_context)
 
     if config.DEBUG_ARRAY_OPT:
@@ -809,8 +810,9 @@ def _lower_parfor_dppy_no_gufunc(lowerer, parfor):
         print("alias_map", alias_map)
         print("arg_aliases", arg_aliases)
 
-    # run get_parfor_outputs() and get_parfor_reductions() before gufunc creation
-    # since Jumps are modified so CFG of loop_body dict will become invalid
+    # run get_parfor_outputs() and get_parfor_reductions() before
+    # gufunc creation since Jumps are modified so CFG of loop_body
+    # dict will become invalid
     assert parfor.params != None
 
     parfor_output_arrays = numba.parfor.get_parfor_outputs(
@@ -871,7 +873,7 @@ def _lower_parfor_dppy_no_gufunc(lowerer, parfor):
         parfor.races,
         typemap)
 
-    call_dppy(
+    generate_dppy_host_wrapper(
         lowerer,
         func,
         gu_signature,
@@ -911,7 +913,8 @@ def _create_shape_signature(
     #num_inouts = len(args) - num_reductions
     num_inouts = len(args)
     # maximum class number for array shapes
-    classes = [get_shape_classes(var, typemap=typemap) if var not in races else (-1,) for var in args[1:]]
+    classes = [get_shape_classes(var, typemap=typemap)
+               if var not in races else (-1,) for var in args[1:]]
     class_set = set()
     for _class in classes:
         if _class:
@@ -960,16 +963,17 @@ def _create_shape_signature(
 # Keep all the dppy kernels and programs created alive indefinitely.
 keep_alive_kernels = []
 
-def call_dppy(lowerer, cres,
-              gu_signature,
-              outer_sig,
-              expr_args,
-              num_inputs,
-              expr_arg_types,
-              loop_ranges,
-              init_block,
-              index_var_typ,
-              races):
+def generate_dppy_host_wrapper(lowerer,
+                               cres,
+                               gu_signature,
+                               outer_sig,
+                               expr_args,
+                               num_inputs,
+                               expr_arg_types,
+                               loop_ranges,
+                               init_block,
+                               index_var_typ,
+                               races):
     '''
     Adds the call to the gufunc function from the main function.
     '''
@@ -979,7 +983,7 @@ def call_dppy(lowerer, cres,
     num_dim = len(loop_ranges)
 
     if config.DEBUG_ARRAY_OPT:
-        print("call_dppy")
+        print("generate_dppy_host_wrapper")
         print("args = ", expr_args)
         print("outer_sig = ", outer_sig.args, outer_sig.return_type,
               outer_sig.recvr, outer_sig.pysig)
@@ -994,7 +998,7 @@ def call_dppy(lowerer, cres,
 #        print("cres.fndesc", cres.fndesc, type(cres.fndesc))
 
     # get dppy_cpu_portion_lowerer object
-    dppy_cpu_lowerer = DPPyHostWrapperLowerer(lowerer, cres, num_inputs)
+    dppy_cpu_lowerer = DPPyHostWrapperGenerator(lowerer, cres, num_inputs)
 
     # Compute number of args ------------------------------------------------
     num_expanded_args = 0
@@ -1078,7 +1082,7 @@ def call_dppy(lowerer, cres,
     dppy_cpu_lowerer.enqueue_kernel_and_read_back(loop_ranges)
 
 
-class DPPyHostWrapperLowerer(object):
+class DPPyHostWrapperGenerator(object):
     def __init__(self, lowerer, cres, num_inputs):
         self.lowerer = lowerer
         self.context = self.lowerer.context
@@ -1139,7 +1143,9 @@ class DPPyHostWrapperLowerer(object):
 
     def _declare_functions(self):
         create_dppy_kernel_arg_fnty = lc.Type.function(
-            self.intp_t, [self.void_ptr_ptr_t, self.intp_t, self.void_ptr_ptr_t])
+            self.intp_t,
+             [self.void_ptr_ptr_t, self.intp_t, self.void_ptr_ptr_t])
+
         self.create_dppy_kernel_arg = self.builder.module.get_or_insert_function(create_dppy_kernel_arg_fnty,
                                                               name="create_dp_kernel_arg")
 
