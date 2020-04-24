@@ -85,6 +85,9 @@ def array_take(arr, indices):
 def array_take_kws(arr, indices, axis):
     return arr.take(indices, axis=axis)
 
+def np_array(inp):
+    return np.array(inp)
+
 def np_arange_1(arg0):
     return np.arange(arg0)
 
@@ -741,6 +744,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                 condition = x > x_mean
                 params = (condition, x, y)
                 check_ok(params)
+
+    def test_array_on_array(self):
+        pyfunc = np_array
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def array_example():
+            yield np.arange(10)
+            yield np.arange(10).reshape(2, 5)
+            yield np.arange(10, dtype=np.int32)
+            yield np.arange(8, dtype=np.int32).reshape(2, 2, 2)
+
+        for arr in array_example():
+            self.assertPreciseEqual(cfunc(arr), arr)
 
     def test_arange_1_arg(self):
 

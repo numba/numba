@@ -1,9 +1,12 @@
+import struct
+import unittest
+
 import numpy as np
+
 from numba.core.compiler import compile_isolated
 from numba import njit
 from numba.core import types
-import struct
-import unittest
+from numba.tests.support import TestCase
 
 
 def float_to_int(x):
@@ -22,7 +25,7 @@ def float_to_complex(x):
     return types.complex128(x)
 
 
-class TestCasting(unittest.TestCase):
+class TestCasting(TestCase):
     def test_float_to_int(self):
         pyfunc = float_to_int
         cr = compile_isolated(pyfunc, [types.float32])
@@ -97,6 +100,19 @@ class TestCasting(unittest.TestCase):
 
         self.assertEqual(foo(2), 2)
         self.assertIsNone(foo(None))
+
+    def test_array_dtype_cast(self):
+        @njit
+        def intp_cast(x):
+            return np.intp(x)
+
+        def examples():
+            yield np.arange(10)
+            yield np.arange(10).astype(np.float32)
+            yield np.arange(10, dtype=np.float32).reshape(2, 5)
+
+        for x in examples():
+            self.assertPreciseEqual(intp_cast(x), intp_cast.py_func(x))
 
 
 if __name__ == '__main__':
