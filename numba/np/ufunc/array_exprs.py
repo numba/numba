@@ -339,17 +339,9 @@ def _lower_array_expr(lowerer, expr):
     expr_args = [var.name for var in expr_var_unique]
 
     # 1. Create an AST tree from the array expression.
-
     with _legalize_parameter_names(expr_var_unique) as expr_params:
-
-        if hasattr(ast, "arg"):
-            # Should be Python 3.x
-            ast_args = [ast.arg(param_name, None)
-                        for param_name in expr_params]
-        else:
-            # Should be Python 2.x
-            ast_args = [ast.Name(param_name, ast.Param())
-                        for param_name in expr_params]
+        ast_args = [ast.arg(param_name, None)
+                    for param_name in expr_params]
         # Parse a stub function to ensure the AST is populated with
         # reasonable defaults for the Python version.
         ast_module = ast.parse('def {0}(): return'.format(expr_name),
