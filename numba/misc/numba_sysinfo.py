@@ -223,6 +223,7 @@ def get_os_spec_info(os_name):
         split = os_spec_info.get(_cpus_allowed, '').split()
         if split:
             n = split[-1]
+            n = n.split(',')[-1]
             os_spec_info[_cpus_allowed] = str(bin(int(n or 0, 16))).count('1')
         split = os_spec_info.get(_cpus_list, '').split()
         if split:

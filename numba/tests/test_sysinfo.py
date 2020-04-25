@@ -133,7 +133,6 @@ class TestSysInfoWithoutPsutil(TestCase):
         nsi._psutil_import = False
         self.info = nsi.get_os_spec_info(platform.system())
 
-
     def tearDown(self):
         super(TestSysInfoWithoutPsutil, self).tearDown()
         nsi._psutil_import = self.psutil_orig_state
