@@ -11,13 +11,10 @@ import numba.misc.numba_sysinfo as nsi
 
 class TestSysInfo(TestCase):
 
-    info = None
-
-    @classmethod
-    def setUpClass(cls):
-        super(TestSysInfo, cls).setUpClass()
-        cls.info = nsi.get_sysinfo()
-        cls.safe_contents = {
+    def setUp(self):
+        super(TestSysInfo, self).setUp()
+        self.info = nsi.get_sysinfo()
+        self.safe_contents = {
             int: (
                 nsi._cpu_count,
             ),
@@ -58,13 +55,12 @@ class TestSysInfo(TestCase):
                 nsi._start,
             ),
         }
-        cls.safe_keys = chain(*cls.safe_contents.values())
+        self.safe_keys = chain(*self.safe_contents.values())
 
-    @classmethod
-    def tearDownClass(cls):
-        super(TestSysInfo, cls).tearDownClass()
+    def tearDown(self):
+        super(TestSysInfo, self).tearDown()
         # System info might contain long strings or lists so delete it.
-        del cls.info
+        del self.info
 
     def test_has_safe_keys(self):
         for k in self.safe_keys:
@@ -90,30 +86,27 @@ class TestSysInfo(TestCase):
 
 class TestSysInfoWithPsutil(TestCase):
 
-    info = None
     mem_total = 2 * 1024 ** 2  # 2_097_152
     mem_available = 1024 ** 2  # 1_048_576
     cpus_list = [1, 2]
 
-    @classmethod
-    def setUpClass(cls):
-        super(TestSysInfoWithPsutil, cls).setUpClass()
-        cls.psutil_orig_state = nsi._psutil_import
+    def setUp(self):
+        super(TestSysInfoWithPsutil, self).setUp()
+        self.psutil_orig_state = nsi._psutil_import
         # Mocking psutil
         nsi._psutil_import = True
         nsi.psutil = NonCallableMock()
         vm = nsi.psutil.virtual_memory.return_value
-        vm.total = cls.mem_total
-        vm.available = cls.mem_available
+        vm.total = self.mem_total
+        vm.available = self.mem_available
         proc = nsi.psutil.Process.return_value
-        proc.cpu_affinity.return_value = cls.cpus_list
+        proc.cpu_affinity.return_value = self.cpus_list
 
-        cls.info = nsi.get_os_spec_info(platform.system())
+        self.info = nsi.get_os_spec_info(platform.system())
 
-    @classmethod
-    def tearDownClass(cls):
-        super(TestSysInfoWithPsutil, cls).tearDownClass()
-        nsi._psutil_import = cls.psutil_orig_state
+    def tearDown(self):
+        super(TestSysInfoWithPsutil, self).tearDown()
+        nsi._psutil_import = self.psutil_orig_state
 
     def test_has_all_data(self):
         keys = (nsi._mem_total, nsi._mem_available, nsi._cpus_allowed)
@@ -134,19 +127,16 @@ class TestSysInfoWithPsutil(TestCase):
 
 class TestSysInfoWithoutPsutil(TestCase):
 
-    info = None
-
-    @classmethod
-    def setUpClass(cls):
-        super(TestSysInfoWithoutPsutil, cls).setUpClass()
-        cls.psutil_orig_state = nsi._psutil_import
+    def setUp(self):
+        super(TestSysInfoWithoutPsutil, self).setUp()
+        self.psutil_orig_state = nsi._psutil_import
         nsi._psutil_import = False
-        cls.info = nsi.get_os_spec_info(platform.system())
+        self.info = nsi.get_os_spec_info(platform.system())
 
-    @classmethod
-    def tearDownClass(cls):
-        super(TestSysInfoWithoutPsutil, cls).tearDownClass()
-        nsi._psutil_import = cls.psutil_orig_state
+
+    def tearDown(self):
+        super(TestSysInfoWithoutPsutil, self).tearDown()
+        nsi._psutil_import = self.psutil_orig_state
 
     def test_has_all_data(self):
         keys = (nsi._mem_total, nsi._mem_available)
@@ -158,11 +148,8 @@ class TestSysInfoWithoutPsutil(TestCase):
 
 class TestPlatformSpecificInfo(TestCase):
 
-    info = None
-
-    @classmethod
-    def setUpClass(cls):
-        cls.plat_spec_info = {
+    def setUp(self):
+        self.plat_spec_info = {
             'Linux': {
                 str: (nsi._libc_version,),
             },
@@ -173,9 +160,9 @@ class TestPlatformSpecificInfo(TestCase):
                 str: (nsi._os_spec_version,),
             },
         }
-        cls.os_name = platform.system()
-        cls.contents = cls.plat_spec_info.get(cls.os_name, {})
-        cls.info = nsi.get_os_spec_info(cls.os_name)
+        self.os_name = platform.system()
+        self.contents = self.plat_spec_info.get(self.os_name, {})
+        self.info = nsi.get_os_spec_info(self.os_name)
 
     def test_has_all_data(self):
         keys = chain(*self.contents.values())
