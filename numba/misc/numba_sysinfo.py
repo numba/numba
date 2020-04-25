@@ -334,8 +334,8 @@ def get_sysinfo():
             sys_info[_cu_lib_test] = output.getvalue()
             output.close()
         except Exception as e:
-            _error_log.append(
-                "Error (cuda): Probing CUDA failed "
+            _warning_log.append(
+                "Warning (cuda): Probing CUDA failed "
                 "(device and driver present, runtime problem?)\n"
                 f"(cuda) {type(e)}: {e}")
 
