@@ -11,6 +11,8 @@ import numba.misc.numba_sysinfo as nsi
 
 class TestSysInfo(TestCase):
 
+    info = None
+
     @classmethod
     def setUpClass(cls):
         super(TestSysInfo, cls).setUpClass()
@@ -88,6 +90,7 @@ class TestSysInfo(TestCase):
 
 class TestSysInfoWithPsutil(TestCase):
 
+    info = None
     mem_total = 2 * 1024 ** 2  # 2_097_152
     mem_available = 1024 ** 2  # 1_048_576
     cpus_list = [1, 2]
@@ -131,6 +134,8 @@ class TestSysInfoWithPsutil(TestCase):
 
 class TestSysInfoWithoutPsutil(TestCase):
 
+    info = None
+
     @classmethod
     def setUpClass(cls):
         super(TestSysInfoWithoutPsutil, cls).setUpClass()
@@ -152,6 +157,8 @@ class TestSysInfoWithoutPsutil(TestCase):
 
 
 class TestPlatformSpecificInfo(TestCase):
+
+    info = None
 
     @classmethod
     def setUpClass(cls):
