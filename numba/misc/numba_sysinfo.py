@@ -258,7 +258,7 @@ def get_sysinfo():
 
     # Gather the information that shouldn't raise exceptions
     sys_info = {
-        _start: datetime.utcnow(),
+        _start: datetime.now(),
         _machine: platform.machine(),
         _cpu_name: llvmbind.get_host_cpu_name(),
         _cpu_count: multiprocessing.cpu_count(),
@@ -495,11 +495,11 @@ def get_sysinfo():
     sys_info.update(get_os_spec_info(sys_info[_os_name]))
     sys_info[_errors] = _error_log
     sys_info[_warnings] = _warning_log
-    sys_info[_runtime] = (datetime.utcnow() - sys_info[_start]).total_seconds()
+    sys_info[_runtime] = (datetime.now() - sys_info[_start]).total_seconds()
     return sys_info
 
 
-def display_sysinfo():
+def display_sysinfo(info=None):
     class DisplayMap(dict):
         display_map_flag = True
 
@@ -509,56 +509,57 @@ def display_sysinfo():
     class DisplaySeqMaps(tuple):
         display_seqmaps_flag = True
 
-    info = get_sysinfo()
+    if info is None:
+        info = get_sysinfo()
 
     fmt = "%-45s : %-s"
     MB = 1024**2
     template = (
         ("-" * 80,),
         ("__Time Stamp__",),
-        ("Report started", info[_start]),
-        ("Running time (s)", info[_runtime]),
+        ("Report started (local time)", info.get(_start, '?')),
+        ("Running time (s)", info.get(_runtime, '?')),
         ("",),
         ("__Hardware Information__",),
-        ("Machine", info[_machine]),
-        ("CPU Name", info[_cpu_name]),
-        ("CPU Count", info[_cpu_count]),
-        ("Number of accessible CPUs", info.get(_cpus_allowed, 'N/A')),
-        ("List of accessible CPUs cores", info.get(_cpus_list, 'N/A')),
+        ("Machine", info.get(_machine, '?')),
+        ("CPU Name", info.get(_cpu_name, '?')),
+        ("CPU Count", info.get(_cpu_count, '?')),
+        ("Number of accessible CPUs", info.get(_cpus_allowed, '?')),
+        ("List of accessible CPUs cores", info.get(_cpus_list, '?')),
         ("CFS Restrictions (CPUs worth of runtime)",
             info.get(_cfs_restrict, 'None')),
         ("",),
         ("CPU Features:",),
-        (info.get(_cpu_features, 'N/A'),),
+        (info.get(_cpu_features, '?'),),
         ("",),
         ("Memory Total (MB)", info.get(_mem_total, 0) // MB or '?'),
         ("Memory Available (MB)", info.get(_mem_available, 0) // MB or '?'),
         ("",),
         ("__OS Information__",),
-        ("Platform Name", info[_platform_name]),
-        ("Platform Release", info[_platform_release]),
-        ("OS Name", info[_os_name]),
-        ("OS Version", info[_os_version]),
-        ("OS Specific Version", info.get(_os_spec_version, 'N/A')),
-        ("Libc Version", info.get(_libc_version, 'N/A')),
+        ("Platform Name", info.get(_platform_name, '?')),
+        ("Platform Release", info.get(_platform_release, '?')),
+        ("OS Name", info.get(_os_name, '?')),
+        ("OS Version", info.get(_os_version, '?')),
+        ("OS Specific Version", info.get(_os_spec_version, '?')),
+        ("Libc Version", info.get(_libc_version, '?')),
         ("",),
         ("__Python Information__",),
         DisplayMap({k: v for k, v in info.items() if k.startswith('Python')}),
         ("",),
         ("__LLVM Information__",),
-        ("LLVM Version", info[_llvm_version]),
+        ("LLVM Version", info.get(_llvm_version, '?')),
         ("",),
         ("__CUDA Information__",),
-        ("CUDA Device Initialized", info[_cu_dev_init]),
-        ("CUDA Driver Version", info.get(_cu_drv_ver, 'N/A')),
+        ("CUDA Device Initialized", info.get(_cu_dev_init, '?')),
+        ("CUDA Driver Version", info.get(_cu_drv_ver, '?')),
         ("CUDA Detect Output:",),
         (info.get(_cu_detect_out, "None"),),
         ("CUDA Librairies Test Output:",),
         (info.get(_cu_lib_test, "None"),),
         ("",),
         ("__ROC information__",),
-        ("ROC Available", info[_roc_available]),
-        ("ROC Toolchains", info[_roc_toolchains] or 'None'),
+        ("ROC Available", info.get(_roc_available, '?')),
+        ("ROC Toolchains", info.get(_roc_toolchains, []) or 'None'),
         ("HSA Agents Count", info.get(_hsa_agents_count, 0)),
         ("HSA Agents:",),
         (DisplaySeqMaps(info.get(_hsa_agents, {})) or ('None',)),
@@ -566,37 +567,40 @@ def display_sysinfo():
         ('HSA Discrete GPUs', info.get(_hsa_gpus, 'None')),
         ("",),
         ("__SVML Information__",),
-        ("SVML State, config.USING_SVML", info[_svml_state]),
-        ("SVML Library Loaded", info[_svml_loaded]),
-        ("llvmlite Using SVML Patched LLVM", info[_llvm_svml_patched]),
-        ("SVML Operational", info[_svml_operational]),
+        ("SVML State, config.USING_SVML", info.get(_svml_state, '?')),
+        ("SVML Library Loaded", info.get(_svml_loaded, '?')),
+        ("llvmlite Using SVML Patched LLVM", info.get(_llvm_svml_patched, '?')),
+        ("SVML Operational", info.get(_svml_operational, '?')),
         ("",),
         ("__Threading Layer Information__",),
-        ("TBB Threading Layer Available", info[_tbb_thread]),
-        ("+-->TBB imported successfully." if info[_tbb_thread]
+        ("TBB Threading Layer Available", info.get(_tbb_thread, '?')),
+        ("+-->TBB imported successfully." if info.get(_tbb_thread, '?')
             else f"+--> Disabled due to {info.get(_tbb_error, '?')}",),
-        ("OpenMP Threading Layer Available", info[_openmp_thread]),
-        (f"+-->Vendor: {info[_openmp_vendor]}" if info[_openmp_thread]
+        ("OpenMP Threading Layer Available", info.get(_openmp_thread, '?')),
+        (f"+-->Vendor: {info.get(_openmp_vendor, '?')}"
+            if info.get(_openmp_thread, False)
             else f"+--> Disabled due to {info.get(_openmp_error, '?')}",),
-        ("Workqueue Threading Layer Available", info[_wkq_thread]),
-        ("+-->Workqueue imported successfully." if info[_wkq_thread]
+        ("Workqueue Threading Layer Available", info.get(_wkq_thread, '?')),
+        ("+-->Workqueue imported successfully." if info.get(_wkq_thread, False)
             else f"+--> Disabled due to {info.get(_wkq_error, '?')}",),
         ("",),
         ("__Numba Environment Variable Information__",),
-        (DisplayMap(info[_numba_env_vars]) or ('None found.',)),
+        (DisplayMap(info.get(_numba_env_vars, {})) or ('None found.',)),
         ("",),
         ("__Conda Information__",),
         (DisplayMap({k: v for k, v in info.items()
                      if k.startswith('Conda')}) or ("Conda not available.",)),
         ("",),
         ("__Installed Packages__",),
-        DisplaySeq(info.get(_inst_pkg, ("Couldn t retrieve packages info.",))),
+        DisplaySeq(info.get(_inst_pkg, ("Couldn't retrieve packages info.",))),
         ("",),
-        ("__Error log__" if _error_log else "No errors reported.",),
-        DisplaySeq(_error_log),
+        ("__Error log__" if info.get(_errors, [])
+            else "No errors reported.",),
+        DisplaySeq(info.get(_errors, [])),
         ("",),
-        ("__Warning log__" if _warning_log else "No warnings reported.",),
-        DisplaySeq(_warning_log),
+        ("__Warning log__" if info.get(_warnings, [])
+            else "No warnings reported.",),
+        DisplaySeq(info.get(_warnings, [])),
         ("-" * 80,),
         ("If requested, please copy and paste the information between\n"
          "the dashed (----) lines, or from a given specific section as\n"
