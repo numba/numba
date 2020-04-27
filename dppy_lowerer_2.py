@@ -8,17 +8,11 @@ import os
 import sys
 import numpy as np
 
-import llvmlite.llvmpy.core as lc
-import llvmlite.ir.values as liv
-import llvmlite.ir as lir
-import llvmlite.binding as lb
-
 import numba
 from .. import (compiler,
                 ir,
                 types,
                 six,
-                cgutils,
                 sigutils,
                 lowering,
                 parfor,
@@ -45,7 +39,6 @@ from ..typing import signature
 from numba import config, dppy
 from numba.targets.cpu import ParallelOptions
 from numba.six import exec_
-import types as pytypes
 import operator
 
 import warnings
@@ -53,6 +46,7 @@ from ..errors import NumbaParallelSafetyWarning
 
 from .target import SPIR_GENERIC_ADDRSPACE
 from .dufunc_inliner import dufunc_inliner
+from . import dppy_host_fn_call_gen as dppy_call_gen
 import dppy.core as driver
 
 
@@ -176,217 +170,6 @@ def unwrap_loop_body(loop_body):
     last_label = max(loop_body.keys())
     loop_body[last_label].body = loop_body[last_label].body[:-1]
 
-def add_to_def_once_sets(a_def, def_once, def_more):
-    '''If the variable is already defined more than once, do nothing.
-       Else if defined exactly once previously then transition this
-       variable to the defined more than once set (remove it from
-       def_once set and add to def_more set).
-       Else this must be the first time we've seen this variable defined
-       so add to def_once set.
-    '''
-    if a_def in def_more:
-        pass
-    elif a_def in def_once:
-        def_more.add(a_def)
-        def_once.remove(a_def)
-    else:
-        def_once.add(a_def)
-
-def compute_def_once_block(block, def_once, def_more, getattr_taken, typemap, module_assigns):
-    '''Effect changes to the set of variables defined once or more than once
-       for a single block.
-       block - the block to process
-       def_once - set of variable names known to be defined exactly once
-       def_more - set of variable names known to be defined more than once
-       getattr_taken - dict mapping variable name to tuple of object and attribute taken
-       module_assigns - dict mapping variable name to the Global that they came from
-    '''
-    # The only "defs" occur in assignments, so find such instructions.
-    assignments = block.find_insts(ir.Assign)
-    # For each assignment...
-    for one_assign in assignments:
-        # Get the LHS/target of the assignment.
-        a_def = one_assign.target.name
-        # Add variable to def sets.
-        add_to_def_once_sets(a_def, def_once, def_more)
-
-        rhs = one_assign.value
-        if isinstance(rhs, ir.Global):
-            # Remember assignments of the form "a = Global(...)"
-            # Is this a module?
-            if isinstance(rhs.value, pytypes.ModuleType):
-                module_assigns[a_def] = rhs.value.__name__
-        if isinstance(rhs, ir.Expr) and rhs.op == 'getattr' and rhs.value.name in def_once:
-            # Remember assignments of the form "a = b.c"
-            getattr_taken[a_def] = (rhs.value.name, rhs.attr)
-        if isinstance(rhs, ir.Expr) and rhs.op == 'call' and rhs.func.name in getattr_taken:
-            # If "a" is being called then lookup the getattr definition of "a"
-            # as above, getting the module variable "b" (base_obj)
-            # and the attribute "c" (base_attr).
-            base_obj, base_attr = getattr_taken[rhs.func.name]
-            if base_obj in module_assigns:
-                # If we know the definition of the module variable then get the module
-                # name from module_assigns.
-                base_mod_name = module_assigns[base_obj]
-                if not is_const_call(base_mod_name, base_attr):
-                    # Calling a method on an object could modify the object and is thus
-                    # like a def of that object.  We call is_const_call to see if this module/attribute
-                    # combination is known to not modify the module state.  If we don't know that
-                    # the combination is safe then we have to assume there could be a modification to
-                    # the module and thus add the module variable as defined more than once.
-                    add_to_def_once_sets(base_obj, def_once, def_more)
-            else:
-                # Assume the worst and say that base_obj could be modified by the call.
-                add_to_def_once_sets(base_obj, def_once, def_more)
-        if isinstance(rhs, ir.Expr) and rhs.op == 'call':
-            # If a mutable object is passed to a function, then it may be changed and
-            # therefore can't be hoisted.
-            # For each argument to the function...
-            for argvar in rhs.args:
-                # Get the argument's type.
-                if isinstance(argvar, ir.Var):
-                    argvar = argvar.name
-                avtype = typemap[argvar]
-                # If that type doesn't have a mutable attribute or it does and it's set to
-                # not mutable then this usage is safe for hoisting.
-                if getattr(avtype, 'mutable', False):
-                    # Here we have a mutable variable passed to a function so add this variable
-                    # to the def lists.
-                    add_to_def_once_sets(argvar, def_once, def_more)
-
-def compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap, module_assigns):
-    '''Compute the set of variables defined exactly once in the given set of blocks
-       and use the given sets for storing which variables are defined once, more than
-       once and which have had a getattr call on them.
-    '''
-    # For each block...
-    for label, block in loop_body.items():
-        # Scan this block and effect changes to def_once, def_more, and getattr_taken
-        # based on the instructions in that block.
-        compute_def_once_block(block, def_once, def_more, getattr_taken, typemap, module_assigns)
-        # Have to recursively process parfors manually here.
-        for inst in block.body:
-            if isinstance(inst, parfor.Parfor):
-                # Recursively compute for the parfor's init block.
-                compute_def_once_block(inst.init_block, def_once, def_more, getattr_taken, typemap, module_assigns)
-                # Recursively compute for the parfor's loop body.
-                compute_def_once_internal(inst.loop_body, def_once, def_more, getattr_taken, typemap, module_assigns)
-
-def compute_def_once(loop_body, typemap):
-    '''Compute the set of variables defined exactly once in the given set of blocks.
-    '''
-    def_once = set()   # set to hold variables defined exactly once
-    def_more = set()   # set to hold variables defined more than once
-    getattr_taken = {}
-    module_assigns = {}
-    compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap, module_assigns)
-    return def_once
-
-def find_vars(var, varset):
-    assert isinstance(var, ir.Var)
-    varset.add(var.name)
-    return var
-
-def _hoist_internal(inst, dep_on_param, call_table, hoisted, not_hoisted,
-                    typemap, stored_arrays):
-    if inst.target.name in stored_arrays:
-        not_hoisted.append((inst, "stored array"))
-        if config.DEBUG_ARRAY_OPT >= 1:
-            print("Instruction", inst, " could not be hoisted because the created array is stored.")
-        return False
-
-    uses = set()
-    visit_vars_inner(inst.value, find_vars, uses)
-    diff = uses.difference(dep_on_param)
-    if config.DEBUG_ARRAY_OPT >= 1:
-        print("_hoist_internal:", inst, "uses:", uses, "diff:", diff)
-    if len(diff) == 0 and is_pure(inst.value, None, call_table):
-        if config.DEBUG_ARRAY_OPT >= 1:
-            print("Will hoist instruction", inst, typemap[inst.target.name])
-        hoisted.append(inst)
-        if not isinstance(typemap[inst.target.name], types.npytypes.Array):
-            dep_on_param += [inst.target.name]
-        return True
-    else:
-        if len(diff) > 0:
-            not_hoisted.append((inst, "dependency"))
-            if config.DEBUG_ARRAY_OPT >= 1:
-                print("Instruction", inst, " could not be hoisted because of a dependency.")
-        else:
-            not_hoisted.append((inst, "not pure"))
-            if config.DEBUG_ARRAY_OPT >= 1:
-                print("Instruction", inst, " could not be hoisted because it isn't pure.")
-    return False
-
-def find_setitems_block(setitems, itemsset, block, typemap):
-    for inst in block.body:
-        if isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
-            setitems.add(inst.target.name)
-            # If we store a non-mutable object into an array then that is safe to hoist.
-            # If the stored object is mutable and you hoist then multiple entries in the
-            # outer array could reference the same object and changing one index would then
-            # change other indices.
-            if getattr(typemap[inst.value.name], "mutable", False):
-                itemsset.add(inst.value.name)
-        elif isinstance(inst, parfor.Parfor):
-            find_setitems_block(setitems, itemsset, inst.init_block, typemap)
-            find_setitems_body(setitems, itemsset, inst.loop_body, typemap)
-
-def find_setitems_body(setitems, itemsset, loop_body, typemap):
-    """
-      Find the arrays that are written into (goes into setitems) and the
-      mutable objects (mostly arrays) that are written into other arrays
-      (goes into itemsset).
-    """
-    for label, block in loop_body.items():
-        find_setitems_block(setitems, itemsset, block, typemap)
-
-def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
-    dep_on_param = copy.copy(parfor_params)
-    hoisted = []
-    not_hoisted = []
-
-    # Compute the set of variable defined exactly once in the loop body.
-    def_once = compute_def_once(loop_body, typemap)
-    (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
-
-    setitems = set()
-    itemsset = set()
-    find_setitems_body(setitems, itemsset, loop_body, typemap)
-    dep_on_param = list(set(dep_on_param).difference(setitems))
-    if config.DEBUG_ARRAY_OPT >= 1:
-        print("hoist - def_once:", def_once, "setitems:",
-              setitems, "itemsset:", itemsset, "dep_on_param:",
-              dep_on_param, "parfor_params:", parfor_params)
-
-    for label, block in loop_body.items():
-        new_block = []
-        for inst in block.body:
-            if isinstance(inst, ir.Assign) and inst.target.name in def_once:
-                if _hoist_internal(inst, dep_on_param, call_table,
-                                   hoisted, not_hoisted, typemap, itemsset):
-                    # don't add this instruction to the block since it is
-                    # hoisted
-                    continue
-            elif isinstance(inst, parfor.Parfor):
-                new_init_block = []
-                if config.DEBUG_ARRAY_OPT >= 1:
-                    print("parfor")
-                    inst.dump()
-                for ib_inst in inst.init_block.body:
-                    if (isinstance(ib_inst, ir.Assign) and
-                        ib_inst.target.name in def_once):
-                        if _hoist_internal(ib_inst, dep_on_param, call_table,
-                                           hoisted, not_hoisted, typemap, itemsset):
-                            # don't add this instuction to the block since it is hoisted
-                            continue
-                    new_init_block.append(ib_inst)
-                inst.init_block.body = new_init_block
-
-            new_block.append(inst)
-        block.body = new_block
-    return hoisted, not_hoisted
-
 
 def legalize_names_with_typemap(names, typemap):
     """ We use ir_utils.legalize_names to replace internal IR variable names
@@ -410,6 +193,14 @@ def to_scalar_from_0d(x):
         if x.ndim == 0:
             return x.dtype
     return x
+
+
+def _create_gufunc_for_regular_parfor():
+    pass
+
+
+def _create_gufunc_for_reduction_parfor():
+    raise ValueError("Reductions are not yet supported via parfor")
 
 
 def _create_gufunc_for_parfor_body(
@@ -468,6 +259,16 @@ def _create_gufunc_for_parfor_body(
 
     # Get all parfor reduction vars, and operators.
     typemap = lowerer.fndesc.typemap
+
+    parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
+                                        lowerer.func_ir,
+                                        parfor,
+                                        parfor_params,
+                                        lowerer.fndesc.calltypes)
+    has_reduction = False if len(parfor_redvars) == 0 else True
+
+    if has_reduction:
+        _create_gufunc_for_reduction_parfor()
 
     # Compute just the parfor inputs as a set difference.
     parfor_inputs = sorted(
@@ -775,6 +576,8 @@ def _create_gufunc_for_parfor_body(
         print('after DUFunc inline'.center(80, '-'))
         gufunc_ir.dump()
 
+    # FIXME : We should not always use gpu device, instead select the default
+    # device as configured in dppy.
     kernel_func = numba.dppy.compiler.compile_kernel_parfor(
         driver.runtime.get_gpu_device(),
         gufunc_ir,
@@ -1032,7 +835,8 @@ def generate_dppy_host_wrapper(lowerer,
 #        print("cres.fndesc", cres.fndesc, type(cres.fndesc))
 
     # get dppy_cpu_portion_lowerer object
-    dppy_cpu_lowerer = DPPyHostWrapperGenerator(lowerer, cres, num_inputs)
+    dppy_cpu_lowerer = dppy_call_gen.DPPyHostFunctionCallsGenerator(
+                           lowerer, cres, num_inputs)
 
     # Compute number of args ------------------------------------------------
     num_expanded_args = 0
@@ -1114,274 +918,3 @@ def generate_dppy_host_wrapper(lowerer,
         loop_ranges[i] = (start, stop, step)
 
     dppy_cpu_lowerer.enqueue_kernel_and_read_back(loop_ranges)
-
-
-class DPPyHostWrapperGenerator(object):
-    def __init__(self, lowerer, cres, num_inputs):
-        self.lowerer = lowerer
-        self.context = self.lowerer.context
-        self.builder = self.lowerer.builder
-
-        self.gpu_device = driver.runtime.get_gpu_device()
-        self.gpu_device_env = self.gpu_device.get_env_ptr()
-        self.gpu_device_int = int(driver.ffi.cast("uintptr_t",
-                                                  self.gpu_device_env))
-
-        self.kernel_t_obj = cres.kernel._kernel_t_obj[0]
-        self.kernel_int = int(driver.ffi.cast("uintptr_t",
-                                              self.kernel_t_obj))
-
-        # Initialize commonly used LLVM types and constant
-        self._init_llvm_types_and_constants()
-        # Create functions that we need to call
-        self._declare_functions()
-        # Create a NULL void * pointer for meminfo and parent
-        # parts of ndarray type args
-        self.null_ptr = self._create_null_ptr()
-
-        self.total_kernel_args = 0
-        self.cur_arg           = 0
-        self.num_inputs        = num_inputs
-
-        # list of buffer that needs to comeback to host
-        self.read_bufs_after_enqueue = []
-
-
-    def _create_null_ptr(self):
-        null_ptr = cgutils.alloca_once(self.builder, self.void_ptr_t,
-                size=self.context.get_constant(types.uintp, 1), name="null_ptr")
-        self.builder.store(
-            self.builder.inttoptr(
-                self.context.get_constant(types.uintp, 0), self.void_ptr_t),
-                null_ptr)
-        return null_ptr
-
-
-    def _init_llvm_types_and_constants(self):
-        self.byte_t          = lc.Type.int(8)
-        self.byte_ptr_t      = lc.Type.pointer(self.byte_t)
-        self.byte_ptr_ptr_t  = lc.Type.pointer(self.byte_ptr_t)
-        self.intp_t          = self.context.get_value_type(types.intp)
-        self.uintp_t         = self.context.get_value_type(types.uintp)
-        self.intp_ptr_t      = lc.Type.pointer(self.intp_t)
-        self.uintp_ptr_t     = lc.Type.pointer(self.uintp_t)
-        self.zero            = self.context.get_constant(types.uintp, 0)
-        self.one             = self.context.get_constant(types.uintp, 1)
-        self.one_type        = self.one.type
-        self.sizeof_intp     = self.context.get_abi_sizeof(self.intp_t)
-        self.void_ptr_t      = self.context.get_value_type(types.voidptr)
-        self.void_ptr_ptr_t  = lc.Type.pointer(self.void_ptr_t)
-        self.sizeof_void_ptr = self.context.get_abi_sizeof(self.intp_t)
-        self.gpu_device_int_const = self.context.get_constant(
-                                        types.uintp, self.gpu_device_int)
-
-    def _declare_functions(self):
-        create_dppy_kernel_arg_fnty = lc.Type.function(
-            self.intp_t,
-             [self.void_ptr_ptr_t, self.intp_t, self.void_ptr_ptr_t])
-
-        self.create_dppy_kernel_arg = self.builder.module.get_or_insert_function(create_dppy_kernel_arg_fnty,
-                                                              name="create_dp_kernel_arg")
-
-        create_dppy_kernel_arg_from_buffer_fnty = lc.Type.function(
-            self.intp_t, [self.void_ptr_ptr_t, self.void_ptr_ptr_t])
-        self.create_dppy_kernel_arg_from_buffer = self.builder.module.get_or_insert_function(
-                                                   create_dppy_kernel_arg_from_buffer_fnty,
-                                                   name="create_dp_kernel_arg_from_buffer")
-
-        create_dppy_rw_mem_buffer_fnty = lc.Type.function(
-            self.intp_t, [self.void_ptr_t, self.intp_t, self.void_ptr_ptr_t])
-        self.create_dppy_rw_mem_buffer = self.builder.module.get_or_insert_function(
-                                          create_dppy_rw_mem_buffer_fnty,
-                                          name="create_dp_rw_mem_buffer")
-
-        write_mem_buffer_to_device_fnty = lc.Type.function(
-            self.intp_t, [self.void_ptr_t, self.void_ptr_t, self.intp_t, self.intp_t, self.intp_t, self.void_ptr_t])
-        self.write_mem_buffer_to_device = self.builder.module.get_or_insert_function(
-                                          write_mem_buffer_to_device_fnty,
-                                          name="write_dp_mem_buffer_to_device")
-
-        read_mem_buffer_from_device_fnty = lc.Type.function(
-            self.intp_t, [self.void_ptr_t, self.void_ptr_t, self.intp_t, self.intp_t, self.intp_t, self.void_ptr_t])
-        self.read_mem_buffer_from_device = self.builder.module.get_or_insert_function(
-                                        read_mem_buffer_from_device_fnty,
-                                        name="read_dp_mem_buffer_from_device")
-
-        enqueue_kernel_fnty = lc.Type.function(
-            self.intp_t, [self.void_ptr_t, self.void_ptr_t, self.intp_t, self.void_ptr_ptr_t,
-                     self.intp_t, self.intp_ptr_t, self.intp_ptr_t])
-        self.enqueue_kernel = self.builder.module.get_or_insert_function(
-                                      enqueue_kernel_fnty,
-                                      name="set_args_and_enqueue_dp_kernel_auto_blocking")
-
-
-    def allocate_kenrel_arg_array(self, num_kernel_args):
-        self.total_kernel_args = num_kernel_args
-
-        # we need a kernel arg array to enqueue
-        self.kernel_arg_array = cgutils.alloca_once(
-            self.builder, self.void_ptr_t, size=self.context.get_constant(
-                types.uintp, num_kernel_args), name="kernel_arg_array")
-
-
-    def _call_dppy_kernel_arg_fn(self, args):
-        kernel_arg = cgutils.alloca_once(self.builder, self.void_ptr_t,
-                                         size=self.one, name="kernel_arg" + str(self.cur_arg))
-
-        args.append(kernel_arg)
-        self.builder.call(self.create_dppy_kernel_arg, args)
-        dst = self.builder.gep(self.kernel_arg_array, [self.context.get_constant(types.intp, self.cur_arg)])
-        self.cur_arg += 1
-        self.builder.store(self.builder.load(kernel_arg), dst)
-
-
-    def process_kernel_arg(self, var, llvm_arg, arg_type, gu_sig, val_type, index):
-
-        if isinstance(arg_type, types.npytypes.Array):
-            if llvm_arg is None:
-                raise NotImplementedError(arg_type, var)
-
-            # Handle meminfo.  Not used by kernel so just write a null pointer.
-            args = [self.null_ptr, self.context.get_constant(types.uintp, self.sizeof_void_ptr)]
-            self._call_dppy_kernel_arg_fn(args)
-
-            # Handle parent.  Not used by kernel so just write a null pointer.
-            args = [self.null_ptr, self.context.get_constant(types.uintp, self.sizeof_void_ptr)]
-            self._call_dppy_kernel_arg_fn(args)
-
-            # Handle array size
-            array_size_member = self.builder.gep(llvm_arg,
-                    [self.context.get_constant(types.int32, 0), self.context.get_constant(types.int32, 2)])
-            args = [self.builder.bitcast(array_size_member, self.void_ptr_ptr_t),
-                    self.context.get_constant(types.uintp, self.sizeof_intp)]
-            self._call_dppy_kernel_arg_fn(args)
-
-            # Handle itemsize
-            item_size_member = self.builder.gep(llvm_arg,
-                    [self.context.get_constant(types.int32, 0), self.context.get_constant(types.int32, 3)])
-            args = [self.builder.bitcast(item_size_member, self.void_ptr_ptr_t),
-                    self.context.get_constant(types.uintp, self.sizeof_intp)]
-            self._call_dppy_kernel_arg_fn(args)
-
-            # Calculate total buffer size
-            total_size = cgutils.alloca_once(self.builder, self.intp_t,
-                    size=self.one, name="total_size" + str(self.cur_arg))
-            self.builder.store(self.builder.sext(self.builder.mul(self.builder.load(array_size_member),
-                               self.builder.load(item_size_member)), self.intp_t), total_size)
-
-            # Handle data
-            kernel_arg = cgutils.alloca_once(self.builder, self.void_ptr_t,
-                    size=self.one, name="kernel_arg" + str(self.cur_arg))
-            data_member = self.builder.gep(llvm_arg,
-                    [self.context.get_constant(types.int32, 0), self.context.get_constant(types.int32, 4)])
-
-            buffer_name = "buffer_ptr" + str(self.cur_arg)
-            buffer_ptr = cgutils.alloca_once(self.builder, self.void_ptr_t,
-                                             size=self.one, name=buffer_name)
-
-            # env, buffer_size, buffer_ptr
-            args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
-                    self.builder.load(total_size),
-                    buffer_ptr]
-            self.builder.call(self.create_dppy_rw_mem_buffer, args)
-
-            if index < self.num_inputs:
-                args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
-                        self.builder.load(buffer_ptr),
-                        self.one,
-                        self.zero,
-                        self.builder.load(total_size),
-                        self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t)]
-
-                self.builder.call(self.write_mem_buffer_to_device, args)
-            else:
-                self.read_bufs_after_enqueue.append((buffer_ptr, total_size, data_member))
-
-            self.builder.call(self.create_dppy_kernel_arg_from_buffer, [buffer_ptr, kernel_arg])
-            dst = self.builder.gep(self.kernel_arg_array, [self.context.get_constant(types.intp, self.cur_arg)])
-            self.cur_arg += 1
-            self.builder.store(self.builder.load(kernel_arg), dst)
-
-            # Handle shape
-            shape_member = self.builder.gep(llvm_arg,
-                    [self.context.get_constant(types.int32, 0),
-                     self.context.get_constant(types.int32, 5)])
-
-            for this_dim in range(arg_type.ndim):
-                shape_entry = self.builder.gep(shape_member,
-                                [self.context.get_constant(types.int32, 0),
-                                 self.context.get_constant(types.int32, this_dim)])
-
-                args = [self.builder.bitcast(shape_entry, self.void_ptr_ptr_t),
-                        self.context.get_constant(types.uintp, self.sizeof_intp)]
-                self._call_dppy_kernel_arg_fn(args)
-
-            # Handle strides
-            stride_member = self.builder.gep(llvm_arg,
-                    [self.context.get_constant(types.int32, 0),
-                     self.context.get_constant(types.int32, 6)])
-
-            for this_stride in range(arg_type.ndim):
-                stride_entry = self.builder.gep(stride_member,
-                                [self.context.get_constant(types.int32, 0),
-                                 self.context.get_constant(types.int32, this_dim)])
-
-                args = [self.builder.bitcast(stride_entry, self.void_ptr_ptr_t),
-                        self.context.get_constant(types.uintp, self.sizeof_intp)]
-                self._call_dppy_kernel_arg_fn(args)
-
-        else:
-            args = [self.builder.bitcast(llvm_arg, self.void_ptr_ptr_t),
-                    self.context.get_constant(types.uintp, self.context.get_abi_sizeof(val_type))]
-            self._call_dppy_kernel_arg_fn(args)
-
-    def enqueue_kernel_and_read_back(self, loop_ranges):
-        # the assumption is loop_ranges will always be less than or equal to 3 dimensions
-        num_dim = len(loop_ranges) if len(loop_ranges) < 4 else 3
-
-        # Package dim start and stops for auto-blocking enqueue.
-        dim_starts = cgutils.alloca_once(
-                        self.builder, self.uintp_t,
-                        size=self.context.get_constant(types.uintp, num_dim), name="dims")
-
-        dim_stops = cgutils.alloca_once(
-                        self.builder, self.uintp_t,
-                        size=self.context.get_constant(types.uintp, num_dim), name="dims")
-
-        for i in range(num_dim):
-            start, stop, step = loop_ranges[i]
-            if start.type != self.one_type:
-                start = self.builder.sext(start, self.one_type)
-            if stop.type != self.one_type:
-                stop = self.builder.sext(stop, self.one_type)
-            if step.type != self.one_type:
-                step = self.builder.sext(step, self.one_type)
-
-            # substract 1 because do-scheduling takes inclusive ranges
-            stop = self.builder.sub(stop, self.one)
-
-            self.builder.store(start,
-                               self.builder.gep(dim_starts, [self.context.get_constant(types.uintp, i)]))
-            self.builder.store(stop,
-                               self.builder.gep(dim_stops, [self.context.get_constant(types.uintp, i)]))
-
-        args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
-                self.builder.inttoptr(self.context.get_constant(types.uintp, self.kernel_int), self.void_ptr_t),
-                self.context.get_constant(types.uintp, self.total_kernel_args),
-                self.kernel_arg_array,
-                self.context.get_constant(types.uintp, num_dim),
-                dim_starts,
-                dim_stops]
-
-        self.builder.call(self.enqueue_kernel, args)
-
-        # read buffers back to host
-        for read_buf in self.read_bufs_after_enqueue:
-            buffer_ptr, array_size_member, data_member = read_buf
-            args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
-                    self.builder.load(buffer_ptr),
-                    self.one,
-                    self.zero,
-                    self.builder.load(array_size_member),
-                    self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t)]
-            self.builder.call(self.read_mem_buffer_from_device, args)
