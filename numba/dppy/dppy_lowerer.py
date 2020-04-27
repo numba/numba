@@ -602,7 +602,7 @@ def _create_gufunc_for_parfor_body(
     return kernel_func, parfor_args, kernel_sig, func_arg_types
 
 
-def _lower_parfor_dppy_no_gufunc(lowerer, parfor):
+def _lower_parfor_gufunc(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
     This function lowers a parfor IR node to LLVM.
     The general approach is as follows:
@@ -928,3 +928,14 @@ def generate_dppy_host_wrapper(lowerer,
         loop_ranges[i] = (start, stop, step)
 
     dppy_cpu_lowerer.enqueue_kernel_and_read_back(loop_ranges)
+
+
+from numba.lowering import Lower
+
+class DPPyLower(Lower):
+    def __init__(self, context, library, fndesc, func_ir, metadata=None):
+        Lower.__init__(self, context, library, fndesc, func_ir, metadata)
+        lowering.lower_extensions[parfor.Parfor] = _lower_parfor_gufunc
+
+def dppy_lower_array_expr(lowerer, expr):
+    raise NotImplementedError(expr)
