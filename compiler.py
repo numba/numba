@@ -38,7 +38,7 @@ class DPPyCompiler(CompilerBase):
         # this maintains the objmode fallback behaviour
         pms = []
         if not self.state.flags.force_pyobject:
-            print("No python DPPY pipeline...")
+            print("Numba-DPPY [INFO]: Using Numba-DPPY pipeline")
             pms.append(DPPyPassBuilder.define_nopython_pipeline(self.state))
         if self.state.status.can_fallback or self.state.flags.force_pyobject:
             pms.append(

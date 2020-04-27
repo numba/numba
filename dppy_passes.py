@@ -49,7 +49,6 @@ class DPPyPreParforPass(FunctionPass):
         """
         # Ensure we have an IR and type information.
         assert state.func_ir
-        print(state.flags.auto_parallel.numpy)
 
         preparfor_pass = _parfor_PreParforPass(
             state.func_ir,

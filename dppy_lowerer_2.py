@@ -341,12 +341,12 @@ def _create_gufunc_for_parfor_body(
     assert(len(param_types_addrspaces) == len(addrspaces))
     for i in range(len(param_types_addrspaces)):
         if addrspaces[i] is not None:
-            print("before:", id(param_types_addrspaces[i]))
+            #print("before:", id(param_types_addrspaces[i]))
             assert(isinstance(param_types_addrspaces[i], types.npytypes.Array))
             param_types_addrspaces[i] = (param_types_addrspaces[i]
                                         .copy(addrspace=addrspaces[i]))
-            print("setting param type", i, param_types[i], id(param_types[i]),
-                  "to addrspace", param_types_addrspaces[i].addrspace)
+            #print("setting param type", i, param_types[i], id(param_types[i]),
+            #      "to addrspace", param_types_addrspaces[i].addrspace)
 
     def print_arg_with_addrspaces(args):
         for a in args:

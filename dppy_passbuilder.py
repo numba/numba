@@ -80,7 +80,6 @@ class DPPyPassBuilder(object):
         pm = PassManager(name)
         DPPyPassBuilder.default_numba_nopython_pipeline(state, pm)
 
-
         # Intel GPU/CPU specific optimizations
         pm.add_pass(DPPyPreParforPass, "Preprocessing for parfors")
         if not state.flags.no_rewrites:
