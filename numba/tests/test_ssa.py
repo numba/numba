@@ -370,3 +370,26 @@ class TestReportedSSAIssues(SSABaseTest):
         res2 = jit(forceobj=True, looplift=False)(foo)(10, 10, data)
         np.testing.assert_array_equal(expect, res1)
         np.testing.assert_array_equal(expect, res2)
+
+    def test_issue5623_equal_statements_in_same_bb(self):
+
+        def foo(pred, stack):
+            i = 0
+            c = 1
+
+            if pred is True:
+                stack[i] = c
+                i += 1
+                stack[i] = c
+                i += 1
+
+        python = np.array([0, 666])
+        foo(True, python)
+
+        nb = np.array([0, 666])
+        njit(foo)(True, nb)
+
+        expect = np.array([1, 1])
+
+        np.testing.assert_array_equal(python, expect)
+        np.testing.assert_array_equal(nb, expect)
