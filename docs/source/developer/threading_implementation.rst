@@ -212,7 +212,7 @@ The general pattern for using ``get_num_threads`` in code generation is
 
    # Pass num_threads through to the appropriate backend function here
 
-See the code in ``numba/np/ufunc/parfor.py``.
+See the code in ``numba/parfors/parfor_lowering.py``.
 
 The guard against ``num_threads`` being <= 0 is not strictly necessary, but it
 can protect against accidentally incorrect behavior in case the thread masking
