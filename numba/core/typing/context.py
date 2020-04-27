@@ -385,7 +385,7 @@ class BaseContext(object):
 
         raise typeof_exc
 
-    def resolve_value_type_as_literal(self, value):
+    def resolve_value_type_prefer_literal(self, value):
         """Resolve value type and prefer Literal types whenever possible.
         """
         lit = types.maybe_literal(value)

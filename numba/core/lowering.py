@@ -551,7 +551,7 @@ class Lower(BaseLower):
             if isinstance(argty, types.Omitted):
                 pyval = argty.value
                 tyctx = self.context.typing_context
-                valty = tyctx.resolve_value_type_as_literal(pyval)
+                valty = tyctx.resolve_value_type_prefer_literal(pyval)
                 # use the type of the constant value
                 const = self.context.get_constant_generic(
                     self.builder, valty, pyval,

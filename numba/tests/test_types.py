@@ -822,7 +822,8 @@ class TestIssues(TestCase):
             if not isinstance(a, types.Literal):
                 return
             self.assertIsInstance(a, types.Literal)
-            return lambda a: type(a)(a + 1)
+            # NOTE: using 1.23 to ensure that the result is indeed an int.
+            return lambda a: type(a)(a + 1.23)
 
         @njit
         def my_func(a=1):
