@@ -438,11 +438,10 @@ class _FixSSAVars(_BaseHandler):
         # Compare using id() as IR node equality is for semantic equivalence
         # opposed to direct equality (the location and scope are not considered
         # as part of the equality measure, this is important here).
-        stmtids = [id(x) for x in block.body]
-        try:
-            return stmtids.index(id(defstmt), 0, stop)
-        except ValueError:
-            return len(block.body)
+        for i in range(len(block.body))[:stop]:
+            if block.body[i] is defstmt:
+                return i
+        return len(block.body)
 
 
 def _warn_about_uninitialized_variable(varname, loc):
