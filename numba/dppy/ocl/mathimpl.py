@@ -19,12 +19,29 @@ _unary_d_d = types.float64(types.float64)
 _binary_f_ff = types.float32(types.float32, types.float32)
 _binary_d_dd = types.float64(types.float64, types.float64)
 
+_binary_f_fi = types.float32(types.float32, types.int32)
+_binary_f_fl = types.float32(types.float32, types.int64)
+_binary_d_di = types.float64(types.float64, types.int32)
+_binary_d_dl = types.float64(types.float64, types.int64)
+
+sig_mapper = {
+        'f->f' : _unary_f_f,
+        'd->d' : _unary_d_d,
+        'ff->f': _binary_f_ff,
+        'dd->d': _binary_d_dd,
+        'fi->f': _binary_f_fi,
+        'fl->f': _binary_f_fl,
+        'di->d': _binary_d_di,
+        'dl->d': _binary_d_dl,
+        }
+
 function_descriptors = {
     'isnan': (_unary_b_f, _unary_b_d),
     'isinf': (_unary_b_f, _unary_b_d),
 
     'ceil': (_unary_f_f, _unary_d_d),
     'floor': (_unary_f_f, _unary_d_d),
+    'trunc': (_unary_f_f, _unary_d_d),
 
     'fabs': (_unary_f_f, _unary_d_d),
 
@@ -58,6 +75,8 @@ function_descriptors = {
     'gamma': (_unary_f_f, _unary_d_d),
     'lgamma': (_unary_f_f, _unary_d_d),
 
+    'ldexp': (_binary_f_fi, _binary_f_fl, _binary_d_di, _binary_d_dl),
+
     # unsupported functions listed in the math module documentation:
     # frexp, ldexp, trunc, modf, factorial, fsum
 }
@@ -87,21 +106,29 @@ _supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'sinh',
               'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'isnan', 'isinf',
               'ceil', 'floor', 'fabs', 'sqrt', 'exp', 'expm1', 'log',
               'log10', 'log1p', 'copysign', 'pow', 'fmod', 'erf', 'erfc',
-              'gamma', 'lgamma',
+              'gamma', 'lgamma', 'ldexp', 'trunc'
               ]
 
-for name in _supported:
-    sigs = function_descriptors.get(name)
-    if sigs is None:
-        warnings.warn("HSA - failed to register '{0}'".format(name))
-        continue
 
+lower_ocl_impl = dict()
+
+def function_name_to_supported_decl(name, sig):
     try:
         # only symbols present in the math module
         key = getattr(math, name)
     except AttributeError:
+        return None
+
+    fn = _mk_fn_decl(name, sig)
+    #lower(key, *sig.args)(fn)
+    lower_ocl_impl[(name, sig)] = lower(key, *sig.args)(fn)
+
+
+for name in _supported:
+    sigs = function_descriptors.get(name)
+    if sigs is None:
+        warnings.warn("OCL - failed to register '{0}'".format(name))
         continue
 
     for sig in sigs:
-        fn = _mk_fn_decl(name, sig)
-        lower(key, *sig.args)(fn)
+        function_name_to_supported_decl(name, sig)

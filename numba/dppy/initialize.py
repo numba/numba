@@ -34,4 +34,3 @@ def _initialize_gufunc():
         return OclGUFuncVectorize
 
     GUVectorize.target_registry.ondemand['dppy'] = init_guvectorize
-

@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 
 import re
+import numpy as np
 
 from llvmlite.llvmpy import core as lc
 from llvmlite import ir as llvmir
@@ -25,11 +26,12 @@ class DPPyTypingContext(typing.BaseContext):
     def load_additional_registries(self):
         # Declarations for OpenCL API functions and OpenCL Math functions
         from .ocl import ocldecl, mathdecl
-        from numba.typing import cmathdecl
+        from numba.typing import cmathdecl, npydecl
 
         self.install_registry(ocldecl.registry)
         self.install_registry(mathdecl.registry)
         self.install_registry(cmathdecl.registry)
+        self.install_registry(npydecl.registry)
         #self.install_registry(operatordecl.registry)
 
 
@@ -65,6 +67,24 @@ def _init_data_model_manager():
 
 spirv_data_model_manager = _init_data_model_manager()
 
+def _replace_numpy_ufunc_with_opencl_supported_functions():
+    from numba.targets.ufunc_db import _ufunc_db as ufunc_db
+    from numba.dppy.ocl.mathimpl import lower_ocl_impl, sig_mapper
+
+    ufuncs = [("fabs", np.fabs), ("exp", np.exp), ("log", np.log),
+              ("log10", np.log10), ("expm1", np.expm1), ("log1p", np.log1p),
+              ("sqrt", np.sqrt), ("sin", np.sin), ("cos", np.cos),
+              ("tan", np.tan), ("asin", np.arcsin), ("acos", np.arccos),
+              ("atan", np.arctan), ("atan2", np.arctan2), ("sinh", np.sinh),
+              ("cosh", np.cosh), ("tanh", np.tanh), ("asinh", np.arcsinh),
+              ("acosh", np.arccosh), ("atanh", np.arctanh), ("ldexp", np.ldexp),
+              ("floor", np.floor), ("ceil", np.ceil), ("trunc", np.trunc)]
+
+    for name, ufunc in ufuncs:
+        for sig in ufunc_db[ufunc].keys():
+            if sig in sig_mapper and (name, sig_mapper[sig]) in lower_ocl_impl:
+                ufunc_db[ufunc][sig] = lower_ocl_impl[(name, sig_mapper[sig])]
+
 
 class DPPyTargetContext(BaseContext):
     implement_powi_as_math_call = True
@@ -77,12 +97,24 @@ class DPPyTargetContext(BaseContext):
                                 .SPIR_DATA_LAYOUT[utils.MACHINE_BITS]))
         # Override data model manager to SPIR model
         self.data_model_manager = spirv_data_model_manager
+        self.done_once = False
 
     def load_additional_registries(self):
         from .ocl import oclimpl, mathimpl
+        from numba.targets import npyimpl
 
         self.insert_func_defn(oclimpl.registry.functions)
         self.insert_func_defn(mathimpl.registry.functions)
+        self.insert_func_defn(npyimpl.registry.functions)
+
+        """ To make sure we are calling supported OpenCL math
+            functions we will redirect some of NUMBA's NumPy
+            ufunc with OpenCL's.
+        """
+        if not self.done_once:
+            _replace_numpy_ufunc_with_opencl_supported_functions()
+            self.done_once = True
+
 
     @cached_property
     def call_conv(self):

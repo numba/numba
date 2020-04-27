@@ -2,17 +2,20 @@ from __future__ import absolute_import, print_function
 
 import numpy as np
 
-from numba.targets.descriptors import TargetDescriptor
-from numba.targets.options import TargetOptions
-from numba import dppy
-from numba.dppy import jit, autojit
-from .descriptor import DPPyTargetDesc
-from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
-                                        GUFuncCallSteps)
+#from numba.targets.descriptors import TargetDescriptor
+#from numba.targets.options import TargetOptions
+#from numba import dppy
+from numba.dppy import kernel, autojit
+from .descriptor import dppy_target
+#from numba.npyufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
+ #                                       GUFuncCallSteps)
 
+from .. import dispatcher, utils, typing
+from .compiler import DPPyCompiler
 
-class DPPyDispatcher(object):
-    targetdescr = DPPyTargetDesc
+class DPPyDispatcher(dispatcher.Dispatcher):
+    targetdescr = dppy_target
+
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         assert not locals
@@ -26,7 +29,7 @@ class DPPyDispatcher(object):
         assert not locals
         options = self.targetoptions.copy()
         options.update(targetoptions)
-        kernel = jit(sig, **options)(self.py_func)
+        kernel = kernel(sig, **options)(self.py_func)
         self._compiled = kernel
         if hasattr(kernel, "_npm_context_"):
             self._npm_context_ = kernel._npm_context_
@@ -54,7 +57,6 @@ class DPPyDispatcher(object):
 
     def __getattr__(self, key):
         return getattr(self.compiled, key)
-
 
 class DPPyUFuncDispatcher(object):
     """

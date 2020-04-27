@@ -9,9 +9,9 @@ from numba import dppy
 registry = Registry()
 intrinsic = registry.register
 intrinsic_attr = registry.register_attr
-intrinsic_global = registry.register_global
+#intrinsic_global = registry.register_global
 
-register_number_classes(intrinsic_global)
+#register_number_classes(intrinsic_global)
 
 @intrinsic
 class Ocl_get_global_id(ConcreteTemplate):
@@ -127,4 +127,4 @@ class OclModuleTemplate(AttributeTemplate):
 
 # intrinsic
 
-intrinsic_global(dppy, types.Module(dppy))
+#intrinsic_global(dppy, types.Module(dppy))

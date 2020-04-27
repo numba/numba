@@ -4,7 +4,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import compiler, types, utils
-from numba.targets import registry
+from numba.targets import cpu_dispatcher as registry
 
 
 def overhead(x):
