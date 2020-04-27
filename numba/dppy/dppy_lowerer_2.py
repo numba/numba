@@ -129,26 +129,33 @@ def replace_var_with_array_in_block(vars, block, typemap, calltypes):
     for inst in block.body:
         if isinstance(inst, ir.Assign) and inst.target.name in vars:
             const_node = ir.Const(0, inst.loc)
-            const_var = ir.Var(inst.target.scope, mk_unique_var("$const_ind_0"), inst.loc)
+            const_var = ir.Var(inst.target.scope, mk_unique_var("$const_ind_0"),
+                               inst.loc)
             typemap[const_var.name] = types.uintp
             const_assign = ir.Assign(const_node, const_var, inst.loc)
             new_block.append(const_assign)
 
-            setitem_node = ir.SetItem(inst.target, const_var, inst.value, inst.loc)
+            setitem_node = ir.SetItem(inst.target, const_var, inst.value,
+                                      inst.loc)
             calltypes[setitem_node] = signature(
-                types.none, types.npytypes.Array(typemap[inst.target.name], 1, "C"), types.intp, typemap[inst.target.name])
+                types.none, types.npytypes.Array(typemap[inst.target.name], 1,
+                                                 "C"), types.intp,
+                                                 typemap[inst.target.name])
             new_block.append(setitem_node)
             continue
         elif isinstance(inst, parfor.Parfor):
-            replace_var_with_array_internal(vars, {0: inst.init_block}, typemap, calltypes)
-            replace_var_with_array_internal(vars, inst.loop_body, typemap, calltypes)
+            replace_var_with_array_internal(vars, {0: inst.init_block},
+                                            typemap, calltypes)
+            replace_var_with_array_internal(vars, inst.loop_body,
+                                            typemap, calltypes)
 
         new_block.append(inst)
     return new_block
 
 def replace_var_with_array_internal(vars, loop_body, typemap, calltypes):
     for label, block in loop_body.items():
-        block.body = replace_var_with_array_in_block(vars, block, typemap, calltypes)
+        block.body = replace_var_with_array_in_block(vars, block, typemap,
+                                                     calltypes)
 
 def replace_var_with_array(vars, loop_body, typemap, calltypes):
     replace_var_with_array_internal(vars, loop_body, typemap, calltypes)
@@ -196,6 +203,7 @@ def to_scalar_from_0d(x):
 
 
 def _create_gufunc_for_regular_parfor():
+    #TODO
     pass
 
 
@@ -403,7 +411,8 @@ def _create_gufunc_for_parfor_body(
     gufunc_txt += "(" + (", ".join(parfor_params)) + "):\n"
 
 
-    gufunc_txt += _schedule_loop(parfor_dim, legal_loop_indices, loop_ranges, param_dict)
+    gufunc_txt += _schedule_loop(parfor_dim, legal_loop_indices, loop_ranges,
+                                 param_dict)
 
     # Add the sentinel assignment so that we can find the loop body position
     # in the IR.
@@ -497,13 +506,14 @@ def _create_gufunc_for_parfor_body(
     # Search all the block in the gufunc outline for the sentinel assignment.
     for label, block in gufunc_ir.blocks.items():
         for i, inst in enumerate(block.body):
-            if isinstance(inst, ir.Assign) and inst.target.name == sentinel_name:
+            if (isinstance(inst, ir.Assign) and
+                inst.target.name == sentinel_name):
                 # We found the sentinel assignment.
                 loc = inst.loc
                 scope = block.scope
                 # split block across __sentinel__
-                # A new block is allocated for the statements prior to the sentinel
-                # but the new block maintains the current block label.
+                # A new block is allocated for the statements prior to the
+                # sentinel but the new block maintains the current block label.
                 prev_block = ir.Block(scope, loc)
                 prev_block.body = block.body[:i]
 
@@ -522,8 +532,8 @@ def _create_gufunc_for_parfor_body(
                 body_last_label = max(loop_body.keys())
                 gufunc_ir.blocks[new_label] = block
                 gufunc_ir.blocks[label] = prev_block
-                # Add a jump from the last parfor body block to the block containing
-                # statements after the sentinel.
+                # Add a jump from the last parfor body block to the block
+                # containing statements after the sentinel.
                 gufunc_ir.blocks[body_last_label].append(
                     ir.Jump(new_label, loc))
                 break
