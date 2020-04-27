@@ -76,9 +76,8 @@ def _schedule_loop(parfor_dim, legal_loop_indices, loop_ranges, param_dict):
                        + "dppy.get_global_id(" + str(eachdim) + ")\n")
 
 
-    indent_count = 1
     for eachdim in range(global_id_dim, for_loop_dim):
-        for indent in range(indent_count + (eachdim - global_id_dim)):
+        for indent in range(1 + (eachdim - global_id_dim)):
             gufunc_txt += "    "
 
         start, stop, step = loop_ranges[eachdim]
@@ -91,7 +90,7 @@ def _schedule_loop(parfor_dim, legal_loop_indices, loop_ranges, param_dict):
                    " + 1):\n")
 
     for eachdim in range(global_id_dim, for_loop_dim):
-        for indent in range(indent_count + (eachdim - global_id_dim)):
+        for indent in range(1 + (eachdim - global_id_dim)):
             gufunc_txt += "    "
 
     return gufunc_txt
