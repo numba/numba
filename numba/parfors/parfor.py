@@ -2864,7 +2864,8 @@ def _arrayexpr_tree_to_ir(
             el_typ1 = typemap[arg_vars[0].name]
             if len(arg_vars) == 2:
                 el_typ2 = typemap[arg_vars[1].name]
-                func_typ = typingctx.resolve_function_type(op, (el_typ1, el_typ), {})
+                func_typ = typingctx.resolve_function_type(op, (el_typ1,
+                                                                el_typ2), {})
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
