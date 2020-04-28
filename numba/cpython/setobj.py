@@ -198,8 +198,10 @@ class _SetPayload(object):
 
         mask = self.mask
         dtype = self._ty.dtype
-        eqfn = context.get_function(operator.eq,
-                                    typing.signature(types.boolean, dtype, dtype))
+        tyctx = context.typing_context
+        fnty = tyctx.resolve_value_type(operator.eq)
+        sig = fnty.get_call_type(tyctx, (dtype, dtype), {})
+        eqfn = context.get_function(fnty, sig)
 
         one = ir.Constant(intp_t, 1)
         five = ir.Constant(intp_t, 5)
