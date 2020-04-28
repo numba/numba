@@ -1,5 +1,6 @@
 import types as pytypes
 from numba import jit, njit, cfunc, types, int64, float64, float32, errors
+from numba import literal_unroll
 from numba.core.config import IS_32BITS, IS_WIN32
 import ctypes
 import warnings
@@ -1074,6 +1075,7 @@ class TestMiscIssues(TestCase):
             r'.*first-class function call cannot use keyword arguments')
 
     def test_issue_5615(self):
+
         @njit
         def foo1(x):
             return x + 1
@@ -1081,8 +1083,6 @@ class TestMiscIssues(TestCase):
         @njit
         def foo2(x):
             return x + 2
-
-        from numba import literal_unroll
 
         @njit
         def bar(fcs):
@@ -1096,4 +1096,5 @@ class TestMiscIssues(TestCase):
             return x
 
         tup = ((foo1, foo2), (foo2, foo1))
-        print(bar(tup))
+
+        self.assertEqual(bar(tup), 39)

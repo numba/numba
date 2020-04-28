@@ -532,8 +532,6 @@ def unified_function_type(numba_types, require_precise=True):
             if isinstance(t, types.UndefinedFunctionType):
                 if undefined_function is None:
                     undefined_function = t
-                elif 0:
-                    assert undefined_function == t
                 dispatchers.update(t.dispatchers)
             else:
                 if function is None:
