@@ -1801,6 +1801,19 @@ class TestMore(TestCase):
             ['a', '25', '0.23', 'None'],
         )
 
+    def test_unroller_as_freevar(self):
+        mixed = (np.ones((1,)), np.ones((1, 1)), np.ones((1, 1, 1)))
+        from numba import literal_unroll as freevar_unroll
+
+        @njit
+        def foo():
+            out = 0
+            for i in freevar_unroll(mixed):
+                out += i.ndim
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
 
 def capture(real_pass):
     """ Returns a compiler pass that captures the mutation state reported
