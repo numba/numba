@@ -283,6 +283,10 @@ def _fix_loop_exit(cfg, loop):
         return loop
 
 
+# Used to describe a nullified condition in dead branch pruning
+nullified = namedtuple('nullified', 'condition, taken_br, rewrite_stmt')
+
+
 # Functions to manipulate IR
 def dead_branch_prune(func_ir, called_args):
     """
@@ -397,7 +401,6 @@ def dead_branch_prune(func_ir, called_args):
     # at least one an arg of the condition is a const
     # if the condition is met it will replace the branch with a jump
     branch_info = find_branches(func_ir)
-    nullified = namedtuple('nullified', 'condition, taken_br, rewrite_stmt')
     nullified_conditions = [] # stores conditions that have no impact post prune
 
     for branch, condition, blk in branch_info:
