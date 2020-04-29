@@ -1057,12 +1057,12 @@ type may be registered with Numba. This may include struct types, though it is
 only permitted to call functions that accept pointers to structs - passing a
 struct by value is unsupported. For registering a mapping, use:
 
-.. function:: numba.cffi_support.register_type(cffi_type, numba_type)
+.. function:: numba.core.typing.cffi_utils.register_type(cffi_type, numba_type)
 
 Out-of-line cffi modules must be registered with Numba prior to the use of any
 of their functions from within Numba-compiled functions:
 
-.. function:: numba.cffi_support.register_module(mod)
+.. function:: numba.core.typing.cffi_utils.register_module(mod)
 
    Register the cffi out-of-line module ``mod`` with Numba.
 
