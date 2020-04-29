@@ -48,6 +48,7 @@ def _run_ssa(blocks):
         return {}
     # Run CFG on the blocks
     cfg = compute_cfg_from_blocks(blocks)
+    df_plus = _iterated_domfronts(cfg)
     # Find SSA violators
     violators = _find_defs_violators(blocks)
     # Process one SSA-violating variable at a time
@@ -61,11 +62,11 @@ def _run_ssa(blocks):
         _logger.debug("Replaced assignments: %s", pformat(defmap))
         # Fix up the RHS
         # Re-associate the variable uses with the reaching definition
-        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg)
+        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus)
     return blocks
 
 
-def _fix_ssa_vars(blocks, varname, defmap, cfg):
+def _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus):
     """Rewrite all uses to ``varname`` given the definition map
     """
     states = _make_states(blocks)
@@ -73,7 +74,7 @@ def _fix_ssa_vars(blocks, varname, defmap, cfg):
     states['defmap'] = defmap
     states['phimap'] = phimap = defaultdict(list)
     states['cfg'] = cfg
-    states['df+'] = _iterated_domfronts(cfg)
+    states['df+'] = df_plus
     newblocks = _run_block_rewrite(blocks, states, _FixSSAVars())
     # check for unneeded phi nodes
     _remove_unneeded_phis(phimap)
