@@ -3194,14 +3194,16 @@ def _combine_params_races_for_ssa_names(scope, params, races):
             # XXX: it's a bug that something references an undefined name
             return k
 
-    keep = set(races)
+    races1 = set(races)
+    unver_params = list(map(unversion, params))
+
     for rv in races:
-        if any(unversion(rv) == unversion(pv) for pv in params):
-            keep.discard(rv)
+        if any(unversion(rv) == pv for pv in unver_params):
+            races1.discard(rv)
         else:
             break
 
-    return params | keep, keep
+    return params | races1, races1
 
 
 def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
