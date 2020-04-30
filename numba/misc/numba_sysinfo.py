@@ -77,6 +77,8 @@ _conda_platform, _conda_python_ver = 'Conda Platform', 'Conda Python Version'
 _conda_root_writable = 'Conda Root Writable'
 # Packages info
 _inst_pkg = 'Installed Packages'
+# Psutil info
+_psutil = 'Psutil Available'
 # Errors and warnings
 _errors = 'Errors'
 _warnings = 'Warnings'
@@ -159,13 +161,16 @@ def get_os_spec_info(os_name):
 
     if _psutil_import:
         vm = psutil.virtual_memory()
-        cpus_allowed = psutil.Process().cpu_affinity()
         os_spec_info.update({
             _mem_total: vm.total,
             _mem_available: vm.available,
-            _cpus_allowed: len(cpus_allowed),
-            _cpus_list: ' '.join(str(n) for n in cpus_allowed),
         })
+        p = psutil.Process()
+        cpus_allowed = p.cpu_affinity() if hasattr(p, 'cpu_affinity') else []
+        if cpus_allowed:
+            os_spec_info[_cpus_allowed] = len(cpus_allowed)
+            os_spec_info[_cpus_list] = ' '.join(str(n) for n in cpus_allowed)
+
     else:
         _warning_log.append(
             "Warning (psutil): psutil cannot be imported. "
@@ -274,6 +279,7 @@ def get_sysinfo():
                           if k.startswith('NUMBA_')},
         _llvm_version: '.'.join(str(i) for i in llvmbind.llvm_version_info),
         _roc_available: roc.is_available(),
+        _psutil: _psutil_import,
     }
 
     # CPU features
@@ -534,7 +540,9 @@ def display_sysinfo(info=None):
         (info.get(_cpu_features, '?'),),
         ("",),
         ("Memory Total (MB)", info.get(_mem_total, 0) // MB or '?'),
-        ("Memory Available (MB)", info.get(_mem_available, 0) // MB or '?'),
+        ("Memory Available (MB)"
+            if info.get(_os_name, '') != 'Darwin' or info.get(_psutil, False)
+            else "Free Memory (MB)", info.get(_mem_available, 0) // MB or '?'),
         ("",),
         ("__OS Information__",),
         ("Platform Name", info.get(_platform_name, '?')),
