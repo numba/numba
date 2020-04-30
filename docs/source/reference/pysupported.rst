@@ -193,8 +193,7 @@ use-case would look like:
 The ``finally`` block and the ``else`` block of a ``try .. except`` are
 supported.
 
-The ``try .. finally`` construct without the ``except`` is currently
-**unsupported**.
+The ``try .. finally`` construct without the ``except`` is supported.
 
 .. _pysupported-builtin-types:
 
