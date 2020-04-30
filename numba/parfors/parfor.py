@@ -3170,12 +3170,41 @@ def get_parfor_params(blocks, options_fusion, fusion_info):
             dummy_block.body = block.body[:i]
             before_defs = compute_use_defs({0: dummy_block}).defmap[0]
             pre_defs |= before_defs
-            parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info) | parfor.races
+            params = get_parfor_params_inner(
+                parfor, pre_defs, options_fusion, fusion_info,
+            )
+            parfor.params, parfor.races = _combine_params_races_for_ssa_names(
+                block.scope, params, parfor.races,
+            )
             parfor_ids.add(parfor.id)
             parfors.append(parfor)
 
         pre_defs |= all_defs[label]
     return parfor_ids, parfors
+
+
+def _combine_params_races_for_ssa_names(scope, params, races):
+    """Returns `(params|races1, races1)`, where `races1` contains all variables
+    in `races` are NOT referring to the same unversioned (SSA) variables in
+    `params`.
+    """
+    def unversion(k):
+        try:
+            return scope.get_exact(k).unversioned_name
+        except ir.NotDefinedError:
+            # XXX: it's a bug that something references an undefined name
+            return k
+
+    races1 = set(races)
+    unver_params = list(map(unversion, params))
+
+    for rv in races:
+        if any(unversion(rv) == pv for pv in unver_params):
+            races1.discard(rv)
+        else:
+            break
+
+    return params | races1, races1
 
 
 def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
