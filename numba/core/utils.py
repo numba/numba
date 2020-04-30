@@ -533,7 +533,8 @@ def unified_function_type(numba_types, require_precise=True):
                 if undefined_function is None:
                     undefined_function = t
                 else:
-                    assert undefined_function == t
+                    # Refuse to unify using function type
+                    return
                 dispatchers.update(t.dispatchers)
             else:
                 if function is None:
