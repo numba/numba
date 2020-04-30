@@ -1763,7 +1763,8 @@ class ConvertNumpyPass:
                 if isinstance(instr, ir.Assign):
                     expr = instr.value
                     lhs = instr.target
-                    if self._is_C_order(lhs.name):
+                    lhs_typ = self.pass_states.typemap[lhs.name]
+                    if self._is_C_or_F_order(lhs_typ):
                         # only translate C order since we can't allocate F
                         if guard(self._is_supported_npycall, expr):
                             new_instr = self._numpy_to_parfor(equiv_set, lhs, expr)
@@ -1787,8 +1788,26 @@ class ConvertNumpyPass:
             block.body = new_body
 
     def _is_C_order(self, arr_name):
-        typ = self.pass_states.typemap[arr_name]
-        return isinstance(typ, types.npytypes.Array) and typ.layout == 'C' and typ.ndim > 0
+        if isinstance(arr_name, types.npytypes.Array):
+            return arr_name.layout == 'C' and arr_name.ndim > 0
+        elif arr_name is str:
+            typ = self.pass_states.typemap[arr_name]
+            return (isinstance(typ, types.npytypes.Array) and
+                    typ.layout == 'C' and
+                    typ.ndim > 0)
+        else:
+            return False
+
+    def _is_C_or_F_order(self, arr_name):
+        if isinstance(arr_name, types.npytypes.Array):
+            return (arr_name.layout == 'C' or arr_name.layout == 'F') and arr_name.ndim > 0
+        elif arr_name is str:
+            typ = self.pass_states.typemap[arr_name]
+            return (isinstance(typ, types.npytypes.Array) and
+                    (typ.layout == 'C' or typ.layout == 'F') and
+                    typ.ndim > 0)
+        else:
+            return False
 
     def _arrayexpr_to_parfor(self, equiv_set, lhs, arrayexpr, avail_vars):
         """generate parfor from arrayexpr node, which is essentially a
@@ -1808,7 +1827,8 @@ class ConvertNumpyPass:
         # generate init block and body
         init_block = ir.Block(scope, loc)
         init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc)
+                                   tuple(size_vars), el_typ, scope, loc,
+                                   pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
@@ -1886,7 +1906,8 @@ class ConvertNumpyPass:
         # generate init block and body
         init_block = ir.Block(scope, loc)
         init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
-                                   tuple(size_vars), el_typ, scope, loc)
+                                   tuple(size_vars), el_typ, scope, loc,
+                                   self.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
