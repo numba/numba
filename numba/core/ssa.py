@@ -315,12 +315,13 @@ class _FixSSAVars(_BaseHandler):
         elif isinstance(rhs, ir.Var):
             newdef = self._fix_var(states, assign, [rhs])
             # Has a replacement that is not the current variable
-            if newdef is not None and states['varname'] != newdef.target.name:
-                return ir.Assign(
-                    target=assign.target,
-                    value=newdef.target,
-                    loc=assign.loc,
-                )
+            if newdef is not None and newdef.target is not ir.UNDEFINED:
+                if states['varname'] != newdef.target.name:
+                    return ir.Assign(
+                        target=assign.target,
+                        value=newdef.target,
+                        loc=assign.loc,
+                    )
 
         return assign
 
@@ -328,10 +329,11 @@ class _FixSSAVars(_BaseHandler):
         newdef = self._fix_var(
             states, stmt, stmt.list_vars(),
         )
-        if newdef is not None and states['varname'] != newdef.target.name:
-            replmap = {states['varname']: newdef.target}
-            stmt = copy(stmt)
-            ir_utils.replace_vars_stmt(stmt, replmap)
+        if newdef is not None and newdef.target is not ir.UNDEFINED:
+            if states['varname'] != newdef.target.name:
+                replmap = {states['varname']: newdef.target}
+                stmt = copy(stmt)
+                ir_utils.replace_vars_stmt(stmt, replmap)
         return stmt
 
     def _fix_var(self, states, stmt, used_vars):
