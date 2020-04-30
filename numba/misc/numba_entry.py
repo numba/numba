@@ -6,6 +6,7 @@ import json
 
 from .numba_sysinfo import display_sysinfo, get_sysinfo
 
+
 def make_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--annotate', help='Annotate source',

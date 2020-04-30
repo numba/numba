@@ -615,7 +615,7 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
             calls = [_ for _ in blk.find_exprs('call')]
             for call in calls:
                 glbl = guard(get_definition, func_ir, call.func)
-                if glbl and isinstance(glbl, ir.Global):
+                if glbl and isinstance(glbl, (ir.Global, ir.FreeVar)):
                     # find a literal_unroll
                     if glbl.value is literal_unroll:
                         if len(call.args) > 1:
@@ -1285,7 +1285,8 @@ class IterLoopCanonicalization(FunctionPass):
                         return False
                     func_var = guard(get_definition, func_ir,  call.func)
                     func = guard(get_definition, func_ir,  func_var)
-                    if func is None or not isinstance(func, ir.Global):
+                    if func is None or not isinstance(func,
+                                                      (ir.Global, ir.FreeVar)):
                         return False
                     if (func.value is None or
                             func.value not in self._accepted_calls):
