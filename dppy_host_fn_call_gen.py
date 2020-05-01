@@ -7,6 +7,8 @@ import llvmlite.ir as lir
 import llvmlite.binding as lb
 from .. import types, cgutils
 
+from numba.ir_utils import legalize_names
+
 class DPPyHostFunctionCallsGenerator(object):
     def __init__(self, lowerer, cres, num_inputs):
         self.lowerer = lowerer
@@ -126,7 +128,7 @@ class DPPyHostFunctionCallsGenerator(object):
         self.builder.store(self.builder.load(kernel_arg), dst)
 
 
-    def process_kernel_arg(self, var, llvm_arg, arg_type, gu_sig, val_type, index):
+    def process_kernel_arg(self, var, llvm_arg, arg_type, gu_sig, val_type, index, modified_arrays):
 
         if isinstance(arg_type, types.npytypes.Array):
             if llvm_arg is None:
@@ -176,6 +178,13 @@ class DPPyHostFunctionCallsGenerator(object):
                     buffer_ptr]
             self.builder.call(self.create_dppy_rw_mem_buffer, args)
 
+            # names are replaces usig legalize names, we have to do the same for them to match
+            legal_names = legalize_names([var])
+
+            if legal_names[var] in modified_arrays:
+                self.read_bufs_after_enqueue.append((buffer_ptr, total_size, data_member))
+
+            # We really need to detect when an array needs to be copied over
             if index < self.num_inputs:
                 args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
                         self.builder.load(buffer_ptr),
@@ -185,8 +194,6 @@ class DPPyHostFunctionCallsGenerator(object):
                         self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t)]
 
                 self.builder.call(self.write_mem_buffer_to_device, args)
-            else:
-                self.read_bufs_after_enqueue.append((buffer_ptr, total_size, data_member))
 
             self.builder.call(self.create_dppy_kernel_arg_from_buffer, [buffer_ptr, kernel_arg])
             dst = self.builder.gep(self.kernel_arg_array, [self.context.get_constant(types.intp, self.cur_arg)])
@@ -215,7 +222,7 @@ class DPPyHostFunctionCallsGenerator(object):
             for this_stride in range(arg_type.ndim):
                 stride_entry = self.builder.gep(stride_member,
                                 [self.context.get_constant(types.int32, 0),
-                                 self.context.get_constant(types.int32, this_dim)])
+                                 self.context.get_constant(types.int32, this_stride)])
 
                 args = [self.builder.bitcast(stride_entry, self.void_ptr_ptr_t),
                         self.context.get_constant(types.uintp, self.sizeof_intp)]
