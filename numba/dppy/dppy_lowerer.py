@@ -50,6 +50,18 @@ from . import dppy_host_fn_call_gen as dppy_call_gen
 import dppy.core as driver
 
 
+def _print_block(block):
+    for i, inst in enumerate(block.body):
+        print("    ", i, inst)
+
+def _print_body(body_dict):
+    '''Pretty-print a set of IR blocks.
+    '''
+    for label, block in body_dict.items():
+        print("label: ", label)
+        _print_block(block)
+
+
 # This loop scheduler is pretty basic, there is only
 # 3 dimension allowed in OpenCL, so to make the backend
 # functional we will schedule the first 3 dimensions
@@ -201,6 +213,20 @@ def to_scalar_from_0d(x):
             return x.dtype
     return x
 
+def find_setitems_block(setitems, block, typemap):
+    for inst in block.body:
+        if isinstance(inst, ir.StaticSetItem) or isinstance(inst, ir.SetItem):
+            setitems.add(inst.target.name)
+        elif isinstance(inst, parfor.Parfor):
+            find_setitems_block(setitems, inst.init_block, typemap)
+            find_setitems_body(setitems, inst.loop_body, typemap)
+
+def find_setitems_body(setitems, loop_body, typemap):
+    """
+      Find the arrays that are written into (goes into setitems)
+    """
+    for label, block in loop_body.items():
+        find_setitems_block(setitems, block, typemap)
 
 def _create_gufunc_for_regular_parfor():
     #TODO
@@ -487,6 +513,9 @@ def _create_gufunc_for_parfor_body(
     wrapped_blocks = wrap_loop_body(loop_body)
     #hoisted, not_hoisted = hoist(parfor_params, loop_body,
     #                             typemap, wrapped_blocks)
+    setitems = set()
+    find_setitems_body(setitems, loop_body, typemap)
+
     hoisted = []
     not_hoisted = []
 
@@ -599,7 +628,7 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("kernel_sig = ", kernel_sig)
 
-    return kernel_func, parfor_args, kernel_sig, func_arg_types
+    return kernel_func, parfor_args, kernel_sig, func_arg_types, setitems
 
 
 def _lower_parfor_gufunc(lowerer, parfor):
@@ -680,7 +709,7 @@ def _lower_parfor_gufunc(lowerer, parfor):
     numba.parfor.sequential_parfor_lowering = True
     loop_ranges = [(l.start, l.stop, l.step) for l in parfor.loop_nests]
 
-    func, func_args, func_sig, func_arg_types =(
+    func, func_args, func_sig, func_arg_types, modified_arrays =(
     _create_gufunc_for_parfor_body(
         lowerer,
         parfor,
@@ -731,7 +760,8 @@ def _lower_parfor_gufunc(lowerer, parfor):
         loop_ranges,
         parfor.init_block,
         index_var_typ,
-        parfor.races)
+        parfor.races,
+        modified_arrays)
 
     if config.DEBUG_ARRAY_OPT:
         sys.stdout.flush()
@@ -820,7 +850,8 @@ def generate_dppy_host_wrapper(lowerer,
                                loop_ranges,
                                init_block,
                                index_var_typ,
-                               races):
+                               races,
+                               modified_arrays):
     '''
     Adds the call to the gufunc function from the main function.
     '''
@@ -841,6 +872,7 @@ def generate_dppy_host_wrapper(lowerer,
         print("sin", sin)
         print("sout", sout)
         print("cres", cres, type(cres))
+        print("modified_arrays", modified_arrays)
 #        print("cres.library", cres.library, type(cres.library))
 #        print("cres.fndesc", cres.fndesc, type(cres.fndesc))
 
@@ -908,7 +940,7 @@ def generate_dppy_host_wrapper(lowerer,
                   "\n\tindex:", index)
 
         dppy_cpu_lowerer.process_kernel_arg(var, llvm_arg, arg_type, gu_sig,
-                                            val_type, index)
+                                            val_type, index, modified_arrays)
     # -----------------------------------------------------------------------
 
     # loadvars for loop_ranges
