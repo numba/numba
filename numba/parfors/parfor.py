@@ -1907,7 +1907,7 @@ class ConvertNumpyPass:
         init_block = ir.Block(scope, loc)
         init_block.body = mk_alloc(pass_states.typemap, pass_states.calltypes, lhs,
                                    tuple(size_vars), el_typ, scope, loc,
-                                   self.typemap[lhs.name])
+                                   pass_states.typemap[lhs.name])
         body_label = next_label()
         body_block = ir.Block(scope, loc)
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
