@@ -360,6 +360,10 @@ class _EnvReloader(object):
         ENABLE_PROFILING = _readenv(
             "NUMBA_ENABLE_PROFILING", int, int(RUNNING_UNDER_PROFILER))
 
+        # Tracing support
+        LINE_TRACE = _readenv(
+            "NUMBA_LINE_TRACE", int, int(0))
+
         # Debug Info
 
         # The default value for the `debug` flag

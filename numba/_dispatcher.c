@@ -67,7 +67,7 @@ call_trace_protected(Py_tracefunc func, PyObject *obj,
  * exception state is preserved correctly).
  */
 #define C_TRACE(x, call)                                        \
-if (call_trace(tstate->c_profilefunc, tstate->c_profileobj,     \
+if (call_trace(tstate->c_tracefunc, tstate->c_traceobj,     \
                tstate, tstate->frame, PyTrace_CALL, cfunc))	\
     x = NULL;                                                   \
 else                                                            \
@@ -300,7 +300,7 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
 
-    if (tstate->use_tracing && tstate->c_profilefunc)
+    if (tstate->use_tracing && tstate->c_tracefunc)
     {
         /*
          * The following code requires some explaining:

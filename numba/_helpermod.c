@@ -90,6 +90,7 @@ build_c_helpers_dict(void)
     declmethod(py_type);
     declmethod(unpack_slice);
     declmethod(do_raise);
+    declmethod(line_trace);
     declmethod(unpickle);
     declmethod(attempt_nocopy_reshape);
     declmethod(get_pyobject_private_data);

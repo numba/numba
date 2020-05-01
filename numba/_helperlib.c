@@ -825,6 +825,79 @@ error:
     _PyErr_ChainExceptions(exc, val, tb);
 }
 
+
+NUMBA_EXPORT_FUNC(void)
+numba_line_trace(const char *funcname, const char *filename, int lineno) {
+
+   int ret;
+
+    PyObject *globals = NULL;
+    PyCodeObject *code = NULL;
+    PyFrameObject *frame = NULL;
+    PyThreadState *tstate = NULL;
+    PyObject *exc, *val, *tb;
+
+    PyGILState_STATE gil = PyGILState_Ensure();
+    /* Save and clear the current exception. Python functions must not be
+       called with an exception set. Calling Python functions happens when
+       the codec of the filesystem encoding is implemented in pure Python. */
+    PyErr_Fetch(&exc, &val, &tb);
+
+    globals = PyDict_New();
+    if (!globals)
+        goto error;
+    code = PyCode_NewEmpty(filename, funcname, lineno);
+    if (!code) {
+        goto error;
+    }
+    tstate = PyThreadState_Get();
+    if (!tstate) {
+        goto error;
+    }
+    frame = PyFrame_New(tstate, code, globals, NULL);
+    Py_DECREF(globals);
+    Py_DECREF(code);
+    if (!frame)
+        goto error;
+    frame->f_lineno = lineno;
+
+    if (tstate->use_tracing && tstate->c_tracefunc){
+        ////
+        /* Reference: https://github.com/cython/cython/blob/a87f498d964f4b63a93aba79ed8c5f082fedaa4f/Cython/Utility/Profile.c#L194-L224
+        */
+       /*
+        XXX: there are many common functions in _dispatcher.c that can be refactored to reuse
+
+        NOTE: line-tracing (coverage) would work if the dispatcher calling C_TRACE with PyTrace_CALL
+       */
+        // printf("IS TRACING %s %s %d\n", filename, funcname, lineno);
+        tstate->tracing++;
+        // printf("tstate->tracing=%d  tstate->use_tracing=%d\n",
+        //         tstate->tracing, tstate->use_tracing);
+        tstate->use_tracing = 0;
+        ret = tstate->c_tracefunc(tstate->c_traceobj, frame, PyTrace_LINE, NULL);
+        tstate->use_tracing = 1;
+        tstate->tracing--;
+        // printf("ret=%d\n", ret);
+        if (ret)
+            goto error;
+
+        ////
+    }
+    PyErr_Restore(exc, val, tb);
+    Py_DECREF(frame);
+
+    PyGILState_Release(gil);
+    return;
+
+error:
+    puts("ERROR");
+    _PyErr_ChainExceptions(exc, val, tb);
+
+    PyGILState_Release(gil);
+}
+
+
 /* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
    This *consumes* a reference count to its argument. */
 NUMBA_EXPORT_FUNC(int)

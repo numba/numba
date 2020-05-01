@@ -355,9 +355,32 @@ class Lower(BaseLower):
         except AttributeError:
             pass
 
+    def _call_line_trace(self, funcname, filename, lineno):
+        from llvmlite import ir
+        fnty = ir.FunctionType(
+            ir.VoidType(),
+            # []
+            [cgutils.voidptr_t, cgutils.voidptr_t, cgutils.int32_t],
+        )
+        # cgutils.printf(self.builder, "CALLTRACE {} {} {}\n".format(funcname, filename, lineno))
+        fn = self.module.get_or_insert_function(fnty, name="numba_line_trace")
+        # fn = self.builder.inttoptr(cgutils.intp_t(inner_trace_addr.value), fnty.as_pointer())
+
+        ll_funcname = self.context.insert_const_string(self.module, funcname)
+        ll_filename = self.context.insert_const_string(self.module, filename)
+        self.builder.call(fn, [ll_filename, ll_funcname, cgutils.int32_t(lineno)])
+
     def lower_inst(self, inst):
         # Set debug location for all subsequent LL instructions
         self.debuginfo.mark_location(self.builder, self.loc)
+        if config.LINE_TRACE:
+            self._call_line_trace(
+                # self.fndesc.mangled_name,
+                "foo",
+                self.loc.filename,
+                self.loc.line,
+            )
+
         self.debug_print(str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)

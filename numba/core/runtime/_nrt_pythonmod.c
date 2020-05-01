@@ -114,6 +114,7 @@ meminfo_alloc_safe(PyObject *self, PyObject *args) {
     return PyLong_FromVoidPtr(mi);
 }
 
+
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
 #define declmethod_noargs(func) { #func , ( PyCFunction )func , METH_NOARGS, NULL }
