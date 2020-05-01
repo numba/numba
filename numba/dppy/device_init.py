@@ -13,6 +13,7 @@ from .ocl.stubs import (
     mem_fence,
 #    shared,
     sub_group_barrier,
+    atomic,
 )
 
 from . import initialize
