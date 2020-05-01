@@ -58,8 +58,8 @@ class Ocl_get_local_size(ConcreteTemplate):
 @intrinsic
 class Ocl_barrier(ConcreteTemplate):
     key = dppy.barrier
-    cases = [signature(types.void, types.uint32),
-             signature(types.void)]
+    cases = [signature(types.intp, types.int32),
+             signature(types.uintp, types.uint32)]
 
 
 @intrinsic
@@ -72,6 +72,47 @@ class Ocl_mem_fence(ConcreteTemplate):
 class Ocl_sub_group_barrier(ConcreteTemplate):
     key = dppy.sub_group_barrier
     cases = [signature(types.void)]
+
+
+# ocl.atomic submodule -------------------------------------------------------
+
+@intrinsic
+class Ocl_atomic_add(AbstractTemplate):
+    key = dppy.atomic.add
+
+    def generic(self, args, kws):
+        assert not kws
+        ary, idx, val = args
+
+        if ary.ndim == 1:
+            return signature(ary.dtype, ary, types.intp, ary.dtype)
+        elif ary.ndim > 1:
+            return signature(ary.dtype, ary, idx, ary.dtype)
+
+@intrinsic
+class Ocl_atomic_sub(AbstractTemplate):
+    key = dppy.atomic.sub
+
+    def generic(self, args, kws):
+        assert not kws
+        ary, idx, val = args
+
+        if ary.ndim == 1:
+            return signature(ary.dtype, ary, types.intp, ary.dtype)
+        elif ary.ndim > 1:
+            return signature(ary.dtype, ary, idx, ary.dtype)
+
+
+@intrinsic_attr
+class OclAtomicTemplate(AttributeTemplate):
+    key = types.Module(dppy.atomic)
+
+    def resolve_add(self, mod):
+        return types.Function(Ocl_atomic_add)
+
+    def resolve_sub(self, mod):
+        return types.Function(Ocl_atomic_sub)
+
 
 # ocl.shared submodule -------------------------------------------------------
 
@@ -121,6 +162,9 @@ class OclModuleTemplate(AttributeTemplate):
 
     def resolve_sub_group_barrier(self, mod):
         return types.Function(Ocl_sub_group_barrier)
+
+    def resolve_atomic(self, mod):
+        return types.Module(dppy.atomic)
 
 #    def resolve_shared(self, mod):
 #        return types.Module(ocl.shared)

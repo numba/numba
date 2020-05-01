@@ -75,7 +75,6 @@ def sub_group_barrier():
     raise _stub_error
 
 
-
 class Stub(object):
     """A stub object to represent special objects which is meaningless
     outside the context of DPPy compilation context.
@@ -88,3 +87,23 @@ class Stub(object):
 
     def __repr__(self):
         return self._description_
+
+#-------------------------------------------------------------------------------
+# atomic
+
+class atomic(Stub):
+    """atomic namespace
+    """
+    _description_ = '<atomic>'
+
+    class add(Stub):
+        """add(ary, idx, val)
+
+        Perform atomic ary[idx] += val
+        """
+
+    class sub(Stub):
+        """sub(ary, idx, val)
+
+        Perform atomic ary[idx] -= val
+        """
