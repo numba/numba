@@ -211,7 +211,7 @@ supported:
     ...
     >>> foo()
     main block
-    handler block
+    else block
     final block
 
 The ``try .. finally`` construct without the ``except`` clause is also
