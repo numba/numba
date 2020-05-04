@@ -3895,6 +3895,7 @@ def np_asarray(a, dtype=None):
             for i, v in enumerate(a):
                 ret[i] = v
             return ret
+
     return impl
 
 

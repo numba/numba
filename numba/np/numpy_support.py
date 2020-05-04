@@ -95,6 +95,7 @@ def from_dtype(dtype):
         return FROM_DTYPE[dtype]
     except KeyError:
         char = dtype.char
+
         if char in 'SU':
             return _from_str_dtype(dtype)
         if char in 'mM':
