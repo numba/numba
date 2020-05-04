@@ -2349,12 +2349,13 @@ def integer_str(n):
             s = ''
             flag = False
             if n < 0:
-                n *= -1
+                n = -n 
                 flag = True
             if n == 0:
                 return '0'
             while n > 0:
-                c = chr(ord('0') + (n % 10))
+                # there is an implicit conversion of n to float here
+                c = chr(int(ord('0') + (n % 10)))
                 n = n // 10
                 s = c + s
             if flag:

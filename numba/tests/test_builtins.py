@@ -511,18 +511,16 @@ class TestBuiltins(TestCase):
     def test_str(self, flags=nrt_no_pyobj_flags):
         pyfunc = str_usecase
 
-        cr = compile_isolated(pyfunc, (types.int64,), flags=flags)
-        cfunc = cr.entry_point
-
         args = [
             123456789,
             2**32-1,
             0,
             33,
-            -33,
         ]
 
-        tp = [
+        typs = [
+            types.int8,
+            types.int16,
             types.int32,
             types.int64,
             types.uint,
@@ -536,8 +534,19 @@ class TestBuiltins(TestCase):
             types.ulonglong,
         ]
 
-        for v, t in zip(args, tp):
-            self.assertPreciseEqual(cfunc(t(v)), pyfunc(t(v)))
+        for typ in typs:
+            for v in args:
+                cr = compile_isolated(pyfunc, (typ,), flags=flags)
+                cfunc = cr.entry_point
+                self.assertPreciseEqual(cfunc(typ(v)), pyfunc(typ(v)))
+
+        # negative inputs
+        for typ in [types.int8, types.int16, types.int32, types.int64]:
+            for v in args:
+                cr = compile_isolated(pyfunc, (typ,), flags=flags)
+                cfunc = cr.entry_point
+                self.assertPreciseEqual(cfunc(typ(-v)), pyfunc(typ(-v)))
+
 
 
     def test_int(self, flags=enable_pyobj_flags):
