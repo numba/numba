@@ -2349,7 +2349,7 @@ def integer_str(n):
             s = ''
             flag = False
             if n < 0:
-                n = -n 
+                n = -n
                 flag = True
             if n == 0:
                 return '0'
