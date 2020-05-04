@@ -1,58 +1,15 @@
-import weakref
 from collections import namedtuple
 import operator
 from functools import partial
 
 from llvmlite.llvmpy.core import Constant, Type, Builder
 
-from numba import _dynfunc
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
                         generators, config, ir_utils, cgutils, removerefctpass)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError)
 from numba.core.funcdesc import default_mangler
-
-
-class Environment(_dynfunc.Environment):
-    """Stores globals and constant pyobjects for runtime.
-
-    It is often needed to convert b/w nopython objects and pyobjects.
-    """
-    __slots__ = ('env_name', '__weakref__')
-    # A weak-value dictionary to store live environment with env_name as the
-    # key.
-    _memo = weakref.WeakValueDictionary()
-
-    @classmethod
-    def from_fndesc(cls, fndesc):
-        try:
-            # Avoid creating new Env
-            return cls._memo[fndesc.env_name]
-        except KeyError:
-            inst = cls(fndesc.lookup_globals())
-            inst.env_name = fndesc.env_name
-            cls._memo[fndesc.env_name] = inst
-            return inst
-
-    def __reduce__(self):
-        return _rebuild_env, (
-            self.globals['__name__'],
-            self.consts,
-            self.env_name,
-        )
-
-    def __del__(self):
-        return
-
-
-def _rebuild_env(modname, consts, env_name):
-    if env_name in Environment._memo:
-        return Environment._memo[env_name]
-    from numba.core import serialize
-    mod = serialize._rebuild_module(modname)
-    env = Environment(mod.__dict__)
-    env.consts[:] = consts
-    return env
+from numba.core.environment import Environment
 
 
 _VarArgItem = namedtuple("_VarArgItem", ("vararg", "index"))
@@ -821,6 +778,8 @@ class Lower(BaseLower):
                                  resty)
 
     def _lower_call_ObjModeDispatcher(self, fnty, expr, signature):
+        from numba.core.pythonapi import ObjModeUtils
+
         self.init_pyapi()
         # Acquire the GIL
         gil_state = self.pyapi.gil_ensure()
@@ -835,13 +794,10 @@ class Lower(BaseLower):
         argobjs = [self.pyapi.from_native_value(atyp, aval,
                                                 self.env_manager)
                    for atyp, aval in zip(argtypes, argvalues)]
+
+        # Load objmode dispatcher
+        callee = ObjModeUtils(self.pyapi).load_dispatcher(fnty, argtypes)
         # Make Call
-        entry_pt = fnty.dispatcher.compile(tuple(argtypes))
-        callee = self.context.add_dynamic_addr(
-            self.builder,
-            id(entry_pt),
-            info="with_objectmode",
-        )
         ret_obj = self.pyapi.call_function_objargs(callee, argobjs)
         has_exception = cgutils.is_null(self.builder, ret_obj)
         with self. builder.if_else(has_exception) as (then, orelse):

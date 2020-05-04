@@ -66,7 +66,7 @@ class DUFuncLowerer(object):
                                           explicit_output=explicit_output)
 
 
-class DUFunc(_internal._DUFunc):
+class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
     """
     Dynamic universal function (DUFunc) intended to act like a normal
     Numpy ufunc, but capable of call-time (just-in-time) compilation
@@ -95,14 +95,23 @@ class DUFunc(_internal._DUFunc):
         self.__name__ = dispatcher.py_func.__name__
         self.__doc__ = dispatcher.py_func.__doc__
 
-    def __reduce__(self):
+    def _reduce_states(self):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
         siglist = list(self._dispatcher.overloads.keys())
-        return (serialize._rebuild_reduction,
-                (self.__class__, self._dispatcher, self.identity,
-                 self._frozen, siglist))
+        return dict(
+            dispatcher=self._dispatcher,
+            identity=self.identity,
+            frozen=self._frozen,
+            siglist=siglist,
+        )
 
     @classmethod
     def _rebuild(cls, dispatcher, identity, frozen, siglist):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
         self = _internal._DUFunc.__new__(cls)
         self._initialize(dispatcher, identity)
         # Re-add signatures

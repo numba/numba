@@ -411,8 +411,8 @@ class CompileResultCacheImpl(_CacheImpl):
         cannot_cache = None
         if self._is_closure:
             cannot_cache = "as it uses outer variables in a closure"
-        elif cres.lifted:
-            cannot_cache = "as it uses lifted loops"
+        elif any(not x.can_cache for x in cres.lifted):
+            cannot_cache = "as it uses lifted code"
         elif cres.library.has_dynamic_globals:
             cannot_cache = ("as it uses dynamic globals "
                             "(such as ctypes pointers and large global arrays)")

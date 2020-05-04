@@ -935,6 +935,13 @@ class Const(EqualityCheckMixin, AbstractRHS):
     def infer_constant(self):
         return self.value
 
+    def __deepcopy__(self, memo):
+        # Override to not copy constant values in code
+        return Const(
+            value=self.value, loc=self.loc,
+            use_literal_type=self.use_literal_type,
+        )
+
 
 class Global(EqualityCheckMixin, AbstractRHS):
     def __init__(self, name, value, loc):
@@ -978,6 +985,12 @@ class FreeVar(EqualityCheckMixin, AbstractRHS):
 
     def infer_constant(self):
         return self.value
+
+    def __deepcopy__(self, memo):
+        # Override to not copy constant values in code
+        return FreeVar(index=self.index, name=self.name, value=self.value,
+                       loc=self.loc)
+
 
 
 class Var(EqualityCheckMixin, AbstractRHS):

@@ -146,6 +146,7 @@ Compiler Pipeline
   variable lifetime, inserts del operations, and handles generators
 - :ghfile:`numba/core/lowering.py` - General implementation of lowering Numba IR
   to LLVM
+  :ghfile:`numba/core/environment.py` - Runtime environment object
 - :ghfile:`numba/core/withcontexts.py` - General scaffolding for implementing
   context managers in nopython mode, and the objectmode context
   manager

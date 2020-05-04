@@ -22,7 +22,6 @@ exclude =
     __init__.py
     # Grandfather in existing failing files.  This list should shrink over time
     numba/core/dispatcher.py
-    numba/core/serialize.py
     numba/core/funcdesc.py
     numba/core/postproc.py
     numba/stencils/stencil.py
@@ -223,7 +222,6 @@ exclude =
     numba/tests/test_wrapper.py
     numba/tests/test_obj_lifetime.py
     numba/tests/test_intwidth.py
-    numba/tests/test_extending.py
     numba/tests/test_remove_dead.py
     numba/tests/serialize_usecases.py
     numba/tests/test_del.py

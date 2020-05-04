@@ -1077,9 +1077,12 @@ class BaseCacheUsecasesTest(BaseCacheTest):
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = popen.communicate()
         if popen.returncode != 0:
-            raise AssertionError("process failed with code %s: "
-                                 "stderr follows\n%s\n"
-                                 % (popen.returncode, err.decode()))
+            raise AssertionError(
+                "process failed with code %s: \n"
+                "stdout follows\n%s\n"
+                "stderr follows\n%s\n"
+                % (popen.returncode, out.decode(), err.decode()),
+            )
 
     def check_module(self, mod):
         self.check_pycache(0)
@@ -1208,7 +1211,7 @@ class TestCache(BaseCacheUsecasesTest):
 
         self.assertEqual(len(w), 1)
         self.assertIn('Cannot cache compiled function "looplifted" '
-                      'as it uses lifted loops', str(w[0].message))
+                      'as it uses lifted code', str(w[0].message))
 
     def test_big_array(self):
         # Code references big array globals cannot be cached
@@ -1757,14 +1760,16 @@ def function2(x):
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
         out, err = popen.communicate()
-        self.assertEqual(popen.returncode, 0)
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
+        self.assertEqual(popen.returncode, 0, msg=msg)
 
         # Execute file2.py
         popen = subprocess.Popen([sys.executable, self.file2],
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
         out, err = popen.communicate()
-        self.assertEqual(popen.returncode, 0)
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
+        self.assertEqual(popen.returncode, 0, msg)
 
 
 class TestDispatcherFunctionBoundaries(TestCase):
