@@ -36,7 +36,7 @@ Below is a quick reference for the support level of Python constructs.
 
 **Partially supported** constructs:
 
-- exceptions: ``try .. except``, ``raise``
+- exceptions: ``try .. except``, ``raise``, ``else`` and ``finally``
   (See details in this :ref:`section <pysupported-exception-handling>`)
 
 - context manager:
@@ -190,11 +190,32 @@ use-case would look like:
      handle_error_case()
      return error_code
 
-The ``finally`` block and the ``else`` block of a ``try .. except`` are
-supported.
+``try .. except .. else .. finally``
+''''''''''''''''''''''''''''''''''''
 
-The ``try .. finally`` construct without the ``except`` is currently
-**unsupported**.
+The ``else`` block and the ``finally`` block of a ``try .. except`` are
+supported:
+
+  .. code-block:: python
+
+    >>> @jit(nopython=True)
+    ... def foo():
+    ...     try:
+    ...         print('main block')
+    ...     except Exception:
+    ...         print('handler block')
+    ...     else:
+    ...         print('else block')
+    ...     finally:
+    ...         print('final block')
+    ...
+    >>> foo()
+    main block
+    else block
+    final block
+
+The ``try .. finally`` construct without the ``except`` clause is also
+supported.
 
 .. _pysupported-builtin-types:
 
