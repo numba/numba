@@ -1,3 +1,4 @@
 import sys
-import numba.core.types
-sys.modules[__name__] = numba.core.types
+from numba.core.utils import _RedirectSubpackage
+sys.modules[__name__] = _RedirectSubpackage(locals(), "numba.core.types")
+
