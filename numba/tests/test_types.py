@@ -18,6 +18,7 @@ import numpy as np
 
 from numba.core import types, typing, errors, sigutils
 from numba.core.types.abstract import _typecache
+from numba.core.types.functions import _header_lead
 from numba.core.typing.templates import make_overload_template
 from numba import jit, njit, typeof
 from numba.core.extending import (overload, register_model, models, unbox,
@@ -740,7 +741,7 @@ class FooType(types.Type):
             with self.assertRaises(errors.TypingError) as raises:
                 call_false_if_not_array_closed_system(Foo())
             estr = str(raises.exception)
-            self.assertIn("Invalid use of Function", estr)
+            self.assertIn(_header_lead, estr)
             self.assertIn("false_if_not_array_closed_system", estr)
             self.assertIn("(Foo)", estr)
 

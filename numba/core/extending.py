@@ -54,7 +54,8 @@ def type_callable(func):
 _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
-def overload(func, jit_options={}, strict=True, inline='never'):
+def overload(func, jit_options={}, strict=True, inline='never',
+             signatures=None):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
