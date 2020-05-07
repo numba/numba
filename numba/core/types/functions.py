@@ -1,12 +1,20 @@
 import traceback
+from collections import namedtuple
+import inspect
+import itertools
+import logging
 
 from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
 from .misc import unliteral
-from numba.core import errors, utils, types
+from numba.core import errors, utils, types, config
+
+_logger = logging.getLogger(__name__)
 
 # terminal color markup
 _termcolor = errors.termcolor()
+
+_FAILURE = namedtuple('_FAILURE', 'template matched error literal')
 
 class _ResolutionFailures(object):
     """Collect and format function resolution failures.
@@ -21,7 +29,7 @@ class _ResolutionFailures(object):
     def __len__(self):
         return len(self._failures)
 
-    def add_error(self, calltemplate, error):
+    def add_error(self, calltemplate, matched, error, literal):
         """
         Args
         ----
@@ -29,7 +37,7 @@ class _ResolutionFailures(object):
         error : Exception or str
             Error message
         """
-        self._failures.append((calltemplate, error))
+        self._failures.append(_FAILURE(calltemplate, matched, error, literal))
 
     def format(self):
         """Return a formatted error message from all the gathered errors.
@@ -37,22 +45,61 @@ class _ResolutionFailures(object):
         indent = ' ' * 4
         args = [str(a) for a in self._args]
         args += ["%s=%s" % (k, v) for k, v in sorted(self._kwargs.items())]
-        headtmp = 'Invalid use of {} with argument(s) of type(s): ({})'
-        msgbuf = [headtmp.format(self._function_type, ', '.join(args))]
+        headtmp = 'No implementation of function {} found for signature: ({}). There are {} known matches:'
+        msgbuf = [headtmp.format(self._function_type, ', '.join(args), len(self._failures))]
         explain = self._context.explain_function_type(self._function_type)
         msgbuf.append(explain)
-        for i, (temp, error) in enumerate(self._failures):
-            msgbuf.append(_termcolor.errmsg("In definition {}:".format(i)))
-            msgbuf.append(_termcolor.highlight('{}{}'.format(
-                indent, self.format_error(error))))
+        args = self._args
+        kws = self._kwargs
+        nolitargs = tuple([unliteral(a) for a in args])
+        nolitkws = {k: unliteral(v) for k, v in kws.items()}
+
+        argstr = ",".join([str(x) for x in args]) + ', ' + ",".join([str(x) + '=' + str(y) for x, y in kws.items()])
+        nolitargstr = ",".join([str(x) for x in nolitargs]) + ', ' + ",".join([str(x) + '=' + str(y) for x, y in nolitkws.items()])
+        key = self._function_type.key[0]
+        try:
+            fn_name = getattr(key, '__name__', str(key))
+        except Exception as e:
+            import pdb; pdb.set_trace()
+            pass
+
+        for i, err in enumerate(self._failures):
+            temp, error = err.template, err.error
+
+            source_fn = err.template.key
+            import numba
+            if isinstance(source_fn, numba.core.extending._Intrinsic):
+                source_fn = err.template.key._defn
+            #fn = getattr(err.template, '_overload_func', source_fn)
+            if 'builtin_function' in str(type(source_fn)):
+                source_file = "built_in"
+                source_line = ""
+            else:
+                source_file = inspect.getsourcefile(source_fn)
+                source_line = inspect.getsourcelines(source_fn)[1]
+            largstr = argstr if err.literal else nolitargstr
+            msgbuf.append(_termcolor.errmsg("{}. Overload in function '{}': File {}: Line {}. With argument(s): '({})':".format(i + 1, source_fn.__name__, source_file, source_line, largstr)))
+            if error is None:
+                errstr = "Rejected as arguments did not match (no explicit signatures given)."
+                if hasattr(err.template, '_overload_func'):
+                    if hasattr(err.template._overload_func.outer, 'signatures'):
+                        sigs = err.template._overload_func.outer.signatures
+                        if sigs:
+                            lsigs = '\n'.join([2 * indent + "* " + fn_name + str(x) for x in sigs])
+                            errstr = "Rejected as arguments did not match the declared template signatures:\n%s" % lsigs
+            else:
+                errstr = "Rejected as the implementation raised a specific error:\n{}{}".format(indent, self.format_error(error))
+                # if you are a developer, show the back traces
+                if config.DEVELOPER_MODE:
+                    bt = traceback.format_exception(type(error), error, error.__traceback__)
+                    bt_as_lines = [y for y in itertools.chain(*[x.split('\n') for x in bt]) if y]
+                    errstr += _termcolor.reset(('\n' + 2 * indent) + ('\n' + 2 * indent).join(bt_as_lines))
+            msgbuf.append(_termcolor.highlight('{}{}'.format(indent, errstr)))
             loc = self.get_loc(temp, error)
             if loc:
                 msgbuf.append('{}raised from {}'.format(indent, loc))
 
-        likely_cause = ("This error is usually caused by passing an argument "
-                        "of a type that is unsupported by the named function.")
-        msgbuf.append(_termcolor.errmsg(likely_cause))
-        return '\n'.join(msgbuf)
+        return '\n'.join(msgbuf) + '\n'
 
     def format_error(self, error):
         """Format error message or exception
@@ -71,7 +118,7 @@ class _ResolutionFailures(object):
             return "{}:{}".format(frame[0], frame[1])
 
     def raise_error(self):
-        for _tempcls, e in self._failures:
+        for _tempcls, e, *_ in self._failures:
             if isinstance(e, errors.ForceLiteralArg):
                 raise e
         raise errors.TypingError(self.format())
@@ -131,7 +178,7 @@ class BaseFunction(Callable):
                         sig = temp.apply(nolitargs, nolitkws)
                 except Exception as e:
                     sig = None
-                    failures.add_error(temp_cls, e)
+                    failures.add_error(temp, False, e, uselit)
                 else:
                     if sig is not None:
                         self._impl_keys[sig.args] = temp.get_impl_key(sig)
@@ -139,7 +186,7 @@ class BaseFunction(Callable):
                     else:
                         haslit= '' if uselit else 'out'
                         msg = "All templates rejected with%s literals." % haslit
-                        failures.add_error(temp_cls, msg)
+                        failures.add_error(temp, True, msg, uselit)
 
         if len(failures) == 0:
             raise AssertionError("Internal Error. "

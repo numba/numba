@@ -182,9 +182,6 @@ class BaseContext(object):
             for sig in defns:
                 desc.append(' * {0}'.format(sig))
 
-        if param:
-            desc.append(' * parameterized')
-
         return '\n'.join(desc)
 
     def resolve_function_type(self, func, args, kws):
