@@ -24,6 +24,8 @@ issues:
 * PR #5651: Fix some SSA issues
 * PR #5652: Pin to sphinx=2.4.4 to avoid problem with C declaration
 * PR #5658: Fix unifying undefined first class function types issue
+* PR #5669: Update example in 5m guide WRT SSA type stability.
+* PR #5676: Restore ``numba.types`` as public API
 
 Authors:
 
