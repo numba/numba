@@ -399,15 +399,6 @@ class TestAPIMoves_Q1_2020(TestCase):
         with checker(fn):
             getattr(numba.typeconv, fn)
 
-    def test_numba_types(self):
-        checker = self.check_warning("numba.types", "numba.core.types")
-        with checker():
-            import numba.types
-
-        for fn in ("int64", "float64"):
-            with checker(fn):
-                getattr(numba.types, fn)
-
     def test_aaaaa_numba_targets(self):
         # silly 'aaaaa' name to game test ordering, warnings only get triggered
         # once and the `TestAPIMoves_Q1_2020` hits numba.targets.* so this needs
