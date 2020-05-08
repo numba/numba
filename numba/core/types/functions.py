@@ -1,5 +1,5 @@
 import traceback
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import inspect
 import itertools
 import logging
@@ -24,7 +24,7 @@ class _ResolutionFailures(object):
         self._function_type = function_type
         self._args = args
         self._kwargs = kwargs
-        self._failures = []
+        self._failures = defaultdict(list)
 
     def __len__(self):
         return len(self._failures)
@@ -37,7 +37,11 @@ class _ResolutionFailures(object):
         error : Exception or str
             Error message
         """
-        self._failures.append(_FAILURE(calltemplate, matched, error, literal))
+        isexc = isinstance(error, Exception)
+        errclazz = '%s: ' % type(error).__name__ if isexc else ''
+
+        key = "{}{}".format(errclazz, str(error))
+        self._failures[key].append(_FAILURE(calltemplate, matched, error, literal))
 
     def format(self):
         """Return a formatted error message from all the gathered errors.
@@ -45,10 +49,9 @@ class _ResolutionFailures(object):
         indent = ' ' * 4
         args = [str(a) for a in self._args]
         args += ["%s=%s" % (k, v) for k, v in sorted(self._kwargs.items())]
-        headtmp = 'No implementation of function {} found for signature: ({}). There are {} known matches:'
-        msgbuf = [headtmp.format(self._function_type, ', '.join(args), len(self._failures))]
-        explain = self._context.explain_function_type(self._function_type)
-        msgbuf.append(explain)
+        nfails = sum([len(x) for x in self._failures.values()])
+        headtmp = 'No implementation of function {} found for signature: ({}).\n\nThere are {} known matches:'
+        msgbuf = [headtmp.format(self._function_type, ', '.join(args), nfails)]
         args = self._args
         kws = self._kwargs
         nolitargs = tuple([unliteral(a) for a in args])
@@ -63,7 +66,9 @@ class _ResolutionFailures(object):
             #import pdb; pdb.set_trace()
             pass
 
-        for i, err in enumerate(self._failures):
+        for i, (k, err_list) in enumerate(self._failures.items()):
+            err = err_list[0]
+            nduplicates = len(err_list)
             temp, error = err.template, err.error
 
             source_fn = err.template.key
@@ -78,7 +83,7 @@ class _ResolutionFailures(object):
                 source_file = inspect.getsourcefile(source_fn)
                 source_line = inspect.getsourcelines(source_fn)[1]
             largstr = argstr if err.literal else nolitargstr
-            msgbuf.append(_termcolor.errmsg(indent + "{}. Overload in function '{}': File {}: Line {}. With argument(s): '({})':".format(i + 1, source_fn.__name__, source_file, source_line, largstr)))
+            msgbuf.append(_termcolor.errmsg(indent + "{}. There are {} report(s) of:\n       Overload in function '{}': File {}: Line {}. With argument(s): '({})':".format(i + 1, nduplicates, source_fn.__name__, source_file, source_line, largstr)))
             if error is None:
                 errstr = "Rejected as arguments did not match (no explicit signatures given)."
                 if hasattr(err.template, '_overload_func'):
@@ -90,10 +95,10 @@ class _ResolutionFailures(object):
             else:
                 if isinstance(error, BaseException):
                     errstr = "Rejected as the implementation raised a specific error:\n{}{}".format(2 * indent, self.format_error(error))
-                else:
-                    #import pdb; pdb.set_trace()
-                    pass
+                elif error is None:
                     errstr = "Rejected with no specific reason given (probably didn't match)."
+                else:
+                    errstr = error
                 # if you are a developer, show the back traces
                 if config.DEVELOPER_MODE:
                     if isinstance(error, BaseException):
@@ -193,10 +198,12 @@ class BaseFunction(Callable):
                         self._impl_keys[sig.args] = temp.get_impl_key(sig)
                         return sig
                     else:
-                        #import pdb; pdb.set_trace()
-                        pass
-                        haslit= '' if uselit else 'out'
-                        msg = "All templates rejected with%s literals." % haslit
+                        registered_sigs = getattr(temp, 'cases', None)
+                        if registered_sigs is not None:
+                            msg = "No match for registered cases:\n%s"
+                            msg = msg % '\n'.join("        * {}".format(x) for x in registered_sigs)
+                        else:
+                            msg = 'No match.'
                         failures.add_error(temp, True, msg, uselit)
 
         if len(failures) == 0:
@@ -278,8 +285,8 @@ class BoundFunction(Callable, Opaque):
                 unliteral_e = exc
 
         if out is None and (unliteral_e is not None or literal_e is not None):
-            fmt = ("Resolution failure for literal arguments:\n%s\n"
-                   "Resolution failure for non-literal arguments:\n%s")
+            fmt = ("- Resolution failure for literal arguments:\n%s\n"
+                   "- Resolution failure for non-literal arguments:\n%s")
             e1 = errors.TypingError(str(unliteral_e), nested=1)
             e2 = errors.TypingError(str(literal_e), nested=1)
             raise errors.TypingError(fmt % (str(e1), str(e2)))
