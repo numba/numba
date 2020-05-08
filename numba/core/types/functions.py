@@ -3,11 +3,13 @@ from collections import namedtuple, defaultdict
 import inspect
 import itertools
 import logging
+from os import path
 
 from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
 from .misc import unliteral
 from numba.core import errors, utils, types, config
+import numba
 
 _logger = logging.getLogger(__name__)
 
@@ -61,30 +63,31 @@ class _ResolutionFailures(object):
         argstr = ", ".join([str(x) for x in args]) + ', ' + ",".join([str(x) + '=' + str(y) for x, y in kws.items()])
         nolitargstr = ", ".join([str(x) for x in nolitargs]) + ', ' + ",".join([str(x) + '=' + str(y) for x, y in nolitkws.items()])
         key = self._function_type.key[0]
-        try:
-            fn_name = getattr(key, '__name__', str(key))
-        except Exception as e:
-            #import pdb; pdb.set_trace()
-            pass
+        fn_name = getattr(key, '__name__', str(key))
 
         for i, (k, err_list) in enumerate(self._failures.items()):
             err = err_list[0]
             nduplicates = len(err_list)
             temp, error = err.template, err.error
 
-            source_fn = err.template.key
-            import numba
+            source_fn = getattr(err.template, '_overload_func', err.template.key)
             if isinstance(source_fn, numba.core.extending._Intrinsic):
                 source_fn = err.template.key._defn
-            #fn = getattr(err.template, '_overload_func', source_fn)
             if 'builtin_function' in str(type(source_fn)):
                 source_file = "<built-in>"
                 source_line = "<N/A>"
             else:
                 source_file = inspect.getsourcefile(source_fn)
-                source_line = inspect.getsourcelines(source_fn)[1]
+                if path.isfile(source_file):
+                    source_line = inspect.getsourcelines(source_fn)[1]
+                    here = path.abspath(__file__)
+                    common = path.commonpath([here, source_file])
+                    source_file = source_file.replace(common, 'numba')
+                else:
+                    source_file = "Unknown"
+                    source_line = "<N/A>"
             largstr = argstr if err.literal else nolitargstr
-            msgbuf.append(_termcolor.errmsg(" - Of which {} did not match due to:\n       Overload in function '{}': File {}: Line {}. With argument(s): '({})':".format(nduplicates, source_fn.__name__, source_file, source_line, largstr)))
+            msgbuf.append(_termcolor.errmsg(" - Of which {} did not match due to:\n       Overload in function '{}': File: {}: Line {}. With argument(s): '({})':".format(nduplicates, source_fn.__name__, source_file, source_line, largstr)))
             if error is None:
                 errstr = "Rejected as arguments did not match (no explicit signatures given)."
                 if hasattr(err.template, '_overload_func'):
