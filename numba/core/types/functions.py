@@ -70,20 +70,21 @@ class _ResolutionFailures(object):
             nduplicates = len(err_list)
             temp, error = err.template, err.error
 
-            source_fn = getattr(err.template, '_overload_func', err.template.key)
+            #source_fn = getattr(err.template, '_overload_func', err.template.key)
+            source_fn = err.template.key
             if isinstance(source_fn, numba.core.extending._Intrinsic):
                 source_fn = err.template.key._defn
             if 'builtin_function' in str(type(source_fn)):
                 source_file = "<built-in>"
                 source_line = "<N/A>"
             else:
-                source_file = path.abspath(inspect.getsourcefile(source_fn))
-                if path.isfile(source_file):
+                try:
+                    source_file = path.abspath(inspect.getsourcefile(source_fn))
                     source_line = inspect.getsourcelines(source_fn)[1]
                     here = path.abspath(__file__)
                     common = path.commonpath([here, source_file])
                     source_file = source_file.replace(common, 'numba')
-                else:
+                except:
                     source_file = "Unknown"
                     source_line = "<N/A>"
             largstr = argstr if err.literal else nolitargstr
