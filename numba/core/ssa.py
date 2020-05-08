@@ -111,6 +111,7 @@ def _remove_unneeded_phis(phimap):
     for philist in phimap.values():
         for unneeded in unneeded_phis:
             if unneeded in philist:
+                raise AssertionError("XXX UNREACHBLE")
                 philist.remove(unneeded)
 
 
