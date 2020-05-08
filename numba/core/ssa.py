@@ -385,17 +385,6 @@ class _FixSSAVars(_BaseHandler):
             )
         return selected_def
 
-    def _find_reaching_vars(self, label, defmap, domfronts):
-        out = set()
-        for deflabel, defstmt in defmap.items():
-            if not defstmt:
-                # skip if no definition
-                continue
-            df = domfronts[deflabel]
-            if label in df: # or deflabel == 0:
-                out.add(deflabel)
-        return out
-
     def _find_def_from_top(self, states, label, loc):
         """Find definition reaching block of ``label``.
 
