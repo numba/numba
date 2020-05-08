@@ -74,45 +74,12 @@ def _fix_ssa_vars(blocks, varname, defmap):
     states['cfg'] = cfg = compute_cfg_from_blocks(blocks)
     states['phi_locations'] = _compute_phi_locations(cfg, defmap)
     newblocks = _run_block_rewrite(blocks, states, _FixSSAVars())
-    # check for unneeded phi nodes
-    _remove_unneeded_phis(phimap)
     # insert phi nodes
     for label, philist in phimap.items():
         curblk = newblocks[label]
         # Prepend PHI nodes to the block
         curblk.body = philist + curblk.body
     return newblocks
-
-
-def _remove_unneeded_phis(phimap):
-    """Remove unneeded PHIs from the phimap
-    """
-    all_phis = []
-    for philist in phimap.values():
-        all_phis.extend(philist)
-    unneeded_phis = set()
-    # Find unneeded PHIs.
-    for phi in all_phis:
-        ivs = phi.value.incoming_values
-        # It's unneeded if the incomings are either undefined or
-        # the PHI node target is itself
-        if all(iv is ir.UNDEFINED or iv == phi.target for iv in ivs):
-            unneeded_phis.add(phi)
-    # Fix up references to unneeded PHIs
-    for phi in all_phis:
-        for unneed in unneeded_phis:
-            if unneed is not phi:
-                # If the unneeded PHI is in the current phi's incoming values
-                if unneed.target in phi.value.incoming_values:
-                    # Replace the unneeded PHI with an UNDEFINED
-                    idx = phi.value.incoming_values.index(unneed.target)
-                    phi.value.incoming_values[idx] = ir.UNDEFINED
-    # Remove unneeded phis
-    for philist in phimap.values():
-        for unneeded in unneeded_phis:
-            if unneeded in philist:
-                raise AssertionError("XXX UNREACHBLE")
-                philist.remove(unneeded)
 
 
 def _iterated_domfronts(cfg):
