@@ -54,8 +54,8 @@ class _ResolutionFailures(object):
         nolitargs = tuple([unliteral(a) for a in args])
         nolitkws = {k: unliteral(v) for k, v in kws.items()}
 
-        argstr = ",".join([str(x) for x in args]) + ', ' + ",".join([str(x) + '=' + str(y) for x, y in kws.items()])
-        nolitargstr = ",".join([str(x) for x in nolitargs]) + ', ' + ",".join([str(x) + '=' + str(y) for x, y in nolitkws.items()])
+        argstr = ", ".join([str(x) for x in args]) + ', ' + ",".join([str(x) + '=' + str(y) for x, y in kws.items()])
+        nolitargstr = ", ".join([str(x) for x in nolitargs]) + ', ' + ",".join([str(x) + '=' + str(y) for x, y in nolitkws.items()])
         key = self._function_type.key[0]
         try:
             fn_name = getattr(key, '__name__', str(key))
@@ -72,8 +72,8 @@ class _ResolutionFailures(object):
                 source_fn = err.template.key._defn
             #fn = getattr(err.template, '_overload_func', source_fn)
             if 'builtin_function' in str(type(source_fn)):
-                source_file = "built_in"
-                source_line = ""
+                source_file = "<built-in>"
+                source_line = "<N/A>"
             else:
                 source_file = inspect.getsourcefile(source_fn)
                 source_line = inspect.getsourcelines(source_fn)[1]
@@ -88,10 +88,17 @@ class _ResolutionFailures(object):
                             lsigs = '\n'.join([2 * indent + "* " + fn_name + str(x) for x in sigs])
                             errstr = "Rejected as arguments did not match the declared template signatures:\n%s" % lsigs
             else:
-                errstr = "Rejected as the implementation raised a specific error:\n{}{}".format(indent, self.format_error(error))
+                if isinstance(error, BaseException):
+                    errstr = "Rejected as the implementation raised a specific error:\n{}{}".format(indent, self.format_error(error))
+                else:
+                    errstr = "Rejected with no specific reason given (probably didn't match)."
                 # if you are a developer, show the back traces
                 if config.DEVELOPER_MODE:
-                    bt = traceback.format_exception(type(error), error, error.__traceback__)
+                    if isinstance(error, BaseException):
+                        # if the error is an actual exception instance, trace it
+                        bt = traceback.format_exception(type(error), error, error.__traceback__)
+                    else:
+                        bt = [""]
                     bt_as_lines = [y for y in itertools.chain(*[x.split('\n') for x in bt]) if y]
                     errstr += _termcolor.reset(('\n' + 2 * indent) + ('\n' + 2 * indent).join(bt_as_lines))
             msgbuf.append(_termcolor.highlight('{}{}'.format(indent, errstr)))
