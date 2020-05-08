@@ -468,7 +468,7 @@ class WarningsFixer(object):
 
 class NumbaError(Exception):
 
-    def __init__(self, msg, loc=None, highlighting=True):
+    def __init__(self, msg, loc=None, highlighting=True, nested=0):
         self.msg = msg
         self.loc = loc
         if highlighting:
@@ -476,11 +476,21 @@ class NumbaError(Exception):
         else:
             def highlight(x):
                 return x
-        if loc:
-            super(NumbaError, self).__init__(
-                highlight("%s\n%s\n" % (msg, loc.strformat())))
+
+        if nested:
+            def nest(lines):
+                buf = []
+                for l in lines.splitlines():
+                    buf.append('    ' * nested + l)
+                return '\n'.join(buf)
         else:
-            super(NumbaError, self).__init__(highlight("%s" % (msg,)))
+            nest = lambda x:x
+
+        if loc:
+            new_msg = "%s\n%s\n" % (msg, loc.strformat())
+        else:
+            new_msg = "%s" % (msg,)
+        super(NumbaError, self).__init__(highlight(nest(new_msg)))
 
     @property
     def contexts(self):
@@ -507,7 +517,6 @@ class NumbaError(Exception):
         Change the error message to the given new message.
         """
         self.args = (new_message,) + self.args[1:]
-
 
 class UnsupportedError(NumbaError):
     """

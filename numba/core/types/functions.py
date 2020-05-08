@@ -78,7 +78,7 @@ class _ResolutionFailures(object):
                 source_file = inspect.getsourcefile(source_fn)
                 source_line = inspect.getsourcelines(source_fn)[1]
             largstr = argstr if err.literal else nolitargstr
-            msgbuf.append(_termcolor.errmsg("{}. Overload in function '{}': File {}: Line {}. With argument(s): '({})':".format(i + 1, source_fn.__name__, source_file, source_line, largstr)))
+            msgbuf.append(_termcolor.errmsg(indent + "{}. Overload in function '{}': File {}: Line {}. With argument(s): '({})':".format(i + 1, source_fn.__name__, source_file, source_line, largstr)))
             if error is None:
                 errstr = "Rejected as arguments did not match (no explicit signatures given)."
                 if hasattr(err.template, '_overload_func'):
@@ -89,7 +89,7 @@ class _ResolutionFailures(object):
                             errstr = "Rejected as arguments did not match the declared template signatures:\n%s" % lsigs
             else:
                 if isinstance(error, BaseException):
-                    errstr = "Rejected as the implementation raised a specific error:\n{}{}".format(indent, self.format_error(error))
+                    errstr = "Rejected as the implementation raised a specific error:\n{}{}".format(2 * indent, self.format_error(error))
                 else:
                     errstr = "Rejected with no specific reason given (probably didn't match)."
                 # if you are a developer, show the back traces
@@ -101,7 +101,7 @@ class _ResolutionFailures(object):
                         bt = [""]
                     bt_as_lines = [y for y in itertools.chain(*[x.split('\n') for x in bt]) if y]
                     errstr += _termcolor.reset(('\n' + 2 * indent) + ('\n' + 2 * indent).join(bt_as_lines))
-            msgbuf.append(_termcolor.highlight('{}{}'.format(indent, errstr)))
+            msgbuf.append(_termcolor.highlight('{}{}'.format(2 * indent, errstr)))
             loc = self.get_loc(temp, error)
             if loc:
                 msgbuf.append('{}raised from {}'.format(indent, loc))
@@ -256,20 +256,31 @@ class BoundFunction(Callable, Opaque):
 
     def get_call_type(self, context, args, kws):
         template = self.template(context)
-        e = None
+        literal_e = None
+        unliteral_e = None
         # Try with Literal
         try:
             out = template.apply(args, kws)
-        except Exception:
+        except Exception as exc:
+            literal_e = exc
             out = None
         # If that doesn't work, remove literals
         if out is None:
-            args = [unliteral(a) for a in args]
-            kws = {k: unliteral(v) for k, v in kws.items()}
-            out = template.apply(args, kws)
-        if out is None and e is not None:
-            raise e
+            try:
+                args = [unliteral(a) for a in args]
+                kws = {k: unliteral(v) for k, v in kws.items()}
+                out = template.apply(args, kws)
+            except Exception as exc:
+                unliteral_e = exc
+
+        if out is None and (unliteral_e is not None or literal_e is not None):
+            fmt = ("Resolution failure for literal arguments:\n%s\n"
+                   "Resolution failure for non-literal arguments:\n%s")
+            e1 = errors.TypingError(str(unliteral_e), nested=1)
+            e2 = errors.TypingError(str(literal_e), nested=1)
+            raise errors.TypingError(fmt % (str(e1), str(e2)))
         return out
+
 
     def get_call_signatures(self):
         sigs = getattr(self.template, 'cases', [])
