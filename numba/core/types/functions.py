@@ -298,8 +298,25 @@ class BoundFunction(Callable, Opaque):
         if out is None and (unliteral_e is not None or literal_e is not None):
             fmt = ("- Resolution failure for literal arguments:\n%s\n"
                    "- Resolution failure for non-literal arguments:\n%s")
-            e1 = errors.TypingError(str(unliteral_e), nested=1)
-            e2 = errors.TypingError(str(literal_e), nested=1)
+            if config.DEVELOPER_MODE:
+                indent = '    '
+                def add_bt(error):
+                    if isinstance(error, BaseException):
+                        # if the error is an actual exception instance, trace it
+                        bt = traceback.format_exception(type(error), error, error.__traceback__)
+                    else:
+                        bt = [""]
+                    bt_as_lines = [y for y in itertools.chain(*[x.split('\n') for x in bt]) if y]
+                    return _termcolor.reset(('\n' + 2 * indent) + ('\n' + 2 * indent).join(bt_as_lines))
+            else:
+                add_bt = lambda X: ''
+
+            su = str(unliteral_e)
+            su = su if su else str(repr(unliteral_e)) + add_bt(unliteral_e)
+            sl = str(literal_e)
+            sl = sl if sl else str(repr(literal_e)) + add_bt(literal_e)
+            e1 = errors.TypingError(su, nested=1)
+            e2 = errors.TypingError(sl, nested=1)
             raise errors.TypingError(fmt % (str(e1), str(e2)))
         return out
 
