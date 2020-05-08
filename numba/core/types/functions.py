@@ -50,7 +50,8 @@ class _ResolutionFailures(object):
         args = [str(a) for a in self._args]
         args += ["%s=%s" % (k, v) for k, v in sorted(self._kwargs.items())]
         nfails = sum([len(x) for x in self._failures.values()])
-        headtmp = 'No implementation of function {} found for signature: ({}).\n\nThere are {} known matches:'
+        headtmp = ('No implementation of function {} found for signature: ({}).\n\n'
+                   'There are {} candidate implementations:')
         msgbuf = [headtmp.format(self._function_type, ', '.join(args), nfails)]
         args = self._args
         kws = self._kwargs
@@ -83,7 +84,7 @@ class _ResolutionFailures(object):
                 source_file = inspect.getsourcefile(source_fn)
                 source_line = inspect.getsourcelines(source_fn)[1]
             largstr = argstr if err.literal else nolitargstr
-            msgbuf.append(_termcolor.errmsg(indent + "{}. There are {} report(s) of:\n       Overload in function '{}': File {}: Line {}. With argument(s): '({})':".format(i + 1, nduplicates, source_fn.__name__, source_file, source_line, largstr)))
+            msgbuf.append(_termcolor.errmsg(" - Of which {} did not match due to:\n       Overload in function '{}': File {}: Line {}. With argument(s): '({})':".format(nduplicates, source_fn.__name__, source_file, source_line, largstr)))
             if error is None:
                 errstr = "Rejected as arguments did not match (no explicit signatures given)."
                 if hasattr(err.template, '_overload_func'):
@@ -269,18 +270,25 @@ class BoundFunction(Callable, Opaque):
         template = self.template(context)
         literal_e = None
         unliteral_e = None
+
+
         # Try with Literal
         try:
             out = template.apply(args, kws)
         except Exception as exc:
             literal_e = exc
             out = None
+
+        # if the unliteral_args and unliteral_kws are the same as the literal
+        # ones, don't bother retrying
+        unliteral_args = [unliteral(a) for a in args]
+        unliteral_kws = {k: unliteral(v) for k, v in kws.items()}
+        skip = unliteral_args and kws == unliteral_kws
+
         # If that doesn't work, remove literals
-        if out is None:
+        if not skip and out is None:
             try:
-                args = [unliteral(a) for a in args]
-                kws = {k: unliteral(v) for k, v in kws.items()}
-                out = template.apply(args, kws)
+                out = template.apply(unliteral_args, unliteral_kws)
             except Exception as exc:
                 unliteral_e = exc
 
