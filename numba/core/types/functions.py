@@ -77,7 +77,7 @@ class _ResolutionFailures(object):
                 source_file = "<built-in>"
                 source_line = "<N/A>"
             else:
-                source_file = inspect.getsourcefile(source_fn)
+                source_file = path.abspath(inspect.getsourcefile(source_fn))
                 if path.isfile(source_file):
                     source_line = inspect.getsourcelines(source_fn)[1]
                     here = path.abspath(__file__)
