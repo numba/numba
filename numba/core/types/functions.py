@@ -60,7 +60,7 @@ class _ResolutionFailures(object):
         try:
             fn_name = getattr(key, '__name__', str(key))
         except Exception as e:
-            import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             pass
 
         for i, err in enumerate(self._failures):
@@ -91,6 +91,8 @@ class _ResolutionFailures(object):
                 if isinstance(error, BaseException):
                     errstr = "Rejected as the implementation raised a specific error:\n{}{}".format(2 * indent, self.format_error(error))
                 else:
+                    #import pdb; pdb.set_trace()
+                    pass
                     errstr = "Rejected with no specific reason given (probably didn't match)."
                 # if you are a developer, show the back traces
                 if config.DEVELOPER_MODE:
@@ -191,6 +193,8 @@ class BaseFunction(Callable):
                         self._impl_keys[sig.args] = temp.get_impl_key(sig)
                         return sig
                     else:
+                        #import pdb; pdb.set_trace()
+                        pass
                         haslit= '' if uselit else 'out'
                         msg = "All templates rejected with%s literals." % haslit
                         failures.add_error(temp, True, msg, uselit)
