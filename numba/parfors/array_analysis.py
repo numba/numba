@@ -1869,7 +1869,7 @@ class ArrayAnalysis(object):
 
         # We can only replace the slice and record some information about the slice
         # size if both parts of the slice were analyzable.
-        if def_res1 and def_res1:
+        if def_res1 and def_res2:
             post_wrap_size_var = ir.Var(
                 scope, mk_unique_var("post_wrap_slice_size"), loc
             )
