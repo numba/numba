@@ -858,8 +858,8 @@ class SymbolicEquivSet(ShapeEquivSet):
                         # If wrap_index for a slice works on a variable
                         # that is not analyzable (e.g., multiple definitions)
                         # then we have to return None here since we can't know
-                        # how that size will compare to others if we can't analyze
-                        # some part of the slice.
+                        # how that size will compare to others if we can't
+                        # analyze some part of the slice.
                         if -1 in index:
                             return None
                         names = self.ext_shapes.get(index, [])
@@ -1867,13 +1867,16 @@ class ArrayAnalysis(object):
         if value2 is not None:
             stmts.append(ir.Assign(value=value2, target=var2, loc=loc))
 
-        # We can only replace the slice and record some information about the slice
-        # size if both parts of the slice were analyzable.
+        # We can only replace the slice and record some information about
+        # the slice size if both parts of the slice were analyzable.
         if def_res1 and def_res2:
             post_wrap_size_var = ir.Var(
                 scope, mk_unique_var("post_wrap_slice_size"), loc
             )
-            post_wrap_size_val = ir.Expr.binop(operator.sub, var2, var1, loc=loc)
+            post_wrap_size_val = ir.Expr.binop(operator.sub,
+                                               var2,
+                                               var1,
+                                               loc=loc)
             self.calltypes[post_wrap_size_val] = signature(
                 slice_typ, var2_typ, var1_typ
             )
