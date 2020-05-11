@@ -108,28 +108,13 @@ def overload(func, jit_options={}, strict=True, inline='never',
     opts = _overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
-    class decorate(object):
-        def __init__(self, overload_func):
-            outer = self
-            class wrapper(object):
-                def __init__(self, fn):
-                    self.outer = outer
-                    self.fn = fn
-
-                def __call__(self, *args):
-                    self.fn.__globals__['OVERLOADER'] = self.outer
-                    return self.fn(*args)
-
-            template = make_overload_template(func, overload_func, opts, strict,
-                                            inline)
-            infer(template)
-            if callable(func):
-                infer_global(func, types.Function(template))
-            self.overload_func = overload_func
-            self.signatures = signatures
-
-        def __call__(self):
-            return self.overload_func
+    def decorate(overload_func):
+        template = make_overload_template(func, overload_func, opts, strict,
+                                          inline)
+        infer(template)
+        if callable(func):
+            infer_global(func, types.Function(template))
+        return overload_func
 
     return decorate
 
