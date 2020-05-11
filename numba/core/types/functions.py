@@ -3,7 +3,8 @@ from collections import namedtuple, defaultdict
 import inspect
 import itertools
 import logging
-from os import path
+import textwrap
+from os import path, get_terminal_size
 
 from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
@@ -17,6 +18,40 @@ _logger = logging.getLogger(__name__)
 _termcolor = errors.termcolor()
 
 _FAILURE = namedtuple('_FAILURE', 'template matched error literal')
+
+_termwidth = get_terminal_size()[0]
+_txtwrapper = textwrap.TextWrapper(width=_termwidth, drop_whitespace=False)
+
+_header_template = """
+No implementation of function {the_function} found for signature: {signature}.
+
+There are {ncandidates} candidate implementations:
+"""
+
+_reason_template = """
+" - Of which {nmatches} did not match due to:\n
+"""
+
+def wrapper(x):
+    buf = []
+    for l in x.splitlines():
+        buf.extend(_txtwrapper.wrap(l))
+    return '\n'.join(buf)
+
+_overload_template = ("- Of which {nduplicates} did not match due to:\n\t"
+                      "Overload in function '{function}': File: {file}: "
+                      "Line {line}. With argument(s): '({args})':")
+
+_err_reasons = {}
+_err_reasons['no_explicit_sig'] = "Rejected as arguments did not match (no explicit signatures given)."
+_err_reasons['no_match_explicit_sig'] = "Rejected as arguments did not match the declared template signatures:\n%s"
+_err_reasons['specific_error'] = "Rejected as the implementation raised a specific error:\n{}{}"
+_err_reasons['nonspecific_error'] =  "Rejected with no specific reason given (probably didn't match)."
+
+def argsnkwargs_to_str(args, kwargs):
+    buf = [str(a) for a in tuple(args)]
+    buf.extend(["{}={}".format(k, v) for k, v in kwargs.items()])
+    return ', '.join(buf)
 
 class _ResolutionFailures(object):
     """Collect and format function resolution failures.
@@ -45,63 +80,60 @@ class _ResolutionFailures(object):
         key = "{}{}".format(errclazz, str(error))
         self._failures[key].append(_FAILURE(calltemplate, matched, error, literal))
 
+    def _get_source_info(self, source_fn):
+        source_line = "<N/A>"
+        if 'builtin_function' in str(type(source_fn)):
+            source_file = "<built-in>"
+        else:
+            try:
+                source_file = path.abspath(inspect.getsourcefile(source_fn))
+                source_line = inspect.getsourcelines(source_fn)[1]
+                here = path.abspath(__file__)
+                common = path.commonpath([here, source_file])
+                source_file = source_file.replace(common, 'numba')
+            except:
+                source_file = "Unknown"
+        return source_file, source_line
+
     def format(self):
         """Return a formatted error message from all the gathered errors.
         """
         indent = ' ' * 4
-        args = [str(a) for a in self._args]
-        args += ["%s=%s" % (k, v) for k, v in sorted(self._kwargs.items())]
-        nfails = sum([len(x) for x in self._failures.values()])
-        headtmp = ('No implementation of function {} found for signature: ({}).\n\n'
-                   'There are {} candidate implementations:')
-        msgbuf = [headtmp.format(self._function_type, ', '.join(args), nfails)]
-        args = self._args
-        kws = self._kwargs
-        nolitargs = tuple([unliteral(a) for a in args])
-        nolitkws = {k: unliteral(v) for k, v in kws.items()}
+        argstr = argsnkwargs_to_str(self._args, self._kwargs)
+        ncandidates = sum([len(x) for x in self._failures.values()])
+        msgbuf = [_header_template.format(the_function=self._function_type,
+                                          signature=argstr,
+                                          ncandidates=ncandidates)]
+        nolitargs = tuple([unliteral(a) for a in self._args])
+        nolitkwargs = {k: unliteral(v) for k, v in self._kwargs.items()}
+        nolitargstr = argsnkwargs_to_str(nolitargs, nolitkwargs)
 
-        argstr = ", ".join([str(x) for x in args]) + ', ' + ",".join([str(x) + '=' + str(y) for x, y in kws.items()])
-        nolitargstr = ", ".join([str(x) for x in nolitargs]) + ', ' + ",".join([str(x) + '=' + str(y) for x, y in nolitkws.items()])
         key = self._function_type.key[0]
         fn_name = getattr(key, '__name__', str(key))
 
         for i, (k, err_list) in enumerate(self._failures.items()):
             err = err_list[0]
             nduplicates = len(err_list)
-            temp, error = err.template, err.error
-
-            #source_fn = getattr(err.template, '_overload_func', err.template.key)
-            source_fn = err.template.key
+            template, error = err.template, err.error
+            source_fn = template.key
             if isinstance(source_fn, numba.core.extending._Intrinsic):
-                source_fn = err.template.key._defn
-            if 'builtin_function' in str(type(source_fn)):
-                source_file = "<built-in>"
-                source_line = "<N/A>"
-            else:
-                try:
-                    source_file = path.abspath(inspect.getsourcefile(source_fn))
-                    source_line = inspect.getsourcelines(source_fn)[1]
-                    here = path.abspath(__file__)
-                    common = path.commonpath([here, source_file])
-                    source_file = source_file.replace(common, 'numba')
-                except:
-                    source_file = "Unknown"
-                    source_line = "<N/A>"
+                source_fn = template.key._defn
+            source_file, source_line = self._get_source_info(source_fn)
             largstr = argstr if err.literal else nolitargstr
-            msgbuf.append(_termcolor.errmsg(" - Of which {} did not match due to:\n       Overload in function '{}': File: {}: Line {}. With argument(s): '({})':".format(nduplicates, source_fn.__name__, source_file, source_line, largstr)))
+            msgbuf.append(_termcolor.errmsg(wrapper(_overload_template).format(nduplicates=nduplicates, function=source_fn.__name__, file=source_file, line=source_line, args=largstr)))
             if error is None:
-                errstr = "Rejected as arguments did not match (no explicit signatures given)."
-                if hasattr(err.template, '_overload_func'):
-                    if hasattr(err.template._overload_func.outer, 'signatures'):
-                        sigs = err.template._overload_func.outer.signatures
+                errstr = _err_reasons['no_explicit_sig']
+                if hasattr(template, '_overload_func'):
+                    if hasattr(template._overload_func.outer, 'signatures'):
+                        sigs = template._overload_func.outer.signatures
                         if sigs:
                             lsigs = '\n'.join([2 * indent + "* " + fn_name + str(x) for x in sigs])
-                            errstr = "Rejected as arguments did not match the declared template signatures:\n%s" % lsigs
+                            errstr = _reason_template['no_match_explicit_sig'] % lsigs
             else:
                 if isinstance(error, BaseException):
-                    errstr = "Rejected as the implementation raised a specific error:\n{}{}".format(2 * indent, self.format_error(error))
+                    errstr = _err_reasons['specific_error'].format(2 * indent, self.format_error(error))
                 elif error is None:
-                    errstr = "Rejected with no specific reason given (probably didn't match)."
+                    errstr =_err_reasons['nonspecific_error']
                 else:
                     errstr = error
                 # if you are a developer, show the back traces
@@ -114,7 +146,7 @@ class _ResolutionFailures(object):
                     bt_as_lines = [y for y in itertools.chain(*[x.split('\n') for x in bt]) if y]
                     errstr += _termcolor.reset(('\n' + 2 * indent) + ('\n' + 2 * indent).join(bt_as_lines))
             msgbuf.append(_termcolor.highlight('{}{}'.format(2 * indent, errstr)))
-            loc = self.get_loc(temp, error)
+            loc = self.get_loc(template, error)
             if loc:
                 msgbuf.append('{}raised from {}'.format(indent, loc))
 
