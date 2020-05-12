@@ -25,7 +25,7 @@ except OSError: # lack of active console
     _termwidth = 120
 
 _header_template = ("No implementation of function {the_function} found for "
-                    "signature:\n - {fname}({signature}).\nThere are {ncandidates} "
+                    "signature:\n \n >>> {fname}({signature})\n \nThere are {ncandidates} "
                     "candidate implementations:")
 
 _reason_template = """
@@ -322,7 +322,7 @@ class BoundFunction(Callable, Opaque):
     def get_call_type(self, context, args, kws):
         template = self.template(context)
         literal_e = None
-        unliteral_e = None
+        nonliteral_e = None
 
 
         # Try with Literal
@@ -343,11 +343,10 @@ class BoundFunction(Callable, Opaque):
             try:
                 out = template.apply(unliteral_args, unliteral_kws)
             except Exception as exc:
-                unliteral_e = exc
+                nonliteral_e = exc
 
-        if out is None and (unliteral_e is not None or literal_e is not None):
-            fmt = ("- Resolution failure for literal arguments:\n%s\n"
-                   "- Resolution failure for non-literal arguments:\n%s")
+        if out is None and (nonliteral_e is not None or literal_e is not None):
+            tmplt = _termcolor.highlight("- Resolution failure for {} arguments:\n{}\n")
             if config.DEVELOPER_MODE:
                 indent = '    '
                 def add_bt(error):
@@ -361,13 +360,14 @@ class BoundFunction(Callable, Opaque):
             else:
                 add_bt = lambda X: ''
 
-            su = str(unliteral_e)
-            su = su if su else str(repr(unliteral_e)) + add_bt(unliteral_e)
-            sl = str(literal_e)
-            sl = sl if sl else str(repr(literal_e)) + add_bt(literal_e)
-            e1 = errors.TypingError(textwrap.dedent(su))
-            e2 = errors.TypingError(textwrap.dedent(sl))
-            raise errors.TypingError(fmt % (str(e1), str(e2)))
+            def nested_msg(literalness, e):
+                estr = str(e)
+                estr = estr if estr else (str(repr(e)) + add_bt(e))
+                new_e = errors.TypingError(textwrap.dedent(estr))
+                return tmplt.format(literalness, str(new_e))
+
+            raise errors.TypingError(nested_msg('literal', literal_e) +
+                                     nested_msg('non-literal', nonliteral_e))
         return out
 
 
