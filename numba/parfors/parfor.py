@@ -3517,7 +3517,7 @@ def parfor_defs(parfor, use_set=None, def_set=None):
     loop_vars |= {
         l.step.name for l in parfor.loop_nests if isinstance(
             l.step, ir.Var)}
-    use_set.update(loop_vars)
+    use_set.update(loop_vars - def_set)
     use_set |= get_parfor_pattern_vars(parfor)
 
     return analysis._use_defs_result(usemap=use_set, defmap=def_set)
