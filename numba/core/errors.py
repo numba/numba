@@ -497,9 +497,8 @@ class NumbaError(Exception):
         contextual information.
         """
         self.contexts.append(msg)
-        f = termcolor().errmsg('{0}\n') + termcolor().filename(
-            '[{1}] During: {2}')
-        newmsg = f.format(self, len(self.contexts), msg)
+        f = termcolor().errmsg('{0}\n') + termcolor().filename('During: {1}')
+        newmsg = f.format(self, msg)
         self.args = (newmsg,)
         return self
 
