@@ -19,33 +19,36 @@ _termcolor = errors.termcolor()
 
 _FAILURE = namedtuple('_FAILURE', 'template matched error literal')
 
-_termwidth = get_terminal_size()[0]
-_txtwrapper = textwrap.TextWrapper(width=_termwidth, drop_whitespace=False)
+try:
+    _termwidth = get_terminal_size()[0]
+except OSError: # lack of active console
+    _termwidth = 120
 
-_header_template = """
-No implementation of function {the_function} found for signature: {signature}.
-
-There are {ncandidates} candidate implementations:
-"""
+_header_template = ("No implementation of function {the_function} found for "
+                    "signature:\n - {fname}({signature}).\nThere are {ncandidates} "
+                    "candidate implementations:")
 
 _reason_template = """
 " - Of which {nmatches} did not match due to:\n
 """
 
-def wrapper(x):
+def wrapper(x, indent=0):
     buf = []
+    _txtwrapper = textwrap.TextWrapper(width=_termwidth - indent,
+                                       drop_whitespace=False)
     for l in x.splitlines():
         buf.extend(_txtwrapper.wrap(l))
-    return '\n'.join(buf)
+    tmp = '\n'.join(buf)
+    return textwrap.indent(tmp, ' ' * indent,  lambda line: True)
 
-_overload_template = ("- Of which {nduplicates} did not match due to:\n\t"
+_overload_template = ("- Of which {nduplicates} did not match due to:\n"
                       "Overload in function '{function}': File: {file}: "
-                      "Line {line}. With argument(s): '({args})':")
+                      "Line {line}.\n  With argument(s): '({args})':")
 
 _err_reasons = {}
 _err_reasons['no_explicit_sig'] = "Rejected as arguments did not match (no explicit signatures given)."
-_err_reasons['no_match_explicit_sig'] = "Rejected as arguments did not match the declared template signatures:\n%s"
-_err_reasons['specific_error'] = "Rejected as the implementation raised a specific error:\n{}{}"
+_err_reasons['no_match_explicit_sig'] = "Rejected as arguments did not match the declared template signatures:\n{}"
+_err_reasons['specific_error'] = "Rejected as the implementation raised a specific error:\n{}"
 _err_reasons['nonspecific_error'] =  "Rejected with no specific reason given (probably didn't match)."
 
 def argsnkwargs_to_str(args, kwargs):
@@ -56,12 +59,14 @@ def argsnkwargs_to_str(args, kwargs):
 class _ResolutionFailures(object):
     """Collect and format function resolution failures.
     """
-    def __init__(self, context, function_type, args, kwargs):
+    def __init__(self, context, function_type, args, kwargs, depth=0):
         self._context = context
         self._function_type = function_type
         self._args = args
         self._kwargs = kwargs
         self._failures = defaultdict(list)
+        self._depth = depth
+        self._scale = 2
 
     def __len__(self):
         return len(self._failures)
@@ -98,10 +103,11 @@ class _ResolutionFailures(object):
     def format(self):
         """Return a formatted error message from all the gathered errors.
         """
-        indent = ' ' * 4
+        indent = ' ' * 2
         argstr = argsnkwargs_to_str(self._args, self._kwargs)
         ncandidates = sum([len(x) for x in self._failures.values()])
         msgbuf = [_header_template.format(the_function=self._function_type,
+                                          fname=self._function_type.typing_key.__name__,
                                           signature=argstr,
                                           ncandidates=ncandidates)]
         nolitargs = tuple([unliteral(a) for a in self._args])
@@ -120,18 +126,25 @@ class _ResolutionFailures(object):
                 source_fn = template.key._defn
             source_file, source_line = self._get_source_info(source_fn)
             largstr = argstr if err.literal else nolitargstr
-            msgbuf.append(_termcolor.errmsg(wrapper(_overload_template).format(nduplicates=nduplicates, function=source_fn.__name__, file=source_file, line=source_line, args=largstr)))
+            msgbuf.append(_termcolor.errmsg(
+                wrapper(_overload_template.format(nduplicates=nduplicates,
+                                                  function=source_fn.__name__,
+                                                  file=source_file,
+                                                  line=source_line,
+                                                  args=largstr),
+                self._depth + 1)))
             if error is None:
                 errstr = _err_reasons['no_explicit_sig']
                 if hasattr(template, '_overload_func'):
                     if hasattr(template._overload_func.outer, 'signatures'):
                         sigs = template._overload_func.outer.signatures
                         if sigs:
-                            lsigs = '\n'.join([2 * indent + "* " + fn_name + str(x) for x in sigs])
-                            errstr = _reason_template['no_match_explicit_sig'] % lsigs
+                            lsigs = '\n'.join([' ' * (self._depth + 1) + "* " + fn_name + str(x) for x in sigs])
+                            errstr = _reason_template['no_match_explicit_sig'].format(lsigs)
             else:
                 if isinstance(error, BaseException):
-                    errstr = _err_reasons['specific_error'].format(2 * indent, self.format_error(error))
+                    # moves specific error reason text
+                    errstr = _err_reasons['specific_error'].format(indent + self.format_error(error))
                 elif error is None:
                     errstr =_err_reasons['nonspecific_error']
                 else:
@@ -145,12 +158,12 @@ class _ResolutionFailures(object):
                         bt = [""]
                     bt_as_lines = [y for y in itertools.chain(*[x.split('\n') for x in bt]) if y]
                     errstr += _termcolor.reset(('\n' + 2 * indent) + ('\n' + 2 * indent).join(bt_as_lines))
-            msgbuf.append(_termcolor.highlight('{}{}'.format(2 * indent, errstr)))
+            msgbuf.append(_termcolor.highlight(wrapper(errstr, self._depth + 2)))
             loc = self.get_loc(template, error)
             if loc:
                 msgbuf.append('{}raised from {}'.format(indent, loc))
 
-        return '\n'.join(msgbuf) + '\n'
+        return wrapper('\n'.join(msgbuf) + '\n', self._scale * self._depth)
 
     def format_error(self, error):
         """Format error message or exception
@@ -194,6 +207,7 @@ class BaseFunction(Callable):
             self.typing_key = template.key
         self._impl_keys = {}
         name = "%s(%s)" % (self.__class__.__name__, self.typing_key)
+        self._depth = 0
         super(BaseFunction, self).__init__(name)
 
     @property
@@ -216,7 +230,9 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
-        failures = _ResolutionFailures(context, self, args, kws)
+        failures = _ResolutionFailures(context, self, args, kws,
+                                       depth=self._depth)
+        self._depth += 1
         for temp_cls in self.templates:
             temp = temp_cls(context)
             for uselit in [True, False]:
@@ -233,12 +249,13 @@ class BaseFunction(Callable):
                 else:
                     if sig is not None:
                         self._impl_keys[sig.args] = temp.get_impl_key(sig)
+                        self._depth -= 1
                         return sig
                     else:
                         registered_sigs = getattr(temp, 'cases', None)
                         if registered_sigs is not None:
                             msg = "No match for registered cases:\n%s"
-                            msg = msg % '\n'.join("        * {}".format(x) for x in registered_sigs)
+                            msg = msg % '\n'.join(" * {}".format(x) for x in registered_sigs)
                         else:
                             msg = 'No match.'
                         failures.add_error(temp, True, msg, uselit)
@@ -348,8 +365,8 @@ class BoundFunction(Callable, Opaque):
             su = su if su else str(repr(unliteral_e)) + add_bt(unliteral_e)
             sl = str(literal_e)
             sl = sl if sl else str(repr(literal_e)) + add_bt(literal_e)
-            e1 = errors.TypingError(su, nested=1)
-            e2 = errors.TypingError(sl, nested=1)
+            e1 = errors.TypingError(textwrap.dedent(su))
+            e2 = errors.TypingError(textwrap.dedent(sl))
             raise errors.TypingError(fmt % (str(e1), str(e2)))
         return out
 
