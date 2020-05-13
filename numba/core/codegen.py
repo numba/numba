@@ -829,6 +829,8 @@ class JITCPUCodegen(BaseCPUCodegen):
         arch = ll.Target.from_default_triple().name
         if arch.startswith('x86'): # one of x86 or x86_64
             reloc_model = 'static'
+        elif arch.startswith('ppc'):
+            reloc_model = 'pic'
         else:
             reloc_model = 'default'
         options['reloc'] = reloc_model
