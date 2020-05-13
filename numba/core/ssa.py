@@ -28,15 +28,8 @@ def reconstruct_ssa(func_ir):
 
     Produces minimal SSA using Choi et al algorithm.
     """
-    _logger.debug("BEFORE SSA".center(80, "-"))
-    _logger.debug(func_ir.dump_to_string())
-    _logger.debug("=" * 80)
-
     func_ir.blocks = _run_ssa(func_ir.blocks)
 
-    _logger.debug("AFTER SSA".center(80, "-"))
-    _logger.debug(func_ir.dump_to_string())
-    _logger.debug("=" * 80)
     return func_ir
 
 
