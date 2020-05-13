@@ -14,7 +14,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import pndindex
+from numba import pndindex, typeof
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran)
@@ -29,6 +29,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
 from numba.core.typing import signature
 from numba.core.extending import (register_jitable, overload, overload_method,
                                   intrinsic)
+from numba.typed import List
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem
@@ -4923,7 +4924,7 @@ def np_flip_ud(a):
 
 
 @intrinsic
-def _build_slice_tuple(tyctx, sz):
+def _build_flip_slice_tuple(tyctx, sz):
     """ Creates a tuple of slices for np.flip indexing like
     `(slice(None, None, -1),) * sz` """
     size = int(sz.literal_value)
@@ -4958,9 +4959,63 @@ def np_flip(a):
         raise errors.TypingError("Cannot np.flip on %s type" % a)
 
     def impl(a):
-        sl = _build_slice_tuple(a.ndim)
+        sl = _build_flip_slice_tuple(a.ndim)
         return a[sl]
 
+    return impl
+
+
+@intrinsic
+def _build_full_slice_tuple(tyctx, sz):
+    """Creates a sz-tuple of full slices"""
+    size = int(sz.literal_value)
+    tuple_type = types.UniTuple(dtype=types.slice2_type, count=size)
+    sig = tuple_type(sz)
+
+    def codegen(context, builder, signature, args):
+        def impl(length, empty_tuple):
+            out = empty_tuple
+            for i in range(length):
+                out = tuple_setitem(out, i, slice(None, None))
+            return out
+
+        inner_argtypes = [types.intp, tuple_type]
+        inner_sig = typing.signature(tuple_type, *inner_argtypes)
+        ll_idx_type = context.get_value_type(types.intp)
+        # Allocate an empty tuple
+        empty_tuple = context.get_constant_undef(tuple_type)
+        inner_args = [ll_idx_type(size), empty_tuple]
+
+        res = context.compile_internal(builder, impl, inner_sig, inner_args)
+        return res
+
+    return sig, codegen
+
+
+@overload(np.split)
+def split(a, indices, axis=0):
+    if a.ndim > 1:
+        a_type = types.Array(a.dtype, a.ndim, "A")
+    else:
+        a_type = typeof(a)
+
+    if isinstance(indices, types.Integer):
+        def impl(a, indices, axis=0):
+            l, rem = divmod(a.shape[axis], indices)
+            if rem != 0:
+                raise ValueError()
+            return np.split(a, list(range(l, len(a), l)), axis=axis)
+    else:
+        def impl(a, indices, axis=0):
+            slice_tup = _build_full_slice_tuple(a.ndim)
+            out = List.empty_list(a_type)
+            prev = 0
+            for cur in indices:
+                idx = tuple_setitem(slice_tup, axis, slice(prev, cur))
+                out.append(a[idx])
+                prev = cur
+            out.append(a[tuple_setitem(slice_tup, axis, slice(cur, None))])
+            return out
     return impl
 
 
