@@ -121,6 +121,10 @@ def flip(a):
     return np.flip(a)
 
 
+def array_split(a, indices, axis=0):
+    return np.array_split(a, indices, axis=0)
+
+
 def split(a, indices, axis=0):
     return np.split(a, indices, axis=0)
 
@@ -2179,11 +2183,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
 
-    def test_split_basic(self):
-        pyfunc = split
+    def _check_array_split(self, func):
+        # Since np.split and np.array_split are very similar
+        pyfunc = func
         cfunc = jit(nopython=True)(pyfunc)
 
-        def a_variations():
+        def args_variations():
             a = np.arange(100)
             yield a, 2
             yield a, 2, 0
@@ -2201,16 +2206,22 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield a, [1, 3], 1
             yield a, [1, 3], 2
 
-        for args in a_variations():
+        for args in args_variations():
             expected = pyfunc(*args)
             got = cfunc(*args)
 
             np.testing.assert_equal(expected, list(got))
             # self.assertTrue(np.array_equal(expected, got))
 
-        with self.assertRaises(ValueError) as raises:
-            cfunc(np.ones(5), 2)
+    def test_array_split_basic(self):
+        self._check_array_split(array_split)
 
+    def test_split_basic(self):
+        self._check_array_split(split)
+
+        self.disable_leak_check()  # The exception leaks
+        with self.assertRaises(ValueError) as raises:
+            njit(split)(np.ones(5), 2)
         self.assertIn("array split does not result in an equal division", str(raises.exception))
 
     def test_roll_basic(self):

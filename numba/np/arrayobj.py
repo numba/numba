@@ -4991,8 +4991,8 @@ def _build_full_slice_tuple(tyctx, sz):
     return sig, codegen
 
 
-@overload(np.split)
-def np_split(a, indices, axis=0):
+@overload(np.array_split)
+def np_array_split(a, indices, axis=0):
     # If this statement is put at the top of the file, numba fails to import
     from numba.typed import List
 
@@ -5005,9 +5005,7 @@ def np_split(a, indices, axis=0):
 
         def impl(a, indices, axis=0):
             l, rem = divmod(a.shape[axis], indices)
-            if rem != 0:
-                raise ValueError("array split does not result in an equal division")
-            return np.split(a, np.arange(l, len(a), l), axis=axis)
+            return np.array_split(a, np.arange(l + rem, len(a), l), axis=axis)
 
     else:
 
@@ -5022,6 +5020,21 @@ def np_split(a, indices, axis=0):
             out.append(a[tuple_setitem(slice_tup, axis, slice(cur, None))])
             return out
 
+    return impl
+
+
+@overload(np.split)
+def np_split(a, indices, axis=0):
+    # This is just a wrapper of array_split, but with an extra error if indices is an int.
+    if isinstance(indices, types.Integer):
+        def impl(a, indices, axis=0):
+            l, rem = divmod(a.shape[axis], indices)
+            if rem != 0:
+                raise ValueError("array split does not result in an equal division")
+            return np.array_split(a, np.arange(l, len(a), l), axis=axis)
+    else:
+        def impl(a, indices, axis=0):
+            return np.array_split(a, indices, axis=axis)
     return impl
 
 
