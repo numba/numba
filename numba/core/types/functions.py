@@ -331,6 +331,7 @@ class BoundFunction(Callable, Opaque):
         template = self.template(context)
         literal_e = None
         nonliteral_e = None
+        _DEBUG = False
 
 
         # Try with Literal
@@ -342,9 +343,11 @@ class BoundFunction(Callable, Opaque):
 
         # if the unliteral_args and unliteral_kws are the same as the literal
         # ones, don't bother retrying
-        unliteral_args = [unliteral(a) for a in args]
+        unliteral_args = tuple([unliteral(a) for a in args])
         unliteral_kws = {k: unliteral(v) for k, v in kws.items()}
-        skip = unliteral_args and kws == unliteral_kws
+        skip = unliteral_args == args and kws == unliteral_kws
+        if _DEBUG:
+            print("SKIP=", skip, args, unliteral_args, kws, unliteral_kws)
 
         # If that doesn't work, remove literals
         if not skip and out is None:
