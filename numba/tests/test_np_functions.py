@@ -121,6 +121,10 @@ def flip(a):
     return np.flip(a)
 
 
+def split(a, indices, axis=0):
+    return np.split(a, indices, axis=0)
+
+
 def correlate(a, v):
     return np.correlate(a, v)
 
@@ -2174,6 +2178,35 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc((1, 2, 3))
 
         self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
+
+    def test_split_basic(self):
+        pyfunc = split
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def a_variations():
+            a = np.arange(100)
+            yield a, 2
+            yield a, 2, 0
+            yield a, [1, 4, 72]
+            yield a, [1, 4, 72], 0
+
+            a = np.arange(64).reshape(4, 4, 4)
+            yield a, 2
+            yield a, 2, 0
+            yield a, 2, 1
+            yield a, [2, 1, 5]
+            yield a, [2, 1, 5], 1
+            yield a, [2, 1, 5], 2
+            yield a, [1, 3]
+            yield a, [1, 3], 1
+            yield a, [1, 3], 2
+
+        for args in a_variations():
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+
+            np.testing.assert_equal(expected, list(got))
+            # self.assertTrue(np.array_equal(expected, got))
 
     def test_roll_basic(self):
         pyfunc = roll
