@@ -108,8 +108,18 @@ class _ResolutionFailures(object):
         argstr = argsnkwargs_to_str(self._args, self._kwargs)
         ncandidates = sum([len(x) for x in self._failures.values()])
 
+        # sort out a display name for the function
         tykey = self._function_type.typing_key
-        fname = getattr(tykey, '__name__', str(tykey))
+        # most things have __name__
+        fname = getattr(tykey, '__name__', None)
+        is_external_fn_ptr = isinstance(self._function_type,
+                                        ExternalFunctionPointer)
+        if fname is None:
+            if is_external_fn_ptr:
+                fname = "ExternalFunctionPointer"
+            else:
+                fname = "<unknown function>"
+
         msgbuf = [_header_template.format(the_function=self._function_type,
                                           fname=fname,
                                           signature=argstr,
@@ -131,6 +141,9 @@ class _ResolutionFailures(object):
             source_fn = template.key
             if isinstance(source_fn, numba.core.extending._Intrinsic):
                 source_fn = template.key._defn
+            elif is_external_fn_ptr and isinstance(source_fn,
+                                                   numba.core.typing.templates.Signature):
+                source_fn = template.__class__
             source_file, source_line = self._get_source_info(source_fn)
             largstr = argstr if err.literal else nolitargstr
             msgbuf.append(_termcolor.errmsg(
@@ -342,14 +355,14 @@ class BoundFunction(Callable, Opaque):
             out = None
 
         # if the unliteral_args and unliteral_kws are the same as the literal
-        # ones, don't bother retrying
+        # ones, set up to not bother retrying
         unliteral_args = tuple([unliteral(a) for a in args])
         unliteral_kws = {k: unliteral(v) for k, v in kws.items()}
         skip = unliteral_args == args and kws == unliteral_kws
-        if _DEBUG:
-            print("SKIP=", skip, args, unliteral_args, kws, unliteral_kws)
 
-        # If that doesn't work, remove literals
+        # If the above template application failed and the non-literal args are
+        # different to the literal ones, try again with literals rewritten as
+        # non-literals
         if not skip and out is None:
             try:
                 out = template.apply(unliteral_args, unliteral_kws)
