@@ -205,9 +205,10 @@ class _ResolutionFailures(object):
             return "{}:{}".format(frame[0], frame[1])
 
     def raise_error(self):
-        for _tempcls, e, *_ in self._failures:
-            if isinstance(e, errors.ForceLiteralArg):
-                raise e
+        for faillist in self._failures.values():
+            for fail in faillist:
+                if isinstance(fail.error, errors.ForceLiteralArg):
+                    raise fail.error
         raise errors.TypingError(self.format())
 
 
