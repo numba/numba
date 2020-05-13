@@ -532,13 +532,8 @@ class InlineWorker(object):
         # call branch pruning to simplify IR and avoid inference errors
         callee_ir._definitions = ir_utils.build_definitions(callee_ir.blocks)
         numba.core.analysis.dead_branch_prune(callee_ir, arg_typs)
-        try:
-            f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
-                    self.typingctx, callee_ir, arg_typs, None)
-        except Exception:
-            f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
-                    self.typingctx, callee_ir, arg_typs, None)
-            pass
+        f_typemap, f_return_type, f_calltypes = typed_passes.type_inference_stage(
+                self.typingctx, callee_ir, arg_typs, None)
         canonicalize_array_math(callee_ir, f_typemap,
                                 f_calltypes, self.typingctx)
         # remove argument entries like arg.a from typemap
