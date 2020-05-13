@@ -1,11 +1,11 @@
-from __future__ import print_function, division, absolute_import
-
 import sys
 
 import numpy as np
-from numba import cuda, numpy_support, types
-from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba import cuda
+from numba.core import types
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
+import unittest
+from numba.np import numpy_support
 
 
 def set_a(ary, i, v):
@@ -100,7 +100,7 @@ recordwith2darray = np.dtype([('i', np.int32),
                               ('j', np.float32, (3, 2))])
 
 
-class TestRecordDtype(SerialMixin, unittest.TestCase):
+class TestRecordDtype(CUDATestCase):
 
     def _createSampleArrays(self):
         self.sample1d = np.recarray(3, dtype=recordtype)
@@ -131,13 +131,9 @@ class TestRecordDtype(SerialMixin, unittest.TestCase):
             # Force the argument to the pure Python function to be
             # a recarray, as attribute access isn't supported on
             # structured arrays.
-            if numpy_support.version <= (1, 9):
-                expect = np.recarray(got.shape, got.dtype)
-                expect[:] = got
-            else:
-                expect = got.copy().view(np.recarray)
+            expect = got.copy().view(np.recarray)
 
-            cfunc(got, i, value)
+            cfunc[1, 1](got, i, value)
             pyfunc(expect, i, value)
 
             # Match the entire array to ensure no memory corruption
@@ -169,7 +165,7 @@ class TestRecordDtype(SerialMixin, unittest.TestCase):
             pyfunc(expect, i, j)
 
             got = self.sample1d.copy()
-            cfunc(got, i, j)
+            cfunc[1, 1](got, i, j)
 
             # Match the entire array to ensure no memory corruption
             self.assertEqual(expect[i], expect[j])
@@ -180,7 +176,7 @@ class TestRecordDtype(SerialMixin, unittest.TestCase):
         rec = self.sample1d.copy()[0]
         nbrecord = numpy_support.from_dtype(recordtype)
         cfunc = self.get_cfunc(pyfunc, (nbrecord,))
-        cfunc(rec, v)
+        cfunc[1, 1](rec, v)
         np.testing.assert_equal(rec[f], v)
 
     def test_rec_set_a(self):
@@ -198,7 +194,7 @@ class TestRecordDtype(SerialMixin, unittest.TestCase):
         arr = np.zeros(1, v.dtype)
         nbrecord = numpy_support.from_dtype(recordtype)
         cfunc = self.get_cfunc(pyfunc, (nbrecord,))
-        cfunc(rec, arr)
+        cfunc[1, 1](rec, arr)
         np.testing.assert_equal(arr[0], v)
 
     def test_rec_read_a(self):
@@ -218,7 +214,7 @@ class TestRecordDtype(SerialMixin, unittest.TestCase):
         nbrecord = numpy_support.from_dtype(recordwitharray)
         cfunc = self.get_cfunc(record_write_array, (nbrecord,))
 
-        cfunc(rec)
+        cfunc[1, 1](rec)
         expected = self.samplerec1darr.copy()
         expected['g'] = 2
         expected['h'][0] = 3.0
@@ -233,7 +229,7 @@ class TestRecordDtype(SerialMixin, unittest.TestCase):
         rec = self.samplerec2darr.copy()
         nbrecord = numpy_support.from_dtype(recordwith2darray)
         cfunc = self.get_cfunc(record_write_2d_array, (nbrecord,))
-        cfunc(rec)
+        cfunc[1, 1](rec)
 
         expected = self.samplerec2darr.copy()
         expected['i'] = 3
@@ -252,7 +248,7 @@ class TestRecordDtype(SerialMixin, unittest.TestCase):
         nbrecord = numpy_support.from_dtype(recordwitharray)
         cfunc = self.get_cfunc(record_read_array, (nbrecord,))
         arr = np.zeros(2, dtype=rec['h'].dtype)
-        cfunc(rec, arr)
+        cfunc[1, 1](rec, arr)
 
         np.testing.assert_equal(rec['h'], arr)
 
@@ -268,7 +264,7 @@ class TestRecordDtype(SerialMixin, unittest.TestCase):
         nbrecord = numpy_support.from_dtype(recordwith2darray)
         cfunc = self.get_cfunc(record_read_2d_array, (nbrecord,))
         arr = np.zeros((3,2), dtype=rec['j'].dtype)
-        cfunc(rec, arr)
+        cfunc[1, 1](rec, arr)
 
         np.testing.assert_equal(rec['j'], arr)
 

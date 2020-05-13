@@ -2,14 +2,13 @@
 Test basic language features
 
 """
-from __future__ import print_function, absolute_import, division
 
 import numpy as np
 from numba import cuda, float64
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class TestLang(SerialMixin, unittest.TestCase):
+class TestLang(CUDATestCase):
     def test_enumerate(self):
         tup = (1., 2.5, 3.)
 
@@ -19,7 +18,7 @@ class TestLang(SerialMixin, unittest.TestCase):
                 a[i] = v
 
         a = np.zeros(len(tup))
-        foo(a)
+        foo[1, 1](a)
         self.assertTrue(np.all(a == tup))
 
     def test_zip(self):
@@ -34,7 +33,7 @@ class TestLang(SerialMixin, unittest.TestCase):
             a[0] = c
 
         a = np.zeros(1)
-        foo(a)
+        foo[1, 1](a)
         b = np.array(t1)
         c = np.array(t2)
         self.assertTrue(np.all(a == (b + c).sum()))

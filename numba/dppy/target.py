@@ -7,11 +7,11 @@ from llvmlite.llvmpy import core as lc
 from llvmlite import ir as llvmir
 from llvmlite import binding as ll
 
-from numba import typing, types, utils, cgutils
-from numba.utils import cached_property
-from numba import datamodel
-from numba.targets.base import BaseContext
-from numba.targets.callconv import MinimalCallConv
+from numba.core import typing, types, utils, cgutils
+from numba.core.utils import cached_property
+from numba.core import datamodel
+from numba.core.base import BaseContext
+from numba.core.callconv import MinimalCallConv
 from . import codegen
 
 CC_SPIR_KERNEL = "spir_kernel"
@@ -26,7 +26,7 @@ class DPPyTypingContext(typing.BaseContext):
     def load_additional_registries(self):
         # Declarations for OpenCL API functions and OpenCL Math functions
         from .ocl import ocldecl, mathdecl
-        from numba.typing import cmathdecl, npydecl
+        from numba.core.typing import cmathdecl, npydecl
 
         self.install_registry(ocldecl.registry)
         self.install_registry(mathdecl.registry)
@@ -68,7 +68,7 @@ def _init_data_model_manager():
 spirv_data_model_manager = _init_data_model_manager()
 
 def _replace_numpy_ufunc_with_opencl_supported_functions():
-    from numba.targets.ufunc_db import _ufunc_db as ufunc_db
+    from numba.np.ufunc_db import _ufunc_db as ufunc_db
     from numba.dppy.ocl.mathimpl import lower_ocl_impl, sig_mapper
 
     ufuncs = [("fabs", np.fabs), ("exp", np.exp), ("log", np.log),
@@ -101,7 +101,7 @@ class DPPyTargetContext(BaseContext):
 
     def load_additional_registries(self):
         from .ocl import oclimpl, mathimpl
-        from numba.targets import npyimpl
+        from numba.np import npyimpl
 
         self.insert_func_defn(oclimpl.registry.functions)
         self.insert_func_defn(mathimpl.registry.functions)

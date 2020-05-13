@@ -1,10 +1,9 @@
-from __future__ import print_function, absolute_import
 import numpy as np
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class TestCudaComplex(SerialMixin, unittest.TestCase):
+class TestCudaComplex(CUDATestCase):
     def test_cuda_complex_arg(self):
         @cuda.jit('void(complex128[:], complex128)')
         def foo(a, b):

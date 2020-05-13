@@ -1,15 +1,14 @@
-from __future__ import print_function, division, absolute_import
-
 import array
 import numpy as np
-import sys
 
-from numba import unittest_support as unittest
-from numba import jit, cffi_support, types, errors
-from numba.compiler import compile_isolated, Flags
+from numba import jit
+import numba.core.typing.cffi_utils as cffi_support
+from numba.core import types, errors
+from numba.core.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase, tag
 
 import numba.tests.cffi_usecases as mod
+import unittest
 
 
 enable_pyobj_flags = Flags()
@@ -52,7 +51,6 @@ class TestCFFI(TestCase):
         self.assertEqual(pyfunc(), True)
         self.assertEqual(cfunc(), True)
 
-    @tag('important')
     def test_sin_function_npm(self):
         self._test_function(mod.use_cffi_sin, flags=no_pyobj_flags)
 
@@ -106,7 +104,6 @@ class TestCFFI(TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         self.check_vector_sin(cfunc, x, y)
 
-    @tag('important')
     def test_from_buffer_float32(self):
         self._test_from_buffer_numpy_array(mod.vector_sin_float32, np.float32)
 
@@ -124,8 +121,6 @@ class TestCFFI(TestCase):
         imag_cfunc(x, y)
         np.testing.assert_equal(x.imag, y)
 
-    @unittest.skipIf(sys.version_info < (3,),
-                     "buffer protocol on array.array needs Python 3+")
     def test_from_buffer_pyarray(self):
         pyfunc = mod.vector_sin_float32
         cfunc = jit(nopython=True)(pyfunc)

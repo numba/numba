@@ -1,7 +1,8 @@
-"""
-This subpackage is intended for low-level extension developers and compiler
-developers.  Regular user SHOULD NOT use code in this module.
+import numba.core.errors as _errors
+from numba.core.utils import PYVERSION as _PYVERSION
 
-This contains compilable utility functions that can interact directly with
-the compiler to implement low-level internal code.
-"""
+# What was numba.unsafe.refcount got renamed to numba.core.unsafe
+from numba.core import unsafe as refcount  # noqa: F401
+
+_moved_mod = None
+_errors.deprecate_moved_module(__name__, _moved_mod)

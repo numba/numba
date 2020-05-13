@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function
-
 import os
 import sys
 from collections import namedtuple
@@ -10,11 +8,11 @@ import tempfile
 import os
 import re
 import weakref
-from numba import config
 from numba.roc.hsadrv import devices
 from .common import AMDGCNModule
 
 from numba.roc.hlc.hlc import CmdLine
+from numba.core import config
 
 # the CLI tooling is needed for the linking phase at present
 cli = CmdLine()

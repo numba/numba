@@ -1,14 +1,11 @@
-from __future__ import print_function
-
 # import numpy in two ways, both uses needed
 import numpy as np
 import numpy
 
-import numba.unittest_support as unittest
-from numba import njit, jit, testing, utils
-from numba.errors import TypingError, UnsupportedError
-from .support import TestCase, tag
-from numba.six import exec_
+import unittest
+from numba import njit, jit, testing
+from numba.core.errors import TypingError, UnsupportedError
+from numba.tests.support import TestCase
 
 
 class TestClosure(TestCase):
@@ -116,7 +113,6 @@ class TestInlinedClosure(TestCase):
     at compile time.
     """
 
-    @tag('important')
     def test_inner_function(self):
 
         def outer(x):
@@ -129,7 +125,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @tag('important')
     def test_inner_function_with_closure(self):
 
         def outer(x):
@@ -143,7 +138,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @tag('important')
     def test_inner_function_with_closure_2(self):
 
         def outer(x):
@@ -158,7 +152,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @unittest.skipIf(utils.PYVERSION < (3, 0), "needs Python 3")
     def test_inner_function_with_closure_3(self):
 
         code = """
@@ -174,12 +167,11 @@ class TestInlinedClosure(TestCase):
                 return inner(x) + inner(x) + z
         """
         ns = {}
-        exec_(code.strip(), ns)
+        exec(code.strip(), ns)
 
         cfunc = njit(ns['outer'])
         self.assertEqual(cfunc(10), ns['outer'](10))
 
-    @tag('important')
     def test_inner_function_nested(self):
 
         def outer(x):
@@ -199,7 +191,6 @@ class TestInlinedClosure(TestCase):
         cfunc = njit(outer)
         self.assertEqual(cfunc(10), outer(10))
 
-    @tag('important')
     def test_bulk_use_cases(self):
         """ Tests the large number of use cases defined below """
 

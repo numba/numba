@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function
-
 import numpy as np
 from numba import mviewbuf
 from numba.roc.hsadrv.devices import get_context

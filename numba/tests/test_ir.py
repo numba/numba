@@ -1,8 +1,7 @@
-from __future__ import print_function
-
-import numba.unittest_support as unittest
-from numba import compiler, ir, objmode
+import unittest
+from numba import objmode
 import numpy as np
+from numba.core import ir, compiler
 
 
 class TestIR(unittest.TestCase):
@@ -338,6 +337,10 @@ class TestIRCompounds(CheckEquality):
         self.check(a, same=[b], different=[c])
 
     def test_functionir(self):
+
+        def run_frontend(x):
+            return compiler.run_frontend(x, emit_dels=True)
+
         # this creates a function full of all sorts of things to ensure the IR
         # is pretty involved, it then compares two instances of the compiled
         # function IR to check the IR is the same invariant of objects, and then
@@ -383,8 +386,9 @@ class TestIRCompounds(CheckEquality):
 
         x = gen()
         y = gen()
-        x_ir = compiler.run_frontend(x)
-        y_ir = compiler.run_frontend(y)
+        x_ir = run_frontend(x)
+        y_ir = run_frontend(y)
+
         self.assertTrue(x_ir.equal_ir(y_ir))
 
         def check_diffstr(string, pointing_at=[]):
@@ -412,7 +416,7 @@ class TestIRCompounds(CheckEquality):
         z = gen()
         self.assertFalse(x_ir.equal_ir(y_ir))
 
-        z_ir = compiler.run_frontend(z)
+        z_ir = run_frontend(z)
 
         change_set = set()
         for label in reversed(list(z_ir.blocks.keys())):
@@ -431,6 +435,9 @@ class TestIRCompounds(CheckEquality):
                 change_set.add(str(b[idx]))
                 b[idx], b[idx + 1] = b[idx + 1], b[idx]
                 break
+
+        # ensure that a mutation occurred.
+        self.assertTrue(change_set)
 
         self.assertFalse(x_ir.equal_ir(z_ir))
         self.assertEqual(len(change_set), 2)
@@ -456,12 +463,12 @@ class TestIRCompounds(CheckEquality):
             e = np.sqrt(d + 1)
             return e
 
-        foo_ir = compiler.run_frontend(foo)
-        bar_ir = compiler.run_frontend(bar)
+        foo_ir = run_frontend(foo)
+        bar_ir = run_frontend(bar)
         self.assertTrue(foo_ir.equal_ir(bar_ir))
         self.assertIn("IR is considered equivalent", foo_ir.diff_str(bar_ir))
 
-        baz_ir = compiler.run_frontend(baz)
+        baz_ir = run_frontend(baz)
         self.assertFalse(foo_ir.equal_ir(baz_ir))
         tmp = foo_ir.diff_str(baz_ir)
         self.assertIn("Other block contains more statements", tmp)

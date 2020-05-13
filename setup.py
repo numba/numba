@@ -1,7 +1,3 @@
-# NOTE: for building under Windows.
-# Use setuptools so as to enable support of the special
-# "Microsoft Visual C++ Compiler for Python 2.7" (http://aka.ms/vcpython27)
-# Note setuptools >= 6.0 is required for this.
 from setuptools import setup, Extension, find_packages
 from distutils.command import build
 from distutils.spawn import spawn
@@ -15,8 +11,8 @@ import versioneer
 min_python_version = "3.6"
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
-min_llvmlite_version = "0.31.0dev0"
-max_llvmlite_version = "0.32.0"
+min_llvmlite_version = "0.31.0.dev0"
+max_llvmlite_version = "0.33.0.dev0"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -111,7 +107,7 @@ def get_ext_modules():
                                         'numba/_typeof.c',
                                         'numba/_hashtable.c',
                                         'numba/_dispatcherimpl.cpp',
-                                        'numba/typeconv/typeconv.cpp'],
+                                        'numba/core/typeconv/typeconv.cpp'],
                                depends=["numba/_pymodule.h",
                                         "numba/_dispatcher.h",
                                         "numba/_typeof.h",
@@ -120,7 +116,6 @@ def get_ext_modules():
 
     ext_helperlib = Extension(name="numba._helperlib",
                               sources=["numba/_helpermod.c",
-                                       "numba/_math_c99.c",
                                        "numba/cext/utils.c",
                                        "numba/cext/dictobject.c",
                                        "numba/cext/listobject.c",
@@ -128,7 +123,6 @@ def get_ext_modules():
                               extra_compile_args=CFLAGS,
                               extra_link_args=install_name_tool_fixer,
                               depends=["numba/_pymodule.h",
-                                       "numba/_math_c99.h",
                                        "numba/_helperlib.c",
                                        "numba/_lapack.c",
                                        "numba/_npymath_exports.c",
@@ -137,21 +131,26 @@ def get_ext_modules():
                                        ],
                               **np_compile_args)
 
-    ext_typeconv = Extension(name="numba.typeconv._typeconv",
-                             sources=["numba/typeconv/typeconv.cpp",
-                                      "numba/typeconv/_typeconv.cpp"],
+    ext_typeconv = Extension(name="numba.core.typeconv._typeconv",
+                             sources=["numba/core/typeconv/typeconv.cpp",
+                                      "numba/core/typeconv/_typeconv.cpp"],
                              depends=["numba/_pymodule.h"],
                              )
 
-    ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
-                                   sources=["numba/npyufunc/_internal.c"],
-                                   depends=["numba/npyufunc/_ufunc.c",
-                                            "numba/npyufunc/_internal.h",
-                                            "numba/_pymodule.h"],
-                                   **np_compile_args)
+    ext_np_ufunc = Extension(name="numba.np.ufunc._internal",
+                             sources=["numba/np/ufunc/_internal.c"],
+                             depends=["numba/np/ufunc/_ufunc.c",
+                                      "numba/np/ufunc/_internal.h",
+                                      "numba/_pymodule.h"],
+                             **np_compile_args)
 
-    ext_npyufunc_workqueue_impls = []
-    ext_dppy_impls = []
+    ext_npyufunc_num_threads = Extension(name="numba.np.ufunc._num_threads",
+                                         sources=[
+                                             "numba/np/ufunc/_num_threads.c"],
+                                         depends=["numba/_pymodule.h"],
+                                         )
+
+    ext_np_ufunc_backends = []
 
     def check_file_at_path(path2file):
         """
@@ -188,8 +187,7 @@ def get_ext_modules():
         tbb_root = check_file_at_path(['include', 'tbb', 'tbb.h'])
 
     # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
-    #RH TODO: Make have_openmp = True once conda packages are being shipped
-    have_openmp = False
+    have_openmp = True
     if sys.platform.startswith('win'):
         cpp11flags = []
         ompcompileflags = ['-openmp']
@@ -217,13 +215,13 @@ def get_ext_modules():
 
     if tbb_root:
         print("Using Intel TBB from:", tbb_root)
-        ext_npyufunc_tbb_workqueue = Extension(
-            name='numba.npyufunc.tbbpool',
+        ext_np_ufunc_tbb_backend = Extension(
+            name='numba.np.ufunc.tbbpool',
             sources=[
-                'numba/npyufunc/tbbpool.cpp',
-                'numba/npyufunc/gufunc_scheduler.cpp',
+                'numba/np/ufunc/tbbpool.cpp',
+                'numba/np/ufunc/gufunc_scheduler.cpp',
             ],
-            depends=['numba/npyufunc/workqueue.h'],
+            depends=['numba/np/ufunc/workqueue.h'],
             include_dirs=[os.path.join(tbb_root, 'include')],
             extra_compile_args=cpp11flags,
             libraries=['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
@@ -236,7 +234,7 @@ def get_ext_modules():
                 os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),
             ],
         )
-        ext_npyufunc_workqueue_impls.append(ext_npyufunc_tbb_workqueue)
+        ext_np_ufunc_backends.append(ext_np_ufunc_tbb_backend)
     else:
         print("TBB not found")
 
@@ -248,45 +246,45 @@ def get_ext_modules():
     elif have_openmp:
         print("Using OpenMP from:", have_openmp)
         # OpenMP backed work queue
-        ext_npyufunc_omppool = Extension(
-            name='numba.npyufunc.omppool',
+        ext_np_ufunc_omppool_backend = Extension(
+            name='numba.np.ufunc.omppool',
             sources=[
-                'numba/npyufunc/omppool.cpp',
-                'numba/npyufunc/gufunc_scheduler.cpp',
+                'numba/np/ufunc/omppool.cpp',
+                'numba/np/ufunc/gufunc_scheduler.cpp',
             ],
-            depends=['numba/npyufunc/workqueue.h'],
+            depends=['numba/np/ufunc/workqueue.h'],
             extra_compile_args=ompcompileflags + cpp11flags,
             extra_link_args=omplinkflags,
         )
 
-        ext_npyufunc_workqueue_impls.append(ext_npyufunc_omppool)
+        ext_np_ufunc_backends.append(ext_np_ufunc_omppool_backend)
     else:
         print("OpenMP not found")
 
     # Build the Numba workqueue implementation irrespective of whether the TBB
     # version is built. Users can select a backend via env vars.
-    ext_npyufunc_workqueue = Extension(
-        name='numba.npyufunc.workqueue',
-        sources=['numba/npyufunc/workqueue.c',
-                 'numba/npyufunc/gufunc_scheduler.cpp'],
-        depends=['numba/npyufunc/workqueue.h'])
-    ext_npyufunc_workqueue_impls.append(ext_npyufunc_workqueue)
+    ext_np_ufunc_workqueue_backend = Extension(
+        name='numba.np.ufunc.workqueue',
+        sources=['numba/np/ufunc/workqueue.c',
+                 'numba/np/ufunc/gufunc_scheduler.cpp'],
+        depends=['numba/np/ufunc/workqueue.h'])
+    ext_np_ufunc_backends.append(ext_np_ufunc_workqueue_backend)
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
                              extra_link_args=install_name_tool_fixer,
                              sources=['numba/mviewbuf.c'])
 
-    ext_nrt_python = Extension(name='numba.runtime._nrt_python',
-                               sources=['numba/runtime/_nrt_pythonmod.c',
-                                        'numba/runtime/nrt.c'],
-                               depends=['numba/runtime/nrt.h',
+    ext_nrt_python = Extension(name='numba.core.runtime._nrt_python',
+                               sources=['numba/core/runtime/_nrt_pythonmod.c',
+                                        'numba/core/runtime/nrt.c'],
+                               depends=['numba/core/runtime/nrt.h',
                                         'numba/_pymodule.h',
-                                        'numba/runtime/_nrt_python.c'],
+                                        'numba/core/runtime/_nrt_python.c'],
                                **np_compile_args)
 
-    ext_jitclass_box = Extension(name='numba.jitclass._box',
-                                 sources=['numba/jitclass/_box.c'],
-                                 depends=['numba/_pymodule.h'],
+    ext_jitclass_box = Extension(name='numba.experimental.jitclass._box',
+                                 sources=['numba/experimental/jitclass/_box.c'],
+                                 depends=['numba/experimental/_pymodule.h'],
                                  )
 
     ext_cuda_extras = Extension(name='numba.cuda.cudadrv._extras',
@@ -295,11 +293,10 @@ def get_ext_modules():
                                 include_dirs=["numba"])
 
     ext_modules = [ext_dynfunc, ext_dispatcher, ext_helperlib, ext_typeconv,
-                   ext_npyufunc_ufunc, ext_mviewbuf, ext_nrt_python,
-                   ext_jitclass_box, ext_cuda_extras]
+                   ext_np_ufunc, ext_npyufunc_num_threads, ext_mviewbuf,
+                   ext_nrt_python, ext_jitclass_box, ext_cuda_extras]
 
-    ext_modules += ext_npyufunc_workqueue_impls
-    ext_modules += ext_dppy_impls
+    ext_modules += ext_np_ufunc_backends
 
     return ext_modules
 
@@ -309,7 +306,7 @@ packages = find_packages(include=["numba", "numba.*"])
 build_requires = [f'numpy >={min_numpy_build_version}']
 
 install_requires = [
-    f'llvmlite >={min_llvmlite_version},<{max_llvmlite_version}',
+    f'llvmlite >={min_llvmlite_version},<={max_llvmlite_version}',
     f'numpy >={min_numpy_run_version}',
     'setuptools',
 ]
@@ -332,17 +329,17 @@ metadata = dict(
     ],
     package_data={
         # HTML templates for type annotations
-        "numba.annotations": ["*.html"],
+        "numba.core.annotations": ["*.html"],
         # Various test data
         "numba.cuda.tests.cudadrv.data": ["*.ptx"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc
         "numba": ["*.c", "*.h"],
         "numba.pycc": ["*.c", "*.h"],
-        "numba.runtime": ["*.c", "*.h"],
+        "numba.core.runtime": ["*.c", "*.h"],
         "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
-        "numba.targets": ["cmdlang.gdb"],
+        "numba.misc": ["cmdlang.gdb"],
     },
     scripts=["numba/pycc/pycc", "bin/numba"],
     author="Anaconda, Inc.",

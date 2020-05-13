@@ -1,7 +1,6 @@
 """
 Module that deals with HSA in a high level way
 """
-from __future__ import print_function, absolute_import, division
 import os
 import numba.testing
 from .api import *

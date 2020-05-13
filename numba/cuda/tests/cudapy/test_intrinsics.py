@@ -1,10 +1,7 @@
-from __future__ import print_function, absolute_import, division
-
 import numpy as np
 import re
 from numba import cuda, int32, float32
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
-from numba.utils import IS_PY3
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
 def simple_threadidx(ary):
@@ -113,11 +110,11 @@ def simple_warpsize(ary):
     ary[0] = cuda.warpsize
 
 
-class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
+class TestCudaIntrinsic(CUDATestCase):
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
         ary = np.ones(1, dtype=np.int32)
-        compiled(ary)
+        compiled[1, 1](ary)
         self.assertTrue(ary[0] == 0)
 
     def test_fill_threadidx(self):
@@ -264,44 +261,44 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
     def test_popc_u4(self):
         compiled = cuda.jit("void(int32[:], uint32)")(simple_popc)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0xF0)
+        compiled[1, 1](ary, 0xF0)
         self.assertEquals(ary[0], 4)
 
     def test_popc_u8(self):
         compiled = cuda.jit("void(int32[:], uint64)")(simple_popc)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0xF00000000000)
+        compiled[1, 1](ary, 0xF00000000000)
         self.assertEquals(ary[0], 4)
 
     def test_fma_f4(self):
         compiled = cuda.jit("void(f4[:], f4, f4, f4)")(simple_fma)
         ary = np.zeros(1, dtype=np.float32)
-        compiled(ary, 2., 3., 4.)
+        compiled[1, 1](ary, 2., 3., 4.)
         np.testing.assert_allclose(ary[0], 2 * 3 + 4)
 
     def test_fma_f8(self):
         compiled = cuda.jit("void(f8[:], f8, f8, f8)")(simple_fma)
         ary = np.zeros(1, dtype=np.float64)
-        compiled(ary, 2., 3., 4.)
+        compiled[1, 1](ary, 2., 3., 4.)
         np.testing.assert_allclose(ary[0], 2 * 3 + 4)
 
     def test_brev_u4(self):
         compiled = cuda.jit("void(uint32[:], uint32)")(simple_brev)
         ary = np.zeros(1, dtype=np.uint32)
-        compiled(ary, 0x000030F0)
+        compiled[1, 1](ary, 0x000030F0)
         self.assertEquals(ary[0], 0x0F0C0000)
 
     @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
     def test_brev_u8(self):
         compiled = cuda.jit("void(uint64[:], uint64)")(simple_brev)
         ary = np.zeros(1, dtype=np.uint64)
-        compiled(ary, 0x000030F0000030F0)
+        compiled[1, 1](ary, 0x000030F0000030F0)
         self.assertEquals(ary[0], 0x0F0C00000F0C0000)
 
     def test_clz_i4(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x00100000)
+        compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 11)
 
     def test_clz_u4(self):
@@ -314,57 +311,57 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
         """
         compiled = cuda.jit("void(int32[:], uint32)")(simple_clz)
         ary = np.zeros(1, dtype=np.uint32)
-        compiled(ary, 0x00100000)
+        compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 11)
 
     def test_clz_i4_1s(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0xFFFFFFFF)
+        compiled[1, 1](ary, 0xFFFFFFFF)
         self.assertEquals(ary[0], 0)
 
     def test_clz_i4_0s(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_clz)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x0)
+        compiled[1, 1](ary, 0x0)
         self.assertEquals(ary[0], 32, "CUDA semantics")
 
     @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
     def test_clz_i8(self):
         compiled = cuda.jit("void(int32[:], int64)")(simple_clz)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x000000000010000)
+        compiled[1, 1](ary, 0x000000000010000)
         self.assertEquals(ary[0], 47)
 
     def test_ffs_i4(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x00100000)
+        compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 20)
 
     def test_ffs_u4(self):
         compiled = cuda.jit("void(int32[:], uint32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.uint32)
-        compiled(ary, 0x00100000)
+        compiled[1, 1](ary, 0x00100000)
         self.assertEquals(ary[0], 20)
 
     def test_ffs_i4_1s(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0xFFFFFFFF)
+        compiled[1, 1](ary, 0xFFFFFFFF)
         self.assertEquals(ary[0], 0)
 
     def test_ffs_i4_0s(self):
         compiled = cuda.jit("void(int32[:], int32)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x0)
+        compiled[1, 1](ary, 0x0)
         self.assertEquals(ary[0], 32, "CUDA semantics")
 
     @skip_on_cudasim('only get given a Python "int", assumes 32 bits')
     def test_ffs_i8(self):
         compiled = cuda.jit("void(int32[:], int64)")(simple_ffs)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary, 0x000000000010000)
+        compiled[1, 1](ary, 0x000000000010000)
         self.assertEquals(ary[0], 16)
 
     def test_simple_laneid(self):
@@ -378,25 +375,23 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
     def test_simple_warpsize(self):
         compiled = cuda.jit("void(int32[:])")(simple_warpsize)
         ary = np.zeros(1, dtype=np.int32)
-        compiled(ary)
+        compiled[1, 1](ary)
         self.assertEquals(ary[0], 32, "CUDA semantics")
 
-    @unittest.skipUnless(IS_PY3, "round() returns float on Py2")
     def test_round_f4(self):
         compiled = cuda.jit("void(int64[:], float32)")(simple_round)
         ary = np.zeros(1, dtype=np.int32)
 
         for i in [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]:
-            compiled(ary, i)
+            compiled[1, 1](ary, i)
             self.assertEquals(ary[0], round(i))
 
-    @unittest.skipUnless(IS_PY3, "round() returns float on Py2")
     def test_round_f8(self):
         compiled = cuda.jit("void(int64[:], float64)")(simple_round)
         ary = np.zeros(1, dtype=np.int32)
 
         for i in [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]:
-            compiled(ary, i)
+            compiled[1, 1](ary, i)
             self.assertEquals(ary[0], round(i))
 
 

@@ -7,10 +7,9 @@ from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba.targets.imputils import Registry
-from numba import cgutils
-from numba import types
-from numba.itanium_mangler import mangle_c, mangle, mangle_type
+from numba.core.imputils import Registry
+from numba.core import cgutils, types
+from numba.core.itanium_mangler import mangle_c, mangle, mangle_type
 from numba.dppy import target
 from . import stubs
 from numba.dppy.codegen import SPIR_DATA_LAYOUT

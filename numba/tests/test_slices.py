@@ -1,5 +1,3 @@
-from __future__ import print_function, division, absolute_import
-
 from functools import partial
 import itertools
 from itertools import chain, product, starmap
@@ -7,9 +5,10 @@ import sys
 
 import numpy as np
 
-from numba import unittest_support as unittest
-from numba import jit, typeof, utils, TypingError
-from .support import TestCase, MemoryLeakMixin
+from numba import jit, typeof, TypingError
+from numba.core import utils
+from numba.tests.support import TestCase, MemoryLeakMixin
+import unittest
 
 
 def slice_passing(sl):
@@ -155,10 +154,6 @@ class TestSlices(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(slice_indices)
 
         for s, l in product(slices, lengths):
-            if l < 0 and not utils.IS_PY3:
-                # Passing a negative length to slice.indices in python2 is
-                # undefined. See https://bugs.python.org/issue14794#msg174678
-                continue
             try:
                 expected = slice_indices(s, l)
             except Exception as py_e:

@@ -1,9 +1,8 @@
 """
 A library written in CUDA Python for generating reduction kernels
 """
-from __future__ import division
 
-from numba.numpy_support import from_dtype
+from numba.np.numpy_support import from_dtype
 
 
 _WARPSIZE = 32

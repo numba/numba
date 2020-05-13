@@ -33,8 +33,6 @@ The following requisites will need to be present in the system. Refer to next se
 
 - LLVM-SPIRV translator: Used for SPIRV generation from LLVM IR.
 
-- SPIRV-Tools          : Used internally for code-generation.
-
 - LLVMDEV              : To support LLVM IR generation.
 
 - Others               : All existing dependecies for NUMBA, such as llvmlite, also apply to DPPy.

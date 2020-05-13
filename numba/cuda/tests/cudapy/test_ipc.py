@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function, division
-
 import sys
 import multiprocessing as mp
 import traceback
@@ -9,11 +7,11 @@ import numpy as np
 
 from numba import cuda
 from numba.cuda.cudadrv import drvapi, devicearray
-from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim, CUDATestCase
+from numba.cuda.testing import skip_on_cudasim, ContextResettingTestCase
+from numba.tests.support import linux_only
+import unittest
 
-
-not_linux = not sys.platform.startswith('linux')
+linux = sys.platform.startswith('linux')
 has_mp_get_context = hasattr(mp, 'get_context')
 
 
@@ -81,10 +79,10 @@ def ipc_array_test(ipcarr, result_queue):
     result_queue.put((succ, out))
 
 
-@unittest.skipIf(not_linux, "IPC only supported on Linux")
+@linux_only
 @unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
-class TestIpcMemory(CUDATestCase):
+class TestIpcMemory(ContextResettingTestCase):
     def test_ipc_handle(self):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
@@ -182,9 +180,9 @@ class TestIpcMemory(CUDATestCase):
         self.check_ipc_array(slice(3, 8))
         self.check_ipc_array(slice(None, 8))
 
-@unittest.skipUnless(not_linux, "Only on OS other than Linux")
+@unittest.skipIf(linux, 'Only on OS other than Linux')
 @skip_on_cudasim('Ipc not available in CUDASIM')
-class TestIpcNotSupported(CUDATestCase):
+class TestIpcNotSupported(ContextResettingTestCase):
     def test_unsupported(self):
         arr = np.arange(10, dtype=np.intp)
         devarr = cuda.to_device(arr)
@@ -198,8 +196,6 @@ def staged_ipc_handle_test(handle, device_num, result_queue):
     def the_work():
         with cuda.gpus[device_num]:
             this_ctx = cuda.devices.get_context()
-            can_access = handle.can_access_peer(this_ctx)
-            print('can_access_peer {} {}'.format(this_ctx, can_access))
             deviceptr = handle.open_staged(this_ctx)
             arrsize = handle.size // np.dtype(np.intp).itemsize
             hostarray = np.zeros(arrsize, dtype=np.intp)
@@ -216,7 +212,6 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
     try:
         with cuda.gpus[device_num]:
             this_ctx = cuda.devices.get_context()
-            print(this_ctx.device)
             with ipcarr as darr:
                 arr = darr.copy_to_host()
                 try:
@@ -239,10 +234,10 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
     result_queue.put((succ, out))
 
 
-@unittest.skipIf(not_linux, "IPC only supported on Linux")
+@linux_only
 @unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
-class TestIpcStaged(CUDATestCase):
+class TestIpcStaged(ContextResettingTestCase):
     def test_staged(self):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
