@@ -839,9 +839,8 @@ class JITCPUCodegen(BaseCPUCodegen):
         # Set feature attributes (such as ISA extensions)
         # This overrides default feature selection by CPU model above
         options['features'] = self._tm_features
-
-        # Enable JIT debug
-        options['jitdebug'] = True
+        # Mark that this is making a JIT engine
+        options['jit'] = True
 
     def _customize_tm_features(self):
         # For JIT target, we will use LLVM to get the feature map
