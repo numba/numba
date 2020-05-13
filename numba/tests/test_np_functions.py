@@ -122,11 +122,11 @@ def flip(a):
 
 
 def array_split(a, indices, axis=0):
-    return np.array_split(a, indices, axis=0)
+    return np.array_split(a, indices, axis=axis)
 
 
 def split(a, indices, axis=0):
-    return np.split(a, indices, axis=0)
+    return np.split(a, indices, axis=axis)
 
 
 def correlate(a, v):
@@ -2206,12 +2206,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield a, [1, 3], 1
             yield a, [1, 3], 2
 
+            a = np.arange(100).reshape(2, -1)
+            yield a, 1
+            yield a, 1, 0
+            yield a, [1], 0
+            yield a, 50, 1
+            yield a, np.arange(10, 50, 10), 1
+
         for args in args_variations():
             expected = pyfunc(*args)
             got = cfunc(*args)
 
             np.testing.assert_equal(expected, list(got))
-            # self.assertTrue(np.array_equal(expected, got))
 
     def test_array_split_basic(self):
         self._check_array_split(array_split)
