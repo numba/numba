@@ -66,6 +66,7 @@ class _ResolutionFailures(object):
         self._kwargs = kwargs
         self._failures = defaultdict(list)
         self._depth = depth
+        self._max_depth = 5
         self._scale = 2
 
     def __len__(self):
@@ -103,11 +104,14 @@ class _ResolutionFailures(object):
     def format(self):
         """Return a formatted error message from all the gathered errors.
         """
-        indent = ' ' * 2
+        indent = ' ' * self._scale
         argstr = argsnkwargs_to_str(self._args, self._kwargs)
         ncandidates = sum([len(x) for x in self._failures.values()])
+
+        tykey = self._function_type.typing_key
+        fname = getattr(tykey, '__name__', str(tykey))
         msgbuf = [_header_template.format(the_function=self._function_type,
-                                          fname=self._function_type.typing_key.__name__,
+                                          fname=fname,
                                           signature=argstr,
                                           ncandidates=ncandidates)]
         nolitargs = tuple([unliteral(a) for a in self._args])
@@ -116,6 +120,9 @@ class _ResolutionFailures(object):
 
         key = self._function_type.key[0]
         fn_name = getattr(key, '__name__', str(key))
+
+        # depth could potentially get massive, so limit it.
+        ldepth = min(max(self._depth, 0), self._max_depth)
 
         for i, (k, err_list) in enumerate(self._failures.items()):
             err = err_list[0]
@@ -132,38 +139,39 @@ class _ResolutionFailures(object):
                                                   file=source_file,
                                                   line=source_line,
                                                   args=largstr),
-                self._depth + 1)))
+                ldepth + 1)))
             if error is None:
                 errstr = _err_reasons['no_explicit_sig']
                 if hasattr(template, '_overload_func'):
                     if hasattr(template._overload_func.outer, 'signatures'):
                         sigs = template._overload_func.outer.signatures
                         if sigs:
-                            lsigs = '\n'.join([' ' * (self._depth + 1) + "* " + fn_name + str(x) for x in sigs])
+                            lsigs = '\n'.join([' ' * (ldepth + 1) + "* " + fn_name + str(x) for x in sigs])
                             errstr = _reason_template['no_match_explicit_sig'].format(lsigs)
             else:
                 if isinstance(error, BaseException):
-                    # moves specific error reason text
-                    errstr = _err_reasons['specific_error'].format(indent + self.format_error(error))
-                elif error is None:
-                    errstr =_err_reasons['nonspecific_error']
+                    reason = indent + self.format_error(error)
+                    errstr = _err_reasons['specific_error'].format(reason)
                 else:
                     errstr = error
                 # if you are a developer, show the back traces
                 if config.DEVELOPER_MODE:
                     if isinstance(error, BaseException):
                         # if the error is an actual exception instance, trace it
-                        bt = traceback.format_exception(type(error), error, error.__traceback__)
+                        bt = traceback.format_exception(type(error), error,
+                                                        error.__traceback__)
                     else:
                         bt = [""]
                     bt_as_lines = [y for y in itertools.chain(*[x.split('\n') for x in bt]) if y]
-                    errstr += _termcolor.reset(('\n' + 2 * indent) + ('\n' + 2 * indent).join(bt_as_lines))
-            msgbuf.append(_termcolor.highlight(wrapper(errstr, self._depth + 2)))
+                    nd2indent = '\n{}'.format(2 * indent)
+                    errstr += _termcolor.reset(nd2indent +
+                                               nd2indent.join(bt_as_lines))
+            msgbuf.append(_termcolor.highlight(wrapper(errstr, ldepth + 2)))
             loc = self.get_loc(template, error)
             if loc:
                 msgbuf.append('{}raised from {}'.format(indent, loc))
 
-        return wrapper('\n'.join(msgbuf) + '\n', self._scale * self._depth)
+        return wrapper('\n'.join(msgbuf) + '\n', self._scale * ldepth)
 
     def format_error(self, error):
         """Format error message or exception
