@@ -29,7 +29,6 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
 from numba.core.typing import signature
 from numba.core.extending import (register_jitable, overload, overload_method,
                                   intrinsic)
-from numba.typed import List
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem
@@ -4993,19 +4992,25 @@ def _build_full_slice_tuple(tyctx, sz):
 
 
 @overload(np.split)
-def split(a, indices, axis=0):
+def np_split(a, indices, axis=0):
+    # If this statement is put at the top of the file, numba fails to import
+    from numba.typed import List
+
     if a.ndim > 1:
         a_type = types.Array(a.dtype, a.ndim, "A")
     else:
         a_type = typeof(a)
 
     if isinstance(indices, types.Integer):
+
         def impl(a, indices, axis=0):
             l, rem = divmod(a.shape[axis], indices)
             if rem != 0:
                 raise ValueError()
             return np.split(a, list(range(l, len(a), l)), axis=axis)
+
     else:
+
         def impl(a, indices, axis=0):
             slice_tup = _build_full_slice_tuple(a.ndim)
             out = List.empty_list(a_type)
@@ -5016,6 +5021,7 @@ def split(a, indices, axis=0):
                 prev = cur
             out.append(a[tuple_setitem(slice_tup, axis, slice(cur, None))])
             return out
+
     return impl
 
 
