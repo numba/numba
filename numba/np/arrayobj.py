@@ -4992,52 +4992,56 @@ def _build_full_slice_tuple(tyctx, sz):
 
 
 @overload(np.array_split)
-def np_array_split(a, indices, axis=0):
+def np_array_split(ary, indices_or_sections, axis=0):
     # If this statement is put at the top of the file, numba fails to import
     from numba.typed import List
 
-    if a.ndim > 1:
-        a_type = types.Array(a.dtype, a.ndim, "A")
+    if ary.ndim > 1:
+        a_type = types.Array(ary.dtype, ary.ndim, "A")
     else:
-        a_type = typeof(a)
+        a_type = typeof(ary)
 
-    if isinstance(indices, types.Integer):
+    if isinstance(indices_or_sections, types.Integer):
 
-        def impl(a, indices, axis=0):
-            l, rem = divmod(a.shape[axis], indices)
-            return np.array_split(a, np.arange(l + rem, len(a), l), axis=axis)
+        def impl(ary, indices_or_sections, axis=0):
+            l, rem = divmod(ary.shape[axis], indices_or_sections)
+            return np.array_split(
+                ary, np.arange(l + rem, ary.shape[axis], l), axis=axis
+            )
 
     else:
 
-        def impl(a, indices, axis=0):
-            slice_tup = _build_full_slice_tuple(a.ndim)
-            out = List.empty_list(a_type)
+        def impl(ary, indices_or_sections, axis=0):
+            slice_tup = _build_full_slice_tuple(ary.ndim)
+            out = List.empty_list(a_type, len(indices_or_sections) + 1)
             prev = 0
-            for cur in indices:
+            for cur in indices_or_sections:
                 idx = tuple_setitem(slice_tup, axis, slice(prev, cur))
-                out.append(a[idx])
+                out.append(ary[idx])
                 prev = cur
-            out.append(a[tuple_setitem(slice_tup, axis, slice(cur, None))])
+            out.append(ary[tuple_setitem(slice_tup, axis, slice(cur, None))])
             return out
 
     return impl
 
 
 @overload(np.split)
-def np_split(a, indices, axis=0):
+def np_split(ary, indices_or_sections, axis=0):
     # This is just a wrapper of array_split, but with an extra error if
     # indices is an int.
-    if isinstance(indices, types.Integer):
-        def impl(a, indices, axis=0):
-            l, rem = divmod(a.shape[axis], indices)
+    if isinstance(indices_or_sections, types.Integer):
+        def impl(ary, indices_or_sections, axis=0):
+            l, rem = divmod(ary.shape[axis], indices_or_sections)
             if rem != 0:
                 raise ValueError(
                     "array split does not result in an equal division"
                 )
-            return np.array_split(a, np.arange(l, len(a), l), axis=axis)
+            return np.array_split(
+                ary, np.arange(l, ary.shape[axis], l), axis=axis
+            )
     else:
-        def impl(a, indices, axis=0):
-            return np.array_split(a, indices, axis=axis)
+        def impl(ary, indices_or_sections, axis=0):
+            return np.array_split(ary, indices_or_sections, axis=axis)
     return impl
 
 
