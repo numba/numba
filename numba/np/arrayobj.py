@@ -5025,12 +5025,15 @@ def np_array_split(a, indices, axis=0):
 
 @overload(np.split)
 def np_split(a, indices, axis=0):
-    # This is just a wrapper of array_split, but with an extra error if indices is an int.
+    # This is just a wrapper of array_split, but with an extra error if
+    # indices is an int.
     if isinstance(indices, types.Integer):
         def impl(a, indices, axis=0):
             l, rem = divmod(a.shape[axis], indices)
             if rem != 0:
-                raise ValueError("array split does not result in an equal division")
+                raise ValueError(
+                    "array split does not result in an equal division"
+                )
             return np.array_split(a, np.arange(l, len(a), l), axis=axis)
     else:
         def impl(a, indices, axis=0):

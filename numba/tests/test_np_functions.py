@@ -2222,7 +2222,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.disable_leak_check()  # The exception leaks
         with self.assertRaises(ValueError) as raises:
             njit(split)(np.ones(5), 2)
-        self.assertIn("array split does not result in an equal division", str(raises.exception))
+        self.assertIn(
+            "array split does not result in an equal division",
+            str(raises.exception)
+        )
 
     def test_roll_basic(self):
         pyfunc = roll
