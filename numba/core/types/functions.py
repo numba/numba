@@ -33,12 +33,13 @@ _reason_template = """
 """
 
 def wrapper(x, indent=0):
-    buf = []
-    _txtwrapper = textwrap.TextWrapper(width=_termwidth - indent,
-                                       drop_whitespace=False)
-    for l in x.splitlines():
-        buf.extend(_txtwrapper.wrap(l))
-    tmp = '\n'.join(buf)
+    #buf = []
+    #_txtwrapper = textwrap.TextWrapper(width=_termwidth - indent,
+                                       #drop_whitespace=False)
+    #for l in x.splitlines():
+        #buf.extend(_txtwrapper.wrap(l))
+    #tmp = '\n'.join(buf)
+    tmp = x
     return textwrap.indent(tmp, ' ' * indent,  lambda line: True)
 
 _overload_template = ("- Of which {nduplicates} did not match due to:\n"
@@ -184,7 +185,8 @@ class _ResolutionFailures(object):
             if loc:
                 msgbuf.append('{}raised from {}'.format(indent, loc))
 
-        return wrapper('\n'.join(msgbuf) + '\n', self._scale * ldepth)
+        # the commented bit rewraps each block, may not be helpful?!
+        return wrapper('\n'.join(msgbuf) + '\n') # , self._scale * ldepth)
 
     def format_error(self, error):
         """Format error message or exception
