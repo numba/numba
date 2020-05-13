@@ -3,17 +3,17 @@ import copy
 from collections import namedtuple
 
 from .dppy_passbuilder import DPPyPassBuilder
-from numba.typing.templates import ConcreteTemplate
-from numba import types, compiler, ir
-from numba.typing.templates import AbstractTemplate
-from numba import ctypes_support as ctypes
+from numba.core.typing.templates import ConcreteTemplate
+from numba.core import types, compiler, ir
+from numba.core.typing.templates import AbstractTemplate
+import ctypes
 from types import FunctionType
 
 import dppy.core as driver
 from . import spirv_generator
 
 import os
-from numba.compiler import DefaultPassBuilder, CompilerBase
+from numba.core.compiler import DefaultPassBuilder, CompilerBase
 
 DEBUG=os.environ.get('NUMBA_DPPY_DEBUG', None)
 _NUMBA_PVC_READ_ONLY  = "read_only"
@@ -62,7 +62,7 @@ def compile_with_dppy(pyfunc, return_type, args, debug):
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
-    flags.set('nrt')
+    flags.unset('nrt')
     # Run compilation pipeline
     if isinstance(pyfunc, FunctionType):
         cres = compiler.compile_extra(typingctx=typingctx,

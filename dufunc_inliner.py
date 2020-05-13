@@ -1,12 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
-from numba import ir
-from numba.ir_utils import dead_code_elimination, simplify_CFG
+from numba.core import ir
+from numba.core.ir_utils import dead_code_elimination, simplify_CFG
 
 
 def _run_inliner(func_ir, sig, template, arg_typs, expr, i, py_func, block,
                  work_list, typemap, calltypes, typingctx):
-    from numba.inline_closurecall import (inline_closure_call,
+    from numba.core.inline_closurecall import (inline_closure_call,
                                           callee_ir_validator)
 
     # pass is typed so use the callee globals

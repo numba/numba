@@ -9,15 +9,11 @@ import sys
 import numpy as np
 
 import numba
-from .. import (compiler,
-                ir,
-                types,
-                six,
-                sigutils,
-                lowering,
-                parfor,
-                funcdesc)
-from numba.ir_utils import (add_offset_to_labels,
+from numba.core import (compiler, ir, types, sigutils, lowering,
+                funcdesc, config)
+from numba.parfors import parfor
+from numba import dppy
+from numba.core.ir_utils import (add_offset_to_labels,
                             replace_var_names,
                             remove_dels,
                             legalize_names,
@@ -35,14 +31,11 @@ from numba.ir_utils import (add_offset_to_labels,
                             get_unused_var_name,
                             find_potential_aliases,
                             is_const_call)
-from ..typing import signature
-from numba import config, dppy
-from numba.targets.cpu import ParallelOptions
-from numba.six import exec_
-import operator
+
+from numba.core.typing import signature
 
 import warnings
-from ..errors import NumbaParallelSafetyWarning
+from numba.core.errors import NumbaParallelSafetyWarning
 
 from .target import SPIR_GENERIC_ADDRSPACE
 from .dufunc_inliner import dufunc_inliner
@@ -289,12 +282,12 @@ def _create_gufunc_for_parfor_body(
             parfor_params.add(stop.name)
 
     # Get just the outputs of the parfor.
-    parfor_outputs = numba.parfor.get_parfor_outputs(parfor, parfor_params)
+    parfor_outputs = numba.parfors.parfor.get_parfor_outputs(parfor, parfor_params)
 
     # Get all parfor reduction vars, and operators.
     typemap = lowerer.fndesc.typemap
 
-    parfor_redvars, parfor_reddict = numba.parfor.get_parfor_reductions(
+    parfor_redvars, parfor_reddict = numba.parfors.parfor.get_parfor_reductions(
                                         lowerer.func_ir,
                                         parfor,
                                         parfor_params,
@@ -454,7 +447,7 @@ def _create_gufunc_for_parfor_body(
     # Force gufunc outline into existence.
     globls = {"np": np, "numba": numba, "dppy": dppy}
     locls = {}
-    exec_(gufunc_txt, globls, locls)
+    exec(gufunc_txt, globls, locls)
     gufunc_func = locls[gufunc_name]
 
     if config.DEBUG_ARRAY_OPT:
@@ -680,7 +673,7 @@ def _lower_parfor_gufunc(lowerer, parfor):
 
     alias_map = {}
     arg_aliases = {}
-    numba.parfor.find_potential_aliases_parfor(parfor, parfor.params, typemap,
+    numba.parfors.parfor.find_potential_aliases_parfor(parfor, parfor.params, typemap,
                                         lowerer.func_ir, alias_map, arg_aliases)
     if config.DEBUG_ARRAY_OPT:
         print("alias_map", alias_map)
@@ -691,7 +684,7 @@ def _lower_parfor_gufunc(lowerer, parfor):
     # dict will become invalid
     assert parfor.params != None
 
-    parfor_output_arrays = numba.parfor.get_parfor_outputs(
+    parfor_output_arrays = numba.parfors.parfor.get_parfor_outputs(
         parfor, parfor.params)
 
 
@@ -706,7 +699,7 @@ def _lower_parfor_gufunc(lowerer, parfor):
     for l in parfor.loop_nests[1:]:
         assert typemap[l.index_variable.name] == index_var_typ
 
-    numba.parfor.sequential_parfor_lowering = True
+    numba.parfors.parfor.sequential_parfor_lowering = True
     loop_ranges = [(l.start, l.stop, l.step) for l in parfor.loop_nests]
 
     func, func_args, func_sig, func_arg_types, modified_arrays =(
@@ -723,7 +716,7 @@ def _lower_parfor_gufunc(lowerer, parfor):
         index_var_typ,
         parfor.races))
 
-    numba.parfor.sequential_parfor_lowering = False
+    numba.parfors.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
     get_shape_classes = parfor.get_shape_classes
@@ -962,7 +955,7 @@ def generate_dppy_host_wrapper(lowerer,
     dppy_cpu_lowerer.enqueue_kernel_and_read_back(loop_ranges)
 
 
-from numba.lowering import Lower
+from numba.core.lowering import Lower
 
 class DPPyLower(Lower):
     def __init__(self, context, library, fndesc, func_ir, metadata=None):

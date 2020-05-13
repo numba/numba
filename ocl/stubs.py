@@ -1,5 +1,5 @@
 from __future__ import print_function, absolute_import
-from numba import types, ir, typing, macro
+from numba.core import types, ir, typing
 
 
 _stub_error = NotImplementedError("This is a stub.")

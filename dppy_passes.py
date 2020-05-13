@@ -6,33 +6,27 @@ import weakref
 from collections import namedtuple, deque
 import operator
 
-from numba.lowering import Lower, _VarArgItem
-
-from llvmlite.llvmpy.core import Constant, Type, Builder
-from numba.stencilparfor import StencilPass
-
-from numba import (
+from numba.core import (
     config,
     errors,
-    types,
-    rewrites,
-    typeinfer,
     funcdesc,
     utils,
-    typing
+    typing,
+    types,
     )
 
-from numba.errors import (LoweringError, new_error_context, TypingError,
+from numba.core.ir_utils import remove_dels
+
+from numba.core.errors import (LoweringError, new_error_context, TypingError,
                      LiteralTypingError)
 
-from numba.compiler_machinery import FunctionPass, LoweringPass, register_pass
+from numba.core.compiler_machinery import FunctionPass, LoweringPass, register_pass
 
 from .dppy_lowerer import DPPyLower
 
-from numba.parfor import PreParforPass as _parfor_PreParforPass
-from numba.parfor import ParforPass as _parfor_ParforPass
-from numba.parfor import Parfor
-#from numba.npyufunc.dufunc import DUFunc
+from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass
+from numba.parfors.parfor import ParforPass as _parfor_ParforPass
+from numba.parfors.parfor import Parfor
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
@@ -92,6 +86,8 @@ class DPPyParforPass(FunctionPass):
                                          state.parfor_diagnostics)
 
         parfor_pass.run()
+
+        remove_dels(state.func_ir.blocks)
 
         if config.DEBUG or config.DUMP_IR:
             name = state.func_ir.func_id.func_qualname
@@ -169,11 +165,12 @@ class SpirvFriendlyLowering(LoweringPass):
                 lower.lower()
                 if not flags.no_cpython_wrapper:
                     lower.create_cpython_wrapper(flags.release_gil)
+
                 env = lower.env
                 call_helper = lower.call_helper
                 del lower
 
-            from numba.compiler import _LowerResult  # TODO: move this
+            from numba.core.compiler import _LowerResult  # TODO: move this
             if flags.no_compile:
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=None, env=env)
@@ -203,7 +200,7 @@ class DPPyNoPythonBackend(FunctionPass):
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 
-        from numba.compiler import compile_result
+        from numba.core.compiler import compile_result
         state.cr = compile_result(
             typing_context=state.typingctx,
             target_context=state.targetctx,
@@ -221,4 +218,7 @@ class DPPyNoPythonBackend(FunctionPass):
             metadata=state.metadata,
             reload_init=state.reload_init,
         )
+
+        remove_dels(state.func_ir.blocks)
+
         return True
