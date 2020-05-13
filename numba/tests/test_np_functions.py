@@ -2208,6 +2208,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             np.testing.assert_equal(expected, list(got))
             # self.assertTrue(np.array_equal(expected, got))
 
+        with self.assertRaises(ValueError) as raises:
+            cfunc(np.ones(5), 2)
+
+        self.assertIn("array split does not result in an equal division", str(raises.exception))
+
     def test_roll_basic(self):
         pyfunc = roll
         cfunc = jit(nopython=True)(pyfunc)

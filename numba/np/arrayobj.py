@@ -5006,7 +5006,7 @@ def np_split(a, indices, axis=0):
         def impl(a, indices, axis=0):
             l, rem = divmod(a.shape[axis], indices)
             if rem != 0:
-                raise ValueError()
+                raise ValueError("array split does not result in an equal division")
             return np.split(a, list(range(l, len(a), l)), axis=axis)
 
     else:
