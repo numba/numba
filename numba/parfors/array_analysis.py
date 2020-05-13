@@ -870,7 +870,11 @@ class SymbolicEquivSet(ShapeEquivSet):
                 elif expr.op == "binop":
                     lhs = self._get_or_set_rel(expr.lhs, func_ir)
                     rhs = self._get_or_set_rel(expr.rhs, func_ir)
-                    if expr.fn == operator.add:
+                    # If either the lhs or rhs is not analyzable
+                    # then don't try to record information this var.
+                    if lhs is None or rhs is None:
+                        return None
+                    elif expr.fn == operator.add:
                         value = plus(lhs, rhs)
                     elif expr.fn == operator.sub:
                         value = minus(lhs, rhs)
@@ -924,11 +928,6 @@ class SymbolicEquivSet(ShapeEquivSet):
             and isinstance(typ, types.Number)
         ):
             value = guard(self._get_or_set_rel, name, func_ir)
-            # It is possible for _get_or_set_rel to fail if
-            # something in the expression is not analyzable.
-            # Return False to indicate failure.
-            if value is None:
-                return False
             # turn constant definition into equivalence
             if isinstance(value, int):
                 self._insert([name, value])
@@ -1847,18 +1846,14 @@ class ArrayAnalysis(object):
                 new_value = ir.Expr.call(wrap_var, [val, dsize], {}, loc)
                 # def_res will be False if there is something unanalyzable
                 # that prevents a size association from being created.
-                def_res = self._define(equiv_set, var, var_typ, new_value)
+                self._define(equiv_set, var, var_typ, new_value)
                 self.calltypes[new_value] = sig
-                return (var, var_typ, new_value, def_res)
+                return (var, var_typ, new_value)
             else:
-                return (val, val_typ, None, True)
+                return (val, val_typ, None)
 
-        var1, var1_typ, value1, def_res1 = gen_wrap_if_not_known(lhs,
-                                                                 lhs_typ,
-                                                                 lhs_known)
-        var2, var2_typ, value2, def_res2 = gen_wrap_if_not_known(rhs,
-                                                                 rhs_typ,
-                                                                 rhs_known)
+        var1, var1_typ, value1 = gen_wrap_if_not_known(lhs, lhs_typ, lhs_known)
+        var2, var2_typ, value2 = gen_wrap_if_not_known(rhs, rhs_typ, rhs_known)
 
         stmts.append(ir.Assign(value=size_val, target=size_var, loc=loc))
         stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
@@ -1867,31 +1862,25 @@ class ArrayAnalysis(object):
         if value2 is not None:
             stmts.append(ir.Assign(value=value2, target=var2, loc=loc))
 
-        # We can only replace the slice and record some information about
-        # the slice size if both parts of the slice were analyzable.
-        if def_res1 and def_res2:
-            post_wrap_size_var = ir.Var(
-                scope, mk_unique_var("post_wrap_slice_size"), loc
-            )
-            post_wrap_size_val = ir.Expr.binop(operator.sub,
-                                               var2,
-                                               var1,
-                                               loc=loc)
-            self.calltypes[post_wrap_size_val] = signature(
-                slice_typ, var2_typ, var1_typ
-            )
-            self._define(
-                equiv_set, post_wrap_size_var, slice_typ, post_wrap_size_val
-            )
+        post_wrap_size_var = ir.Var(
+            scope, mk_unique_var("post_wrap_slice_size"), loc
+        )
+        post_wrap_size_val = ir.Expr.binop(operator.sub,
+                                           var2,
+                                           var1,
+                                           loc=loc)
+        self.calltypes[post_wrap_size_val] = signature(
+            slice_typ, var2_typ, var1_typ
+        )
+        self._define(
+            equiv_set, post_wrap_size_var, slice_typ, post_wrap_size_val
+        )
 
-            stmts.append(
-                ir.Assign(
-                    value=post_wrap_size_val, target=post_wrap_size_var, loc=loc
-                )
+        stmts.append(
+            ir.Assign(
+                value=post_wrap_size_val, target=post_wrap_size_var, loc=loc
             )
-        else:
-            # Don't change this slice since there was something unanalyzable.
-            return None, None
+        )
 
         # rel_map keeps a map of relative sizes that we have seen so
         # that if we compute the same relative sizes different times
