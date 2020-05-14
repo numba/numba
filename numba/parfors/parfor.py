@@ -3316,7 +3316,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
             # SSA can make things look like reductions except that they don't
-            # reduction operators.  If we get to this point but don't find a
+            # have reduction operators.  If we get to this point but don't find a
             # reduction operator then assume it is SSA.
             if reduce_nodes is not None:
                 reduce_varnames.append(param_name)
