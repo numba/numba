@@ -529,7 +529,7 @@ def unified_function_type(numba_types, require_precise=True):
             if mnargs is None:
                 mnargs = mxargs = t.nargs
             elif not (mnargs == mxargs == t.nargs):
-                return numba_types
+                return
             if isinstance(t, types.UndefinedFunctionType):
                 if undefined_function is None:
                     undefined_function = t
