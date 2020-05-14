@@ -106,6 +106,7 @@ class _ColorScheme(object):
     def reset(self, msg):
         pass
 
+
 class _DummyColorScheme(_ColorScheme):
 
     def __init__(self, theme=None):
@@ -128,6 +129,7 @@ class _DummyColorScheme(_ColorScheme):
 
     def reset(self, msg):
         pass
+
 
 # holds reference to the instance of the terminal color scheme in use
 _termcolor_inst = None
@@ -507,6 +509,7 @@ class NumbaError(Exception):
         Change the error message to the given new message.
         """
         self.args = (new_message,) + self.args[1:]
+
 
 class UnsupportedError(NumbaError):
     """
