@@ -94,6 +94,8 @@ To run the test suite execute the following:
 Refer the HowTo.rst guide for an overview of the programming semantics,
 examples, supported functionalities, and known issues.
 
+*Installing while Intel OneAPI basekit is actvated have shown to throw error while installation of NUMBA-DPPY because of incompatible TBB interface, one way around that is to temporaily move env variable TBBROOT to something else*
+
 
 ===================
 6. Reporting issues
