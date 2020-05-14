@@ -43,6 +43,8 @@ requirements:
     # On channel https://anaconda.org/numba/
     - llvmlite >=0.31.*
     - dppy
+    - spirv-tools
+    - llvm-spirv
   run_constrained:
     # If TBB is present it must be at least this version from Anaconda due to
     # build flag issues triggering UB
