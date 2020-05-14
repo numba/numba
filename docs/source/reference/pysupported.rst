@@ -693,34 +693,34 @@ limitations will be relaxed as Numba continues to improve.
 Here's an example of using ``dict()`` and ``{}`` to create ``numba.typed.Dict``
 instances and letting the compiler infer the key-value types:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_inferred_dict_njit`` of ``examples/dict_usage.py``
+   :caption: from ``ex_inferred_dict_njit`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_inferred_dict_njit.begin
    :end-before: magictoken.ex_inferred_dict_njit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from interpreted
 code and using the dictionary in jit code:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_typed_dict_from_cpython`` of ``examples/dict_usage.py``
+   :caption: from ``ex_typed_dict_from_cpython`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_typed_dict_from_cpython.begin
    :end-before: magictoken.ex_typed_dict_from_cpython.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from jit code and
 using the dictionary in interpreted code:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_typed_dict_njit`` of ``examples/dict_usage.py``
+   :caption: from ``ex_typed_dict_njit`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_typed_dict_njit.begin
    :end-before: magictoken.ex_typed_dict_njit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 It should be noted that ``numba.typed.Dict`` is not thread-safe.
