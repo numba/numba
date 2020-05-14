@@ -1167,7 +1167,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             foo()
 
-        self.assertIn("Invalid use of", str(raises.exception))
+        self.assertIn(_header_lead, str(raises.exception))
         self.assertIn("zip", str(raises.exception))
 
     def test_32(self):
