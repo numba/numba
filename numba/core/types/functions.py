@@ -24,8 +24,10 @@ try:
 except OSError: # lack of active console
     _termwidth = 120
 
-_header_template = ("No implementation of function {the_function} found for "
-                    "signature:\n \n >>> {fname}({signature})\n \nThere are {ncandidates} "
+# pull out the lead line as unit tests often use this
+_header_lead = "No implementation of function"
+_header_template = (_header_lead + " {the_function} found for signature:\n \n "
+                    ">>> {fname}({signature})\n \nThere are {ncandidates} "
                     "candidate implementations:")
 
 _reason_template = """
