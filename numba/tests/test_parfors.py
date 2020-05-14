@@ -2506,6 +2506,7 @@ class TestPrange(TestPrangeBase):
             empty = np.zeros(image.shape)
             for i in range(image.shape[0]):
                 r = image[i][0] / 255.0
+                h = 1
                 if b == 0:
                     h = 0
                 if a == r and b != 0:
