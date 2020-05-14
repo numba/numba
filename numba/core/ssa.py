@@ -63,6 +63,12 @@ def _run_ssa(blocks):
         # Fix up the RHS
         # Re-associate the variable uses with the reaching definition
         blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus)
+
+    # Post-condition checks.
+    # CFG invariant
+    cfg_post = compute_cfg_from_blocks(blocks)
+    if cfg_post != cfg:
+        raise AssertionError("CFG mutated in SSA pass")
     return blocks
 
 
