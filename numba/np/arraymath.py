@@ -608,13 +608,13 @@ def array_argmin(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(np.argmax, types.Array)
-@lower_builtin("array.argmax", types.Array)
-def array_argmax(context, builder, sig, args):
-    def array_argmax_impl(arry):
-        if arry.size == 0:
+@overload(np.argmax)
+@overload_method(types.Array, "argmax")
+def np_argmax(arr):
+    def np_argmax_impl(arr):
+        if arr.size == 0:
             raise ValueError("attempt to get argmax of an empty sequence")
-        for v in arry.flat:
+        for v in arr.flat:
             max_value = v
             max_idx = 0
             break
@@ -622,15 +622,14 @@ def array_argmax(context, builder, sig, args):
             raise RuntimeError('unreachable')
 
         idx = 0
-        for v in arry.flat:
+        for v in arr.flat:
             if v > max_value:
                 max_value = v
                 max_idx = idx
             idx += 1
         return max_idx
-    res = context.compile_internal(builder, array_argmax_impl, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
 
+    return np_argmax_impl
 
 @overload(np.all)
 @overload_method(types.Array, "all")
