@@ -712,10 +712,13 @@ class Kernel(CUDAKernelBase):
     Kernel objects are not to be constructed by the user, but instead are
     created using the :func:`numba.cuda.jit` decorator.
     '''
-    def __init__(self, func, bind, targetoptions):
+    def __init__(self, func, sigs, bind, targetoptions):
         super(Kernel, self).__init__()
         self.py_func = func
-        self.bind = bind
+        self.sigs = sigs
+        self._bind = bind
+        self.link = targetoptions.pop('link', (),)
+        self._can_compile = True
 
         # keyed by a `(compute capability, args)` tuple
         self.definitions = {}
@@ -729,6 +732,13 @@ class Kernel(CUDAKernelBase):
         from .descriptor import CUDATargetDesc
 
         self.typingctx = CUDATargetDesc.typingctx
+
+        if self.sigs is not None:
+            if len(sigs) > 1:
+                raise TypeError("Only one signature supported at present")
+            self.compile(sigs[0])
+            self._can_compile = False
+
 
     @property
     def extensions(self):
@@ -775,16 +785,21 @@ class Kernel(CUDAKernelBase):
         specialized for the given signature.
         '''
         argtypes, return_type = sigutils.normalize_signature(sig)
-        assert return_type is None
+        assert return_type is None or return_type == types.none
         cc = get_current_device().compute_capability
-        kernel = self.definitions.get((cc, argtypes))
+        if self.sigs and not self._can_compile:
+            # There is only one definition. Return it with no type checking.
+            return next(iter(self.definitions.values()))
+        else:
+            kernel = self.definitions.get((cc, argtypes))
         if kernel is None:
-            if 'link' not in self.targetoptions:
-                self.targetoptions['link'] = ()
+            if not self._can_compile:
+                raise RuntimeError("Compilation disabled")
             kernel = compile_kernel(self.py_func, argtypes,
+                                    link=self.link,
                                     **self.targetoptions)
             self.definitions[(cc, argtypes)] = kernel
-            if self.bind:
+            if self._bind:
                 kernel.bind()
         return kernel
 
@@ -796,6 +811,9 @@ class Kernel(CUDAKernelBase):
         cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
             return self.definitions[(cc, signature)].inspect_llvm()
+        elif self.sigs:
+            # FIXME: One signature only at present.
+            return next(iter(self.definitions.values())).inspect_llvm()
         else:
             return dict((sig, defn.inspect_llvm())
                         for sig, defn in self.definitions.items())
@@ -809,6 +827,9 @@ class Kernel(CUDAKernelBase):
         cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
             return self.definitions[(cc, signature)].inspect_asm()
+        elif self.sigs:
+            # FIXME: One signature only at present.
+            return next(iter(self.definitions.values())).inspect_asm()
         else:
             return dict((sig, defn.inspect_asm())
                         for sig, defn in self.definitions.items())
@@ -822,16 +843,32 @@ class Kernel(CUDAKernelBase):
         if file is None:
             file = sys.stdout
 
-        for _, defn in utils.iteritems(self.definitions):
-            defn.inspect_types(file=file)
+        if self.sigs:
+            # FIXME: One signature only at present.
+            next(iter(self.definitions.values())).inspect_types(file=file)
+        else:
+            for _, defn in utils.iteritems(self.definitions):
+                defn.inspect_types(file=file)
+
+    @property
+    def ptx(self):
+        if self.sigs:
+            return next(iter(self.definitions.values())).ptx
+        else:
+            return dict((sig, defn.ptx)
+                         for sig, defn in self.definitions.items())
+
+    def bind(self):
+        for defn in self.definitions.values():
+            defn.bind()
 
     @classmethod
-    def _rebuild(cls, func_reduced, bind, targetoptions, config):
+    def _rebuild(cls, func_reduced, sigs, bind, targetoptions, config):
         """
         Rebuild an instance.
         """
         func = serialize._rebuild_function(*func_reduced)
-        instance = cls(func, bind, targetoptions)
+        instance = cls(func, sigs, bind, targetoptions)
         instance._deserialize_config(config)
         return instance
 
@@ -843,6 +880,6 @@ class Kernel(CUDAKernelBase):
         glbls = serialize._get_function_globals_for_reduction(self.py_func)
         func_reduced = serialize._reduce_function(self.py_func, glbls)
         config = self._serialize_config()
-        args = (self.__class__, func_reduced, self.bind, self.targetoptions,
-                config)
+        args = (self.__class__, func_reduced, self.sigs, self._bind,
+                self.targetoptions, config)
         return (serialize._rebuild_reduction, args)
