@@ -258,7 +258,7 @@ numba_list_set_is_mutable(NB_List *lp, int is_mutable){
 /* Set an item in a list.
  *
  * lp: a list
- * index: the index of the item to set
+ * index: the index of the item to set (must be in range 0 <= index < len(list))
  * item: the item to set
  *
  * This assume there is already an element at the given index that will be
@@ -288,7 +288,7 @@ numba_list_setitem(NB_List *lp, Py_ssize_t index, const char *item) {
 /* Get an item from a list.
  *
  * lp: a list
- * index: the index of the item to get
+ * index: the index of the item to get (must be in range 0 <= index < len(list))
  * out: a pointer to hold the item
  */
 int
@@ -403,6 +403,7 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
  *
  * lp: a list
  * index: the index of the item to delete
+ *        (must be in range 0 <= index < len(list))
  *
  * */
 int
