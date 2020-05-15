@@ -84,27 +84,26 @@ def cuda_grid(context, builder, sig, args):
         raise ValueError('Unexpected return type %s from cuda.grid' % restype)
 
 
+def _nthreads_for_dim(builder, dim):
+    ntid = nvvmutils.call_sreg(builder, f"ntid.{dim}")
+    nctaid = nvvmutils.call_sreg(builder, f"nctaid.{dim}")
+    return builder.mul(ntid, nctaid)
+
+
 @lower(cuda.gridsize, types.int32)
 def cuda_gridsize(context, builder, sig, args):
     restype = sig.return_type
-
-    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
-    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
-    nx = builder.mul(ntidx, nctaidx)
+    nx = _nthreads_for_dim(builder, 'x')
 
     if restype == types.int32:
         return nx
     elif isinstance(restype, types.UniTuple):
-        ntidy = nvvmutils.call_sreg(builder, "ntid.y")
-        nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
-        ny = builder.mul(ntidy, nctaidy)
+        ny = _nthreads_for_dim(builder, 'y')
 
         if restype.count == 2:
             return cgutils.pack_array(builder, (nx, ny))
         elif restype.count == 3:
-            ntidz = nvvmutils.call_sreg(builder, "ntid.z")
-            nctaidz = nvvmutils.call_sreg(builder, "nctaid.z")
-            nz = builder.mul(ntidz, nctaidz)
+            nz = _nthreads_for_dim(builder, 'z')
             return cgutils.pack_array(builder, (nx, ny, nz))
 
     # Fallthrough to here indicates unexpected return type or tuple length
@@ -133,7 +132,7 @@ def _get_unique_smem_id(name):
     return "{0}_{1}".format(name, _unique_smem_id)
 
 
-@lower(cuda.shared.array, types.Integer, types.Any)
+@lower(cuda.shared.array, types.IntegerLiteral, types.Any)
 def cuda_shared_array_integer(context, builder, sig, args):
     length = sig.args[0].literal_value
     dtype = parse_dtype(sig.args[1])
@@ -154,7 +153,7 @@ def cuda_shared_array_tuple(context, builder, sig, args):
                           can_dynsized=True)
 
 
-@lower(cuda.local.array, types.Integer, types.Any)
+@lower(cuda.local.array, types.IntegerLiteral, types.Any)
 def cuda_local_array_integer(context, builder, sig, args):
     length = sig.args[0].literal_value
     dtype = parse_dtype(sig.args[1])

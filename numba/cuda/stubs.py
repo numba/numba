@@ -3,7 +3,6 @@ This scripts specifies all PTX special objects.
 """
 import functools
 import llvmlite.llvmpy.core as lc
-import numpy
 import operator
 from numba.core.rewrites.macros import Macro
 from numba.core import types, typing, ir

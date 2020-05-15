@@ -337,6 +337,9 @@ class BaseContext(object):
 
     @utils.cached_property
     def nonconst_module_attrs(self):
+        """
+        All module attrs are constant for targets using BaseContext.
+        """
         return tuple()
 
     @utils.cached_property
