@@ -103,17 +103,18 @@ def get_os_spec_info(os_name):
     class CmdBufferOut(tuple):
         buffer_output_flag = True
 
+    class CmdReadFile(tuple):
+        read_file_flag = True
+
     shell_params = {
         'Linux': {
             'cmd': (
-                CmdBufferOut(('tail', '-vn', '+1',
-                              '/sys/fs/cgroup/cpuacct/cpu.cfs_quota_us')),
-                CmdBufferOut(('tail', '-vn', '+1',
-                              '/sys/fs/cgroup/cpuacct/cpu.cfs_period_us')),
+                CmdReadFile(('/sys/fs/cgroup/cpuacct/cpu.cfs_quota_us',)),
+                CmdReadFile(('/sys/fs/cgroup/cpuacct/cpu.cfs_period_us',)),
             ),
             'cmd_optional': (
-                ('cat', '/proc/meminfo'),
-                ('cat', '/proc/self/status'),
+                CmdReadFile(('/proc/meminfo',)),
+                CmdReadFile(('/proc/self/status',)),
             ),
             'kwds': {
                 # output string fragment -> result dict key
@@ -183,13 +184,23 @@ def get_os_spec_info(os_name):
     # Gather output in a list of strings containing a keyword and some value.
     output = []
     for cmd in cmd_selected:
-        try:
-            out = check_output(cmd, stderr=PIPE)
-        except (OSError, CalledProcessError) as e:
-            _error_log.append(f'Error (subprocess): {e}')
+        if hasattr(cmd, 'read_file_flag'):
+            # Open file within Python
+            with open(cmd[0], 'r') as f:
+                out = f.readlines()
+                if out:
+                    out[0] = ' '.join((cmd[0], out[0]))
+                    output.extend(out)
             continue
-        if hasattr(cmd, 'buffer_output_flag'):
-            out = b' '.join(line for line in out.splitlines()) + b'\n'
+        else:
+            # Spawn a subprocess
+            try:
+                out = check_output(cmd, stderr=PIPE)
+            except (OSError, CalledProcessError) as e:
+                _error_log.append(f'Error (subprocess): {e}')
+                continue
+            if hasattr(cmd, 'buffer_output_flag'):
+                out = b' '.join(line for line in out.splitlines()) + b'\n'
         output.extend(out.decode().splitlines())
 
     # Extract (k, output) pairs by searching for keywords in output
