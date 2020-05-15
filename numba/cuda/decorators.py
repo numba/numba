@@ -1,7 +1,7 @@
 from warnings import warn
 from numba.core import types, config, sigutils
 from numba.core.errors import NumbaDeprecationWarning
-from .compiler import (compile_device, declare_device_function, Kernel,
+from .compiler import (compile_device, declare_device_function, Dispatcher,
                        compile_device_template)
 from .simulator.kernel import FakeCUDAKernel
 
@@ -94,7 +94,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
                 targetoptions['debug'] = debug
                 targetoptions['link'] = link
                 sigs = None
-                return Kernel(func_or_sig, sigs, bind=bind,
+                return Dispatcher(func_or_sig, sigs, bind=bind,
                               targetoptions=targetoptions)
 
     else:
@@ -123,13 +123,11 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
             if restype and not device and restype != types.void:
                 raise TypeError("CUDA kernel must have void return type.")
 
-        #sigs = [sigutils.normalize_signature(sig) for sig in sigs]
-
         def kernel_jit(func):
             targetoptions = kws.copy()
             targetoptions['debug'] = debug
             targetoptions['link'] = link
-            return Kernel(func, sigs, bind=bind, targetoptions=targetoptions)
+            return Dispatcher(func, sigs, bind=bind, targetoptions=targetoptions)
 
         def device_jit(func):
             return compile_device(func, restype, argtypes, inline=inline,

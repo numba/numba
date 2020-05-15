@@ -60,17 +60,17 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                                                           cres.signature.args,
                                                           debug=debug)
 
-    cukern = SpecializedKernel(llvm_module=lib._final_module,
-                        name=kernel.name,
-                        pretty_name=cres.fndesc.qualname,
-                        argtypes=cres.signature.args,
-                        type_annotation=cres.type_annotation,
-                        link=link,
-                        debug=debug,
-                        call_helper=cres.call_helper,
-                        fastmath=fastmath,
-                        extensions=extensions,
-                        max_registers=max_registers)
+    cukern = Kernel(llvm_module=lib._final_module,
+                    name=kernel.name,
+                    pretty_name=cres.fndesc.qualname,
+                    argtypes=cres.signature.args,
+                    type_annotation=cres.type_annotation,
+                    link=link,
+                    debug=debug,
+                    call_helper=cres.call_helper,
+                    fastmath=fastmath,
+                    extensions=extensions,
+                    max_registers=max_registers)
     return cukern
 
 
@@ -383,7 +383,7 @@ class CachedCUFunction(object):
         return cls(entry_name, ptx, linking, max_registers)
 
 
-class SpecializedKernel:
+class Kernel:
     '''
     CUDA Kernel specialized for a given set of argument types. When called, this
     object will validate that the argument types match those for which it is
@@ -392,7 +392,7 @@ class SpecializedKernel:
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
                  link=(), debug=False, fastmath=False, type_annotation=None,
                  extensions=[], max_registers=None):
-        super(SpecializedKernel, self).__init__()
+        super(Kernel, self).__init__()
         # initialize CUfunction
         options = {'debug': debug}
         if fastmath:
@@ -636,18 +636,18 @@ class SpecializedKernel:
             raise NotImplementedError(ty, val)
 
 
-class Kernel:
+class Dispatcher:
     '''
-    CUDA Kernel object. When called, the kernel object will specialize itself
+    CUDA Dispatcher object. When called, the dispatcher will specialize itself
     for the given arguments (if no suitable specialized version already exists)
     & compute capability, and launch on the device associated with the current
     context.
 
-    Kernel objects are not to be constructed by the user, but instead are
+    Dispatcher objects are not to be constructed by the user, but instead are
     created using the :func:`numba.cuda.jit` decorator.
     '''
     def __init__(self, func, sigs, bind, targetoptions):
-        super(Kernel, self).__init__()
+        super(Dispatcher, self).__init__()
         self.py_func = func
         self.sigs = sigs
         self._bind = bind
