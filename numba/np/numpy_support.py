@@ -394,7 +394,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         At the moment this function takes care of the case where all
         inputs have the same unit, and therefore the output unit has the same.
         If in the future this should be extended to a case with mixed units,
-        the rules should be implemented `npdatetime_helpers` and called from
+        the rules should be implemented in `npdatetime_helpers` and called
         this function to set the correct output unit.
         """
         if all(inp.unit == inputs[0].unit for inp in inputs):
