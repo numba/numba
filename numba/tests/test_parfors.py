@@ -2188,6 +2188,24 @@ class TestPrange(TestPrangeBase):
                            check_fastmath=True, check_fastmath_result=True)
 
     @skip_parfors_unsupported
+    def test_prange27(self):
+        # issue5597: usedef error in parfor
+        def test_impl(a, b, c):
+            for j in range(b[0]-1):
+                for k in range(2):
+                    z = np.abs(a[c-1:c+1])
+            return 0
+
+        # patch inner loop to 'prange'
+        self.prange_tester(test_impl,
+                           np.arange(20),
+                           np.asarray([4,4,4,4,4,4,4,4,4,4]),
+                           0,
+                           patch_instance=[1],
+                           scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_parfors_unsupported
     def test_prange_two_instances_same_reduction_var(self):
         # issue4922 - multiple uses of same reduction variable
         def test_impl(n):
