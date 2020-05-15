@@ -384,10 +384,21 @@ def ufunc_find_matching_loop(ufunc, arg_types):
 
     def set_output_dt_units(inputs, outputs, ufunc_inputs):
         """
-        Refines the output of a functino from  timedelta64[] to a more specific
-        timedelta64[?] where ? is the right time unit depending on the inputs
-        """
+        Sets the output unit of a datetime type based on the input units
 
+        Timedelta is a special dtype that requires the time unit to be
+        specified (day, month, etc). Not every operation with timedelta inputs
+        leads to an output of timedelta output. However, for those that do,
+        the unit of output must be inferred based on the units of the inputs.
+
+        At the moment this function takes care of two cases
+         a) where all inputs are timedelta with the same unit (mm), and
+         therefore the output has the same unit.
+         If in the future this should be extended to a case with mixed units,
+         the rules should be implemented in `npdatetime_helpers` and called
+         from this function to set the correct output unit.
+         b) where only one of the inputs is a timedelta (m? or ?m)
+        """
         def make_specific(outputs, unit):
             new_outputs = []
             for out in outputs:
@@ -412,8 +423,6 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             unit = inputs[0].unit
             new_outputs = make_specific(outputs, unit)
             return new_outputs
-
-
 
     # In NumPy, the loops are evaluated from first to last. The first one
     # that is viable is the one used. One loop is viable if it is possible
