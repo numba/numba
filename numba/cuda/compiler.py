@@ -289,68 +289,6 @@ class ForAll(object):
             return tpb
 
 
-class CUDAKernelBase(object):
-    """Define interface for configurable kernels
-    """
-
-    def __init__(self):
-        self.griddim = None
-        self.blockdim = None
-        self.sharedmem = 0
-        self.stream = 0
-
-    def copy(self):
-        """
-        Shallow copy the instance
-        """
-        # Note: avoid using ``copy`` which calls __reduce__
-        cls = self.__class__
-        # new bare instance
-        new = cls.__new__(cls)
-        # update the internal states
-        new.__dict__.update(self.__dict__)
-        return new
-
-    def configure(self, griddim, blockdim, stream=0, sharedmem=0):
-        griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
-
-        clone = self.copy()
-        clone.griddim = tuple(griddim)
-        clone.blockdim = tuple(blockdim)
-        clone.stream = stream
-        clone.sharedmem = sharedmem
-        return clone
-
-    def __getitem__(self, args):
-        if len(args) not in [2, 3, 4]:
-            raise ValueError('must specify at least the griddim and blockdim')
-        return self.configure(*args)
-
-    def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
-        """Returns a configured kernel for 1D kernel of given number of tasks
-        ``ntasks``.
-
-        This assumes that:
-        - the kernel 1-to-1 maps global thread id ``cuda.grid(1)`` to tasks.
-        - the kernel must check if the thread id is valid."""
-
-        return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
-
-    def _serialize_config(self):
-        """
-        Helper for serializing the grid, block and shared memory configuration.
-        CUDA stream config is not serialized.
-        """
-        return self.griddim, self.blockdim, self.sharedmem
-
-    def _deserialize_config(self, config):
-        """
-        Helper for deserializing the grid, block and shared memory
-        configuration.
-        """
-        self.griddim, self.blockdim, self.sharedmem = config
-
-
 class CachedPTX(object):
     """A PTX cache that uses compute capability as a cache key
     """
@@ -698,7 +636,7 @@ class SpecializedKernel:
             raise NotImplementedError(ty, val)
 
 
-class Kernel(CUDAKernelBase):
+class Kernel:
     '''
     CUDA Kernel object. When called, the kernel object will specialize itself
     for the given arguments (if no suitable specialized version already exists)
@@ -715,6 +653,11 @@ class Kernel(CUDAKernelBase):
         self._bind = bind
         self.link = targetoptions.pop('link', (),)
         self._can_compile = True
+
+        self.griddim = None
+        self.blockdim = None
+        self.sharedmem = 0
+        self.stream = 0
 
         # keyed by a `(compute capability, args)` tuple
         self.definitions = {}
@@ -735,6 +678,56 @@ class Kernel(CUDAKernelBase):
             self.compile(sigs[0])
             self._can_compile = False
 
+    def copy(self):
+        """
+        Shallow copy the instance
+        """
+        # Note: avoid using ``copy`` which calls __reduce__
+        cls = self.__class__
+        # new bare instance
+        new = cls.__new__(cls)
+        # update the internal states
+        new.__dict__.update(self.__dict__)
+        return new
+
+    def configure(self, griddim, blockdim, stream=0, sharedmem=0):
+        griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
+
+        clone = self.copy()
+        clone.griddim = tuple(griddim)
+        clone.blockdim = tuple(blockdim)
+        clone.stream = stream
+        clone.sharedmem = sharedmem
+        return clone
+
+    def __getitem__(self, args):
+        if len(args) not in [2, 3, 4]:
+            raise ValueError('must specify at least the griddim and blockdim')
+        return self.configure(*args)
+
+    def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
+        """Returns a configured kernel for 1D kernel of given number of tasks
+        ``ntasks``.
+
+        This assumes that:
+        - the kernel 1-to-1 maps global thread id ``cuda.grid(1)`` to tasks.
+        - the kernel must check if the thread id is valid."""
+
+        return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
+
+    def _serialize_config(self):
+        """
+        Helper for serializing the grid, block and shared memory configuration.
+        CUDA stream config is not serialized.
+        """
+        return self.griddim, self.blockdim, self.sharedmem
+
+    def _deserialize_config(self, config):
+        """
+        Helper for deserializing the grid, block and shared memory
+        configuration.
+        """
+        self.griddim, self.blockdim, self.sharedmem = config
 
     @property
     def extensions(self):
