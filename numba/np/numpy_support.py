@@ -383,6 +383,20 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         return types
 
     def set_output_dt_units(inputs, outputs):
+        """
+        Sets the output unit of a datetime type based on the input units
+
+        Timedelta is a special dtype that requires the time unit to be
+        specified (day, month, etc). Not every operation with timedelta inputs
+        leads to an output of timedelta output. However, for those that do,
+        the unit of output must be inferred based on the units of the inputs.
+
+        At the moment this function takes care of the case where all
+        inputs have the same unit, and therefore the same as the output unit.
+        If in the future this should be extended to a case with mixed units,
+        the rules should be implemented `npdatetime_helpers` and called from
+        this function to set the correct output unit.
+        """
         if all(inp.unit == inputs[0].unit for inp in inputs):
             # Case with operation on same units. Operations on different units
             # not adjusted for now but might need to be added in the future
