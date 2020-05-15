@@ -70,7 +70,6 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
     else:
         bind=True
 
-    #from pudb import set_trace; set_trace()
     fastmath = kws.get('fastmath', False)
     if argtypes is None and not sigutils.is_signature(func_or_sig):
         if func_or_sig is None:

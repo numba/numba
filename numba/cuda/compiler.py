@@ -263,17 +263,13 @@ class ForAll(object):
         if self.ntasks == 0:
             return
 
-        if isinstance(self.kernel, Kernel):
-            kernel = self.kernel.specialize(*args)
-        else:
-            kernel = self.kernel
+        kernel = self.kernel.specialize(*args)
 
-        tpb = self._compute_thread_per_block(kernel)
-        tpbm1 = tpb - 1
-        blkct = (self.ntasks + tpbm1) // tpb
+        blockdim = self._compute_thread_per_block(kernel)
+        griddim = (self.ntasks + blockdim - 1) // blockdim
 
-        return kernel.configure(blkct, tpb, stream=self.stream,
-                                sharedmem=self.sharedmem)(*args)
+        griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
+        return kernel[griddim, blockdim, self.stream, self.sharedmem](*args)
 
     def _compute_thread_per_block(self, kernel):
         tpb = self.thread_per_block
@@ -449,7 +445,7 @@ class CachedCUFunction(object):
         return cls(entry_name, ptx, linking, max_registers)
 
 
-class SpecializedKernel(CUDAKernelBase):
+class SpecializedKernel:
     '''
     CUDA Kernel specialized for a given set of argument types. When called, this
     object will validate that the argument types match those for which it is
@@ -572,7 +568,7 @@ class SpecializedKernel(CUDAKernelBase):
         print(self._type_annotation, file=file)
         print('=' * 80, file=file)
 
-    def _kernel_call(self, args, griddim, blockdim, stream=0, sharedmem=0):
+    def launch(self, args, griddim, blockdim, stream=0, sharedmem=0):
         # Prepare kernel
         cufunc = self._func.get()
 
@@ -765,19 +761,36 @@ class Kernel(CUDAKernelBase):
         '''
         Specialize and invoke this kernel with *args*.
         '''
-        kernel = self.specialize(*args)
-        cfg = kernel[self.griddim, self.blockdim, self.stream, self.sharedmem]
-        cfg(*args)
+        argtypes = tuple(
+            [self.typingctx.resolve_argument_type(a) for a in args])
+        kernel = self.compile(argtypes)
+        griddim, blockdim = normalize_kernel_dimensions(self.griddim,
+                                                        self.blockdim)
+        kernel.launch(args, griddim, blockdim, self.stream, self.sharedmem)
+        #cfg = kernel[self.griddim, self.blockdim, self.stream, self.sharedmem]
+        #cfg(*args)
 
     def specialize(self, *args):
         '''
         Compile and bind to the current context a version of this kernel
         specialized for the given *args*.
         '''
+        ### HERE - NEED TO FIX BY CLONING THIS AND COMPILING AND BINDING FOR
+        ### THE SIG THEN DISABLING COMPILATION
+        clone = self.copy()
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
-        kernel = self.compile(argtypes)
-        return kernel
+        kernel = clone.compile(argtypes)
+        clone.disable_compile()
+        return clone
+
+    def disable_compile(self, val=True):
+        self._can_compile = not val
+
+    @property
+    def _func(self):
+        # FIXME: Only works when this has been specialised to one argument type.
+        return next(iter(self.definitions.values()))._func
 
     def compile(self, sig):
         '''
@@ -852,7 +865,8 @@ class Kernel(CUDAKernelBase):
 
     @property
     def ptx(self):
-        if self.sigs:
+        # FIXME: Gives the PTX for a specialised single instance.
+        if self.sigs or not self._can_compile:
             return next(iter(self.definitions.values())).ptx
         else:
             return dict((sig, defn.ptx)
