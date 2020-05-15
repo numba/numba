@@ -54,6 +54,31 @@ class Loop(collections.namedtuple("Loop",
         return hash(self.header)
 
 
+class _DictOfContainers(collections.defaultdict):
+    """A defaultdict with customized equality checks that ignore empty values.
+
+    Non-empty value is checked by: `bool(value_item) == True`.
+    """
+
+    def __eq__(self, other):
+        if isinstance(other, _DictOfContainers):
+            mine = self._non_empty_items()
+            theirs = other._non_empty_items()
+            return mine == theirs
+
+        return NotImplemented
+
+    def __ne__(self, other):
+        ret = self.__eq__(other)
+        if ret is NotImplemented:
+            return ret
+        else:
+            return not ret
+
+    def _non_empty_items(self):
+        return [(k, vs) for k, vs in self.items() if vs]
+
+
 class CFGraph(object):
     """
     Generic (almost) implementation of a Control Flow Graph.
@@ -61,8 +86,8 @@ class CFGraph(object):
 
     def __init__(self):
         self._nodes = set()
-        self._preds = collections.defaultdict(set)
-        self._succs = collections.defaultdict(set)
+        self._preds = _DictOfContainers(set)
+        self._succs = _DictOfContainers(set)
         self._edge_data = {}
         self._entry_point = None
 
@@ -449,7 +474,7 @@ class CFGraph(object):
 
     def _find_dominator_tree(self):
         idom = self._idom
-        domtree = collections.defaultdict(set)
+        domtree = _DictOfContainers(set)
 
         for u, v in idom.items():
             # v dominates u
