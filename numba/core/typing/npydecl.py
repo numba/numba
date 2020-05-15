@@ -125,8 +125,8 @@ class Numpy_rules_ufunc(AbstractTemplate):
         out = list(explicit_outputs)
         implicit_output_count = ufunc.nout - len(explicit_outputs)
         if implicit_output_count > 0:
-            # XXX this is currently wrong for datetime64 and timedelta64,
-            # as ufunc_find_matching_loop() doesn't do any type inference.
+            # XXX this is sometimes wrong for datetime64 and timedelta64,
+            # as ufunc_find_matching_loop() doesn't do any type inference
             ret_tys = ufunc_loop.outputs[-implicit_output_count:]
             if ndims > 0:
                 assert layout is not None
