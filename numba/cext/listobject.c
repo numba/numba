@@ -423,7 +423,7 @@ numba_list_delitem(NB_List *lp, Py_ssize_t index) {
     loc = lp->items + lp->item_size * index;
     list_decref_item(lp, loc);
     if (index != lp->size - 1) {
-        // delitem from somewhere other than the end, incur the dreaded memory copy
+        // delitem from somewhere other than the end, incur the memory copy
         leftover_bytes = (lp->size - 1 - index) * lp->item_size;
         new_loc = lp->items + (lp->item_size * (index + 1));
         // use memmove instead of memcpy since we may be dealing with
