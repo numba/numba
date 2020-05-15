@@ -1029,6 +1029,14 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         # FIXME comparison of empty array-typed lists fails
         # self.assertEqual(expected, got)
 
+    def test_5264(self):
+        # Test the reproducer from #5264 and make sure it doesn't segfault
+        float_array = types.float64[:]
+        l = List.empty_list(float_array)
+        l.append(np.ones(3,dtype=np.float64))
+        l.pop()
+        self.assertEqual(0, len(l))
+
     def test_jitclass_as_item_in_list(self):
 
         spec = [
@@ -1068,6 +1076,22 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             np.testing.assert_allclose(one.array, two.array)
 
         [bag_equal(a, b) for a, b in zip(expected, got)]
+
+    def test_4960(self):
+        # Test the reproducer from #4960 and make sure it doesn't segfault
+        @jitclass([('value', int32)])
+        class Simple(object):
+            def __init__(self, value):
+                self.value = value
+
+        @njit
+        def foo():
+            l = List((Simple(23),Simple(24)))
+            l.pop()
+            return l
+
+        l = foo()
+        self.assertEqual(1, len(l))
 
     def test_storage_model_mismatch(self):
         # https://github.com/numba/numba/issues/4520
