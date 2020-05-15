@@ -407,8 +407,6 @@ numba_list_resize(NB_List *lp, Py_ssize_t newsize) {
  * */
 int
 numba_list_delitem(NB_List *lp, Py_ssize_t index) {
-    // FIXME the following line is the lazy implementation
-    //result = numba_list_delete_slice(lp, index, index+1, 1);
     int result;
     char *loc, *new_loc;
     Py_ssize_t leftover_bytes;
