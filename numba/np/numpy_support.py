@@ -392,7 +392,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         the unit of output must be inferred based on the units of the inputs.
 
         At the moment this function takes care of the case where all
-        inputs have the same unit, and therefore the same as the output unit.
+        inputs have the same unit, and therefore the output unit has the same.
         If in the future this should be extended to a case with mixed units,
         the rules should be implemented `npdatetime_helpers` and called from
         this function to set the correct output unit.
