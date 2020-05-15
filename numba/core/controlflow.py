@@ -113,22 +113,13 @@ class CFGraph(object):
 
     def process(self):
         """
-        Compute various properties of the control flow graph.  The graph
-        must have been fully populated, and its entry point specified.
+        Compute essential properties of the control flow graph.  The graph
+        must have been fully populated, and its entry point specified. Other
+        graph properties are computed on-demand.
         """
         if self._entry_point is None:
             raise RuntimeError("no entry point defined!")
         self._eliminate_dead_blocks()
-        self._find_exit_points()
-        self._find_dominators()
-        self._find_back_edges()
-        self._find_topo_order()
-        self._find_descendents()
-        self._find_loops()
-        self._find_post_dominators()
-        self._find_immediate_dominators()
-        self._find_dominance_frontier()
-        self._find_dominator_tree()
 
     def dominators(self):
         """
@@ -177,6 +168,50 @@ class CFGraph(object):
         The domtree(B) is the closest strict set of nodes that B dominates
         """
         return self._domtree
+
+    @utils.cached_property
+    def _exit_points(self):
+        return self._find_exit_points()
+
+    @utils.cached_property
+    def _doms(self):
+        return self._find_dominators()
+
+    @utils.cached_property
+    def _back_edges(self):
+        return self._find_back_edges()
+
+    @utils.cached_property
+    def _topo_order(self):
+        return self._find_topo_order()
+
+    @utils.cached_property
+    def _descs(self):
+        return self._find_descendents()
+
+    @utils.cached_property
+    def _loops(self):
+        return self._find_loops()
+
+    @utils.cached_property
+    def _in_loops(self):
+        return self._find_in_loops()
+
+    @utils.cached_property
+    def _post_doms(self):
+        return self._find_post_dominators()
+
+    @utils.cached_property
+    def _idom(self):
+        return self._find_immediate_dominators()
+
+    @utils.cached_property
+    def _df(self):
+        return self._find_dominance_frontier()
+
+    @utils.cached_property
+    def _domtree(self):
+        return self._find_dominator_tree()
 
     def descendents(self, node):
         """
@@ -353,7 +388,7 @@ class CFGraph(object):
         for n in self._nodes:
             if not self._succs.get(n):
                 exit_points.add(n)
-        self._exit_points = exit_points
+        return exit_points
 
     def _find_postorder(self):
         succs = self._succs
@@ -410,7 +445,7 @@ class CFGraph(object):
                     idom[u] = new_idom
                     changed = True
 
-        self._idom = idom
+        return idom
 
     def _find_dominator_tree(self):
         idom = self._idom
@@ -423,7 +458,7 @@ class CFGraph(object):
             if u != v:
                 domtree[v].add(u)
 
-        self._domtree = domtree
+        return domtree
 
     def _find_dominance_frontier(self):
         idom = self._idom
@@ -438,7 +473,7 @@ class CFGraph(object):
                     df[v].add(u)
                     v = idom[v]
 
-        self._df = df
+        return df
 
     def _find_dominators_internal(self, post=False):
         # See theoretical description in
@@ -484,7 +519,7 @@ class CFGraph(object):
         return doms
 
     def _find_dominators(self):
-        self._doms = self._find_dominators_internal(post=False)
+        return self._find_dominators_internal(post=False)
 
     def _find_post_dominators(self):
         # To handle infinite loops correctly, we need to add a dummy
@@ -495,13 +530,14 @@ class CFGraph(object):
             if not loop.exits:
                 for b in loop.body:
                     self._add_edge(b, dummy_exit)
-        self._post_doms = self._find_dominators_internal(post=True)
+        pdoms = self._find_dominators_internal(post=True)
         # Fix the _post_doms table to make no reference to the dummy exit
-        del self._post_doms[dummy_exit]
-        for doms in self._post_doms.values():
+        del pdoms[dummy_exit]
+        for doms in pdoms.values():
             doms.discard(dummy_exit)
         self._remove_node_edges(dummy_exit)
         self._exit_points.remove(dummy_exit)
+        return pdoms
 
     # Finding loops and back edges: see
     # http://pages.cs.wisc.edu/~fischer/cs701.f08/finding.loops.html
@@ -518,7 +554,7 @@ class CFGraph(object):
             # given block.
             assert len(back) <= 1
             back_edges.update((src, dest) for dest in back)
-        self._back_edges = back_edges
+        return back_edges
 
     def _find_topo_order(self):
         succs = self._succs
@@ -536,7 +572,7 @@ class CFGraph(object):
 
         _dfs_rec(self._entry_point)
         post_order.reverse()
-        self._topo_order = post_order
+        return post_order
 
     def _find_descendents(self):
         descs = {}
@@ -546,7 +582,7 @@ class CFGraph(object):
                 if (node, succ) not in self._back_edges:
                     node_descs.add(succ)
                     node_descs.update(descs[succ])
-        self._descs = descs
+        return descs
 
     def _find_loops(self):
         """
@@ -582,8 +618,10 @@ class CFGraph(object):
                 exits.update(self._succs[n] - body)
             loop = Loop(header=header, body=body, entries=entries, exits=exits)
             loops[header] = loop
-        self._loops = loops
+        return loops
 
+    def _find_in_loops(self):
+        loops = self._loops
         # Compute the loops to which each node belongs.
         in_loops = dict((n, []) for n in self._nodes)
         # Sort loops from longest to shortest
@@ -591,7 +629,7 @@ class CFGraph(object):
         for loop in sorted(loops.values(), key=lambda loop: len(loop.body)):
             for n in loop.body:
                 in_loops[n].append(loop.header)
-        self._in_loops = in_loops
+        return in_loops
 
     def _dump_adj_lists(self, file):
         adj_lists = dict((src, sorted(list(dests)))
