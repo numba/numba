@@ -68,7 +68,7 @@ def _run_ssa(blocks):
     # CFG invariant
     cfg_post = compute_cfg_from_blocks(blocks)
     if cfg_post != cfg:
-        raise AssertionError("CFG mutated in SSA pass")
+        raise errors.CompilerError("CFG mutated in SSA pass")
     return blocks
 
 
