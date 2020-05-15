@@ -60,7 +60,7 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                                                           cres.signature.args,
                                                           debug=debug)
 
-    cukern = CUDAKernel(llvm_module=lib._final_module,
+    cukern = SpecializedKernel(llvm_module=lib._final_module,
                         name=kernel.name,
                         pretty_name=cres.fndesc.qualname,
                         argtypes=cres.signature.args,
@@ -263,7 +263,7 @@ class ForAll(object):
         if self.ntasks == 0:
             return
 
-        if isinstance(self.kernel, AutoJitCUDAKernel):
+        if isinstance(self.kernel, Kernel):
             kernel = self.kernel.specialize(*args)
         else:
             kernel = self.kernel
@@ -449,7 +449,7 @@ class CachedCUFunction(object):
         return cls(entry_name, ptx, linking, max_registers)
 
 
-class CUDAKernel(CUDAKernelBase):
+class SpecializedKernel(CUDAKernelBase):
     '''
     CUDA Kernel specialized for a given set of argument types. When called, this
     object will validate that the argument types match those for which it is
@@ -458,7 +458,7 @@ class CUDAKernel(CUDAKernelBase):
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
                  link=(), debug=False, fastmath=False, type_annotation=None,
                  extensions=[], max_registers=None):
-        super(CUDAKernel, self).__init__()
+        super(SpecializedKernel, self).__init__()
         # initialize CUfunction
         options = {'debug': debug}
         if fastmath:
@@ -702,7 +702,7 @@ class CUDAKernel(CUDAKernelBase):
             raise NotImplementedError(ty, val)
 
 
-class AutoJitCUDAKernel(CUDAKernelBase):
+class Kernel(CUDAKernelBase):
     '''
     CUDA Kernel object. When called, the kernel object will specialize itself
     for the given arguments (if no suitable specialized version already exists)
@@ -713,7 +713,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
     created using the :func:`numba.cuda.jit` decorator.
     '''
     def __init__(self, func, bind, targetoptions):
-        super(AutoJitCUDAKernel, self).__init__()
+        super(Kernel, self).__init__()
         self.py_func = func
         self.bind = bind
 

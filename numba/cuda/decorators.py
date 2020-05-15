@@ -1,7 +1,7 @@
 from warnings import warn
 from numba.core import types, config, sigutils
 from .compiler import (compile_kernel, compile_device, declare_device_function,
-                       AutoJitCUDAKernel, compile_device_template)
+                       Kernel, compile_device_template)
 from .simulator.kernel import FakeCUDAKernel
 
 
@@ -77,7 +77,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
-                return AutoJitCUDAKernel(func_or_sig, bind=bind, targetoptions=targetoptions)
+                return Kernel(func_or_sig, bind=bind, targetoptions=targetoptions)
 
     else:
         if config.ENABLE_CUDASIM:
