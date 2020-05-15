@@ -2983,6 +2983,25 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.arange(4))
 
+    @skip_parfors_unsupported
+    def test_parfor_slice27(self):
+        # issue5601: tests array analysis of the slice with
+        # n_valid_vals of unknown size.
+        def test_impl(a):
+            n_valid_vals = 0
+
+            for i in prange(a.shape[0]):
+                if a[i] != 0:
+                    n_valid_vals += 1
+
+                if n_valid_vals:
+                    unused = a[:n_valid_vals]
+
+            return 0
+
+        self.check(test_impl, np.arange(3))
+
+
 class TestParforsOptions(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
