@@ -2502,20 +2502,17 @@ class TestPrange(TestPrangeBase):
         # reduction variable except that it lacks an associated
         # reduction operator.  Test here that h is excluded as a
         # reduction variable.
-        def test_impl(image, a, b):
+        def test_impl(image, a):
             empty = np.zeros(image.shape)
             for i in range(image.shape[0]):
                 r = image[i][0] / 255.0
-                h = 1
-                if b == 0:
-                    h = 0
-                if a == r and b != 0:
+                if a == 0:
                     h = 0
                 empty[i] = [h, h, h]
             return empty
 
         image = np.zeros((3, 3), dtype=np.int32)
-        self.prange_tester(test_impl, image, 0, 0)
+        self.prange_tester(test_impl, image, 0)
 
 
 @skip_parfors_unsupported
