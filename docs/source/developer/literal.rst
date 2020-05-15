@@ -47,7 +47,7 @@ Code Example
 
 .. literalinclude:: ../../../numba/tests/doc_examples/test_literally_usage.py
    :language: python
-   :caption: from ``test_literally_usage`` of ``numba/tests/doc_examples/test_literally_usage.pyy``
+   :caption: from ``test_literally_usage`` of ``numba/tests/doc_examples/test_literally_usage.py``
    :start-after: magictoken.ex_literally_usage.begin
    :end-before: magictoken.ex_literally_usage.end
    :dedent: 4
