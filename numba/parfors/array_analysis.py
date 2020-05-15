@@ -855,6 +855,11 @@ class SymbolicEquivSet(ShapeEquivSet):
                         index = tuple(
                             self.obj_to_ind.get(x.name, -1) for x in expr.args
                         )
+                        # If wrap_index for a slice works on a variable
+                        # that is not analyzable (e.g., multiple definitions)
+                        # then we have to return None here since we can't know
+                        # how that size will compare to others if we can't
+                        # analyze some part of the slice.
                         if -1 in index:
                             return None
                         names = self.ext_shapes.get(index, [])
@@ -865,7 +870,11 @@ class SymbolicEquivSet(ShapeEquivSet):
                 elif expr.op == "binop":
                     lhs = self._get_or_set_rel(expr.lhs, func_ir)
                     rhs = self._get_or_set_rel(expr.rhs, func_ir)
-                    if expr.fn == operator.add:
+                    # If either the lhs or rhs is not analyzable
+                    # then don't try to record information this var.
+                    if lhs is None or rhs is None:
+                        return None
+                    elif expr.fn == operator.add:
                         value = plus(lhs, rhs)
                     elif expr.fn == operator.sub:
                         value = minus(lhs, rhs)
@@ -931,6 +940,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                     self.ind_to_var[ind].append(var)
                 else:
                     self.ind_to_var[ind] = [var]
+            return True
 
     def _insert(self, objs):
         """Overload _insert method to handle ind changes between relative
@@ -1057,13 +1067,6 @@ class ArrayAnalysis(object):
         self.prepends = {}
         # keep track of pruned precessors when branch degenerates to jump
         self.pruned_predecessors = {}
-
-    def copy(self):
-        """Returns a fresh copy with shared references to ``context``,
-        ``func_ir``, ``typemap``, ``calltypes``.
-        """
-        return ArrayAnalysis(
-            self.context, self.func_ir, self.typemap, self.calltypes)
 
     def get_equiv_set(self, block_label):
         """Return the equiv_set object of an block given its label.
@@ -1232,7 +1235,8 @@ class ArrayAnalysis(object):
         self.typemap[var.name] = typ
         self.func_ir._definitions[var.name] = [value]
         redefineds = set()
-        equiv_set.define(var, redefineds, self.func_ir, typ)
+        # Propagate the success or failure of define.
+        return equiv_set.define(var, redefineds, self.func_ir, typ)
 
     def _analyze_inst(self, label, scope, equiv_set, inst, redefined):
         pre = []
@@ -1441,9 +1445,7 @@ class ArrayAnalysis(object):
         elif type(inst) in array_analysis_extensions:
             # let external calls handle stmt if type matches
             f = array_analysis_extensions[type(inst)]
-            # Use a copy to isolate state mutation
-            copied_array_analysis = self.copy()
-            pre, post = f(inst, equiv_set, self.typemap, copied_array_analysis)
+            pre, post = f(inst, equiv_set, self.typemap, self)
 
         return pre, post
 
@@ -1842,6 +1844,8 @@ class ArrayAnalysis(object):
                 var = ir.Var(scope, mk_unique_var("var"), loc)
                 var_typ = types.intp
                 new_value = ir.Expr.call(wrap_var, [val, dsize], {}, loc)
+                # def_res will be False if there is something unanalyzable
+                # that prevents a size association from being created.
                 self._define(equiv_set, var, var_typ, new_value)
                 self.calltypes[new_value] = sig
                 return (var, var_typ, new_value)
@@ -1851,10 +1855,20 @@ class ArrayAnalysis(object):
         var1, var1_typ, value1 = gen_wrap_if_not_known(lhs, lhs_typ, lhs_known)
         var2, var2_typ, value2 = gen_wrap_if_not_known(rhs, rhs_typ, rhs_known)
 
+        stmts.append(ir.Assign(value=size_val, target=size_var, loc=loc))
+        stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
+        if value1 is not None:
+            stmts.append(ir.Assign(value=value1, target=var1, loc=loc))
+        if value2 is not None:
+            stmts.append(ir.Assign(value=value2, target=var2, loc=loc))
+
         post_wrap_size_var = ir.Var(
             scope, mk_unique_var("post_wrap_slice_size"), loc
         )
-        post_wrap_size_val = ir.Expr.binop(operator.sub, var2, var1, loc=loc)
+        post_wrap_size_val = ir.Expr.binop(operator.sub,
+                                           var2,
+                                           var1,
+                                           loc=loc)
         self.calltypes[post_wrap_size_val] = signature(
             slice_typ, var2_typ, var1_typ
         )
@@ -1862,12 +1876,6 @@ class ArrayAnalysis(object):
             equiv_set, post_wrap_size_var, slice_typ, post_wrap_size_val
         )
 
-        stmts.append(ir.Assign(value=size_val, target=size_var, loc=loc))
-        stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
-        if value1 is not None:
-            stmts.append(ir.Assign(value=value1, target=var1, loc=loc))
-        if value2 is not None:
-            stmts.append(ir.Assign(value=value2, target=var2, loc=loc))
         stmts.append(
             ir.Assign(
                 value=post_wrap_size_val, target=post_wrap_size_var, loc=loc

@@ -2,7 +2,9 @@ from collections import OrderedDict
 import ctypes
 import random
 import pickle
+import warnings
 
+import numba
 import numpy as np
 
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
@@ -86,6 +88,19 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             jitclass(spec2)(Test)
         self.assertEqual(str(raises.exception),
                          "spec keys should be strings, got 1")
+
+    def test_init_errors(self):
+
+        @jitclass([])
+        class Test:
+            def __init__(self):
+                return 7
+
+        with self.assertRaises(errors.TypingError) as raises:
+            Test()
+
+        self.assertIn("__init__() should return None, not",
+                      str(raises.exception))
 
     def _make_Float2AndArray(self):
         spec = OrderedDict()
@@ -906,6 +921,20 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertIsInstance(ty, types.ClassInstanceType)
         pickled = pickle.dumps(ty)
         self.assertIs(pickle.loads(pickled), ty)
+
+    def test_import_warnings(self):
+        class Test:
+            def __init__(self):
+                pass
+
+        with warnings.catch_warnings(record=True) as ws:
+            numba.experimental.jitclass([])(Test)
+            self.assertEqual(len(ws), 0)
+
+            numba.jitclass([])(Test)
+            self.assertEqual(len(ws), 1)
+            self.assertIs(ws[0].category, errors.NumbaDeprecationWarning)
+            self.assertIn("numba.experimental.jitclass", ws[0].message.msg)
 
 
 if __name__ == '__main__':

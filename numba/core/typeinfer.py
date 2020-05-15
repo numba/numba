@@ -208,7 +208,9 @@ class ArgConstraint(object):
                 return
             ty = src.getone()
             if isinstance(ty, types.Omitted):
-                ty = typeinfer.context.resolve_value_type(ty.value)
+                ty = typeinfer.context.resolve_value_type_prefer_literal(
+                    ty.value,
+                )
             if not ty.is_precise():
                 raise TypingError('non-precise type {}'.format(ty))
             typeinfer.add_type(self.dst, ty, loc=self.loc)
@@ -1491,9 +1493,11 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             typ = typ.copy(readonly=True)
 
         if isinstance(typ, types.BaseAnonymousTuple):
-            types_with_literals = (types.Integer, types.UnicodeType)
-            if all(isinstance(ty, types_with_literals) for ty in typ):
-                typ = types.Tuple([types.literal(val) for val in gvar.value])
+            # if it's a tuple of literal types, swap the type for the more
+            # specific literal version
+            literaled = [types.maybe_literal(x) for x in gvar.value]
+            if all(literaled):
+                typ = types.Tuple(literaled)
 
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled

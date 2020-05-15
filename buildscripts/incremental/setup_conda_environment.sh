@@ -78,7 +78,7 @@ fi
 $CONDA_INSTALL -c numba llvmlite
 
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx sphinx_rtd_theme pygments numpydoc; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 sphinx_rtd_theme pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi

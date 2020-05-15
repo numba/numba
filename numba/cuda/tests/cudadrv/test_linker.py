@@ -5,7 +5,7 @@ from numba.cuda.testing import skip_on_cudasim
 from numba.cuda.testing import CUDATestCase
 from numba.cuda.cudadrv.driver import Linker
 from numba.cuda import require_context
-from numba import cuda
+from numba import cuda, void, float64, int64
 
 
 def function_with_lots_of_registers(x, a, b, c, d, e, f):
@@ -105,6 +105,12 @@ class TestLinker(CUDATestCase):
     def test_set_registers_38(self):
         compiled = cuda.jit(max_registers=38)(function_with_lots_of_registers)
         compiled = compiled.specialize(np.empty(32), *range(6))
+        self.assertLessEqual(compiled._func.get().attrs.regs, 38)
+
+    @require_context
+    def test_set_registers_eager(self):
+        sig = void(float64[::1], int64, int64, int64, int64, int64, int64)
+        compiled = cuda.jit(sig, max_registers=38)(function_with_lots_of_registers)
         self.assertLessEqual(compiled._func.get().attrs.regs, 38)
 
 
