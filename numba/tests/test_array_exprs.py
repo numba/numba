@@ -10,6 +10,8 @@ from numba.core.compiler import Compiler, Flags
 from numba.tests.support import MemoryLeakMixin, TestCase
 import unittest
 
+TIMEDELTA_M = 'timedelta64[M]'
+TIMEDELTA_Y = 'timedelta64[Y]'
 
 class Namespace(dict):
     def __getattr__(s, k):
@@ -612,6 +614,19 @@ class TestOptionalsExceptions(MemoryLeakMixin, unittest.TestCase):
         self.assertTrue(isinstance(oty.type, types.Array))
         self.assertTrue(isinstance(oty.type.dtype, types.Float))
 
+
+class TestDatetimeDeltaOps(TestCase):
+    def test_add(self):
+        def arr_add(a, b):
+            return a + b
+
+        py_func = arr_add
+        cfunc = njit(arr_add)
+        # np.dtype(TIMEDELTA_M)
+        test_cases = [(np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.dtype(TIMEDELTA_M))),
+                     ]
+        for a, b in test_cases:
+            self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
 
 if __name__ == "__main__":
     unittest.main()
