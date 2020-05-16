@@ -385,6 +385,15 @@ class BaseContext(object):
 
         raise typeof_exc
 
+    def resolve_value_type_prefer_literal(self, value):
+        """Resolve value type and prefer Literal types whenever possible.
+        """
+        lit = types.maybe_literal(value)
+        if lit is None:
+            return self.resolve_value_type(value)
+        else:
+            return lit
+
     def _get_global_type(self, gv):
         ty = self._lookup_global(gv)
         if ty is not None:

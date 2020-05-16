@@ -4,9 +4,13 @@ from numba.cuda.testing import CUDATestCase
 import unittest
 
 
-class TestCudaAutojit(CUDATestCase):
+class TestCudaJitNoTypes(CUDATestCase):
+    """
+    Tests the jit decorator with no types provided.
+    """
+
     def test_device_array(self):
-        @cuda.autojit
+        @cuda.jit
         def foo(x, y):
             i = cuda.grid(1)
             y[i] = x[i]
@@ -23,17 +27,15 @@ class TestCudaAutojit(CUDATestCase):
 
         self.assertTrue(np.all(x == y))
 
-    def test_device_auto_jit(self):
+    def test_device_jit(self):
         @cuda.jit(device=True)
         def mapper(args):
             a, b, c = args
             return a + b + c
 
-
         @cuda.jit(device=True)
         def reducer(a, b):
             return a + b
-
 
         @cuda.jit
         def driver(A, B):
@@ -52,7 +54,7 @@ class TestCudaAutojit(CUDATestCase):
 
         np.testing.assert_allclose(Acopy + Acopy + Bcopy + Bcopy + 1, B)
 
-    def test_device_auto_jit_2(self):
+    def test_device_jit_2(self):
         @cuda.jit(device=True)
         def inner(arg):
             return arg + 1
