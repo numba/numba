@@ -466,7 +466,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                 inputs = choose_types(input_types, ufunc_inputs)
                 outputs = choose_types(output_types, ufunc_outputs)
                 if ufunc_inputs == 'mm':
-                    outputs = set_output_dt_units(inputs, outputs)
+                    outputs = set_output_dt_units(inputs, outputs, ufunc_inputs)
 
             except NotImplementedError:
                 # One of the selected dtypes isn't supported by Numba
