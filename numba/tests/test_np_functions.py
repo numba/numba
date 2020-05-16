@@ -3633,7 +3633,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.zeros(1)
             yield np.array([1, 2, 3])
             yield np.array([0, 1, 2, 3])
-            yield np.array([0, 1, 2, 0, 0])
+            yield np.array([0., 1., 2., np.nan, 0.])
+
+        def explicit_trim():
+            yield np.array([0, 1, 2, 0, 0]), 'FB'
+            yield np.array([0, 1, 2]), 'B'
+            yield np.array([np.nan, 0., 1.2, 2.3, 0.]), 'b'
+            yield np.array([0, 0, 1, 2, 5]), 'f'
+            yield np.array([0, 1, 2, 0]), 'abf'
+            yield np.array([0, 4, 0]), 'd'
 
         pyfunc = np_trim_zeros
         cfunc = jit(nopython=True)(pyfunc)
@@ -3641,6 +3649,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         for arr in arrays():
             expected = pyfunc(arr)
             got = cfunc(arr)
+            self.assertPreciseEqual(expected, got)
+
+        for arr, trim in explicit_trim():
+            expected = pyfunc(arr, trim)
+            got = cfunc(arr, trim)
             self.assertPreciseEqual(expected, got)
 
     def test_trim_zeros_exceptions(self):

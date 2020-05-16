@@ -4263,6 +4263,7 @@ def np_trim_zeros(a, trim='fb'):
     def impl(a, trim='fb'):
         a_ = np.asarray(a)
         first = 0
+        trim = trim.lower()
         if 'f' in trim:
             for i in a_:
                 if i != 0:
