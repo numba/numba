@@ -616,15 +616,20 @@ class TestOptionalsExceptions(MemoryLeakMixin, unittest.TestCase):
 
 
 class TestDatetimeDeltaOps(TestCase):
-    def test_add(self):
-        def arr_add(a, b):
+    def test_div(self):
+        """
+        Test the division of a timedelta by numeric types
+        """
+        def arr_div(a, b):
             return a / b
 
-        py_func = arr_add
-        cfunc = njit(arr_add)
-        # np.dtype(TIMEDELTA_M)
+        py_func = arr_div
+        cfunc = njit(arr_div)
         test_cases = [(np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.dtype(TIMEDELTA_M))),
+                      (np.ones(3, np.dtype(TIMEDELTA_Y)), np.ones(3, np.dtype(TIMEDELTA_Y))),
                       (np.ones(3, np.dtype(TIMEDELTA_M)), 1),
+                      (np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.int64)),
+                      (np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.float64)),
                      ]
         for a, b in test_cases:
-            self.assertTrue(np.array_equal(py_func(a, b), 
+            self.assertTrue(np.array_equal(py_func(a, b), cfunc(a,b)))
