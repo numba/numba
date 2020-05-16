@@ -397,7 +397,15 @@ def ufunc_find_matching_loop(ufunc, arg_types):
          If in the future this should be extended to a case with mixed units,
          the rules should be implemented in `npdatetime_helpers` and called
          from this function to set the correct output unit.
-         b) where only one of the inputs is a timedelta (m? or ?m)
+         This case is used for arr.sum, and for arr1+arr2 where all arrays
+         are timedeltas
+         b) where left operand is a timedelta, ie the "m?" case. This case
+         is used for division, eg timedelta / int
+
+         At the time of writing, numba does not support addition of timedelta
+         and other types, so this function does not consider the case "?m",
+         ie where timedelta is the right operand to a non-timedelta left operand
+         To extend it in the future, just add another elif clause.
         """
         def make_specific(outputs, unit):
             new_outputs = []
@@ -418,7 +426,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             else:
                 return outputs
             return new_outputs
-        if ufunc_inputs[0] == 'm':
+        elif ufunc_inputs[0] == 'm':
             # case where the left operand has timedelta type
             unit = inputs[0].unit
             new_outputs = make_specific(outputs, unit)
@@ -465,7 +473,9 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             try:
                 inputs = choose_types(input_types, ufunc_inputs)
                 outputs = choose_types(output_types, ufunc_outputs)
-                if ufunc_inputs == 'mm':
+                # if the left operand or both are timedeltas, then the output
+                # units need to be determined.
+                if ufunc_inputs[0] == 'm':
                     outputs = set_output_dt_units(inputs, outputs, ufunc_inputs)
 
             except NotImplementedError:
