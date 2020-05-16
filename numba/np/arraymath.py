@@ -436,7 +436,7 @@ def array_mean(arr, axis=None):
                 if axis >= arr.ndim:
                     raise ValueError("'axis' entry is out of bounds")
                 sum_arr = sum_array_axis(arr, axis=axis, dtype=ret_dtype)
-                return  sum_arr / arr.shape[axis]
+                return sum_arr / arr.shape[axis]
 
             return mean_impl
         elif isinstance(axis, types.IntegerLiteral):
