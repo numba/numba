@@ -416,11 +416,11 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                     new_outputs.append(out)
             return new_outputs
 
-
         if ufunc_inputs == 'mm':
             if all(inp.unit == inputs[0].unit for inp in inputs):
-                # Case with operation on same units. Operations on different units
-                # not adjusted for now but might need to be added in the future
+                # Case with operation on same units. Operations on different
+                # units not adjusted for now but might need to be
+                # added in the future
                 unit = inputs[0].unit
                 new_outputs = make_specific(outputs, unit)
             else:
