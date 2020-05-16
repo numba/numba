@@ -3634,6 +3634,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([1, 2, 3])
             yield np.array([0, 1, 2, 3])
             yield np.array([0., 1., 2., np.nan, 0.])
+            yield np.array(['0', 'Hello', 'world'])
 
         def explicit_trim():
             yield np.array([0, 1, 2, 0, 0]), 'FB'
@@ -3642,6 +3643,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([0, 0, 1, 2, 5]), 'f'
             yield np.array([0, 1, 2, 0]), 'abf'
             yield np.array([0, 4, 0]), 'd'
+            yield np.array(['\0', '1', '2']), 'f'
 
         pyfunc = np_trim_zeros
         cfunc = jit(nopython=True)(pyfunc)
