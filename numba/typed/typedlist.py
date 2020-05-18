@@ -29,139 +29,141 @@ from numba.core.typing.templates import Signature
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
+njitcached = njit(cache=True)
 
-@njit
+
+@njitcached
 def _make_list(itemty, allocated=DEFAULT_ALLOCATED):
     return listobject._as_meminfo(listobject.new_list(itemty,
                                                       allocated=allocated))
 
 
-@njit
+@njitcached
 def _length(l):
     return len(l)
 
 
-@njit
+@njitcached
 def _allocated(l):
     return l._allocated()
 
 
-@njit
+@njitcached
 def _is_mutable(l):
     return l._is_mutable()
 
 
-@njit
+@njitcached
 def _make_mutable(l):
     return l._make_mutable()
 
 
-@njit
+@njitcached
 def _make_immutable(l):
     return l._make_immutable()
 
 
-@njit
+@njitcached
 def _append(l, item):
     l.append(item)
 
 
-@njit
+@njitcached
 def _setitem(l, i, item):
     l[i] = item
 
 
-@njit
+@njitcached
 def _getitem(l, i):
     return l[i]
 
 
-@njit
+@njitcached
 def _contains(l, item):
     return item in l
 
 
-@njit
+@njitcached
 def _count(l, item):
     return l.count(item)
 
 
-@njit
+@njitcached
 def _pop(l, i):
     return l.pop(i)
 
 
-@njit
+@njitcached
 def _delitem(l, i):
     del l[i]
 
 
-@njit
+@njitcached
 def _extend(l, iterable):
     return l.extend(iterable)
 
 
-@njit
+@njitcached
 def _insert(l, i, item):
     l.insert(i, item)
 
 
-@njit
+@njitcached
 def _remove(l, item):
     l.remove(item)
 
 
-@njit
+@njitcached
 def _clear(l):
     l.clear()
 
 
-@njit
+@njitcached
 def _reverse(l):
     l.reverse()
 
 
-@njit
+@njitcached
 def _copy(l):
     return l.copy()
 
 
-@njit
+@njitcached
 def _eq(t, o):
     return t == o
 
 
-@njit
+@njitcached
 def _ne(t, o):
     return t != o
 
 
-@njit
+@njitcached
 def _lt(t, o):
     return t < o
 
 
-@njit
+@njitcached
 def _le(t, o):
     return t <= o
 
 
-@njit
+@njitcached
 def _gt(t, o):
     return t > o
 
 
-@njit
+@njitcached
 def _ge(t, o):
     return t >= o
 
 
-@njit
+@njitcached
 def _index(l, item, start, end):
     return l.index(item, start, end)
 
 
-@njit
+@njitcached
 def _sort(l, key, reverse):
     return l.sort(key, reverse)
 
