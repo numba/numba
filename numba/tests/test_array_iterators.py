@@ -174,7 +174,7 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         self.check_array_unary(arr, arrty, array_ndenumerate_sum)
 
     def test_array_iter(self):
-        # Test iterating over a 1d array
+        # Test iterating over arrays
         arr = np.arange(6)
         self.check_array_iter_1d(arr)
         self.check_array_iter_items(arr)
@@ -189,6 +189,21 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
         arr = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
         self.check_array_iter_items(arr)
         self.check_array_iter_items(arr.T)
+
+    def test_array_iter_yielded_order(self):
+        # See issue #5692
+        @jit(nopython=True)
+        def foo(arr):
+            t = []
+            for y1 in arr:
+                for y2 in y1:
+                    t.append(y2.ravel())
+            return t
+
+        arr = np.arange(24).reshape((2, 3, 4), order='F')
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        np.testing.assert_allclose(expected, got)
 
     def test_array_view_iter(self):
         # Test iterating over a 1d view over a 2d array
