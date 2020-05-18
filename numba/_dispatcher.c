@@ -294,8 +294,7 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
 {
     PyCFunctionWithKeywords fn;
     PyThreadState *tstate;
-    int store_CO_OPTIMIZED;
-    
+
     assert(PyCFunction_Check(cfunc));
     assert(PyCFunction_GET_FLAGS(cfunc) == METH_VARARGS | METH_KEYWORDS);
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
@@ -329,7 +328,6 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
             goto error;
         }
 
-        store_CO_OPTIMIZED = code->co_flags & CO_OPTIMIZED;
         /* unset the CO_OPTIMIZED flag, make the frame get a new locals dict */
         code->co_flags &= 0xFFFE;
 
@@ -503,7 +501,7 @@ static PyObject*
 Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 {
     PyObject *tmptype, *retval = NULL;
-    int *tys;
+    int *tys = NULL;
     int argct;
     int i;
     int prealloc[24];

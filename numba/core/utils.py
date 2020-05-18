@@ -1,6 +1,7 @@
 import atexit
 import builtins
 import functools
+import inspect
 import os
 import operator
 import threading
@@ -9,7 +10,9 @@ import math
 import sys
 import traceback
 import weakref
+import warnings
 from types import ModuleType
+from importlib import import_module
 from collections.abc import Mapping
 import numpy as np
 
@@ -19,7 +22,7 @@ from inspect import Parameter as pyParameter # noqa: F401
 
 from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
-
+from numba.core import types
 
 INT_TYPES = (int,)
 longint = int
@@ -434,3 +437,158 @@ def chain_exception(new_exc, old_exc):
     if DEVELOPER_MODE:
         new_exc.__cause__ = old_exc
     return new_exc
+
+
+def get_nargs_range(pyfunc):
+    """Return the minimal and maximal number of Python function
+    positional arguments.
+    """
+    sig = pysignature(pyfunc)
+    min_nargs = 0
+    max_nargs = 0
+    for p in sig.parameters.values():
+        max_nargs += 1
+        if p.default == inspect._empty:
+            min_nargs += 1
+    return min_nargs, max_nargs
+
+
+def unify_function_types(numba_types):
+    """Return a normalized tuple of Numba function types so that
+
+        Tuple(numba_types)
+
+    becomes
+
+        UniTuple(dtype=<unified function type>, count=len(numba_types))
+
+    If the above transformation would be incorrect, return the
+    original input as given. For instance, if the input tuple contains
+    types that are not function or dispatcher type, the transformation
+    is considered incorrect.
+    """
+    dtype = unified_function_type(numba_types)
+    if dtype is None:
+        return numba_types
+    return (dtype,) * len(numba_types)
+
+
+def unified_function_type(numba_types, require_precise=True):
+    """Returns a unified Numba function type if possible.
+
+    Parameters
+    ----------
+    numba_types : tuple
+      Numba type instances.
+    require_precise : bool
+      If True, the returned Numba function type must be precise.
+
+    Returns
+    -------
+    typ : {numba.core.types.Type, None}
+      A unified Numba function type. Or ``None`` when the Numba types
+      cannot be unified, e.g. when the ``numba_types`` contains at
+      least two different Numba function type instances.
+
+    If ``numba_types`` contains a Numba dispatcher type, the unified
+    Numba function type will be an imprecise ``UndefinedFunctionType``
+    instance, or None when ``require_precise=True`` is specified.
+
+    Specifying ``require_precise=False`` enables unifying imprecise
+    Numba dispatcher instances when used in tuples or if-then branches
+    when the precise Numba function cannot be determined on the first
+    occurrence that is not a call expression.
+    """
+    from numba.core.errors import NumbaExperimentalFeatureWarning
+
+    if not (numba_types
+            and isinstance(numba_types[0],
+                           (types.Dispatcher, types.FunctionType))):
+        return
+
+    warnings.warn("First-class function type feature is experimental",
+                  category=NumbaExperimentalFeatureWarning)
+
+    mnargs, mxargs = None, None
+    dispatchers = set()
+    function = None
+    undefined_function = None
+
+    for t in numba_types:
+        if isinstance(t, types.Dispatcher):
+            mnargs1, mxargs1 = get_nargs_range(t.dispatcher.py_func)
+            if mnargs is None:
+                mnargs, mxargs = mnargs1, mxargs1
+            elif not (mnargs, mxargs) == (mnargs1, mxargs1):
+                return
+            dispatchers.add(t.dispatcher)
+            t = t.dispatcher.get_function_type()
+            if t is None:
+                continue
+        if isinstance(t, types.FunctionType):
+            if mnargs is None:
+                mnargs = mxargs = t.nargs
+            elif not (mnargs == mxargs == t.nargs):
+                return
+            if isinstance(t, types.UndefinedFunctionType):
+                if undefined_function is None:
+                    undefined_function = t
+                else:
+                    # Refuse to unify using function type
+                    return
+                dispatchers.update(t.dispatchers)
+            else:
+                if function is None:
+                    function = t
+                else:
+                    assert function == t
+        else:
+            return
+    if require_precise and (function is None or undefined_function is not None):
+        return
+    if function is not None:
+        if undefined_function is not None:
+            assert function.nargs == undefined_function.nargs
+            function = undefined_function
+    elif undefined_function is not None:
+        undefined_function.dispatchers.update(dispatchers)
+        function = undefined_function
+    else:
+        function = types.UndefinedFunctionType(mnargs, dispatchers)
+
+    return function
+
+
+class _RedirectSubpackage(ModuleType):
+    """Redirect a subpackage to a subpackage.
+
+    This allows all references like:
+
+    >>> from numba.old_subpackage import module
+    >>> module.item
+
+    >>> import numba.old_subpackage.module
+    >>> numba.old_subpackage.module.item
+
+    >>> from numba.old_subpackage.module import item
+    """
+    def __init__(self, old_module_locals, new_module):
+        old_module = old_module_locals['__name__']
+        super().__init__(old_module)
+
+        new_mod_obj = import_module(new_module)
+
+        # Map all sub-modules over
+        for k, v in new_mod_obj.__dict__.items():
+            # Get attributes so that `subpackage.xyz` and
+            # `from subpackage import xyz` work
+            setattr(self, k, v)
+            if isinstance(v, ModuleType):
+                # Map modules into the interpreter so that
+                # `import subpackage.xyz` works
+                sys.modules[f"{old_module}.{k}"] = sys.modules[v.__name__]
+
+        # copy across dunders so that package imports work too
+        for attr, value in old_module_locals.items():
+            if attr.startswith('__') and attr.endswith('__'):
+                setattr(self, attr, value)

@@ -49,7 +49,8 @@ class Generator(SimpleIteratorType):
 
     @property
     def key(self):
-        return self.gen_func, self.arg_types, self.yield_type, self.has_finalizer
+        return (self.gen_func, self.arg_types, self.yield_type,
+                self.has_finalizer, self.state_types)
 
 
 class EnumerateType(SimpleIteratorType):

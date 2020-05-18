@@ -1,11 +1,10 @@
-import platform
 import numpy as np
 
 import unittest
 from numba import jit, from_dtype
 from numba.core import types, utils
 from numba.typed import Dict
-from numba.tests.support import TestCase
+from numba.tests.support import (TestCase, skip_ppc64le_issue4026)
 
 require_py37 = unittest.skipIf(utils.PYVERSION < (3, 7), "requires Python 3.7+")
 
@@ -217,7 +216,7 @@ def return_not(x, i):
     return not x[i]
 
 
-@unittest.skipIf(platform.machine() == 'ppc64le', "LLVM bug")
+@skip_ppc64le_issue4026
 class TestUnicodeArray(TestCase):
 
     def _test(self, pyfunc, cfunc, *args, **kwargs):

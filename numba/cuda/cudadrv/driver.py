@@ -534,10 +534,11 @@ class Device(object):
 
     def release_primary_context(self):
         """
-        Release reference to primary context
+        Release reference to primary context if it has been retained.
         """
-        driver.cuDevicePrimaryCtxRelease(self.id)
-        self.primary_context = None
+        if self.primary_context:
+            driver.cuDevicePrimaryCtxRelease(self.id)
+            self.primary_context = None
 
     def reset(self):
         try:
@@ -834,13 +835,11 @@ class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
         return MemoryInfo(free=free.value, total=total.value)
 
     def get_ipc_handle(self, memory):
+        base, end = device_extents(memory)
         ipchandle = drvapi.cu_ipc_mem_handle()
-        driver.cuIpcGetMemHandle(
-            byref(ipchandle),
-            memory.owner.handle,
-        )
+        driver.cuIpcGetMemHandle(byref(ipchandle), base)
         source_info = self.context.device.get_device_identity()
-        offset = memory.handle.value - memory.owner.handle.value
+        offset = memory.handle.value - base
 
         return IpcHandle(memory, ipchandle, memory.size, source_info,
                          offset=offset)
@@ -2100,7 +2099,7 @@ def get_devptr_for_active_ctx(ptr):
     """Query the device pointer usable in the current context from an arbitrary
     pointer.
     """
-    devptr = c_void_p(0)
+    devptr = drvapi.cu_device_ptr()
     if ptr != 0:
         attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
         driver.cuPointerGetAttribute(byref(devptr), attr, ptr)

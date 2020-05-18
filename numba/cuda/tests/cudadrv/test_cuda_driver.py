@@ -169,11 +169,9 @@ class TestCudaDriver(CUDATestCase):
         function = module.get_function('_Z10helloworldPi')
 
         value = self.context.get_active_blocks_per_multiprocessor(function, 128, 128)
-        print('active blocks:', value)
         self.assertTrue(value > 0)
         def b2d(bs): return bs
         grid, block = self.context.get_max_potential_block_size(function, b2d, 128, 128)
-        print('grid size:', grid, ', block size:', block)
         self.assertTrue(grid > 0)
         self.assertTrue(block > 0)
 

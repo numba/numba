@@ -3,6 +3,7 @@ import platform
 
 import llvmlite.binding as ll
 import llvmlite.llvmpy.core as lc
+from llvmlite import ir
 
 from numba import _dynfunc
 from numba.core.callwrapper import PyCallWrapper
@@ -58,6 +59,7 @@ class CPUContext(BaseContext):
         # Initialize additional implementations
         import numba.cpython.unicode
         import numba.typed.dictimpl
+        import numba.experimental.function_type
 
     def load_additional_registries(self):
         # Add target specific implementations
@@ -157,6 +159,37 @@ class CPUContext(BaseContext):
         builder.build()
         library.add_ir_module(wrapper_module)
 
+    def create_cfunc_wrapper(self, library, fndesc, env, call_helper):
+
+        wrapper_module = self.create_module("cfunc_wrapper")
+        fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
+        wrapper_callee = wrapper_module.add_function(fnty, fndesc.llvm_func_name)
+
+        ll_argtypes = [self.get_value_type(ty) for ty in fndesc.argtypes]
+        ll_return_type = self.get_value_type(fndesc.restype)
+
+        wrapty = ir.FunctionType(ll_return_type, ll_argtypes)
+        wrapfn = wrapper_module.add_function(wrapty, fndesc.llvm_cfunc_wrapper_name)
+        builder = ir.IRBuilder(wrapfn.append_basic_block('entry'))
+
+        status, out = self.call_conv.call_function(
+            builder, wrapper_callee, fndesc.restype, fndesc.argtypes, wrapfn.args)
+
+        with builder.if_then(status.is_error, likely=False):
+            # If (and only if) an error occurred, acquire the GIL
+            # and use the interpreter to write out the exception.
+            pyapi = self.get_python_api(builder)
+            gil_state = pyapi.gil_ensure()
+            self.call_conv.raise_error(builder, pyapi, status)
+            cstr = self.insert_const_string(builder.module, repr(self))
+            strobj = pyapi.string_from_string(cstr)
+            pyapi.err_write_unraisable(strobj)
+            pyapi.decref(strobj)
+            pyapi.gil_release(gil_state)
+
+        builder.ret(out)
+        library.add_ir_module(wrapper_module)
+
     def get_executable(self, library, fndesc, env):
         """
         Returns
@@ -208,6 +241,7 @@ class CPUTargetOptions(TargetOptions):
         "_nrt": bool,
         "no_rewrites": bool,
         "no_cpython_wrapper": bool,
+        "no_cfunc_wrapper": bool,
         "fastmath": FastMathOptions,
         "error_model": str,
         "parallel": ParallelOptions,

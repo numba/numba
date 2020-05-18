@@ -1,4 +1,5 @@
 import logging
+import warnings
 
 from pkg_resources import iter_entry_points
 
@@ -20,5 +21,11 @@ def init_all():
 
     for entry_point in iter_entry_points('numba_extensions', 'init'):
         logger.debug('Loading extension: %s', entry_point)
-        func = entry_point.load()
-        func()
+        try:
+            func = entry_point.load()
+            func()
+        except Exception as e:
+            msg = "Numba extension module '{}' failed to load due to '{}({})'."
+            warnings.warn(msg.format(entry_point.module_name, type(e).__name__,
+                                     str(e)), stacklevel=2)
+            logger.debug('Extension loading failed for: %s', entry_point)

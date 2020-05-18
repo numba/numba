@@ -1701,6 +1701,8 @@ class TestUnicode(BaseTest):
             ('      ', ' '),
             ('', ' '),
             ('', ''),
+            ('', None),
+            (' ', None),
             ('  asscii  ', 'ai '),
             ('  asscii  ', ''),
             ('  asscii  ', None),

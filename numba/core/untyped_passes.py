@@ -19,6 +19,7 @@ from numba.core.ir_utils import (guard, resolve_func_from_module, simplify_CFG,
                                  replace_var_names, get_name_var_table,
                                  compile_to_numba_ir, get_definition,
                                  find_max_label, rename_labels)
+from numba.core.ssa import reconstruct_ssa
 from numba.core import interpreter
 
 
@@ -614,7 +615,7 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
             calls = [_ for _ in blk.find_exprs('call')]
             for call in calls:
                 glbl = guard(get_definition, func_ir, call.func)
-                if glbl and isinstance(glbl, ir.Global):
+                if glbl and isinstance(glbl, (ir.Global, ir.FreeVar)):
                     # find a literal_unroll
                     if glbl.value is literal_unroll:
                         if len(call.args) > 1:
@@ -697,16 +698,25 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
                                     # check if this is a tuple slice
                                     if not isinstance(ty, self._accepted_types):
                                         extra = "operation %s" % to_unroll.op
+                                        loc = to_unroll.loc
                             elif isinstance(to_unroll, ir.Arg):
                                 extra = "non-const argument %s" % to_unroll.name
+                                loc = to_unroll.loc
                             else:
-                                extra = "unknown problem"
+                                if to_unroll is None:
+                                    extra = ('multiple definitions of '
+                                             'variable "%s".' % unroll_var.name)
+                                    loc = unroll_var.loc
+                                else:
+                                    loc = to_unroll.loc
+                                    extra = "unknown problem"
+
                             if extra:
                                 msg = ("Invalid use of literal_unroll, "
                                        "argument should be a tuple or a list "
-                                       "of constant values, found %s" % extra)
-                                raise errors.UnsupportedError(msg,
-                                                              to_unroll.loc)
+                                       "of constant values. Failure reason: "
+                                       "found %s" % extra)
+                                raise errors.UnsupportedError(msg, loc)
         return mutated
 
 
@@ -1044,7 +1054,10 @@ class MixedContainerUnroller(FunctionPass):
                                                     stmt.value.value)
                                         if dfn is None:
                                             continue
-                                        args = getattr(dfn, 'args', False)
+                                        try:
+                                            args = getattr(dfn, 'args', False)
+                                        except KeyError:
+                                            continue
                                         if not args:
                                             continue
                                         if not args[0] == arg:
@@ -1117,7 +1130,10 @@ class MixedContainerUnroller(FunctionPass):
                         # try a couple of spellings... a[i] and ref(a)[i]
                         if stmt.value.value != getitem_target:
                             dfn = func_ir.get_definition(stmt.value.value)
-                            args = getattr(dfn, 'args', False)
+                            try:
+                                args = getattr(dfn, 'args', False)
+                            except KeyError:
+                                continue
                             if not args:
                                 continue
                             if not args[0] == getitem_target:
@@ -1269,7 +1285,8 @@ class IterLoopCanonicalization(FunctionPass):
                         return False
                     func_var = guard(get_definition, func_ir,  call.func)
                     func = guard(get_definition, func_ir,  func_var)
-                    if func is None or not isinstance(func, ir.Global):
+                    if func is None or not isinstance(func,
+                                                      (ir.Global, ir.FreeVar)):
                         return False
                     if (func.value is None or
                             func.value not in self._accepted_calls):
@@ -1452,3 +1469,42 @@ class SimplifyCFG(FunctionPass):
         state.func_ir.blocks = new_blks
         mutated = blks != new_blks
         return mutated
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class ReconstructSSA(FunctionPass):
+    """Perform SSA-reconstruction
+
+    Produces minimal SSA.
+    """
+    _name = "reconstruct_ssa"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        state.func_ir = reconstruct_ssa(state.func_ir)
+        self._patch_locals(state)
+
+        # Rebuild definitions
+        state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+
+        # Rerun postprocessor to update metadata
+        # example generator_info
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run(emit_dels=False)
+        return True      # XXX detect if it actually got changed
+
+    def _patch_locals(self, state):
+        # Fix dispatcher locals dictionary type annotation
+        locals_dict = state.get('locals')
+        if locals_dict is None:
+            return
+
+        first_blk, *_ = state.func_ir.blocks.values()
+        scope = first_blk.scope
+        for parent, redefs in scope.var_redefinitions.items():
+            if parent in locals_dict:
+                typ = locals_dict[parent]
+                for derived in redefs:
+                    locals_dict[derived] = typ

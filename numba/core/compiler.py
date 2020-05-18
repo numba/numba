@@ -19,13 +19,15 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        FindLiterallyCalls,
                                        MakeFunctionToJitFunction,
                                        CanonicalizeLoopExit,
-                                       CanonicalizeLoopEntry, LiteralUnroll,)
+                                       CanonicalizeLoopEntry, LiteralUnroll,
+                                       ReconstructSSA,
+                                       )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      NopythonRewrites, PreParforPass,
                                      ParforPass, DumpParforDiagnostics,
                                      IRLegalization, NoPythonBackend,
-                                     InlineOverloads)
+                                     InlineOverloads, PreLowerStripPhis)
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd, CompileInterpMode)
@@ -42,6 +44,8 @@ class Flags(utils.ConfigOptions):
         'enable_pyobject': False,
         # Enable pyobject mode inside lifted loops
         'enable_pyobject_looplift': False,
+        # Enable SSA:
+        'enable_ssa': True,
         # Force pyobject mode inside the whole function
         'force_pyobject': False,
         # Release GIL inside the native function
@@ -51,6 +55,7 @@ class Flags(utils.ConfigOptions):
         'boundscheck': False,
         'forceinline': False,
         'no_cpython_wrapper': False,
+        'no_cfunc_wrapper': False,
         # Enable automatic parallel optimization, can be fine-tuned by taking
         # a dictionary of sub-options instead of a boolean, see parfor.py for
         # detail.
@@ -138,6 +143,11 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  reload_init=reload_init,
                  )
         return cr
+
+    def dump(self, tab=''):
+        print(f'{tab}DUMP {type(self).__name__} {self.entry_point}')
+        self.signature.dump(tab=tab + '  ')
+        print(f'{tab}END DUMP')
 
 
 _LowerResult = namedtuple("_LowerResult", [
@@ -459,9 +469,14 @@ class DefaultPassBuilder(object):
         pm.add_pass(FindLiterallyCalls, "find literally calls")
         pm.add_pass(LiteralUnroll, "handles literal_unroll")
 
+        if state.flags.enable_ssa:
+            pm.add_pass(ReconstructSSA, "ssa")
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
         pm.add_pass(AnnotateTypes, "annotate types")
+
+        # strip phis
+        pm.add_pass(PreLowerStripPhis, "remove phis nodes")
 
         # optimisation
         pm.add_pass(InlineOverloads, "inline overloaded functions")
@@ -490,6 +505,10 @@ class DefaultPassBuilder(object):
         if state.func_ir is None:
             pm.add_pass(TranslateByteCode, "analyzing bytecode")
             pm.add_pass(FixupArgs, "fix up args")
+        else:
+            # Reaches here if it's a fallback from nopython mode.
+            # Strip the phi nodes.
+            pm.add_pass(PreLowerStripPhis, "remove phis nodes")
         pm.add_pass(IRProcessing, "processing IR")
 
         if utils.PYVERSION >= (3, 7):
