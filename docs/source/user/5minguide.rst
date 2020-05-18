@@ -62,7 +62,7 @@ Numba works well on code that looks like this::
 
     @jit(nopython=True) # Set "nopython" mode for best performance, equivalent to @njit
     def go_fast(a): # Function is compiled to machine code when called the first time
-        trace = 0
+        trace = 0.0
         for i in range(a.shape[0]):   # Numba likes loops
             trace += np.tanh(a[i, i]) # Numba likes NumPy functions
         return a + trace              # Numba likes NumPy broadcasting
@@ -130,7 +130,7 @@ For example::
 
     @jit(nopython=True)
     def go_fast(a): # Function is compiled and runs in machine code
-        trace = 0
+        trace = 0.0
         for i in range(a.shape[0]):
             trace += np.tanh(a[i, i])
         return a + trace

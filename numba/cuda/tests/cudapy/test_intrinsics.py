@@ -380,7 +380,7 @@ class TestCudaIntrinsic(CUDATestCase):
 
     def test_round_f4(self):
         compiled = cuda.jit("void(int64[:], float32)")(simple_round)
-        ary = np.zeros(1, dtype=np.int32)
+        ary = np.zeros(1, dtype=np.int64)
 
         for i in [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]:
             compiled[1, 1](ary, i)
@@ -388,7 +388,7 @@ class TestCudaIntrinsic(CUDATestCase):
 
     def test_round_f8(self):
         compiled = cuda.jit("void(int64[:], float64)")(simple_round)
-        ary = np.zeros(1, dtype=np.int32)
+        ary = np.zeros(1, dtype=np.int64)
 
         for i in [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]:
             compiled[1, 1](ary, i)

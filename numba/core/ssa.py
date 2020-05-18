@@ -46,7 +46,9 @@ def _run_ssa(blocks):
     if not blocks:
         # Empty blocks?
         return {}
-
+    # Run CFG on the blocks
+    cfg = compute_cfg_from_blocks(blocks)
+    df_plus = _iterated_domfronts(cfg)
     # Find SSA violators
     violators = _find_defs_violators(blocks)
     # Process one SSA-violating variable at a time
@@ -60,19 +62,25 @@ def _run_ssa(blocks):
         _logger.debug("Replaced assignments: %s", pformat(defmap))
         # Fix up the RHS
         # Re-associate the variable uses with the reaching definition
-        blocks = _fix_ssa_vars(blocks, varname, defmap)
+        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus)
+
+    # Post-condition checks.
+    # CFG invariant
+    cfg_post = compute_cfg_from_blocks(blocks)
+    if cfg_post != cfg:
+        raise errors.CompilerError("CFG mutated in SSA pass")
     return blocks
 
 
-def _fix_ssa_vars(blocks, varname, defmap):
+def _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus):
     """Rewrite all uses to ``varname`` given the definition map
     """
     states = _make_states(blocks)
     states['varname'] = varname
     states['defmap'] = defmap
     states['phimap'] = phimap = defaultdict(list)
-    states['cfg'] = cfg = compute_cfg_from_blocks(blocks)
-    states['df+'] = _iterated_domfronts(cfg)
+    states['cfg'] = cfg
+    states['df+'] = df_plus
     newblocks = _run_block_rewrite(blocks, states, _FixSSAVars())
     # check for unneeded phi nodes
     _remove_unneeded_phis(phimap)
@@ -315,12 +323,13 @@ class _FixSSAVars(_BaseHandler):
         elif isinstance(rhs, ir.Var):
             newdef = self._fix_var(states, assign, [rhs])
             # Has a replacement that is not the current variable
-            if newdef is not None and states['varname'] != newdef.target.name:
-                return ir.Assign(
-                    target=assign.target,
-                    value=newdef.target,
-                    loc=assign.loc,
-                )
+            if newdef is not None and newdef.target is not ir.UNDEFINED:
+                if states['varname'] != newdef.target.name:
+                    return ir.Assign(
+                        target=assign.target,
+                        value=newdef.target,
+                        loc=assign.loc,
+                    )
 
         return assign
 
@@ -328,10 +337,11 @@ class _FixSSAVars(_BaseHandler):
         newdef = self._fix_var(
             states, stmt, stmt.list_vars(),
         )
-        if newdef is not None and states['varname'] != newdef.target.name:
-            replmap = {states['varname']: newdef.target}
-            stmt = copy(stmt)
-            ir_utils.replace_vars_stmt(stmt, replmap)
+        if newdef is not None and newdef.target is not ir.UNDEFINED:
+            if states['varname'] != newdef.target.name:
+                replmap = {states['varname']: newdef.target}
+                stmt = copy(stmt)
+                ir_utils.replace_vars_stmt(stmt, replmap)
         return stmt
 
     def _fix_var(self, states, stmt, used_vars):
@@ -430,15 +440,18 @@ class _FixSSAVars(_BaseHandler):
             return self._find_def_from_top(states, label, loc=loc)
 
     def _stmt_index(self, defstmt, block, stop=-1):
-        """Find the postitional index of the statement at ``block``.
+        """Find the positional index of the statement at ``block``.
 
         Assumptions:
         - no two statements can point to the same object.
         """
-        try:
-            return block.body.index(defstmt, 0, stop)
-        except ValueError:
-            return len(block.body)
+        # Compare using id() as IR node equality is for semantic equivalence
+        # opposed to direct equality (the location and scope are not considered
+        # as part of the equality measure, this is important here).
+        for i in range(len(block.body))[:stop]:
+            if block.body[i] is defstmt:
+                return i
+        return len(block.body)
 
 
 def _warn_about_uninitialized_variable(varname, loc):

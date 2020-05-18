@@ -785,5 +785,61 @@ class FooType(types.Type):
                              f(Foo()))
 
 
+class TestIssues(TestCase):
+    def test_omitted_type(self):
+        # issue https://github.com/numba/numba/issues/5471
+        def inner(a):
+            pass
+
+        @overload(inner)
+        def inner_overload(a):
+            if not isinstance(a, types.Literal):
+                return
+            return lambda a: a
+
+        @njit
+        def my_func(a='a'):
+            return inner(a)
+
+        @njit
+        def f():
+            return my_func()
+
+        @njit
+        def g():
+            return my_func('b')
+
+        self.assertEqual(f(), 'a')
+        self.assertEqual(g(), 'b')
+
+    def test_type_of_literal(self):
+        # type(val) where val is a literal should not give a literal type.
+        def inner(a):
+            pass
+
+        @overload(inner)
+        def inner_overload(a):
+            if not isinstance(a, types.Literal):
+                return
+            self.assertIsInstance(a, types.Literal)
+            # NOTE: using 1.23 to ensure that the result is indeed an int.
+            return lambda a: type(a)(a + 1.23)
+
+        @njit
+        def my_func(a=1):
+            return inner(a)
+
+        @njit
+        def f():
+            return my_func()
+
+        @njit
+        def g():
+            return my_func(100)
+
+        self.assertEqual(f(), 2)
+        self.assertEqual(g(), 101)
+
+
 if __name__ == '__main__':
     unittest.main()

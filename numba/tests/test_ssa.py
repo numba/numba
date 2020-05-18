@@ -149,6 +149,57 @@ class TestSSA(SSABaseTest):
 
         self.check_func(foo, np.array([1, 2]))
 
+    def test_unhandled_undefined(self):
+        def function1(arg1, arg2, arg3, arg4, arg5):
+            # This function is auto-generated.
+            if arg1:
+                var1 = arg2
+                var2 = arg3
+                var3 = var2
+                var4 = arg1
+                return
+            else:
+                if arg2:
+                    if arg4:
+                        var5 = arg4         # noqa: F841
+                        return
+                    else:
+                        var6 = var4
+                        return
+                    return var6
+                else:
+                    if arg5:
+                        if var1:
+                            if arg5:
+                                var1 = var6
+                                return
+                            else:
+                                var7 = arg2     # noqa: F841
+                                return arg2
+                            return
+                        else:
+                            if var2:
+                                arg5 = arg2
+                                return arg1
+                            else:
+                                var6 = var3
+                                return var4
+                            return
+                        return
+                    else:
+                        var8 = var1
+                        return
+                    return var8
+                var9 = var3         # noqa: F841
+                var10 = arg5        # noqa: F841
+                return var1
+
+        # The argument values is not critical for re-creating the bug
+        # because the bug is in compile-time.
+        expect = function1(2, 3, 6, 0, 7)
+        got = njit(function1)(2, 3, 6, 0, 7)
+        self.assertEqual(expect, got)
+
 
 class TestReportedSSAIssues(SSABaseTest):
     # Tests from issues
@@ -305,8 +356,8 @@ class TestReportedSSAIssues(SSABaseTest):
         # We have to create a custom pipeline to force a SSA reconstruction
         # and stripping.
         from numba.core.compiler import CompilerBase, DefaultPassBuilder
-        from numba.untyped_passes import ReconstructSSA, IRProcessing
-        from numba.typed_passes import PreLowerStripPhis
+        from numba.core.untyped_passes import ReconstructSSA, IRProcessing
+        from numba.core.typed_passes import PreLowerStripPhis
 
         class CustomPipeline(CompilerBase):
             def define_pipelines(self):
@@ -370,3 +421,26 @@ class TestReportedSSAIssues(SSABaseTest):
         res2 = jit(forceobj=True, looplift=False)(foo)(10, 10, data)
         np.testing.assert_array_equal(expect, res1)
         np.testing.assert_array_equal(expect, res2)
+
+    def test_issue5623_equal_statements_in_same_bb(self):
+
+        def foo(pred, stack):
+            i = 0
+            c = 1
+
+            if pred is True:
+                stack[i] = c
+                i += 1
+                stack[i] = c
+                i += 1
+
+        python = np.array([0, 666])
+        foo(True, python)
+
+        nb = np.array([0, 666])
+        njit(foo)(True, nb)
+
+        expect = np.array([1, 1])
+
+        np.testing.assert_array_equal(python, expect)
+        np.testing.assert_array_equal(nb, expect)

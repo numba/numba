@@ -377,7 +377,7 @@ class Interpreter(object):
 
                 err = errors.NotDefinedError(e.name, loc=loc)
                 if not config.FULL_TRACEBACKS:
-                    raise value from None
+                    raise err from None
                 else:
                     raise err
 

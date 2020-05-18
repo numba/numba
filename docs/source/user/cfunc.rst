@@ -126,14 +126,17 @@ With CFFI
 For applications that have a lot of state, it is useful to pass data in C
 structures.  To simplify the interoperability with C code, numba can convert
 a ``cffi`` type into a numba ``Record`` type using
-``numba.cffi_support.map_type``::
+``numba.core.typing.cffi_utils.map_type``::
 
-   from numba import cffi_support
+   from numba.core.typing import cffi_utils
 
-   nbtype = cffi_support.map_type(cffi_type, use_record_dtype=True)
+   nbtype = cffi_utils.map_type(cffi_type, use_record_dtype=True)
 
 .. note:: **use_record_dtype=True** is needed otherwise pointers to C
     structures are returned as void pointers.
+
+.. note:: From v0.49 the ``numba.cffi_support`` module has been phased out
+    in favour of ``numba.core.typing.cffi_utils``
 
 
 For example::
@@ -158,7 +161,7 @@ For example::
    ffi.cdef(src)
 
    # Get the function signature from *my_func*
-   sig = cffi_support.map_type(ffi.typeof('my_func'), use_record_dtype=True)
+   sig = cffi_utils.map_type(ffi.typeof('my_func'), use_record_dtype=True)
 
    # Make the cfunc
    from numba import cfunc, carray

@@ -4,6 +4,39 @@ Version 0.50.0
 In development
 
 
+Version 0.49.1 (May 7, 2020)
+----------------------------
+
+This is a bugfix release for 0.49.0, it fixes some residual issues with SSA
+form, a critical bug in the branch pruning logic and a number of other smaller
+issues:
+
+* PR #5587: Fixed #5586 Threading Implementation Typos
+* PR #5592: Fixes #5583 Remove references to cffi_support from docs and examples
+* PR #5614: Fix invalid type in resolve for comparison expr in parfors.
+* PR #5624: Fix erroneous rewrite of predicate to bit const on prune.
+* PR #5627: Fixes #5623, SSA local def scan based on invalid equality
+  assumption.
+* PR #5629: Fixes naming error in array_exprs
+* PR #5630: Fix #5570. Incorrect race variable detection due to SSA naming.
+* PR #5638: Make literal_unroll function work as a freevar.
+* PR #5648: Unset the memory manager after EMM Plugin tests
+* PR #5651: Fix some SSA issues
+* PR #5652: Pin to sphinx=2.4.4 to avoid problem with C declaration
+* PR #5658: Fix unifying undefined first class function types issue
+* PR #5669: Update example in 5m guide WRT SSA type stability.
+* PR #5676: Restore ``numba.types`` as public API
+
+Authors:
+
+* Graham Markall
+* Juan Manuel Cruz Martinez
+* Pearu Peterson
+* Sean Law
+* Stuart Archibald (core dev)
+* Siu Kwan Lam (core dev)
+
+
 Version 0.49.0 (Apr 16, 2020)
 -----------------------------
 
@@ -207,7 +240,8 @@ Fixes:
 * PR #5548: Fix #5537 Removed reference to ``platform.linux_distribution``
 * PR #5555: Fix #5515 by reverting changes to ArrayAnalysis
 * PR #5557: First-class function call cannot use keyword arguments
-* PR #5568: Add skip to entrypoint test on windows
+* PR #5569: Fix RewriteConstGetitems not registering calltype for new expr
+* PR #5571: Pin down llvmlite requirement
 
 CUDA Enhancements/Fixes:
 
