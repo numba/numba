@@ -574,13 +574,24 @@ function:
    :dedent: 4
    :linenos:
 
-Finally, here's an example of using a nested `List()`:
+Here's an example of using a nested ``List()``:
 
 .. literalinclude:: ../../../examples/typed_list_usage.py
    :language: python
    :caption: from ``ex_nested_list`` of ``examples/typed_list_usage.py``
    :start-after: magictoken.ex_nested_list.begin
    :end-before: magictoken.ex_nested_list.end
+   :dedent: 4
+   :linenos:
+
+If you don't want the list type to be inferred, you can use
+``List.empty_list()`` to create a list with explicit type. For example:
+
+.. literalinclude:: ../../../examples/typed_list_usage.py
+   :language: python
+   :caption: from ``ex_empty_list`` of ``examples/typed_list_usage.py``
+   :start-after: magictoken.ex_empty_list.begin
+   :end-before: magictoken.ex_empty_list.end
    :dedent: 4
    :linenos:
 
