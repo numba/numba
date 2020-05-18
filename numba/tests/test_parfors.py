@@ -2188,6 +2188,24 @@ class TestPrange(TestPrangeBase):
                            check_fastmath=True, check_fastmath_result=True)
 
     @skip_parfors_unsupported
+    def test_prange27(self):
+        # issue5597: usedef error in parfor
+        def test_impl(a, b, c):
+            for j in range(b[0]-1):
+                for k in range(2):
+                    z = np.abs(a[c-1:c+1])
+            return 0
+
+        # patch inner loop to 'prange'
+        self.prange_tester(test_impl,
+                           np.arange(20),
+                           np.asarray([4,4,4,4,4,4,4,4,4,4]),
+                           0,
+                           patch_instance=[1],
+                           scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_parfors_unsupported
     def test_prange_two_instances_same_reduction_var(self):
         # issue4922 - multiple uses of same reduction variable
         def test_impl(n):
@@ -2983,6 +3001,25 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.arange(4))
 
+    @skip_parfors_unsupported
+    def test_parfor_slice27(self):
+        # issue5601: tests array analysis of the slice with
+        # n_valid_vals of unknown size.
+        def test_impl(a):
+            n_valid_vals = 0
+
+            for i in prange(a.shape[0]):
+                if a[i] != 0:
+                    n_valid_vals += 1
+
+                if n_valid_vals:
+                    unused = a[:n_valid_vals]
+
+            return 0
+
+        self.check(test_impl, np.arange(3))
+
+
 class TestParforsOptions(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
@@ -3427,6 +3464,26 @@ class TestParforsMisc(TestParforsBase):
         arr = np.zeros(size, dtype=int)
 
         self.check(parallel_test, size, arr)
+
+    @skip_parfors_unsupported
+    def test_issue5570_ssa_races(self):
+        @njit(parallel=True)
+        def foo(src, method, out):
+            for i in prange(1):
+                for j in range(1):
+                    out[i, j] = 1
+            if method:
+                out += 1
+            return out
+
+        src = np.zeros((5,5))
+        method = 57
+        out = np.zeros((2, 2))
+
+        self.assertPreciseEqual(
+            foo(src, method, out),
+            foo.py_func(src, method, out)
+        )
 
 
 @skip_parfors_unsupported
