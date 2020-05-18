@@ -2,7 +2,7 @@ from math import sqrt
 from numba import cuda, float32, void
 from numba.cuda import compile_ptx, compile_ptx_for_current_device
 
-from numba.cuda.testing import skip_on_cudasim, unittest
+from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 
 
 @skip_on_cudasim('Compilation unsupported in the simulator')
@@ -63,6 +63,8 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertIn('div.full.ftz.f32', ptx)
         self.assertIn('sqrt.approx.ftz.f32', ptx)
 
+
+class TestCompileToPTXForCurrentDevice(CUDATestCase):
     def test_compile_ptx_for_current_device(self):
         def add(x, y):
             return x + y
