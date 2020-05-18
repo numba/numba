@@ -8,8 +8,8 @@ import numpy as np
 
 from numba import cuda
 from numba.cuda.cudadrv import drvapi, devicearray
-from numba.cuda.testing import (skip_on_cudasim, ContextResettingTestCase,
-                                ForeignArray)
+from numba.cuda.testing import (skip_on_cudasim, skip_under_cuda_memcheck,
+                                ContextResettingTestCase, ForeignArray)
 from numba.tests.support import linux_only
 import unittest
 
@@ -82,6 +82,7 @@ def ipc_array_test(ipcarr, result_queue):
 
 
 @linux_only
+@skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcMemory(ContextResettingTestCase):
@@ -244,6 +245,7 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
 
 
 @linux_only
+@skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcStaged(ContextResettingTestCase):
