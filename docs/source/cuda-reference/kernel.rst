@@ -4,17 +4,18 @@ CUDA Kernel API
 Kernel declaration
 ------------------
 
-The ``@cuda.jit`` decorator is used to create a CUDA kernel:
+The ``@cuda.jit`` decorator is used to create a CUDA dispatcher object that can
+be specialized into kernels:
 
 .. autofunction:: numba.cuda.jit
 
-.. autoclass:: numba.cuda.compiler.AutoJitCUDAKernel
+.. autoclass:: numba.cuda.compiler.Dispatcher
    :members: inspect_asm, inspect_llvm, inspect_types, specialize, extensions
 
 Individual specialized kernels are instances of
-:class:`numba.cuda.compiler.CUDAKernel`:
+:class:`numba.cuda.compiler.Kernel`:
 
-.. autoclass:: numba.cuda.compiler.CUDAKernel
+.. autoclass:: numba.cuda.compiler.Kernel
    :members: bind, ptx, device, inspect_llvm, inspect_asm, inspect_types
 
 Intrinsic Attributes and Functions
