@@ -18,58 +18,60 @@ from numba.core.extending import (
 from numba.typed import dictobject
 from numba.core.typing import signature
 
+njitcached = njit(cache=True)
 
-@njit
+
+@njitcached
 def _make_dict(keyty, valty):
     return dictobject._as_meminfo(dictobject.new_dict(keyty, valty))
 
 
-@njit
+@njitcached
 def _length(d):
     return len(d)
 
 
-@njit
+@njitcached
 def _setitem(d, key, value):
     d[key] = value
 
 
-@njit
+@njitcached
 def _getitem(d, key):
     return d[key]
 
 
-@njit
+@njitcached
 def _delitem(d, key):
     del d[key]
 
 
-@njit
+@njitcached
 def _contains(d, key):
     return key in d
 
 
-@njit
+@njitcached
 def _get(d, key, default):
     return d.get(key, default)
 
 
-@njit
+@njitcached
 def _setdefault(d, key, default):
     return d.setdefault(key, default)
 
 
-@njit
+@njitcached
 def _iter(d):
     return list(d.keys())
 
 
-@njit
+@njitcached
 def _popitem(d):
     return d.popitem()
 
 
-@njit
+@njitcached
 def _copy(d):
     return d.copy()
 
