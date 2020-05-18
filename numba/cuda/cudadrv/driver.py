@@ -1141,7 +1141,8 @@ class Context(object):
         del self.modules[module.handle.value]
 
     def get_default_stream(self):
-        return Stream(weakref.proxy(self), drvapi.cu_stream(0), None)
+        handle = drvapi.cu_stream(drvapi.CU_STREAM_DEFAULT)
+        return Stream(weakref.proxy(self), handle, None)
 
     def get_legacy_default_stream(self):
         handle = drvapi.cu_stream(drvapi.CU_STREAM_LEGACY)
@@ -1748,15 +1749,15 @@ class Stream(object):
 
     def __int__(self):
         # The default stream's handle.value is 0, which gives `None`
-        return self.handle.value or 0
+        return self.handle.value or drvapi.CU_STREAM_DEFAULT
 
     def __repr__(self):
         default_streams = {
-            0: "<Default CUDA stream on %s>",
-            1: "<Legacy default CUDA stream on %s>",
-            2: "<Per-thread default CUDA stream on %s>",
+            drvapi.CU_STREAM_DEFAULT: "<Default CUDA stream on %s>",
+            drvapi.CU_STREAM_LEGACY: "<Legacy default CUDA stream on %s>",
+            drvapi.CU_STREAM_PER_THREAD: "<Per-thread default CUDA stream on %s>",
         }
-        ptr = self.handle.value or 0
+        ptr = self.handle.value or drvapi.CU_STREAM_DEFAULT
         if ptr in default_streams:
             return default_streams[ptr] % self.context
         elif self.external:

@@ -20,6 +20,7 @@ cu_ipc_mem_handle = (c_byte * _extras.CUDA_IPC_HANDLE_SIZE)   # 64 bytes wide
 cu_occupancy_b2d_size = CFUNCTYPE(c_size_t, c_int)
 
 # See https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TYPES.html
+CU_STREAM_DEFAULT = 0
 CU_STREAM_LEGACY = 1
 CU_STREAM_PER_THREAD = 2
 
