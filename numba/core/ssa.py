@@ -46,7 +46,9 @@ def _run_ssa(blocks):
     if not blocks:
         # Empty blocks?
         return {}
-
+    # Run CFG on the blocks
+    cfg = compute_cfg_from_blocks(blocks)
+    df_plus = _iterated_domfronts(cfg)
     # Find SSA violators
     violators = _find_defs_violators(blocks)
     # Process one SSA-violating variable at a time
@@ -60,11 +62,17 @@ def _run_ssa(blocks):
         _logger.debug("Replaced assignments: %s", pformat(defmap))
         # Fix up the RHS
         # Re-associate the variable uses with the reaching definition
-        blocks = _fix_ssa_vars(blocks, varname, defmap)
+        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus)
+
+    # Post-condition checks.
+    # CFG invariant
+    cfg_post = compute_cfg_from_blocks(blocks)
+    if cfg_post != cfg:
+        raise errors.CompilerError("CFG mutated in SSA pass")
     return blocks
 
 
-def _fix_ssa_vars(blocks, varname, defmap):
+def _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus):
     """Rewrite all uses to ``varname`` given the definition map
     """
     states = _make_states(blocks)

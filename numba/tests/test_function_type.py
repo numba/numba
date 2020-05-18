@@ -1098,3 +1098,28 @@ class TestMiscIssues(TestCase):
         tup = ((foo1, foo2), (foo2, foo1))
 
         self.assertEqual(bar(tup), 39)
+
+    def test_issue_5685(self):
+
+        @njit
+        def foo1():
+            return 1
+
+        @njit
+        def foo2(x):
+            return x + 1
+
+        @njit
+        def foo3(x):
+            return x + 2
+
+        @njit
+        def bar(fcs):
+            r = 0
+            for pair in literal_unroll(fcs):
+                f1, f2 = pair
+                r += f1() + f2(2)
+            return r
+
+        self.assertEqual(bar(((foo1, foo2),)), 4)
+        self.assertEqual(bar(((foo1, foo2), (foo1, foo3))), 9)  # reproducer
