@@ -43,6 +43,18 @@ class Cuda_gridsize(GridFunction):
 class Cuda_array_decl(CallableTemplate):
     def generic(self):
         def typer(shape, dtype):
+
+            # Only integer literals and tuples of integer literals are valid
+            # shapes
+            if isinstance(shape, types.Integer):
+                if not isinstance(shape, types.IntegerLiteral):
+                    return None
+            elif isinstance(shape, (types.Tuple, types.UniTuple)):
+                if any([not isinstance(s, types.IntegerLiteral) for s in shape]):
+                    return None
+            else:
+                return None
+
             ndim = parse_shape(shape)
             nb_dtype = parse_dtype(dtype)
             if nb_dtype is not None and ndim is not None:
