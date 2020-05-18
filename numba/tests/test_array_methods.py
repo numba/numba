@@ -750,11 +750,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         all_pyfuncs = (
             np_arange_1,
             lambda x: np.arange(x, 10),
-            lambda x: np.arange(7, step=abs(x))
+            lambda x: np.arange(7, step=max(1, abs(x)))
         )
 
         for pyfunc in all_pyfuncs:
-            pyfunc = np_arange_1
             cfunc = jit(nopython=True)(pyfunc)
 
             def check_ok(arg0):
