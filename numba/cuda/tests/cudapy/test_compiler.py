@@ -64,6 +64,7 @@ class TestCompileToPTX(unittest.TestCase):
         self.assertIn('sqrt.approx.ftz.f32', ptx)
 
 
+@skip_on_cudasim('Compilation unsupported in the simulator')
 class TestCompileToPTXForCurrentDevice(CUDATestCase):
     def test_compile_ptx_for_current_device(self):
         def add(x, y):
