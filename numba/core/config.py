@@ -216,7 +216,11 @@ class _EnvReloader(object):
 
         # Force dump of Numba IR
         DUMP_IR = _readenv("NUMBA_DUMP_IR", int,
-                           DEBUG_FRONTEND or DEBUG_TYPEINFER)
+                           DEBUG_FRONTEND)
+
+        # Force dump of Numba IR in SSA form
+        DUMP_SSA = _readenv("NUMBA_DUMP_SSA", int,
+                            DEBUG_FRONTEND or DEBUG_TYPEINFER)
 
         # print debug info of analysis and optimization on array operations
         DEBUG_ARRAY_OPT = _readenv("NUMBA_DEBUG_ARRAY_OPT", int, 0)
