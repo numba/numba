@@ -120,7 +120,7 @@ class BaseTuple(ConstSized, Hashable):
     """
 
     @classmethod
-    def from_types(cls, tys, pyclass=None):
+    def from_types(cls, tys, pyclass=None, typeofctx=None):
         """
         Instantiate the right tuple type for the given element types.
         """
@@ -135,7 +135,7 @@ class BaseTuple(ConstSized, Hashable):
                 else:
                     return NamedTuple(tys, pyclass)
         else:
-            dtype = utils.unified_function_type(tys)
+            dtype = utils.unified_function_type(tys, typeofctx=typeofctx)
             if dtype is not None:
                 return UniTuple(dtype, len(tys))
             # non-named tuple

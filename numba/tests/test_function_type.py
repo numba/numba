@@ -490,7 +490,7 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), mk_wap_func(sig),
-                      mk_njit_with_sig_func(sig)]:
+                      mk_njit_with_sig_func(sig), njit_func]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):
@@ -521,7 +521,7 @@ class TestFunctionType(TestCase):
         sig = int64(int64)
 
         for decor in [mk_cfunc_func(sig), mk_wap_func(sig),
-                      mk_njit_with_sig_func(sig)]:
+                      mk_njit_with_sig_func(sig), njit_func]:
             for jit_opts in [dict(nopython=True), dict(forceobj=True)]:
                 jit_ = jit(**jit_opts)
                 with self.subTest(decor=decor.__name__):

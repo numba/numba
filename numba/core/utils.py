@@ -473,7 +473,8 @@ def unify_function_types(numba_types):
     return (dtype,) * len(numba_types)
 
 
-def unified_function_type(numba_types, require_precise=True):
+def unified_function_type(numba_types, require_precise=True,
+                          typeofctx=None):
     """Returns a unified Numba function type if possible.
 
     Parameters
@@ -544,6 +545,10 @@ def unified_function_type(numba_types, require_precise=True):
                     assert function == t
         else:
             return
+    if typeofctx is not None:
+        from .typing.typeof import Purpose
+        if typeofctx.purpose == Purpose.argument:
+            require_precise = False
     if require_precise and (function is None or undefined_function is not None):
         return
     if function is not None:
