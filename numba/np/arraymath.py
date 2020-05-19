@@ -3980,6 +3980,9 @@ def np_select(condlist, choicelist, default=0):
 def np_union1d(arr1, arr2):
     if not type_can_asarray(arr1) or not type_can_asarray(arr2):
         raise TypingError("The arguments to np.union1d must be array-like")
+    if (('unichr' in arr1.dtype.name or 'unichr' in arr2.dtype.name) and
+       arr1.dtype.name != arr2.dtype.name):
+        raise TypingError("For Unicode arrays, arrays must have same dtype")
 
     def union_impl(arr1, arr2):
         a = np.ravel(np.asarray(arr1))
