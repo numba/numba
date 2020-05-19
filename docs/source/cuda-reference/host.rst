@@ -109,10 +109,14 @@ invoking any of the driver API. This can be useful for:
 .. autofunction:: numba.cuda.compile_ptx
 
 
-If PTX for the compute capability of the current device is required, the
-``compile_ptx_for_current_device`` function can be used:
+The configuration variable ``CUDA_DEFAULT_PTX_CC`` can be set to control the
+default compute capability targeted by ``compile_ptx`` - see
+:ref:`numba-envvars-gpu-support`. If PTX for the compute capability of the
+current device is required, the ``compile_ptx_for_current_device`` function can
+be used:
 
 .. autofunction:: numba.cuda.compile_ptx_for_current_device
+
 
 
 Measurement

@@ -71,15 +71,9 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
     return cukern
 
 
-# The default compute capability to target when compiling to PTX. This is
-# chosen as the lowest non-deprecated compute capability in the most recent
-# version of the CUDA toolkit supported (10.2 at present).
-DEFAULT_PTX_CC = (5, 2)
-
-
 @global_compiler_lock
 def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
-                cc=DEFAULT_PTX_CC, opt=True):
+                cc=None, opt=True):
     """Compile a Python function to PTX for a given set of argument types.
 
     :param pyfunc: The Python function to compile.
@@ -117,7 +111,8 @@ def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
         'fastmath': fastmath,
     }
 
-    opt = opt and 3 or 0
+    cc = cc or config.CUDA_DEFAULT_PTX_CC
+    opt = 3 if opt else 0
     arch = nvvm.get_arch_option(*cc)
     llvmir = str(llvm_module)
     ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **options)

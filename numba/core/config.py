@@ -35,7 +35,7 @@ def _parse_cc(text):
     else:
         m = re.match(r'(\d+)\.(\d+)', text)
         if not m:
-            raise ValueError("NUMBA_FORCE_CUDA_CC must be specified as a "
+            raise ValueError("Compute capability must be specified as a "
                              "string of \"major.minor\" where major "
                              "and minor are decimals")
         grp = m.groups()
@@ -302,6 +302,10 @@ class _EnvReloader(object):
 
         # Force CUDA compute capability to a specific version
         FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _parse_cc, None)
+
+        # The default compute capability to target when compiling to PTX.
+        CUDA_DEFAULT_PTX_CC = _readenv("NUMBA_CUDA_DEFAULT_PTX_CC", _parse_cc,
+                                       (5, 2))
 
         # Disable CUDA support
         DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA",
