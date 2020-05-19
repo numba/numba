@@ -365,6 +365,8 @@ class BoundFunction(Callable, Opaque):
         try:
             out = template.apply(args, kws)
         except Exception as exc:
+            if isinstance(exc, errors.ForceLiteralArg):
+                raise exc
             literal_e = exc
             out = None
 
@@ -381,6 +383,8 @@ class BoundFunction(Callable, Opaque):
             try:
                 out = template.apply(unliteral_args, unliteral_kws)
             except Exception as exc:
+                if isinstance(exc, errors.ForceLiteralArg):
+                    raise exc
                 nonliteral_e = exc
 
         if out is None and (nonliteral_e is not None or literal_e is not None):
