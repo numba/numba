@@ -3689,25 +3689,25 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array(['hello', 'world']), np.array(['a', 'b']))
         self.assertIn(
-            "For Unicode arrays, both arrays must have the same dtype",
+            "For Unicode arrays, arrays must have same dtype",
             str(raises.exception)
         )
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array(['c', 'd']), np.array(['foo', 'bar']))
         self.assertIn(
-            "For Unicode arrays, both arrays must have the same dtype",
+            "For Unicode arrays, arrays must have same dtype",
             str(raises.exception)
         )
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array(['c', 'd']), np.array([1, 2]))
         self.assertIn(
-            "For Unicode arrays, both arrays must have the same dtype",
+            "For Unicode arrays, arrays must have same dtype",
             str(raises.exception)
         )
         with self.assertRaises(TypingError) as raises:
             cfunc(np.array(['c', 'd']), np.array([1.1, 2.5]))
         self.assertIn(
-            "For Unicode arrays, both arrays must have the same dtype",
+            "For Unicode arrays, arrays must have same dtype",
             str(raises.exception)
         )
 
