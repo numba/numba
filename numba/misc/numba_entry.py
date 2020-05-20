@@ -50,6 +50,7 @@ def main():
     if args.sys_json:
         info = get_sysinfo()
         info.update({'Start': info['Start'].isoformat()})
+        info.update({'Start UTC': info['Start UTC'].isoformat()})
         with open(args.sys_json[0], 'w') as f:
             json.dump(info, f, indent=4)
         sys.exit(0)

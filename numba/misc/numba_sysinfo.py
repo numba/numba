@@ -31,7 +31,7 @@ __all__ = ['get_sysinfo', 'display_sysinfo']
 # Keys of a `sysinfo` dictionary
 
 # Time info
-_start, _runtime = 'Start', 'Runtime'
+_start, _start_utc, _runtime = 'Start', 'Start UTC', 'Runtime'
 # Hardware info
 _machine = 'Machine'
 _cpu_name, _cpu_count = 'CPU Name', 'CPU Count'
@@ -276,6 +276,7 @@ def get_sysinfo():
     # Gather the information that shouldn't raise exceptions
     sys_info = {
         _start: datetime.now(),
+        _start_utc: datetime.utcnow(),
         _machine: platform.machine(),
         _cpu_name: llvmbind.get_host_cpu_name(),
         _cpu_count: multiprocessing.cpu_count(),
@@ -300,7 +301,7 @@ def get_sysinfo():
         _error_log.append(f'Error (CPU features): {e}')
     else:
         features = sorted([key for key, value in feature_map.items() if value])
-        sys_info[_cpu_features] = textwrap.fill(' '.join(features), 80)
+        sys_info[_cpu_features] = ' '.join(features)
 
     # Python locale
     # On MacOSX, getdefaultlocale can raise. Check again if Py > 3.7.5
@@ -517,7 +518,7 @@ def get_sysinfo():
     return sys_info
 
 
-def display_sysinfo(info=None):
+def display_sysinfo(info=None, sep_pos=45):
     class DisplayMap(dict):
         display_map_flag = True
 
@@ -530,12 +531,13 @@ def display_sysinfo(info=None):
     if info is None:
         info = get_sysinfo()
 
-    fmt = "%-45s : %-s"
+    fmt = f'%-{sep_pos}s : %-s'
     MB = 1024**2
     template = (
         ("-" * 80,),
         ("__Time Stamp__",),
         ("Report started (local time)", info.get(_start, '?')),
+        ("UTC start time", info.get(_start_utc, '?')),
         ("Running time (s)", info.get(_runtime, '?')),
         ("",),
         ("__Hardware Information__",),
@@ -547,8 +549,15 @@ def display_sysinfo(info=None):
         ("CFS Restrictions (CPUs worth of runtime)",
             info.get(_cfs_restrict, 'None')),
         ("",),
-        ("CPU Features:",),
-        (info.get(_cpu_features, '?'),),
+        ("CPU Features", '\n'.join(
+            ' ' * (sep_pos + 3) + l if i else l
+            for i, l in enumerate(
+                textwrap.wrap(
+                    info.get(_cpu_features, '?'),
+                    width=79 - sep_pos
+                )
+            )
+        )),
         ("",),
         ("Memory Total (MB)", info.get(_mem_total, 0) // MB or '?'),
         ("Memory Available (MB)"
