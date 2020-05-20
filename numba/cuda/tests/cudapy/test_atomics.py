@@ -391,23 +391,47 @@ class TestCudaAtomics(CUDATestCase):
         gold = np.max(vals)
         np.testing.assert_equal(res, gold)
 
-    def test_atomic_max_nan_location(self):
+    # Taken together, _test_atomic_minmax_nan_location and
+    # _test_atomic_minmax_nan_val check that NaNs are treated similarly to the
+    # way they are in Python / NumPy - that is, {min,max}(a, b) == a if either
+    # a or b is a NaN. For the atomics, this means that the max is taken as the
+    # value stored in the memory location rather than the value supplied - i.e.
+    # for:
+    #
+    #    cuda.atomic.{min,max}(ary, idx, val)
+    #
+    # the result will be ary[idx] for either of ary[idx] or val being NaN.
+
+    def _test_atomic_minmax_nan_location(self, func):
+
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(func)
+
         vals = np.random.randint(0, 128, size=(1,1)).astype(np.float64)
-        gold = vals.copy().reshape(1)
         res = np.zeros(1, np.float64) + np.nan
-        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max)
         cuda_func[1, 1](res, vals)
+        np.testing.assert_equal(res, [np.nan])
 
-        np.testing.assert_equal(res, gold)
+    def _test_atomic_minmax_nan_val(self, func):
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(func)
 
-    def test_atomic_max_nan_val(self):
         res = np.random.randint(0, 128, size=1).astype(np.float64)
         gold = res.copy()
         vals = np.zeros((1, 1), np.float64) + np.nan
-        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max)
         cuda_func[1, 1](res, vals)
 
         np.testing.assert_equal(res, gold)
+
+    def test_atomic_min_nan_location(self):
+        self._test_atomic_minmax_nan_location(atomic_min)
+
+    def test_atomic_max_nan_location(self):
+        self._test_atomic_minmax_nan_location(atomic_max)
+
+    def test_atomic_min_nan_val(self):
+        self._test_atomic_minmax_nan_val(atomic_min)
+
+    def test_atomic_max_nan_val(self):
+        self._test_atomic_minmax_nan_val(atomic_max)
 
     def test_atomic_max_double_shared(self):
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
@@ -442,6 +466,69 @@ class TestCudaAtomics(CUDATestCase):
 
         np.testing.assert_array_equal(expect_res, res)
         np.testing.assert_array_equal(expect_out, out)
+
+    # Tests that the atomic add, min, and max operations return the old value -
+    # in the simulator, they did not (see Issue #5458). The max and min have
+    # special handling for NaN values, so we explicitly test with a NaN in the
+    # array being modified and the value provided.
+
+    def _test_atomic_returns_old(self, kernel, initial):
+        x = np.zeros(2, dtype=np.float32)
+        x[0] = initial
+        kernel[1, 1](x)
+        if np.isnan(initial):
+            self.assertTrue(np.isnan(x[1]))
+        else:
+            self.assertEqual(x[1], initial)
+
+    def test_atomic_add_returns_old(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.add(x, 0, 1)
+
+        self._test_atomic_returns_old(kernel, 10)
+
+    def test_atomic_max_returns_old(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.max(x, 0, 1)
+
+        self._test_atomic_returns_old(kernel, 10)
+
+    def test_atomic_max_returns_old_nan_in_array(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.max(x, 0, 1)
+
+        self._test_atomic_returns_old(kernel, np.nan)
+
+    def test_atomic_max_returns_old_nan_val(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.max(x, 0, np.nan)
+
+        self._test_atomic_returns_old(kernel, 10)
+
+    def test_atomic_min_returns_old(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.min(x, 0, 11)
+
+        self._test_atomic_returns_old(kernel, 10)
+
+    def test_atomic_min_returns_old_nan_in_array(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.min(x, 0, 11)
+
+        self._test_atomic_returns_old(kernel, np.nan)
+
+    def test_atomic_min_returns_old_nan_val(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.min(x, 0, 11)
+
+        self._test_atomic_returns_old(kernel, np.nan)
 
 
 if __name__ == '__main__':

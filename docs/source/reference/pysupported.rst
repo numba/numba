@@ -36,7 +36,7 @@ Below is a quick reference for the support level of Python constructs.
 
 **Partially supported** constructs:
 
-- exceptions: ``try .. except``, ``raise``
+- exceptions: ``try .. except``, ``raise``, ``else`` and ``finally``
   (See details in this :ref:`section <pysupported-exception-handling>`)
 
 - context manager:
@@ -190,11 +190,32 @@ use-case would look like:
      handle_error_case()
      return error_code
 
-The ``finally`` block and the ``else`` block of a ``try .. except`` are
-supported.
+``try .. except .. else .. finally``
+''''''''''''''''''''''''''''''''''''
 
-The ``try .. finally`` construct without the ``except`` is currently
-**unsupported**.
+The ``else`` block and the ``finally`` block of a ``try .. except`` are
+supported:
+
+  .. code-block:: python
+
+    >>> @jit(nopython=True)
+    ... def foo():
+    ...     try:
+    ...         print('main block')
+    ...     except Exception:
+    ...         print('handler block')
+    ...     else:
+    ...         print('else block')
+    ...     finally:
+    ...         print('final block')
+    ...
+    >>> foo()
+    main block
+    else block
+    final block
+
+The ``try .. finally`` construct without the ``except`` clause is also
+supported.
 
 .. _pysupported-builtin-types:
 
@@ -533,34 +554,34 @@ explicitly from the `numba.typed` module::
 Here's an example using ``List()`` to create ``numba.typed.List`` inside a
 jit-compiled function and letting the compiler infer the item type:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_inferred_list_jit`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_inferred_list_jit`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_inferred_list_jit.begin
    :end-before: magictoken.ex_inferred_list_jit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of using ``List()`` to create a ``numba.typed.List`` outside of
 a jit-compiled function and then using it as an argument to a jit-compiled
 function:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_inferred_list`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_inferred_list`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_inferred_list.begin
    :end-before: magictoken.ex_inferred_list.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Finally, here's an example of using a nested `List()`:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_nested_list`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_nested_list`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_nested_list.begin
    :end-before: magictoken.ex_nested_list.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 .. _pysupported-comprehension:
@@ -672,34 +693,34 @@ limitations will be relaxed as Numba continues to improve.
 Here's an example of using ``dict()`` and ``{}`` to create ``numba.typed.Dict``
 instances and letting the compiler infer the key-value types:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_inferred_dict_njit`` of ``examples/dict_usage.py``
+   :caption: from ``ex_inferred_dict_njit`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_inferred_dict_njit.begin
    :end-before: magictoken.ex_inferred_dict_njit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from interpreted
 code and using the dictionary in jit code:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_typed_dict_from_cpython`` of ``examples/dict_usage.py``
+   :caption: from ``ex_typed_dict_from_cpython`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_typed_dict_from_cpython.begin
    :end-before: magictoken.ex_typed_dict_from_cpython.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from jit code and
 using the dictionary in interpreted code:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_typed_dict_njit`` of ``examples/dict_usage.py``
+   :caption: from ``ex_typed_dict_njit`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_typed_dict_njit.begin
    :end-before: magictoken.ex_typed_dict_njit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 It should be noted that ``numba.typed.Dict`` is not thread-safe.
@@ -1057,12 +1078,12 @@ type may be registered with Numba. This may include struct types, though it is
 only permitted to call functions that accept pointers to structs - passing a
 struct by value is unsupported. For registering a mapping, use:
 
-.. function:: numba.cffi_support.register_type(cffi_type, numba_type)
+.. function:: numba.core.typing.cffi_utils.register_type(cffi_type, numba_type)
 
 Out-of-line cffi modules must be registered with Numba prior to the use of any
 of their functions from within Numba-compiled functions:
 
-.. function:: numba.cffi_support.register_module(mod)
+.. function:: numba.core.typing.cffi_utils.register_module(mod)
 
    Register the cffi out-of-line module ``mod`` with Numba.
 

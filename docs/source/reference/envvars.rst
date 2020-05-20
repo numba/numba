@@ -158,6 +158,12 @@ These variables influence what is printed out during compilation of
    If set to non-zero, print out the Numba Intermediate Representation
    of compiled functions.
 
+
+.. envvar:: NUMBA_DUMP_SSA
+
+   If set to non-zero, print out the Numba Intermediate Representation of
+   compiled functions after conversion to Static Single Assignment (SSA) form.
+
 .. envvar:: NUMBA_DEBUG_PRINT_AFTER
 
    Dump the Numba IR after declared pass(es). This is useful for debugging IR

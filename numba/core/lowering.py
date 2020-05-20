@@ -550,10 +550,12 @@ class Lower(BaseLower):
             argty = self.typeof("arg." + value.name)
             if isinstance(argty, types.Omitted):
                 pyval = argty.value
+                tyctx = self.context.typing_context
+                valty = tyctx.resolve_value_type_prefer_literal(pyval)
                 # use the type of the constant value
-                valty = self.context.typing_context.resolve_value_type(pyval)
-                const = self.context.get_constant_generic(self.builder, valty,
-                                                          pyval)
+                const = self.context.get_constant_generic(
+                    self.builder, valty, pyval,
+                )
                 # cast it to the variable type
                 res = self.context.cast(self.builder, const, valty, ty)
             else:
@@ -1250,6 +1252,9 @@ class Lower(BaseLower):
 
         elif expr.op == "phi":
             raise LoweringError("PHI not stripped")
+
+        elif expr.op == 'null':
+            return self.context.get_constant_null(resty)
 
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)

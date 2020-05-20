@@ -2,7 +2,9 @@ from collections import OrderedDict
 import ctypes
 import random
 import pickle
+import warnings
 
+import numba
 import numpy as np
 
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
@@ -43,20 +45,28 @@ def _get_meminfo(box):
 
 class TestJitClass(TestCase, MemoryLeakMixin):
 
-    def _check_spec(self, spec):
-        @jitclass(spec)
-        class Test(object):
+    def _check_spec(self, spec, test_cls=None):
+        if test_cls is None:
+            @jitclass(spec)
+            class Test(object):
 
-            def __init__(self):
-                pass
+                def __init__(self):
+                    pass
+            test_cls = Test
 
-        clsty = Test.class_type.instance_type
+        clsty = test_cls.class_type.instance_type
         names = list(clsty.struct.keys())
         values = list(clsty.struct.values())
-        self.assertEqual(names[0], 'x')
-        self.assertEqual(names[1], 'y')
-        self.assertEqual(values[0], int32)
-        self.assertEqual(values[1], float32)
+
+        if isinstance(spec, OrderedDict):
+            all_expected = spec.items()
+        else:
+            all_expected = spec
+
+        self.assertEqual(len(names), len(spec))
+        for got, expected in zip(zip(names, values), all_expected):
+            self.assertEqual(got[0], expected[0])
+            self.assertEqual(got[1], expected[1])
 
     def test_ordereddict_spec(self):
         spec = OrderedDict()
@@ -68,6 +78,18 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [('x', int32),
                 ('y', float32)]
         self._check_spec(spec)
+
+    def test_type_annotations(self):
+        spec = [('x', int32)]
+
+        @jitclass(spec)
+        class Test(object):
+            y: int
+
+            def __init__(self):
+                pass
+
+        self._check_spec(spec, Test)
 
     def test_spec_errors(self):
         spec1 = [('x', int), ('y', float32[:])]
@@ -86,6 +108,19 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             jitclass(spec2)(Test)
         self.assertEqual(str(raises.exception),
                          "spec keys should be strings, got 1")
+
+    def test_init_errors(self):
+
+        @jitclass([])
+        class Test:
+            def __init__(self):
+                return 7
+
+        with self.assertRaises(errors.TypingError) as raises:
+            Test()
+
+        self.assertIn("__init__() should return None, not",
+                      str(raises.exception))
 
     def _make_Float2AndArray(self):
         spec = OrderedDict()
@@ -906,6 +941,20 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertIsInstance(ty, types.ClassInstanceType)
         pickled = pickle.dumps(ty)
         self.assertIs(pickle.loads(pickled), ty)
+
+    def test_import_warnings(self):
+        class Test:
+            def __init__(self):
+                pass
+
+        with warnings.catch_warnings(record=True) as ws:
+            numba.experimental.jitclass([])(Test)
+            self.assertEqual(len(ws), 0)
+
+            numba.jitclass([])(Test)
+            self.assertEqual(len(ws), 1)
+            self.assertIs(ws[0].category, errors.NumbaDeprecationWarning)
+            self.assertIn("numba.experimental.jitclass", ws[0].message.msg)
 
 
 if __name__ == '__main__':
