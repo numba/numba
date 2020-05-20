@@ -3158,6 +3158,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([2, 3], dtype=np.float32), np.float32
             yield np.array([2, 3], dtype=np.int8), np.int8
             yield np.array([2, 3], dtype=np.int8), np.complex64
+            yield np.array([2, 3], dtype=np.int8), np.complex128
 
         pyfunc = asfarray
         cfunc = jit(nopython=True)(pyfunc)
