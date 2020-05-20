@@ -1151,7 +1151,8 @@ class TestUndefinedFunction(TestCase):
         def foo2(x):
             return x + 2
 
-        self.assertTrue(typeof((foo1, foo2)) == typeof((foo2, foo1)))
+        self.assertTrue(types.UndefinedFunctionType(1, (foo1, foo2)) ==
+                        types.UndefinedFunctionType(1, (foo2, foo1)))
 
     def test_types_differ(self):
         """
