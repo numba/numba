@@ -5,7 +5,7 @@ from numba import literal_unroll
 from numba.core.config import IS_32BITS, IS_WIN32
 import ctypes
 import warnings
-
+from numba.core.utils import unified_function_type
 from .support import TestCase
 
 
@@ -1137,6 +1137,9 @@ class TestUndefinedFunction(TestCase):
             return x + 1
 
         self.assertTrue(typeof((foo,)) == typeof((foo,)))
+        footy = foo._numba_type_
+        self.assertTrue(unified_function_type((footy, footy), False) ==
+                        unified_function_type((footy, footy), False))
 
     def test_type_consistency_set(self):
         """
@@ -1151,8 +1154,12 @@ class TestUndefinedFunction(TestCase):
         def foo2(x):
             return x + 2
 
+        foo1ty = foo1._numba_type_
+        foo2ty = foo2._numba_type_
         self.assertTrue(types.UndefinedFunctionType(1, (foo1, foo2)) ==
                         types.UndefinedFunctionType(1, (foo2, foo1)))
+        self.assertTrue(unified_function_type((foo1ty, foo2ty), False) ==
+                        unified_function_type((foo2ty, foo1ty), False))
 
     def test_types_differ(self):
         """
