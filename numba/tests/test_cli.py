@@ -65,6 +65,7 @@ class TestCLi(TestCase):
                 ),
                 str: (
                     nsi._start,
+                    nsi._start_utc,
                     nsi._machine,
                     nsi._cpu_name,
                     nsi._platform_name,

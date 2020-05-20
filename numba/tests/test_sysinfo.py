@@ -54,6 +54,7 @@ class TestSysInfo(TestCase):
             ),
             datetime: (
                 nsi._start,
+                nsi._start_utc,
             ),
         }
         self.safe_keys = chain(*self.safe_contents.values())
