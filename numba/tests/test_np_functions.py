@@ -3683,6 +3683,13 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
+        with self.assertRaises(TypingError) as raises:
+            cfunc(np.array([0, 1, 2]), 1)
+        self.assertIn(
+            'The second argument must be a string',
+            str(raises.exception)
+        )
+
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr

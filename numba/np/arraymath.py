@@ -4259,6 +4259,8 @@ def np_trim_zeros(a, trim='fb'):
         raise TypeError('The first argument must be an array-like')
     if hasattr(a, 'ndim') and a.ndim > 1:
         raise TypingError('array must be 1D')
+    if not isinstance(trim, (str, types.UnicodeType, types.StringLiteral)):
+        raise TypeError('The second argument must be a string')
 
     def impl(a, trim='fb'):
         a_ = np.asarray(a)
