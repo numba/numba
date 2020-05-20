@@ -1042,7 +1042,8 @@ def fflush(builder):
     fflush_fn = builder.module.get_or_insert_function(
         fflush_fnty, name='fflush')
 
-    builder.call(fflush_fn, [int8_t.as_pointer()(None)]) 
+    builder.call(fflush_fn, [int8_t.as_pointer()(None)])
+
 
 def printf(builder, format, *args):
     """
