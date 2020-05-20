@@ -248,6 +248,12 @@ def array_dot_chain(a, b):
 def array_ctor(n, dtype):
     return np.ones(n, dtype=dtype)
 
+def array_isreal(x):
+    return np.isreal(x)
+
+def array_iscomplex(x):
+    return np.iscomplex(x)
+
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -1320,6 +1326,30 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             x, y = np.meshgrid(x, x)
             z = x + 1j*y
             np.testing.assert_equal(pyfunc(z), cfunc(z))
+
+    def test_isreal(self):
+        pyfunc = array_isreal
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # arange instead of linspace to ensure a zero
+        x = np.arange(-10, 10)
+        np.testing.assert_equal(pyfunc(x), cfunc(x))
+
+        x, y = np.meshgrid(x, x)
+        z = x + 1j*y
+        np.testing.assert_equal(pyfunc(z), cfunc(z))
+
+    def test_iscomplex(self):
+        pyfunc = array_iscomplex
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # arange instead of linspace to ensure a zero
+        x = np.arange(-10, 10)
+        np.testing.assert_equal(pyfunc(x), cfunc(x))
+
+        x, y = np.meshgrid(x, x)
+        z = x + 1j*y
+        np.testing.assert_equal(pyfunc(z), cfunc(z))
 
     def test_unique(self):
         pyfunc = np_unique

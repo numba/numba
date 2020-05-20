@@ -4251,3 +4251,25 @@ def cross2d(a, b):
         return _cross2d_operation(a_, b_)
 
     return impl
+
+
+@overload(np.iscomplex)
+def numpy_iscomplex(x):
+    if not type_can_asarray(x):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(x):
+        return np.asarray(x).imag != 0
+
+    return impl
+
+
+@overload(np.isreal)
+def numpy_isreal(x):
+    if not type_can_asarray(x):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(x):
+        return np.asarray(x).imag == 0
+
+    return impl

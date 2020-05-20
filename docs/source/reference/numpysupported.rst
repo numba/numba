@@ -402,6 +402,8 @@ The following top-level functions are supported:
 * :func:`numpy.histogram` (only the 3 first arguments)
 * :func:`numpy.hstack`
 * :func:`numpy.identity`
+* :func:`numpy.iscomplex`
+* :func:`numpy.isreal`
 * :func:`numpy.kaiser`
 * :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
 * :func:`numpy.linspace` (only the 3-argument form)
