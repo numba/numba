@@ -1037,6 +1037,7 @@ def fflush(builder):
     Calls fflush(NULL) which flushes all open streams.
     """
     int8_t = ir.IntType(8)
+    int32_t = ir.IntType(32)
     fflush_fnty = ir.FunctionType(int32_t, [int8_t.as_pointer()])
     fflush_fn = builder.module.get_or_insert_function(
         fflush_fnty, name='fflush')
