@@ -1032,6 +1032,17 @@ def muladd_with_overflow(builder, a, b, c):
     return res, ovf
 
 
+def fflush(builder):
+    """
+    Calls fflush(NULL) which flushes all open streams.
+    """
+    int8_t = ir.IntType(8)
+    fflush_fnty = ir.FunctionType(int32_t, [int8_t.as_pointer()])
+    fflush_fn = builder.module.get_or_insert_function(
+        fflush_fnty, name='fflush')
+
+    builder.call(fflush_fn, [int8_t.as_pointer()(None)]) 
+
 def printf(builder, format, *args):
     """
     Calls printf().
