@@ -3157,6 +3157,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.array([1, 2, 3]), None
             yield np.array([2, 3], dtype=np.float32), np.float32
             yield np.array([2, 3], dtype=np.int8), np.int8
+            yield np.array([2, 3], dtype=np.int8), np.complex64
 
         pyfunc = asfarray
         cfunc = jit(nopython=True)(pyfunc)
@@ -3168,8 +3169,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             else:
                 expected = pyfunc(arr, dtype=dt)
                 got = cfunc(arr, dtype=dt)
+
             self.assertPreciseEqual(expected, got)
-            self.assertTrue(np.issubdtype(got.dtype, np.floating), got.dtype)
+            self.assertTrue(np.issubdtype(got.dtype, np.inexact), got.dtype)
 
     def test_repeat(self):
         # np.repeat(a, repeats)

@@ -3901,15 +3901,14 @@ def np_asarray(a, dtype=None):
 
 @overload(np.asfarray)
 def np_asfarray(a, dtype=types.float64):
-    if is_nonelike(dtype):
-        dt = types.float64
+    dtype = as_dtype(dtype)
+    if not np.issubdtype(dtype, np.inexact):
+        dx = types.float64
     else:
-        dt = dtype.dtype
-        if not isinstance(dt, types.Float):
-            dt = types.float64
+        dx = dtype
 
     def impl(a, dtype=types.float64):
-        return np.asarray(a, dt)
+        return np.asarray(a, dx)
     return impl
 
 
