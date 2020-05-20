@@ -1,4 +1,5 @@
 import platform
+import unittest
 from unittest import skipUnless
 from unittest.mock import NonCallableMock
 from itertools import chain
@@ -182,3 +183,8 @@ class TestPlatformSpecificInfo(TestCase):
             for k in keys:
                 with self.subTest(k=k):
                     self.assertIsInstance(self.info[k], t)
+
+
+if __name__ == '__main__':
+    unittest.main()
+
