@@ -1157,7 +1157,8 @@ class TestUndefinedFunction(TestCase):
         foo1ty = foo1._numba_type_
         foo2ty = foo2._numba_type_
         self.assertTrue(types.UndefinedFunctionType(1, (foo1, foo2)) ==
-                        types.UndefinedFunctionType(1, (foo2, foo1)))
+                        types.UndefinedFunctionType(1, (foo2, foo1))
+                        )  # noqa: E721
         self.assertTrue(unified_function_type((foo1ty, foo2ty), False) ==
                         unified_function_type((foo2ty, foo1ty), False))
 
