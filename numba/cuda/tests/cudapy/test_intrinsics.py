@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 import re
 from numba import cuda, int32, float32
@@ -80,6 +81,10 @@ def simple_ffs(ary, c):
 
 def simple_round(ary, c):
     ary[0] = round(c)
+
+
+def simple_round_to(ary, c, ndigits):
+    ary[0] = round(c, ndigits)
 
 
 def branching_with_ifs(a, b, c):
@@ -393,6 +398,26 @@ class TestCudaIntrinsic(CUDATestCase):
         for i in [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]:
             compiled[1, 1](ary, i)
             self.assertEquals(ary[0], round(i))
+
+    def test_round_to_f4(self):
+        compiled = cuda.jit("void(float32[:], float32, int64)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float32)
+        vals = np.random.random(32)
+        digits = np.arange(-5, 5)
+        for val, ndigits in itertools.product(vals, digits):
+            compiled[1, 1](ary, val, ndigits)
+            np.testing.assert_allclose(ary[0], round(val, ndigits))
+
+    def test_round_to_f8(self):
+        compiled = cuda.jit("void(float64[:], float64, int64)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float64)
+        vals = np.random.random(32)
+        digits = np.arange(-5, 5)
+        for val, ndigits in itertools.product(vals, digits):
+            with self.subTest(val=val, ndigits=ndigits):
+                compiled[1, 1](ary, val, ndigits)
+                np.testing.assert_allclose(ary[0], round(val, ndigits))
+
 
 
 if __name__ == '__main__':
