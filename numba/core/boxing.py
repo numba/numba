@@ -1096,3 +1096,7 @@ def unbox_meminfo_pointer(typ, obj, c):
 def unbox_typeref(typ, val, c):
     return NativeValue(c.context.get_dummy_value(), is_error=cgutils.false_bit)
 
+
+@box(types.LiteralStrKeyDict)
+def box_LiteralStrKeyDict(typ, val, c):
+    return box_unsupported(typ, val, c)

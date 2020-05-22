@@ -327,10 +327,11 @@ def getitem_unituple(context, builder, sig, args):
         return impl_ret_borrowed(context, builder, sig.return_type, res)
 
 
+@lower_builtin('static_getitem', types.LiteralStrKeyDict, types.Any)
 @lower_builtin('static_getitem', types.BaseTuple, types.IntegerLiteral)
 @lower_builtin('static_getitem', types.BaseTuple, types.SliceLiteral)
 def static_getitem_tuple(context, builder, sig, args):
-    tupty, _ = sig.args
+    tupty, idxty = sig.args
     tup, idx = args
     if isinstance(idx, int):
         if idx < 0:
@@ -341,6 +342,12 @@ def static_getitem_tuple(context, builder, sig, args):
     elif isinstance(idx, slice):
         items = cgutils.unpack_tuple(builder, tup)[idx]
         res = context.make_tuple(builder, sig.return_type, items)
+    elif isinstance(tupty, types.LiteralStrKeyDict):
+        # pretend to be a dictionary
+        if isinstance(idxty, types.Literal):
+            idx_val = idxty.literal_value
+            idx_offset = tupty.fields.index(idx_val)
+            res = builder.extract_value(tup, idx_offset)
     else:
         raise NotImplementedError("unexpected index %r for %s"
                                   % (idx, sig.args[0]))

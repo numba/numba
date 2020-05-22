@@ -456,3 +456,15 @@ class TypeRef(Dummy):
         self.instance_type = instance_type
         super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
 
+
+class InitialValue(object):
+    """
+    Used as a mixin for a type will potentially have an initial value that will
+    be carried in the .initial_value attribute.
+    """
+    def __init__(self, initial_value):
+        self._initial_value = initial_value
+
+    @property
+    def initial_value(self):
+        return self._initial_value
