@@ -1,10 +1,10 @@
 import numpy as np
 
 from numba import cuda, jit
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba.core import config
 
-class TestException(SerialMixin, unittest.TestCase):
+class TestException(CUDATestCase):
     def test_exception(self):
         def foo(ary):
             x = cuda.threadIdx.x

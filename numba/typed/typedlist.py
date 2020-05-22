@@ -13,7 +13,7 @@ from collections.abc import MutableSequence
 from numba.core.types import ListType, TypeRef
 from numba.core.imputils import numba_typeref_ctor
 from numba.core.dispatcher import Dispatcher
-from numba.core import types, errors, config, cgutils
+from numba.core import types, config, cgutils
 from numba import njit, typeof
 from numba.core.extending import (
     overload_method,
@@ -24,6 +24,8 @@ from numba.core.extending import (
     type_callable,
 )
 from numba.typed import listobject
+from numba.core.errors import TypingError, LoweringError
+from numba.core.typing.templates import Signature
 
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
@@ -174,7 +176,13 @@ class List(MutableSequence):
     Implements the MutableSequence interface.
     """
 
-    def __new__(cls, lsttype=None, meminfo=None, allocated=DEFAULT_ALLOCATED):
+    _legal_kwargs = ["lsttype", "meminfo", "allocated"]
+
+    def __new__(cls,
+                lsttype=None,
+                meminfo=None,
+                allocated=DEFAULT_ALLOCATED,
+                **kwargs):
         if config.DISABLE_JIT:
             return list.__new__(list)
         else:
@@ -196,13 +204,15 @@ class List(MutableSequence):
         else:
             return cls(lsttype=ListType(item_type), allocated=allocated)
 
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         For users, the constructor does not take any parameters.
         The keyword arguments are for internal use only.
 
         Parameters
         ----------
+        args: iterable
+            The iterable to intialize the list from
         lsttype : numba.core.types.ListType; keyword-only
             Used internally for the list type.
         meminfo : MemInfo; keyword-only
@@ -210,10 +220,31 @@ class List(MutableSequence):
         allocated: int; keyword-only
             Used internally to pre-allocate space for items
         """
+        illegal_kwargs = any((kw not in self._legal_kwargs for kw in kwargs))
+        if illegal_kwargs or args and kwargs:
+            raise TypeError("List() takes no keyword arguments")
         if kwargs:
             self._list_type, self._opaque = self._parse_arg(**kwargs)
         else:
             self._list_type = None
+            if args:
+                if not 0 <= len(args) <= 1:
+                    raise TypeError(
+                        "List() expected at most 1 argument, got {}"
+                        .format(len(args))
+                    )
+                iterable = args[0]
+                # Special case Numpy scalars or anything that quacks like a
+                # NumPy Array.
+                if hasattr(iterable, "ndim") and iterable.ndim == 0:
+                    self.append(iterable.item())
+                else:
+                    try:
+                        iter(iterable)
+                    except TypeError:
+                        raise TypeError("List() argument must be iterable")
+                    for i in args[0]:
+                        self.append(i)
 
     def _parse_arg(self, lsttype, meminfo=None, allocated=DEFAULT_ALLOCATED):
         if not isinstance(lsttype, ListType):
@@ -324,13 +355,14 @@ class List(MutableSequence):
         return _pop(self, i)
 
     def extend(self, iterable):
+        # Empty iterable, do nothing
+        if len(iterable) == 0:
+            return self
         if not self._typed:
             # Need to get the first element of the iterable to initialise the
             # type of the list. FIXME: this may be a problem if the iterable
             # can not be sliced.
             self._initialise_list(iterable[0])
-            self.append(iterable[0])
-            return _extend(self, iterable[1:])
         return _extend(self, iterable)
 
     def remove(self, item):
@@ -366,7 +398,7 @@ class List(MutableSequence):
 
     def __repr__(self):
         body = str(self)
-        prefix = str(self._list_type)
+        prefix = str(self._list_type) if self._typed else "ListType[Undefined]"
         return "{prefix}({body})".format(prefix=prefix, body=body)
 
 
@@ -443,43 +475,134 @@ def unbox_listtype(typ, val, c):
 # The following contains the logic for the type-inferred constructor
 #
 
+def _guess_dtype(iterable):
+    """Guess the correct dtype of the iterable type. """
+    if not isinstance(iterable, types.IterableType):
+        raise TypingError(
+            "List() argument must be iterable")
+    # Special case for nested NumPy arrays.
+    elif isinstance(iterable, types.Array) and iterable.ndim > 1:
+        return iterable.copy(ndim=iterable.ndim - 1)
+    elif hasattr(iterable, "dtype"):
+        return iterable.dtype
+    elif hasattr(iterable, "yield_type"):
+        return iterable.yield_type
+    elif isinstance(iterable, types.UnicodeType):
+        return iterable
+    elif isinstance(iterable, types.DictType):
+        return iterable.key_type
+    else:
+        # This should never happen, since the 'dtype' of any iterable
+        # should have determined above.
+        raise TypingError(
+            "List() argument does not have a suitable dtype")
+
 
 @type_callable(ListType)
 def typedlist_call(context):
+    """Defines typing logic for ``List()`` and ``List(iterable)``.
+
+    If no argument is given, the returned typer types a new typed-list with an
+    undefined item type. If a single argument is given it must be iterable with
+    a guessable 'dtype'. In this case, the typer types a new typed-list with
+    the type set to the 'dtype' of the iterable arg.
+
+    Parameters
+    ----------
+    arg : single iterable (optional)
+        The single optional argument.
+
+    Returns
+    -------
+    typer : function
+        A typer suitable to type constructor calls.
+
+    Raises
+    ------
+    The returned typer raises a TypingError in case of unsuitable arguments.
+
     """
-    Defines typing logic for ``List()``.
-    Produces List[undefined]
-    """
-    def typer():
-        return types.ListType(types.undefined)
-    return typer
+
+    class Typer(object):
+
+        def attach_sig(self):
+            from inspect import signature as mypysig
+
+            def mytyper(iterable):
+                pass
+            self.pysig = mypysig(mytyper)
+
+        def __call__(self, *args, **kwargs):
+            if kwargs:
+                raise TypingError(
+                    "List() takes no keyword arguments"
+                )
+            elif args:
+                if not 0 <= len(args) <= 1:
+                    raise TypingError(
+                        "List() expected at most 1 argument, got {}"
+                        .format(len(args))
+                    )
+                rt = types.ListType(_guess_dtype(args[0]))
+                self.attach_sig()
+                return Signature(rt, args, None, pysig=self.pysig)
+            else:
+                item_type = types.undefined
+                return types.ListType(item_type)
+
+    return Typer()
 
 
 @overload(numba_typeref_ctor)
-def impl_numba_typeref_ctor(cls):
-    """
-    Defines ``List()``, the type-inferred version of the list ctor.
+def impl_numba_typeref_ctor(cls, *args):
+    """Defines lowering for ``List()`` and ``List(iterable)``.
+
+    This defines the lowering logic to instantiate either an empty typed-list
+    or a typed-list initialised with values from a single iterable argument.
 
     Parameters
     ----------
     cls : TypeRef
         Expecting a TypeRef of a precise ListType.
+    args: tuple
+        A tuple that contains a single iterable (optional)
+
+    Returns
+    -------
+    impl : function
+        An implementation suitable for lowering the constructor call.
 
     See also: `redirect_type_ctor` in numba/cpython/bulitins.py
     """
     list_ty = cls.instance_type
     if not isinstance(list_ty, types.ListType):
-        msg = "expecting a ListType but got {}".format(list_ty)
         return  # reject
     # Ensure the list is precisely typed.
     if not list_ty.is_precise():
         msg = "expecting a precise ListType but got {}".format(list_ty)
-        raise errors.LoweringError(msg)
+        raise LoweringError(msg)
 
     item_type = types.TypeRef(list_ty.item_type)
-
-    def impl(cls):
-        # Simply call .empty_list with the item types from *cls*
-        return List.empty_list(item_type)
+    if args:
+        # special case 0d Numpy arrays
+        if isinstance(args[0], types.Array) and args[0].ndim == 0:
+            def impl(cls, *args):
+                # Instatiate an empty list and populate it with the single
+                # value from the array.
+                r = List.empty_list(item_type)
+                r.append(args[0].item())
+                return r
+        else:
+            def impl(cls, *args):
+                # Instatiate an empty list and populate it with values from the
+                # iterable.
+                r = List.empty_list(item_type)
+                for i in args[0]:
+                    r.append(i)
+                return r
+    else:
+        def impl(cls, *args):
+            # Simply call .empty_list with the item type from *cls*
+            return List.empty_list(item_type)
 
     return impl

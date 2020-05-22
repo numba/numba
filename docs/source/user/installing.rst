@@ -237,7 +237,7 @@ vary with target operating system and hardware. The following lists them all
 
   * ``sphinx``
   * ``pygments``
-  * ``sphinx-bootstrap``
+  * ``sphinx_rtd_theme``
   * ``numpydoc``
   * ``make`` as an executable on the ``$PATH``
 

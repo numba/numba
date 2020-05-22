@@ -6,7 +6,6 @@ import numpy as np
 
 from numba.core.utils import cached_property, add_metaclass
 
-
 # Types are added to a global registry (_typecache) in order to assign
 # them unique integer codes for fast matching in _dispatcher.c.
 # However, we also want types to be disposable, therefore we ensure
@@ -189,7 +188,10 @@ class Type(object):
     def _determine_array_spec(self, args):
         # XXX non-contiguous by default, even for 1d arrays,
         # doesn't sound very intuitive
-        if isinstance(args, (tuple, list)):
+        def validate_slice(s):
+            return isinstance(s, slice) and s.start is None and s.stop is None
+
+        if isinstance(args, (tuple, list)) and all(map(validate_slice, args)):
             ndim = len(args)
             if args[0].step == 1:
                 layout = 'F'
@@ -197,15 +199,15 @@ class Type(object):
                 layout = 'C'
             else:
                 layout = 'A'
-        elif isinstance(args, slice):
+        elif validate_slice(args):
             ndim = 1
             if args.step == 1:
                 layout = 'C'
             else:
                 layout = 'A'
         else:
-            ndim = 1
-            layout = 'A'
+            # Raise a KeyError to not be handled by collection constructors (e.g. list).
+            raise KeyError(f"Can only index numba types with slices with no start or stop, got {args}.")
 
         return ndim, layout
 
@@ -218,6 +220,9 @@ class Type(object):
         """ Returns True if this class is an internally defined Numba type by
         virtue of the module in which it is instantiated, False else."""
         return self._is_internal
+
+    def dump(self, tab=''):
+        print(f'{tab}DUMP {type(self).__name__}[code={self._code}, name={self.name}]')
 
 # XXX we should distinguish between Dummy (no meaningful
 # representation, e.g. None or a builtin function) and Opaque (has a

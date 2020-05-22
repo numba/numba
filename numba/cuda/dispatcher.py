@@ -3,7 +3,7 @@ import numpy as np
 from numba.core.descriptors import TargetDescriptor
 from numba.core.options import TargetOptions
 from numba import cuda
-from numba.cuda import jit, autojit
+from numba.cuda import jit
 from numba.cuda.cudadrv import devicearray
 from .descriptor import CUDATargetDesc
 from numba.np.ufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
@@ -33,7 +33,7 @@ class CUDADispatcher(object):
     @property
     def compiled(self):
         if self._compiled is None:
-            self._compiled = autojit(self.py_func, **self.targetoptions)
+            self._compiled = jit(self.py_func, **self.targetoptions)
         return self._compiled
 
     def __call__(self, *args, **kws):

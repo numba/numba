@@ -3,7 +3,7 @@ import traceback
 from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
 from .misc import unliteral
-from numba.core import errors
+from numba.core import errors, utils, types
 
 # terminal color markup
 _termcolor = errors.termcolor()
@@ -263,6 +263,11 @@ class Dispatcher(WeakType, Callable, Dummy):
         self._store_object(dispatcher)
         super(Dispatcher, self).__init__("type(%s)" % dispatcher)
 
+    def dump(self, tab=''):
+        print(f'{tab}DUMP {type(self).__name__}[code={self._code}, name={self.name}]')
+        self.dispatcher.dump(tab=tab + '  ')
+        print(f'{tab}END DUMP')
+
     def get_call_type(self, context, args, kws):
         """
         Resolve a call to this dispatcher using the given argument types.
@@ -297,6 +302,9 @@ class Dispatcher(WeakType, Callable, Dummy):
         Get the implementation key for the given signature.
         """
         return self.get_overload(sig)
+
+    def unify(self, context, other):
+        return utils.unified_function_type((self, other), require_precise=False)
 
 
 class ObjModeDispatcher(Dispatcher):

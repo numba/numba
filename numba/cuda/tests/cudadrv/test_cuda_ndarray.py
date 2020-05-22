@@ -1,11 +1,11 @@
 import numpy as np
 from numba.cuda.cudadrv import devicearray
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
 
 
-class TestCudaNDArray(SerialMixin, unittest.TestCase):
+class TestCudaNDArray(CUDATestCase):
     def test_device_array_interface(self):
         dary = cuda.device_array(shape=100)
         devicearray.verify_cuda_ndarray_interface(dary)
@@ -407,7 +407,7 @@ class TestCudaNDArray(SerialMixin, unittest.TestCase):
         self.assertEqual(d._numba_type_.layout, 'A')
 
 
-class TestRecarray(SerialMixin, unittest.TestCase):
+class TestRecarray(CUDATestCase):
     def test_recarray(self):
         # From issue #4111
         a = np.recarray((16,), dtype=[
@@ -434,7 +434,7 @@ class TestRecarray(SerialMixin, unittest.TestCase):
         np.testing.assert_array_equal(expect2, got2)
 
 
-class TestCoreContiguous(SerialMixin, unittest.TestCase):
+class TestCoreContiguous(CUDATestCase):
     def _test_against_array_core(self, view):
         self.assertEqual(
             devicearray.is_contiguous(view),

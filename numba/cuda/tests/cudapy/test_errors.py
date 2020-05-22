@@ -1,14 +1,14 @@
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
 def noop(x):
     pass
 
 
-class TestJitErrors(SerialMixin, unittest.TestCase):
+class TestJitErrors(CUDATestCase):
     """
     Test compile-time errors with @jit.
     """
@@ -45,11 +45,11 @@ class TestJitErrors(SerialMixin, unittest.TestCase):
         self.assertIn("launch configuration was not specified",
                       str(raises.exception))
 
-    def test_unconfigured_cudakernel(self):
+    def test_unconfigured_typed_cudakernel(self):
         kernfunc = cuda.jit("void(int32)")(noop)
         self._test_unconfigured(kernfunc)
 
-    def test_unconfigured_autojitcudakernel(self):
+    def test_unconfigured_untyped_cudakernel(self):
         kernfunc = cuda.jit(noop)
         self._test_unconfigured(kernfunc)
 

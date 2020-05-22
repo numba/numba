@@ -44,11 +44,14 @@ from numba.np.numpy_support import carray, farray, from_dtype
 # Re-export experimental
 from numba import experimental
 
+# Re-export experimental.jitclass as jitclass, this is deprecated
+from numba.experimental.jitclass.decorators import _warning_jitclass as jitclass
+
 # Initialize withcontexts
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 
-# Enable bytes/unicode array support
+# Bytes/unicode array support
 import numba.cpython.charseq
 
 # Keep this for backward compatibility.
@@ -64,6 +67,7 @@ __all__ = """
     njit
     stencil
     jit_module
+    jitclass
     typeof
     prange
     gdb

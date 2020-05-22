@@ -61,6 +61,7 @@ class RewriteStringLiteralGetitems(Rewrite):
         """
         self.getitems = getitems = {}
         self.block = block
+        self.calltypes = calltypes
         for expr in block.find_exprs(op='getitem'):
             if expr.op == 'getitem':
                 index_ty = typemap[expr.index.name]
@@ -85,6 +86,7 @@ class RewriteStringLiteralGetitems(Rewrite):
                                                       index=lit_val,
                                                       index_var=expr.index,
                                                       loc=expr.loc)
+                    self.calltypes[new_expr] = self.calltypes[expr]
                     inst = ir.Assign(value=new_expr, target=inst.target,
                                      loc=inst.loc)
             new_block.append(inst)

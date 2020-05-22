@@ -198,6 +198,14 @@ class TestNumberHashing(BaseTest):
         self.check_hash_values([np.uint64(0x1ffffffffffffffe)])
         self.check_hash_values([np.uint64(0x1fffffffffffffff)])
 
+        # check some values near sys int mins
+        self.check_hash_values([np.int64(-0x7fffffffffffffff)])
+        self.check_hash_values([np.int64(-0x7ffffffffffffff6)])
+        self.check_hash_values([np.int64(-0x7fffffffffffff9c)])
+        self.check_hash_values([np.int32(-0x7fffffff)])
+        self.check_hash_values([np.int32(-0x7ffffff6)])
+        self.check_hash_values([np.int32(-0x7fffff9c)])
+
 
 class TestTupleHashing(BaseTest):
     """

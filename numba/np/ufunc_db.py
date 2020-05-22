@@ -51,6 +51,12 @@ def _fill_ufunc_db(ufunc_db):
     from numba.cpython import cmathimpl, mathimpl, numbers
     from numba.np.numpy_support import numpy_version
 
+    ufunc_db[np.isnat] = {
+        # datetime & timedelta
+        'M->?': npyfuncs.np_datetime_isnat_impl,
+        'm->?': npyfuncs.np_datetime_isnat_impl,
+    }
+
     ufunc_db[np.negative] = {
         '?->?': numbers.int_invert_impl,
         'b->b': numbers.int_negate_impl,

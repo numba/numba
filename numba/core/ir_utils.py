@@ -2077,11 +2077,22 @@ def enforce_no_dels(func_ir):
             msg = "Illegal IR, del found at: %s" % dels[0]
             raise CompilerError(msg, loc=dels[0].loc)
 
+def enforce_no_phis(func_ir):
+    """
+    Enforce there being no ir.Expr.phi nodes in the IR.
+    """
+    for blk in func_ir.blocks.values():
+        phis = [x for x in blk.find_exprs(op='phi')]
+        if phis:
+            msg = "Illegal IR, phi found at: %s" % phis[0]
+            raise CompilerError(msg, loc=phis[0].loc)
+
 
 def check_and_legalize_ir(func_ir):
     """
     This checks that the IR presented is legal
     """
+    enforce_no_phis(func_ir)
     enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)

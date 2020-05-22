@@ -1048,9 +1048,14 @@ def unbox_deferred(typ, obj, c):
 
 @unbox(types.Dispatcher)
 def unbox_dispatcher(typ, obj, c):
-    # A dispatcher object has no meaningful value in native code
-    res = c.context.get_constant_undef(typ)
-    return NativeValue(res)
+    # In native code, Dispatcher types can be casted to FunctionType.
+    return NativeValue(obj)
+
+
+@box(types.Dispatcher)
+def box_pyobject(typ, val, c):
+    c.pyapi.incref(val)
+    return val
 
 
 def unbox_unsupported(typ, obj, c):

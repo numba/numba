@@ -1,7 +1,7 @@
 import numpy as np
 import time
 from numba import cuda, float64, void
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.core import config
 
 # NOTE: CUDA kernel does not return any value
@@ -12,7 +12,7 @@ else:
     tpb = 16
 SM_SIZE = tpb, tpb
 
-class TestCudaLaplace(SerialMixin, unittest.TestCase):
+class TestCudaLaplace(CUDATestCase):
     def test_laplace_small(self):
 
         @cuda.jit(float64(float64, float64), device=True, inline=True)

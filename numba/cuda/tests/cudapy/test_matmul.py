@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import cuda, float32
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 from numba.core import config
 
 # Ensure the test takes a reasonable amount of time in the simulator
@@ -14,7 +14,7 @@ n = bpg * tpb
 SM_SIZE = (tpb, tpb)
 
 
-class TestCudaMatMul(SerialMixin, unittest.TestCase):
+class TestCudaMatMul(CUDATestCase):
 
     def test_func(self):
 
