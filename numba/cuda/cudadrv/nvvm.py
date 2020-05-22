@@ -285,13 +285,20 @@ if NVVM_VERSION < (1, 4):
     SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2)
 elif NVVM_VERSION < (1, 5):
     # CUDA 9.0 and later
-    SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2)
+    SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0)
 else:
     # CUDA 10.0 and later
     SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5)
 
 
-def _find_arch(mycc):
+def find_closest_arch(mycc):
+    """
+    Given a compute capability, return the closest compute capability supported
+    by the CUDA toolkit.
+
+    :param mycc: Compute capability as a tuple ``(MAJOR, MINOR)``
+    :return: Closest supported CC as a tuple ``(MAJOR, MINOR)``
+    """
     for i, cc in enumerate(SUPPORTED_CC):
         if cc == mycc:
             # Matches
@@ -316,7 +323,7 @@ def get_arch_option(major, minor):
     if config.FORCE_CUDA_CC:
         arch = config.FORCE_CUDA_CC
     else:
-        arch = _find_arch((major, minor))
+        arch = find_closest_arch((major, minor))
     return 'compute_%d%d' % arch
 
 

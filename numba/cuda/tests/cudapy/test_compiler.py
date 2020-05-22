@@ -73,8 +73,10 @@ class TestCompileToPTXForCurrentDevice(CUDATestCase):
         args = (float32, float32)
         ptx, resty = compile_ptx_for_current_device(add, args, device=True)
 
-        # Check we target the current device's compute capabilitay
-        cc = cuda.get_current_device().compute_capability
+        # Check we target the current device's compute capability, or the
+        # closest compute capability supported by the current toolkit.
+        device_cc = cuda.get_current_device().compute_capability
+        cc = cuda.cudadrv.nvvm.find_closest_arch(device_cc)
         target = f'.target sm_{cc[0]}{cc[1]}'
         self.assertIn(target, ptx)
 
