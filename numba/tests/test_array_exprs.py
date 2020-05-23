@@ -626,6 +626,8 @@ class TestDatetimeDeltaOps(TestCase):
         py_func = arr_div
         cfunc = njit(arr_div)
         test_cases = [(np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.dtype(TIMEDELTA_M))),
+                      (np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.dtype(TIMEDELTA_Y))),
+                      (np.ones(3, np.dtype(TIMEDELTA_Y)), np.ones(3, np.dtype(TIMEDELTA_M))),
                       (np.ones(3, np.dtype(TIMEDELTA_Y)), np.ones(3, np.dtype(TIMEDELTA_Y))),
                       (np.ones(3, np.dtype(TIMEDELTA_M)), 1),
                       (np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.int64)),
