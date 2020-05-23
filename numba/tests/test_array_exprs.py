@@ -10,8 +10,8 @@ from numba.core.compiler import Compiler, Flags
 from numba.tests.support import MemoryLeakMixin, TestCase
 import unittest
 
-TIMEDELTA_M = 'timedelta64[M]'
-TIMEDELTA_Y = 'timedelta64[Y]'
+TIMEDELTA_M = np.dtype('timedelta64[M]')
+TIMEDELTA_Y = np.dtype('timedelta64[Y]')
 
 class Namespace(dict):
     def __getattr__(s, k):
@@ -518,7 +518,6 @@ class TestOptionals(MemoryLeakMixin, unittest.TestCase):
         self.assertTrue(isinstance(oty, types.Optional))
         self.assertTrue(isinstance(oty.type, types.Float))
 
-
     def test_optional_array_type(self):
 
         @njit
@@ -625,13 +624,14 @@ class TestDatetimeDeltaOps(TestCase):
 
         py_func = arr_div
         cfunc = njit(arr_div)
-        test_cases = [(np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.dtype(TIMEDELTA_M))),
-                      (np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.dtype(TIMEDELTA_Y))),
-                      (np.ones(3, np.dtype(TIMEDELTA_Y)), np.ones(3, np.dtype(TIMEDELTA_M))),
-                      (np.ones(3, np.dtype(TIMEDELTA_Y)), np.ones(3, np.dtype(TIMEDELTA_Y))),
-                      (np.ones(3, np.dtype(TIMEDELTA_M)), 1),
-                      (np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.int64)),
-                      (np.ones(3, np.dtype(TIMEDELTA_M)), np.ones(3, np.float64)),
-                     ]
+        test_cases = [
+            (np.ones(3, TIMEDELTA_M), np.ones(3, TIMEDELTA_M)),
+            (np.ones(3, TIMEDELTA_M), np.ones(3, TIMEDELTA_Y)),
+            (np.ones(3, TIMEDELTA_Y), np.ones(3, TIMEDELTA_M)),
+            (np.ones(3, TIMEDELTA_Y), np.ones(3, TIMEDELTA_Y)),
+            (np.ones(3, TIMEDELTA_M), 1),
+            (np.ones(3, TIMEDELTA_M), np.ones(3, np.int64)),
+            (np.ones(3, TIMEDELTA_M), np.ones(3, np.float64)),
+        ]
         for a, b in test_cases:
-            self.assertTrue(np.array_equal(py_func(a, b), cfunc(a,b)))
+            self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
