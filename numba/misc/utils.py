@@ -20,6 +20,13 @@ def _printf(typingctx, format_type, *args):
 @register_jitable
 def printf(format_type, *args):
     if config.DISABLE_JIT:
+        if '%p' in format_type:
+            raise ValueError('"%p" is not supported when JIT is disabled.'
+                '\nReplace the formatter by "%#x" and use the identity (id)'
+                ' of the object.\nFor example:\n'
+                '\n>>> arg = "hello world"'
+                '\n>>> print("%#x" % id(arg))'
+                '\n0x10531d1f0\n')
         with bypass_context:
             print(format_type % args, end='')
     else:
