@@ -29,6 +29,9 @@ def from_cuda_array_interface(desc, owner=None):
     The *owner* is the owner of the underlying memory.
     The resulting DeviceNDArray will acquire a reference from it.
     """
+    # Argument may be a description or callable description provider
+    desc = desc() if callable(desc) else desc
+
     version = desc.get('version')
     # Mask introduced in version 1
     if 1 <= version:

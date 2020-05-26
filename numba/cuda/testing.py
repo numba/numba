@@ -1,6 +1,7 @@
 import contextlib
 import os
 import sys
+import enum
 
 from numba.tests.support import (
     captured_stdout,
@@ -104,7 +105,14 @@ class ForeignArray(object):
     Array interface. This just hides a DeviceNDArray so that it doesn't look
     like a DeviceNDArray.
     """
+    class InterfaceType(enum.Enum):
+        Attribute = "Attribute"  #: Provide interface description as attribute
+        Callable = "Callable"  #: Provide interface description via callable
 
-    def __init__(self, arr):
+    def __init__(self, arr, iftype: InterfaceType = InterfaceType.Attribute):
         self._arr = arr
-        self.__cuda_array_interface__ = arr.__cuda_array_interface__
+        desc = arr.__cuda_array_interface__
+        desc = desc() if callable(desc) else desc
+        self.__cuda_array_interface__ = \
+            desc if iftype is ForeignArray.InterfaceType.Attribute \
+            else lambda: desc
