@@ -21,7 +21,8 @@ def _printf(typingctx, format_type, *args):
 def printf(format_type, *args):
     if config.DISABLE_JIT:
         if '%p' in format_type:
-            raise ValueError('"%p" is not supported when JIT is disabled.'
+            raise ValueError(
+                '"%p" is not supported when JIT is disabled.'
                 '\nReplace the formatter by "%#x" and use the identity (id)'
                 ' of the object.\nFor example:\n'
                 '\n>>> arg = "hello world"'
