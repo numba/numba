@@ -2549,7 +2549,7 @@ class TestParforsVectorizer(TestPrangeBase):
         assertions = kwargs.pop('assertions', True)
 
         env_opts = {'NUMBA_CPU_NAME': cpu_name,
-                    'NUMBA_CPU_FEATURES': '',
+                    'NUMBA_CPU_FEATURES': '-prefer-256-bit',
                     }
 
         overrides = []
