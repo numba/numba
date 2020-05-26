@@ -1,6 +1,7 @@
 from numba.core import cgutils, config, types
 from numba.core.withcontexts import bypass_context
 from numba.core.extending import intrinsic, register_jitable
+from llvmlite import ir
 import sys
 
 
@@ -11,9 +12,18 @@ def _printf(typingctx, format_type, *args):
     """
     if isinstance(format_type, types.StringLiteral):
         sig = types.void(format_type, types.BaseTuple.from_types(args))
+        def codegen(context, builder, signature, fn_args):
+            mod = builder.module
+            value = fn_args[1].value # StructLiteral
+            for i, arg in enumerate(*args):
+                if isinstance(arg, types.StringLiteral):
+                    lv = arg.literal_value
+                    const_str = context.insert_const_string(mod, lv)
+                    value = builder.insert_value(value, const_str, i)
 
-        def codegen(context, builder, signature, args):
-            cgutils.printf(builder, format_type.literal_value, *args[1:])
+            # Replace %c formatter by %s, since it doesn't work here
+            ft = format_type.literal_value.replace('%c', '%s')
+            cgutils.printf(builder, ft, value)
         return sig, codegen
 
 
