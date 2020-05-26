@@ -1,7 +1,6 @@
 from numba.core import cgutils, config, types
 from numba.core.withcontexts import bypass_context
 from numba.core.extending import intrinsic, register_jitable
-from llvmlite import ir
 import sys
 
 
@@ -12,6 +11,7 @@ def _printf(typingctx, format_type, *args):
     """
     if isinstance(format_type, types.StringLiteral):
         sig = types.void(format_type, types.BaseTuple.from_types(args))
+
         def codegen(context, builder, signature, fn_args):
             mod = builder.module
             value = fn_args[1].value # StructLiteral
