@@ -69,6 +69,10 @@ def bincount2(a, w):
     return np.bincount(a, weights=w)
 
 
+def bincount3(a, w=None, minlength=0):
+    return np.bincount(a, w, minlength)
+
+
 def searchsorted(a, v):
     return np.searchsorted(a, v)
 
@@ -747,6 +751,36 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc([2, -1], [0])
         self.assertIn("weights and list don't have the same length",
+                      str(raises.exception))
+
+    def test_bincount3(self):
+        pyfunc = bincount3
+        cfunc = jit(nopython=True)(pyfunc)
+        for seq in self.bincount_sequences():
+            a_max = max(seq)
+            for length in (a_max + 1, a_max - 1):
+                expected = pyfunc(seq, None, length)
+                got = cfunc(seq, None, length)
+                self.assertEqual(len(expected), len(got))
+                self.assertPreciseEqual(expected, got)
+
+    def test_bincount3_exceptions(self):
+        pyfunc = bincount3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Negative input
+        with self.assertRaises(ValueError) as raises:
+            cfunc([2, -1], [0, 0])
+        self.assertIn("first argument must be non-negative",
+                      str(raises.exception))
+
+        # Negative minlength
+        with self.assertRaises(ValueError) as raises:
+            cfunc([17, 38], None, -1)
+        self.assertIn("minlength must be non-negative",
                       str(raises.exception))
 
     def test_searchsorted(self):
