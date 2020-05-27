@@ -69,8 +69,8 @@ def bincount2(a, w):
     return np.bincount(a, weights=w)
 
 
-def bincount3(a, minlength):
-    return np.bincount(a, minlength=minlength)
+def bincount3(a, w=None, minlength=0):
+    return np.bincount(a, w, minlength)
 
 
 def searchsorted(a, v):
