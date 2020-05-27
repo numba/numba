@@ -69,6 +69,10 @@ def bincount2(a, w):
     return np.bincount(a, weights=w)
 
 
+def bincount3(a, minlength):
+    return np.bincount(a, minlength=minlength)
+
+
 def searchsorted(a, v):
     return np.searchsorted(a, v)
 
@@ -696,7 +700,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         a = [1, 2, 5, 2, 3, 20]
         b = np.array([5, 8, 42, 5])
         c = self.rnd.randint(0, 100, size=300).astype(np.int8)
-        return (a, b, c)
+        d = []
+        return (a, b, c, d)
 
     def test_bincount1(self):
         pyfunc = bincount1
@@ -718,6 +723,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc([2, -1])
         self.assertIn("first argument must be non-negative",
                       str(raises.exception))
+
 
     def test_bincount2(self):
         pyfunc = bincount2
@@ -747,6 +753,36 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc([2, -1], [0])
         self.assertIn("weights and list don't have the same length",
+                      str(raises.exception))
+
+    def test_bincount_3(self):
+        pyfunc = bincount3
+        cfunc = jit(nopython=True)(pyfunc)
+        for seq in self.bincount_sequences():
+            a_max = max(seq)
+            for length in (a_max + 1, a_max - 1):
+                expected = pyfunc(seq, None, length)
+                got = cfunc(seq, None, length)
+                self.assertEqual(len(expected), len(got))
+                self.assertPreciseEqual(expected, got)
+
+    def test_bincount3_exceptions(self):
+        pyfunc = bincount3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Negative input
+        with self.assertRaises(ValueError) as raises:
+            cfunc([2, -1], [0, 0])
+        self.assertIn("first argument must be non-negative",
+                      str(raises.exception))
+
+        # Negative minlength
+        with self.assertRaises(ValueError) as raises:
+            cfunc([17, 38], None, -1)
+        self.assertIn("minlength must be non-negative",
                       str(raises.exception))
 
     def test_searchsorted(self):
