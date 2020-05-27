@@ -700,8 +700,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         a = [1, 2, 5, 2, 3, 20]
         b = np.array([5, 8, 42, 5])
         c = self.rnd.randint(0, 100, size=300).astype(np.int8)
-        d = []
-        return (a, b, c, d)
+        return (a, b, c)
 
     def test_bincount1(self):
         pyfunc = bincount1
@@ -755,7 +754,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn("weights and list don't have the same length",
                       str(raises.exception))
 
-    def test_bincount_3(self):
+    def test_bincount3(self):
         pyfunc = bincount3
         cfunc = jit(nopython=True)(pyfunc)
         for seq in self.bincount_sequences():

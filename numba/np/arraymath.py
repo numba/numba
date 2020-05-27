@@ -3324,13 +3324,14 @@ def np_bincount(a, weights=None, minlength=0):
         validate_inputs(a, weights, minlength)
         n = len(a)
 
-        out_length = minlength
+        a_max = a[0] if n > 0 else -1
         for i in range(1, n):
             if a[i] < 0:
                 raise ValueError("bincount(): first argument must be "
                                  "non-negative")
-            out_length = max(out_length, a[i] + 1)
+            a_max = max(a_max, a[i])
 
+        out_length = max(a_max + 1, minlength)
         out = np.zeros(out_length, out_dtype)
         for i in range(n):
             count_item(out, i, a[i], weights)
