@@ -3302,8 +3302,6 @@ def np_bincount(a, weights=None, minlength=0):
             if len(a) != len(weights):
                 raise ValueError("bincount(): weights and list don't have "
                                  "the same length")
-            if minlength < 0:
-                raise ValueError("bincount(): minlength must be non-negative!")
 
         @register_jitable
         def count_item(out, idx, val, weights):
@@ -3322,8 +3320,10 @@ def np_bincount(a, weights=None, minlength=0):
 
     def bincount_impl(a, weights=None, minlength=0):
         validate_inputs(a, weights, minlength)
-        n = len(a)
+        if minlength < 0:
+            raise ValueError("bincount(): minlength must be non-negative!")
 
+        n = len(a)
         a_max = a[0] if n > 0 else -1
         for i in range(1, n):
             if a[i] < 0:
