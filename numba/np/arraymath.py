@@ -3285,10 +3285,11 @@ def validate_1d_array_like(func_name, seq):
 @overload(np.bincount)
 def np_bincount(a, weights=None, minlength=0):
     validate_1d_array_like("bincount", a)
+
     if not isinstance(a.dtype, types.Integer):
         return
-    if not isinstance(minlength, types.Integer):
-        raise TypingError("minlength must be an integer")
+
+    _check_is_integer(minlength, 'minlength')
 
     if weights not in (None, types.none):
         validate_1d_array_like("bincount", weights)
@@ -3312,7 +3313,7 @@ def np_bincount(a, weights=None, minlength=0):
         out_dtype = types.intp
 
         @register_jitable
-        def validate_inputs(a, weights):
+        def validate_inputs(a, weights, minlength):
             pass
 
         @register_jitable
