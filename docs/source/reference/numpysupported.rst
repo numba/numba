@@ -361,7 +361,7 @@ The following top-level functions are supported:
 * :func:`numpy.atleast_2d`
 * :func:`numpy.atleast_3d`
 * :func:`numpy.bartlett`
-* :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.bincount`
 * :func:`numpy.blackman`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`

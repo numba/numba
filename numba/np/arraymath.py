@@ -3283,10 +3283,12 @@ def validate_1d_array_like(func_name, seq):
 
 
 @overload(np.bincount)
-def np_bincount(a, weights=None):
+def np_bincount(a, weights=None, minlength=0):
     validate_1d_array_like("bincount", a)
     if not isinstance(a.dtype, types.Integer):
         return
+    if not isinstance(minlength, types.Integer):
+        raise TypingError("minlength must be an integer")
 
     if weights not in (None, types.none):
         validate_1d_array_like("bincount", weights)
@@ -3295,10 +3297,12 @@ def np_bincount(a, weights=None):
         out_dtype = np.float64
 
         @register_jitable
-        def validate_inputs(a, weights):
+        def validate_inputs(a, weights, minlength):
             if len(a) != len(weights):
                 raise ValueError("bincount(): weights and list don't have "
                                  "the same length")
+            if minlength < 0:
+                raise ValueError("bincount(): minlength must be non-negative!")
 
         @register_jitable
         def count_item(out, idx, val, weights):
@@ -3315,18 +3319,18 @@ def np_bincount(a, weights=None):
         def count_item(out, idx, val, weights):
             out[val] += 1
 
-    def bincount_impl(a, weights=None):
-        validate_inputs(a, weights)
+    def bincount_impl(a, weights=None, minlength=0):
+        validate_inputs(a, weights, minlength)
         n = len(a)
 
-        a_max = a[0] if n > 0 else -1
+        out_length = minlength
         for i in range(1, n):
             if a[i] < 0:
                 raise ValueError("bincount(): first argument must be "
                                  "non-negative")
-            a_max = max(a_max, a[i])
+            out_length = max(out_length, a[i] + 1)
 
-        out = np.zeros(a_max + 1, out_dtype)
+        out = np.zeros(out_length, out_dtype)
         for i in range(n):
             count_item(out, i, a[i], weights)
         return out
