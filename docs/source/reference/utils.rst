@@ -6,16 +6,19 @@ Utilities
 Printing
 ========
 
+
 .. function:: numba.misc.utils.printf(format, ...)
 
    Writes the C string pointed by `format` to the standart output (stdout).
    If `format` includes specifiers, the additional arguments following format
-   are inserted in the resulting string.
+   are inserted in the resulting string. The following formatters are supported:
+   `%d`, `%i`, `%u`, `%x`, `%X`, `%f`, `%F`, `%e`, `%E`, `%g`, `%G`, `%c`, and `%s`
 
 
 .. function:: numba.misc.utils.fflush()
 
    Calls stdlib `fflush` and flushes all open streams. 
+
 
 Dealing with pointers
 =====================
