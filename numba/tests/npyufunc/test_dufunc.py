@@ -33,6 +33,7 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
 
     def test_npm_call(self):
         duadd = self.nopython_dufunc(pyuadd)
+
         @njit
         def npmadd(a0, a1, o0):
             duadd(a0, a1, o0)
@@ -54,6 +55,7 @@ class TestDUFunc(MemoryLeakMixin, unittest.TestCase):
 
     def test_npm_call_implicit_output(self):
         duadd = self.nopython_dufunc(pyuadd)
+
         @njit
         def npmadd(a0, a1):
             return duadd(a0, a1)

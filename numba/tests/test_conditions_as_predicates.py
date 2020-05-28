@@ -13,6 +13,7 @@ class TestConditionsAsPredicates(TestCase):
         for dt in dts:
             for c in 1, 0:
                 x = dt(c)
+
                 @njit
                 def foo():
                     if x:
@@ -21,6 +22,7 @@ class TestConditionsAsPredicates(TestCase):
                         return 20
                 self.assertEqual(foo(), foo.py_func())
                 self.assertEqual(foo(), 10 if c == 1 or dt is str else 20)
+
         # empty string
         @njit
         def foo(x):
@@ -164,7 +166,6 @@ class TestConditionsAsPredicates(TestCase):
         z = np.array(0)
         self.assertEqual(foo(z), foo.py_func(z))
         self.assertEqual(foo.py_func(z), 20)
-
         # non-empty nd True
         z = np.array([[[1]]])
         self.assertEqual(foo(z), foo.py_func(z))
