@@ -1890,6 +1890,7 @@ class TestLiteralUnrollPassTriggering(TestCase):
 
     def test_literal_unroll_is_invoked_via_alias(self):
         alias = literal_unroll
+
         @njit(pipeline_class=CapturingCompiler)
         def foo():
             acc = 0

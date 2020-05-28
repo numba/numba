@@ -1016,6 +1016,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     def test_list_as_item_in_list(self):
         nested_type = types.ListType(types.int32)
+
         @njit
         def foo():
             la = List.empty_list(nested_type)
@@ -1030,6 +1031,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     def test_array_as_item_in_list(self):
         nested_type = types.Array(types.float64, 1, 'C')
+
         @njit
         def foo():
             l = List.empty_list(nested_type)
@@ -1321,6 +1323,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
 
     def test_append_fails(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = List()

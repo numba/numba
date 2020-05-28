@@ -526,6 +526,7 @@ class TestNumThreads(TestCase):
     @unittest.skipIf(not sys.platform.startswith('linux'), "Linux only")
     def _test_threadmask_across_fork(self):
         forkctx = multiprocessing.get_context('fork')
+
         @njit
         def foo():
             return get_num_threads()
