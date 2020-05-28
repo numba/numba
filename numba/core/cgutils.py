@@ -678,7 +678,7 @@ def do_boundscheck(context, builder, ind, dimlen, axis=None):
                        "for axis {} with size %d\n".format(axis), ind, dimlen)
             else:
                 printf(builder, "debug: IndexError: index %d is out of bounds "
-                       "for axis %d with size %d\n".format(axis), ind, axis,
+                       "for axis %d with size %d\n", ind, axis,
                        dimlen)
         else:
             printf(builder,

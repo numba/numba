@@ -244,6 +244,7 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
 
         def factory(inline, x, y):
             z = x + 12
+
             @njit(inline=inline)
             def func():
                 return (x, y + 3, z)
@@ -311,6 +312,7 @@ class TestFunctionInlining(MemoryLeakMixin, InliningBase):
 
         def factory():
             from .inlining_usecases import bar
+
             @njit(inline='always')
             def tmp():
                 return bar()
@@ -616,6 +618,7 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
 
             def factory(target, x, y, inline=None):
                 z = x + 12
+
                 @overload(target, inline=inline)
                 def func():
                     def impl():
@@ -675,6 +678,7 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
 
         def factory():
             from .inlining_usecases import baz
+
             @njit(inline='always')
             def tmp():
                 return baz()
