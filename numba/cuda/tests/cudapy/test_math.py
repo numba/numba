@@ -1,7 +1,7 @@
 import sys
 import numpy as np
 from numba.cuda.testing import unittest, CUDATestCase
-from numba import cuda, float32, float64, int32
+from numba import cuda, float32, float64, int32, int64
 import math
 
 
@@ -198,12 +198,22 @@ class TestCudaMath(CUDATestCase):
         cfunc[1, nelem](A, B)
         self.assertTrue(np.allclose(npfunc(A), B))
 
+
     def unary_bool_template_float32(self, func, npfunc, start=0, stop=1):
         self.unary_template(func, npfunc, np.float32, float32, start, stop)
 
 
     def unary_bool_template_float64(self, func, npfunc, start=0, stop=1):
         self.unary_template(func, npfunc, np.float64, float64, start, stop)
+
+
+    def unary_bool_template_int32(self, func, npfunc, start=0, stop=49):
+        self.unary_template(func, npfunc, np.int32, int32, start, stop)
+
+
+    def unary_bool_template_int64(self, func, npfunc, start=0, stop=49):
+        self.unary_template(func, npfunc, np.int64, int64, start, stop)
+
 
     def unary_bool_template(self, func, npfunc, npdtype, npmtype, start, stop):
         nelem = 50
@@ -555,6 +565,8 @@ class TestCudaMath(CUDATestCase):
     def test_math_isnan(self):
         self.unary_bool_template_float32(math_isnan, np.isnan)
         self.unary_bool_template_float64(math_isnan, np.isnan)
+        self.unary_bool_template_int32(math_isnan, np.isnan)
+        self.unary_bool_template_int64(math_isnan, np.isnan)
 
     #------------------------------------------------------------------------------
     # test_math_isinf
@@ -563,6 +575,8 @@ class TestCudaMath(CUDATestCase):
     def test_math_isinf(self):
         self.unary_bool_template_float32(math_isinf, np.isinf)
         self.unary_bool_template_float64(math_isinf, np.isinf)
+        self.unary_bool_template_int32(math_isinf, np.isnan)
+        self.unary_bool_template_int64(math_isinf, np.isnan)
 
     #------------------------------------------------------------------------------
     # test_math_degrees
