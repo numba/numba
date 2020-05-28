@@ -758,9 +758,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
         for seq in self.bincount_sequences():
             a_max = max(seq)
-            for length in (a_max + 1, a_max - 1):
-                expected = pyfunc(seq, None, length)
-                got = cfunc(seq, None, length)
+            # Size of output controlled by a_max in the first case, minlength in the second
+            for minlength in (a_max, a_max + 2):
+                expected = pyfunc(seq, None, minlength)
+                got = cfunc(seq, None, minlength)
                 self.assertEqual(len(expected), len(got))
                 self.assertPreciseEqual(expected, got)
 
