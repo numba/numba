@@ -723,7 +723,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         self.assertIn("first argument must be non-negative",
                       str(raises.exception))
 
-
     def test_bincount2(self):
         pyfunc = bincount2
         cfunc = jit(nopython=True)(pyfunc)
