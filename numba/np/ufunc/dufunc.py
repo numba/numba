@@ -65,7 +65,7 @@ class DUFuncLowerer(object):
                                           self.kernel,
                                           explicit_output=explicit_output)
 
-
+import functools
 class DUFunc(_internal._DUFunc):
     """
     Dynamic universal function (DUFunc) intended to act like a normal
@@ -82,6 +82,7 @@ class DUFunc(_internal._DUFunc):
         dispatcher = jit(target='npyufunc',
                          cache=cache,
                          **targetoptions)(py_func)
+        functools.update_wrapper(self, py_func)
         self._initialize(dispatcher, identity)
 
     def _initialize(self, dispatcher, identity):
@@ -117,6 +118,13 @@ class DUFunc(_internal._DUFunc):
         For compatibility with the various *UFuncBuilder classes.
         """
         return self
+
+    def __get__(self, obj, objtype=None):
+        '''Allow a JIT function to be bound as a method to an object'''
+        if obj is None:  # Unbound method
+            return self
+        else:  # Bound method
+            return pytypes.MethodType(self, obj)
 
     @property
     def targetoptions(self):

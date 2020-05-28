@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, ".")
+print(sys.path)
 import numba
 
 def f_python(x):
