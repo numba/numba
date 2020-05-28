@@ -105,14 +105,10 @@ binarys += [('__nv_hypot', '__nv_hypotf', math.hypot)]
 
 
 for name64, name32, key in booleans:
-    implf64 = bool_implement(name64, types.float64)
-    lower(key, types.float64)(implf64)
-    implf32 = bool_implement(name32, types.float32)
-    lower(key, types.float32)(implf32)
-    impli64 = bool_implement(name64, types.int64)
-    lower(key, types.int64)(impli64)
-    impli32 = bool_implement(name32, types.int32)
-    lower(key, types.int32)(impli32)
+    impl64 = bool_implement(name64, types.float64)
+    lower(key, types.float64)(impl64)
+    impl32 = bool_implement(name32, types.float32)
+    lower(key, types.float32)(impl32)
 
 
 for name64, name32, key in unarys:
