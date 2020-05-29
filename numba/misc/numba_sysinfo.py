@@ -186,12 +186,15 @@ def get_os_spec_info(os_name):
     for cmd in cmd_selected:
         if hasattr(cmd, 'read_file_flag'):
             # Open file within Python
-            with open(cmd[0], 'r') as f:
-                out = f.readlines()
-                if out:
-                    out[0] = ' '.join((cmd[0], out[0]))
-                    output.extend(out)
-            continue
+            try:
+                with open(cmd[0], 'r') as f:
+                    out = f.readlines()
+                    if out:
+                        out[0] = ' '.join((cmd[0], out[0]))
+                        output.extend(out)
+            except Exception as e:
+                _error_log.append(f'Error (file read): {e}')
+                continue
         else:
             # Spawn a subprocess
             try:
@@ -201,7 +204,7 @@ def get_os_spec_info(os_name):
                 continue
             if hasattr(cmd, 'buffer_output_flag'):
                 out = b' '.join(line for line in out.splitlines()) + b'\n'
-        output.extend(out.decode().splitlines())
+            output.extend(out.decode().splitlines())
 
     # Extract (k, output) pairs by searching for keywords in output
     kwds = params.get('kwds', {})
