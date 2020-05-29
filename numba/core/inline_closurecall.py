@@ -445,40 +445,6 @@ class InlineWorker(object):
         return self.inline_ir(caller_ir, block, i, callee_ir, freevars,
                               arg_typs=arg_typs)
 
-    def inline_closure(self, caller_ir, block, i, closure_obj, glbls,
-                       replace_freevars=True, arg_typs=None):
-        """ Inlines the closure code object into the caller_ir at statement
-        index i of block `block`. `glbls` are the closures globals. If
-        replace_freevars is True (default) then free variables in the closure
-        will be updated from variables in the caller. If `arg_typs` is given
-        and the InlineWorker instance was initialized with a typemap and
-        calltypes then they will be appropriately updated based on the arg_typs.
-        """
-        # create function from code object
-        function, callee_code, callee_closure = \
-            self.convert_code_object_to_function(closure_obj, glbls)
-        # create IR from function
-        callee_ir = self.run_untyped_passes(function)
-        # Replace freevars with actual closure var in IR
-        callee_blocks = callee_ir.blocks
-        if callee_closure and replace_freevars:
-            closure = caller_ir.get_definition(callee_closure)
-            self.debug_print("callee's closure = ", closure)
-            if isinstance(closure, tuple):
-                cellget = ctypes.pythonapi.PyCell_Get
-                cellget.restype = ctypes.py_object
-                cellget.argtypes = (ctypes.py_object,)
-                items = tuple(cellget(x) for x in closure)
-            else:
-                assert(isinstance(closure, ir.Expr)
-                    and closure.op == 'build_tuple')
-                items = closure.items
-            assert(len(callee_code.co_freevars) == len(items))
-            _replace_freevars(callee_blocks, items)
-        freevars = closure_obj.code.co_freevars
-        return self.inline_ir(caller_ir, block, i, callee_ir, freevars,
-                              arg_typs=arg_typs)
-
     def run_untyped_passes(self, func):
         """
         Run the compiler frontend's untyped passes over the given Python
@@ -542,22 +508,6 @@ class InlineWorker(object):
             f_typemap.pop(a)
         self.typemap.update(f_typemap)
         self.calltypes.update(f_calltypes)
-
-    def convert_code_object_to_function(self, obj, glbls):
-        """ converts a code object (Python types CodeType) to a function using
-        globals glbls. Returns the new function, the callee <code> object and
-        the callee <closure> object"""
-        callee = obj
-        callee_code = callee.code if hasattr(callee, 'code') else callee.__code__
-        callee_closure = callee.closure if hasattr(callee, 'closure') else callee.__closure__
-        nfree = len(callee_code.co_freevars)
-        func_env = "\n".join(["  c_%d = None" % i for i in range(nfree)])
-        func_clo = ",".join(["c_%d" % i for i in range(nfree)])
-        func_arg = ",".join(["x_%d" % i for i in range(callee_code.co_argcount)])
-
-        f = _create_function_from_code_obj(callee_code, func_env, func_arg,
-                                        func_clo, glbls)
-        return f, callee_code, callee_closure
 
 
 def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
