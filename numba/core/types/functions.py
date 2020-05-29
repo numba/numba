@@ -42,15 +42,8 @@ _overload_template = ("- Of which {nduplicates} did not match due to:\n"
                       "Line {line}.\n  With argument(s): '({args})':")
 
 _err_reasons = {}
-_err_reasons['no_explicit_sig'] = ("Rejected as arguments did not match (no "
-                                   "explicit signatures given).")
-_err_reasons['no_match_explicit_sig'] = ("Rejected as arguments did not match "
-                                         "the declared template signatures:"
-                                         "\n{}")
 _err_reasons['specific_error'] = ("Rejected as the implementation raised a "
                                   "specific error:\n{}")
-_err_reasons['nonspecific_error'] =  ("Rejected with no specific reason given "
-                                      "(probably didn't match).")
 
 def _bt_as_lines(bt):
     """
@@ -161,35 +154,24 @@ class _ResolutionFailures(object):
                                                   line=source_line,
                                                   args=largstr),
                 ldepth + 1)))
-            if error is None:
-                errstr = _err_reasons['no_explicit_sig']
-                if hasattr(template, '_overload_func'):
-                    if hasattr(template._overload_func.outer, 'signatures'):
-                        sigs = template._overload_func.outer.signatures
-                        if sigs:
-                            sstr = [' ' * (ldepth + 1) + "* " + fn_name + str(x)
-                                    for x in sigs]
-                            lsigs = '\n'.join(sstr)
-                            rtempl = _reason_template['no_match_explicit_sig']
-                            errstr = rtempl.format(lsigs)
+
+            if isinstance(error, BaseException):
+                reason = indent + self.format_error(error)
+                errstr = _err_reasons['specific_error'].format(reason)
             else:
+                errstr = error
+            # if you are a developer, show the back traces
+            if config.DEVELOPER_MODE:
                 if isinstance(error, BaseException):
-                    reason = indent + self.format_error(error)
-                    errstr = _err_reasons['specific_error'].format(reason)
+                    # if the error is an actual exception instance, trace it
+                    bt = traceback.format_exception(type(error), error,
+                                                    error.__traceback__)
                 else:
-                    errstr = error
-                # if you are a developer, show the back traces
-                if config.DEVELOPER_MODE:
-                    if isinstance(error, BaseException):
-                        # if the error is an actual exception instance, trace it
-                        bt = traceback.format_exception(type(error), error,
-                                                        error.__traceback__)
-                    else:
-                        bt = [""]
-                    bt_as_lines = _bt_as_lines(bt)
-                    nd2indent = '\n{}'.format(2 * indent)
-                    errstr += _termcolor.reset(nd2indent +
-                                               nd2indent.join(bt_as_lines))
+                    bt = [""]
+                bt_as_lines = _bt_as_lines(bt)
+                nd2indent = '\n{}'.format(2 * indent)
+                errstr += _termcolor.reset(nd2indent +
+                                            nd2indent.join(bt_as_lines))
             msgbuf.append(_termcolor.highlight(_wrapper(errstr, ldepth + 2)))
             loc = self.get_loc(template, error)
             if loc:
@@ -358,7 +340,6 @@ class BoundFunction(Callable, Opaque):
         template = self.template(context)
         literal_e = None
         nonliteral_e = None
-        _DEBUG = False
 
 
         # Try with Literal

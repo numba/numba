@@ -54,8 +54,7 @@ def type_callable(func):
 _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
-def overload(func, jit_options={}, strict=True, inline='never',
-             signatures=None):
+def overload(func, jit_options={}, strict=True, inline='never'):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -139,6 +138,7 @@ def register_jitable(*args, **kwargs):
     def wrap(fn):
         # It is just a wrapper for @overload
         inline = kwargs.pop('inline', 'never')
+
         @overload(fn, jit_options=kwargs, inline=inline, strict=False)
         def ov_wrap(*args, **kwargs):
             return fn
