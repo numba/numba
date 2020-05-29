@@ -200,7 +200,26 @@ class TestArrayIterators(MemoryLeakMixin, TestCase):
                     t.append(y2.ravel())
             return t
 
+        # 'F' ordered
         arr = np.arange(24).reshape((2, 3, 4), order='F')
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        np.testing.assert_allclose(expected, got)
+
+        # 'A' ordered, outer strided
+        arr = np.arange(64).reshape((4, 8, 2), order='F')[::2, :, :]
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        np.testing.assert_allclose(expected, got)
+
+        # 'A' ordered, middle strided
+        arr = np.arange(64).reshape((4, 8, 2), order='F')[:, ::2, :]
+        expected = foo.py_func(arr)
+        got = foo(arr)
+        np.testing.assert_allclose(expected, got)
+
+        # 'A' ordered, inner strided
+        arr = np.arange(64).reshape((4, 8, 2), order='F')[:, :, ::2]
         expected = foo.py_func(arr)
         got = foo(arr)
         np.testing.assert_allclose(expected, got)
