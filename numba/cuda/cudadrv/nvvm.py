@@ -388,18 +388,19 @@ done:
 }
 """
 
+
 ir_numba_atomic_max = """
 define internal {T} @___numba_atomic_{T}_max({T}* %ptr, {T} %val) alwaysinline {{
 entry:
     %ptrval = load volatile {T}, {T}* %ptr
-    ; Check if val is a NaN and return *ptr early if so
-    %valnan = fcmp uno {T} %val, %val
+    ; Check if either value is a NaN and return *ptr early if so
+    %valnan = fcmp uno {T} %val, %ptrval
     br i1 %valnan, label %done, label %lt_check
 
 lt_check:
     %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
-    ; Continue attempts if dold < val or dold is NaN (using ult semantics)
-    %lt = fcmp ult {T} %dold, %val
+    ; Continue attempts if dold < val
+    %lt = fcmp nnan olt {T} %dold, %val
     br i1 %lt, label %attempt, label %done
 
 attempt:
@@ -423,14 +424,14 @@ ir_numba_atomic_min = """
 define internal {T} @___numba_atomic_{T}_min({T}* %ptr, {T} %val) alwaysinline{{
 entry:
     %ptrval = load volatile {T}, {T}* %ptr
-    ; Check if val is a NaN and return *ptr early if so
-    %valnan = fcmp uno {T} %val, %val
+    ; Check if either value is a NaN and return *ptr early if so
+    %valnan = fcmp uno {T} %val, %ptrval
     br i1 %valnan, label %done, label %gt_check
 
 gt_check:
     %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
-    ; Continue attempts if dold > val or dold is NaN (using ugt semantics)
-    %lt = fcmp ugt {T} %dold, %val
+    ; Continue attempts if dold > val
+    %lt = fcmp nnan ogt {T} %dold, %val
     br i1 %lt, label %attempt, label %done
 
 attempt:

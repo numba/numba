@@ -1493,6 +1493,12 @@ class ReconstructSSA(FunctionPass):
         # example generator_info
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run(emit_dels=False)
+
+        if config.DEBUG or config.DUMP_SSA:
+            name = state.func_ir.func_id.func_qualname
+            print(f"SSA IR DUMP: {name}".center(80, "-"))
+            state.func_ir.dump()
+
         return True      # XXX detect if it actually got changed
 
     def _patch_locals(self, state):
