@@ -1583,6 +1583,7 @@ class TestMore(TestCase):
         # literal_unroll
         bar()
 
+    @unittest.skip("inlining of foo doesn't have const prop so y isn't const")
     def test_inlined_unroll_list(self):
         @njit(inline='always')
         def foo(y):

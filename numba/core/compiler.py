@@ -435,11 +435,68 @@ class DefaultPassBuilder(object):
       - nopython
       - objectmode
       - interpreted
+      - typed
+      - untyped
+      - nopython lowering
     """
     @staticmethod
     def define_nopython_pipeline(state, name='nopython'):
         """Returns an nopython mode pipeline based PassManager
         """
+        # compose pipeline from untyped, typed and lowering parts
+        dpb = DefaultPassBuilder
+        pm = PassManager(name)
+        untyped_passes = dpb.define_untyped_pipeline(state)
+        pm.passes.extend(untyped_passes.passes)
+
+        typed_passes = dpb.define_typed_pipeline(state)
+        pm.passes.extend(typed_passes.passes)
+
+        lowering_passes = dpb.define_nopython_lowering_pipeline(state)
+        pm.passes.extend(lowering_passes.passes)
+
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_nopython_lowering_pipeline(state, name='nopython_lowering'):
+        pm = PassManager(name)
+        # legalise
+        pm.add_pass(IRLegalization,
+                    "ensure IR is legal prior to lowering")
+
+        # lower
+        pm.add_pass(NoPythonBackend, "nopython mode backend")
+        pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_typed_pipeline(state, name="typed"):
+        """Returns the typed part of the nopython pipeline"""
+        pm = PassManager(name)
+        # typing
+        pm.add_pass(NopythonTypeInference, "nopython frontend")
+        pm.add_pass(AnnotateTypes, "annotate types")
+
+        # strip phis
+        pm.add_pass(PreLowerStripPhis, "remove phis nodes")
+
+        # optimisation
+        pm.add_pass(InlineOverloads, "inline overloaded functions")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(PreParforPass, "Preprocessing for parfors")
+        if not state.flags.no_rewrites:
+            pm.add_pass(NopythonRewrites, "nopython rewrites")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(ParforPass, "convert to parfors")
+
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_untyped_pipeline(state, name='untyped'):
+        """Returns an untyped part of the nopython pipeline"""
         pm = PassManager(name)
         if state.func_ir is None:
             pm.add_pass(TranslateByteCode, "analyzing bytecode")
@@ -471,29 +528,7 @@ class DefaultPassBuilder(object):
 
         if state.flags.enable_ssa:
             pm.add_pass(ReconstructSSA, "ssa")
-        # typing
-        pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
 
-        # strip phis
-        pm.add_pass(PreLowerStripPhis, "remove phis nodes")
-
-        # optimisation
-        pm.add_pass(InlineOverloads, "inline overloaded functions")
-        if state.flags.auto_parallel.enabled:
-            pm.add_pass(PreParforPass, "Preprocessing for parfors")
-        if not state.flags.no_rewrites:
-            pm.add_pass(NopythonRewrites, "nopython rewrites")
-        if state.flags.auto_parallel.enabled:
-            pm.add_pass(ParforPass, "convert to parfors")
-
-        # legalise
-        pm.add_pass(IRLegalization,
-                    "ensure IR is legal prior to lowering")
-
-        # lower
-        pm.add_pass(NoPythonBackend, "nopython mode backend")
-        pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         pm.finalize()
         return pm
 

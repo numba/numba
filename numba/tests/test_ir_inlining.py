@@ -1071,5 +1071,65 @@ class TestInlineOptions(TestCase):
         self.assertIs(model.value, cost_model)
 
 
+class TestInlineMiscIssues(TestCase):
+
+    def test_issue4691(self):
+        def output_factory(array, dtype):
+            pass
+
+        @overload(output_factory, inline='always')
+        def ol_output_factory(array, dtype):
+            if isinstance(array, types.npytypes.Array):
+                def impl(array, dtype):
+                    shape = array.shape[3:]
+                    return np.zeros(shape, dtype=dtype)
+
+                return impl
+
+        @njit(nogil=True)
+        def fn(array):
+            out = output_factory(array, array.dtype)
+            return out
+
+        @njit(nogil=True)
+        def fn2(array):
+            return np.zeros(array.shape[3:], dtype=array.dtype)
+
+        fn(np.ones((10, 20, 30, 40, 50)))
+        fn2(np.ones((10, 20, 30, 40, 50)))
+
+    def test_issue4693(self):
+
+        @njit(inline='always')
+        def inlining(array):
+            if array.ndim != 1:
+                raise ValueError("Invalid number of dimensions")
+
+            return array
+
+        @njit
+        def fn(array):
+            return inlining(array)
+
+        fn(np.zeros(10))
+
+    def test_issue5476(self):
+        # Actual issue has the ValueError passed as an arg to `inlining` so is
+        # a constant inference error
+        @njit(inline='always')
+        def inlining():
+            msg = 'Something happened'
+            raise ValueError(msg)
+
+        @njit
+        def fn():
+            return inlining()
+
+        with self.assertRaises(ValueError) as raises:
+            fn()
+
+        self.assertIn("Something happened", str(raises.exception))
+
+
 if __name__ == '__main__':
     unittest.main()
