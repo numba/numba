@@ -309,7 +309,10 @@ def get_sysinfo():
     # Python locale
     # On MacOSX, getdefaultlocale can raise. Check again if Py > 3.7.5
     try:
-        sys_info[_python_locale] = '.'.join(locale.getdefaultlocale())
+        # If $LANG is unset, getdefaultlocale() can return (None, None), make
+        # sure we can encode this as strings by casting explicitly.
+        sys_info[_python_locale] = '.'.join([str(i) for i in
+                                             locale.getdefaultlocale()])
     except Exception as e:
         _error_log.append(f'Error (locale): {e}')
 
