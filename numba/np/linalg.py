@@ -452,6 +452,8 @@ def dot_2_mm(context, builder, sig, args):
     def dot_impl(a, b):
         m, k = a.shape
         _k, n = b.shape
+        if k == 0:
+            return np.zeros((m, n), a.dtype)
         out = np.empty((m, n), a.dtype)
         return np.dot(a, b, out)
 
@@ -466,6 +468,8 @@ def dot_2_vm(context, builder, sig, args):
     def dot_impl(a, b):
         m, = a.shape
         _m, n = b.shape
+        if m == 0:
+            return np.zeros((n, ), a.dtype)
         out = np.empty((n, ), a.dtype)
         return np.dot(a, b, out)
 
@@ -480,6 +484,8 @@ def dot_2_mv(context, builder, sig, args):
     def dot_impl(a, b):
         m, n = a.shape
         _n, = b.shape
+        if n == 0:
+            return np.zeros((m, ), a.dtype)
         out = np.empty((m, ), a.dtype)
         return np.dot(a, b, out)
 
