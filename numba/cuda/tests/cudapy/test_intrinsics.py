@@ -400,24 +400,56 @@ class TestCudaIntrinsic(CUDATestCase):
             self.assertEquals(ary[0], round(i))
 
     def test_round_to_f4(self):
-        compiled = cuda.jit("void(float32[:], float32, int64)")(simple_round_to)
+        compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
         ary = np.zeros(1, dtype=np.float32)
-        vals = np.random.random(32)
-        digits = np.arange(-5, 5)
-        for val, ndigits in itertools.product(vals, digits):
-            compiled[1, 1](ary, val, ndigits)
-            np.testing.assert_allclose(ary[0], round(val, ndigits))
-
-    def test_round_to_f8(self):
-        compiled = cuda.jit("void(float64[:], float64, int64)")(simple_round_to)
-        ary = np.zeros(1, dtype=np.float64)
-        vals = np.random.random(32)
-        digits = np.arange(-5, 5)
+        vals = np.random.random(32).astype(np.float32)
+        np.concatenate((vals, np.array([np.inf, -np.inf, np.nan])))
+        digits = (
+            # Common case branch of round_to_impl
+            -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5,
+            # The algorithm currently implemented can only round to 13 digits
+            # with single precision
+            13
+        )
         for val, ndigits in itertools.product(vals, digits):
             with self.subTest(val=val, ndigits=ndigits):
                 compiled[1, 1](ary, val, ndigits)
-                np.testing.assert_allclose(ary[0], round(val, ndigits))
+                self.assertPreciseEqual(ary[0], round(val, ndigits),
+                                        prec='single')
 
+    def test_round_to_f4_halfway(self):
+        # Presently not passing
+        compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float32)
+        val = 0.5425
+        ndigits = 3
+        compiled[1, 1](ary, val, ndigits)
+        self.assertPreciseEqual(ary[0], round(val, ndigits), prec='single')
+
+
+    def test_round_to_f8(self):
+        compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float64)
+        #vals = np.random.random(32)
+        #digits = np.arange(-5, 5)
+        vals = np.random.random(32)
+        np.concatenate((vals, np.array([np.inf, -np.inf, np.nan])))
+        digits = (
+            -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5,
+        )
+
+        for val, ndigits in itertools.product(vals, digits):
+            with self.subTest(val=val, ndigits=ndigits):
+                compiled[1, 1](ary, val, ndigits)
+                self.assertPreciseEqual(ary[0], round(val, ndigits),
+                                        prec='exact')
+
+        val = 0.12345678987654321 * 10e-15
+        ndigits = 23
+        with self.subTest(val=val, ndigits=ndigits):
+            compiled[1, 1](ary, val, ndigits)
+            self.assertPreciseEqual(ary[0], round(val, ndigits),
+                                    prec='double')
 
 
 if __name__ == '__main__':
