@@ -75,6 +75,24 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': numbers.complex_negate_impl,
     }
 
+    ufunc_db[np.positive] = {
+        '?->?': numbers.int_positive_impl,
+        'b->b': numbers.int_positive_impl,
+        'B->B': numbers.int_positive_impl,
+        'h->h': numbers.int_positive_impl,
+        'H->H': numbers.int_positive_impl,
+        'i->i': numbers.int_positive_impl,
+        'I->I': numbers.int_positive_impl,
+        'l->l': numbers.int_positive_impl,
+        'L->L': numbers.int_positive_impl,
+        'q->q': numbers.int_positive_impl,
+        'Q->Q': numbers.int_positive_impl,
+        'f->f': numbers.real_positive_impl,
+        'd->d': numbers.real_positive_impl,
+        'F->F': numbers.complex_positive_impl,
+        'D->D': numbers.complex_positive_impl,
+    }
+
     ufunc_db[np.absolute] = {
         '?->?': numbers.int_abs_impl,
         'b->b': numbers.int_abs_impl,
@@ -997,6 +1015,9 @@ def _fill_ufunc_db(ufunc_db):
     from numba.np import npdatetime
     ufunc_db[np.negative].update({
         'm->m': npdatetime.timedelta_neg_impl,
+    })
+    ufunc_db[np.positive].update({
+        'm->m': npdatetime.timedelta_pos_impl,
     })
     ufunc_db[np.absolute].update({
         'm->m': npdatetime.timedelta_abs_impl,
