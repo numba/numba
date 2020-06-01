@@ -453,6 +453,7 @@ def zero_dim_msg(fn_name):
 def _is_nat(x):
     pass
 
+
 @overload(_is_nat)
 def ol_is_nat(x):
     if numpy_version >= (1, 18):
@@ -460,6 +461,7 @@ def ol_is_nat(x):
     else:
         nat = x('NaT')
         return lambda x: x == nat
+
 
 @lower_builtin(np.min, types.Array)
 @lower_builtin("array.min", types.Array)

@@ -868,7 +868,6 @@ def _fill_ufunc_db(ufunc_db):
             'M->?': npyfuncs.np_int_isinf_impl,
         })
 
-
     ufunc_db[np.isfinite] = {
         'f->?': npyfuncs.np_real_isfinite_impl,
         'd->?': npyfuncs.np_real_isfinite_impl,
