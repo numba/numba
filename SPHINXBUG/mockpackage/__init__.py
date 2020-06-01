@@ -2,7 +2,10 @@ import sys
 sys.path.insert(0, ".")
 print(sys.path)
 import numba
+from functools import lru_cache
+import inspect
 
+inspect.isfunction()
 def f_python(x):
     """
     I am a python function
@@ -21,4 +24,9 @@ def f_vectorize(x):
     """
     I am a vectorize function
     """
+    return x
+
+@lru_cache()
+def f_cache(x):
+    "I am cached"
     return x

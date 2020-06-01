@@ -64,7 +64,7 @@ class DUFuncLowerer(object):
         return npyimpl.numpy_ufunc_kernel(context, builder, sig, args,
                                           self.kernel,
                                           explicit_output=explicit_output)
-
+import types as pytypes
 import functools
 class DUFunc(_internal._DUFunc):
     """
