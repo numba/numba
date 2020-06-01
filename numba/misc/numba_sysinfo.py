@@ -186,14 +186,18 @@ def get_os_spec_info(os_name):
     for cmd in cmd_selected:
         if hasattr(cmd, 'read_file_flag'):
             # Open file within Python
-            try:
-                with open(cmd[0], 'r') as f:
-                    out = f.readlines()
-                    if out:
-                        out[0] = ' '.join((cmd[0], out[0]))
-                        output.extend(out)
-            except Exception as e:
-                _error_log.append(f'Error (file read): {e}')
+            if os.path.exists(cmd[0]):
+                try:
+                    with open(cmd[0], 'r') as f:
+                        out = f.readlines()
+                        if out:
+                            out[0] = ' '.join((cmd[0], out[0]))
+                            output.extend(out)
+                except Exception as e:
+                    _error_log.append(f'Error (file read): {e}')
+                    continue
+            else:
+                _warning_log.append('Warning (no file): {}'.format(cmd[0]))
                 continue
         else:
             # Spawn a subprocess
