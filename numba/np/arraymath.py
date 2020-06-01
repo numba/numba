@@ -483,7 +483,10 @@ def array_min(context, builder, sig, args):
             for view in it:
                 v = view.item()
                 if _is_nat(v):
-                    return v
+                    if numpy_version >= (1, 18):
+                        return v
+                    else:
+                        continue
                 if v < min_value:
                     min_value = v
             return min_value
@@ -563,7 +566,10 @@ def array_max(context, builder, sig, args):
             for view in it:
                 v = view.item()
                 if _is_nat(v):
-                    return v
+                    if numpy_version >= (1, 18):
+                        return v
+                    else:
+                        continue
                 if v > max_value:
                     max_value = v
             return max_value
@@ -640,7 +646,11 @@ def array_argmin(context, builder, sig, args):
             for view in it:
                 v = view.item()
                 if _is_nat(v):
-                    return idx
+                    if numpy_version >= (1, 18):
+                        return idx
+                    else:
+                        idx += 1
+                        continue
                 if v < min_value:
                     min_value = v
                     min_idx = idx
@@ -709,7 +719,11 @@ def array_argmax(context, builder, sig, args):
             for view in it:
                 v = view.item()
                 if _is_nat(v):
-                    return idx
+                    if numpy_version >= (1, 18):
+                        return idx
+                    else:
+                        idx += 1
+                        continue
                 if v > max_value:
                     max_value = v
                     max_idx = idx
