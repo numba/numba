@@ -152,7 +152,6 @@ class TestProduct(TestCase):
         self.check_dot_vv(vdot, "np.vdot()")
 
     def check_dot_vm(self, pyfunc2, pyfunc3, func_name):
-        m, n = 2, 3
 
         def samples(m, n):
             for order in 'CF':
@@ -169,14 +168,18 @@ class TestProduct(TestCase):
         cfunc2 = jit(nopython=True)(pyfunc2)
         if pyfunc3 is not None:
             cfunc3 = jit(nopython=True)(pyfunc3)
-        for a, b in samples(m, n):
-            self.check_func(pyfunc2, cfunc2, (a, b))
-            self.check_func(pyfunc2, cfunc2, (b, a.T))
-        if pyfunc3 is not None:
+
+        for m, n in [(2, 3),
+                     (3, 0)
+                     ]:
             for a, b in samples(m, n):
-                out = np.empty(m, dtype=a.dtype)
-                self.check_func_out(pyfunc3, cfunc3, (a, b), out)
-                self.check_func_out(pyfunc3, cfunc3, (b, a.T), out)
+                self.check_func(pyfunc2, cfunc2, (a, b))
+                self.check_func(pyfunc2, cfunc2, (b, a.T))
+            if pyfunc3 is not None:
+                for a, b in samples(m, n):
+                    out = np.empty(m, dtype=a.dtype)
+                    self.check_func_out(pyfunc3, cfunc3, (a, b), out)
+                    self.check_func_out(pyfunc3, cfunc3, (b, a.T), out)
 
         # Mismatching sizes
         a = self.sample_matrix(m, n - 1, np.float64)
@@ -229,10 +232,12 @@ class TestProduct(TestCase):
 
         # Test generic matrix * matrix as well as "degenerate" cases
         # where one of the outer dimensions is 1 (i.e. really represents
-        # a vector, which may select a different implementation)
+        # a vector, which may select a different implementation),
+        # or both matrices are empty but their product is not.
         for m, n, k in [(2, 3, 4),  # Generic matrix * matrix
                         (1, 3, 4),  # 2d vector * matrix
                         (1, 1, 4),  # 2d vector * 2d vector
+                        (3, 2, 0)   # Empty matrix * empty matrix
                         ]:
             for a, b in samples(m, n, k):
                 self.check_func(pyfunc2, cfunc2, (a, b))
