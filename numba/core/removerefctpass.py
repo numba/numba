@@ -55,6 +55,21 @@ def _legalize(module, dmm, fndesc):
         """
         return valid_output(ty) or isinstance(ty, types.Array)
 
+
+    # Ensure no reference to function marked as
+    # "numba_args_may_always_need_nrt"
+    try:
+        nmd = fn.module.get_named_metadata("numba_args_may_always_need_nrt")
+    except KeyError:
+        # Nothing marked
+        pass
+    else:
+        # Has functions marked as "numba_args_may_always_need_nrt"
+        if len(nmd.operands) > 0:
+            # The pass is illegal for this compilation unit.
+            return False
+
+    # More legalization base on function type
     argtypes = fndesc.argtypes
     restype = fndesc.restype
     calltypes = fndesc.calltypes
