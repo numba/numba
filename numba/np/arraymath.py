@@ -2785,20 +2785,38 @@ def np_corrcoef(x, y=None, rowvar=True):
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+
 @overload(np.argwhere)
 def np_argwhere(a):
     # needs to be much more array-like for the array impl to work, Numba bug
     # in one of the underlying function calls?
-    if type_can_asarray(a) and not isinstance(a, (types.Number, types.Boolean)):
+
+    use_scalar = (numpy_version >= (1, 18) and
+                  isinstance(a, (types.Number, types.Boolean)))
+    if type_can_asarray(a) and not use_scalar:
+        if numpy_version < (1, 18):
+            check = register_jitable(lambda x: not np.any(x))
+        else:
+            check = register_jitable(lambda x: True)
+
         def impl(a):
             arr = np.asarray(a)
+            if arr.shape == () and check(arr):
+                return np.zeros((0, 1), dtype=types.intp)
             return np.transpose(np.vstack(np.nonzero(arr)))
     else:
+        if numpy_version < (1, 18):
+            falseish = (0, 1)
+            trueish = (1, 1)
+        else:
+            falseish = (0, 0)
+            trueish = (1, 0)
+
         def impl(a):
             if a is not None and bool(a):
-                return np.zeros((1, 0), dtype=types.intp)
+                return np.zeros(trueish, dtype=types.intp)
             else:
-                return np.zeros((0, 0), dtype=types.intp)
+                return np.zeros(falseish, dtype=types.intp)
 
     return impl
 
