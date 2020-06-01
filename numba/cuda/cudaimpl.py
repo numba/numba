@@ -487,14 +487,26 @@ def round_to_impl(context, builder, sig, args):
             y = (x * pow1) * pow2
             if math.isinf(y):
                 return x
-            return (round(y) / pow2) / pow1
+            #return (round(y) / pow2) / pow1
 
         else:
             pow1 = 10.0 ** (-ndigits)
             y = x / pow1
-            return round(y) * pow1
+            #return round(y) * pow1
 
-    return context.compile_internal(builder, round_ndigits, sig, args)
+        z = round(y)
+        if (math.fabs(y - z) == 0.5):
+            # halfway between two integers; use round-half-even
+            z = 2.0 * round(y / 2.0)
+
+        if ndigits >= 0:
+            z = (z / pow2) / pow1
+        else:
+            z *= pow1
+
+        return z
+
+    return context.compile_internal(builder, round_ndigits, sig, args, )
 
 
 def gen_deg_rad(const):
