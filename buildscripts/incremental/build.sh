@@ -12,5 +12,4 @@ python setup.py build_ext -q --inplace
 
 # Install numba locally for use in `numba -s` sys info tool at test time
 # `-iNOWHERE` make a fake index to avoid auto downloading dependency
-# python -m pip install -iNOWHERE -e .
-python setup.py develop --no-deps  # XXX: revert me
+python -m pip install -iNOWHERE -e .

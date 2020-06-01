@@ -75,7 +75,7 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest llvmlite build
-$CONDA_INSTALL -c numba/label/dev llvmlite=0.33.0dev0_llvm9
+$CONDA_INSTALL -c numba llvmlite
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 sphinx_rtd_theme pygments numpydoc; fi
