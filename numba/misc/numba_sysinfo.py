@@ -186,12 +186,19 @@ def get_os_spec_info(os_name):
     for cmd in cmd_selected:
         if hasattr(cmd, 'read_file_flag'):
             # Open file within Python
-            with open(cmd[0], 'r') as f:
-                out = f.readlines()
-                if out:
-                    out[0] = ' '.join((cmd[0], out[0]))
-                    output.extend(out)
-            continue
+            if os.path.exists(cmd[0]):
+                try:
+                    with open(cmd[0], 'r') as f:
+                        out = f.readlines()
+                        if out:
+                            out[0] = ' '.join((cmd[0], out[0]))
+                            output.extend(out)
+                except OSError as e:
+                    _error_log.append(f'Error (file read): {e}')
+                    continue
+            else:
+                _warning_log.append('Warning (no file): {}'.format(cmd[0]))
+                continue
         else:
             # Spawn a subprocess
             try:
@@ -201,7 +208,7 @@ def get_os_spec_info(os_name):
                 continue
             if hasattr(cmd, 'buffer_output_flag'):
                 out = b' '.join(line for line in out.splitlines()) + b'\n'
-        output.extend(out.decode().splitlines())
+            output.extend(out.decode().splitlines())
 
     # Extract (k, output) pairs by searching for keywords in output
     kwds = params.get('kwds', {})
@@ -306,7 +313,10 @@ def get_sysinfo():
     # Python locale
     # On MacOSX, getdefaultlocale can raise. Check again if Py > 3.7.5
     try:
-        sys_info[_python_locale] = '.'.join(locale.getdefaultlocale())
+        # If $LANG is unset, getdefaultlocale() can return (None, None), make
+        # sure we can encode this as strings by casting explicitly.
+        sys_info[_python_locale] = '.'.join([str(i) for i in
+                                             locale.getdefaultlocale()])
     except Exception as e:
         _error_log.append(f'Error (locale): {e}')
 
