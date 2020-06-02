@@ -59,7 +59,7 @@ def _legalize(module, dmm, fndesc):
     # Ensure no reference to function marked as
     # "numba_args_may_always_need_nrt"
     try:
-        nmd = fn.module.get_named_metadata("numba_args_may_always_need_nrt")
+        nmd = module.get_named_metadata("numba_args_may_always_need_nrt")
     except KeyError:
         # Nothing marked
         pass
