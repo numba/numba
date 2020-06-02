@@ -16,7 +16,7 @@ class _MarkNrtCallVisitor(CallVisitor):
         self.marked = set()
 
     def visit_Call(self, instr):
-        if getattr(instr.callee, 'name', '') in ('NRT_incref', 'NRT_decref'):
+        if getattr(instr.callee, 'name', '') in _accepted_nrtfns:
             self.marked.add(instr)
 
 
