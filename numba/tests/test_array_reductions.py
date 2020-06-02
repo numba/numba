@@ -1003,7 +1003,6 @@ class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as e:
             cfunc(self.zero_size)
         self.assertIn(msg, str(e.exception))
-        self.disable_leak_check()
 
     @classmethod
     def install(cls):
