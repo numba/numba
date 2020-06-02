@@ -193,7 +193,7 @@ def get_os_spec_info(os_name):
                         if out:
                             out[0] = ' '.join((cmd[0], out[0]))
                             output.extend(out)
-                except Exception as e:
+                except OSError as e:
                     _error_log.append(f'Error (file read): {e}')
                     continue
             else:
