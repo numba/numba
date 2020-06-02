@@ -2547,9 +2547,12 @@ class TestParforsVectorizer(TestPrangeBase):
         fastmath = kwargs.pop('fastmath', False)
         cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
         assertions = kwargs.pop('assertions', True)
+        # force LLVM to use zmm registers for vectorization
+        # https://reviews.llvm.org/D67259
+        cpu_features = kwargs.pop('cpu_features', '-prefer-256-bit')
 
         env_opts = {'NUMBA_CPU_NAME': cpu_name,
-                    'NUMBA_CPU_FEATURES': '-prefer-256-bit',
+                    'NUMBA_CPU_FEATURES': cpu_features,
                     }
 
         overrides = []
