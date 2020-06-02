@@ -1,6 +1,6 @@
 """
-Implement a rewrite pass on LLVM module to remove unnecessary refcount
-operation.
+Implement a rewrite pass on a LLVM module to remove unnecessary 
+refcount operations.
 """
 
 from llvmlite.ir.transforms import CallVisitor
@@ -24,11 +24,10 @@ def _rewrite_function(function):
     # Mark NRT usage
     markpass = _MarkNrtCallVisitor()
     markpass.visit_Function(function)
-    marked = markpass.marked
     # Remove NRT usage
     for bb in function.basic_blocks:
         for inst in list(bb.instructions):
-            if inst in marked:
+            if inst in markpass.marked:
                 bb.instructions.remove(inst)
 
 
@@ -38,8 +37,8 @@ _accepted_nrtfns = 'NRT_incref', 'NRT_decref'
 def _legalize(module, dmm, fndesc):
     """
     Legalize the code in the module.
-    Returns True if the module is legal for the rewrite pass that remove
-    unnecessary refcount.
+    Returns True if the module is legal for the rewrite pass that removes
+    unnecessary refcounts.
     """
 
     def valid_output(ty):
@@ -103,16 +102,16 @@ def remove_unnecessary_nrt_usage(function, context, fndesc):
     It uses highlevel type info to determine if the function does not need NRT.
     Such a function does not:
 
-    - return array object;
-    - take arguments that need refcount except array;
-    - call function that return refcounted object.
+    - return array object(s);
+    - take arguments that need refcounting except array;
+    - call function(s) that return refcounted object.
 
     In effect, the function will not capture or create references that extend
     the lifetime of any refcounted objects beyound the lifetime of the
     function.
 
-    The rewrite performs inplace.
-    If rewrite has happen, this function return True. Otherwise, return False.
+    The rewrite is performed in place.
+    If rewrite has happened, this function returns True, otherwise, it returns False.
     """
     dmm = context.data_model_manager
     if _legalize(function.module, dmm, fndesc):
@@ -120,4 +119,3 @@ def remove_unnecessary_nrt_usage(function, context, fndesc):
         return True
     else:
         return False
-

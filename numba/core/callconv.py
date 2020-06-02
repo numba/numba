@@ -507,7 +507,7 @@ class CPUCallConv(BaseCallConv):
         # Add metadata to mark functions that may need NRT
         # thus disabling aggressive refct pruning in removerefctpass.py
         def type_may_always_need_nrt(ty):
-            # Returns True is it's a non-Array type that is contains MemInfo
+            # Returns True if it's a non-Array type that is contains MemInfo
             if not isinstance(ty, types.Array):
                 dmm = self.context.data_model_manager
                 if dmm[ty].contains_nrt_meminfo():
