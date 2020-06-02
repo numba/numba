@@ -341,6 +341,7 @@ Options for the compilation cache.
     :ref:`docs on cache clearing <cache-clearing>`
 
 
+.. _numba-envvars-gpu-support:
 
 GPU support
 -----------
@@ -353,6 +354,13 @@ GPU support
 
    If set, force the CUDA compute capability to the given version (a
    string of the type ``major.minor``), regardless of attached devices.
+
+.. envvar:: NUMBA_CUDA_DEFAULT_PTX_CC
+
+   The default compute capability (a string of the type ``major.minor``) to
+   target when compiling to PTX using ``cuda.compile_ptx``. The default is
+   5.2, which is the lowest non-deprecated compute capability in the most
+   recent version of the CUDA toolkit supported (10.2 at present).
 
 .. envvar:: NUMBA_ENABLE_CUDASIM
 
