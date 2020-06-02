@@ -502,6 +502,7 @@ def llvm_to_ptx(llvmir, **opts):
          ir_numba_atomic_min.format(T='float', Ti='i32')),
         ('declare double @___numba_atomic_double_min(double*, double)',
          ir_numba_atomic_min.format(T='double', Ti='i64')),
+        ('immarg', '')
     ]
 
     for decl, fn in replacements:
