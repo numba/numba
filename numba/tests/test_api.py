@@ -1,4 +1,5 @@
 import numba
+from numba import jit, njit
 
 from numba.tests.support import TestCase
 import unittest
@@ -26,6 +27,46 @@ class TestNumbaModule(TestCase):
         self.check_member("int32")
         # misc
         numba.__version__  # not in __all__
+
+
+class TestJitDecorator(TestCase):
+    """
+    Test the jit and njit decorators
+    """
+    def test_jit_nopython_forceobj(self):
+        with self.assertRaises(ValueError):
+            jit(nopython=True, forceobj=True)
+
+        def py_func(x):
+            return(x)
+
+        jit_func = jit(nopython=True)(py_func)
+        jit_func(1)
+        self.assertTrue(jit_func.nopython_signatures)
+
+        jit_func = jit(forceobj=True)(py_func)
+        jit_func(1)
+        self.assertFalse(jit_func.nopython_signatures)
+
+
+
+    def test_njit_nopython_forceobj(self):
+        with self.assertWarns(RuntimeWarning):
+            njit(forceobj=True)
+
+        with self.assertWarns(RuntimeWarning):
+            njit(nopython=True)
+
+        def py_func(x):
+            return(x)
+
+        jit_func = njit(nopython=True)(py_func)
+        jit_func(1)
+        self.assertTrue(jit_func.nopython_signatures)
+
+        jit_func = njit(forceobj=True)(py_func)
+        jit_func(1)
+        self.assertTrue(jit_func.nopython_signatures)
 
 
 if __name__ == '__main__':
