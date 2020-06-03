@@ -48,8 +48,6 @@ class TestJitDecorator(TestCase):
         jit_func(1)
         self.assertFalse(jit_func.nopython_signatures)
 
-
-
     def test_njit_nopython_forceobj(self):
         with self.assertWarns(RuntimeWarning):
             njit(forceobj=True)
