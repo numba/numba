@@ -1,3 +1,9 @@
+Version 0.51.0
+--------------
+
+In development
+
+
 Version 0.50.0 (Jun 10, 2020)
 -----------------------------
 
@@ -300,7 +306,7 @@ Enhancements from user contributed PRs (with thanks!):
 
 General Enhancements:
 
-* PR #4615: Allow masking threads out at runtime 
+* PR #4615: Allow masking threads out at runtime
 * PR #4798: Add branch pruning based on raw predicates.
 * PR #5115: Add support for iterating over 2D arrays
 * PR #5117: Implement ord()/chr()
