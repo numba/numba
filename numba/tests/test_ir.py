@@ -46,7 +46,9 @@ class CheckEquality(unittest.TestCase):
     loc2 = ir.Loc('mock', 2, 0)
     loc3 = ir.Loc('mock', 3, 0)
 
-    def check(self, base, same=[], different=[]):
+    def check(self, base, same=None, different=None):
+        same = same if same else []
+        different = different if different else []
         for s in same:
             self.assertTrue(base == s)
         for d in different:
@@ -391,7 +393,8 @@ class TestIRCompounds(CheckEquality):
 
         self.assertTrue(x_ir.equal_ir(y_ir))
 
-        def check_diffstr(string, pointing_at=[]):
+        def check_diffstr(string, pointing_at=None):
+            pointing_at = pointing_at if pointing_at else []
             lines = string.splitlines()
             for item in pointing_at:
                 for l in lines:

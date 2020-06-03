@@ -212,12 +212,13 @@ def git_versions_from_vcs(tag_prefix, root, verbose=False):
     return {"version": version, "full": full}
 
 
-def get_versions(default={"version": "0+unknown", "full": ""}, verbose=False):
+def get_versions(default=None, verbose=False):
     # I am in _version.py, which lives at ROOT/VERSIONFILE_SOURCE. If we have
     # __file__, we can work backwards from there to the root. Some
     # py2exe/bbfreeze/non-CPython implementations don't do __file__, in which
     # case we can only use expanded keywords.
 
+    default = default if default else {"version": "0+unknown", "full": ""}
     keywords = {"refnames": git_refnames, "full": git_full}
     ver = git_versions_from_keywords(keywords, tag_prefix, verbose)
     if ver:

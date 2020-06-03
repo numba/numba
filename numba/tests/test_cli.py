@@ -12,7 +12,8 @@ from numba.tests.support import TestCase
 import numba.misc.numba_sysinfo as nsi
 
 
-def run_cmd(cmdline, env=os.environ, timeout=60):
+def run_cmd(cmdline, env=None, timeout=60):
+    env = env if env else os.environ
     popen = subprocess.Popen(cmdline,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE,

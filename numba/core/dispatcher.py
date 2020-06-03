@@ -664,7 +664,7 @@ class Dispatcher(_DispatcherBase):
     __uuid = None
     __numba__ = 'py_func'
 
-    def __init__(self, py_func, locals={}, targetoptions={},
+    def __init__(self, py_func, locals=None, targetoptions=None,
                  impl_kind='direct', pipeline_class=compiler.Compiler):
         """
         Parameters
@@ -680,6 +680,8 @@ class Dispatcher(_DispatcherBase):
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
+        locals = locals if locals else {}
+        targetoptions = targetoptions if targetoptions else {}
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 

@@ -161,12 +161,14 @@ class BaseUFuncTest(MemoryLeakMixin):
 class TestUFuncs(BaseUFuncTest, TestCase):
 
     def basic_ufunc_test(self, ufunc, flags=no_pyobj_flags,
-                         skip_inputs=[], additional_inputs=[],
+                         skip_inputs=None, additional_inputs=None,
                          int_output_type=None, float_output_type=None,
                          kinds='ifc', positive_only=False):
 
         # Necessary to avoid some Numpy warnings being silenced, despite
         # the simplefilter() call below.
+        skip_inputs = skip_inputs if skip_inputs else []
+        additional_inputs = additional_inputs if additional_inputs else []
         self.reset_module_warnings(__name__)
 
         pyfunc = _make_ufunc_usecase(ufunc)
@@ -854,8 +856,10 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
         np.testing.assert_array_almost_equal(expected, got)
 
     def unary_op_test(self, operator, flags=enable_nrt_flags,
-                      skip_inputs=[], additional_inputs=[],
+                      skip_inputs=None, additional_inputs=None,
                       int_output_type=None, float_output_type=None):
+        skip_inputs = skip_inputs if skip_inputs else []
+        additional_inputs = additional_inputs if additional_inputs else []
         operator_func = _make_unary_ufunc_op_usecase(operator)
         inputs = list(self.inputs)
         inputs.extend(additional_inputs)
@@ -875,9 +879,11 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
             self._check_results(expected, got)
 
     def binary_op_test(self, operator, flags=enable_nrt_flags,
-                       skip_inputs=[], additional_inputs=[],
+                       skip_inputs=None, additional_inputs=None,
                        int_output_type=None, float_output_type=None,
                        positive_rhs=False):
+        skip_inputs = skip_inputs if skip_inputs else []
+        additional_inputs = additional_inputs if additional_inputs else []
         operator_func = _make_binary_ufunc_op_usecase(operator)
         inputs = list(self.inputs)
         inputs.extend(additional_inputs)

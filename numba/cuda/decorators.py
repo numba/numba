@@ -5,9 +5,10 @@ from .compiler import (compile_kernel, compile_device, declare_device_function,
 from .simulator.kernel import FakeCUDAKernel
 
 
-def jitdevice(func, link=[], debug=None, inline=False):
+def jitdevice(func, link=None, debug=None, inline=False):
     """Wrapper for device-jit.
     """
+    link = link if link else []
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     if link:
         raise ValueError("link keyword invalid for device function")
@@ -15,7 +16,7 @@ def jitdevice(func, link=[], debug=None, inline=False):
 
 
 def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
-        link=[], debug=None, **kws):
+        link=None, debug=None, **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
@@ -47,6 +48,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
        registers per thread. Useful for increasing occupancy.
     """
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
+    link = link if link else []
 
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')

@@ -13,14 +13,16 @@ from numba.np.ufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
 class CUDADispatcher(object):
     targetdescr = CUDATargetDesc
 
-    def __init__(self, py_func, locals={}, targetoptions={}):
+    def __init__(self, py_func, locals=None, targetoptions=None):
+        locals = locals if locals else {}
         assert not locals
         self.py_func = py_func
-        self.targetoptions = targetoptions
+        self.targetoptions = targetoptions if targetoptions else {}
         self.doc = py_func.__doc__
         self._compiled = None
 
-    def compile(self, sig, locals={}, **targetoptions):
+    def compile(self, sig, locals=None, **targetoptions):
+        locals = locals if locals else {}
         assert self._compiled is None
         assert not locals
         options = self.targetoptions.copy()

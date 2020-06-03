@@ -175,12 +175,13 @@ def compile_result(**kws):
 
 
 def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
-                     locals={}):
+                     locals=None):
     """
     Compile the function in an isolated environment (typing and target
     context).
     Good for testing.
     """
+    locals = locals if locals else {}
     from numba.core.registry import cpu_target
     typingctx = typing.Context()
     targetctx = cpu.CPUContext(typingctx)

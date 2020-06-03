@@ -47,11 +47,11 @@ class UFuncDispatcher(object):
     """
     targetdescr = ufunc_target
 
-    def __init__(self, py_func, locals={}, targetoptions={}):
+    def __init__(self, py_func, locals=None, targetoptions=None):
         self.py_func = py_func
         self.overloads = utils.UniqueDict()
-        self.targetoptions = targetoptions
-        self.locals = locals
+        self.targetoptions = targetoptions if targetoptions else {}
+        self.locals = locals if locals else {}
         self.cache = NullCache()
 
     def __reduce__(self):
@@ -73,7 +73,8 @@ class UFuncDispatcher(object):
     def enable_caching(self):
         self.cache = FunctionCache(self.py_func)
 
-    def compile(self, sig, locals={}, **targetoptions):
+    def compile(self, sig, locals=None, **targetoptions):
+        locals = locals if locals else {}
         locs = self.locals.copy()
         locs.update(locals)
 
@@ -224,7 +225,8 @@ class _BaseUFuncBuilder(object):
 
 class UFuncBuilder(_BaseUFuncBuilder):
 
-    def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
+    def __init__(self, py_func, identity=None, cache=False, targetoptions=None):
+        targetoptions = targetoptions if targetoptions else {}
         self.py_func = py_func
         self.identity = parse_identity(identity)
         self.nb_func = jit(target='npyufunc',
@@ -289,13 +291,13 @@ class GUFuncBuilder(_BaseUFuncBuilder):
 
     # TODO handle scalar
     def __init__(self, py_func, signature, identity=None, cache=False,
-                 targetoptions={}):
+                 targetoptions=None):
         self.py_func = py_func
         self.identity = parse_identity(identity)
         self.nb_func = jit(target='npyufunc', cache=cache)(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
-        self.targetoptions = targetoptions
+        self.targetoptions = targetoptions if targetoptions else {}
         self.cache = cache
         self._sigs = []
         self._cres = {}

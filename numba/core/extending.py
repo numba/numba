@@ -54,7 +54,7 @@ def type_callable(func):
 _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
-def overload(func, jit_options={}, strict=True, inline='never'):
+def overload(func, jit_options=None, strict=True, inline='never'):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -101,6 +101,7 @@ def overload(func, jit_options={}, strict=True, inline='never'):
       to determine whether to inline, this essentially permitting custom
       inlining rules (typical use might be cost models).
     """
+    jit_options = jit_options if jit_options else {}
     from numba.core.typing.templates import make_overload_template, infer_global
 
     # set default options

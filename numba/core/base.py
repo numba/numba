@@ -817,7 +817,7 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def _compile_subroutine_no_cache(self, builder, impl, sig, locals={},
+    def _compile_subroutine_no_cache(self, builder, impl, sig, locals=None,
                                      flags=None):
         """
         Invoke the compiler to compile a function to be used inside a
@@ -826,6 +826,7 @@ class BaseContext(object):
 
         Note this context's flags are not inherited.
         """
+        locals = locals if locals else {}
         # Compile
         from numba.core import compiler
 
@@ -847,7 +848,7 @@ class BaseContext(object):
             self.active_code_library.add_linking_library(cres.library)
             return cres
 
-    def compile_subroutine(self, builder, impl, sig, locals={}, flags=None,
+    def compile_subroutine(self, builder, impl, sig, locals=None, flags=None,
                            caching=True):
         """
         Compile the function *impl* for the given *sig* (in nopython mode).
@@ -856,6 +857,7 @@ class BaseContext(object):
         If *caching* evaluates True, the function keeps the compiled function
         for reuse in *.cached_internal_func*.
         """
+        locals = locals if locals else {}
         cache_key = (impl.__code__, sig, type(self.error_model))
         if not caching:
             cached = None
@@ -876,11 +878,12 @@ class BaseContext(object):
         self.active_code_library.add_linking_library(cres.library)
         return cres
 
-    def compile_internal(self, builder, impl, sig, args, locals={}):
+    def compile_internal(self, builder, impl, sig, args, locals=None):
         """
         Like compile_subroutine(), but also call the function with the given
         *args*.
         """
+        locals = locals if locals else {}
         cres = self.compile_subroutine(builder, impl, sig, locals)
         return self.call_internal(builder, cres.fndesc, sig, args)
 
