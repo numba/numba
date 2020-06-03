@@ -392,8 +392,6 @@ def call_xxgemv(context, builder, do_trans,
                             builder.bitcast(v_data, ll_void_p),
                             builder.bitcast(beta, ll_void_p),
                             builder.bitcast(out_data, ll_void_p)))
-    # if lda == 0:
-    #     cgutils.memset(builder, res.data, builder.mul(res.itemsize, res.nitems), 0)
     check_blas_return(context, builder, res)
 
 
@@ -444,8 +442,6 @@ def call_xxgemm(context, builder,
                             builder.bitcast(alpha, ll_void_p), data_a, lda,
                             data_b, ldb, builder.bitcast(beta, ll_void_p),
                             data_c, ldc))
-    # if k == 0:
-    #     cgutils.memset(builder, res.data, builder.mul(res.itemsize, res.nitems), 0)
     check_blas_return(context, builder, res)
 
 
@@ -685,7 +681,7 @@ def dot_3_mm(context, builder, sig, args):
             cgutils.memset(builder, out.data,
                            builder.mul(out.itemsize, out.nitems), 0)
         with nonempty:
-            # Check whether any of the operands is really a 1-d vector represented
+            # Check if any of the operands is really a 1-d vector represented
             # as a (1, k) or (k, 1) 2-d array.  In those cases, it is pessimal
             # to call the generic matrix * matrix product BLAS function.
             one = ir.Constant(intp_t, 1)
