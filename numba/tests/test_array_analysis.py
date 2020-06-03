@@ -108,7 +108,7 @@ class ArrayAnalysisTester(Compiler):
     @classmethod
     def mk_pipeline(cls, args, return_type=None, flags=None, locals=None,
                     library=None, typing_context=None, target_context=None):
-        locals = locals if locals else {}
+        locals = locals if locals is not None else {}
         if not flags:
             flags = Flags()
         flags.nrt = True
@@ -180,8 +180,8 @@ class TestArrayAnalysis(TestCase):
         """
         Compile the given function and get its IR.
         """
-        asserts = asserts if asserts else []
-        equivs = equivs if equivs else []
+        asserts = asserts if asserts is not None else []
+        equivs = equivs if equivs is not None else []
         test_pipeline = ArrayAnalysisTester.mk_pipeline(arg_tys)
         test_idempotence = self.compare_ir if idempotent else lambda x:()
         analysis = test_pipeline.compile_to_ir(fn, test_idempotence)

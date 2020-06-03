@@ -13,7 +13,7 @@ import numba.misc.numba_sysinfo as nsi
 
 
 def run_cmd(cmdline, env=None, timeout=60):
-    env = env if env else os.environ
+    env = env if env is not None else os.environ
     popen = subprocess.Popen(cmdline,
                              stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE,

@@ -78,7 +78,7 @@ class RewritesTester(Compiler):
     @classmethod
     def mk_pipeline(cls, args, return_type=None, flags=None, locals=None,
                     library=None, typing_context=None, target_context=None):
-        locals = locals if locals else {}
+        locals = locals if locals is not None else {}
         if not flags:
             flags = Flags()
         flags.nrt = True
@@ -92,7 +92,7 @@ class RewritesTester(Compiler):
     @classmethod
     def mk_no_rw_pipeline(cls, args, return_type=None, flags=None, locals=None,
                           library=None, **kws):
-        locals = locals if locals else {}
+        locals = locals if locals is not None else {}
         if not flags:
             flags = Flags()
         flags.no_rewrites = True

@@ -826,7 +826,7 @@ class BaseContext(object):
 
         Note this context's flags are not inherited.
         """
-        locals = locals if locals else {}
+        locals = locals if locals is not None else {}
         # Compile
         from numba.core import compiler
 
@@ -857,7 +857,7 @@ class BaseContext(object):
         If *caching* evaluates True, the function keeps the compiled function
         for reuse in *.cached_internal_func*.
         """
-        locals = locals if locals else {}
+        locals = locals if locals is not None else {}
         cache_key = (impl.__code__, sig, type(self.error_model))
         if not caching:
             cached = None
@@ -883,7 +883,7 @@ class BaseContext(object):
         Like compile_subroutine(), but also call the function with the given
         *args*.
         """
-        locals = locals if locals else {}
+        locals = locals if locals is not None else {}
         cres = self.compile_subroutine(builder, impl, sig, locals)
         return self.call_internal(builder, cres.fndesc, sig, args)
 

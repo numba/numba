@@ -208,7 +208,7 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
     def __init__(self, py_func, signature, identity=None, cache=False,
                  targetoptions=None):
         # Force nopython mode
-        targetoptions = targetoptions if targetoptions else {}
+        targetoptions = targetoptions if targetoptions is not None else {}
         targetoptions.update(dict(nopython=True))
         super(
             ParallelGUFuncBuilder,

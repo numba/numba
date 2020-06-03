@@ -8,7 +8,7 @@ from .simulator.kernel import FakeCUDAKernel
 def jitdevice(func, link=None, debug=None, inline=False):
     """Wrapper for device-jit.
     """
-    link = link if link else []
+    link = link if link is not None else []
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     if link:
         raise ValueError("link keyword invalid for device function")
@@ -48,7 +48,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
        registers per thread. Useful for increasing occupancy.
     """
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
-    link = link if link else []
+    link = link if link is not None else []
 
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')

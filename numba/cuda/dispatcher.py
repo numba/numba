@@ -14,15 +14,15 @@ class CUDADispatcher(object):
     targetdescr = CUDATargetDesc
 
     def __init__(self, py_func, locals=None, targetoptions=None):
-        locals = locals if locals else {}
+        locals = locals if locals is not None else {}
         assert not locals
         self.py_func = py_func
-        self.targetoptions = targetoptions if targetoptions else {}
+        self.targetoptions = targetoptions if targetoptions is not None else {}
         self.doc = py_func.__doc__
         self._compiled = None
 
     def compile(self, sig, locals=None, **targetoptions):
-        locals = locals if locals else {}
+        locals = locals if locals is not None else {}
         assert self._compiled is None
         assert not locals
         options = self.targetoptions.copy()

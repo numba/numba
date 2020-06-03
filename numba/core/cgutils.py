@@ -76,7 +76,7 @@ def copy_struct(dst, src, repl=None):
     """
     Copy structure from *src* to *dst* with replacement from *repl*.
     """
-    repl = repl.copy() if repl else {}
+    repl = repl.copy() if repl is not None else {}
     # copy data from src or use those in repl
     for k in src._datamodel._fields:
         v = repl.pop(k, getattr(src, k))

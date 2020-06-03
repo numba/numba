@@ -680,8 +680,8 @@ class Dispatcher(_DispatcherBase):
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
-        locals = locals if locals else {}
-        targetoptions = targetoptions if targetoptions else {}
+        locals = locals if locals is not None else {}
+        targetoptions = targetoptions if targetoptions is not None else {}
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 

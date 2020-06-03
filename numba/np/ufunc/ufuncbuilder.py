@@ -50,8 +50,8 @@ class UFuncDispatcher(object):
     def __init__(self, py_func, locals=None, targetoptions=None):
         self.py_func = py_func
         self.overloads = utils.UniqueDict()
-        self.targetoptions = targetoptions if targetoptions else {}
-        self.locals = locals if locals else {}
+        self.targetoptions = targetoptions if targetoptions is not None else {}
+        self.locals = locals if locals is not None else {}
         self.cache = NullCache()
 
     def __reduce__(self):
@@ -74,7 +74,7 @@ class UFuncDispatcher(object):
         self.cache = FunctionCache(self.py_func)
 
     def compile(self, sig, locals=None, **targetoptions):
-        locals = locals if locals else {}
+        locals = locals if locals is not None else {}
         locs = self.locals.copy()
         locs.update(locals)
 
@@ -226,7 +226,7 @@ class _BaseUFuncBuilder(object):
 class UFuncBuilder(_BaseUFuncBuilder):
 
     def __init__(self, py_func, identity=None, cache=False, targetoptions=None):
-        targetoptions = targetoptions if targetoptions else {}
+        targetoptions = targetoptions if targetoptions is not None else {}
         self.py_func = py_func
         self.identity = parse_identity(identity)
         self.nb_func = jit(target='npyufunc',
@@ -297,7 +297,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         self.nb_func = jit(target='npyufunc', cache=cache)(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
-        self.targetoptions = targetoptions if targetoptions else {}
+        self.targetoptions = targetoptions if targetoptions is not None else {}
         self.cache = cache
         self._sigs = []
         self._cres = {}

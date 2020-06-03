@@ -51,7 +51,7 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
 @global_compiler_lock
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                    fastmath=False, extensions=None, max_registers=None):
-    extensions = extensions if extensions else []
+    extensions = extensions if extensions is not None else []
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     fname = cres.fndesc.llvm_func_name
     lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
@@ -207,7 +207,7 @@ class DeviceFunctionTemplate(object):
         -------
         ptx : bytes
         """
-        nvvm_options = nvvm_options if nvvm_options else {}
+        nvvm_options = nvvm_options if nvvm_options is not None else {}
         llvmir = self.inspect_llvm(args)
         # Make PTX
         cuctx = get_context()
@@ -516,7 +516,7 @@ class CUDAKernel(CUDAKernelBase):
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
                  link=(), debug=False, fastmath=False, type_annotation=None,
                  extensions=None, max_registers=None):
-        extensions = extensions if extensions else []
+        extensions = extensions if extensions is not None else []
         super(CUDAKernel, self).__init__()
         # initialize CUfunction
         options = {

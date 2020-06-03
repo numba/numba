@@ -522,7 +522,7 @@ class JITTimsortMixin(object):
         Wrap *func* into another compiled function inserting a runtime-created
         mergestate as the first function argument.
         """
-        _cache = _cache if _cache else {}
+        _cache = _cache if _cache is not None else {}
         key = timsort, func
         if key in _cache:
             return _cache[key]
@@ -761,7 +761,7 @@ class TestNumpySort(TestCase):
         self.assertPreciseEqual(val, orig)
 
     def check_argsort(self, pyfunc, cfunc, val, kwargs=None):
-        kwargs = kwargs if kwargs else {}
+        kwargs = kwargs if kwargs is not None else {}
         orig = copy.copy(val)
         expected = pyfunc(val, **kwargs)
         got = cfunc(val, **kwargs)

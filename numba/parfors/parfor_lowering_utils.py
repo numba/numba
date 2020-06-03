@@ -47,7 +47,7 @@ class ParforLoweringBuilder:
         -------
         callable: _CallableNode
         """
-        kws = kws if kws else {}
+        kws = kws if kws is not None else {}
         loc = self._loc
         varname = f"{fobj.__name__}_func"
         gvname = f"{fobj.__name__}"
@@ -160,7 +160,7 @@ class ParforLoweringBuilder:
         res : ir.Expr
             The expression node for the return value of the call
         """
-        kws = kws if kws else {}
+        kws = kws if kws is not None else {}
         call = ir.Expr.call(callable_node.func, args, kws, loc=self._loc)
         self._calltypes[call] = callable_node.sig
         return call

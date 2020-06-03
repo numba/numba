@@ -101,7 +101,7 @@ def overload(func, jit_options=None, strict=True, inline='never'):
       to determine whether to inline, this essentially permitting custom
       inlining rules (typical use might be cost models).
     """
-    jit_options = jit_options if jit_options else {}
+    jit_options = jit_options if jit_options is not None else {}
     from numba.core.typing.templates import make_overload_template, infer_global
 
     # set default options

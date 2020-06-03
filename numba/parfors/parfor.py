@@ -554,7 +554,7 @@ class Parfor(ir.Expr, ir.Stmt):
         # if True, this parfor shouldn't be lowered sequentially even with the
         # sequential lowering option
         self.no_sequential_lowering = no_sequential_lowering
-        self.races = races if races else set()
+        self.races = races if races is not None else set()
         if config.DEBUG_ARRAY_OPT_STATS:
             fmt = 'Parallel for-loop #{} is produced from pattern \'{}\' at {}'
             print(fmt.format(
@@ -1350,14 +1350,14 @@ class PreParforPass(object):
     implementations of numpy functions if available.
     """
     def __init__(self, func_ir, typemap, calltypes, typingctx, options,
-                 swapped={}):
+                 swapped=None):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.typingctx = typingctx
         self.options = options
         # diagnostics
-        self.swapped = swapped
+        self.swapped = swapped if swapped is not None else {}
         self.stats = {
             'replaced_func': 0,
             'replaced_dtype': 0,

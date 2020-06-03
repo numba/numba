@@ -139,7 +139,7 @@ def jit(signature_or_function=None, locals=None, target='cpu', cache=False,
                 return x + y
 
     """
-    locals = locals if locals else {}
+    locals = locals if locals is not None else {}
     if 'argtypes' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
     if 'restype' in options:
@@ -248,7 +248,7 @@ def cfunc(sig, locals=None, cache=False, **options):
             return a + b
 
     """
-    locals = locals if locals else {}
+    locals = locals if locals is not None else {}
     sig = sigutils.normalize_signature(sig)
 
     def wrapper(func):

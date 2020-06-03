@@ -167,8 +167,8 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
         # Necessary to avoid some Numpy warnings being silenced, despite
         # the simplefilter() call below.
-        skip_inputs = skip_inputs if skip_inputs else []
-        additional_inputs = additional_inputs if additional_inputs else []
+        skip_inputs = skip_inputs if skip_inputs is not None else []
+        additional_inputs = additional_inputs if additional_inputs is not None else []
         self.reset_module_warnings(__name__)
 
         pyfunc = _make_ufunc_usecase(ufunc)
@@ -858,8 +858,8 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
     def unary_op_test(self, operator, flags=enable_nrt_flags,
                       skip_inputs=None, additional_inputs=None,
                       int_output_type=None, float_output_type=None):
-        skip_inputs = skip_inputs if skip_inputs else []
-        additional_inputs = additional_inputs if additional_inputs else []
+        skip_inputs = skip_inputs if skip_inputs is not None else []
+        additional_inputs = additional_inputs if additional_inputs is not None else []
         operator_func = _make_unary_ufunc_op_usecase(operator)
         inputs = list(self.inputs)
         inputs.extend(additional_inputs)
@@ -882,8 +882,8 @@ class TestArrayOperators(BaseUFuncTest, TestCase):
                        skip_inputs=None, additional_inputs=None,
                        int_output_type=None, float_output_type=None,
                        positive_rhs=False):
-        skip_inputs = skip_inputs if skip_inputs else []
-        additional_inputs = additional_inputs if additional_inputs else []
+        skip_inputs = skip_inputs if skip_inputs is not None else []
+        additional_inputs = additional_inputs if additional_inputs is not None else []
         operator_func = _make_binary_ufunc_op_usecase(operator)
         inputs = list(self.inputs)
         inputs.extend(additional_inputs)

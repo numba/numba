@@ -218,7 +218,7 @@ def get_versions(default=None, verbose=False):
     # py2exe/bbfreeze/non-CPython implementations don't do __file__, in which
     # case we can only use expanded keywords.
 
-    default = default if default else {"version": "0+unknown", "full": ""}
+    default = default if default is not None else {"version": "0+unknown", "full": ""}
     keywords = {"refnames": git_refnames, "full": git_full}
     ver = git_versions_from_keywords(keywords, tag_prefix, verbose)
     if ver:

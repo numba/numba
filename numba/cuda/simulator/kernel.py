@@ -48,7 +48,7 @@ class FakeCUDAKernel(object):
     '''
 
     def __init__(self, fn, device, fastmath=False, extensions=None):
-        extensions = extensions if extensions else []
+        extensions = extensions if extensions is not None else []
         self.fn = fn
         self._device = device
         self._fastmath = fastmath

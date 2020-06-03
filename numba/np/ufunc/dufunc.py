@@ -77,7 +77,7 @@ class DUFunc(_internal._DUFunc):
     __base_kwargs = set(('identity', '_keepalive', 'nin', 'nout'))
 
     def __init__(self, py_func, identity=None, cache=False, targetoptions=None):
-        targetoptions = targetoptions if targetoptions else {}
+        targetoptions = targetoptions if targetoptions is not None else {}
         if isinstance(py_func, Dispatcher):
             py_func = py_func.py_func
         dispatcher = jit(target='npyufunc',
