@@ -1350,14 +1350,14 @@ class PreParforPass(object):
     implementations of numpy functions if available.
     """
     def __init__(self, func_ir, typemap, calltypes, typingctx, options,
-                 swapped=None):
+                 swapped={}):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.typingctx = typingctx
         self.options = options
         # diagnostics
-        self.swapped = swapped if swapped else {}
+        self.swapped = swapped
         self.stats = {
             'replaced_func': 0,
             'replaced_dtype': 0,
