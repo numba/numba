@@ -83,12 +83,16 @@ class Omitted(Opaque):
     """
 
     def __init__(self, value):
-        self.value = value
+        self._value = value
         super(Omitted, self).__init__("omitted(default=%r)" % (value,))
 
     @property
     def key(self):
-        return type(self.value), id(self.value)
+        return type(self._value), id(self._value)
+
+    @property
+    def value(self):
+        return self._value
 
 
 class VarArg(Type):

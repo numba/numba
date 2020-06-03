@@ -10,6 +10,7 @@ import unittest
 from numba.core.compiler import compile_isolated, Flags
 from numba import jit
 from numba.core import types, utils, errors, typeinfer
+from numba.core.types.functions import _header_lead
 from numba.tests.support import TestCase, tag, needs_blas
 from numba.tests.matmul_usecase import (matmul_usecase, imatmul_usecase,
                                         DumbMatrix,)
@@ -979,7 +980,7 @@ class TestOperators(TestCase):
             with self.assertRaises(errors.TypingError, msg=msg) as raises:
                 compile_isolated(pyfunc, argtypes)
             # check error message
-            fmt = 'Invalid use of {}'
+            fmt = _header_lead + ' {}'
             expecting = fmt.format(opname
                                    if isinstance(opname, str)
                                    else 'Function({})'.format(opname))

@@ -1,3 +1,4 @@
 import sys
-from numba.core.errors import _MovedModule
-sys.modules[__name__] = _MovedModule(locals(), "numba.core.types")
+from numba.core.utils import _RedirectSubpackage
+sys.modules[__name__] = _RedirectSubpackage(locals(), "numba.core.types")
+

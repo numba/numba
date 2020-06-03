@@ -25,7 +25,7 @@ from numba.core import types, utils, typing, ir, config
 from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
-                               ForceLiteralArg)
+                               ForceLiteralArg, CompilerError)
 from numba.core.funcdesc import qualifying_prefix
 
 
@@ -81,7 +81,13 @@ class TypeVar(object):
 
     def lock(self, tp, loc, literal_value=NOTSET):
         assert isinstance(tp, types.Type), type(tp)
-        assert not self.locked
+
+        if self.locked:
+            msg = ("Invalid reassignment of a type-variable detected, type "
+                   "variables are locked according to the user provided "
+                   "function signature or from an ir.Const node. This is a "
+                   "bug! Type={}. {}").format(tp, self.type)
+            raise CompilerError(msg, loc)
 
         # If there is already a type, ensure we can convert it to the
         # locked type.
@@ -208,7 +214,9 @@ class ArgConstraint(object):
                 return
             ty = src.getone()
             if isinstance(ty, types.Omitted):
-                ty = typeinfer.context.resolve_value_type(ty.value)
+                ty = typeinfer.context.resolve_value_type_prefer_literal(
+                    ty.value,
+                )
             if not ty.is_precise():
                 raise TypingError('non-precise type {}'.format(ty))
             typeinfer.add_type(self.dst, ty, loc=self.loc)
