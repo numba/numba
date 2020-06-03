@@ -42,11 +42,13 @@ class TestJitDecorator(TestCase):
 
         jit_func = jit(nopython=True)(py_func)
         jit_func(1)
-        self.assertTrue(jit_func.nopython_signatures)
+        # Check length of nopython_signatures to check
+        # which mode the function was compiled in
+        self.assertTrue(len(jit_func.nopython_signatures) == 1)
 
         jit_func = jit(forceobj=True)(py_func)
         jit_func(1)
-        self.assertFalse(jit_func.nopython_signatures)
+        self.assertTrue(len(jit_func.nopython_signatures) == 0)
 
     def test_njit_nopython_forceobj(self):
         with self.assertWarns(RuntimeWarning):
@@ -60,11 +62,12 @@ class TestJitDecorator(TestCase):
 
         jit_func = njit(nopython=True)(py_func)
         jit_func(1)
-        self.assertTrue(jit_func.nopython_signatures)
+        self.assertTrue(len(jit_func.nopython_signatures) == 1)
 
         jit_func = njit(forceobj=True)(py_func)
         jit_func(1)
-        self.assertTrue(jit_func.nopython_signatures)
+        # Since forceobj is ignored this has to compile in nopython mode
+        self.assertTrue(len(jit_func.nopython_signatures) == 1)
 
 
 if __name__ == '__main__':
