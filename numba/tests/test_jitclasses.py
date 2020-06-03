@@ -991,6 +991,9 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(2, t1.add(1, 1))
         self.assertEqual(0, t1.sub(1, 1))
         self.assertEqual(0, t2.add(1, 1))
+        self.assertEqual(2j, t1.add(1j, 1j))
+        self.assertEqual(1j, t1.sub(2j, 1j))
+        self.assertEqual("foobar", t1.add("foo", "bar"))
 
         with self.assertRaises(AttributeError) as raises:
             Test2.sub(3, 1)
@@ -1000,6 +1003,28 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         with self.assertRaises(TypeError) as raises:
             Test1.add(3)
         self.assertIn("not enough arguments: expected 2, got 1",
+                      str(raises.exception))
+
+        # Check error message for calling a static method as a class attr from
+        # another method (currently unsupported).
+
+        @jitclass([])
+        class Test3:
+            def __init__(self):
+                pass
+
+            @staticmethod
+            def a_static_method(a, b):
+                pass
+
+            def call_static(self):
+                return Test3.a_static_method(1, 2)
+
+        invalid = Test3()
+        with self.assertRaises(errors.TypingError) as raises:
+            invalid.call_static()
+
+        self.assertIn("Unknown attribute 'a_static_method'",
                       str(raises.exception))
 
     def test_import_warnings(self):

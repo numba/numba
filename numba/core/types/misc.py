@@ -422,7 +422,7 @@ class ClassType(Callable, Opaque):
 
     @property
     def methods(self):
-        return dict((k, v.py_func) for k, v in self.jit_methods.items())
+        return {k: v.py_func for k, v in self.jit_methods.items()}
 
     @property
     def static_methods(self):
