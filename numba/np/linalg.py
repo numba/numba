@@ -392,6 +392,8 @@ def call_xxgemv(context, builder, do_trans,
                             builder.bitcast(v_data, ll_void_p),
                             builder.bitcast(beta, ll_void_p),
                             builder.bitcast(out_data, ll_void_p)))
+    # if lda == 0:
+    #     cgutils.memset(builder, res.data, builder.mul(res.itemsize, res.nitems), 0)
     check_blas_return(context, builder, res)
 
 
@@ -442,6 +444,8 @@ def call_xxgemm(context, builder,
                             builder.bitcast(alpha, ll_void_p), data_a, lda,
                             data_b, ldb, builder.bitcast(beta, ll_void_p),
                             data_c, ldc))
+    # if k == 0:
+    #     cgutils.memset(builder, res.data, builder.mul(res.itemsize, res.nitems), 0)
     check_blas_return(context, builder, res)
 
 
@@ -577,6 +581,7 @@ def dot_3_mv_check_args(a, b, out):
         raise ValueError("incompatible output array size for "
                          "np.dot(a, b, out) (matrix * vector)")
 
+
 def dot_3_vm(context, builder, sig, args):
     """
     np.dot(vector, matrix, out)
@@ -597,16 +602,16 @@ def dot_3_vm(context, builder, sig, args):
         # Asked for x * y, we will compute y.T * x
         mty = yty
         m_shapes = y_shapes
+        v_shape = x_shapes[0]
         do_trans = yty.layout == 'F'
         m_data, v_data = y.data, x.data
         check_args = dot_3_vm_check_args
-
-
     else:
         # Matrix * vector
         # We will compute x * y
         mty = xty
         m_shapes = x_shapes
+        v_shape = y_shapes[0]
         do_trans = xty.layout == 'C'
         m_data, v_data = x.data, y.data
         check_args = dot_3_mv_check_args
@@ -617,8 +622,15 @@ def dot_3_vm(context, builder, sig, args):
     for val in m_shapes:
         check_c_int(context, builder, val)
 
-    call_xxgemv(context, builder, do_trans, mty, m_shapes, m_data,
-                v_data, out.data)
+    zero = ir.Constant(intp_t, 0)
+    is_empty = builder.icmp_signed('==', v_shape, zero)
+    with builder.if_else(is_empty, likely=False) as (empty, nonempty):
+        with empty:
+            cgutils.memset(builder, out.data,
+                           builder.mul(out.itemsize, out.nitems), 0)
+        with nonempty:
+            call_xxgemv(context, builder, do_trans, mty, m_shapes, m_data,
+                        v_data, out.data)
 
     return impl_ret_borrowed(context, builder, sig.return_type,
                              out._getvalue())
@@ -656,6 +668,7 @@ def dot_3_mm(context, builder, sig, args):
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
+
     check_c_int(context, builder, m)
     check_c_int(context, builder, k)
     check_c_int(context, builder, n)
@@ -664,38 +677,46 @@ def dot_3_mm(context, builder, sig, args):
     y_data = y.data
     out_data = out.data
 
-    # Check whether any of the operands is really a 1-d vector represented
-    # as a (1, k) or (k, 1) 2-d array.  In those cases, it is pessimal
-    # to call the generic matrix * matrix product BLAS function.
-    one = ir.Constant(intp_t, 1)
-    is_left_vec = builder.icmp_signed('==', m, one)
-    is_right_vec = builder.icmp_signed('==', n, one)
+    # If eliminated dimension is zero, set all entries to zero and return
+    zero = ir.Constant(intp_t, 0)
+    is_empty = builder.icmp_signed('==', k, zero)
+    with builder.if_else(is_empty, likely=False) as (empty, nonempty):
+        with empty:
+            cgutils.memset(builder, out.data,
+                           builder.mul(out.itemsize, out.nitems), 0)
+        with nonempty:
+            # Check whether any of the operands is really a 1-d vector represented
+            # as a (1, k) or (k, 1) 2-d array.  In those cases, it is pessimal
+            # to call the generic matrix * matrix product BLAS function.
+            one = ir.Constant(intp_t, 1)
+            is_left_vec = builder.icmp_signed('==', m, one)
+            is_right_vec = builder.icmp_signed('==', n, one)
 
-    with builder.if_else(is_right_vec) as (r_vec, r_mat):
-        with r_vec:
-            with builder.if_else(is_left_vec) as (v_v, m_v):
-                with v_v:
-                    # V * V
-                    call_xxdot(context, builder, False, dtype,
-                               k, x_data, y_data, out_data)
-                with m_v:
-                    # M * V
-                    do_trans = xty.layout == outty.layout
-                    call_xxgemv(context, builder, do_trans,
-                                xty, x_shapes, x_data, y_data, out_data)
-        with r_mat:
-            with builder.if_else(is_left_vec) as (v_m, m_m):
-                with v_m:
-                    # V * M
-                    do_trans = yty.layout != outty.layout
-                    call_xxgemv(context, builder, do_trans,
-                                yty, y_shapes, y_data, x_data, out_data)
-                with m_m:
-                    # M * M
-                    call_xxgemm(context, builder,
-                                xty, x_shapes, x_data,
-                                yty, y_shapes, y_data,
-                                outty, out_shapes, out_data)
+            with builder.if_else(is_right_vec) as (r_vec, r_mat):
+                with r_vec:
+                    with builder.if_else(is_left_vec) as (v_v, m_v):
+                        with v_v:
+                            # V * V
+                            call_xxdot(context, builder, False, dtype,
+                                       k, x_data, y_data, out_data)
+                        with m_v:
+                            # M * V
+                            do_trans = xty.layout == outty.layout
+                            call_xxgemv(context, builder, do_trans,
+                                        xty, x_shapes, x_data, y_data, out_data)
+                with r_mat:
+                    with builder.if_else(is_left_vec) as (v_m, m_m):
+                        with v_m:
+                            # V * M
+                            do_trans = yty.layout != outty.layout
+                            call_xxgemv(context, builder, do_trans,
+                                        yty, y_shapes, y_data, x_data, out_data)
+                        with m_m:
+                            # M * M
+                            call_xxgemm(context, builder,
+                                        xty, x_shapes, x_data,
+                                        yty, y_shapes, y_data,
+                                        outty, out_shapes, out_data)
 
     return impl_ret_borrowed(context, builder, sig.return_type,
                              out._getvalue())

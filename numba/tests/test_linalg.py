@@ -182,6 +182,7 @@ class TestProduct(TestCase):
                     self.check_func_out(pyfunc3, cfunc3, (b, a.T), out)
 
         # Mismatching sizes
+        m, n = 2, 3
         a = self.sample_matrix(m, n - 1, np.float64)
         b = self.sample_vector(n, np.float64)
         self.assert_mismatching_sizes(cfunc2, (a, b))
