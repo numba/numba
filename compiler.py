@@ -137,6 +137,83 @@ def compile_kernel_parfor(device, func_ir, args, args_with_addrspaces,
     return oclkern
 
 
+def compile_dppy_func(pyfunc, return_type, args, debug=False):
+    cres = compile_with_dppy(pyfunc, return_type, args, debug=debug)
+    func = cres.library.get_function(cres.fndesc.llvm_func_name)
+    cres.target_context.mark_ocl_device(func)
+    devfn = DPPYFunction(cres)
+
+    class dppy_function_template(ConcreteTemplate):
+        key = devfn
+        cases = [cres.signature]
+
+    cres.typing_context.insert_user_function(devfn, dppy_function_template)
+    libs = [cres.library]
+    cres.target_context.insert_user_function(devfn, cres.fndesc, libs)
+    return devfn
+
+
+# Compile dppy function template
+def compile_dppy_func_template(pyfunc):
+    """Compile a DPPYFunctionTemplate
+    """
+    from .descriptor import dppy_target
+
+    dft = DPPYFunctionTemplate(pyfunc)
+
+    class dppy_function_template(AbstractTemplate):
+        key = dft
+
+        def generic(self, args, kws):
+            assert not kws
+            return dft.compile(args)
+
+    typingctx = dppy_target.typing_context
+    typingctx.insert_user_function(dft, dppy_function_template)
+    return dft
+
+
+class DPPYFunctionTemplate(object):
+    """Unmaterialized dppy function
+    """
+    def __init__(self, pyfunc, debug=False):
+        self.py_func = pyfunc
+        self.debug = debug
+        # self.inline = inline
+        self._compileinfos = {}
+
+    def compile(self, args):
+        """Compile the function for the given argument types.
+
+        Each signature is compiled once by caching the compiled function inside
+        this object.
+        """
+        if args not in self._compileinfos:
+            cres = compile_with_dppy(self.py_func, None, args, debug=self.debug)
+            func = cres.library.get_function(cres.fndesc.llvm_func_name)
+            cres.target_context.mark_ocl_device(func)
+            first_definition = not self._compileinfos
+            self._compileinfos[args] = cres
+            libs = [cres.library]
+
+            if first_definition:
+                # First definition
+                cres.target_context.insert_user_function(self, cres.fndesc,
+                                                         libs)
+            else:
+                cres.target_context.add_user_function(self, cres.fndesc, libs)
+
+        else:
+            cres = self._compileinfos[args]
+
+        return cres.signature
+
+
+class DPPYFunction(object):
+    def __init__(self, cres):
+        self.cres = cres
+
+
 def _ensure_valid_work_item_grid(val, device_env):
 
     if not isinstance(val, (tuple, list, int)):
