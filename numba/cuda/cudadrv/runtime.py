@@ -36,21 +36,19 @@ class Runtime:
 
     def __init__(self):
         self.is_initialized = False
-        try:
-            if config.DISABLE_CUDA:
-                msg = ("CUDA is disabled due to setting NUMBA_DISABLE_CUDA=1 "
-                       "in the environment, or because CUDA is unsupported on "
-                       "32-bit systems.")
-                raise CudaSupportError(msg)
-            self.lib = open_cudalib('cudart')
-            self.load_error = None
-        except CudaSupportError as e:
-            self.load_error = e
 
     def _initialize(self):
         # lazily initialize logger
         global _logger
         _logger = make_logger()
+
+        if config.DISABLE_CUDA:
+            msg = ("CUDA is disabled due to setting NUMBA_DISABLE_CUDA=1 "
+                   "in the environment, or because CUDA is unsupported on "
+                   "32-bit systems.")
+            raise CudaSupportError(msg)
+        self.lib = open_cudalib('cudart')
+
         self.is_initialized = True
 
     def __getattr__(self, fname):
@@ -64,10 +62,6 @@ class Runtime:
 
         if not self.is_initialized:
             self._initialize()
-
-        if self.load_error is not None:
-            raise CudaSupportError("Error at runtime load: \n%s:" %
-                                   self.load_error)
 
         # Find function in runtime library
         libfn = self._find_api(fname)
