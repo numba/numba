@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import, division
 from numba import sigutils, types
-from .compiler import (compile_kernel, JitDPPyKernel)
+from .compiler import (compile_kernel, JitDPPyKernel,
+                       compile_dppy_func_template, compile_dppy_func)
 from inspect import signature
 
 
@@ -46,3 +47,26 @@ def _kernel_jit(signature, debug):
         return compile_kernel(pyfunc, argtypes, debug)
 
     return _wrapped
+
+
+
+def func(signature=None):
+    if signature is None:
+        return _func_autojit
+    elif not sigutils.is_signature(signature):
+        func = signature
+        return _func_autojit(func)
+    else:
+        return _func_jit(signature)
+
+
+def _func_jit(signature):
+    argtypes, restype = sigutils.normalize_signature(signature)
+
+    def _wrapped(pyfunc):
+        return compile_dppy_func(pyfunc, restype, argtypes)
+
+    return _wrapped
+
+def _func_autojit(pyfunc):
+    return compile_dppy_func_template(pyfunc)
