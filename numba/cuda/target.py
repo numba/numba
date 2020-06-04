@@ -86,6 +86,20 @@ class CUDATargetContext(BaseContext):
         return self._target_data
 
     @cached_property
+    def nonconst_module_attrs(self):
+        """
+        Some CUDA intrinsics are at the module level, but cannot be treated as
+        constants, because they are loaded from a special register in the PTX.
+        These include threadIdx, blockDim, etc.
+        """
+        from numba import cuda
+        nonconsts = ('threadIdx', 'blockDim', 'blockIdx', 'gridDim', 'laneid',
+                     'warpsize')
+        nonconsts_with_mod = tuple([ (types.Module(cuda), nc)
+                                    for nc in nonconsts ])
+        return nonconsts_with_mod
+
+    @cached_property
     def call_conv(self):
         return CUDACallConv(self)
 

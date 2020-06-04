@@ -500,7 +500,24 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # need to run the compiler front end up to type inference to compute
             # a signature
             from numba.core import typed_passes, compiler
-            ir = compiler.run_frontend(disp_type.dispatcher.py_func)
+            from numba.core.inline_closurecall import InlineWorker
+            fcomp = disp._compiler
+            flags = compiler.Flags()
+
+            # Updating these causes problems?!
+            #fcomp.targetdescr.options.parse_as_flags(flags,
+            #                                         fcomp.targetoptions)
+            #flags = fcomp._customize_flags(flags)
+
+            # spoof a compiler pipline like the one that will be in use
+            tyctx = fcomp.targetdescr.typing_context
+            tgctx = fcomp.targetdescr.target_context
+            compiler_inst = fcomp.pipeline_class(tyctx, tgctx, None, None, None,
+                                                 flags, None, )
+            inline_worker = InlineWorker(tyctx, tgctx, fcomp.locals,
+                                         compiler_inst, flags, None,)
+
+            ir = inline_worker.run_untyped_passes(disp_type.dispatcher.py_func)
             resolve = disp_type.dispatcher.get_call_template
             template, pysig, folded_args, kws = resolve(new_args, kws)
 
@@ -527,9 +544,9 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
                 # store the inliner information, it's used later in the cost
                 # model function call
-                iinfo = _inline_info(ir, typemap, calltypes, sig)
-                self._inline_overloads[sig.args] = {'folded_args': folded_args,
-                                                    'iinfo': iinfo}
+            iinfo = _inline_info(ir, typemap, calltypes, sig)
+            self._inline_overloads[sig.args] = {'folded_args': folded_args,
+                                                'iinfo': iinfo}
         else:
             sig = disp_type.get_call_type(self.context, new_args, kws)
             self._compiled_overloads[sig.args] = disp_type.get_overload(sig)

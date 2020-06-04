@@ -175,10 +175,12 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
         return _ArrayHelper(ctxt, bld, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
-    elif types.unliteral(tyinp) in types.number_domain | set([types.boolean]):
+    elif (types.unliteral(tyinp) in types.number_domain | {types.boolean}
+          or isinstance(tyinp, types.scalars._NPDatetimeBase)):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
-        raise NotImplementedError('unsupported type for {0}: {1}'.format(where, str(tyinp)))
+        raise NotImplementedError('unsupported type for {0}: {1}'.format(where,
+                                  str(tyinp)))
 
 
 _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
@@ -441,38 +443,21 @@ def _ufunc_db_function(ufunc):
 
 _kernels = {} # Temporary map from ufunc's to their kernel implementation class
 
-def register_unary_ufunc_kernel(ufunc, kernel):
-    def unary_ufunc(context, builder, sig, args):
+def register_ufunc_kernel(ufunc, kernel):
+    def do_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel)
 
-    def unary_ufunc_no_explicit_output(context, builder, sig, args):
+    def do_ufunc_no_explicit_output(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel,
                                   explicit_output=False)
 
     _any = types.Any
+    in_args = (_any,) * ufunc.nin
 
     # (array or scalar, out=array)
-    lower(ufunc, _any, types.Array)(unary_ufunc)
+    lower(ufunc, *in_args, types.Array)(do_ufunc)
     # (array or scalar)
-    lower(ufunc, _any)(unary_ufunc_no_explicit_output)
-
-    _kernels[ufunc] = kernel
-
-
-def register_binary_ufunc_kernel(ufunc, kernel):
-    def binary_ufunc(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, kernel)
-
-    def binary_ufunc_no_explicit_output(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
-                                  explicit_output=False)
-
-    _any = types.Any
-
-    # (array or scalar, array o scalar, out=array)
-    lower(ufunc, _any, _any, types.Array)(binary_ufunc)
-    # (scalar, scalar)
-    lower(ufunc, _any, _any)(binary_ufunc_no_explicit_output)
+    lower(ufunc, *in_args)(do_ufunc_no_explicit_output)
 
     _kernels[ufunc] = kernel
 
@@ -515,12 +500,7 @@ def register_binary_operator_kernel(op, kernel, inplace=False):
 # Use the contents of ufunc_db to initialize the supported ufuncs
 
 for ufunc in ufunc_db.get_ufuncs():
-    if ufunc.nin == 1:
-        register_unary_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
-    elif ufunc.nin == 2:
-        register_binary_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
-    else:
-        raise RuntimeError("Don't know how to register ufuncs from ufunc_db with arity > 2")
+    register_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
 
 
 @lower(operator.pos, types.Array)

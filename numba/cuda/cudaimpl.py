@@ -7,47 +7,44 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
 from numba.core.imputils import Registry
+from numba.core.typing.npydecl import parse_dtype
 from numba.core import types, cgutils
 from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs
-from numba.cuda.cudadecl import dim3_type
+from numba.cuda.types import dim3
+
 
 registry = Registry()
 lower = registry.lower
 lower_attr = registry.lower_getattr
 
 
+def initialize_dim3(builder, prefix):
+    x = nvvmutils.call_sreg(builder, "%s.x" % prefix)
+    y = nvvmutils.call_sreg(builder, "%s.y" % prefix)
+    z = nvvmutils.call_sreg(builder, "%s.z" % prefix)
+    return cgutils.pack_struct(builder, (x, y, z))
+
+
 @lower_attr(types.Module(cuda), 'threadIdx')
 def cuda_threadIdx(context, builder, sig, args):
-    tidx = nvvmutils.call_sreg(builder, "tid.x")
-    tidy = nvvmutils.call_sreg(builder, "tid.y")
-    tidz = nvvmutils.call_sreg(builder, "tid.z")
-    return cgutils.pack_struct(builder, (tidx, tidy, tidz))
+    return initialize_dim3(builder, 'tid')
 
 
 @lower_attr(types.Module(cuda), 'blockDim')
 def cuda_blockDim(context, builder, sig, args):
-    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
-    ntidy = nvvmutils.call_sreg(builder, "ntid.y")
-    ntidz = nvvmutils.call_sreg(builder, "ntid.z")
-    return cgutils.pack_struct(builder, (ntidx, ntidy, ntidz))
+    return initialize_dim3(builder, 'ntid')
 
 
 @lower_attr(types.Module(cuda), 'blockIdx')
 def cuda_blockIdx(context, builder, sig, args):
-    ctaidx = nvvmutils.call_sreg(builder, "ctaid.x")
-    ctaidy = nvvmutils.call_sreg(builder, "ctaid.y")
-    ctaidz = nvvmutils.call_sreg(builder, "ctaid.z")
-    return cgutils.pack_struct(builder, (ctaidx, ctaidy, ctaidz))
+    return initialize_dim3(builder, 'ctaid')
 
 
 @lower_attr(types.Module(cuda), 'gridDim')
 def cuda_gridDim(context, builder, sig, args):
-    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
-    nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
-    nctaidz = nvvmutils.call_sreg(builder, "nctaid.z")
-    return cgutils.pack_struct(builder, (nctaidx, nctaidy, nctaidz))
+    return initialize_dim3(builder, 'nctaid')
 
 
 @lower_attr(types.Module(cuda), 'laneid')
@@ -60,18 +57,18 @@ def cuda_warpsize(context, builder, sig, args):
     return nvvmutils.call_sreg(builder, 'warpsize')
 
 
-@lower_attr(dim3_type, 'x')
-def threadIdx_x(context, builder, sig, args):
+@lower_attr(dim3, 'x')
+def dim3_x(context, builder, sig, args):
     return builder.extract_value(args, 0)
 
 
-@lower_attr(dim3_type, 'y')
-def threadIdx_y(context, builder, sig, args):
+@lower_attr(dim3, 'y')
+def dim3_y(context, builder, sig, args):
     return builder.extract_value(args, 1)
 
 
-@lower_attr(dim3_type, 'z')
-def threadIdx_z(context, builder, sig, args):
+@lower_attr(dim3, 'z')
+def dim3_z(context, builder, sig, args):
     return builder.extract_value(args, 2)
 
 
@@ -87,46 +84,30 @@ def cuda_grid(context, builder, sig, args):
         raise ValueError('Unexpected return type %s from cuda.grid' % restype)
 
 
+def _nthreads_for_dim(builder, dim):
+    ntid = nvvmutils.call_sreg(builder, f"ntid.{dim}")
+    nctaid = nvvmutils.call_sreg(builder, f"nctaid.{dim}")
+    return builder.mul(ntid, nctaid)
+
+
 @lower(cuda.gridsize, types.int32)
 def cuda_gridsize(context, builder, sig, args):
     restype = sig.return_type
-
-    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
-    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
-    nx = builder.mul(ntidx, nctaidx)
+    nx = _nthreads_for_dim(builder, 'x')
 
     if restype == types.int32:
         return nx
     elif isinstance(restype, types.UniTuple):
-        ntidy = nvvmutils.call_sreg(builder, "ntid.y")
-        nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
-        ny = builder.mul(ntidy, nctaidy)
+        ny = _nthreads_for_dim(builder, 'y')
 
         if restype.count == 2:
             return cgutils.pack_array(builder, (nx, ny))
         elif restype.count == 3:
-            ntidz = nvvmutils.call_sreg(builder, "ntid.z")
-            nctaidz = nvvmutils.call_sreg(builder, "nctaid.z")
-            nz = builder.mul(ntidz, nctaidz)
+            nz = _nthreads_for_dim(builder, 'z')
             return cgutils.pack_array(builder, (nx, ny, nz))
 
     # Fallthrough to here indicates unexpected return type or tuple length
     raise ValueError('Unexpected return type %s of cuda.gridsize' % restype)
-
-
-# -----------------------------------------------------------------------------
-
-def ptx_sreg_template(sreg):
-    def ptx_sreg_impl(context, builder, sig, args):
-        assert not args
-        return nvvmutils.call_sreg(builder, sreg)
-
-    return ptx_sreg_impl
-
-
-# Dynamic create all special register
-for sreg in nvvmutils.SREG_MAPPING.keys():
-    lower(sreg)(ptx_sreg_template(sreg))
 
 
 # -----------------------------------------------------------------------------
@@ -151,17 +132,10 @@ def _get_unique_smem_id(name):
     return "{0}_{1}".format(name, _unique_smem_id)
 
 
-def _parse_dtype(dtype):
-    if isinstance(dtype, types.DTypeSpec):
-        return dtype.dtype
-    elif isinstance(dtype, types.TypeRef):
-        return dtype.instance_type
-
-
-@lower(cuda.shared.array, types.Integer, types.Any)
+@lower(cuda.shared.array, types.IntegerLiteral, types.Any)
 def cuda_shared_array_integer(context, builder, sig, args):
     length = sig.args[0].literal_value
-    dtype = _parse_dtype(sig.args[1])
+    dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
                           symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
@@ -172,17 +146,17 @@ def cuda_shared_array_integer(context, builder, sig, args):
 @lower(cuda.shared.array, types.UniTuple, types.Any)
 def cuda_shared_array_tuple(context, builder, sig, args):
     shape = [ s.literal_value for s in sig.args[0] ]
-    dtype = _parse_dtype(sig.args[1])
+    dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=shape, dtype=dtype,
                           symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
 
-@lower(cuda.local.array, types.Integer, types.Any)
+@lower(cuda.local.array, types.IntegerLiteral, types.Any)
 def cuda_local_array_integer(context, builder, sig, args):
     length = sig.args[0].literal_value
-    dtype = _parse_dtype(sig.args[1])
+    dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
                           symbol_name='_cudapy_lmem',
                           addrspace=nvvm.ADDRSPACE_LOCAL,
@@ -193,7 +167,7 @@ def cuda_local_array_integer(context, builder, sig, args):
 @lower(cuda.local.array, types.UniTuple, types.Any)
 def ptx_lmem_alloc_array(context, builder, sig, args):
     shape = [ s.literal_value for s in sig.args[0] ]
-    dtype = _parse_dtype(sig.args[1])
+    dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=shape, dtype=dtype,
                           symbol_name='_cudapy_lmem',
                           addrspace=nvvm.ADDRSPACE_LOCAL,

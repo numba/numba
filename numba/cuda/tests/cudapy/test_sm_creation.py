@@ -1,5 +1,5 @@
 import numpy as np
-from numba import cuda, float32
+from numba import cuda, float32, int32
 from numba.core.errors import TypingError
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
@@ -47,6 +47,12 @@ def udt_invalid_2(A):
     A[i, j] = sa[i, j]
 
 
+def udt_invalid_3(A):
+    sa = cuda.shared.array(shape=(1, A[0]), dtype=float32)
+    i = cuda.grid(1)
+    A[i] = sa[i, 0]
+
+
 class TestSharedMemoryCreation(CUDATestCase):
     def getarg(self):
         return np.array(100, dtype=np.float32, ndmin=1)
@@ -62,15 +68,16 @@ class TestSharedMemoryCreation(CUDATestCase):
         udt = cuda.jit((float32[:, :],))(udt_global_build_tuple)
         udt[1, 1](self.getarg2())
 
-    @skip_on_cudasim('Simulator does not validate shared array construction')
+    @skip_on_cudasim('Simulator does not perform macro expansion')
     def test_global_build_list(self):
         with self.assertRaises(TypingError) as raises:
             cuda.jit((float32[:, :],))(udt_global_build_list)
 
-        self.assertIn("Invalid use of Function(<function shared.array",
+        self.assertIn("No implementation of function "
+                      "Function(<function shared.array",
                       str(raises.exception))
-        self.assertIn("with argument(s) of type(s): "
-                      "(dtype=class(float32), shape=list(int64)",
+        self.assertIn("found for signature:\n \n "
+                      ">>> array(shape=list(int64), dtype=class(float32)",
                       str(raises.exception))
 
     def test_global_constant_tuple(self):
@@ -79,24 +86,56 @@ class TestSharedMemoryCreation(CUDATestCase):
 
     @skip_on_cudasim("Can't check for constants in simulator")
     def test_invalid_1(self):
+        # Scalar shape cannot be a floating point value
         with self.assertRaises(TypingError) as raises:
             cuda.jit((float32[:],))(udt_invalid_1)
 
-        self.assertIn("Invalid use of Function(<function shared.array",
+        self.assertIn("No implementation of function "
+                      "Function(<function shared.array",
                       str(raises.exception))
-        self.assertIn("with argument(s) of type(s): "
-                      "(dtype=class(float32), shape=float32)",
+        self.assertIn("found for signature:\n \n "
+                      ">>> array(shape=float32, dtype=class(float32))",
                       str(raises.exception))
 
     @skip_on_cudasim("Can't check for constants in simulator")
     def test_invalid_2(self):
+        # Tuple shape cannot contain a floating point value
         with self.assertRaises(TypingError) as raises:
             cuda.jit((float32[:, :],))(udt_invalid_2)
 
-        self.assertIn("Invalid use of Function(<function shared.array",
+        self.assertIn("No implementation of function "
+                      "Function(<function shared.array",
                       str(raises.exception))
-        self.assertIn("with argument(s) of type(s): (dtype=class(float32), "
-                      "shape=Tuple(Literal[int](1), array(float32, 1d, A)))",
+        self.assertIn("found for signature:\n \n "
+                      ">>> array(shape=Tuple(Literal[int](1), "
+                      "array(float32, 1d, A)), dtype=class(float32))",
+                      str(raises.exception))
+
+    @skip_on_cudasim("Can't check for constants in simulator")
+    def test_invalid_3(self):
+        # Scalar shape must be literal
+        with self.assertRaises(TypingError) as raises:
+            cuda.jit((int32[:],))(udt_invalid_1)
+
+        self.assertIn("No implementation of function "
+                      "Function(<function shared.array",
+                      str(raises.exception))
+        self.assertIn("found for signature:\n \n "
+                      ">>> array(shape=int32, dtype=class(float32))",
+                      str(raises.exception))
+
+    @skip_on_cudasim("Can't check for constants in simulator")
+    def test_invalid_4(self):
+        # Tuple shape must contain only literals
+        with self.assertRaises(TypingError) as raises:
+            cuda.jit((int32[:],))(udt_invalid_3)
+
+        self.assertIn("No implementation of function "
+                      "Function(<function shared.array",
+                      str(raises.exception))
+        self.assertIn("found for signature:\n \n "
+                      ">>> array(shape=Tuple(Literal[int](1), int32), "
+                      "dtype=class(float32))",
                       str(raises.exception))
 
 

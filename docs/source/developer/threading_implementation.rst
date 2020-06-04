@@ -18,9 +18,9 @@ execute the parallel tasks.
 
 The relevant source files referenced in this document are
 
-- ``numba/npyufunc/tbbpool.cpp``
-- ``numba/npyufunc/omppool.cpp``
-- ``numba/npyufunc/workqueue.c``
+- ``numba/np/ufunc/tbbpool.cpp``
+- ``numba/np/ufunc/omppool.cpp``
+- ``numba/np/ufunc/workqueue.c``
 
   These files contain the TBB, OpenMP, and workqueue threadpool
   implementations, respectively. Each includes the functions
@@ -29,14 +29,14 @@ The relevant source files referenced in this document are
   schedulers. Note that the basic thread local variable logic is duplicated in
   each of these files, and not shared between them.
 
-- ``numba/npyufunc/parallel.py``
+- ``numba/np/ufunc/parallel.py``
 
   This file contains the Python and JIT compatible wrappers for
   ``set_num_threads()``, ``get_num_threads()``, and ``get_thread_id()``, as
   well as the code that loads the above libraries into Python and launches the
   threadpool.
 
-- ``numba/npyufunc/parfor.py``
+- ``numba/parfors/parfor_lowering.py``
 
   This file contains the main logic for generating code for the parallel
   backend. The thread mask is accessed in this file in the code that generates
@@ -47,7 +47,7 @@ Thread masking
 --------------
 
 As part of its design, Numba never launches new threads beyond the threads
-that are launched initially with ``numba.npyufunc.parallel._launch_threads()``
+that are launched initially with ``numba.np.ufunc.parallel._launch_threads()``
 when the first parallel execution is run. This is due to the way threads were
 already implemented in Numba prior to thread masking being implemented. This
 restriction was kept to keep the design simple, although it could be removed
@@ -164,7 +164,7 @@ Thread ID
 
 A private ``get_thread_id()`` function was added to each threading backend,
 which returns a unique ID for each thread. This can be accessed from Python by
-``numba.npyufunc.parallel._get_thread_id()`` (it can also be used inside a
+``numba.np.ufunc.parallel._get_thread_id()`` (it can also be used inside a
 JIT compiled function). The thread ID function is useful for testing that the
 thread masking behavior is correct, but it should not be used outside of the
 tests. For example, one can call ``set_num_threads(4)`` and then collect all
@@ -212,7 +212,7 @@ The general pattern for using ``get_num_threads`` in code generation is
 
    # Pass num_threads through to the appropriate backend function here
 
-See the code in ``numba/npyufunc/parfor.py``.
+See the code in ``numba/parfors/parfor_lowering.py``.
 
 The guard against ``num_threads`` being <= 0 is not strictly necessary, but it
 can protect against accidentally incorrect behavior in case the thread masking
