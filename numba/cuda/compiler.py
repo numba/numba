@@ -702,10 +702,10 @@ class _KernelConfiguration:
 
 class Dispatcher:
     '''
-    CUDA Dispatcher object. When called, the dispatcher will specialize itself
-    for the given arguments (if no suitable specialized version already exists)
-    & compute capability, and launch on the device associated with the current
-    context.
+    CUDA Dispatcher object. When configured and called, the dispatcher will
+    specialize itself for the given arguments (if no suitable specialized
+    version already exists) & compute capability, and launch on the device
+    associated with the current context.
 
     Dispatcher objects are not to be constructed by the user, but instead are
     created using the :func:`numba.cuda.jit` decorator.
@@ -807,8 +807,9 @@ class Dispatcher:
 
     @property
     def specialized(self):
-        # When the Dispatcher is specialized, it has one signature and cannot
-        # compile.
+        """
+        True if the Dispatcher has been specialized.
+        """
         return len(self.sigs) == 1 and not self._can_compile
 
     @property
@@ -857,7 +858,9 @@ class Dispatcher:
     def inspect_llvm(self, signature=None, compute_capability=None):
         '''
         Return the LLVM IR for all signatures encountered thus far, or the LLVM
-        IR for a specific signature and compute_capability if given.
+        IR for a specific signature and compute_capability if given. If the
+        dispatcher is specialized, the IR for the single specialization is
+        returned.
         '''
         cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
@@ -872,7 +875,8 @@ class Dispatcher:
         '''
         Return the generated assembly code for all signatures encountered thus
         far, or the LLVM IR for a specific signature and compute_capability
-        if given.
+        if given. If the dispatcher is specialized, the assembly code for the
+        single specialization is returned.
         '''
         cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
