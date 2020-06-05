@@ -319,11 +319,9 @@ class ForAll(object):
             return
 
         kernel = self.kernel.specialize(*args)
-
         blockdim = self._compute_thread_per_block(kernel)
         griddim = (self.ntasks + blockdim - 1) // blockdim
 
-        griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
         return kernel[griddim, blockdim, self.stream, self.sharedmem](*args)
 
     def _compute_thread_per_block(self, kernel):
@@ -739,23 +737,9 @@ class Dispatcher:
             self.compile(sigs[0])
             self._can_compile = False
 
-    def copy(self):
-        """
-        Shallow copy the instance
-        """
-        # Note: avoid using ``copy`` which calls __reduce__
-        cls = self.__class__
-        # new bare instance
-        new = cls.__new__(cls)
-        # update the internal states
-        new.__dict__.update(self.__dict__)
-        return new
-
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
-
-        return _KernelConfiguration(self, tuple(griddim), tuple(blockdim),
-                                    stream, sharedmem)
+        return _KernelConfiguration(self, griddim, blockdim, stream, sharedmem)
 
     def __getitem__(self, args):
         if len(args) not in [2, 3, 4]:
@@ -808,8 +792,8 @@ class Dispatcher:
 
     def specialize(self, *args):
         '''
-        Compile and bind to the current context a version of this kernel
-        specialized for the given *args*.
+        Create a new instance of this dispatcher specialized for the given
+        *args*.
         '''
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])

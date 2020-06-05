@@ -43,7 +43,7 @@ def normalize_kernel_dimensions(griddim, blockdim):
                                 % (name, dim))
         while len(dim) < 3:
             dim.append(1)
-        return dim
+        return tuple(dim)
 
     if None in (griddim, blockdim):
         raise ValueError(missing_launch_config_msg)

@@ -95,7 +95,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
                 targetoptions['link'] = link
                 sigs = None
                 return Dispatcher(func_or_sig, sigs, bind=bind,
-                              targetoptions=targetoptions)
+                                  targetoptions=targetoptions)
 
     else:
         if config.ENABLE_CUDASIM:
