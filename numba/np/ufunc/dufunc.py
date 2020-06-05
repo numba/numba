@@ -76,9 +76,7 @@ class DUFunc(_internal._DUFunc):
     # _internal.c:dufunc_init()
     __base_kwargs = set(('identity', '_keepalive', 'nin', 'nout'))
 
-
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
-        self.py_func = py_func
         if isinstance(py_func, Dispatcher):
             py_func = py_func.py_func
         dispatcher = jit(target='npyufunc',
@@ -101,10 +99,10 @@ class DUFunc(_internal._DUFunc):
         siglist = list(self._dispatcher.overloads.keys())
         return (serialize._rebuild_reduction,
                 (self.__class__, self._dispatcher, self.identity,
-                 self._frozen, siglist, self.py_func))
+                 self._frozen, siglist))
 
     @classmethod
-    def _rebuild(cls, dispatcher, identity, frozen, siglist, py_func):
+    def _rebuild(cls, dispatcher, identity, frozen, siglist):
         self = _internal._DUFunc.__new__(cls)
         self._initialize(dispatcher, identity)
         # Re-add signatures
@@ -112,7 +110,6 @@ class DUFunc(_internal._DUFunc):
             self.add(sig)
         if frozen:
             self.disable_compile()
-        self.py_func = py_func
         return self
 
     def build_ufunc(self):
