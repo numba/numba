@@ -715,7 +715,7 @@ class Dispatcher:
     def __init__(self, func, sigs, bind, targetoptions):
         super().__init__()
         self.py_func = func
-        self.sigs = sigs
+        self.sigs = []
         self._bind = bind
         self.link = targetoptions.pop('link', (),)
         self._can_compile = True
@@ -733,7 +733,7 @@ class Dispatcher:
 
         self.typingctx = CUDATargetDesc.typingctx
 
-        if self.sigs is not None:
+        if sigs:
             if len(sigs) > 1:
                 raise TypeError("Only one signature supported at present")
             self.compile(sigs[0])
@@ -811,20 +811,40 @@ class Dispatcher:
         Compile and bind to the current context a version of this kernel
         specialized for the given *args*.
         '''
-        clone = self.copy()
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
-        clone.compile(argtypes)
-        clone.disable_compile()
-        return clone
+        targetoptions = self.targetoptions
+        targetoptions['link'] = self.link
+        return Dispatcher(self.py_func, [types.void(*argtypes)], self._bind,
+                          targetoptions)
 
     def disable_compile(self, val=True):
         self._can_compile = not val
 
     @property
-    def _func(self):
-        # FIXME: Only works when this has been specialised to one argument type.
-        return next(iter(self.definitions.values()))._func
+    def specialized(self):
+        # When the Dispatcher is specialized, it has one signature and cannot
+        # compile.
+        return len(self.sigs) == 1 and not self._can_compile
+
+    @property
+    def definition(self):
+        # There is a single definition only when the dispatcher has been
+        # specialized.
+        if not self.specialized:
+            raise ValueError("Dispatcher needs to be specialized to get the "
+                             "single definition")
+        return next(iter(self.definitions.values()))
+
+    @property
+    def _func(self, signature=None, compute_capability=None):
+        cc = compute_capability or get_current_device().compute_capability
+        if signature is not None:
+            return self.definitions[(cc, signature)]._func
+        elif self.specialized:
+            return self.definition._func
+        else:
+            return {sig: defn._func for sig, defn in self.definitions.items()}
 
     def compile(self, sig):
         '''
@@ -834,9 +854,8 @@ class Dispatcher:
         argtypes, return_type = sigutils.normalize_signature(sig)
         assert return_type is None or return_type == types.none
         cc = get_current_device().compute_capability
-        if self.sigs and not self._can_compile:
-            # There is only one definition. Return it with no type checking.
-            return next(iter(self.definitions.values()))
+        if self.specialized:
+            return self.definition
         else:
             kernel = self.definitions.get((cc, argtypes))
         if kernel is None:
@@ -848,6 +867,7 @@ class Dispatcher:
             self.definitions[(cc, argtypes)] = kernel
             if self._bind:
                 kernel.bind()
+            self.sigs.append(sig)
         return kernel
 
     def inspect_llvm(self, signature=None, compute_capability=None):
@@ -858,9 +878,8 @@ class Dispatcher:
         cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
             return self.definitions[(cc, signature)].inspect_llvm()
-        elif self.sigs:
-            # FIXME: One signature only at present.
-            return next(iter(self.definitions.values())).inspect_llvm()
+        elif self.specialized:
+            return self.definition.inspect_llvm()
         else:
             return dict((sig, defn.inspect_llvm())
                         for sig, defn in self.definitions.items())
@@ -874,9 +893,8 @@ class Dispatcher:
         cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
             return self.definitions[(cc, signature)].inspect_asm()
-        elif self.sigs:
-            # FIXME: One signature only at present.
-            return next(iter(self.definitions.values())).inspect_asm()
+        elif self.specialized:
+            return self.definition.inspect_asm()
         else:
             return dict((sig, defn.inspect_asm())
                         for sig, defn in self.definitions.items())
@@ -890,18 +908,16 @@ class Dispatcher:
         if file is None:
             file = sys.stdout
 
-        if self.sigs:
-            # FIXME: One signature only at present.
-            next(iter(self.definitions.values())).inspect_types(file=file)
+        if self.specialized:
+            self.definition.inspect_types(file=file)
         else:
             for _, defn in utils.iteritems(self.definitions):
                 defn.inspect_types(file=file)
 
     @property
     def ptx(self):
-        # FIXME: Gives the PTX for a specialised single instance.
-        if self.sigs or not self._can_compile:
-            return next(iter(self.definitions.values())).ptx
+        if self.specialized:
+            return self.definition.ptx
         else:
             return dict((sig, defn.ptx)
                         for sig, defn in self.definitions.items())
