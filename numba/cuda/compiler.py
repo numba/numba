@@ -57,17 +57,17 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                                                           cres.signature.args,
                                                           debug=debug)
 
-    cukern = Kernel(llvm_module=lib._final_module,
-                    name=kernel.name,
-                    pretty_name=cres.fndesc.qualname,
-                    argtypes=cres.signature.args,
-                    type_annotation=cres.type_annotation,
-                    link=link,
-                    debug=debug,
-                    call_helper=cres.call_helper,
-                    fastmath=fastmath,
-                    extensions=extensions,
-                    max_registers=max_registers)
+    cukern = _Kernel(llvm_module=lib._final_module,
+                     name=kernel.name,
+                     pretty_name=cres.fndesc.qualname,
+                     argtypes=cres.signature.args,
+                     type_annotation=cres.type_annotation,
+                     link=link,
+                     debug=debug,
+                     call_helper=cres.call_helper,
+                     fastmath=fastmath,
+                     extensions=extensions,
+                     max_registers=max_registers)
     return cukern
 
 
@@ -439,11 +439,10 @@ class CachedCUFunction(object):
         return cls(entry_name, ptx, linking, max_registers)
 
 
-class Kernel:
+class _Kernel:
     '''
     CUDA Kernel specialized for a given set of argument types. When called, this
-    object will validate that the argument types match those for which it is
-    specialized, and then launch the kernel on the device.
+    object launches the kernel on the device.
     '''
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
                  link=(), debug=False, fastmath=False, type_annotation=None,
