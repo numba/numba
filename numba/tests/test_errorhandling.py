@@ -2,8 +2,9 @@
 Unspecified error handling tests
 """
 
-from numba import jit, njit, typed, int64
+from numba import jit, njit, typed, int64, intp, types
 from numba.core import errors, utils
+from numba.extending import overload, intrinsic
 import numpy as np
 
 
@@ -15,6 +16,7 @@ from numba.core.typed_passes import (NopythonTypeInference, DeadCodeElimination,
                                      NoPythonBackend)
 
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
+from numba.core.types.functions import _err_reasons as error_reasons
 
 from numba.tests.support import skip_parfors_unsupported
 import unittest
@@ -186,6 +188,82 @@ class TestConstantInferenceErrorHandling(unittest.TestCase):
         msg2 = 'raise Exception("Equal numbers: %i %i", a, b)'
         self.assertIn(msg1, str(raises.exception))
         self.assertIn(msg2, str(raises.exception))
+
+
+class TestErrorMessages(unittest.TestCase):
+
+    def test_specific_error(self):
+
+        given_reason = "specific_reason"
+
+        def foo():
+            pass
+
+        @overload(foo)
+        def ol_foo():
+            raise ValueError(given_reason)
+
+        @njit
+        def call_foo():
+            foo()
+
+        with self.assertRaises(errors.TypingError) as raises:
+            call_foo()
+
+        excstr = str(raises.exception)
+        self.assertIn(error_reasons['specific_error'].splitlines()[0], excstr)
+        self.assertIn(given_reason, excstr)
+
+    def test_no_match_error(self):
+
+        def foo():
+            pass
+
+        @overload(foo)
+        def ol_foo():
+            return None # emulate no impl available for type
+
+        @njit
+        def call_foo():
+            foo()
+
+        with self.assertRaises(errors.TypingError) as raises:
+            call_foo()
+
+        excstr = str(raises.exception)
+        self.assertIn("No match", excstr)
+
+    def test_error_in_intrinsic(self):
+
+        given_reason1 = "x must be literal"
+        given_reason2 = "array.ndim must be 1"
+
+        @intrinsic
+        def myintrin(typingctx, x, arr):
+            if not isinstance(x, types.IntegerLiteral):
+                raise errors.RequireLiteralValue(given_reason1)
+
+            if arr.ndim != 1:
+                raise ValueError(given_reason2)
+
+            sig = types.intp(x, arr)
+
+            def codegen(context, builder, signature, args):
+                pass
+            return sig, codegen
+
+        @njit
+        def call_intrin():
+            arr = np.zeros((2, 2))
+            myintrin(1, arr)
+
+        with self.assertRaises(errors.TypingError) as raises:
+            call_intrin()
+
+        excstr = str(raises.exception)
+        self.assertIn(error_reasons['specific_error'].splitlines()[0], excstr)
+        self.assertIn(given_reason1, excstr)
+        self.assertIn(given_reason2, excstr)
 
 
 if __name__ == '__main__':

@@ -1,26 +1,23 @@
 import ctypes
 import os
-from functools import reduce, wraps
-import operator
 import sys
-import threading
-import warnings
 
 import numpy as np
 
 from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
-from numba.core import types, typing, utils, funcdesc, serialize, config, compiler, sigutils
+from numba.core import (types, typing, utils, funcdesc, serialize, config,
+                        compiler, sigutils)
 from numba.core.compiler_lock import global_compiler_lock
 
 from .cudadrv.devices import get_context
-from .cudadrv import nvvm, devicearray, driver
+from .cudadrv import nvvm, driver
 from .errors import normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
 
 
 @global_compiler_lock
-def compile_cuda(pyfunc, return_type, args, debug, inline):
+def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
     # First compilation will trigger the initialization of the CUDA backend.
     from .descriptor import CUDATargetDesc
 
@@ -72,6 +69,64 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                     extensions=extensions,
                     max_registers=max_registers)
     return cukern
+
+
+@global_compiler_lock
+def compile_ptx(pyfunc, args, debug=False, device=False, fastmath=False,
+                cc=None, opt=True):
+    """Compile a Python function to PTX for a given set of argument types.
+
+    :param pyfunc: The Python function to compile.
+    :param args: A tuple of argument types to compile for.
+    :param debug: Whether to include debug info in the generated PTX.
+    :type debug: bool
+    :param device: Whether to compile a device function. Defaults to ``False``,
+                   to compile global kernel functions.
+    :type device: bool
+    :param fastmath: Whether to enable fast math flags (ftz=1, prec_sqrt=0,
+                     prec_div=, and fma=1)
+    :type fastmath: bool
+    :param cc: Compute capability to compile for, as a tuple ``(MAJOR, MINOR)``.
+               Defaults to ``(5, 2)``.
+    :type cc: tuple
+    :param opt: Enable optimizations. Defaults to ``True``.
+    :type opt: bool
+    :return: (ptx, resty): The PTX code and inferred return type
+    :rtype: tuple
+    """
+    cres = compile_cuda(pyfunc, None, args, debug=debug)
+    resty = cres.signature.return_type
+    if device:
+        llvm_module = cres.library._final_module
+        nvvm.fix_data_layout(llvm_module)
+    else:
+        fname = cres.fndesc.llvm_func_name
+        tgt = cres.target_context
+        lib, kernel = tgt.prepare_cuda_kernel(cres.library, fname,
+                                              cres.signature.args, debug=debug)
+        llvm_module = lib._final_module
+
+    options = {
+        'debug': debug,
+        'fastmath': fastmath,
+    }
+
+    cc = cc or config.CUDA_DEFAULT_PTX_CC
+    opt = 3 if opt else 0
+    arch = nvvm.get_arch_option(*cc)
+    llvmir = str(llvm_module)
+    ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **options)
+    return ptx.decode('utf-8'), resty
+
+
+def compile_ptx_for_current_device(pyfunc, args, debug=False, device=False,
+                                   fastmath=False, opt=True):
+    """Compile a Python function to PTX for a given set of argument types for
+    the current device's compute capabilility. This calls :func:`compile_ptx`
+    with an appropriate ``cc`` value for the current device."""
+    cc = get_current_device().compute_capability
+    return compile_ptx(pyfunc, args, debug=-debug, device=device,
+                       fastmath=fastmath, cc=cc, opt=True)
 
 
 class DeviceFunctionTemplate(object):
@@ -215,7 +270,7 @@ class DeviceFunction(object):
         cres = compile_cuda(self.py_func, self.return_type, self.args,
                             debug=self.debug, inline=self.inline)
         self.cres = cres
-        # Register
+
         class device_function_template(ConcreteTemplate):
             key = self
             cases = [cres.signature]
@@ -372,7 +427,8 @@ class CachedCUFunction(object):
             msg = ('cannot pickle CUDA kernel function with additional '
                    'libraries to link against')
             raise RuntimeError(msg)
-        args = (self.__class__, self.entry_name, self.ptx, self.linking, self.max_registers)
+        args = (self.__class__, self.entry_name, self.ptx, self.linking,
+                self.max_registers)
         return (serialize._rebuild_reduction, args)
 
     @classmethod
@@ -394,12 +450,10 @@ class Kernel:
                  extensions=[], max_registers=None):
         super(Kernel, self).__init__()
         # initialize CUfunction
-        options = {'debug': debug}
-        if fastmath:
-            options.update(dict(ftz=True,
-                                prec_sqrt=False,
-                                prec_div=False,
-                                fma=True))
+        options = {
+            'debug': debug,
+            'fastmath': fastmath
+        }
 
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
         cufunc = CachedCUFunction(name, ptx, link, max_registers)
@@ -414,7 +468,8 @@ class Kernel:
         self.extensions = list(extensions)
 
     @classmethod
-    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper, extensions, config):
+    def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper,
+                 extensions, config):
         """
         Rebuild an instance.
         """
@@ -450,7 +505,8 @@ class Kernel:
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
-        griddim, blockdim = normalize_kernel_dimensions(self.griddim, self.blockdim)
+        griddim, blockdim = normalize_kernel_dimensions(self.griddim,
+                                                        self.blockdim)
         self._kernel_call(args=args,
                           griddim=griddim,
                           blockdim=blockdim,
@@ -553,13 +609,14 @@ class Kernel:
                 else:
                     sym, filepath, lineno = loc
                     filepath = os.path.abspath(filepath)
-                    locinfo = 'In function %r, file %s, line %s, ' % (
-                        sym, filepath, lineno,
-                        )
+                    locinfo = 'In function %r, file %s, line %s, ' % (sym,
+                                                                      filepath,
+                                                                      lineno,)
                 # Prefix the exception message with the thread position
                 prefix = "%stid=%s ctaid=%s" % (locinfo, tid, ctaid)
                 if exc_args:
-                    exc_args = ("%s: %s" % (prefix, exc_args[0]),) + exc_args[1:]
+                    exc_args = ("%s: %s" % (prefix, exc_args[0]),) + \
+                        exc_args[1:]
                 else:
                     exc_args = prefix,
                 raise exccls(*exc_args)

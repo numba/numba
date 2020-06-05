@@ -554,34 +554,34 @@ explicitly from the `numba.typed` module::
 Here's an example using ``List()`` to create ``numba.typed.List`` inside a
 jit-compiled function and letting the compiler infer the item type:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_inferred_list_jit`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_inferred_list_jit`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_inferred_list_jit.begin
    :end-before: magictoken.ex_inferred_list_jit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of using ``List()`` to create a ``numba.typed.List`` outside of
 a jit-compiled function and then using it as an argument to a jit-compiled
 function:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_inferred_list`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_inferred_list`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_inferred_list.begin
    :end-before: magictoken.ex_inferred_list.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Finally, here's an example of using a nested `List()`:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_nested_list`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_nested_list`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_nested_list.begin
    :end-before: magictoken.ex_nested_list.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 .. _pysupported-comprehension:
@@ -693,34 +693,34 @@ limitations will be relaxed as Numba continues to improve.
 Here's an example of using ``dict()`` and ``{}`` to create ``numba.typed.Dict``
 instances and letting the compiler infer the key-value types:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_inferred_dict_njit`` of ``examples/dict_usage.py``
+   :caption: from ``ex_inferred_dict_njit`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_inferred_dict_njit.begin
    :end-before: magictoken.ex_inferred_dict_njit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from interpreted
 code and using the dictionary in jit code:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_typed_dict_from_cpython`` of ``examples/dict_usage.py``
+   :caption: from ``ex_typed_dict_from_cpython`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_typed_dict_from_cpython.begin
    :end-before: magictoken.ex_typed_dict_from_cpython.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from jit code and
 using the dictionary in interpreted code:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_typed_dict_njit`` of ``examples/dict_usage.py``
+   :caption: from ``ex_typed_dict_njit`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_typed_dict_njit.begin
    :end-before: magictoken.ex_typed_dict_njit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 It should be noted that ``numba.typed.Dict`` is not thread-safe.

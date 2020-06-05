@@ -7,7 +7,7 @@ from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from numba import _dynfunc
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
-                        generators, config, ir_utils, cgutils)
+                        generators, config, ir_utils, cgutils, removerefctpass)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError)
 from numba.core.funcdesc import default_mangler
@@ -203,6 +203,12 @@ class BaseLower(object):
             else:
                 print(self.module)
             print('=' * 80)
+
+        # Special optimization to remove NRT on functions that do not need it.
+        if self.context.enable_nrt and self.generator_info is None:
+            removerefctpass.remove_unnecessary_nrt_usage(self.function,
+                                                         context=self.context,
+                                                         fndesc=self.fndesc)
 
         # Run target specific post lowering transformation
         self.context.post_lowering(self.module, self.library)

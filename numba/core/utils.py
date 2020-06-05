@@ -13,7 +13,7 @@ import weakref
 import warnings
 from types import ModuleType
 from importlib import import_module
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 import numpy as np
 
 from inspect import signature as pysignature # noqa: F401
@@ -478,8 +478,7 @@ def unified_function_type(numba_types, require_precise=True):
 
     Parameters
     ----------
-    numba_types : tuple
-      Numba type instances.
+    numba_types : Sequence of numba Type instances.
     require_precise : bool
       If True, the returned Numba function type must be precise.
 
@@ -501,9 +500,10 @@ def unified_function_type(numba_types, require_precise=True):
     """
     from numba.core.errors import NumbaExperimentalFeatureWarning
 
-    if not (numba_types
-            and isinstance(numba_types[0],
-                           (types.Dispatcher, types.FunctionType))):
+    if not (isinstance(numba_types, Sequence) and
+            len(numba_types) > 0 and
+            isinstance(numba_types[0],
+                       (types.Dispatcher, types.FunctionType))):
         return
 
     warnings.warn("First-class function type feature is experimental",

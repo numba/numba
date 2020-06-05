@@ -1372,32 +1372,8 @@ class ArrayAnalysis(object):
             else:
                 return pre, []
         elif isinstance(inst, ir.Branch):
-            cond_var = inst.cond
-            cond_def = guard(get_definition, self.func_ir, cond_var)
-            if not cond_def:  # phi variable has no single definition
-                # We'll use equiv_set to try to find a cond_def instead
-                equivs = equiv_set.get_equiv_set(cond_var)
-                defs = []
-                for name in equivs:
-                    if isinstance(name, str) and name in self.typemap:
-                        var_def = guard(
-                            get_definition, self.func_ir, name, lhs_only=True
-                        )
-                        if isinstance(var_def, ir.Var):
-                            var_def = var_def.name
-                        if var_def:
-                            defs.append(var_def)
-                    else:
-                        defs.append(name)
-                defvars = set(filter(lambda x: isinstance(x, str), defs))
-                defconsts = set(defs).difference(defvars)
-                if len(defconsts) == 1:
-                    cond_def = list(defconsts)[0]
-                elif len(defvars) == 1:
-                    cond_def = guard(
-                        get_definition, self.func_ir, list(defvars)[0]
-                    )
-            if isinstance(cond_def, ir.Expr) and cond_def.op == "binop":
+
+            def handle_call_binop(cond_def):
                 br = None
                 if cond_def.fn == operator.eq:
                     br = inst.truebr
@@ -1431,6 +1407,45 @@ class ArrayAnalysis(object):
                     self.prepends[(label, otherbr)] = [
                         ir.Assign(ir.Const(1 - cond_val, loc), cond_var, loc)
                     ]
+
+            cond_var = inst.cond
+            cond_def = guard(get_definition, self.func_ir, cond_var)
+            if not cond_def:  # phi variable has no single definition
+                # We'll use equiv_set to try to find a cond_def instead
+                equivs = equiv_set.get_equiv_set(cond_var)
+                defs = []
+                for name in equivs:
+                    if isinstance(name, str) and name in self.typemap:
+                        var_def = guard(
+                            get_definition, self.func_ir, name, lhs_only=True
+                        )
+                        if isinstance(var_def, ir.Var):
+                            var_def = var_def.name
+                        if var_def:
+                            defs.append(var_def)
+                    else:
+                        defs.append(name)
+                defvars = set(filter(lambda x: isinstance(x, str), defs))
+                defconsts = set(defs).difference(defvars)
+                if len(defconsts) == 1:
+                    cond_def = list(defconsts)[0]
+                elif len(defvars) == 1:
+                    cond_def = guard(
+                        get_definition, self.func_ir, list(defvars)[0]
+                    )
+            if isinstance(cond_def, ir.Expr) and cond_def.op == 'binop':
+                handle_call_binop(cond_def)
+            elif isinstance(cond_def, ir.Expr) and cond_def.op == 'call':
+                # this handles bool(predicate)
+                glbl_bool = guard(get_definition, self.func_ir, cond_def.func)
+                if glbl_bool is not None and glbl_bool.value is bool:
+                    if len(cond_def.args) == 1:
+                        condition = guard(get_definition, self.func_ir,
+                                          cond_def.args[0])
+                        if (condition is not None and
+                            isinstance(condition, ir.Expr) and
+                                condition.op == 'binop'):
+                            handle_call_binop(condition)
             else:
                 if isinstance(cond_def, ir.Const):
                     cond_def = cond_def.value

@@ -9,7 +9,17 @@ from numba.core import cgutils
 _regex_incref = re.compile(r'\s*(?:tail)?\s*call void @NRT_incref\((.*)\)')
 _regex_decref = re.compile(r'\s*(?:tail)?\s*call void @NRT_decref\((.*)\)')
 _regex_bb = re.compile(
-    r'([\'"]?[-a-zA-Z$._][-a-zA-Z$._0-9]*[\'"]?:)|^define|^;\s*<label>')
+    r'|'.join([
+        # unamed BB is just a plain number
+        r'[0-9]+:',
+        # with a proper identifer (see llvm langref)
+        r'[\'"]?[-a-zA-Z$._0-9][-a-zA-Z$._0-9]*[\'"]?:',
+        # is a start of a function definition
+        r'^define',
+        # no name
+        r'^;\s*<label>',
+    ])
+)
 
 
 def _remove_redundant_nrt_refct(llvmir):
