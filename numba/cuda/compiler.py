@@ -11,7 +11,7 @@ from numba.core.compiler_lock import global_compiler_lock
 
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, driver
-from .errors import normalize_kernel_dimensions
+from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
 
@@ -469,7 +469,7 @@ class Kernel:
 
     @classmethod
     def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper,
-                 extensions, config):
+                 extensions):
         """
         Rebuild an instance.
         """
@@ -485,8 +485,6 @@ class Kernel:
         instance.debug = debug
         instance.call_helper = call_helper
         instance.extensions = extensions
-        # update config
-        instance._deserialize_config(config)
         return instance
 
     def __reduce__(self):
@@ -497,10 +495,9 @@ class Kernel:
         Thread, block and shared memory configuration are serialized.
         Stream information is discarded.
         """
-        config = self._serialize_config()
         args = (self.__class__, self.entry_name, self.argument_types,
                 self._func, self.linking, self.debug, self.call_helper,
-                self.extensions, config)
+                self.extensions)
         return (serialize._rebuild_reduction, args)
 
     def __call__(self, *args, **kwargs):
@@ -693,6 +690,19 @@ class Kernel:
             raise NotImplementedError(ty, val)
 
 
+class _KernelConfiguration:
+    def __init__(self, dispatcher, griddim, blockdim, stream, sharedmem):
+        self.dispatcher = dispatcher
+        self.griddim = griddim
+        self.blockdim = blockdim
+        self.stream = stream
+        self.sharedmem = sharedmem
+
+    def __call__(self, *args):
+        return self.dispatcher.call(args, self.griddim, self.blockdim,
+                                    self.stream, self.sharedmem)
+
+
 class Dispatcher:
     '''
     CUDA Dispatcher object. When called, the dispatcher will specialize itself
@@ -710,11 +720,6 @@ class Dispatcher:
         self._bind = bind
         self.link = targetoptions.pop('link', (),)
         self._can_compile = True
-
-        self.griddim = None
-        self.blockdim = None
-        self.sharedmem = 0
-        self.stream = 0
 
         # keyed by a `(compute capability, args)` tuple
         self.definitions = {}
@@ -750,12 +755,8 @@ class Dispatcher:
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
 
-        clone = self.copy()
-        clone.griddim = tuple(griddim)
-        clone.blockdim = tuple(blockdim)
-        clone.stream = stream
-        clone.sharedmem = sharedmem
-        return clone
+        return _KernelConfiguration(self, tuple(griddim), tuple(blockdim),
+                                    stream, sharedmem)
 
     def __getitem__(self, args):
         if len(args) not in [2, 3, 4]:
@@ -771,20 +772,6 @@ class Dispatcher:
         - the kernel must check if the thread id is valid."""
 
         return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
-
-    def _serialize_config(self):
-        """
-        Helper for serializing the grid, block and shared memory configuration.
-        CUDA stream config is not serialized.
-        """
-        return self.griddim, self.blockdim, self.sharedmem
-
-    def _deserialize_config(self, config):
-        """
-        Helper for deserializing the grid, block and shared memory
-        configuration.
-        """
-        self.griddim, self.blockdim, self.sharedmem = config
 
     @property
     def extensions(self):
@@ -807,16 +794,18 @@ class Dispatcher:
         '''
         return self.targetoptions['extensions']
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
+        # An attempt to launch an unconfigured kernel
+        raise ValueError(missing_launch_config_msg)
+
+    def call(self, args, griddim, blockdim, stream, sharedmem):
         '''
         Specialize and invoke this kernel with *args*.
         '''
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
         kernel = self.compile(argtypes)
-        griddim, blockdim = normalize_kernel_dimensions(self.griddim,
-                                                        self.blockdim)
-        kernel.launch(args, griddim, blockdim, self.stream, self.sharedmem)
+        kernel.launch(args, griddim, blockdim, stream, sharedmem)
 
     def specialize(self, *args):
         '''
@@ -923,13 +912,12 @@ class Dispatcher:
             defn.bind()
 
     @classmethod
-    def _rebuild(cls, func_reduced, sigs, bind, targetoptions, config):
+    def _rebuild(cls, func_reduced, sigs, bind, targetoptions):
         """
         Rebuild an instance.
         """
         func = serialize._rebuild_function(*func_reduced)
         instance = cls(func, sigs, bind, targetoptions)
-        instance._deserialize_config(config)
         return instance
 
     def __reduce__(self):
@@ -939,7 +927,6 @@ class Dispatcher:
         """
         glbls = serialize._get_function_globals_for_reduction(self.py_func)
         func_reduced = serialize._reduce_function(self.py_func, glbls)
-        config = self._serialize_config()
         args = (self.__class__, func_reduced, self.sigs, self._bind,
-                self.targetoptions, config)
+                self.targetoptions)
         return (serialize._rebuild_reduction, args)
