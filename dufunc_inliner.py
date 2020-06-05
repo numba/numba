@@ -21,7 +21,7 @@ def _run_inliner(func_ir, sig, template, arg_typs, expr, i, py_func, block,
     return True
 
 
-def _inline(func_ir, work_list, block, i, expr,py_func, typemap, calltypes,
+def _inline(func_ir, work_list, block, i, expr, py_func, typemap, calltypes,
             typingctx):
     # try and get a definition for the call, this isn't always possible as
     # it might be a eval(str)/part generated awaiting update etc. (parfors)
@@ -91,7 +91,7 @@ def dufunc_inliner(func_ir, calltypes, typemap, typingctx):
                 if isinstance(expr, ir.Expr):
                     call_node = _is_dufunc_callsite(expr, block)
                     if call_node:
-                        py_func = call_node.value.py_func
+                        py_func = call_node.value._dispatcher.py_func
                         workfn = _inline(func_ir, work_list, block, i, expr,
                                          py_func, typemap, calltypes, typingctx)
                         if workfn:
