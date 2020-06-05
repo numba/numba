@@ -448,7 +448,7 @@ class Kernel:
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
                  link=(), debug=False, fastmath=False, type_annotation=None,
                  extensions=[], max_registers=None):
-        super(Kernel, self).__init__()
+        super().__init__()
         # initialize CUfunction
         options = {
             'debug': debug,
@@ -704,7 +704,7 @@ class Dispatcher:
     created using the :func:`numba.cuda.jit` decorator.
     '''
     def __init__(self, func, sigs, bind, targetoptions):
-        super(Dispatcher, self).__init__()
+        super().__init__()
         self.py_func = func
         self.sigs = sigs
         self._bind = bind
@@ -817,20 +817,16 @@ class Dispatcher:
         griddim, blockdim = normalize_kernel_dimensions(self.griddim,
                                                         self.blockdim)
         kernel.launch(args, griddim, blockdim, self.stream, self.sharedmem)
-        #cfg = kernel[self.griddim, self.blockdim, self.stream, self.sharedmem]
-        #cfg(*args)
 
     def specialize(self, *args):
         '''
         Compile and bind to the current context a version of this kernel
         specialized for the given *args*.
         '''
-        ### HERE - NEED TO FIX BY CLONING THIS AND COMPILING AND BINDING FOR
-        ### THE SIG THEN DISABLING COMPILATION
         clone = self.copy()
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
-        kernel = clone.compile(argtypes)
+        clone.compile(argtypes)
         clone.disable_compile()
         return clone
 
@@ -920,7 +916,7 @@ class Dispatcher:
             return next(iter(self.definitions.values())).ptx
         else:
             return dict((sig, defn.ptx)
-                         for sig, defn in self.definitions.items())
+                        for sig, defn in self.definitions.items())
 
     def bind(self):
         for defn in self.definitions.values():

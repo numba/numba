@@ -106,7 +106,8 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
 
 
         if isinstance(func_or_sig, list):
-            sigs = func_or_sig
+            msg = 'Lists of signatures are not yet supported in CUDA'
+            raise ValueError(msg)
         elif sigutils.is_signature(func_or_sig):
             sigs = [func_or_sig]
         elif func_or_sig is None:
@@ -114,8 +115,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
             restype = kws.get('restype', types.void)
             sigs = [restype(*argtypes)]
         else:
-            from pudb import set_trace; set_trace()
-            raise ValueError("Expecting signature or list for signatures")
+            raise ValueError("Expecting signature or list of signatures")
 
         for sig in sigs:
             restype, argtypes = convert_types(sig, argtypes)
@@ -147,9 +147,6 @@ def declare_device(name, restype=None, argtypes=None):
 def convert_types(restype, argtypes):
     # eval type string
     if sigutils.is_signature(restype):
-        # Commented because we convert restype / argtypes to signature now.
-        # Doesn't make too much sense but this will go.
-        # assert argtypes is None 
         argtypes, restype = sigutils.normalize_signature(restype)
 
     return restype, argtypes
