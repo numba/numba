@@ -14,6 +14,7 @@ from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
 from . import codegen
 
+
 CC_SPIR_KERNEL = "spir_kernel"
 CC_SPIR_FUNC = "spir_func"
 
@@ -32,7 +33,6 @@ class DPPyTypingContext(typing.BaseContext):
         self.install_registry(mathdecl.registry)
         self.install_registry(cmathdecl.registry)
         self.install_registry(npydecl.registry)
-        #self.install_registry(operatordecl.registry)
 
 
 # -----------------------------------------------------------------------------
@@ -102,10 +102,12 @@ class DPPyTargetContext(BaseContext):
     def load_additional_registries(self):
         from .ocl import oclimpl, mathimpl
         from numba.targets import npyimpl
+        from . import printimpl
 
         self.insert_func_defn(oclimpl.registry.functions)
         self.insert_func_defn(mathimpl.registry.functions)
         self.insert_func_defn(npyimpl.registry.functions)
+        self.install_registry(printimpl.registry)
 
         """ To make sure we are calling supported OpenCL math
             functions we will redirect some of NUMBA's NumPy
@@ -232,6 +234,33 @@ class DPPyTargetContext(BaseContext):
         # a = self.make_array(typ)(self, builder)
         # return a._getvalue()
         raise NotImplementedError
+
+
+    def insert_const_string(self, mod, string):
+        """
+        This returns a a pointer in the spir generic addrspace.
+        """
+        text = lc.Constant.stringz(string)
+
+        name = '$'.join(["__conststring__",
+                         self.mangler(string, ["str"])])
+
+        # Try to reuse existing global
+        try:
+            gv = mod.get_global(name)
+        except KeyError as e:
+            # Not defined yet
+            gv = mod.add_global_variable(text.type, name=name,
+                                         addrspace=SPIR_GENERIC_ADDRSPACE)
+            gv.linkage = 'internal'
+            gv.global_constant = True
+            gv.initializer = text
+
+        # Cast to a i8* pointer
+        charty = gv.type.pointee.element
+        return lc.Constant.bitcast(gv,
+                               charty.as_pointer(SPIR_GENERIC_ADDRSPACE))
+
 
     def addrspacecast(self, builder, src, addrspace):
         """
