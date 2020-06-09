@@ -430,6 +430,7 @@ class WeakType(Type):
         if type(self) is type(other):
             obj = self._wr()
             return obj is not None and obj is other._wr()
+        return NotImplemented
 
     def __hash__(self):
         return Type.__hash__(self)
