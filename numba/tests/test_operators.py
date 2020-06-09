@@ -193,6 +193,10 @@ class LiteralOperatorImpl(object):
     def not_in_usecase(x, y):
         return x not in y
 
+    @staticmethod
+    def is_usecase(x, y):
+        return x is y
+
 
 class FunctionalOperatorImpl(object):
 
@@ -352,6 +356,10 @@ class FunctionalOperatorImpl(object):
     def not_in_usecase(x, y):
         return not operator.contains(y, x)
 
+    @staticmethod
+    def is_usecase(x, y):
+        return operator.is_(x, y)
+
 
 class TestOperators(TestCase):
     """
@@ -490,6 +498,11 @@ class TestOperators(TestCase):
 
     def test_ne_scalar_npm(self):
         self.test_ne_scalar(flags=Noflags)
+
+    def test_is_ellipsis(self):
+        cres = compile_isolated(self.op.is_usecase, (types.ellipsis, types.ellipsis))
+        cfunc = cres.entry_point
+        self.assertTrue(cfunc(Ellipsis, Ellipsis))
 
 
     #
