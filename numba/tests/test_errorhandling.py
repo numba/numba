@@ -2,6 +2,7 @@
 Unspecified error handling tests
 """
 
+import os
 from numba import jit, njit, typed, int64, intp, types
 from numba.core import errors, utils
 from numba.extending import overload, intrinsic
@@ -264,6 +265,23 @@ class TestErrorMessages(unittest.TestCase):
         self.assertIn(error_reasons['specific_error'].splitlines()[0], excstr)
         self.assertIn(given_reason1, excstr)
         self.assertIn(given_reason2, excstr)
+
+    def test_error_function_source_is_correct(self):
+        """ Checks that the reported source location for an overload is the
+        overload implementation source, not the actual function source from the
+        target library."""
+
+        @njit
+        def foo():
+            np.linalg.svd("chars")
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+
+        excstr = str(raises.exception)
+        self.assertIn(error_reasons['specific_error'].splitlines()[0], excstr)
+        expected_file = os.path.join("numba", "np", "linalg.py")
+        self.assertIn(expected_file, excstr)
 
 
 if __name__ == '__main__':
