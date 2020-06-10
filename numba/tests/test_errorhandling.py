@@ -281,7 +281,8 @@ class TestErrorMessages(unittest.TestCase):
         excstr = str(raises.exception)
         self.assertIn(error_reasons['specific_error'].splitlines()[0], excstr)
         expected_file = os.path.join("numba", "np", "linalg.py")
-        self.assertIn(expected_file, excstr)
+        expected = f"Overload in function 'svd_impl': File: {expected_file}:"
+        self.assertIn(expected.format(expected_file), excstr)
 
 
 if __name__ == '__main__':
