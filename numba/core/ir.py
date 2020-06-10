@@ -1199,6 +1199,14 @@ class Block(EqualityCheckMixin):
                     if op is None or expr.op == op:
                         yield expr
 
+    def find_setitem(self):
+        """
+        Return setitem statements in the block
+        """
+        for inst in self.body:
+            if isinstance(inst, SetItem):
+                yield inst
+
     def find_insts(self, cls=None):
         """
         Iterate over insts of the given class in this block.
