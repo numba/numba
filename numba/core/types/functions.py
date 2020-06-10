@@ -145,6 +145,8 @@ class _ResolutionFailures(object):
             elif (is_external_fn_ptr and
                   isinstance(source_fn, numba.core.typing.templates.Signature)):
                 source_fn = template.__class__
+            elif hasattr(template, '_overload_func'):
+                source_fn = template._overload_func
             source_file, source_line = self._get_source_info(source_fn)
             largstr = argstr if err.literal else nolitargstr
             msgbuf.append(_termcolor.errmsg(
