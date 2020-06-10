@@ -5,17 +5,17 @@ from .compiler import (compile_kernel, compile_device, declare_device_function,
 from .simulator.kernel import FakeCUDAKernel
 
 
-def jitdevice(func, link=[], debug=None, inline=False):
+def jitdevice(func, link=[], debug=None, inline=False, opt=True):
     """Wrapper for device-jit.
     """
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
     if link:
         raise ValueError("link keyword invalid for device function")
-    return compile_device_template(func, debug=debug, inline=inline)
+    return compile_device_template(func, debug=debug, inline=inline, opt=opt)
 
 
 def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
-        link=[], debug=None, **kws):
+        link=[], debug=None, opt=True, **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
     If a signature is supplied, then a function is returned that takes a
@@ -45,6 +45,10 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
        from which they are called.
     :param max_registers: Limit the kernel to using at most this number of
        registers per thread. Useful for increasing occupancy.
+    :param opt: Whether to compile from LLVM IR to PTX with optimization
+                enabled. When ``True``, ``-opt=3`` is passed to NVVM. When
+                ``False``, ``-opt=0`` is passed to NVVM. Defaults to ``True``.
+    :type opt: bool
     """
     debug = config.CUDA_DEBUGINFO_DEFAULT if debug is None else debug
 
@@ -64,7 +68,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
             else:
                 def autojitwrapper(func):
                     return jit(func, device=device, bind=bind, debug=debug,
-                               **kws)
+                               opt=opt, **kws)
 
             return autojitwrapper
         # func_or_sig is a function
@@ -73,10 +77,11 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
                 return FakeCUDAKernel(func_or_sig, device=device, fastmath=fastmath,
                                       debug=debug)
             elif device:
-                return jitdevice(func_or_sig, debug=debug, **kws)
+                return jitdevice(func_or_sig, debug=debug, opt=opt, **kws)
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
+                targetoptions['opt'] = opt
                 return AutoJitCUDAKernel(func_or_sig, bind=bind, targetoptions=targetoptions)
 
     else:
@@ -96,7 +101,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
         def kernel_jit(func):
             kernel = compile_kernel(func, argtypes, link=link, debug=debug,
                                     inline=inline, fastmath=fastmath,
-                                    max_registers=max_registers)
+                                    max_registers=max_registers, opt=opt)
 
             # Force compilation for the current context
             if bind:

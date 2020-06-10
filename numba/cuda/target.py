@@ -38,7 +38,9 @@ class CUDATypingContext(typing.BaseContext):
                 if not val._can_compile:
                     raise ValueError('using cpu function on device '
                                      'but its compilation is disabled')
-                jd = jitdevice(val, debug=val.targetoptions.get('debug'))
+                opt = val.targetoptions.get('opt', True)
+                jd = jitdevice(val, debug=val.targetoptions.get('debug'),
+                               opt=opt)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
                 val.__cudajitdevice = jd

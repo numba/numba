@@ -50,7 +50,7 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
 
 @global_compiler_lock
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
-                   fastmath=False, extensions=[], max_registers=None):
+                   fastmath=False, extensions=[], max_registers=None, opt=True):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     fname = cres.fndesc.llvm_func_name
     lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
@@ -64,6 +64,7 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False,
                         type_annotation=cres.type_annotation,
                         link=link,
                         debug=debug,
+                        opt=opt,
                         call_helper=cres.call_helper,
                         fastmath=fastmath,
                         extensions=extensions,
@@ -132,10 +133,11 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, device=False,
 class DeviceFunctionTemplate(object):
     """Unmaterialized device function
     """
-    def __init__(self, pyfunc, debug, inline):
+    def __init__(self, pyfunc, debug, inline, opt):
         self.py_func = pyfunc
         self.debug = debug
         self.inline = inline
+        self.opt = opt
         self._compileinfos = {}
 
     def __reduce__(self):
@@ -188,6 +190,10 @@ class DeviceFunctionTemplate(object):
         -------
         llvmir : str
         """
+        # Force a compilation to occur if none has yet - this can be needed if
+        # the user attempts to inspect LLVM IR or PTX before the function has
+        # been called for the given arguments from a jitted kernel.
+        self.compile(args)
         cres = self._compileinfos[args]
         mod = cres.library._final_module
         return str(mod)
@@ -212,17 +218,18 @@ class DeviceFunctionTemplate(object):
         device = cuctx.device
         cc = device.compute_capability
         arch = nvvm.get_arch_option(*cc)
-        ptx = nvvm.llvm_to_ptx(llvmir, opt=3, arch=arch, **nvvm_options)
+        opt = 3 if self.opt else 0
+        ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **nvvm_options)
         return ptx
 
 
-def compile_device_template(pyfunc, debug=False, inline=False):
+def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
     """Create a DeviceFunctionTemplate object and register the object to
     the CUDA typing context.
     """
     from .descriptor import CUDATargetDesc
 
-    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline)
+    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline, opt=opt)
 
     class device_function_template(AbstractTemplate):
         key = dft
@@ -429,7 +436,7 @@ class CachedPTX(object):
         ptx = self.cache.get(cc)
         if ptx is None:
             arch = nvvm.get_arch_option(*cc)
-            ptx = nvvm.llvm_to_ptx(self.llvmir, opt=3, arch=arch,
+            ptx = nvvm.llvm_to_ptx(self.llvmir, arch=arch,
                                    **self._extra_options)
             self.cache[cc] = ptx
             if config.DUMP_ASSEMBLY:
@@ -513,12 +520,13 @@ class CUDAKernel(CUDAKernelBase):
     '''
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
                  link=(), debug=False, fastmath=False, type_annotation=None,
-                 extensions=[], max_registers=None):
+                 extensions=[], max_registers=None, opt=True):
         super(CUDAKernel, self).__init__()
         # initialize CUfunction
         options = {
             'debug': debug,
-            'fastmath': fastmath
+            'fastmath': fastmath,
+            'opt': 3 if opt else 0
         }
 
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
