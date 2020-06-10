@@ -482,7 +482,7 @@ def _guess_dtype(iterable):
             "List() argument must be iterable")
     # Special case for nested NumPy arrays.
     elif isinstance(iterable, types.Array) and iterable.ndim > 1:
-        return iterable.copy(ndim=iterable.ndim - 1)
+        return iterable.copy(ndim=iterable.ndim - 1, layout='A')
     elif hasattr(iterable, "dtype"):
         return iterable.dtype
     elif hasattr(iterable, "yield_type"):

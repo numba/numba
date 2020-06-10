@@ -829,6 +829,8 @@ class JITCPUCodegen(BaseCPUCodegen):
         arch = ll.Target.from_default_triple().name
         if arch.startswith('x86'): # one of x86 or x86_64
             reloc_model = 'static'
+        elif arch.startswith('ppc'):
+            reloc_model = 'pic'
         else:
             reloc_model = 'default'
         options['reloc'] = reloc_model
@@ -838,8 +840,11 @@ class JITCPUCodegen(BaseCPUCodegen):
         # This overrides default feature selection by CPU model above
         options['features'] = self._tm_features
 
-        # Enable JIT debug
-        options['jitdebug'] = True
+        # Deal with optional argument to ll.Target.create_target_machine
+        sig = utils.pysignature(ll.Target.create_target_machine)
+        if 'jit' in sig.parameters:
+            # Mark that this is making a JIT engine
+            options['jit'] = True
 
     def _customize_tm_features(self):
         # For JIT target, we will use LLVM to get the feature map

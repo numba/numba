@@ -209,6 +209,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         check(arr)
         arr = np.float64(['nan', -1.5, 2.5, 'nan', 'inf', '-inf', 3.0])
         check(arr)
+        arr = np.float64([5.0, 'nan', -1.5, 'nan'])
+        check(arr)
         # Only NaNs
         arr = np.float64(['nan', 'nan'])
         check(arr)
@@ -665,6 +667,15 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # Test with a NaT
         arr[arr.size // 2] = 'NaT'
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
+        if 'median' not in pyfunc.__name__:
+            # Test with (val, NaT)^N (and with the random NaT from above)
+            # use a loop, there's some weird thing/bug with arr[1::2] = 'NaT'
+
+            # Further Numba has bug(s) relating to NaN/NaT handling in anything
+            # using a partition such as np.median
+            for x in range(1, len(arr), 2):
+                arr[x] = 'NaT'
+            self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
         # Test with all NaTs
         arr.fill(arrty.dtype('NaT'))
         self.assertPreciseEqual(cfunc(arr), pyfunc(arr))
@@ -992,7 +1003,6 @@ class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as e:
             cfunc(self.zero_size)
         self.assertIn(msg, str(e.exception))
-        self.disable_leak_check()
 
     @classmethod
     def install(cls):
