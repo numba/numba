@@ -69,6 +69,10 @@ Fixes:
 * PR #5791: Fix up no cgroups problem
 * PR #5795: Restore refct removal pass and make it strict
 * PR #5807: Skip failing test on POWER8 due to PPC CTR Loop problem.
+* PR #5812: Fix side issue from #5792, @overload inliner cached IR being
+  mutated.
+* PR #5815: Pin llvmlite to 0.33
+* PR #5833: Fixes the source location appearing incorrectly in error messages.
 
 CUDA Enhancements/Fixes:
 
