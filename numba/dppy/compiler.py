@@ -300,37 +300,6 @@ class DPPyKernelBase(object):
         return self.configure(device_env, gs, ls)
 
 
-#_CacheEntry = namedtuple("_CachedEntry", ['symbol', 'executable',
-#                                          'kernarg_region'])
-
-
-# class _CachedProgram(object):
-#    def __init__(self, entry_name, binary):
-#        self._entry_name = entry_name
-#        self._binary = binary
-#        # key: ocl context
-#        self._cache = {}
-#
-#    def get(self, device):
-#        context = device.get_context()
-#        result = self._cache.get(context)
-#
-#        if result is not None:
-#            program = result[1]
-#            kernel = result[2]
-#        else:
-#            # First-time compilation
-#            spirv_bc = spirv.llvm_to_spirv(self._binary)
-#            program = context.create_program_from_il(spirv_bc)
-#            program.build()
-#            kernel = program.create_kernel(self._entry_name)
-#
-#            # Cache the just built cl_program, its cl_device and a cl_kernel
-#            self._cache[context] = (device, program, kernel)
-#
-#        return context, device, program, kernel
-
-
 class DPPyKernel(DPPyKernelBase):
     """
     A OCL kernel object
@@ -345,24 +314,15 @@ class DPPyKernel(DPPyKernelBase):
         self.argument_types = tuple(argtypes)
         self.ordered_arg_access_types = ordered_arg_access_types
         self._argloc = []
-        # cached finalized program
-        # self._cacheprog = _CachedProgram(entry_name=self.entry_name,
-        #                                 binary=self.binary)
         # First-time compilation using SPIRV-Tools
         if DEBUG:
             with open("llvm_kernel.ll", "w") as f:
                 f.write(self.binary)
         self.spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
-        #print("DPPyKernel:", self.spirv_bc, type(self.spirv_bc))
         # create a program
         self.program = driver.Program(device_env, self.spirv_bc)
         #  create a kernel
         self.kernel = driver.Kernel(device_env, self.program, self.entry_name)
-    # def bind(self):
-    #    """
-    #    Bind kernel to device
-    #    """
-    #    return self._cacheprog.get(self.device)
 
     def __call__(self, *args):
 
@@ -425,10 +385,6 @@ class DPPyKernel(DPPyKernelBase):
         """
         Convert arguments to ctypes and append to kernelargs
         """
-        # DRD : Check if the val is of type driver.DeviceArray before checking
-        # if ty is of type ndarray. Argtypes returns ndarray for both
-        # DeviceArray and ndarray. This is a hack to get around the issue,
-        # till I understand the typing infrastructure of NUMBA better.
         device_arrs.append(None)
         if isinstance(val, driver.DeviceArray):
             self._unpack_device_array_argument(val, kernelargs)
@@ -499,10 +455,7 @@ class JitDPPyKernel(DPPyKernelBase):
         super(JitDPPyKernel, self).__init__()
 
         self.py_func = func
-        # DRD: Caching definitions this way can lead to unexpected consequences
-        # E.g. A kernel compiled for a given device would not get recompiled
-        # and lead to OpenCL runtime errors.
-        #self.definitions = {}
+        self.definitions = {}
         self.access_types = access_types
 
         from .descriptor import dppy_target
@@ -525,10 +478,10 @@ class JitDPPyKernel(DPPyKernelBase):
     def specialize(self, *args):
         argtypes = tuple([self.typingctx.resolve_argument_type(a)
                           for a in args])
-        kernel = None #self.definitions.get(argtypes)
-
+        key_definitions = (self.device_env._env_ptr, argtypes)
+        kernel = self.definitions.get(key_definitions)
         if kernel is None:
             kernel = compile_kernel(self.device_env, self.py_func, argtypes,
                                     self.access_types)
-            #self.definitions[argtypes] = kernel
+            self.definitions[key_definitions] = kernel
         return kernel
