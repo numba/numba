@@ -1622,6 +1622,18 @@ class TestParfors(TestParforsBase):
         x = np.arange(10)
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_inplace_binop(self):
+        def test_impl(a, b):
+            b += a
+            return b
+
+        X = np.ones(10)
+        Y = np.zeros(10)
+        self.check(test_impl, X, Y)
+        self.assertTrue(countParfors(test_impl,
+                                    (types.Array(types.float64, 1, 'C'),
+                                     types.Array(types.float64, 1, 'C'))) == 1)
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
