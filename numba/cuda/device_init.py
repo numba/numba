@@ -9,8 +9,8 @@ from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
 from .cudadrv.error import CudaSupportError
 from numba.cuda.cudadrv.driver import (BaseCUDAMemoryManager,
                                        HostOnlyCUDAMemoryManager,
-                                       MemoryPointer, MappedMemory,
-                                       PinnedMemory, MemoryInfo,
+                                       GetIpcHandleMixin, MemoryPointer,
+                                       MappedMemory, PinnedMemory, MemoryInfo,
                                        IpcHandle, set_memory_manager)
 from .cudadrv import nvvm
 from numba.cuda import initialize
