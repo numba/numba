@@ -8,10 +8,6 @@ version: 2
 sphinx:
   configuration: docs/source/conf.py
 
-# Build documentation with MkDocs
-#mkdocs:
-#  configuration: mkdocs.yml
-
 # Optionally build your docs in additional formats such as PDF
 formats:
   - pdf
