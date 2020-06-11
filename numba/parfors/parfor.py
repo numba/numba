@@ -1573,8 +1573,11 @@ class ConvertInplaceBinop:
                                     dict(old=instr, new=new_instr,
                                          reason='inplace_binop'),
                                 )
-                                instr = new_instr
-                new_body.append(instr)
+                                instr = [new_instr, ir.Assign(target, lhs, loc)]
+                if isinstance(instr, list):
+                    new_body.extend(instr)
+                else:
+                    new_body.append(instr)
             block.body = new_body
 
     def _inplace_binop_to_parfor(self, equiv_set, loc, op, target, value):
