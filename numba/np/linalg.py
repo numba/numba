@@ -618,7 +618,7 @@ def dot_3_vm(context, builder, sig, args):
     for val in m_shapes:
         check_c_int(context, builder, val)
 
-    zero = ir.Constant(intp_t, 0)
+    zero = context.get_constant(types.intp, 0)
     is_empty = builder.icmp_signed('==', v_shape, zero)
     with builder.if_else(is_empty, likely=False) as (empty, nonempty):
         with empty:
@@ -674,7 +674,7 @@ def dot_3_mm(context, builder, sig, args):
     out_data = out.data
 
     # If eliminated dimension is zero, set all entries to zero and return
-    zero = ir.Constant(intp_t, 0)
+    zero = context.get_constant(types.intp, 0)
     is_empty = builder.icmp_signed('==', k, zero)
     with builder.if_else(is_empty, likely=False) as (empty, nonempty):
         with empty:
@@ -684,7 +684,7 @@ def dot_3_mm(context, builder, sig, args):
             # Check if any of the operands is really a 1-d vector represented
             # as a (1, k) or (k, 1) 2-d array.  In those cases, it is pessimal
             # to call the generic matrix * matrix product BLAS function.
-            one = ir.Constant(intp_t, 1)
+            one = context.get_constant(types.intp, 1)
             is_left_vec = builder.icmp_signed('==', m, one)
             is_right_vec = builder.icmp_signed('==', n, one)
 
