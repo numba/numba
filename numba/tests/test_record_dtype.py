@@ -1111,7 +1111,7 @@ class TestRecordArraySetItem(unittest.TestCase):
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = set_field1
         jitfunc = njit(pyfunc)
-        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+        self.assertEqual(pyfunc(arr[0].copy()), jitfunc(arr[0].copy()))
 
     def test_literal_unroll(self):
         arr = np.array([1, 2], dtype=recordtype2)
