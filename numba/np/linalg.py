@@ -609,7 +609,7 @@ def dot_3_vm(context, builder, sig, args):
         mty = xty
         m_shapes = x_shapes
         v_shape = y_shapes[0]
-        lda = m_shapes[1]
+        lda = m_shapes[0]
         do_trans = xty.layout == 'C'
         m_data, v_data = x.data, y.data
         check_args = dot_3_mv_check_args
