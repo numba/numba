@@ -569,7 +569,7 @@ class TestParfors(TestParforsBase):
     def test_logistic_regression(self):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
-        self.assertTrue(countParfors(lr_impl, args) == 1)
+        self.assertTrue(countParfors(lr_impl, args) == 2)
         self.assertTrue(countArrayAllocs(lr_impl, args) == 1)
 
     @skip_parfors_unsupported
