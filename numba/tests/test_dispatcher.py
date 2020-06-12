@@ -153,6 +153,22 @@ skip_bad_access = unittest.skipUnless(_access_preventable, _access_msg)
 
 
 class TestDispatcher(BaseTest):
+  
+    def test_equality(self):
+        @jit
+        def foo(x):
+            return x
+        
+        @jit
+        def bar(x):
+            return x
+        
+        # Written this way to verify `==` returns a bool (gh-5838). Using
+        # `assertTrue(foo == foo)` or `assertEqual(foo, foo)` would defeat the
+        # purpose of this test.
+        self.assertEqual(foo == foo, True)
+        self.assertEqual(foo == bar, False)
+        self.assertEqual(foo == None, False)
 
     def test_dyn_pyfunc(self):
         @jit
