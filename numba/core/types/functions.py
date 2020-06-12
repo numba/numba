@@ -21,7 +21,7 @@ _FAILURE = namedtuple('_FAILURE', 'template matched error literal')
 
 try:
     _termwidth = get_terminal_size()[0]
-except OSError: # lack of active console
+except (OSError, ValueError): # lack of active console
     _termwidth = 120
 
 # pull out the lead line as unit tests often use this
