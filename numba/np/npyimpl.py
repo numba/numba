@@ -441,8 +441,6 @@ def _ufunc_db_function(ufunc):
 ################################################################################
 # Helper functions that register the ufuncs
 
-_kernels = {} # Temporary map from ufunc's to their kernel implementation class
-
 def register_ufunc_kernel(ufunc, kernel):
     def do_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel)
@@ -459,7 +457,7 @@ def register_ufunc_kernel(ufunc, kernel):
     # (array or scalar)
     lower(ufunc, *in_args)(do_ufunc_no_explicit_output)
 
-    _kernels[ufunc] = kernel
+    return kernel
 
 
 def register_unary_operator_kernel(operator, kernel, inplace=False):
@@ -495,13 +493,8 @@ def register_binary_operator_kernel(op, kernel, inplace=False):
             lower(op, *sig)(lower_inplace_operator)
 
 
-
 ################################################################################
 # Use the contents of ufunc_db to initialize the supported ufuncs
-
-for ufunc in ufunc_db.get_ufuncs():
-    register_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
-
 
 @lower(operator.pos, types.Array)
 def array_positive_impl(context, builder, sig, args):
@@ -518,34 +511,40 @@ def array_positive_impl(context, builder, sig, args):
                               _UnaryPositiveKernel, explicit_output=False)
 
 
-for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
-                npydecl.NumpyRulesArrayOperator._op_map,
-                ):
-    for operator, ufunc_name in _op_map.items():
-        ufunc = getattr(np, ufunc_name)
-        kernel = _kernels[ufunc]
-        if ufunc.nin == 1:
-            register_unary_operator_kernel(operator, kernel)
-        elif ufunc.nin == 2:
-            register_binary_operator_kernel(operator, kernel)
-        else:
-            raise RuntimeError("There shouldn't be any non-unary or binary operators")
+def _register_ufuncs():
+    kernels = {}
 
-for _op_map in (npydecl.NumpyRulesInplaceArrayOperator._op_map,
-                ):
-    for operator, ufunc_name in _op_map.items():
-        ufunc = getattr(np, ufunc_name)
-        kernel = _kernels[ufunc]
-        if ufunc.nin == 1:
-            register_unary_operator_kernel(operator, kernel, inplace=True)
-        elif ufunc.nin == 2:
-            register_binary_operator_kernel(operator, kernel, inplace=True)
-        else:
-            raise RuntimeError("There shouldn't be any non-unary or binary operators")
+    for ufunc in ufunc_db.get_ufuncs():
+        kernels[ufunc] = register_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
+
+    for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
+                    npydecl.NumpyRulesArrayOperator._op_map,
+                    ):
+        for operator, ufunc_name in _op_map.items():
+            ufunc = getattr(np, ufunc_name)
+            kernel = kernels[ufunc]
+            if ufunc.nin == 1:
+                register_unary_operator_kernel(operator, kernel)
+            elif ufunc.nin == 2:
+                register_binary_operator_kernel(operator, kernel)
+            else:
+                raise RuntimeError("There shouldn't be any non-unary or binary operators")
+
+    for _op_map in (npydecl.NumpyRulesInplaceArrayOperator._op_map,
+                    ):
+        for operator, ufunc_name in _op_map.items():
+            ufunc = getattr(np, ufunc_name)
+            kernel = kernels[ufunc]
+            if ufunc.nin == 1:
+                register_unary_operator_kernel(operator, kernel, inplace=True)
+            elif ufunc.nin == 2:
+                register_binary_operator_kernel(operator, kernel, inplace=True)
+            else:
+                raise RuntimeError("There shouldn't be any non-unary or binary operators")
 
 
+_register_ufuncs()
 
-del _kernels
 
 @intrinsic
 def _make_dtype_object(typingctx, desc):
