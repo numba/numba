@@ -395,7 +395,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
          a) where all inputs are timedelta with the same unit (mm), and
          therefore the output has the same unit.
          This case is used for arr.sum, and for arr1+arr2 where all arrays
-         are timedeltas
+         are timedeltas.
          If in the future this needs to be extended to a case with mixed units,
          the rules should be implemented in `npdatetime_helpers` and called
          from this function to set the correct output unit.
