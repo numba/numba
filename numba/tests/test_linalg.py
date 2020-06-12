@@ -170,7 +170,8 @@ class TestProduct(TestCase):
             cfunc3 = jit(nopython=True)(pyfunc3)
 
         for m, n in [(2, 3),
-                     (3, 0)
+                     (3, 0),
+                     (0, 3)
                      ]:
             for a, b in samples(m, n):
                 self.check_func(pyfunc2, cfunc2, (a, b))
@@ -234,11 +235,14 @@ class TestProduct(TestCase):
         # Test generic matrix * matrix as well as "degenerate" cases
         # where one of the outer dimensions is 1 (i.e. really represents
         # a vector, which may select a different implementation),
-        # or both matrices are empty but their product is not.
+        # one of the matrices is empty, or both matrices are empty.
         for m, n, k in [(2, 3, 4),  # Generic matrix * matrix
                         (1, 3, 4),  # 2d vector * matrix
                         (1, 1, 4),  # 2d vector * 2d vector
-                        (3, 2, 0)   # Empty matrix * empty matrix
+                        (0, 3, 2),  # Empty matrix * matrix, empty output
+                        (3, 0, 2),  # Matrix * empty matrix, empty output
+                        (0, 0, 3),  # Both arguments empty, empty output
+                        (3, 2, 0),  # Both arguments empty, nonempty output
                         ]:
             for a, b in samples(m, n, k):
                 self.check_func(pyfunc2, cfunc2, (a, b))

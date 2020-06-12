@@ -599,6 +599,7 @@ def dot_3_vm(context, builder, sig, args):
         mty = yty
         m_shapes = y_shapes
         v_shape = x_shapes[0]
+        lda = m_shapes[1]
         do_trans = yty.layout == 'F'
         m_data, v_data = y.data, x.data
         check_args = dot_3_vm_check_args
@@ -608,10 +609,10 @@ def dot_3_vm(context, builder, sig, args):
         mty = xty
         m_shapes = x_shapes
         v_shape = y_shapes[0]
+        lda = m_shapes[1]
         do_trans = xty.layout == 'C'
         m_data, v_data = x.data, y.data
         check_args = dot_3_mv_check_args
-
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
@@ -619,7 +620,9 @@ def dot_3_vm(context, builder, sig, args):
         check_c_int(context, builder, val)
 
     zero = context.get_constant(types.intp, 0)
-    is_empty = builder.icmp_signed('==', v_shape, zero)
+    both_empty = builder.icmp_signed('==', v_shape, zero)
+    matrix_empty = builder.icmp_signed('==', lda, zero)
+    is_empty = builder.or_(both_empty, matrix_empty)
     with builder.if_else(is_empty, likely=False) as (empty, nonempty):
         with empty:
             cgutils.memset(builder, out.data,
@@ -675,7 +678,10 @@ def dot_3_mm(context, builder, sig, args):
 
     # If eliminated dimension is zero, set all entries to zero and return
     zero = context.get_constant(types.intp, 0)
-    is_empty = builder.icmp_signed('==', k, zero)
+    both_empty = builder.icmp_signed('==', k, zero)
+    x_empty = builder.icmp_signed('==', m, zero)
+    y_empty = builder.icmp_signed('==', n, zero)
+    is_empty = builder.or_(both_empty, builder.or_(x_empty, y_empty))
     with builder.if_else(is_empty, likely=False) as (empty, nonempty):
         with empty:
             cgutils.memset(builder, out.data,
