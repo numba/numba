@@ -4,7 +4,8 @@ import inspect
 import itertools
 import logging
 import textwrap
-from os import path, get_terminal_size
+from os import path
+from shutil import get_terminal_size
 
 from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
@@ -19,10 +20,8 @@ _termcolor = errors.termcolor()
 
 _FAILURE = namedtuple('_FAILURE', 'template matched error literal')
 
-try:
-    _termwidth = get_terminal_size()[0]
-except (OSError, ValueError): # lack of active console
-    _termwidth = 120
+_termwidth = get_terminal_size().columns
+
 
 # pull out the lead line as unit tests often use this
 _header_lead = "No implementation of function"
