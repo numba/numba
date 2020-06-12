@@ -399,7 +399,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
          If in the future this needs to be extended to a case with mixed units,
          the rules should be implemented in `npdatetime_helpers` and called
          from this function to set the correct output unit.
-         b) where left operand is a timedelta, ie the "m?" case. This case
+         b) where left operand is a timedelta, i.e. the "m?" case. This case
          is used for division, eg timedelta / int.
 
          At the time of writing, Numba does not support addition of timedelta
