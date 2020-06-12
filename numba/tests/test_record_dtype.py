@@ -1121,7 +1121,7 @@ class TestRecordArraySetItem(unittest.TestCase):
 
     def test_literal_variable_global_tuple(self):
         """
-        This tests the getitem of record array when the indexes come from a
+        This tests the setitem of record array when the indexes come from a
         global tuple. It tests getitem behaviour but also tests that a global
         tuple is being typed as a tuple of constants.
         """

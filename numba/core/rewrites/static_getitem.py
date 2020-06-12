@@ -102,7 +102,7 @@ class RewriteStringLiteralSetitems(Rewrite):
 
     def match(self, func_ir, block, typemap, calltypes):
         """
-        Detect all getitem expressions and find which ones have
+        Detect all setitem expressions and find which ones have
         string literal indexes
         """
         self.setitems = setitems = {}
