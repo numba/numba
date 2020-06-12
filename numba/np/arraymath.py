@@ -3321,7 +3321,7 @@ def np_bincount(a, weights=None, minlength=0):
     def bincount_impl(a, weights=None, minlength=0):
         validate_inputs(a, weights, minlength)
         if minlength < 0:
-            raise ValueError("bincount(): minlength must be non-negative!")
+            raise ValueError("'minlength' must not be negative")
 
         n = len(a)
         a_max = a[0] if n > 0 else -1
