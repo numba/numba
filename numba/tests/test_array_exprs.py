@@ -650,3 +650,7 @@ class TestDatetimeDeltaOps(TestCase):
         ]
         for a, b in test_cases:
             self.assertTrue(np.array_equal(py_func(a, b), cfunc(a, b)))
+
+
+if __name__ == "__main__":
+    unittest.main()
