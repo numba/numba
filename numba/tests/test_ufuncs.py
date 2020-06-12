@@ -303,6 +303,9 @@ class TestUFuncs(BaseUFuncTest, TestCase):
                               skip_inputs=[types.Array(types.uint32, 1, 'C'), types.uint32],
                               flags=flags)
 
+    def test_positive_ufunc(self, flags=no_pyobj_flags):
+        self.basic_ufunc_test(np.positive, flags=flags)
+
     def test_power_ufunc(self, flags=no_pyobj_flags):
         self.basic_ufunc_test(np.power, flags=flags,
                                positive_only=True)

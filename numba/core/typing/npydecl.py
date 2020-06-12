@@ -143,22 +143,6 @@ class Numpy_rules_ufunc(AbstractTemplate):
         return signature(*out)
 
 
-@infer_global(operator.pos)
-class UnaryPositiveArray(AbstractTemplate):
-    '''Typing template class for +(array) expressions.  This operator is
-    special because there is no Numpy ufunc associated with it; we
-    include typing for it here (numba.typing.npydecl) because this is
-    where the remaining array operators are defined.
-    '''
-    key = operator.pos
-
-    def generic(self, args, kws):
-        assert not kws
-        if len(args) == 1 and isinstance(args[0], types.ArrayCompatible):
-            arg_ty = args[0]
-            return arg_ty.copy()(arg_ty)
-
-
 class NumpyRulesArrayOperator(Numpy_rules_ufunc):
     _op_map = {
         operator.add: "add",
@@ -252,9 +236,7 @@ class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
 
 class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
     _op_map = {
-        # Positive is a special case since there is no Numpy ufunc
-        # corresponding to it (it's essentially an identity operator).
-        # See UnaryPositiveArray, above.
+        operator.pos: "positive",
         operator.neg: "negative",
         operator.invert: "invert",
     }
@@ -269,7 +251,7 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
 
 _math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
-                     "floor_divide", "negative", "power",
+                     "floor_divide", "negative", "positive", "power",
                      "remainder", "fmod", "absolute",
                      "rint", "sign", "conjugate", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
