@@ -40,7 +40,7 @@ class TestOptimization(CUDATestCase):
 
     def test_lazy_opt(self):
         # Optimization should occur by default
-        kernel = cuda.jit(opt=True)(kernel_func)
+        kernel = cuda.jit(kernel_func)
         x = np.zeros(1, dtype=np.float64)
         kernel[1, 1](x)
 
