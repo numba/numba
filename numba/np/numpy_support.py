@@ -404,8 +404,8 @@ def ufunc_find_matching_loop(ufunc, arg_types):
 
         At the time of writing, Numba does not support addition of timedelta
         and other types, so this function does not consider the case "?m",
-        i.e. where timedelta is the right operand to a non-timedelta left operand
-        To extend it in the future, just add another elif clause.
+        i.e. where timedelta is the right operand to a non-timedelta left
+        operand. To extend it in the future, just add another elif clause.
         """
         def make_specific(outputs, unit):
             new_outputs = []
