@@ -1105,7 +1105,7 @@ class TestRecordArrayGetItem(unittest.TestCase):
 
 class TestRecordArraySetItem(unittest.TestCase):
     """
-    Test getitem when index is Literal[str]
+    Test setitem when index is Literal[str]
     """
     def test_literal_variable(self):
         arr = np.array([1, 2], dtype=recordtype2)
