@@ -1117,7 +1117,7 @@ class TestRecordArraySetItem(unittest.TestCase):
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = set_field2
         jitfunc = njit(pyfunc)
-        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+        self.assertEqual(pyfunc(arr[0].copy()), jitfunc(arr[0].copy()))
 
     def test_literal_variable_global_tuple(self):
         """
@@ -1128,7 +1128,7 @@ class TestRecordArraySetItem(unittest.TestCase):
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = set_field3
         jitfunc = njit(pyfunc)
-        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+        self.assertEqual(pyfunc(arr[0].copy()), jitfunc(arr[0].copy()))
 
     def test_literal_unroll_global_tuple(self):
         """
@@ -1140,7 +1140,7 @@ class TestRecordArraySetItem(unittest.TestCase):
         arr = np.array([1, 2], dtype=recordtype2)
         pyfunc = set_field4
         jitfunc = njit(pyfunc)
-        self.assertEqual(pyfunc(arr[0]), jitfunc(arr[0]))
+        self.assertEqual(pyfunc(arr[0].copy()), jitfunc(arr[0].copy()))
 
     def test_literal_unroll_free_var_tuple(self):
         """
@@ -1149,8 +1149,9 @@ class TestRecordArraySetItem(unittest.TestCase):
         It tests getitem behaviour but also tests that literal_unroll accepts
         a free variable tuple as argument
         """
-        fs = ('e', 'f')
+
         arr = np.array([1, 2], dtype=recordtype2)
+        fs = arr.dtype.names
 
         def set_field(rec):
             for f in literal_unroll(fs):
