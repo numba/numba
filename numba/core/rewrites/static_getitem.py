@@ -108,7 +108,7 @@ class RewriteStringLiteralSetitems(Rewrite):
         self.setitems = setitems = {}
         self.block = block
         self.calltypes = calltypes
-        for inst in block.find_setitem():
+        for inst in block.find_insts(ir.SetItem):
             index_ty = typemap[inst.index.name]
             if isinstance(index_ty, types.StringLiteral):
                 setitems[inst] = (inst.index, index_ty.literal_value)

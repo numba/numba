@@ -284,26 +284,26 @@ def get_field4(rec):
 def set_field1(rec):
     fs = ('e', 'f')
     f = fs[1]
-    rec[f] = 1
+    rec[f] = 10
     return rec
 
 
 def set_field2(rec):
     fs = ('e', 'f')
     for f in literal_unroll(fs):
-        rec[f] = 1
+        rec[f] = 10
     return rec
 
 
 def set_field3(rec):
     f = _FS[1]
-    rec[f] = 1
+    rec[f] = 10
     return rec
 
 
 def set_field4(rec):
     for f in literal_unroll(_FS):
-        rec[f] = 2
+        rec[f] = 10
     return rec
 
 
@@ -1132,9 +1132,9 @@ class TestRecordArraySetItem(unittest.TestCase):
 
     def test_literal_unroll_global_tuple(self):
         """
-        This tests the getitem of record array when the indexes come from a
+        This tests the setitem of record array when the indexes come from a
         global tuple and are being unrolled.
-        It tests getitem behaviour but also tests that literal_unroll accepts
+        It tests setitem behaviour but also tests that literal_unroll accepts
         a global tuple as argument
         """
         arr = np.array([1, 2], dtype=recordtype2)
@@ -1144,9 +1144,9 @@ class TestRecordArraySetItem(unittest.TestCase):
 
     def test_literal_unroll_free_var_tuple(self):
         """
-        This tests the getitem of record array when the indexes come from a
+        This tests the setitem of record array when the indexes come from a
         free variable tuple (not local, not global) and are being unrolled.
-        It tests getitem behaviour but also tests that literal_unroll accepts
+        It tests setitem behaviour but also tests that literal_unroll accepts
         a free variable tuple as argument
         """
 
@@ -1155,11 +1155,11 @@ class TestRecordArraySetItem(unittest.TestCase):
 
         def set_field(rec):
             for f in literal_unroll(fs):
-                rec[f] = 2
+                rec[f] = 10
             return rec
 
         jitfunc = njit(set_field)
-        self.assertEqual(set_field(arr[0]), jitfunc(arr[0]))
+        self.assertEqual(set_field(arr[0].copy()), jitfunc(arr[0].copy()))
 
     def test_error_w_invalid_field(self):
         arr = np.array([1, 2], dtype=recordtype3)
