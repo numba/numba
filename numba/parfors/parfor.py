@@ -1622,9 +1622,13 @@ class ConvertInplaceBinop:
         # Create temp to hold result.
         expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
         pass_states.typemap[expr_out_var.name] = el_typ
+
         # Create binop and assign result to temporary.
         binop_expr = ir.Expr.binop(op, target_var, value_var, loc)
         body_block.body.append(ir.Assign(binop_expr, expr_out_var, loc))
+        unified_type = self.pass_states.typingctx.unify_pairs(el_typ, value_typ.dtype)
+        pass_states.calltypes[binop_expr] = signature(
+            unified_type, unified_type, unified_type)
 
         # Write to target
         setitem_node = ir.SetItem(target, index_var, expr_out_var, loc)
@@ -2706,9 +2710,6 @@ class ParforPass(ParforPassStates):
             stencil_pass = StencilPass(self.func_ir, self.typemap, self.calltypes,
                                             self.array_analysis, self.typingctx, self.flags)
             stencil_pass.run()
-        if self.options.inplace_binop:
-            ConvertInplaceBinop(self).run(self.func_ir.blocks)
-        dprint_func_ir(self.func_ir, "after inplace_binop")
         if self.options.setitem:
             ConvertSetItemPass(self).run(self.func_ir.blocks)
         if self.options.numpy:
@@ -2717,6 +2718,8 @@ class ParforPass(ParforPassStates):
             ConvertReducePass(self).run(self.func_ir.blocks)
         if self.options.prange:
             ConvertLoopPass(self).run(self.func_ir.blocks)
+        if self.options.inplace_binop:
+            ConvertInplaceBinop(self).run(self.func_ir.blocks)
 
         # setup diagnostics now parfors are found
         self.diagnostics.setup(self.func_ir, self.options.fusion)
