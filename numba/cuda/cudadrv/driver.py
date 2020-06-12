@@ -534,10 +534,11 @@ class Device(object):
 
     def release_primary_context(self):
         """
-        Release reference to primary context
+        Release reference to primary context if it has been retained.
         """
-        driver.cuDevicePrimaryCtxRelease(self.id)
-        self.primary_context = None
+        if self.primary_context:
+            driver.cuDevicePrimaryCtxRelease(self.id)
+            self.primary_context = None
 
     def reset(self):
         try:
@@ -834,13 +835,11 @@ class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
         return MemoryInfo(free=free.value, total=total.value)
 
     def get_ipc_handle(self, memory):
+        base, end = device_extents(memory)
         ipchandle = drvapi.cu_ipc_mem_handle()
-        driver.cuIpcGetMemHandle(
-            byref(ipchandle),
-            memory.owner.handle,
-        )
+        driver.cuIpcGetMemHandle(byref(ipchandle), base)
         source_info = self.context.device.get_device_identity()
-        offset = memory.handle.value - memory.owner.handle.value
+        offset = memory.handle.value - base
 
         return IpcHandle(memory, ipchandle, memory.size, source_info,
                          offset=offset)
@@ -1141,13 +1140,29 @@ class Context(object):
         del self.modules[module.handle.value]
 
     def get_default_stream(self):
-        return Stream(weakref.proxy(self), drvapi.cu_stream(0), None)
+        handle = drvapi.cu_stream(drvapi.CU_STREAM_DEFAULT)
+        return Stream(weakref.proxy(self), handle, None)
+
+    def get_legacy_default_stream(self):
+        handle = drvapi.cu_stream(drvapi.CU_STREAM_LEGACY)
+        return Stream(weakref.proxy(self), handle, None)
+
+    def get_per_thread_default_stream(self):
+        handle = drvapi.cu_stream(drvapi.CU_STREAM_PER_THREAD)
+        return Stream(weakref.proxy(self), handle, None)
 
     def create_stream(self):
         handle = drvapi.cu_stream()
         driver.cuStreamCreate(byref(handle), 0)
         return Stream(weakref.proxy(self), handle,
                       _stream_finalizer(self.deallocations, handle))
+
+    def create_external_stream(self, ptr):
+        if not isinstance(ptr, int):
+            raise TypeError("ptr for external stream must be an int")
+        handle = drvapi.cu_stream(ptr)
+        return Stream(weakref.proxy(self), handle, None,
+                      external=True)
 
     def create_event(self, timing=True):
         handle = drvapi.cu_event()
@@ -1724,21 +1739,30 @@ class MappedOwnedPointer(OwnedPointer, mviewbuf.MemAlloc):
 
 
 class Stream(object):
-    def __init__(self, context, handle, finalizer):
+    def __init__(self, context, handle, finalizer, external=False):
         self.context = context
         self.handle = handle
+        self.external = external
         if finalizer is not None:
             weakref.finalize(self, finalizer)
 
     def __int__(self):
         # The default stream's handle.value is 0, which gives `None`
-        return self.handle.value or 0
+        return self.handle.value or drvapi.CU_STREAM_DEFAULT
 
     def __repr__(self):
-        if self.handle.value:
-            return "<CUDA stream %d on %s>" % (self.handle.value, self.context)
+        default_streams = {
+            drvapi.CU_STREAM_DEFAULT: "<Default CUDA stream on %s>",
+            drvapi.CU_STREAM_LEGACY: "<Legacy default CUDA stream on %s>",
+            drvapi.CU_STREAM_PER_THREAD: "<Per-thread default CUDA stream on %s>",
+        }
+        ptr = self.handle.value or drvapi.CU_STREAM_DEFAULT
+        if ptr in default_streams:
+            return default_streams[ptr] % self.context
+        elif self.external:
+            return "<External CUDA stream %d on %s>" % (ptr, self.context)
         else:
-            return "<Default CUDA stream on %s>" % self.context
+            return "<CUDA stream %d on %s>" % (ptr, self.context)
 
     def synchronize(self):
         '''
@@ -2075,7 +2099,7 @@ def get_devptr_for_active_ctx(ptr):
     """Query the device pointer usable in the current context from an arbitrary
     pointer.
     """
-    devptr = c_void_p(0)
+    devptr = drvapi.cu_device_ptr()
     if ptr != 0:
         attr = enums.CU_POINTER_ATTRIBUTE_DEVICE_POINTER
         driver.cuPointerGetAttribute(byref(devptr), attr, ptr)

@@ -102,6 +102,10 @@ class _ColorScheme(object):
     def highlight(self, msg):
         pass
 
+    @abstractmethod
+    def reset(self, msg):
+        pass
+
 
 class _DummyColorScheme(_ColorScheme):
 
@@ -121,6 +125,9 @@ class _DummyColorScheme(_ColorScheme):
         pass
 
     def highlight(self, msg):
+        pass
+
+    def reset(self, msg):
         pass
 
 
@@ -172,6 +179,9 @@ except ImportError:
         def highlight(self, msg):
             return msg
 
+        def reset(self, msg):
+            return msg
+
     def termcolor():
         global _termcolor_inst
         if _termcolor_inst is None:
@@ -215,35 +225,40 @@ else:
                           'errmsg': None,
                           'filename': None,
                           'indicate': None,
-                          'highlight': None, }
+                          'highlight': None,
+                          'reset': None, }
 
     # suitable for terminals with a dark background
     themes['dark_bg'] = {'code': Fore.BLUE,
                          'errmsg': Fore.YELLOW,
                          'filename': Fore.WHITE,
                          'indicate': Fore.GREEN,
-                         'highlight': Fore.RED, }
+                         'highlight': Fore.RED,
+                         'reset': Style.RESET_ALL, }
 
     # suitable for terminals with a light background
     themes['light_bg'] = {'code': Fore.BLUE,
                           'errmsg': Fore.BLACK,
                           'filename': Fore.MAGENTA,
                           'indicate': Fore.BLACK,
-                          'highlight': Fore.RED, }
+                          'highlight': Fore.RED,
+                          'reset': Style.RESET_ALL, }
 
     # suitable for terminals with a blue background
     themes['blue_bg'] = {'code': Fore.WHITE,
                          'errmsg': Fore.YELLOW,
                          'filename': Fore.MAGENTA,
                          'indicate': Fore.CYAN,
-                         'highlight': Fore.RED, }
+                         'highlight': Fore.RED,
+                         'reset': Style.RESET_ALL, }
 
     # suitable for use in jupyter notebooks
     themes['jupyter_nb'] = {'code': Fore.BLACK,
                             'errmsg': Fore.BLACK,
                             'filename': Fore.GREEN,
                             'indicate': Fore.CYAN,
-                            'highlight': Fore.RED, }
+                            'highlight': Fore.RED,
+                            'reset': Style.RESET_ALL, }
 
     default_theme = themes['no_color']
 
@@ -254,6 +269,7 @@ else:
             self._filename = theme['filename']
             self._indicate = theme['indicate']
             self._highlight = theme['highlight']
+            self._reset = theme['reset']
             _DummyColorScheme.__init__(self, theme=theme)
 
         def _markup(self, msg, color=None, style=Style.BRIGHT):
@@ -282,6 +298,9 @@ else:
 
         def highlight(self, msg):
             return self._markup(msg, self._highlight)
+
+        def reset(self, msg):
+            return self._markup(msg, self._reset)
 
     def termcolor():
         global _termcolor_inst
@@ -459,11 +478,12 @@ class NumbaError(Exception):
         else:
             def highlight(x):
                 return x
+
         if loc:
-            super(NumbaError, self).__init__(
-                highlight("%s\n%s\n" % (msg, loc.strformat())))
+            new_msg = "%s\n%s\n" % (msg, loc.strformat())
         else:
-            super(NumbaError, self).__init__(highlight("%s" % (msg,)))
+            new_msg = "%s" % (msg,)
+        super(NumbaError, self).__init__(highlight(new_msg))
 
     @property
     def contexts(self):
@@ -479,9 +499,8 @@ class NumbaError(Exception):
         contextual information.
         """
         self.contexts.append(msg)
-        f = termcolor().errmsg('{0}\n') + termcolor().filename(
-            '[{1}] During: {2}')
-        newmsg = f.format(self, len(self.contexts), msg)
+        f = termcolor().errmsg('{0}\n') + termcolor().filename('During: {1}')
+        newmsg = f.format(self, msg)
         self.args = (newmsg,)
         return self
 

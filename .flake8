@@ -41,7 +41,6 @@ exclude =
     numba/core/itanium_mangler.py
     numba/core/generators.py
     numba/misc/appdirs.py
-    numba/cffi_support.py
     numba/core/interpreter.py
     numba/core/caching.py
     numba/core/debuginfo.py
@@ -100,7 +99,6 @@ exclude =
     numba/cuda/printimpl.py
     numba/cuda/libdevice.py
     numba/cuda/device_init.py
-    numba/cuda/compiler.py
     numba/cuda/initialize.py
     numba/cuda/simulator_init.py
     numba/cuda/random.py
