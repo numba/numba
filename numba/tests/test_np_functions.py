@@ -781,7 +781,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # Negative minlength
         with self.assertRaises(ValueError) as raises:
             cfunc([17, 38], None, -1)
-        self.assertIn("minlength must be non-negative",
+        self.assertIn("'minlength' must not be negative",
                       str(raises.exception))
 
     def test_searchsorted(self):
