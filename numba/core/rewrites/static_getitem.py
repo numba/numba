@@ -75,8 +75,7 @@ class RewriteStringLiteralGetitems(Rewrite):
         Rewrite all matching getitems as static_getitems where the index
         is the literal value of the string.
         """
-        new_block = self.block.copy()
-        new_block.clear()
+        new_block = ir.Block(self.block.scope, self.block.loc)
         for inst in self.block.body:
             if isinstance(inst, ir.Assign):
                 expr = inst.value
@@ -121,8 +120,7 @@ class RewriteStringLiteralSetitems(Rewrite):
         Rewrite all matching setitems as static_setitems where the index
         is the literal value of the string.
         """
-        new_block = self.block.copy()
-        new_block.clear()
+        new_block = ir.Block(self.block.scope, self.block.loc)
         for inst in self.block.body:
             if isinstance(inst, ir.SetItem):
                 if inst in self.setitems:
@@ -134,8 +132,6 @@ class RewriteStringLiteralSetitems(Rewrite):
                                                 loc=inst.loc)
                     self.calltypes[new_inst] = self.calltypes[inst]
                     inst = new_inst
-                    # inst = ir.StaticSetItem(target=inst.target, index=lit_val,
-                    #                   value=inst.value, loc=inst.loc)
             new_block.append(inst)
         return new_block
 
