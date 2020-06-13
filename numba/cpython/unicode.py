@@ -433,10 +433,27 @@ def _codepoint_is_ascii(ch):
 # PUBLIC API
 
 
-@overload(str)
+@overload_method(types.UnicodeType, '__str__')
 def unicode_str(s):
-    if isinstance(s, types.UnicodeType):
-        return lambda s: s
+    def impl(s):
+        return s
+    return impl
+
+
+@overload_method(types.UnicodeType, '__repr__')
+def unicode_repr(s):
+    def impl(s):
+        squote, dquote = "'", '"'
+        out = s
+        quote = squote
+        if squote in s:
+            if dquote in s:  # both single and double quotes present
+                quote = "'"
+                out = out.replace("'", "\\'")
+            else:            # only single quotes present, use double
+                quote = dquote
+        return quote + out + quote
+    return impl
 
 
 @overload(len)

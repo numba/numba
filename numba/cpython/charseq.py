@@ -10,10 +10,10 @@ from numba.core.cgutils import is_nonelike
 from numba.cpython import unicode
 
 # bytes and str arrays items are of type CharSeq and UnicodeCharSeq,
-# respectively.  See numpy/types/npytypes.py for CharSeq,
+# respectively.  See core/types/npytypes.py for CharSeq,
 # UnicodeCharSeq definitions.  The corresponding data models are
-# defined in numpy/datamodel/models.py. Boxing/unboxing of item types
-# are defined in numpy/targets/boxing.py, see box_unicodecharseq,
+# defined in core/datamodel/models.py. Boxing/unboxing of item types
+# are defined in core/boxing.py, see box_unicodecharseq,
 # unbox_unicodecharseq, box_charseq, unbox_charseq.
 
 s1_dtype = np.dtype('S1')
@@ -597,21 +597,29 @@ def charseq_to_str_mth(s):
     return tostr_impl
 
 
-@overload(str)
-def charseq_str(s):
-    if isinstance(s, types.UnicodeCharSeq):
-        get_code = _get_code_impl(s)
+@overload_method(types.CharSeq, '__str__')
+@overload_method(types.Bytes, '__str__')
+@overload_method(types.CharSeq, '__repr__')
+@overload_method(types.Bytes, '__repr__')
+def bytes_str(s):
+    def str_impl(s):
+        return "b'" + s._to_str() + "'"
+    return str_impl
 
-        def str_impl(s):
-            n = len(s)
-            kind = s._get_kind()
-            is_ascii = kind == 1 and s.isascii()
-            result = unicode._empty_string(kind, n, is_ascii)
-            for i in range(n):
-                code = get_code(s, i)
-                unicode._set_code_point(result, i, code)
-            return result
-        return str_impl
+
+@overload_method(types.UnicodeCharSeq, '__str__')
+@overload_method(types.UnicodeCharSeq, '__repr__')
+def charseq_str(s):
+    def str_impl(s):
+        n = len(s)
+        kind = s._get_kind()
+        is_ascii = kind == 1 and s.isascii()
+        result = unicode._empty_string(kind, n, is_ascii)
+        for i in range(n):
+            code = unicode_charseq_get_code(s, i)
+            unicode._set_code_point(result, i, code)
+        return result
+    return str_impl
 
 
 @overload(bytes)

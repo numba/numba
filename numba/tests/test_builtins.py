@@ -156,9 +156,6 @@ def type_unary_usecase(a, b):
 def truth_usecase(p):
     return operator.truth(p)
 
-def unichr_usecase(x):
-    return unichr(x)
-
 def zip_usecase():
     result = 0
     for i, j in zip((1, 2, 3), (4.5, 6.7)):
@@ -202,6 +199,14 @@ def pow_op_usecase(x, y):
 
 def pow_usecase(x, y):
     return pow(x, y)
+
+
+def str_usecase(obj):
+    return str(obj)
+
+
+def repr_usecase(obj):
+    return repr(obj)
 
 
 class TestBuiltins(TestCase):
@@ -914,6 +919,40 @@ class TestBuiltins(TestCase):
 
         for fn in sample_functions(op=max):
             self._check_min_max(fn)
+
+    def str_repr_test_cases(self):
+        """
+        Some test cases for str() and repr()
+        """
+        cases = [
+            'abc',
+            "{0}".format(hex(10)),
+            np.array(['q'])[0],
+            "fo'o",
+            'b"ar',
+            """fo'ob"ar""",
+            b'Zoot!',
+            np.array([b'Zoot!'])[0]
+        ]
+        return cases
+
+    def test_str(self):
+        pyfunc = str_usecase
+        cfunc = njit(pyfunc)
+
+        for x in self.str_repr_test_cases():
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertPreciseEqual(expected, got)
+
+    def test_repr(self):
+        pyfunc = repr_usecase
+        cfunc = njit(pyfunc)
+
+        for x in self.str_repr_test_cases():
+            expected = pyfunc(x)
+            got = cfunc(x)
+            self.assertPreciseEqual(expected, got)
 
 
 class TestOperatorMixedTypes(TestCase):
