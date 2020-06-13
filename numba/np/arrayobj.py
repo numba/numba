@@ -4,7 +4,7 @@ the buffer protocol.
 """
 
 
-import functools
+from functools import reduce
 import math
 import operator
 
@@ -1244,7 +1244,7 @@ def _bc_adjust_dimension(context, builder, shapes, strides, target_shape):
         nd_diff = len(shapes) - len(target_shape)
         dim_is_one = [builder.icmp_unsigned('==', sh, one)
                       for sh in shapes[:nd_diff]]
-        accepted = functools.reduce(builder.and_, dim_is_one,
+        accepted = reduce(builder.and_, dim_is_one,
                                     cgutils.true_bit)
         # Check error
         with builder.if_then(builder.not_(accepted), likely=False):
@@ -1991,6 +1991,53 @@ def array_repeat(a, repeats):
         return np.repeat(a, repeats)
 
     return array_repeat_impl
+
+
+@overload(np.tile)
+def np_tile(a, reps):
+    def np_tile_integer_impl(a, reps):
+        if reps < 0:
+            raise ValueError("tile(): negative dimensions are not allowed")
+        arr = np.asarray(a)
+        sz = arr.size
+        out = np.empty(reps * sz, dtype=arr.dtype)
+        arr_flat = arr.flatten()
+        for i in range(reps):
+            start = i * sz
+            end = start + sz
+            out[start:end] = arr_flat
+        return out
+
+    def np_tile_impl(a, reps):
+        for r in reps:
+            if r < 0:
+                raise ValueError("tile(): second argument must be "
+                                 "non-negative")
+
+        arr = np.asarray(a)
+        sz = arr.size
+        # assumes arr is 1-dimensional
+        out_shape = reps[:-1] + (reps[-1] * sz,)
+        num_copies = reduce(lambda x, y: x * y, reps, 1)
+        out = np.empty(shape=num_copies * sz, dtype=arr.dtype)
+        for i in range(num_copies):
+            start = i * sz
+            end = start + sz
+            out[start:end] = arr.flatten()
+        return np.reshape(out, out_shape)
+
+    # Type checks
+    if not type_can_asarray(a):
+        raise errors.TypingError("First argument must be array-like")
+    if isinstance(reps, types.Integer):
+        return np_tile_integer_impl
+    elif isinstance(reps, (types.Tuple, types.Array, types.Sequence)):
+        if isinstance(reps, types.Array) and reps.ndim != 1:
+            raise errors.TypingError("Second argument must be 1-dimensional")
+        if isinstance(reps.dtype, types.Integer):
+            return np_tile_impl
+    raise errors.TypingError("Second argument must be an integer "
+                      "or an array/sequence of integers")
 
 
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
@@ -4610,7 +4657,7 @@ def _np_concatenate(context, builder, arrtys, arrs, retty, axis):
 
         with builder.if_else(is_axis) as (on_axis, on_other_dim):
             with on_axis:
-                sh = functools.reduce(
+                sh = reduce(
                     builder.add,
                     other_shapes + [ret_sh])
                 builder.store(sh, ret_shape_ptr)
