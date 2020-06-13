@@ -1041,6 +1041,31 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             self.assertIs(ws[0].category, errors.NumbaDeprecationWarning)
             self.assertIn("numba.experimental.jitclass", ws[0].message.msg)
 
+    def test_builtins(self):
+
+        @jitclass({"x": types.List(types.intp)})
+        class MyList:
+            def __init__(self):
+                self.x = [0]
+
+            def append(self, y):
+                self.x.append(y)
+
+            def __len__(self):
+                return len(self.x)
+
+            def __contains__(self, y):
+                return y in self.x
+
+        foo = MyList()
+        self.assertEqual(len(foo), 1)
+        self.assertTrue(0 in foo)
+        self.assertFalse(1 in foo)
+        foo.append(1)
+        self.assertEqual(len(foo), 2)
+        self.assertTrue(0 in foo)
+        self.assertTrue(1 in foo)
+
 
 if __name__ == '__main__':
     unittest.main()
