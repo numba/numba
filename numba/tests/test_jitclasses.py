@@ -2,6 +2,7 @@ from collections import OrderedDict
 import ctypes
 import random
 import pickle
+import sys
 import warnings
 
 import numba
@@ -12,7 +13,7 @@ from numba import (float32, float64, int16, int32, boolean, deferred_type,
 from numba import njit, typeof
 from numba.core import types, errors
 from numba.core.dispatcher import Dispatcher
-from numba.core.errors import LoweringError
+from numba.core.errors import LoweringError, TypingError
 from numba.core.runtime.nrt import MemInfo
 from numba.experimental import jitclass
 from numba.experimental.jitclass import _box
@@ -1041,30 +1042,262 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             self.assertIs(ws[0].category, errors.NumbaDeprecationWarning)
             self.assertIn("numba.experimental.jitclass", ws[0].message.msg)
 
-    def test_builtins(self):
 
-        @jitclass({"x": types.List(types.intp)})
-        class MyList:
-            def __init__(self):
-                self.x = [0]
+class TestJitClassOverloads(TestCase, MemoryLeakMixin):
+
+    class PyList:
+        def __init__(self):
+            self.x = [0]
+
+        def append(self, y):
+            self.x.append(y)
+
+        def clear(self):
+            self.x.clear()
+
+        def __abs__(self):
+            return len(self.x) * 7
+
+        def __bool__(self):
+            return len(self.x) % 3 != 0
+
+        def __complex__(self):
+            c = complex(2)
+            if self.x:
+                c += self.x[0]
+            return c
+
+        def __contains__(self, y):
+            return y in self.x
+
+        def __float__(self):
+            f = 3.1415
+            if self.x:
+                f += self.x[0]
+            return f
+
+        def __int__(self):
+            i = 5
+            if self.x:
+                i += self.x[0]
+            return i
+
+        def __len__(self):
+            return len(self.x) + 1
+
+    def assertSame(self, first, second, msg=None):
+        self.assertEqual(type(first), type(second), msg=msg)
+        self.assertEqual(first, second, msg=msg)
+
+    def test_simple(self):
+        """
+        Check that the dunder methods are exposed on ClassInstanceType.
+        """
+        JitList = jitclass({"x": types.List(types.intp)})(self.PyList)
+
+        py_funcs = [
+            lambda x: abs(x),
+            lambda x: x.__abs__(),
+            lambda x: bool(x),
+            lambda x: x.__bool__(),
+            lambda x: complex(x),
+            lambda x: x.__complex__(),
+            lambda x: 0 in x,  # contains
+            lambda x: x.__contains__(0),
+            lambda x: float(x),
+            lambda x: x.__float__(),
+            lambda x: int(x),
+            lambda x: x.__int__(),
+            lambda x: len(x),
+            lambda x: x.__len__(),
+            lambda x: 1 if x else 0,  # truth
+        ]
+        jit_funcs = [njit(f) for f in py_funcs]
+
+        py_list = self.PyList()
+        jit_list = JitList()
+        for py_f, jit_f in zip(py_funcs, jit_funcs):
+            self.assertSame(py_f(py_list), py_f(jit_list))
+            self.assertSame(py_f(py_list), jit_f(jit_list))
+
+        py_list.append(2)
+        jit_list.append(2)
+        for py_f, jit_f in zip(py_funcs, jit_funcs):
+            self.assertSame(py_f(py_list), py_f(jit_list))
+            self.assertSame(py_f(py_list), jit_f(jit_list))
+
+        py_list.append(-5)
+        jit_list.append(-5)
+        for py_f, jit_f in zip(py_funcs, jit_funcs):
+            self.assertSame(py_f(py_list), py_f(jit_list))
+            self.assertSame(py_f(py_list), jit_f(jit_list))
+
+        py_list.clear()
+        jit_list.clear()
+        for py_f, jit_f in zip(py_funcs, jit_funcs):
+            self.assertSame(py_f(py_list), py_f(jit_list))
+            self.assertSame(py_f(py_list), jit_f(jit_list))
+
+    def test_bool_fallback(self):
+
+        def py_b(x):
+            return bool(x)
+
+        jit_b = njit(py_b)
+
+        @jitclass([("x", types.List(types.intp))])
+        class LenClass:
+            def __init__(self, x):
+                self.x = x
+
+            def __len__(self):
+                return len(self.x) % 4
 
             def append(self, y):
                 self.x.append(y)
 
-            def __len__(self):
-                return len(self.x)
+            def pop(self):
+                self.x.pop(0)
 
-            def __contains__(self, y):
-                return y in self.x
+        obj = LenClass([1, 2, 3])
+        self.assertTrue(py_b(obj))
+        self.assertTrue(jit_b(obj))
 
-        foo = MyList()
-        self.assertEqual(len(foo), 1)
-        self.assertTrue(0 in foo)
-        self.assertFalse(1 in foo)
-        foo.append(1)
-        self.assertEqual(len(foo), 2)
-        self.assertTrue(0 in foo)
-        self.assertTrue(1 in foo)
+        obj.append(4)
+        self.assertFalse(py_b(obj))
+        self.assertFalse(jit_b(obj))
+
+        obj.pop()
+        self.assertTrue(py_b(obj))
+        self.assertTrue(jit_b(obj))
+
+        @jitclass([("y", types.float64)])
+        class NormalClass:
+            def __init__(self, y):
+                self.y = y
+
+        obj = NormalClass(0)
+        self.assertTrue(py_b(obj))
+        self.assertTrue(jit_b(obj))
+
+    def test_numeric_fallback(self):
+        def py_c(x):
+            return complex(x)
+
+        def py_f(x):
+            return float(x)
+
+        def py_i(x):
+            return int(x)
+
+        jit_c = njit(py_c)
+        jit_f = njit(py_f)
+        jit_i = njit(py_i)
+
+        @jitclass([])
+        class FloatClass:
+            def __init__(self):
+                pass
+
+            def __float__(self):
+                return 3.1415
+
+        obj = FloatClass()
+        self.assertEquals(py_c(obj), complex(3.1415))
+        self.assertEquals(jit_c(obj), complex(3.1415))
+        self.assertEquals(py_f(obj), 3.1415)
+        self.assertEquals(jit_f(obj), 3.1415)
+
+        with self.assertRaises(TypeError) as e:
+            py_i(obj)
+        self.assertIn("int", str(e.exception))
+        with self.assertRaises(TypingError) as e:
+            jit_i(obj)
+        self.assertIn("int", str(e.exception))
+
+        @jitclass([])
+        class IntClass:
+            def __init__(self):
+                pass
+
+            def __int__(self):
+                return 7
+
+        obj = IntClass()
+        self.assertEquals(py_i(obj), 7)
+        self.assertEquals(jit_i(obj), 7)
+
+        with self.assertRaises(TypeError) as e:
+            py_c(obj)
+        self.assertIn("complex", str(e.exception))
+        with self.assertRaises(TypingError) as e:
+            jit_c(obj)
+        self.assertIn("complex", str(e.exception))
+        with self.assertRaises(TypeError) as e:
+            py_f(obj)
+        self.assertIn("float", str(e.exception))
+        with self.assertRaises(TypingError) as e:
+            jit_f(obj)
+        self.assertIn("float", str(e.exception))
+
+        @jitclass([])
+        class IndexClass:
+            def __init__(self):
+                pass
+
+            def __index__(self):
+                return 1
+
+        obj = IndexClass()
+
+        if sys.version[:3] >= "3.8":
+            self.assertEquals(py_c(obj), complex(1))
+            self.assertEquals(jit_c(obj), complex(1))
+            self.assertEquals(py_f(obj), 1.)
+            self.assertEquals(jit_f(obj), 1.)
+            self.assertEquals(py_i(obj), 1)
+            self.assertEquals(jit_i(obj), 1)
+        else:
+            with self.assertRaises(TypeError) as e:
+                py_c(obj)
+            self.assertIn("complex", str(e.exception))
+            with self.assertRaises(TypingError) as e:
+                jit_c(obj)
+            self.assertIn("complex", str(e.exception))
+            with self.assertRaises(TypeError) as e:
+                py_f(obj)
+            self.assertIn("float", str(e.exception))
+            with self.assertRaises(TypingError) as e:
+                jit_f(obj)
+            self.assertIn("float", str(e.exception))
+            with self.assertRaises(TypeError) as e:
+                py_i(obj)
+            self.assertIn("int", str(e.exception))
+            with self.assertRaises(TypingError) as e:
+                jit_i(obj)
+            self.assertIn("int", str(e.exception))
+
+        @jitclass([])
+        class FloatIntIndexClass:
+            def __init__(self):
+                pass
+
+            def __float__(self):
+                return 3.1415
+
+            def __int__(self):
+                return 7
+
+            def __index__(self):
+                return 1
+
+        obj = FloatIntIndexClass()
+        self.assertEquals(py_c(obj), complex(3.1415))
+        self.assertEquals(jit_c(obj), complex(3.1415))
+        self.assertEquals(py_f(obj), 3.1415)
+        self.assertEquals(jit_f(obj), 3.1415)
+        self.assertEquals(py_i(obj), 7)
+        self.assertEquals(jit_i(obj), 7)
 
 
 if __name__ == '__main__':

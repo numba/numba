@@ -96,15 +96,24 @@ def _specialize_box(typ):
         doc = getattr(imp, '__doc__', None)
         dct[field] = property(getter, setter, doc=doc)
     # Inject methods as class members
-    bad_builtins = {
-        "__name__",
-        "__doc__",
-        "__init__",
-        "__new__",
+    supported_dunders = {
+        "__abs__",
+        "__bool__",
+        "__complex__",
+        "__contains__",
+        "__float__",
+        "__getitem__",
+        "__index__",
+        "__int__",
+        "__len__",
+        "__setitem__",
     }
     for name, func in typ.methods.items():
-        if name not in bad_builtins:
+        if (not (name.startswith("__") and name.endswith("__")) or
+                name in supported_dunders):
             dct[name] = _generate_method(name, func)
+        # if name == "__hash__":
+        #     dct[name] = func
 
     # Inject static methods as class members
     for name, func in typ.static_methods.items():
