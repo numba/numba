@@ -2011,8 +2011,7 @@ def np_tile(a, reps):
     def np_tile_impl(a, reps):
         for r in reps:
             if r < 0:
-                raise ValueError("tile(): second argument must be "
-                                 "non-negative")
+                raise ValueError("tile(): negative dimensions are not allowed")
 
         arr = np.asarray(a)
         sz = arr.size
