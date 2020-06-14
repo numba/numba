@@ -3684,11 +3684,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         # Negative dimensions are not allowed, test both implementations
         with self.assertRaises(ValueError) as raises:
             cfunc([0, 0], (2, -1))
-        self.assertIn("tile(): second argument must be non-negative",
+        self.assertIn("tile(): negative dimensions are not allowed",
                       str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             cfunc([0, 0], -5)
-        self.assertIn("tile(): second argument must be non-negative",
+        self.assertIn("tile(): negative dimensions are not allowed",
                       str(raises.exception))
 
 
