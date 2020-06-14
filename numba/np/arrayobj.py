@@ -4,7 +4,7 @@ the buffer protocol.
 """
 
 
-from functools import reduce
+import functools
 import math
 import operator
 
@@ -1244,7 +1244,7 @@ def _bc_adjust_dimension(context, builder, shapes, strides, target_shape):
         nd_diff = len(shapes) - len(target_shape)
         dim_is_one = [builder.icmp_unsigned('==', sh, one)
                       for sh in shapes[:nd_diff]]
-        accepted = reduce(builder.and_, dim_is_one,
+        accepted = functools.reduce(builder.and_, dim_is_one,
                                     cgutils.true_bit)
         # Check error
         with builder.if_then(builder.not_(accepted), likely=False):
@@ -2018,12 +2018,13 @@ def np_tile(a, reps):
         sz = arr.size
         # assumes arr is 1-dimensional
         out_shape = reps[:-1] + (reps[-1] * sz,)
-        num_copies = reduce(lambda x, y: x * y, reps, 1)
+        num_copies = np.prod(np.array(reps))
         out = np.empty(shape=num_copies * sz, dtype=arr.dtype)
+        arr_flat = arr.flatten()
         for i in range(num_copies):
             start = i * sz
             end = start + sz
-            out[start:end] = arr.flatten()
+            out[start:end] = arr_flat
         return np.reshape(out, out_shape)
 
     # Type checks
@@ -4657,7 +4658,7 @@ def _np_concatenate(context, builder, arrtys, arrs, retty, axis):
 
         with builder.if_else(is_axis) as (on_axis, on_other_dim):
             with on_axis:
-                sh = reduce(
+                sh = functools.reduce(
                     builder.add,
                     other_shapes + [ret_sh])
                 builder.store(sh, ret_shape_ptr)
