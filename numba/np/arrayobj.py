@@ -2038,7 +2038,7 @@ def np_tile(a, reps):
         if isinstance(reps.dtype, types.Integer):
             return np_tile_impl
     raise errors.TypingError("Second argument must be an integer "
-                      "or an array/sequence of integers")
+                             "or an array/sequence of integers")
 
 
 @lower_builtin('array.view', types.Array, types.DTypeSpec)
