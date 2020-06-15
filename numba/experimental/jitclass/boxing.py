@@ -128,13 +128,25 @@ def _specialize_box(typ):
         "__and__",
         "__or__",
         "__xor__",
+        "__iadd__",
+        "__ifloordiv__",
+        "__ilshift__",
+        "__imod__",
+        "__imul__",
+        "__ineg__",
+        "__ipos__",
+        "__ipow__",
+        "__irshift__",
+        "__isub__",
+        "__itruediv__",
+        "__iand__",
+        "__ior__",
+        "__ixor__",
     }
     for name, func in typ.methods.items():
         if (not (name.startswith("__") and name.endswith("__")) or
                 name in supported_dunders):
             dct[name] = _generate_method(name, func)
-        # if name == "__hash__":
-        #     dct[name] = func
 
     # Inject static methods as class members
     for name, func in typ.static_methods.items():

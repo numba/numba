@@ -9,26 +9,44 @@ from numba.core.extending import overload
 from numba.core.types import ClassInstanceType
 
 
-def register_class_overload(func, attr, nargs=1):
-    """
-    Register overload handler for func calling class attribute attr.
-    """
-    args = list("abcdefg")[:nargs]
+def _get_args(nargs=1):
+    return list("xyzabcdefg")[:nargs]
+
+
+def _simple_template(*attrs, nargs=1):
+    args = _get_args(nargs=nargs)
     arg0 = args[0]
 
     template = f"""
 def handler({",".join(args)}):
     if not isinstance({arg0}, ClassInstanceType):
         return
+"""
+    for attr in attrs:
+        assert isinstance(attr, str)
+        template += f"""
     if "__{attr}__" in {arg0}.jit_methods:
         return lambda {",".join(args)}: {arg0}.__{attr}__({",".join(args[1:])})
 """
+    return template
 
+
+def _register_overload(func, template, glbls=None):
+    """
+    Register overload handler for func calling class attribute attr.
+    """
     namespace = dict(ClassInstanceType=ClassInstanceType)
-    exec(template, namespace)
+    if glbls:
+        namespace.update(glbls)
 
+    exec(template, namespace)
     handler = namespace["handler"]
     overload(func)(handler)
+
+
+def register_simple_overload(func, *attrs, nargs=1):
+    template = _simple_template(*attrs, nargs=nargs)
+    _register_overload(func, template)
 
 
 @overload(bool)
@@ -105,31 +123,47 @@ def class_str(x):
     return lambda x: repr(x)
 
 
-register_class_overload(abs, "abs")
-register_class_overload(len, "len")
+register_simple_overload(abs, "abs")
+register_simple_overload(len, "len")
 
 # Comparison operators.
-# register_class_overload(operator.eq, "eq", 2)
-# register_class_overload(operator.ne, "ne", 2)
-register_class_overload(operator.ge, "ge", 2)
-register_class_overload(operator.gt, "gt", 2)
-register_class_overload(operator.le, "le", 2)
-register_class_overload(operator.lt, "lt", 2)
+# register_simple_overload(operator.eq, "eq", 2)
+# register_simple_overload(operator.ne, "ne", 2)
+register_simple_overload(operator.ge, "ge", nargs=2)
+register_simple_overload(operator.gt, "gt", nargs=2)
+register_simple_overload(operator.le, "le", nargs=2)
+register_simple_overload(operator.lt, "lt", nargs=2)
 
 # Arithmetic operators.
-register_class_overload(operator.add, "add", 2)
-register_class_overload(operator.floordiv, "floordiv", 2)
-register_class_overload(operator.lshift, "lshift", 2)
-register_class_overload(operator.mod, "mod", 2)
-register_class_overload(operator.mul, "mul", 2)
-register_class_overload(operator.neg, "neg")
-register_class_overload(operator.pos, "pos")
-register_class_overload(operator.pow, "pow", 2)
-register_class_overload(operator.rshift, "rshift", 2)
-register_class_overload(operator.sub, "sub", 2)
-register_class_overload(operator.truediv, "truediv", 2)
+register_simple_overload(operator.add, "add", nargs=2)
+register_simple_overload(operator.floordiv, "floordiv", nargs=2)
+register_simple_overload(operator.lshift, "lshift", nargs=2)
+register_simple_overload(operator.mod, "mod", nargs=2)
+register_simple_overload(operator.mul, "mul", nargs=2)
+register_simple_overload(operator.neg, "neg")
+register_simple_overload(operator.pos, "pos")
+register_simple_overload(operator.pow, "pow", nargs=2)
+register_simple_overload(operator.rshift, "rshift", nargs=2)
+register_simple_overload(operator.sub, "sub", nargs=2)
+register_simple_overload(operator.truediv, "truediv", nargs=2)
+
+# Inplace arithmetic operators.
+register_simple_overload(operator.iadd, "iadd", "add", nargs=2)
+register_simple_overload(operator.ifloordiv, "ifloordiv", "floordiv", nargs=2)
+register_simple_overload(operator.ilshift, "ilshift", "lshift", nargs=2)
+register_simple_overload(operator.imod, "imod", "mod", nargs=2)
+register_simple_overload(operator.imul, "imul", "mul", nargs=2)
+register_simple_overload(operator.ipow, "ipow", "pow", nargs=2)
+register_simple_overload(operator.irshift, "irshift", "rshift", nargs=2)
+register_simple_overload(operator.isub, "isub", "sub", nargs=2)
+register_simple_overload(operator.itruediv, "itruediv", "truediv", nargs=2)
 
 # Logical operators.
-register_class_overload(operator.and_, "and", 2)
-register_class_overload(operator.or_, "or", 2)
-register_class_overload(operator.xor, "xor", 2)
+register_simple_overload(operator.and_, "and", nargs=2)
+register_simple_overload(operator.or_, "or", nargs=2)
+register_simple_overload(operator.xor, "xor", nargs=2)
+
+# Inplace logical operators.
+register_simple_overload(operator.iand, "iand", "and", nargs=2)
+register_simple_overload(operator.ior, "ior", "or", nargs=2)
+register_simple_overload(operator.ixor, "ixor", "xor", nargs=2)
