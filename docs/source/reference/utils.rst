@@ -12,7 +12,10 @@ Printing
    Writes the C string pointed by `format` to the standart output (stdout).
    If `format` includes specifiers, the additional arguments following format
    are inserted in the resulting string. The following formatters are supported:
-   `%d`, `%i`, `%u`, `%x`, `%X`, `%f`, `%F`, `%e`, `%E`, `%g`, `%G`, `%c`, and `%s`
+   `%d`, `%i`, `%u`, `%x`, `%X`, `%f`, `%F`, `%e`, `%E`, `%g`, `%G`, '%o',
+   '%p', `%c`, and `%s`. Under the hood, `printf` calls the C corresponding
+   implementation. This function is useful to debug LLVM IR and it is not
+   intended to replace the python `print` function.
 
 
 .. function:: numba.misc.utils.fflush()

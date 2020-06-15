@@ -85,3 +85,6 @@ from numba import njit
 
 # 		output = captured_stdout.decode('utf-8')
 # 		self.assertEqual(expected, output)
+
+if __name__ == '__main__':
+	unittest.main()
