@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import ctypes
+import itertools
 import random
 import pickle
 import sys
@@ -1085,11 +1086,17 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
         def __len__(self):
             return len(self.x) + 1
 
+        def __str__(self):
+            if len(self.x) == 0:
+                return "PyList empty"
+            else:
+                return "PyList non-empty"
+
     def assertSame(self, first, second, msg=None):
         self.assertEqual(type(first), type(second), msg=msg)
         self.assertEqual(first, second, msg=msg)
 
-    def test_simple(self):
+    def test_overloads(self):
         """
         Check that the dunder methods are exposed on ClassInstanceType.
         """
@@ -1110,6 +1117,8 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
             lambda x: x.__int__(),
             lambda x: len(x),
             lambda x: x.__len__(),
+            lambda x: str(x),
+            lambda x: x.__str__(),
             lambda x: 1 if x else 0,  # truth
         ]
         jit_funcs = [njit(f) for f in py_funcs]
@@ -1203,10 +1212,10 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
                 return 3.1415
 
         obj = FloatClass()
-        self.assertEquals(py_c(obj), complex(3.1415))
-        self.assertEquals(jit_c(obj), complex(3.1415))
-        self.assertEquals(py_f(obj), 3.1415)
-        self.assertEquals(jit_f(obj), 3.1415)
+        self.assertSame(py_c(obj), complex(3.1415))
+        self.assertSame(jit_c(obj), complex(3.1415))
+        self.assertSame(py_f(obj), 3.1415)
+        self.assertSame(jit_f(obj), 3.1415)
 
         with self.assertRaises(TypeError) as e:
             py_i(obj)
@@ -1224,8 +1233,8 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
                 return 7
 
         obj = IntClass()
-        self.assertEquals(py_i(obj), 7)
-        self.assertEquals(jit_i(obj), 7)
+        self.assertSame(py_i(obj), 7)
+        self.assertSame(jit_i(obj), 7)
 
         with self.assertRaises(TypeError) as e:
             py_c(obj)
@@ -1251,12 +1260,12 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
         obj = IndexClass()
 
         if sys.version[:3] >= "3.8":
-            self.assertEquals(py_c(obj), complex(1))
-            self.assertEquals(jit_c(obj), complex(1))
-            self.assertEquals(py_f(obj), 1.)
-            self.assertEquals(jit_f(obj), 1.)
-            self.assertEquals(py_i(obj), 1)
-            self.assertEquals(jit_i(obj), 1)
+            self.assertSame(py_c(obj), complex(1))
+            self.assertSame(jit_c(obj), complex(1))
+            self.assertSame(py_f(obj), 1.)
+            self.assertSame(jit_f(obj), 1.)
+            self.assertSame(py_i(obj), 1)
+            self.assertSame(jit_i(obj), 1)
         else:
             with self.assertRaises(TypeError) as e:
                 py_c(obj)
@@ -1292,12 +1301,150 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
                 return 1
 
         obj = FloatIntIndexClass()
-        self.assertEquals(py_c(obj), complex(3.1415))
-        self.assertEquals(jit_c(obj), complex(3.1415))
-        self.assertEquals(py_f(obj), 3.1415)
-        self.assertEquals(jit_f(obj), 3.1415)
-        self.assertEquals(py_i(obj), 7)
-        self.assertEquals(jit_i(obj), 7)
+        self.assertSame(py_c(obj), complex(3.1415))
+        self.assertSame(jit_c(obj), complex(3.1415))
+        self.assertSame(py_f(obj), 3.1415)
+        self.assertSame(jit_f(obj), 3.1415)
+        self.assertSame(py_i(obj), 7)
+        self.assertSame(jit_i(obj), 7)
+
+    def test_arithmetic(self):
+
+        @jitclass([("x", types.intp)])
+        class IntWrapper:
+            def __init__(self, value):
+                self.x = value
+
+            def __lshift__(self, other):
+                return IntWrapper(self.x << other.x)
+
+            def __rshift__(self, other):
+                return IntWrapper(self.x >> other.x)
+
+            def __and__(self, other):
+                return IntWrapper(self.x & other.x)
+
+            def __or__(self, other):
+                return IntWrapper(self.x | other.x)
+
+            def __xor__(self, other):
+                return IntWrapper(self.x ^ other.x)
+
+        @jitclass([("x", types.float64)])
+        class FloatWrapper:
+
+            def __init__(self, value):
+                self.x = value
+
+            # def __eq__(self, other):
+            #     print("Eq", self, other, self.x, other.x)
+            #     return self.x == other.x
+
+            # def __ne__(self, other):
+            #     return self.x != other.x
+
+            def __ge__(self, other):
+                return self.x >= other.x
+
+            def __gt__(self, other):
+                return self.x > other.x
+
+            def __le__(self, other):
+                return self.x <= other.x
+
+            def __lt__(self, other):
+                return self.x < other.x
+
+            def __add__(self, other):
+                return FloatWrapper(self.x + other.x)
+
+            def __floordiv__(self, other):
+                return FloatWrapper(self.x // other.x)
+
+            def __mod__(self, other):
+                return FloatWrapper(self.x % other.x)
+
+            def __mul__(self, other):
+                return FloatWrapper(self.x * other.x)
+
+            def __neg__(self, other):
+                return FloatWrapper(-self.x)
+
+            def __pos__(self, other):
+                return FloatWrapper(+self.x)
+
+            def __pow__(self, other):
+                return FloatWrapper(self.x ** other.x)
+
+            def __sub__(self, other):
+                return FloatWrapper(self.x - other.x)
+
+            def __truediv__(self, other):
+                return FloatWrapper(self.x / other.x)
+
+        float_py_funcs = [
+            # lambda x, y: x == y,
+            # lambda x, y: x != y,
+            lambda x, y: x >= y,
+            lambda x, y: x > y,
+            lambda x, y: x <= y,
+            lambda x, y: x < y,
+            lambda x, y: x + y,
+            lambda x, y: x // y,
+            lambda x, y: x % y,
+            lambda x, y: x * y,
+            lambda x, y: x ** y,
+            lambda x, y: x - y,
+            lambda x, y: x / y,
+        ]
+        int_py_funcs = [
+            lambda x, y: x << y,
+            lambda x, y: x >> y,
+            lambda x, y: x & y,
+            lambda x, y: x | y,
+            lambda x, y: x ^ y,
+        ]
+
+        test_values = [
+            (0.0, 2.0),
+            (1.234, 3.1415),
+            (13.1, 1.01),
+        ]
+
+        def unwrap(value):
+            return getattr(value, "x", value)
+
+        for jit_f, (x, y) in itertools.product(
+                map(njit, float_py_funcs), test_values):
+
+            py_f = jit_f.py_func
+
+            expected = py_f(x, y)
+            jit_x = FloatWrapper(x)
+            jit_y = FloatWrapper(y)
+
+            check = (
+                self.assertEqual
+                if type(expected) is not float
+                else self.assertAlmostEqual
+            )
+            check(expected, jit_f(x, y))
+            check(expected, unwrap(py_f(jit_x, jit_y)))
+            check(expected, unwrap(jit_f(jit_x, jit_y)))
+
+        for jit_f, (x, y) in itertools.product(
+                map(njit, int_py_funcs), test_values):
+
+            py_f = jit_f.py_func
+            x, y = int(x), int(y)
+
+            expected = py_f(x, y)
+            jit_x = IntWrapper(x)
+            jit_y = IntWrapper(y)
+
+            self.assertEqual(expected, jit_f(x, y))
+            self.assertEqual(expected, unwrap(py_f(jit_x, jit_y)))
+            self.assertEqual(expected, unwrap(jit_f(jit_x, jit_y)))
 
 
 if __name__ == '__main__':

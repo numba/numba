@@ -9,13 +9,26 @@ from numba.core.extending import overload
 from numba.core.types import ClassInstanceType
 
 
-@overload(abs)
-def class_abs(x):
-    if not isinstance(x, ClassInstanceType):
-        return
+def register_class_overload(func, attr, nargs=1):
+    """
+    Register overload handler for func calling class attribute attr.
+    """
+    args = list("abcdefg")[:nargs]
+    arg0 = args[0]
 
-    if "__abs__" in x.jit_methods:
-        return lambda x: x.__abs__()
+    template = f"""
+def handler({",".join(args)}):
+    if not isinstance({arg0}, ClassInstanceType):
+        return
+    if "__{attr}__" in {arg0}.jit_methods:
+        return lambda {",".join(args)}: {arg0}.__{attr}__({",".join(args[1:])})
+"""
+
+    namespace = dict(ClassInstanceType=ClassInstanceType)
+    exec(template, namespace)
+
+    handler = namespace["handler"]
+    overload(func)(handler)
 
 
 @overload(bool)
@@ -81,10 +94,42 @@ def class_int(x):
         return lambda x: x.__index__()
 
 
-@overload(len)
-def class_len(x):
+@overload(str)
+def class_str(x):
     if not isinstance(x, ClassInstanceType):
         return
 
-    if "__len__" in x.jit_methods:
-        return lambda x: x.__len__()
+    if "__str__" in x.jit_methods:
+        return lambda x: x.__str__()
+
+    return lambda x: repr(x)
+
+
+register_class_overload(abs, "abs")
+register_class_overload(len, "len")
+
+# Comparison operators.
+# register_class_overload(operator.eq, "eq", 2)
+# register_class_overload(operator.ne, "ne", 2)
+register_class_overload(operator.ge, "ge", 2)
+register_class_overload(operator.gt, "gt", 2)
+register_class_overload(operator.le, "le", 2)
+register_class_overload(operator.lt, "lt", 2)
+
+# Arithmetic operators.
+register_class_overload(operator.add, "add", 2)
+register_class_overload(operator.floordiv, "floordiv", 2)
+register_class_overload(operator.lshift, "lshift", 2)
+register_class_overload(operator.mod, "mod", 2)
+register_class_overload(operator.mul, "mul", 2)
+register_class_overload(operator.neg, "neg")
+register_class_overload(operator.pos, "pos")
+register_class_overload(operator.pow, "pow", 2)
+register_class_overload(operator.rshift, "rshift", 2)
+register_class_overload(operator.sub, "sub", 2)
+register_class_overload(operator.truediv, "truediv", 2)
+
+# Logical operators.
+register_class_overload(operator.and_, "and", 2)
+register_class_overload(operator.or_, "or", 2)
+register_class_overload(operator.xor, "xor", 2)
