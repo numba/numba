@@ -10,7 +10,11 @@ from numba.tests.support import skip_linux
 # Solution for capturing stdout
 # https://stackoverflow.com/questions/24277488/in-python-how-to-capture-the-stdout-from-a-c-shared-library-to-a-variable
 captured_stdout = b''
-stdout_pipe = None
+stdout_fileno = sys.stdout.fileno()
+stdout_save = os.dup(stdout_fileno)
+stdout_pipe = os.pipe()
+os.dup2(stdout_pipe[1], stdout_fileno)
+os.close(stdout_pipe[1])
 def drain_pipe():
 	global captured_stdout
 	while True:
@@ -65,13 +69,6 @@ class TestUtils(TestCase):
 
 	@skip_linux
 	def test_printf(self):
-		global stdout_pipe
-		stdout_fileno = sys.stdout.fileno()
-		stdout_save = os.dup(stdout_fileno)
-		stdout_pipe = os.pipe()
-		os.dup2(stdout_pipe[1], stdout_fileno)
-		os.close(stdout_pipe[1])
-
 		d = 3
 		cfunc = njit(printf)
 		t = threading.Thread(target=drain_pipe)
