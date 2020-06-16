@@ -76,6 +76,9 @@ skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 _lnx_reason = 'linux only test'
 linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 
+_skip_linux_reason = 'MacOs and Windows only'
+skip_linux = unittest.skipIf(sys.platform.startswith('linux'), _skip_linux_reason)
+
 _is_armv7l = platform.machine() == 'armv7l'
 
 disabled_test = unittest.skipIf(True, 'Test disabled')

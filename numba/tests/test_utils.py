@@ -4,11 +4,13 @@ import threading
 from numba.misc import utils
 from numba.tests.support import TestCase
 from numba import njit
+from numba.tests.support import skip_linux
 
 
 # Solution for capturing stdout
 # https://stackoverflow.com/questions/24277488/in-python-how-to-capture-the-stdout-from-a-c-shared-library-to-a-variable
 captured_stdout = b''
+stdout_pipe = None
 def drain_pipe():
 	global captured_stdout
 	while True:
@@ -61,8 +63,9 @@ def printf():
 
 class TestUtils(TestCase):
 
-	@unittest.skipIf(sys.platform.startswith('linux'), 'MacOs and Windows only')
+	@skip_linux
 	def test_printf(self):
+		global stdout_pipe
 		stdout_fileno = sys.stdout.fileno()
 		stdout_save = os.dup(stdout_fileno)
 		stdout_pipe = os.pipe()
