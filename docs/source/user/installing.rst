@@ -185,20 +185,31 @@ vary with target operating system and hardware. The following lists them all
   * ``numpy``
   * ``llvmlite``
   * Compiler toolchain mentioned above
-  * OpenMP C headers and runtime libraries compatible with the compiler
-    toolchain mentioned above and accessible to the compiler via standard flags
-    (Linux, Windows).
 
-* Optional build time:
-
-  * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
+* Build time toggles:
+  * ``NUMBA_NO_OPENMP=1``
+    DEFAULT: undefined
+    set the environment variable to ``1`` when building using ``setup.py``
+    to disable compilations of OpenMP threading backend.
+    If enabled you need OpenMP C headers and runtime libraries compatible
+    with the compiler toolchain mentioned above and accessible to the
+    compiler via standard flags (Linux, Windows)
+    * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
     Numba's threading backend
-  * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
+    * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
     threading backend.
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
     into Numba's threading backend
-  * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
-    Python 3.6 and 3.7.
+  * ``NUMBA_NO_TBB=1 TBBROOT=/usr``
+    DEFAULT: both undefined
+    set the environment variable ``NUMBA_NO_TBB`` to ``1`` when building using
+    ``setup.py`` to disable the compilation of the TBB threading backend.
+    If not setting it to ``1`` you can also add the location where the
+    TBB headers are going to be searched for, which is generally in ``/usr``,
+    as they are installed in ``/usr/include/tbb/tbb.h``.
+    If enabled ``tbb-devel`` is a requirement. It provides TBB headers/libraries
+    for compiling TBB support into Numba's threading backend
+
 
 * Required run time:
 
@@ -299,4 +310,3 @@ further information.
                                   pci bus id: 1
 
 (output truncated due to length)
-
