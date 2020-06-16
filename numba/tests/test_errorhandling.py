@@ -171,6 +171,16 @@ class TestMiscErrorHandling(unittest.TestCase):
                 dec(foo)()
             self.assertIn(expected, str(raises.exception))
 
+    def test_handling_undefined_variable(self):
+        @njit
+        def foo():
+            return a
+
+        expected = "NameError: name 'a' is not defined"
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        self.assertIn(expected, str(raises.exception))
 
 class TestConstantInferenceErrorHandling(unittest.TestCase):
 

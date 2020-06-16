@@ -1469,7 +1469,15 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
             else:
                 nm = gvar.name
-                msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
+                 # check if the problem is actually a name error
+                func_glbls = self.func_id.func.__globals__
+                if nm not in func_glbls.keys():
+                    errstr = "NameError: name '%s' is not defined"
+                    msg = _termcolor.errmsg(errstr % nm)
+                    e.patch_message(msg)
+                    raise
+                else:
+                    msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
                 msg += " %s"  # interps the actual error
 
                 # if the untyped global is a numba internal function then add
