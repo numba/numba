@@ -841,8 +841,6 @@ def inv_impl(a):
 
     kind = ord(get_blas_kind(a.dtype, "inv"))
 
-    F_layout = a.layout == 'F'
-
     def inv_impl(a):
         n = a.shape[-1]
         if a.shape[-2] != n:
@@ -851,10 +849,7 @@ def inv_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         if n == 0:
             return acpy
