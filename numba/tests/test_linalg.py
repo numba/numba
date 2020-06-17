@@ -2045,6 +2045,30 @@ class TestLinalgDetAndSlogdet(TestLinalgBase):
         cfunc = jit(nopython=True)(slogdet_matrix)
         self.do_test("slogdet", self.check_slogdet, cfunc)
 
+    @needs_lapack
+    def test_no_input_mutation(self):
+        X = np.array([[1., 3, 2, 7,],
+                      [-5, 4, 2, 3,],
+                      [9, -3, 1, 1,],
+                      [2, -2, 2, 8,]], order='F')
+
+        X_orig = np.copy(X)
+
+        @jit(nopython=True)
+        def func(X, test):
+            if test:
+                # not executed, but necessary to trigger A ordering in X
+                X = X[1:2, :]
+            return np.linalg.slogdet(X)
+
+        expected = func.py_func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        got = func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        np.testing.assert_allclose(expected, got)
+
 # Use TestLinalgSystems as a base to get access to additional
 # testing for 1 and 2D inputs.
 

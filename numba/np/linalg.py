@@ -1966,8 +1966,6 @@ def slogdet_impl(a):
 
     kind = ord(get_blas_kind(a.dtype, "slogdet"))
 
-    F_layout = a.layout == 'F'
-
     diag_walker = _get_slogdet_diag_walker(a)
 
     ONE = a.dtype(1)
@@ -1984,10 +1982,7 @@ def slogdet_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ipiv = np.empty(n, dtype=F_INT_nptype)
 
