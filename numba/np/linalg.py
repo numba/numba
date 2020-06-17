@@ -1629,9 +1629,6 @@ def lstsq_impl(a, b, rcond=-1.0):
     # B can be 1D or 2D.
     _check_linalg_1_or_2d_matrix(b, "lstsq")
 
-    a_F_layout = a.layout == 'F'
-    b_F_layout = b.layout == 'F'
-
     _check_homogeneous_types("lstsq", a, b)
 
     np_dt = np_support.as_dtype(a.dtype)
@@ -1671,10 +1668,7 @@ def lstsq_impl(a, b, rcond=-1.0):
         maxmn = max(m, n)
 
         # a is destroyed on exit, copy it
-        if a_F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         # b is overwritten on exit with the solution, copy allocate
         bcpy = np.empty((nrhs, maxmn), dtype=np_dt).T

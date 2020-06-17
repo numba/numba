@@ -1504,6 +1504,28 @@ class TestLinalgLstsq(TestLinalgSystems):
         self.assert_dimensionally_invalid(cfunc, (ok, bad1D))
         self.assert_dimensionally_invalid(cfunc, (ok, bad2D))
 
+    @needs_lapack
+    def test_issue3368(self):
+        X = np.array([[1., 7.54, 6.52],
+                      [1., 2.70, 4.00],
+                      [1., 2.50, 3.80],
+                      [1., 1.15, 5.64],
+                      [1., 4.22, 3.27],
+                      [1., 1.41, 5.70],], order='F')
+
+        X_orig = np.copy(X)
+        y = np.array([1., 2., 3., 4., 5., 6.])
+
+        @jit(nopython=True)
+        def f2(X, y, test):
+            if test:
+                # never executed, but necessary to trigger the bug
+                X = X[1:2, :]
+            return np.linalg.lstsq(X, y)
+
+        f2(X, y, False)
+        np.testing.assert_allclose(X, X_orig)
+
 
 class TestLinalgSolve(TestLinalgSystems):
     """
