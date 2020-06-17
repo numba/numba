@@ -1772,6 +1772,34 @@ class TestLinalgSolve(TestLinalgSystems):
         bad2D = self.specific_sample_matrix((2, 2), np.float64, 'C', rank=1)
         self.assert_raise_on_singular(cfunc, (bad2D, ok))
 
+    @needs_lapack
+    def test_no_input_mutation(self):
+        X = np.array([[1., 1, 1, 1],
+                      [0., 1, 1, 1],
+                      [0., 0, 1, 1],
+                      [1., 0, 0, 1],], order='F')
+
+        X_orig = np.copy(X)
+        y = np.array([1., 2., 3., 4])
+        y_orig = np.copy(y)
+
+        @jit(nopython=True)
+        def func(X, y, test):
+            if test:
+                # not executed, triggers A order in X
+                X = X[1:2, :]
+            return np.linalg.solve(X, y)
+
+        expected = func.py_func(X, y, False)
+        np.testing.assert_allclose(X, X_orig)
+        np.testing.assert_allclose(y, y_orig)
+
+        got = func(X, y, False)
+        np.testing.assert_allclose(X, X_orig)
+        np.testing.assert_allclose(y, y_orig)
+
+        np.testing.assert_allclose(expected, got)
+
 
 class TestLinalgPinv(TestLinalgBase):
     """

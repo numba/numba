@@ -1702,9 +1702,6 @@ def solve_impl(a, b):
     _check_linalg_matrix(a, "solve")
     _check_linalg_1_or_2d_matrix(b, "solve")
 
-    a_F_layout = a.layout == 'F'
-    b_F_layout = b.layout == 'F'
-
     _check_homogeneous_types("solve", a, b)
 
     np_dt = np_support.as_dtype(a.dtype)
@@ -1727,10 +1724,7 @@ def solve_impl(a, b):
         _system_check_dimensionally_valid(a, b)
 
         # a is destroyed on exit, copy it
-        if a_F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         # b is overwritten on exit with the solution, copy allocate
         bcpy = np.empty((nrhs, n), dtype=np_dt).T
