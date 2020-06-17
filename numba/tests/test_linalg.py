@@ -1337,6 +1337,31 @@ class TestLinalgQr(TestLinalgBase):
         for sz in [(0, 1), (1, 0), (0, 0)]:
             self.assert_raise_on_empty(cfunc, (np.empty(sz),))
 
+    @needs_lapack
+    def test_no_input_mutation(self):
+        X = np.array([[1., 3, 2, 7,],
+                      [-5, 4, 2, 3,],
+                      [9, -3, 1, 1,],
+                      [2, -2, 2, 8,]], order='F')
+
+        X_orig = np.copy(X)
+
+        @jit(nopython=True)
+        def func(X, test):
+            if test:
+                # not executed, but necessary to trigger A ordering in X
+                X = X[1:2, :]
+            return np.linalg.qr(X)
+
+        expected = func.py_func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        got = func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        for e_a, g_a in zip(expected, got):
+            np.testing.assert_allclose(e_a, g_a)
+
 
 class TestLinalgSystems(TestLinalgBase):
     """

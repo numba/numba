@@ -1357,8 +1357,6 @@ def qr_impl(a):
 
     kind = ord(get_blas_kind(a.dtype, "qr"))
 
-    F_layout = a.layout == 'F'
-
     def qr_impl(a):
         n = a.shape[-1]
         m = a.shape[-2]
@@ -1369,10 +1367,7 @@ def qr_impl(a):
         _check_finite_matrix(a)
 
         # copy A as it will be destroyed
-        if F_layout:
-            q = np.copy(a)
-        else:
-            q = np.asfortranarray(a)
+        q = _copy_to_fortran_order(a)
 
         lda = m
 
