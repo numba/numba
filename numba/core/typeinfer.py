@@ -1469,10 +1469,15 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
             else:
                 from numba.misc import special
+                # Python builtins (from python module types, not Numba's)
+                from types import BuiltinFunctionType
+
                 nm = gvar.name
                 # check if the problem is actually a name error
                 func_glbls = self.func_id.func.__globals__
-                if nm not in func_glbls.keys() and nm not in special.__all__:
+                if (nm not in func_glbls.keys() and
+                        nm not in special.__all__ and
+                        isinstance(nm, BuiltinFunctionType)):
                     errstr = "NameError: name '%s' is not defined"
                     msg = _termcolor.errmsg(errstr % nm)
                     e.patch_message(msg)
