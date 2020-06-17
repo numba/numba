@@ -782,6 +782,37 @@ def _check_homogeneous_types(func_name, *types):
             raise TypingError(msg, highlighting=False)
 
 
+def _copy_to_fortran_order():
+    pass
+
+
+@overload(_copy_to_fortran_order)
+def ol_copy_to_fortran_order(a):
+    # This function copies the array 'a' into a new array with fortran order.
+    # This exists because the copy routines don't take order flags yet.
+    F_layout = a.layout == 'F'
+    A_layout = a.layout == 'A'
+    def impl(a):
+        if F_layout:
+            # it's F ordered at compile time, just copy
+            acpy = np.copy(a)
+        elif A_layout:
+            # decide based on runtime value
+            flag_f = a.flags.f_contiguous
+            if flag_f:
+                # it's already F ordered, so copy
+                acpy = np.copy(a)
+            else:
+                # it's something else ordered, so let asfortranarray deal with
+                # copying and making it fortran ordered
+                acpy = np.asfortranarray(a)
+        else:
+            # it's C ordered at compile time, asfortranarray it.
+            acpy = np.asfortranarray(a)
+        return acpy
+    return impl
+
+
 @register_jitable
 def _inv_err_handler(r):
     if r != 0:
@@ -1791,8 +1822,6 @@ def pinv_impl(a, rcond=1.e-15):
 
     numba_xxgemm = _BLAS().numba_xxgemm(a.dtype)
 
-    F_layout = a.layout == 'F'
-
     kind = ord(get_blas_kind(a.dtype, "pinv"))
     JOB = ord('S')
 
@@ -1849,10 +1878,7 @@ def pinv_impl(a, rcond=1.e-15):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         if m == 0 or n == 0:
             return acpy.T.ravel().reshape(a.shape).T

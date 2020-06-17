@@ -1749,6 +1749,29 @@ class TestLinalgPinv(TestLinalgBase):
                                   (np.array([[1., 2., ], [np.inf, np.nan]],
                                             dtype=np.float64),))
 
+    @needs_lapack
+    def test_issue5870(self):
+        # testing for mutation of input matrix
+        @jit(nopython=True)
+        def some_fn(v):
+            return np.linalg.pinv(v[0])
+
+        v_data = np.array([[1., 3, 2, 7,],
+                           [-5, 4, 2, 3,],
+                           [9, -3, 1, 1,],
+                           [2, -2, 2, 8,]], order='F')
+
+        v_orig = np.copy(v_data)
+        reshaped_v = v_data.reshape((1, 4, 4))
+
+        expected = some_fn.py_func(reshaped_v)
+        np.testing.assert_allclose(v_data, v_orig)
+
+        got = some_fn(reshaped_v)
+        np.testing.assert_allclose(v_data, v_orig)
+
+        np.testing.assert_allclose(expected, got)
+
 
 class TestLinalgDetAndSlogdet(TestLinalgBase):
     """
