@@ -800,8 +800,9 @@ def ol_copy_to_fortran_order(a):
             # decide based on runtime value
             flag_f = a.flags.f_contiguous
             if flag_f:
-                # it's already F ordered, so copy
-                acpy = np.copy(a)
+                # it's already F ordered, so copy but in a round about way to
+                # ensure that the copy is also F ordered
+                acpy = np.copy(a.T).T
             else:
                 # it's something else ordered, so let asfortranarray deal with
                 # copying and making it fortran ordered
@@ -955,8 +956,6 @@ def eig_impl(a):
     JOBVL = ord('N')
     JOBVR = ord('V')
 
-    F_layout = a.layout == 'F'
-
     def real_eig_impl(a):
         """
         eig() implementation for real arrays.
@@ -968,10 +967,7 @@ def eig_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ldvl = 1
         ldvr = n
@@ -1027,10 +1023,7 @@ def eig_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ldvl = 1
         ldvr = n
@@ -1078,8 +1071,6 @@ def eigvals_impl(a):
     JOBVL = ord('N')
     JOBVR = ord('N')
 
-    F_layout = a.layout == 'F'
-
     def real_eigvals_impl(a):
         """
         eigvals() implementation for real arrays.
@@ -1091,10 +1082,7 @@ def eigvals_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ldvl = 1
         ldvr = 1
@@ -1153,10 +1141,7 @@ def eigvals_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ldvl = 1
         ldvr = 1
@@ -1197,8 +1182,6 @@ def eigh_impl(a):
 
     _check_linalg_matrix(a, "eigh")
 
-    F_layout = a.layout == 'F'
-
     # convert typing floats to numpy floats for use in the impl
     w_type = getattr(a.dtype, "underlying_float", a.dtype)
     w_dtype = np_support.as_dtype(w_type)
@@ -1219,10 +1202,7 @@ def eigh_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         w = np.empty(n, dtype=w_dtype)
 
@@ -1251,8 +1231,6 @@ def eigvalsh_impl(a):
 
     _check_linalg_matrix(a, "eigvalsh")
 
-    F_layout = a.layout == 'F'
-
     # convert typing floats to numpy floats for use in the impl
     w_type = getattr(a.dtype, "underlying_float", a.dtype)
     w_dtype = np_support.as_dtype(w_type)
@@ -1273,10 +1251,7 @@ def eigvalsh_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         w = np.empty(n, dtype=w_dtype)
 

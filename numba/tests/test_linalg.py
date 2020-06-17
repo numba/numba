@@ -901,17 +901,12 @@ class TestLinalgEigenSystems(TestLinalgBase):
         msg = name + "() argument must not cause a domain change."
         self.assert_error(cfunc, args, msg)
 
-    def checker_for_linalg_eig(
-            self, name, func, expected_res_len, check_for_domain_change=None):
-        """
-        Test np.linalg.eig
-        """
-        n = 10
-        cfunc = jit(nopython=True)(func)
-
-        def check(a):
-            expected = func(a)
-            got = cfunc(a)
+    def _check_worker(self, cfunc, name, expected_res_len,
+                      check_for_domain_change):
+        def check(*args):
+            expected = cfunc.py_func(*args)
+            got = cfunc(*args)
+            a = args[0]
             # check that the returned tuple is same length
             self.assertEqual(len(expected), len(got))
             # and that dimension is correct
@@ -959,7 +954,7 @@ class TestLinalgEigenSystems(TestLinalgBase):
                     if name[-1] == 'h':
                         idxl = np.nonzero(np.eye(a.shape[0], a.shape[1], -1))
                         idxu = np.nonzero(np.eye(a.shape[0], a.shape[1], 1))
-                        cfunc(a)
+                        cfunc(*args)
                         # upper idx must match lower for default uplo="L"
                         # if complex, conjugate
                         a[idxu] = np.conj(a[idxl])
@@ -999,7 +994,19 @@ class TestLinalgEigenSystems(TestLinalgBase):
 
             # Ensure proper resource management
             with self.assertNoNRTLeak():
-                cfunc(a)
+                cfunc(*args)
+        return check
+
+    def checker_for_linalg_eig(
+            self, name, func, expected_res_len, check_for_domain_change=None):
+        """
+        Test np.linalg.eig
+        """
+        n = 10
+        cfunc = jit(nopython=True)(func)
+        check = self._check_worker(cfunc, name, expected_res_len,
+                                   check_for_domain_change)
+
 
         # The main test loop
         for dtype, order in product(self.dtypes, 'FC'):
@@ -1067,6 +1074,48 @@ class TestLinalgEigenSystems(TestLinalgBase):
     @needs_lapack
     def test_linalg_eigvalsh(self):
         self.checker_for_linalg_eig("eigvalsh", eigvalsh_matrix, 1, False)
+
+    @needs_lapack
+    def test_no_input_mutation(self):
+        # checks inputs are not mutated
+
+        for c in (('eig', 2, True),
+                  ('eigvals', 1, True),
+                  ('eigh', 2, False),
+                  ('eigvalsh', 1, False)):
+
+            m, nout, domain_change = c
+
+            meth = getattr(np.linalg, m)
+
+            @jit(nopython=True)
+            def func(X, test):
+                if test:
+                    # not executed, but necessary to trigger A ordering in X
+                    X = X[1:2, :]
+                return meth(X)
+
+            check = self._check_worker(func, m, nout, domain_change)
+
+            for dtype in (np.float64, np.complex128):
+                with self.subTest(meth=meth, dtype=dtype):
+                    # trivial system, doesn't matter, just checking if it gets
+                    # mutated
+                    X = np.array([[10., 1, 0, 1],
+                                [1, 9, 0, 0],
+                                [0, 0, 8, 0],
+                                [1, 0, 0, 7],
+                                ], order='F', dtype=dtype)
+
+                    X_orig = np.copy(X)
+
+                    expected = func.py_func(X, False)
+                    np.testing.assert_allclose(X, X_orig)
+
+                    got = func(X, False)
+                    np.testing.assert_allclose(X, X_orig)
+
+                    check(X, False)
 
 
 class TestLinalgSvd(TestLinalgBase):
