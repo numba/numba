@@ -1280,8 +1280,6 @@ def svd_impl(a, full_matrices=1):
 
     _check_linalg_matrix(a, "svd")
 
-    F_layout = a.layout == 'F'
-
     # convert typing floats to numpy floats for use in the impl
     s_type = getattr(a.dtype, "underlying_float", a.dtype)
     s_dtype = np_support.as_dtype(s_type)
@@ -1302,10 +1300,7 @@ def svd_impl(a, full_matrices=1):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ldu = m
         minmn = min(m, n)
