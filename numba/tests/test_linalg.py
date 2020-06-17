@@ -2368,6 +2368,34 @@ class TestLinalgMatrixRank(TestLinalgSystems):
                                   (np.array([[1., 2., ], [np.inf, np.nan]],
                                             dtype=np.float64),))
 
+    @needs_lapack
+    def test_no_input_mutation(self):
+        # this is here to test no input mutation by
+        # numba.np.linalg._compute_singular_values
+        # which is the workhorse for norm with 2d input, rank and cond.
+
+        X = np.array([[1., 3, 2, 7,],
+                      [-5, 4, 2, 3,],
+                      [9, -3, 1, 1,],
+                      [2, -2, 2, 8,]], order='F')
+
+        X_orig = np.copy(X)
+
+        @jit(nopython=True)
+        def func(X, test):
+            if test:
+                # not executed, but necessary to trigger A ordering in X
+                X = X[1:2, :]
+            return np.linalg.matrix_rank(X)
+
+        expected = func.py_func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        got = func(X, False)
+        np.testing.assert_allclose(X, X_orig)
+
+        np.testing.assert_allclose(expected, got)
+
 
 class TestLinalgMatrixPower(TestLinalgBase):
     """

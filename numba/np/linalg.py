@@ -2057,8 +2057,6 @@ def _compute_singular_values_impl(a):
     u = np.empty((1, 1), dtype=np_dtype)
     vt = np.empty((1, 1), dtype=np_dtype)
 
-    F_layout = a.layout == 'F'
-
     def sv_function(a):
         """
         Computes singular values.
@@ -2080,10 +2078,7 @@ def _compute_singular_values_impl(a):
         ucol = 1
         ldvt = 1
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         # u and vt are not referenced however need to be
         # allocated (as done above) for MKL as it
