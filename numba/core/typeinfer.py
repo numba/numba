@@ -1472,7 +1472,7 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 nm = gvar.name
                 # check if the problem is actually a name error
                 func_glbls = self.func_id.func.__globals__
-                if nm not in func_glbls.keys() and not nm in special.__all__:
+                if nm not in func_glbls.keys() and nm not in special.__all__:
                     errstr = "NameError: name '%s' is not defined"
                     msg = _termcolor.errmsg(errstr % nm)
                     e.patch_message(msg)
