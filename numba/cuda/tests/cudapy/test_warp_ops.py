@@ -1,6 +1,6 @@
 import numpy as np
 from numba import cuda, int32, int64, float32, float64
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba.core import config
 
 
@@ -108,7 +108,7 @@ def _safe_cc_check(cc):
 @unittest.skipUnless(_safe_skip(),
                      "Warp Operations require at least CUDA 9"
                      "and are not yet implemented for the CudaSim")
-class TestCudaWarpOperations(SerialMixin, unittest.TestCase):
+class TestCudaWarpOperations(CUDATestCase):
     def test_useful_syncwarp(self):
         compiled = cuda.jit("void(int32[:])")(useful_syncwarp)
         nelem = 32

@@ -5,7 +5,7 @@ from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
 from ..errors import TypingError
-
+from .. import utils
 
 class Pair(Type):
     """
@@ -135,12 +135,23 @@ class BaseTuple(ConstSized, Hashable):
                 else:
                     return NamedTuple(tys, pyclass)
         else:
+            dtype = utils.unified_function_type(tys)
+            if dtype is not None:
+                return UniTuple(dtype, len(tys))
             # non-named tuple
             homogeneous = is_homogeneous(*tys)
             if homogeneous:
-                return UniTuple(tys[0], len(tys))
+                return cls._make_homogeneous_tuple(tys[0], len(tys))
             else:
-                return Tuple(tys)
+                return cls._make_heterogeneous_tuple(tys)
+
+    @classmethod
+    def _make_homogeneous_tuple(cls, dtype, count):
+        return UniTuple(dtype, count)
+
+    @classmethod
+    def _make_heterogeneous_tuple(cls, tys):
+        return Tuple(tys)
 
 
 class BaseAnonymousTuple(BaseTuple):
@@ -265,6 +276,11 @@ class UnionType(Type):
 class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
 
     def __new__(cls, types):
+
+        t = utils.unified_function_type(types, require_precise=True)
+        if t is not None:
+            return UniTuple(dtype=t, count=len(types))
+
         _HeterogeneousTuple.is_types_iterable(types)
 
         if types and all(t == types[0] for t in types[1:]):
@@ -303,7 +319,18 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
                 return Tuple(unified)
 
 
-class StarArgTuple(Tuple):
+class _StarArgTupleMixin:
+
+    @classmethod
+    def _make_homogeneous_tuple(cls, dtype, count):
+        return StarArgUniTuple(dtype, count)
+
+    @classmethod
+    def _make_heterogeneous_tuple(cls, tys):
+        return StarArgTuple(tys)
+
+
+class StarArgTuple(_StarArgTupleMixin, Tuple):
     """To distinguish from Tuple() used as argument to a `*args`.
     """
     def __new__(cls, types):
@@ -315,7 +342,7 @@ class StarArgTuple(Tuple):
             return object.__new__(StarArgTuple)
 
 
-class StarArgUniTuple(UniTuple):
+class StarArgUniTuple(_StarArgTupleMixin, UniTuple):
     """To distinguish from UniTuple() used as argument to a `*args`.
     """
 
@@ -521,7 +548,7 @@ class ListType(IterableType):
         """Refine to a precise list type
         """
         res = cls(itemty)
-        res.is_precise()
+        assert res.is_precise()
         return res
 
     def unify(self, typingctx, other):
@@ -603,7 +630,7 @@ class DictType(IterableType):
         """Refine to a precise dictionary type
         """
         res = cls(keyty, valty)
-        res.is_precise()
+        assert res.is_precise()
         return res
 
     def unify(self, typingctx, other):
@@ -624,6 +651,7 @@ class DictItemsIterableType(SimpleIterableType):
         self.parent = parent
         self.yield_type = self.parent.keyvalue_type
         name = "items[{}]".format(self.parent.name)
+        self.name = name
         iterator_type = DictIteratorType(self)
         super(DictItemsIterableType, self).__init__(name, iterator_type)
 
@@ -636,6 +664,7 @@ class DictKeysIterableType(SimpleIterableType):
         self.parent = parent
         self.yield_type = self.parent.key_type
         name = "keys[{}]".format(self.parent.name)
+        self.name = name
         iterator_type = DictIteratorType(self)
         super(DictKeysIterableType, self).__init__(name, iterator_type)
 
@@ -648,6 +677,7 @@ class DictValuesIterableType(SimpleIterableType):
         self.parent = parent
         self.yield_type = self.parent.value_type
         name = "values[{}]".format(self.parent.name)
+        self.name = name
         iterator_type = DictIteratorType(self)
         super(DictValuesIterableType, self).__init__(name, iterator_type)
 
@@ -657,5 +687,6 @@ class DictIteratorType(SimpleIteratorType):
         self.parent = iterable.parent
         self.iterable = iterable
         yield_type = iterable.yield_type
-        name = "iter[{}->{}]".format(iterable.parent, yield_type)
+        name = "iter[{}->{}],{}".format(iterable.parent, yield_type,
+                                        iterable.name)
         super(DictIteratorType, self).__init__(name, yield_type)

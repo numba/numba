@@ -4,7 +4,7 @@ import dis
 import operator
 import logging
 
-from numba.core import errors, dataflow, controlflow, ir, config
+from numba.core import errors, dataflow, controlflow, ir, config, ir_utils
 from numba.core.errors import NotDefinedError
 from numba.core.utils import (
     PYVERSION,
@@ -228,7 +228,6 @@ class Interpreter(object):
     def _inject_call(self, func, gv_name, res_name=None):
         """A helper function to inject a call to *func* which is a python
         function.
-
         Parameters
         ----------
         func : callable
@@ -377,7 +376,7 @@ class Interpreter(object):
 
                 err = errors.NotDefinedError(e.name, loc=loc)
                 if not config.FULL_TRACEBACKS:
-                    raise value from None
+                    raise err from None
                 else:
                     raise err
 
@@ -1164,7 +1163,17 @@ class Interpreter(object):
         }
         truebr = brs[iftrue]
         falsebr = brs[not iftrue]
-        bra = ir.Branch(cond=self.get(pred), truebr=truebr, falsebr=falsebr,
+
+        name = "bool%s" % (inst.offset)
+        gv_fn = ir.Global("bool", bool, loc=self.loc)
+        self.store(value=gv_fn, name=name)
+
+        callres = ir.Expr.call(self.get(name), (self.get(pred),), (),
+                               loc=self.loc)
+
+        pname = "$%spred" % (inst.offset)
+        predicate = self.store(value=callres, name=pname)
+        bra = ir.Branch(cond=predicate, truebr=truebr, falsebr=falsebr,
                         loc=self.loc)
         self.current_block.append(bra)
 
@@ -1208,9 +1217,9 @@ class Interpreter(object):
         return self.store(inst, res)
 
     def op_MAKE_FUNCTION(self, inst, name, code, closure, annotations, kwdefaults, defaults, res):
-        if annotations != None:
+        if annotations is not None:
             raise NotImplementedError("op_MAKE_FUNCTION with annotations is not implemented")
-        if kwdefaults != None:
+        if kwdefaults is not None:
             raise NotImplementedError("op_MAKE_FUNCTION with kwdefaults is not implemented")
         if defaults:
             if isinstance(defaults, tuple):

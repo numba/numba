@@ -106,6 +106,17 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         # index
         self.assertEqual(l.index(15), 4)
 
+    def test_list_extend_refines_on_unicode_type(self):
+        @njit
+        def foo(string):
+            l = List()
+            l.extend(string)
+            return l
+
+        for func in (foo, foo.py_func):
+            for string in ("a", "abc", "\nabc\t"):
+                self.assertEqual(list(func(string)), list(string))
+
     def test_unsigned_access(self):
         L = List.empty_list(int32)
         ui32_0 = types.uint32(0)
@@ -154,6 +165,34 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         self.assertEqual(L.pop(ui32_2), 3)
         self.assertEqual(L.pop(ui32_1), 2)
         self.assertEqual(L.pop(ui32_0), 123)
+
+    def test_dtype(self):
+
+        L = List.empty_list(int32)
+        self.assertEqual(L._dtype, int32)
+
+        L = List.empty_list(float32)
+        self.assertEqual(L._dtype, float32)
+
+        @njit
+        def foo():
+            li, lf = List(), List()
+            li.append(int32(1))
+            lf.append(float32(1.0))
+            return li._dtype, lf._dtype
+
+        self.assertEqual(foo(), (np.dtype('int32'), np.dtype('float32')))
+        self.assertEqual(foo.py_func(), (int32, float32))
+
+    def test_dtype_raises_exception_on_untyped_list(self):
+
+        with self.assertRaises(RuntimeError) as raises:
+            L = List()
+            L._dtype
+        self.assertIn(
+            "invalid operation on untyped list",
+            str(raises.exception),
+        )
 
     @skip_parfors_unsupported
     def test_unsigned_prange(self):
@@ -481,6 +520,15 @@ class TestTypedList(MemoryLeakMixin, TestCase):
             str(raises.exception),
         )
 
+    def test_repr(self):
+        l = List()
+        expected = "ListType[Undefined]([])"
+        self.assertEqual(expected, repr(l))
+
+        l = List([int32(i) for i in (1, 2, 3)])
+        expected = "ListType[int32]([1, 2, 3])"
+        self.assertEqual(expected, repr(l))
+
 
 class TestNoneType(MemoryLeakMixin, TestCase):
 
@@ -571,6 +619,7 @@ class TestNoneType(MemoryLeakMixin, TestCase):
             return njit(context["bar"])
         for line1, line2 in (
                 ("lst.append(None)", "lst.pop()"),
+                ("lst.append(None)", "del lst[0]"),
                 ("lst.append(None)", "lst.count(None)"),
                 ("lst.append(None)", "lst.index(None)"),
                 ("lst.append(None)", "lst.insert(0, None)"),
@@ -604,6 +653,25 @@ class TestAllocation(MemoryLeakMixin, TestCase):
         for i in range(16):
             tl = List.empty_list(types.int32, i)
             self.assertEqual(tl._allocated(), i)
+
+    def test_allocation_njit(self):
+        # kwarg version
+        @njit
+        def foo(i):
+            tl = List.empty_list(types.int32, allocated=i)
+            return tl._allocated()
+
+        for j in range(16):
+            self.assertEqual(foo(j), j)
+
+        # posarg version
+        @njit
+        def foo(i):
+            tl = List.empty_list(types.int32, i)
+            return tl._allocated()
+
+        for j in range(16):
+            self.assertEqual(foo(j), j)
 
     def test_growth_and_shrinkage(self):
         tl = List.empty_list(types.int32)
@@ -670,6 +738,33 @@ class TestExtend(MemoryLeakMixin, TestCase):
         expected = impl.py_func()
         got = impl()
         self.assertEqual(expected, got)
+
+    def test_extend_single_value_container(self):
+        @njit
+        def impl():
+            l = List()
+            l.extend((100,))
+            return l
+
+        expected = impl.py_func()
+        got = impl()
+        self.assertEqual(expected, got)
+
+    def test_extend_empty_unrefined(self):
+        # Extending an unrefined list with an empty iterable doesn't work in a
+        # jit compiled function as the list remains untyped.
+        l = List()
+        l.extend(tuple())
+        self.assertEqual(len(l), 0)
+        self.assertFalse(l._typed)
+
+    def test_extend_empty_refiend(self):
+        # Extending a refined list with an empty iterable doesn't work in a
+        # jit compiled function as the (empty) argument can't be typed
+        l = List((1,))
+        l.extend(tuple())
+        self.assertEqual(len(l), 1)
+        self.assertTrue(l._typed)
 
 
 @njit
@@ -921,6 +1016,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     def test_list_as_item_in_list(self):
         nested_type = types.ListType(types.int32)
+
         @njit
         def foo():
             la = List.empty_list(nested_type)
@@ -935,6 +1031,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     def test_array_as_item_in_list(self):
         nested_type = types.Array(types.float64, 1, 'C')
+
         @njit
         def foo():
             l = List.empty_list(nested_type)
@@ -946,6 +1043,28 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         got = foo()
         # Need to compare the nested arrays
         self.assertTrue(np.all(expected[0] == got[0]))
+
+    def test_array_pop_from_single_value_list(self):
+        @njit
+        def foo():
+            l = List((np.zeros((1,)),))
+            l.pop()
+            return l
+
+        expected, got = foo.py_func(), foo()
+        # Need to compare the nested arrays
+        self.assertEqual(len(expected), 0)
+        self.assertEqual(len(got), 0)
+        # FIXME comparison of empty array-typed lists fails
+        # self.assertEqual(expected, got)
+
+    def test_5264(self):
+        # Test the reproducer from #5264 and make sure it doesn't segfault
+        float_array = types.float64[:]
+        l = List.empty_list(float_array)
+        l.append(np.ones(3,dtype=np.float64))
+        l.pop()
+        self.assertEqual(0, len(l))
 
     def test_jitclass_as_item_in_list(self):
 
@@ -986,6 +1105,22 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             np.testing.assert_allclose(one.array, two.array)
 
         [bag_equal(a, b) for a, b in zip(expected, got)]
+
+    def test_4960(self):
+        # Test the reproducer from #4960 and make sure it doesn't segfault
+        @jitclass([('value', int32)])
+        class Simple(object):
+            def __init__(self, value):
+                self.value = value
+
+        @njit
+        def foo():
+            l = List((Simple(23),Simple(24)))
+            l.pop()
+            return l
+
+        l = foo()
+        self.assertEqual(1, len(l))
 
     def test_storage_model_mismatch(self):
         # https://github.com/numba/numba/issues/4520
@@ -1188,6 +1323,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
 
     def test_append_fails(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = List()
@@ -1236,3 +1372,222 @@ class TestImmutable(MemoryLeakMixin, TestCase):
                     "list is immutable",
                     str(raises.exception),
                 )
+
+
+class TestListFromIter(MemoryLeakMixin, TestCase):
+
+    def test_simple_iterable_types(self):
+        """Test all simple iterables that a List can be constructed from."""
+
+        def generate_function(line):
+            context = {}
+            code = dedent("""
+                from numba.typed import List
+                def bar():
+                    {}
+                    return l
+                """).format(line)
+            exec(code, context)
+            return njit(context["bar"])
+        for line in ("l = List([0, 1, 2])",
+                     "l = List(range(3))",
+                     "l = List(List([0, 1, 2]))",
+                     "l = List((0, 1, 2))",
+                     "l = List(set([0, 1, 2]))",
+                     ):
+            foo = generate_function(line)
+            cf_received, py_received = foo(), foo.py_func()
+            for result in (cf_received, py_received):
+                for i in range(3):
+                    self.assertEqual(i, result[i])
+
+    def test_unicode(self):
+        """Test that a List can be created from a unicode string."""
+        @njit
+        def foo():
+            l = List("abc")
+            return l
+        expected = List()
+        for i in ("a", "b", "c"):
+            expected.append(i)
+        self.assertEqual(foo.py_func(), expected)
+        self.assertEqual(foo(), expected)
+
+    def test_dict_iters(self):
+        """Test that a List can be created from Dict iterators."""
+
+        def generate_function(line):
+            context = {}
+            code = dedent("""
+                from numba.typed import List, Dict
+                def bar():
+                    d = Dict()
+                    d[0], d[1], d[2] = "a", "b", "c"
+                    {}
+                    return l
+                """).format(line)
+            exec(code, context)
+            return njit(context["bar"])
+
+        def generate_expected(values):
+            expected = List()
+            for i in values:
+                expected.append(i)
+            return expected
+
+        for line, values in (
+                ("l = List(d)", (0, 1, 2)),
+                ("l = List(d.keys())", (0, 1, 2)),
+                ("l = List(d.values())", ("a", "b", "c")),
+                ("l = List(d.items())", ((0, "a"), (1, "b"), (2, "c"))),
+        ):
+            foo, expected = generate_function(line), generate_expected(values)
+            for func in (foo, foo.py_func):
+                self.assertEqual(func(), expected)
+
+    def test_ndarray_scalar(self):
+
+        @njit
+        def foo():
+            return List(np.ones(3))
+
+        expected = List()
+        for i in range(3):
+            expected.append(1)
+
+        self.assertEqual(expected, foo())
+        self.assertEqual(expected, foo.py_func())
+
+    def test_ndarray_oned(self):
+
+        @njit
+        def foo():
+            return List(np.array(1))
+
+        expected = List()
+        expected.append(1)
+
+        self.assertEqual(expected, foo())
+        self.assertEqual(expected, foo.py_func())
+
+    def test_ndarray_twod(self):
+
+        @njit
+        def foo(x):
+            return List(x)
+
+        carr = np.array([[1, 2], [3, 4]])
+        farr = np.asfortranarray(carr)
+        aarr = np.arange(8).reshape((2, 4))[:, ::2]
+
+        for layout, arr in zip('CFA', (carr, farr, aarr)):
+            self.assertEqual(typeof(arr).layout, layout)
+            expected = List()
+            expected.append(arr[0, :])
+            expected.append(arr[1, :])
+            received = foo(arr)
+
+            np.testing.assert_equal(expected[0], received[0])
+            np.testing.assert_equal(expected[1], received[1])
+
+            pyreceived = foo.py_func(arr)
+
+            np.testing.assert_equal(expected[0], pyreceived[0])
+            np.testing.assert_equal(expected[1], pyreceived[1])
+
+    def test_exception_on_plain_int(self):
+        @njit
+        def foo():
+            l = List(23)
+            return l
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "List() argument must be iterable",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypeError) as raises:
+            List(23)
+        self.assertIn(
+            "List() argument must be iterable",
+            str(raises.exception),
+        )
+
+    def test_exception_on_inhomogeneous_tuple(self):
+        @njit
+        def foo():
+            l = List((1, 1.0))
+            return l
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "List() argument must be iterable",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            List((1, 1.0))
+        # FIXME this bails with a length casting error when we attempt to
+        # append 1.0 to an int typed list.
+
+    def test_exception_on_too_many_args(self):
+        @njit
+        def foo():
+            l = List((0, 1, 2), (3, 4, 5))
+            return l
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "List() expected at most 1 argument, got 2",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypeError) as raises:
+            List((0, 1, 2), (3, 4, 5))
+        self.assertIn(
+            "List() expected at most 1 argument, got 2",
+            str(raises.exception),
+        )
+
+        @njit
+        def foo():
+            l = List((0, 1, 2), (3, 4, 5), (6, 7, 8))
+            return l
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "List() expected at most 1 argument, got 3",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypeError) as raises:
+            List((0, 1, 2), (3, 4, 5), (6, 7, 8))
+        self.assertIn(
+            "List() expected at most 1 argument, got 3",
+            str(raises.exception),
+        )
+
+    def test_exception_on_kwargs(self):
+        @njit
+        def foo():
+            l = List(iterable=(0, 1, 2))
+            return l
+
+        with self.assertRaises(TypingError) as raises:
+            foo()
+        self.assertIn(
+            "List() takes no keyword arguments",
+            str(raises.exception),
+        )
+
+        with self.assertRaises(TypeError) as raises:
+            List(iterable=(0, 1, 2))
+        self.assertIn(
+            "List() takes no keyword arguments",
+            str(raises.exception),
+        )

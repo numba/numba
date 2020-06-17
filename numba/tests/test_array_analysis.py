@@ -6,7 +6,16 @@ from collections import namedtuple
 from io import StringIO
 
 from numba import njit, typeof, prange
-from numba.core import types, typing, ir, bytecode, postproc, cpu, registry
+from numba.core import (
+    types,
+    typing,
+    ir,
+    bytecode,
+    postproc,
+    cpu,
+    registry,
+    utils,
+)
 from numba.tests.support import TestCase, tag, skip_parfors_unsupported
 from numba.parfors.array_analysis import EquivSet, ArrayAnalysis
 from numba.core.compiler import Compiler, Flags, PassManager
@@ -177,7 +186,7 @@ class TestArrayAnalysis(TestCase):
             for func in equivs:
                 # only test the equiv_set of the first block
                 func(analysis.equiv_sets[0])
-        if asserts == None:
+        if asserts is None:
             self.assertTrue(self._has_no_assertcall(analysis.func_ir))
         else:
             for func in asserts:
@@ -998,6 +1007,85 @@ class TestArrayAnalysisParallelRequired(TestCase):
 
         data = np.arange(10.)
         np.testing.assert_array_equal(test_impl(data), test_impl.py_func(data))
+
+
+class TestArrayAnalysisInterface(TestCase):
+    def test_analyze_op_call_interface(self):
+        # gather _analyze_op_call_*
+        aoc = {}
+        for fname in dir(ArrayAnalysis):
+            if fname.startswith('_analyze_op_call_'):
+                aoc[fname] = getattr(ArrayAnalysis, fname)
+        # check interface
+        def iface_stub(self, scope, equiv_set, loc, args, kws):
+            pass
+        expected = utils.pysignature(iface_stub)
+        for k, v in aoc.items():
+            got = utils.pysignature(v)
+            with self.subTest(fname=k, sig=got):
+                self.assertEqual(got, expected)
+
+    @skip_unsupported
+    def test_array_analysis_extensions(self):
+        # Test that the `array_analysis` object in `array_analysis_extensions`
+        # can perform analysis on the scope using `equiv_sets`.
+        from numba.parfors.parfor import Parfor
+        from numba.parfors import array_analysis
+
+        orig_parfor = array_analysis.array_analysis_extensions[Parfor]
+
+        shared = {'counter': 0}
+
+        def testcode(array_analysis):
+            # Find call node corresponding to the ``A = empty(n)``
+            func_ir = array_analysis.func_ir
+            for call in func_ir.blocks[0].find_exprs('call'):
+                callee = func_ir.get_definition(call.func)
+                if getattr(callee, "value", None) is empty:
+                    if getattr(call.args[0], 'name', None) == 'n':
+                        break
+            else:
+                return
+
+            variable_A = func_ir.get_assignee(call)
+            # n must be equiv to
+            es = array_analysis.equiv_sets[0]
+            self.assertTrue(es.is_equiv('n', variable_A.name))
+            shared['counter'] += 1
+
+        def new_parfor(parfor, equiv_set, typemap, array_analysis):
+            """Recursive array analysis for parfor nodes.
+            """
+            testcode(array_analysis)
+            # Call original
+            return orig_parfor(
+                parfor, equiv_set, typemap, array_analysis,
+            )
+
+        try:
+            # Replace the array-analysis extension for Parfor node
+            array_analysis.array_analysis_extensions[Parfor] = new_parfor
+
+            empty = np.empty   # avoid scanning a getattr in the IR
+            def f(n):
+                A = empty(n)
+                for i in prange(n):
+                    S = np.arange(i)
+                    A[i] = S.sum()
+                return A
+
+            got = njit(parallel=True)(f)(10)
+            executed_count = shared['counter']
+            self.assertGreater(executed_count, 0)
+        finally:
+            # Re-install the original handler
+            array_analysis.array_analysis_extensions[Parfor] = orig_parfor
+
+        # Check normal execution
+        expected = njit(parallel=True)(f)(10)
+        self.assertPreciseEqual(got, expected)
+        # Make sure we have uninstalled the handler
+        self.assertEqual(executed_count, shared['counter'])
 
 
 if __name__ == '__main__':

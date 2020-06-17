@@ -217,7 +217,7 @@ class StencilPass(object):
 
         # empty init block
         init_block = ir.Block(scope, loc)
-        if out_arr == None:
+        if out_arr is None:
             in_arr_typ = self.typemap[in_arr.name]
 
             shape_name = ir_utils.mk_unique_var("in_arr_shape")

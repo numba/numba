@@ -154,6 +154,22 @@ skip_bad_access = unittest.skipUnless(_access_preventable, _access_msg)
 
 class TestDispatcher(BaseTest):
 
+    def test_equality(self):
+        @jit
+        def foo(x):
+            return x
+
+        @jit
+        def bar(x):
+            return x
+
+        # Written this way to verify `==` returns a bool (gh-5838). Using
+        # `assertTrue(foo == foo)` or `assertEqual(foo, foo)` would defeat the
+        # purpose of this test.
+        self.assertEqual(foo == foo, True)
+        self.assertEqual(foo == bar, False)
+        self.assertEqual(foo == None, False)  # noqa: E711
+
     def test_dyn_pyfunc(self):
         @jit
         def foo(x):
@@ -1775,17 +1791,14 @@ class TestDispatcherFunctionBoundaries(TestCase):
                       cmpfn=jit(lambda x, y: x[1] - y[1]))
         self.assertEqual(got, (0, 4))
 
-    def test_dispatcher_cannot_return_to_python(self):
+    def test_dispatcher_can_return_to_python(self):
         @jit(nopython=True)
         def foo(fn):
             return fn
 
         fn = jit(lambda x: x)
 
-        with self.assertRaises(TypeError) as raises:
-            foo(fn)
-        self.assertRegexpMatches(str(raises.exception),
-                                 "cannot convert native .* to Python object")
+        self.assertEqual(foo(fn), fn)
 
     def test_dispatcher_in_sequence_arg(self):
         @jit(nopython=True)

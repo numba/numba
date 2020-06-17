@@ -10,7 +10,8 @@ import numpy as np
 
 from numba import jit
 from numba.core import errors
-from numba.tests.support import TestCase, tag, needs_lapack, needs_blas, _is_armv7l
+from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
+                                 _is_armv7l, skip_ppc64le_issue4026)
 from .matmul_usecase import matmul_usecase
 import unittest
 
@@ -152,7 +153,6 @@ class TestProduct(TestCase):
         self.check_dot_vv(vdot, "np.vdot()")
 
     def check_dot_vm(self, pyfunc2, pyfunc3, func_name):
-        m, n = 2, 3
 
         def samples(m, n):
             for order in 'CF':
@@ -169,16 +169,22 @@ class TestProduct(TestCase):
         cfunc2 = jit(nopython=True)(pyfunc2)
         if pyfunc3 is not None:
             cfunc3 = jit(nopython=True)(pyfunc3)
-        for a, b in samples(m, n):
-            self.check_func(pyfunc2, cfunc2, (a, b))
-            self.check_func(pyfunc2, cfunc2, (b, a.T))
-        if pyfunc3 is not None:
+
+        for m, n in [(2, 3),
+                     (3, 0),
+                     (0, 3)
+                     ]:
             for a, b in samples(m, n):
-                out = np.empty(m, dtype=a.dtype)
-                self.check_func_out(pyfunc3, cfunc3, (a, b), out)
-                self.check_func_out(pyfunc3, cfunc3, (b, a.T), out)
+                self.check_func(pyfunc2, cfunc2, (a, b))
+                self.check_func(pyfunc2, cfunc2, (b, a.T))
+            if pyfunc3 is not None:
+                for a, b in samples(m, n):
+                    out = np.empty(m, dtype=a.dtype)
+                    self.check_func_out(pyfunc3, cfunc3, (a, b), out)
+                    self.check_func_out(pyfunc3, cfunc3, (b, a.T), out)
 
         # Mismatching sizes
+        m, n = 2, 3
         a = self.sample_matrix(m, n - 1, np.float64)
         b = self.sample_vector(n, np.float64)
         self.assert_mismatching_sizes(cfunc2, (a, b))
@@ -229,10 +235,15 @@ class TestProduct(TestCase):
 
         # Test generic matrix * matrix as well as "degenerate" cases
         # where one of the outer dimensions is 1 (i.e. really represents
-        # a vector, which may select a different implementation)
+        # a vector, which may select a different implementation),
+        # one of the matrices is empty, or both matrices are empty.
         for m, n, k in [(2, 3, 4),  # Generic matrix * matrix
                         (1, 3, 4),  # 2d vector * matrix
                         (1, 1, 4),  # 2d vector * 2d vector
+                        (0, 3, 2),  # Empty matrix * matrix, empty output
+                        (3, 0, 2),  # Matrix * empty matrix, empty output
+                        (0, 0, 3),  # Both arguments empty, empty output
+                        (3, 2, 0),  # Both arguments empty, nonempty output
                         ]:
             for a, b in samples(m, n, k):
                 self.check_func(pyfunc2, cfunc2, (a, b))
@@ -762,6 +773,7 @@ class TestLinalgInv(TestLinalgBase):
         self.assert_raise_on_singular(cfunc, (np.zeros((2, 2)),))
 
 
+@skip_ppc64le_issue4026
 class TestLinalgCholesky(TestLinalgBase):
     """
     Tests for np.linalg.cholesky.

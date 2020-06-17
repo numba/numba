@@ -1,10 +1,10 @@
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class TestFreeVar(SerialMixin, unittest.TestCase):
+class TestFreeVar(CUDATestCase):
     def test_freevar(self):
         """Make sure we can compile the following kernel with freevar reference
         in macros
@@ -21,7 +21,7 @@ class TestFreeVar(SerialMixin, unittest.TestCase):
             A[i] = sdata[i]
 
         A = np.arange(2, dtype="float32")
-        foo(A, 0)
+        foo[1, 1](A, 0)
 
 
 if __name__ == '__main__':

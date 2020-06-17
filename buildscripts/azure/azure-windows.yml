@@ -8,16 +8,16 @@ jobs:
     vmImage: ${{ parameters.vmImage }}
   strategy:
     matrix:
-      py38_np117:
+      py38_np118:
         PYTHON: '3.8'
-        NUMPY: '1.17'
+        NUMPY: '1.18'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 14
+        TEST_START_INDEX: 16
       py37_np115:
         PYTHON: '3.7'
         NUMPY: '1.15'
         CONDA_ENV: 'testenv'
-        TEST_START_INDEX: 15
+        TEST_START_INDEX: 17
 
   steps:
     - task: CondaEnvironment@1
@@ -51,6 +51,12 @@ jobs:
 
     - script: |
         call activate %CONDA_ENV%
+        python -m numba.runtests -l
+      displayName: 'List discovered tests'
+
+    - script: |
+        call activate %CONDA_ENV%
+        echo "Running slice of discovered tests: %TEST_START_INDEX%,None,%TEST_COUNT%"
         python -m numba.runtests -b -v -g -m 2 -- numba.tests
       displayName: 'Test modified test files'
 

@@ -122,13 +122,14 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
 
 def np_int_sdiv_impl(context, builder, sig, args):
     # based on the actual code in NumPy loops.c.src for signed integer types
-    num, den = args
-    lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    _check_arity_and_homogeneity(sig, args, 2)
 
-    ZERO = lc.Constant.int(lltype, 0)
-    MINUS_ONE = lc.Constant.int(lltype, -1)
-    MIN_INT = lc.Constant.int(lltype, 1 << (den.type.width-1))
+    num, den = args
+    ty = sig.args[0]  # any arg type will do, homogeneous
+
+    ZERO = context.get_constant(ty, 0)
+    MINUS_ONE = context.get_constant(ty, -1)
+    MIN_INT = context.get_constant(ty, 1 << (den.type.width-1))
     den_is_zero = builder.icmp(lc.ICMP_EQ, ZERO, den)
     den_is_minus_one = builder.icmp(lc.ICMP_EQ, MINUS_ONE, den)
     num_is_min_int = builder.icmp(lc.ICMP_EQ, MIN_INT, num)
@@ -149,7 +150,7 @@ def np_int_sdiv_impl(context, builder, sig, args):
             fix_value = builder.select(needs_fixing, MINUS_ONE, ZERO)
             result_otherwise = builder.add(div, fix_value)
 
-    result = builder.phi(lltype)
+    result = builder.phi(ZERO.type)
     result.add_incoming(ZERO, bb_then)
     result.add_incoming(result_otherwise, bb_otherwise)
 
@@ -161,8 +162,7 @@ def np_int_srem_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     num, den = args
-    ty = sig.args[0] # any arg type will do, homogeneous
-    lty = num.type
+    ty = sig.args[0]  # any arg type will do, homogeneous
 
     ZERO = context.get_constant(ty, 0)
     den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
@@ -178,7 +178,7 @@ def np_int_srem_impl(context, builder, sig, args):
         fix_value = builder.select(needs_fixing, den, ZERO)
         final_mod = builder.add(fix_value, mod)
 
-    result = builder.phi(lty)
+    result = builder.phi(ZERO.type)
     result.add_incoming(ZERO, bb_no_if)
     result.add_incoming(final_mod, bb_if)
 
@@ -186,11 +186,12 @@ def np_int_srem_impl(context, builder, sig, args):
 
 
 def np_int_udiv_impl(context, builder, sig, args):
-    num, den = args
-    lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    _check_arity_and_homogeneity(sig, args, 2)
 
-    ZERO = lc.Constant.int(lltype, 0)
+    num, den = args
+    ty = sig.args[0]  # any arg type will do, homogeneous
+
+    ZERO = context.get_constant(ty, 0)
     div_by_zero = builder.icmp(lc.ICMP_EQ, ZERO, den)
     with builder.if_else(div_by_zero, likely=False) as (then, otherwise):
         with then:
@@ -201,7 +202,7 @@ def np_int_udiv_impl(context, builder, sig, args):
             div = builder.udiv(num, den)
             bb_otherwise = builder.basic_block
 
-    result = builder.phi(lltype)
+    result = builder.phi(ZERO.type)
     result.add_incoming(ZERO, bb_then)
     result.add_incoming(div, bb_otherwise)
     return result
@@ -212,8 +213,7 @@ def np_int_urem_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 2)
 
     num, den = args
-    ty = sig.args[0] # any arg type will do, homogeneous
-    lty = num.type
+    ty = sig.args[0]  # any arg type will do, homogeneous
 
     ZERO = context.get_constant(ty, 0)
     den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
@@ -222,7 +222,7 @@ def np_int_urem_impl(context, builder, sig, args):
         bb_if = builder.basic_block
         mod = builder.urem(num,den)
 
-    result = builder.phi(lty)
+    result = builder.phi(ZERO.type)
     result.add_incoming(ZERO, bb_no_if)
     result.add_incoming(mod, bb_if)
 
@@ -1471,6 +1471,11 @@ def np_int_isfinite_impl(context, builder, sig, args):
 def np_datetime_isfinite_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
     return builder.icmp_unsigned('!=', args[0], npdatetime.NAT)
+
+
+def np_datetime_isnat_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return builder.icmp_signed('==', args[0], npdatetime.NAT)
 
 
 def np_real_isfinite_impl(context, builder, sig, args):

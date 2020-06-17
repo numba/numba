@@ -28,15 +28,31 @@ class Signature(object):
 
     # XXX Perhaps the signature should be a BoundArguments, instead
     # of separate args and pysig...
-    __slots__ = 'return_type', 'args', 'recvr', 'pysig'
+    __slots__ = '_return_type', '_args', '_recvr', '_pysig'
 
     def __init__(self, return_type, args, recvr, pysig=None):
         if isinstance(args, list):
             args = tuple(args)
-        self.return_type = return_type
-        self.args = args
-        self.recvr = recvr
-        self.pysig = pysig
+        self._return_type = return_type
+        self._args = args
+        self._recvr = recvr
+        self._pysig = pysig
+
+    @property
+    def return_type(self):
+        return self._return_type
+
+    @property
+    def args(self):
+        return self._args
+
+    @property
+    def recvr(self):
+        return self._recvr
+
+    @property
+    def pysig(self):
+        return self._pysig
 
     def replace(self, **kwargs):
         """Copy and replace the given attributes provided as keyword arguments.
@@ -53,13 +69,13 @@ class Signature(object):
         """
         Needed because of __slots__.
         """
-        return self.return_type, self.args, self.recvr, self.pysig
+        return self._return_type, self._args, self._recvr, self._pysig
 
     def __setstate__(self, state):
         """
         Needed because of __slots__.
         """
-        self.return_type, self.args, self.recvr, self.pysig = state
+        self._return_type, self._args, self._recvr, self._pysig = state
 
     def __hash__(self):
         return hash((self.args, self.return_type))
@@ -96,9 +112,11 @@ class Signature(object):
 
         # Adjust the python signature
         params = list(self.pysig.parameters.values())[1:]
-        sig.pysig = utils.pySignature(
-            parameters=params,
-            return_annotation=self.pysig.return_annotation,
+        sig = sig.replace(
+            pysig=utils.pySignature(
+                parameters=params,
+                return_annotation=self.pysig.return_annotation,
+            ),
         )
         return sig
 
@@ -110,6 +128,32 @@ class Signature(object):
             return self
         sig = signature(self.return_type, *((self.recvr,) + self.args))
         return sig
+
+    def as_type(self):
+        """
+        Convert this signature to a first-class function type.
+        """
+        return types.FunctionType(self)
+
+    def __unliteral__(self):
+        return signature(types.unliteral(self.return_type),
+                         *map(types.unliteral, self.args))
+
+    def dump(self, tab=''):
+        c = self.as_type()._code
+        print(f'{tab}DUMP {type(self).__name__} [type code: {c}]')
+        print(f'{tab}  Argument types:')
+        for a in self.args:
+            a.dump(tab=tab + '  | ')
+        print(f'{tab}  Return type:')
+        self.return_type.dump(tab=tab + '  | ')
+        print(f'{tab}END DUMP')
+
+    def is_precise(self):
+        for atype in self.args:
+            if not atype.is_precise():
+                return False
+        return self.return_type.is_precise()
 
 
 def make_concrete_template(name, key, signatures):
@@ -314,14 +358,14 @@ class CallableTemplate(FunctionTemplate):
                                 "got %r" % (sig,))
             sig = signature(sig, *bound.args)
         if self.recvr is not None:
-            sig.recvr = self.recvr
+            sig = sig.replace(recvr=self.recvr)
         # Hack any omitted parameters out of the typer's pysig,
         # as lowering expects an exact match between formal signature
         # and actual args.
         if len(bound.args) < len(pysig.parameters):
             parameters = list(pysig.parameters.values())[:len(bound.args)]
             pysig = pysig.replace(parameters=parameters)
-        sig.pysig = pysig
+        sig = sig.replace(pysig=pysig)
         cases = [sig]
         return self._select(cases, bound.args, bound.kwargs)
 
@@ -456,7 +500,24 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # need to run the compiler front end up to type inference to compute
             # a signature
             from numba.core import typed_passes, compiler
-            ir = compiler.run_frontend(disp_type.dispatcher.py_func)
+            from numba.core.inline_closurecall import InlineWorker
+            fcomp = disp._compiler
+            flags = compiler.Flags()
+
+            # Updating these causes problems?!
+            #fcomp.targetdescr.options.parse_as_flags(flags,
+            #                                         fcomp.targetoptions)
+            #flags = fcomp._customize_flags(flags)
+
+            # spoof a compiler pipline like the one that will be in use
+            tyctx = fcomp.targetdescr.typing_context
+            tgctx = fcomp.targetdescr.target_context
+            compiler_inst = fcomp.pipeline_class(tyctx, tgctx, None, None, None,
+                                                 flags, None, )
+            inline_worker = InlineWorker(tyctx, tgctx, fcomp.locals,
+                                         compiler_inst, flags, None,)
+
+            ir = inline_worker.run_untyped_passes(disp_type.dispatcher.py_func)
             resolve = disp_type.dispatcher.get_call_template
             template, pysig, folded_args, kws = resolve(new_args, kws)
 
@@ -483,9 +544,9 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                 self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
                 # store the inliner information, it's used later in the cost
                 # model function call
-                iinfo = _inline_info(ir, typemap, calltypes, sig)
-                self._inline_overloads[sig.args] = {'folded_args': folded_args,
-                                                    'iinfo': iinfo}
+            iinfo = _inline_info(ir, typemap, calltypes, sig)
+            self._inline_overloads[sig.args] = {'folded_args': folded_args,
+                                                'iinfo': iinfo}
         else:
             sig = disp_type.get_call_type(self.context, new_args, kws)
             self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
@@ -645,7 +706,7 @@ class _IntrinsicTemplate(AbstractTemplate):
             pysig = utils.pysignature(self._definition_func)
             # omit context argument from user function
             parameters = list(pysig.parameters.values())[1:]
-            sig.pysig = pysig.replace(parameters=parameters)
+            sig = sig.replace(pysig=pysig.replace(parameters=parameters))
             self._impl_cache[cache_key] = sig
             self._overload_cache[sig.args] = imp
             # register the lowering
@@ -863,7 +924,7 @@ def bound_function(template_key):
                 def generic(_, args, kws):
                     sig = method_resolver(self, ty, args, kws)
                     if sig is not None and sig.recvr is None:
-                        sig.recvr = ty
+                        sig = sig.replace(recvr=ty)
                     return sig
 
             return types.BoundFunction(MethodTemplate, ty)

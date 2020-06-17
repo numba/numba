@@ -17,7 +17,8 @@ overhead because no compilation is needed. The cached data is saved under the
 cache directory (see :envvar:`NUMBA_CACHE_DIR`). The index of the cache is
 stored in a ``.nbi`` file, with one index per function, and it lists all the
 overloaded signatures compiled for the function. The *object code* is stored in
-files with an ``.nbc`` extension, one file per overload.
+files with an ``.nbc`` extension, one file per overload. The data in both files
+is serialized with :mod:`pickle`.
 
 
 Requirements for Cacheability

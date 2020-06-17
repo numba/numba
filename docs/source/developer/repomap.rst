@@ -42,8 +42,8 @@ Continuous Integration
 - :ghfile:`codecov.yml` - Codecov.io coverage reporting
 
 
-Documentation / Examples
-''''''''''''''''''''''''
+Documentation
+'''''''''''''
 - :ghfile:`LICENSE` - License for Numba
 - :ghfile:`LICENSES.third-party` - License for third party code vendored
   into Numba
@@ -61,19 +61,10 @@ Documentation / Examples
 - :ghfile:`docs/gh-pages.py` - Utility script to update Numba docs (stored
   as gh-pages)
 - :ghfile:`docs/make.bat` - Not used (remove?)
-- :ghfile:`examples/` - Example scripts demonstrating numba (re/move to
-  numba-examples repo?)
-- :ghfile:`examples/notebooks/` - Example notebooks (re/move to
-  numba-examples repo?)
-- :ghfile:`benchmarks/` - Benchmark scripts (re/move to numba-examples
-  repo?)
-- :ghfile:`tutorials/` - Tutorial notebooks (definitely out of date, should
-  remove and direct to external tutorials)
 - :ghfile:`numba/scripts/generate_lower_listing.py` - Dump all registered
   implementations decorated with ``@lower*`` for reference
   documentation.  Currently misses implementations from the higher
   level extension API.
-
 
 
 Numba Source Code

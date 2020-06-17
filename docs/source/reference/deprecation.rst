@@ -100,8 +100,8 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Pending-deprecation warnings will be issued in version 0.44.0
-* Deprecation warnings and replacements will be issued in version 0.49.0
-* Support will be removed in version 0.50.0
+* Deprecation warnings and replacements will be issued in version 0.50.0
+* Support will be removed in version 0.51.0
 
 Recommendations
 ---------------
@@ -221,3 +221,36 @@ benefit to having the ``@jit`` decorator present consider removing it! If there
 is benefit to having the ``@jit`` decorator present, then to be future proof
 supply the keyword argument ``forceobj=True`` to ensure the function is always
 compiled in :term:`object mode`.
+
+
+Change of jitclass location
+===========================
+Between versions 0.48 and 0.49 Numba underwent a large amount of refactoring.
+One of the decisions made by the core developers as part of this refactoring was
+to move ``numba.jitclass`` to a new location ``numba.experimental.jitclass``.
+This is to help reinforce expectations over the behaviour and support for
+certain features by deliberately placing them in an ``experimental`` submodule.
+
+
+Example(s) of the impact
+------------------------
+The ``jitclass`` decorator has historically been available via
+``from numba import jitclass``, any code using this import location will in
+future need to be updated to ``from numba.experimental import jitclass``.
+
+
+Recommendations
+---------------
+Simply update imports as follows:
+
+* Change ``from numba import jitclass`` to
+  ``from numba.experimental import jitclass``
+
+
+Schedule
+--------
+This feature will be moved with respect to this schedule:
+
+* Deprecation warnings will be issued in version 0.49.0
+* Support for importing from ``numba.jitclass`` will be removed in version
+  0.51.0.

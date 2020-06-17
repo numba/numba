@@ -91,9 +91,12 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
         if restype and not device and restype != types.void:
             raise TypeError("CUDA kernel must have void return type.")
 
+        max_registers = kws.get('max_registers', None)
+
         def kernel_jit(func):
             kernel = compile_kernel(func, argtypes, link=link, debug=debug,
-                                    inline=inline, fastmath=fastmath)
+                                    inline=inline, fastmath=fastmath,
+                                    max_registers=max_registers)
 
             # Force compilation for the current context
             if bind:
@@ -109,11 +112,6 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
             return device_jit
         else:
             return kernel_jit
-
-
-def autojit(*args, **kwargs):
-    warn('autojit is deprecated and will be removed in a future release. Use jit instead.')
-    return jit(*args, **kwargs)
 
 
 def declare_device(name, restype=None, argtypes=None):

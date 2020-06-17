@@ -3,7 +3,7 @@ import numpy as np
 
 from numba import cuda
 from numba.core import types
-from numba.cuda.testing import SerialMixin
+from numba.cuda.testing import CUDATestCase
 import unittest
 
 
@@ -23,7 +23,7 @@ def float_to_complex(x):
     return np.complex128(x)
 
 
-class TestCasting(SerialMixin, unittest.TestCase):
+class TestCasting(CUDATestCase):
     def _create_wrapped(self, pyfunc, intype, outtype):
         wrapped_func = cuda.jit(device=True)(pyfunc)
 
@@ -35,7 +35,7 @@ class TestCasting(SerialMixin, unittest.TestCase):
             argarray = np.zeros(1, dtype=intype)
             argarray[0] = arg
             resarray = np.zeros(1, dtype=outtype)
-            cuda_wrapper_fn(argarray, resarray)
+            cuda_wrapper_fn[1, 1](argarray, resarray)
             return resarray[0]
 
         return wrapper_fn

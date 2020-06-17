@@ -19,7 +19,7 @@ Implemented proposals
    :maxdepth: 1
 
    integer-typing.rst
-
+   external-memory-management.rst
 
 Other proposals
 ---------------

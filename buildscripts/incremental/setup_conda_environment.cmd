@@ -29,8 +29,7 @@ call activate %CONDA_ENV%
 @rem Install latest llvmlite build
 %CONDA_INSTALL% -c numba llvmlite
 @rem Install dependencies for building the documentation
-if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx pygments)
-if "%BUILD_DOC%" == "yes" (%PIP_INSTALL% sphinx_bootstrap_theme)
+if "%BUILD_DOC%" == "yes" (%CONDA_INSTALL% sphinx sphinx_rtd_theme pygments)
 @rem Install dependencies for code coverage (codecov.io)
 if "%RUN_COVERAGE%" == "yes" (%PIP_INSTALL% codecov)
 @rem Install TBB

@@ -138,6 +138,7 @@ def register_jitable(*args, **kwargs):
     def wrap(fn):
         # It is just a wrapper for @overload
         inline = kwargs.pop('inline', 'never')
+
         @overload(fn, jit_options=kwargs, inline=inline, strict=False)
         def ov_wrap(*args, **kwargs):
             return fn
@@ -511,3 +512,16 @@ class BoundLiteralArgs(collections.namedtuple(
             args,
             kwargs,
         )
+
+
+def is_jitted(function):
+    """Returns True if a function is wrapped by one of the Numba @jit
+    decorators, for example: numba.jit, numba.njit
+
+    The purpose of this function is to provide a means to check if a function is
+    already JIT decorated.
+    """
+
+    # don't want to export this so import locally
+    from numba.core.dispatcher import Dispatcher
+    return isinstance(function, Dispatcher)

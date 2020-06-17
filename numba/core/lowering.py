@@ -9,7 +9,7 @@ from numba import _dynfunc
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
                         generators, config, ir_utils, cgutils, removerefctpass)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
-                               LiteralTypingError)
+                               LiteralTypingError, UnsupportedError)
 from numba.core.funcdesc import default_mangler
 
 
@@ -81,6 +81,7 @@ class BaseLower(object):
 
         # Internal states
         self.blkmap = {}
+        self.pending_phis = {}
         self.varmap = {}
         self.firstblk = min(self.blocks.keys())
         self.loc = -1
@@ -192,9 +193,10 @@ class BaseLower(object):
                     from pygments import highlight
                     from pygments.lexers import LlvmLexer as lexer
                     from pygments.formatters import Terminal256Formatter
+                    from numba.misc.dump_style import by_colorscheme
                     print(highlight(self.module.__repr__(), lexer(),
                                     Terminal256Formatter(
-                                        style='solarized-light')))
+                                        style=by_colorscheme())))
                 except ImportError:
                     msg = "Please install pygments to see highlighted dumps"
                     raise ValueError(msg)
@@ -249,12 +251,12 @@ class BaseLower(object):
 
         self.debug_print("# function begin: {0}".format(
             self.fndesc.unique_name))
+
         # Lower all blocks
         for offset, block in sorted(self.blocks.items()):
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
             self.lower_block(block)
-
         self.post_lower()
         return entry_block_tail
 
@@ -284,6 +286,15 @@ class BaseLower(object):
                                             self.env, self.call_helper,
                                             release_gil=release_gil)
 
+    def create_cfunc_wrapper(self):
+        """
+        Create C wrapper around this function.
+        """
+        if self.genlower:
+            raise UnsupportedError('generator as a first-class function type')
+        self.context.create_cfunc_wrapper(self.library, self.fndesc,
+                                          self.env, self.call_helper)
+
     def setup_function(self, fndesc):
         # Setup function
         self.function = self.context.declare_function(self.module, fndesc)
@@ -310,6 +321,22 @@ class Lower(BaseLower):
         from numba.core.unsafe import eh
 
         super(Lower, self).pre_block(block)
+
+        if block == self.firstblk:
+            # create slots for all the vars, irrespective of whether they are
+            # initialized, SSA will pick this up and warn users about using
+            # uninitialized variables. Slots are added as alloca in the first
+            # block
+            bb = self.blkmap[self.firstblk]
+            self.builder.position_at_end(bb)
+            all_names = set()
+            for block in self.blocks.values():
+                for x in block.find_insts(ir.Del):
+                    if x.value not in all_names:
+                        all_names.add(x.value)
+            for name in all_names:
+                fetype = self.typeof(name)
+                self._alloca_var(name, fetype)
 
         # Detect if we are in a TRY block by looking for a call to
         # `eh.exception_check`.
@@ -529,10 +556,12 @@ class Lower(BaseLower):
             argty = self.typeof("arg." + value.name)
             if isinstance(argty, types.Omitted):
                 pyval = argty.value
+                tyctx = self.context.typing_context
+                valty = tyctx.resolve_value_type_prefer_literal(pyval)
                 # use the type of the constant value
-                valty = self.context.typing_context.resolve_value_type(pyval)
-                const = self.context.get_constant_generic(self.builder, valty,
-                                                          pyval)
+                const = self.context.get_constant_generic(
+                    self.builder, valty, pyval,
+                )
                 # cast it to the variable type
                 res = self.context.cast(self.builder, const, valty, ty)
             else:
@@ -740,7 +769,7 @@ class Lower(BaseLower):
                     pos_tys[i] = types.literal(pyval)
 
         fixed_sig = typing.signature(sig.return_type, *pos_tys)
-        fixed_sig.pysig = sig.pysig
+        fixed_sig = fixed_sig.replace(pysig=sig.pysig)
 
         argvals = self.fold_call_args(fnty, sig, pos_args, inst.vararg, {})
         impl = self.context.get_function(print, fixed_sig)
@@ -769,6 +798,9 @@ class Lower(BaseLower):
 
         elif isinstance(fnty, types.RecursiveCall):
             res = self._lower_call_RecursiveCall(fnty, expr, signature)
+
+        elif isinstance(fnty, types.FunctionType):
+            res = self._lower_call_FunctionType(fnty, expr, signature)
 
         else:
             res = self._lower_call_normal(fnty, expr, signature)
@@ -930,6 +962,62 @@ class Lower(BaseLower):
                 self.builder, mangled_name, signature, argvals,
             )
         return res
+
+    def _lower_call_FunctionType(self, fnty, expr, signature):
+        self.debug_print("# calling first-class function type")
+        sig = types.unliteral(signature)
+        if not fnty.check_signature(signature):
+            # value dependent polymorphism?
+            raise UnsupportedError(
+                f'mismatch of function types:'
+                f' expected {fnty} but got {types.FunctionType(sig)}')
+        ftype = fnty.ftype
+        argvals = self.fold_call_args(
+            fnty, sig, expr.args, expr.vararg, expr.kws,
+        )
+        func_ptr = self.__get_function_pointer(ftype, expr.func.name, sig=sig)
+        res = self.builder.call(func_ptr, argvals, cconv=fnty.cconv)
+        return res
+
+    def __get_function_pointer(self, ftype, fname, sig=None):
+        from numba.experimental.function_type import lower_get_wrapper_address
+
+        llty = self.context.get_value_type(ftype)
+        fstruct = self.loadvar(fname)
+        addr = self.builder.extract_value(fstruct, 0,
+                                          name='addr_of_%s' % (fname))
+
+        fptr = cgutils.alloca_once(self.builder, llty,
+                                   name="fptr_of_%s" % (fname))
+        with self.builder.if_else(
+                cgutils.is_null(self.builder, addr),
+                likely=False) as (then, orelse):
+            with then:
+                self.init_pyapi()
+                # Acquire the GIL
+                gil_state = self.pyapi.gil_ensure()
+                pyaddr = self.builder.extract_value(
+                    fstruct, 1,
+                    name='pyaddr_of_%s' % (fname))
+                # try to recover the function address, see
+                # test_zero_address BadToGood example in
+                # test_function_type.py
+                addr1 = lower_get_wrapper_address(
+                    self.context, self.builder, pyaddr, sig,
+                    failure_mode='ignore')
+                with self.builder.if_then(
+                        cgutils.is_null(self.builder, addr1), likely=False):
+                    self.return_exception(
+                        RuntimeError,
+                        exc_args=(f"{ftype} function address is null",),
+                        loc=self.loc)
+                addr2 = self.pyapi.long_as_voidptr(addr1)
+                self.builder.store(self.builder.bitcast(addr2, llty), fptr)
+                self.pyapi.decref(addr1)
+                self.pyapi.gil_release(gil_state)
+            with orelse:
+                self.builder.store(self.builder.bitcast(addr, llty), fptr)
+        return self.builder.load(fptr)
 
     def _lower_call_normal(self, fnty, expr, signature):
         # Normal function resolution
@@ -1167,6 +1255,12 @@ class Lower(BaseLower):
             castval = self.context.cast(self.builder, val, ty, resty)
             self.incref(resty, castval)
             return castval
+
+        elif expr.op == "phi":
+            raise LoweringError("PHI not stripped")
+
+        elif expr.op == 'null':
+            return self.context.get_constant_null(resty)
 
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)

@@ -1,7 +1,8 @@
+from collections import namedtuple
 import numpy as np
 
 from numba.tests.support import (TestCase, MemoryLeakMixin,
-                                 skip_parfors_unsupported)
+                                 skip_parfors_unsupported, captured_stdout)
 from numba import njit, typed, literal_unroll, prange
 from numba.core import types, errors, ir
 from numba.testing import unittest
@@ -16,6 +17,7 @@ from numba.core.untyped_passes import (FixupArgs, TranslateByteCode,
 from numba.core.typed_passes import (NopythonTypeInference, IRLegalization,
                                      NoPythonBackend, PartialTypeInference)
 from numba.core.ir_utils import (compute_cfg_from_blocks, flatten_labels)
+from numba.core.types.functions import _header_lead
 
 _X_GLOBAL = (10, 11)
 
@@ -647,7 +649,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             foo(tup1, tup2)
 
-        self.assertIn("Invalid use", str(raises.exception))
+        self.assertIn(_header_lead, str(raises.exception))
 
     def test_10(self):
         # dispatch on literals triggering @overload resolution
@@ -1165,7 +1167,7 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             foo()
 
-        self.assertIn("Invalid use of", str(raises.exception))
+        self.assertIn(_header_lead, str(raises.exception))
         self.assertIn("zip", str(raises.exception))
 
     def test_32(self):
@@ -1202,6 +1204,30 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         pyfunc = get(consumer.py_func).py_func
 
         self.assertEqual(cfunc(), pyfunc())
+
+    def test_34(self):
+        # mixed bag, redefinition of tuple
+        @njit
+        def foo():
+            acc = 0
+            l1 = [1, 2, 3, 4]
+            l2 = [10, 20]
+            if acc - 2 > 3:
+                tup = (l1, l2)
+            else:
+                a1 = np.arange(20)
+                a2 = np.ones(5, dtype=np.complex128)
+                tup = (l1, a1, l2, a2)
+            for t in literal_unroll(tup):
+                acc += len(t)
+            return acc
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo()
+
+        self.assertIn("Invalid use of", str(raises.exception))
+        self.assertIn("found multiple definitions of variable",
+                      str(raises.exception))
 
 
 class TestConstListUnroll(MemoryLeakMixin, TestCase):
@@ -1558,6 +1584,7 @@ class TestMore(TestCase):
         # literal_unroll
         bar()
 
+    @unittest.skip("inlining of foo doesn't have const prop so y isn't const")
     def test_inlined_unroll_list(self):
         @njit(inline='always')
         def foo(y):
@@ -1628,7 +1655,7 @@ class TestMore(TestCase):
         self.assertRegexpMatches(str(raises.exception), re)
 
     def test_unroll_tuple_of_dict(self):
-        from numba.tests.support import captured_stdout
+
         @njit
         def foo():
             x = {}
@@ -1649,6 +1676,60 @@ class TestMore(TestCase):
             lines,
             ['a 1', 'b 2', '3 c', '4 d'],
         )
+
+    def test_unroll_named_tuple(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo():
+            abc = ABC(1, 2j, 3.4)
+            out = 0
+            for i in literal_unroll(abc):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_named_tuple_arg(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo(x):
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        abc = ABC(1, 2j, 3.4)
+
+        self.assertEqual(foo(abc), foo.py_func(abc))
+
+    def test_unroll_named_unituple(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo():
+            abc = ABC(1, 2, 3)
+            out = 0
+            for i in literal_unroll(abc):
+                out += i
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_named_unituple_arg(self):
+        ABC = namedtuple('ABC', ['a', 'b', 'c'])
+
+        @njit
+        def foo(x):
+            out = 0
+            for i in literal_unroll(x):
+                out += i
+            return out
+
+        abc = ABC(1, 2, 3)
+
+        self.assertEqual(foo(abc), foo.py_func(abc))
 
     def test_unroll_global_tuple(self):
 
@@ -1689,6 +1770,48 @@ class TestMore(TestCase):
             out = 0
             for f in literal_unroll(x):
                 out += f()
+            return out
+
+        self.assertEqual(foo(), foo.py_func())
+
+    def test_unroll_indexing_list(self):
+        # See issue #5477
+        @njit
+        def foo(cont):
+            i = 0
+            acc = 0
+            normal_list = [a for a in cont]
+            heter_tuple = ('a', 25, 0.23, None)
+            for item in literal_unroll(heter_tuple):
+                acc += normal_list[i]
+                i += 1
+                print(item)
+            return i, acc
+
+        data = [j for j in range(4)]
+
+        # send stdout to nowhere, just check return values
+        with captured_stdout():
+            self.assertEqual(foo(data), foo.py_func(data))
+
+        # now capture stdout for jit function and check
+        with captured_stdout() as stdout:
+            foo(data)
+        lines = stdout.getvalue().splitlines()
+        self.assertEqual(
+            lines,
+            ['a', '25', '0.23', 'None'],
+        )
+
+    def test_unroller_as_freevar(self):
+        mixed = (np.ones((1,)), np.ones((1, 1)), np.ones((1, 1, 1)))
+        from numba import literal_unroll as freevar_unroll
+
+        @njit
+        def foo():
+            out = 0
+            for i in freevar_unroll(mixed):
+                out += i.ndim
             return out
 
         self.assertEqual(foo(), foo.py_func())
@@ -1769,6 +1892,7 @@ class TestLiteralUnrollPassTriggering(TestCase):
 
     def test_literal_unroll_is_invoked_via_alias(self):
         alias = literal_unroll
+
         @njit(pipeline_class=CapturingCompiler)
         def foo():
             acc = 0

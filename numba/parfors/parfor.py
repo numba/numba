@@ -614,6 +614,35 @@ class Parfor(ir.Expr, ir.Stmt):
             block.dump(file)
         print(("end parfor {}".format(self.id)).center(20, '-'), file=file)
 
+    def validate_params(self, typemap):
+        """
+        Check that Parfors params are of valid types.
+        """
+        if self.params is None:
+            msg = ("Cannot run parameter validation on a Parfor with params "
+                   "not set")
+            raise ValueError(msg)
+        for p in self.params:
+            ty = typemap.get(p)
+            if ty is None:
+                msg = ("Cannot validate parameter %s, there is no type "
+                       "information available")
+                raise ValueError(msg)
+            if isinstance(ty, types.BaseTuple):
+                if ty.count > config.PARFOR_MAX_TUPLE_SIZE:
+                    msg = ("Use of a tuple (%s) of length %d in a parallel region "
+                           "exceeds the maximum supported tuple size.  Since "
+                           "Generalized Universal Functions back parallel regions "
+                           "and those do not support tuples, tuples passed to "
+                           "parallel regions are unpacked if their size is below "
+                           "a certain threshold, currently configured to be %d. "
+                           "This threshold can be modified using the Numba "
+                           "environment variable NUMBA_PARFOR_MAX_TUPLE_SIZE.")
+                    raise errors.UnsupportedParforsError(msg %
+                              (p, ty.count, config.PARFOR_MAX_TUPLE_SIZE),
+                              self.loc)
+
+
 def _analyze_parfor(parfor, equiv_set, typemap, array_analysis):
     """Recursive array analysis for parfor nodes.
     """
@@ -671,7 +700,6 @@ class ParforDiagnostics(object):
     @has_setup.setter
     def has_setup(self, state):
         self._has_setup = state
-
 
     def count_parfors(self, blocks=None):
         return len(self.get_parfors())
@@ -1378,13 +1406,13 @@ class PreParforPass(object):
                                     # Add the array that the method is on to the arg list.
                                     expr.args.insert(0, callname[1])
 
-                            require(repl_func != None)
+                            require(repl_func is not None)
                             typs = tuple(self.typemap[x.name] for x in expr.args)
                             try:
                                 new_func =  repl_func(lhs_typ, *typs)
                             except:
                                 new_func = None
-                            require(new_func != None)
+                            require(new_func is not None)
                             g = copy.copy(self.func_ir.func_id.func.__globals__)
                             g['numba'] = numba
                             g['np'] = numpy
@@ -1496,7 +1524,7 @@ class ParforPassStates:
         self.nested_fusion_info = diagnostics.nested_fusion_info
 
         self.array_analysis = array_analysis.ArrayAnalysis(
-            typingctx, func_ir, typemap, calltypes,
+            self.typingctx, self.func_ir, self.typemap, self.calltypes,
         )
 
         ir_utils._max_label = max(func_ir.blocks.keys())
@@ -1693,8 +1721,10 @@ def _make_index_var(typemap, scope, index_vars, body_block):
     elif ndims == 1:
         return index_vars[0], types.uintp
     else:
-        raise NotImplementedError(
-            "Parfor does not handle arrays of dimension 0")
+        raise errors.UnsupportedRewriteError(
+            "Parfor does not handle arrays of dimension 0",
+            loc=loc,
+        )
 
 
 def _mk_parfor_loops(typemap, size_vars, scope, loc):
@@ -1836,7 +1866,9 @@ class ConvertNumpyPass:
         if call_name in ['zeros', 'ones'] or mod_name == 'numpy.random':
             return self._numpy_map_to_parfor(equiv_set, call_name, lhs, args, kws, expr)
         # return error if we couldn't handle it (avoid rewrite infinite loop)
-        raise NotImplementedError("parfor translation failed for ", expr)
+        raise errors.UnsupportedRewriteError(
+            f"parfor translation failed for {expr}", loc=expr.loc,
+        )
 
     def _numpy_map_to_parfor(self, equiv_set, call_name, lhs, args, kws, expr):
         """generate parfor from Numpy calls that are maps.
@@ -1959,7 +1991,7 @@ class ConvertReducePass:
             in_arr, mask_var, mask_typ, mask_indices = mask_query_result
 
         init_val = args[2]
-        size_vars = equiv_set.get_shape(in_arr if mask_indices == None else mask_var)
+        size_vars = equiv_set.get_shape(in_arr if mask_indices is None else mask_var)
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
         mask_index = index_vars
         if mask_indices:
@@ -1981,7 +2013,7 @@ class ConvertReducePass:
             raise AssertionError("unreachable")
             index_var = mask_index[0]
 
-        if mask_var != None:
+        if mask_var is not None:
             true_label = min(loop_body.keys())
             false_label = max(loop_body.keys())
             body_block = ir.Block(scope, loc)
@@ -2209,7 +2241,7 @@ class ConvertLoopPass:
                         else:
                             in_arr = args[0]
                         size_vars = equiv_set.get_shape(in_arr
-                                        if mask_indices == None else mask_var)
+                                        if mask_indices is None else mask_var)
                         index_vars, loops = _mk_parfor_loops(
                             pass_states.typemap, size_vars, scope, loc,
                         )
@@ -2234,7 +2266,7 @@ class ConvertLoopPass:
 
                         # if masked array optimization is being applied, create
                         # the branch for array selection
-                        if mask_var != None:
+                        if mask_var is not None:
                             # The following code are not tested
                             raise AssertionError("unreachable")
                             body_label = next_label()
@@ -2266,15 +2298,21 @@ class ConvertLoopPass:
                             try:
                                 step = pass_states.func_ir.get_definition(args[2])
                             except KeyError:
-                                raise NotImplementedError(
-                                    "Only known step size is supported for prange")
+                                raise errors.UnsupportedRewriteError(
+                                    "Only known step size is supported for prange",
+                                    loc=inst.loc,
+                                )
                             if not isinstance(step, ir.Const):
-                                raise NotImplementedError(
-                                    "Only constant step size is supported for prange")
+                                raise errors.UnsupportedRewriteError(
+                                    "Only constant step size is supported for prange",
+                                    loc=inst.loc,
+                                )
                             step = step.value
                             if step != 1:
-                                raise NotImplementedError(
-                                    "Only constant step size of 1 is supported for prange")
+                                raise errors.UnsupportedRewriteError(
+                                    "Only constant step size of 1 is supported for prange",
+                                    loc=inst.loc,
+                                )
                         index_var = ir.Var(scope, mk_unique_var("parfor_index"), loc)
                         # assume user-provided start to prange can be negative
                         # this is the only case parfor can have negative index
@@ -2425,10 +2463,23 @@ class ConvertLoopPass:
                         index_set.add(stmt.target.name)
                         added_indices.add(stmt.target.name)
                     # make sure parallel index is not overwritten
-                    elif stmt.target.name in index_set and stmt.target.name != stmt.value.name:
-                        raise ValueError(
-                            "Overwrite of parallel loop index at {}".format(
-                            stmt.target.loc))
+                    else:
+                        scope = block.scope
+
+                        def unver(name):
+                            from numba.core import errors
+                            try:
+                                return scope.get_exact(name).unversioned_name
+                            except errors.NotDefinedError:
+                                return name
+
+                        if unver(stmt.target.name) in map(unver, index_set) and unver(stmt.target.name) != unver(stmt.value.name):
+                            raise errors.UnsupportedRewriteError(
+                                "Overwrite of parallel loop index",
+                                loc=stmt.target.loc,
+                            )
+
+
 
                 if is_get_setitem(stmt):
                     index = index_var_of_get_setitem(stmt)
@@ -2637,8 +2688,15 @@ class ParforPass(ParforPassStates):
             parfor_ids, parfors = get_parfor_params(self.func_ir.blocks,
                                                     self.options.fusion,
                                                     self.nested_fusion_info)
+
+            # Validate reduction in parfors.
             for p in parfors:
                 get_parfor_reductions(self.func_ir, p, p.params, self.calltypes)
+
+            # Validate parameters:
+            for p in parfors:
+                p.validate_params(self.typemap)
+
             if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
                 n_parfors = len(parfor_ids)
@@ -2806,7 +2864,8 @@ def _arrayexpr_tree_to_ir(
             el_typ1 = typemap[arg_vars[0].name]
             if len(arg_vars) == 2:
                 el_typ2 = typemap[arg_vars[1].name]
-                func_typ = typingctx.resolve_function_type(op, (el_typ1, el_typ), {})
+                func_typ = typingctx.resolve_function_type(op, (el_typ1,
+                                                                el_typ2), {})
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
@@ -2822,7 +2881,7 @@ def _arrayexpr_tree_to_ir(
                 # elif isinstance(op, (np.ufunc, DUFunc)):
                 # function calls are stored in variables which are not removed
                 # op is typing_key to the variables type
-                func_var_name = _find_func_var(typemap, op, avail_vars)
+                func_var_name = _find_func_var(typemap, op, avail_vars, loc=loc)
                 func_var = ir.Var(scope, mk_unique_var(func_var_name), loc)
                 typemap[func_var.name] = typemap[func_var_name]
                 func_var_def = copy.deepcopy(func_ir.get_definition(func_var_name))
@@ -2867,8 +2926,10 @@ def _arrayexpr_tree_to_ir(
         out_ir.append(ir.Assign(expr, expr_out_var, loc))
 
     if len(out_ir) == 0:
-        raise NotImplementedError(
-            "Don't know how to translate array expression '%r'" % (expr,))
+        raise errors.UnsupportedRewriteError(
+            f"Don't know how to translate array expression '{expr:r}'",
+            loc=expr.loc,
+        )
     typemap.pop(expr_out_var.name, None)
     typemap[expr_out_var.name] = el_typ
     return out_ir
@@ -2943,7 +3004,7 @@ def _gen_arrayexpr_getitem(
         # Use last index for 1D arrays
         index_var = all_parfor_indices[-1]
     # Handle known constant size
-    elif any([x != None for x in size_consts]):
+    elif any([x is not None for x in size_consts]):
         # Need a tuple as index
         ind_offset = num_indices - ndims
         tuple_var = ir.Var(var.scope, mk_unique_var(
@@ -2976,7 +3037,7 @@ def _gen_arrayexpr_getitem(
     return ir_expr
 
 
-def _find_func_var(typemap, func, avail_vars):
+def _find_func_var(typemap, func, avail_vars, loc):
     """find variable in typemap which represents the function func.
     """
     for v in avail_vars:
@@ -2984,7 +3045,7 @@ def _find_func_var(typemap, func, avail_vars):
         # Function types store actual functions in typing_key.
         if isinstance(t, Function) and t.typing_key == func:
             return v
-    raise RuntimeError("ufunc call variable not found")
+    raise errors.UnsupportedRewriteError("ufunc call variable not found", loc=loc)
 
 
 def lower_parfor_sequential(typingctx, func_ir, typemap, calltypes):
@@ -3109,12 +3170,41 @@ def get_parfor_params(blocks, options_fusion, fusion_info):
             dummy_block.body = block.body[:i]
             before_defs = compute_use_defs({0: dummy_block}).defmap[0]
             pre_defs |= before_defs
-            parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info) | parfor.races
+            params = get_parfor_params_inner(
+                parfor, pre_defs, options_fusion, fusion_info,
+            )
+            parfor.params, parfor.races = _combine_params_races_for_ssa_names(
+                block.scope, params, parfor.races,
+            )
             parfor_ids.add(parfor.id)
             parfors.append(parfor)
 
         pre_defs |= all_defs[label]
     return parfor_ids, parfors
+
+
+def _combine_params_races_for_ssa_names(scope, params, races):
+    """Returns `(params|races1, races1)`, where `races1` contains all variables
+    in `races` are NOT referring to the same unversioned (SSA) variables in
+    `params`.
+    """
+    def unversion(k):
+        try:
+            return scope.get_exact(k).unversioned_name
+        except ir.NotDefinedError:
+            # XXX: it's a bug that something references an undefined name
+            return k
+
+    races1 = set(races)
+    unver_params = list(map(unversion, params))
+
+    for rv in races:
+        if any(unversion(rv) == pv for pv in unver_params):
+            races1.discard(rv)
+        else:
+            break
+
+    return params | races1, races1
 
 
 def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
@@ -3196,9 +3286,9 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
             if (isinstance(stmt, ir.Assign)
                     and (stmt.target.name in parfor_params
                       or stmt.target.name in var_to_param)):
-                lhs = stmt.target.name
+                lhs = stmt.target
                 rhs = stmt.value
-                cur_param = lhs if lhs in parfor_params else var_to_param[lhs]
+                cur_param = lhs if lhs.name in parfor_params else var_to_param[lhs.name]
                 used_vars = []
                 if isinstance(rhs, ir.Var):
                     used_vars = [rhs.name]
@@ -3221,18 +3311,26 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
         # a parameter is a reduction variable if its value is used to update it
         # check reduce_varnames since recursive parfors might have processed
         # param already
-        if param in used_vars and param not in reduce_varnames:
-            reduce_varnames.append(param)
+        param_name = param.name
+        if param_name in used_vars and param_name not in reduce_varnames:
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
-            check_conflicting_reduction_operators(param, reduce_nodes)
-            gri_out = guard(get_reduction_init, reduce_nodes)
-            if gri_out is not None:
-                init_val, redop = gri_out
-            else:
-                init_val = None
-                redop = None
-            reductions[param] = (init_val, reduce_nodes, redop)
+            # Certain kinds of ill-formed Python (like potentially undefined
+            # variables) in combination with SSA can make things look like
+            # reductions except that they don't have reduction operators.
+            # If we get to this point but don't find a reduction operator
+            # then assume it is this situation and just don't treat this
+            # variable as a reduction.
+            if reduce_nodes is not None:
+                reduce_varnames.append(param_name)
+                check_conflicting_reduction_operators(param, reduce_nodes)
+                gri_out = guard(get_reduction_init, reduce_nodes)
+                if gri_out is not None:
+                    init_val, redop = gri_out
+                else:
+                    init_val = None
+                    redop = None
+                reductions[param_name] = (init_val, reduce_nodes, redop)
 
     return reduce_varnames, reductions
 
@@ -3252,8 +3350,8 @@ def check_conflicting_reduction_operators(param, nodes):
             else:
                 if first_red_func != node.value.fn:
                     msg = ("Reduction variable %s has multiple conflicting "
-                           "reduction operators." % param)
-                    raise errors.UnsupportedError(msg, node.loc)
+                           "reduction operators." % param.unversioned_name)
+                    raise errors.UnsupportedRewriteError(msg, node.loc)
 
 def get_reduction_init(nodes):
     """
@@ -3279,12 +3377,11 @@ def supported_reduction(x, func_ir):
         return True
     if x.op == 'call':
         callname = guard(find_callname, func_ir, x)
-        callname = tuple(i if i != '__builtin__' else 'builtins' for i in callname)
         if callname == ('max', 'builtins') or callname == ('min', 'builtins'):
             return True
     return False
 
-def get_reduce_nodes(name, nodes, func_ir):
+def get_reduce_nodes(reduction_node, nodes, func_ir):
     """
     Get nodes that combine the reduction variable with a sentinel variable.
     Recognizes the first node that combines the reduction variable with another
@@ -3298,8 +3395,9 @@ def get_reduce_nodes(name, nodes, func_ir):
         if isinstance(val, ir.Var):
             return lookup(val)
         else:
-            return var if (varonly or val == None) else val
-
+            return var if (varonly or val is None) else val
+    name = reduction_node.name
+    unversioned_name = reduction_node.unversioned_name
     for i, stmt in enumerate(nodes):
         lhs = stmt.target
         rhs = stmt.value
@@ -3310,13 +3408,16 @@ def get_reduce_nodes(name, nodes, func_ir):
             in_vars = set(lookup(v, True).name for v in rhs.list_vars())
             if name in in_vars:
                 next_node = nodes[i+1]
-                if not (isinstance(next_node, ir.Assign) and next_node.target.name == name):
-                    raise ValueError(("Use of reduction variable " + name +
-                                      " other than in a supported reduction"
-                                      " function is not permitted."))
+                target_name = next_node.target.unversioned_name
+                if not (isinstance(next_node, ir.Assign) and target_name == unversioned_name):
+                    raise ValueError(
+                        f"Use of reduction variable {unversioned_name!r} other "
+                        "than in a supported reduction function is not "
+                        "permitted."
+                    )
 
                 if not supported_reduction(rhs, func_ir):
-                    raise ValueError(("Use of reduction variable " + name +
+                    raise ValueError(("Use of reduction variable " + unversioned_name +
                                       " in an unsupported reduction function."))
                 args = [ (x.name, lookup(x, True)) for x in get_expr_args(rhs) ]
                 non_red_args = [ x for (x, y) in args if y.name != name ]
@@ -3327,7 +3428,6 @@ def get_reduce_nodes(name, nodes, func_ir):
                 replace_vars_inner(rhs, replace_dict)
                 reduce_nodes = nodes[i:]
                 break;
-    assert reduce_nodes, "Invalid reduction format"
     return reduce_nodes
 
 def get_expr_args(expr):
@@ -3423,7 +3523,7 @@ def parfor_defs(parfor, use_set=None, def_set=None):
     loop_vars |= {
         l.step.name for l in parfor.loop_nests if isinstance(
             l.step, ir.Var)}
-    use_set.update(loop_vars)
+    use_set.update(loop_vars - def_set)
     use_set |= get_parfor_pattern_vars(parfor)
 
     return analysis._use_defs_result(usemap=use_set, defmap=def_set)
@@ -3974,7 +4074,7 @@ def simplify_parfor_body_CFG(blocks):
 def wrap_parfor_blocks(parfor, entry_label = None):
     """wrap parfor blocks for analysis/optimization like CFG"""
     blocks = parfor.loop_body.copy()  # shallow copy is enough
-    if entry_label == None:
+    if entry_label is None:
         entry_label = min(blocks.keys())
     assert entry_label > 0  # we are using 0 for init block here
 
