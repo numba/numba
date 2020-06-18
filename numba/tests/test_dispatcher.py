@@ -594,6 +594,27 @@ class TestDispatcher(BaseTest):
         expected_sigs = [(types.complex128,)]
         self.assertEqual(jitfoo.signatures, expected_sigs)
 
+    def test_dispatcher_throws(self):
+        # For context see https://github.com/numba/numba/issues/4750.
+
+        @jit(nopython=True)
+        def foo(x):
+            return x
+
+        with self.assertRaises(TypeError) as raises:
+            jit(foo)
+        err_msg = str(raises.exception)
+        self.assertIn("foo", err_msg)
+        self.assertIn(".py_func", err_msg)
+        self.assertIn("already jitted function", err_msg)
+
+        with self.assertRaises(TypeError) as raises:
+            jit(BaseTest)
+        err_msg = str(raises.exception)
+        self.assertIn(
+            "Object passed to @jit decorator is not a function", err_msg)
+        self.assertIn(f"{type(BaseTest)}", err_msg)
+
 
 class TestSignatureHandling(BaseTest):
     """

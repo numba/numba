@@ -11,6 +11,7 @@ import logging
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
 from numba.core import config, sigutils, registry
+from numba.core.dispatcher import _DispatcherBase
 
 
 _logger = logging.getLogger(__name__)
@@ -179,6 +180,19 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
     dispatcher = registry.dispatcher_registry[target]
 
     def wrapper(func):
+        if isinstance(func, _DispatcherBase):
+            raise TypeError(
+                "@jit decorator called on an already jitted function "
+                f"{func}.  If trying to access the original python "
+                f"function, use the {func}.py_func attribute."
+            )
+
+        if not inspect.isfunction(func):
+            raise TypeError(
+                f"Object passed to @jit decorator is not a function (got "
+                f"type {type(func)})."
+            )
+
         if config.ENABLE_CUDASIM and target == 'cuda':
             from numba import cuda
             return cuda.jit(func)
