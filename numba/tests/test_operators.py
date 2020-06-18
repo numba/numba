@@ -504,6 +504,19 @@ class TestOperators(TestCase):
         cfunc = cres.entry_point
         self.assertTrue(cfunc(Ellipsis, Ellipsis))
 
+    def test_is_void_ptr(self):
+        # can't call this directly from python, as void cannot be unboxed
+        cfunc_void = jit(
+            (types.voidptr, types.voidptr), nopython=True
+        )(self.op.is_usecase)
+
+        # this wrapper performs the casts from int to voidptr for us
+        @jit(nopython=True)
+        def cfunc(x, y):
+            return cfunc_void(x, y)
+
+        self.assertTrue(cfunc(1, 1))
+        self.assertFalse(cfunc(1, 2))
 
     #
     # Arithmetic operators
