@@ -335,7 +335,7 @@ def complex_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(types.NumberClass, types.Any)
+@lower_builtin((types.NumberClass, '__call__'), types.Any)
 def number_constructor(context, builder, sig, args):
     """
     Call a number class, e.g. np.int32(...)
