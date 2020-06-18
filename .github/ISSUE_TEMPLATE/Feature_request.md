@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Tell us about something that it'd be good for Numba to support
+about: Tell us about something in the Python language/NumPy you'd like Numba to support.
 
 ---
 
@@ -18,6 +18,6 @@ already describes the issue you have
 <!--
 
 Please include details of the feature you would like to see, why you would
-like to see it/the use case
+like to see it/the use case.
 
 -->
