@@ -3645,7 +3645,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pyfunc = tile
         cfunc = njit(pyfunc)
         for a, reps in product(tiles(), shapes()):
-            print(a, reps)
             expected = pyfunc(a, reps)
             got = cfunc(a, reps)
             self.assertPreciseEqual(expected, got)
