@@ -278,7 +278,7 @@ any contexts, as EMM Plugin instances are instantiated along with contexts.
 .. autofunction:: numba.cuda.set_memory_manager
 
 
-Re-setting the memory manager
+Resetting the memory manager
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 It is recommended that the memory manager is set once prior to using any CUDA
@@ -305,4 +305,3 @@ to set the memory manager multiple times, noting the following:
           ``@cuda.jit`` prior to context destruction will need to be
           re-defined, as the code underlying them will also have been unloaded
           from the GPU.
-
