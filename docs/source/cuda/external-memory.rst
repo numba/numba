@@ -279,7 +279,7 @@ any contexts, as EMM Plugin instances are instantiated along with contexts.
 
 
 Resetting the memory manager
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 It is recommended that the memory manager is set once prior to using any CUDA
 functionality, and left unchanged for the remainder of execution. It is possible
