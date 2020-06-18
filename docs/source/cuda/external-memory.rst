@@ -303,5 +303,5 @@ to set the memory manager multiple times, noting the following:
 
 .. note:: The invalidation of modules means that all functions compiled with
           ``@cuda.jit`` prior to context destruction will need to be
-          re-defined, as the code underlying them will also have been unloaded
+          redefined, as the code underlying them will also have been unloaded
           from the GPU.
