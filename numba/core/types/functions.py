@@ -648,7 +648,7 @@ class ExternalFunction(Function):
         return self.symbol, self.sig
 
 
-class NamedTupleClass(Callable, Opaque):
+class NamedTupleClass(Opaque):
     """
     Type class for namedtuple classes.
     """
@@ -674,7 +674,7 @@ class NamedTupleClass(Callable, Opaque):
         return self.instance_class
 
 
-class NumberClass(Callable, DTypeSpec, Opaque):
+class NumberClass(DTypeSpec, Opaque):
     """
     Type class for number classes (e.g. "np.float64").
     """

@@ -118,4 +118,4 @@ class NamedTupleClassAttribute(AttributeTemplate):
 
         # Override the typer's pysig to match the namedtuple constructor's
         typer.pysig = pysig
-        return types.Function(make_callable_template(self.key, typer))
+        return types.Function(make_callable_template((self.key, '__call__'), typer))

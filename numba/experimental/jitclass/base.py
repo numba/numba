@@ -550,7 +550,7 @@ def imp_dtor(context, module, instance_type):
     return dtor_fn
 
 
-@ClassBuilder.class_impl_registry.lower(types.ClassType,
+@ClassBuilder.class_impl_registry.lower((types.ClassType, '__call__'),
                                         types.VarArg(types.Any))
 def ctor_impl(context, builder, sig, args):
     """
