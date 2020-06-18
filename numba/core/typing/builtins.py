@@ -771,7 +771,7 @@ class NumberClassAttribute(AttributeTemplate):
                 # Scalar constructor, e.g. np.int32(42)
                 return ty
 
-        return types.Function(make_callable_template(key=ty, typer=typer))
+        return types.Function(make_callable_template(key=(ty, '__call__'), typer=typer))
 
 
 @infer_getattr
@@ -809,7 +809,7 @@ class TypeRefAttribute(AttributeTemplate):
                         self.pysig = result.pysig
                     return result
 
-            return types.Function(make_callable_template(key=ty,
+            return types.Function(make_callable_template(key=(ty, '__call__'),
                                                          typer=Redirect(self.context)))
 
 

@@ -556,7 +556,7 @@ class ExternalFunction(Function):
         return self.symbol, self.sig
 
 
-class NamedTupleClass(Callable, Opaque):
+class NamedTupleClass(Opaque):
     """
     Type class for namedtuple classes.
     """
@@ -566,19 +566,12 @@ class NamedTupleClass(Callable, Opaque):
         name = "class(%s)" % (instance_class)
         super(NamedTupleClass, self).__init__(name)
 
-    def get_call_type(self, context, args, kws):
-        # Overridden by the __call__ constructor resolution in typing.collections
-        return None
-
-    def get_call_signatures(self):
-        return (), True
-
     @property
     def key(self):
         return self.instance_class
 
 
-class NumberClass(Callable, DTypeSpec, Opaque):
+class NumberClass(DTypeSpec, Opaque):
     """
     Type class for number classes (e.g. "np.float64").
     """
@@ -587,13 +580,6 @@ class NumberClass(Callable, DTypeSpec, Opaque):
         self.instance_type = instance_type
         name = "class(%s)" % (instance_type,)
         super(NumberClass, self).__init__(name)
-
-    def get_call_type(self, context, args, kws):
-        # Overridden by the __call__ constructor resolution in typing.builtins
-        return None
-
-    def get_call_signatures(self):
-        return (), True
 
     @property
     def key(self):
