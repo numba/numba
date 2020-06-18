@@ -542,7 +542,16 @@ class BaseContext(object):
         except errors.NumbaNotImplementedError:
             pass
         if isinstance(fn, types.Type):
+            # It's a type instance => try to find a call overload
+            try:
+                return self.get_function((type(fn), '__call__'), sig)
+            except NotImplementedError:
+                # Raise exception for the type instance, for a better error message
+                pass
+
             # It's a type instance => try to find a definition for the type class
+            # TODO: this is weird, why are both static and non-static calls in
+            # the same place.
             try:
                 return self.get_function(type(fn), sig)
             except NotImplementedError:
