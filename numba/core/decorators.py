@@ -144,7 +144,7 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
     if options.get('nopython', False) and options.get('forceobj', False):
-        raise ValueError("Only either 'nopython' or 'forcobj' can be True.")
+        raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
 
     options['boundscheck'] = boundscheck
 
