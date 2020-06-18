@@ -108,7 +108,7 @@ API_PROTOTYPES = {
 'cuMemAlloc':         (c_int, POINTER(cu_device_ptr), c_size_t),
 
 # CUresult cuMemAllocManaged(CUdeviceptr *dptr, size_t bytesize, unsigned int flags);
-'cuMemAllocManaged':  (c_int, POINTER(cu_device_ptr), c_size_t, c_uint),
+'cuMemAllocManaged':  (c_int, c_void_p, c_size_t, c_uint),
 
 # CUresult cuMemsetD8(CUdeviceptr dstDevice, unsigned char uc, size_t N)
 'cuMemsetD8':         (c_int, cu_device_ptr, c_uint8, c_size_t),
