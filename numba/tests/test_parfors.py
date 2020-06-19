@@ -17,6 +17,7 @@ import numpy as np
 from numpy.random import randn
 import operator
 from collections import defaultdict, namedtuple
+import copy
 
 import numba.parfors.parfor
 from numba import njit, prange, set_num_threads, get_num_threads
@@ -120,6 +121,7 @@ class TestParforsBase(TestCase):
         check_fastmath = kwargs.pop('check_fastmath', None)
         fastmath_pcres = kwargs.pop('fastmath_pcres', None)
         check_scheduling = kwargs.pop('check_scheduling', True)
+        check_args_for_equality = kwargs.pop('check_arg_equality', None)
 
         def copy_args(*args):
             if not args:
@@ -133,7 +135,7 @@ class TestParforsBase(TestCase):
                 elif isinstance(x, numbers.Number):
                     new_args.append(x)
                 elif isinstance(x, tuple):
-                    new_args.append(x)
+                    new_args.append(copy.deepcopy(x))
                 elif isinstance(x, list):
                     new_args.append(x[:])
                 else:
@@ -141,18 +143,26 @@ class TestParforsBase(TestCase):
             return tuple(new_args)
 
         # python result
-        py_expected = pyfunc(*copy_args(*args))
+        py_args = copy_args(*args)
+        py_expected = pyfunc(*py_args)
 
         # njit result
-        njit_output = cfunc.entry_point(*copy_args(*args))
+        njit_args = copy_args(*args)
+        njit_output = cfunc.entry_point(*njit_args)
 
         # parfor result
-        parfor_output = cpfunc.entry_point(*copy_args(*args))
+        parfor_args = copy_args(*args)
+        parfor_output = cpfunc.entry_point(*parfor_args)
 
-        np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
-        np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
-
-        self.assertEqual(type(njit_output), type(parfor_output))
+        if check_args_for_equality is None:
+            np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
+            np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
+            self.assertEqual(type(njit_output), type(parfor_output))
+        else:
+            for pyarg, njitarg, parforarg, argcomp in zip(
+                py_args, njit_args, parfor_args, check_args_for_equality):
+                argcomp(njitarg, pyarg, **kwargs)
+                argcomp(parforarg, pyarg, **kwargs)
 
         if check_scheduling:
             self.check_scheduling(cpfunc, scheduler_type)
@@ -1629,6 +1639,21 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, x)
 
     @skip_parfors_unsupported
+    def test_namedtuple3(self):
+        # issue5872: test that a.y[:] = 5 is not removed as
+        # deadcode.
+        TestNamedTuple3 = namedtuple(f'TestNamedTuple3',['y'])
+
+        def test_impl(a):
+            a.y[:] = 5
+
+        def comparer(a, b):
+            np.testing.assert_almost_equal(a.y, b.y)
+
+        x = TestNamedTuple3(y=np.zeros(10))
+        self.check(test_impl, x, check_arg_equality=[comparer])
+
+    @skip_parfors_unsupported
     def test_inplace_binop(self):
         def test_impl(a, b):
             b += a
@@ -1640,6 +1665,7 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countParfors(test_impl,
                                     (types.Array(types.float64, 1, 'C'),
                                      types.Array(types.float64, 1, 'C'))) == 1)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
