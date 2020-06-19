@@ -143,6 +143,8 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
     if 'restype' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
+    if options.get('nopython', False) and options.get('forceobj', False):
+        raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
 
     options['boundscheck'] = boundscheck
 
@@ -232,6 +234,7 @@ def njit(*args, **kws):
         warnings.warn('nopython is set for njit and is ignored', RuntimeWarning)
     if 'forceobj' in kws:
         warnings.warn('forceobj is set for njit and is ignored', RuntimeWarning)
+        del kws['forceobj']
     kws.update({'nopython': True})
     return jit(*args, **kws)
 
