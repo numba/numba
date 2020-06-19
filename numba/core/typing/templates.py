@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from types import MethodType, FunctionType
 
 import numba
-from numba.core import types, utils
+from numba.core import types, utils, errors
 from numba.core.errors import TypingError, InternalError
 from numba.core.cpu_options import InlineOptions
 
@@ -517,7 +517,20 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             inline_worker = InlineWorker(tyctx, tgctx, fcomp.locals,
                                          compiler_inst, flags, None,)
 
-            ir = inline_worker.run_untyped_passes(disp_type.dispatcher.py_func)
+            # If the inlinee contains something to trigger literal arg dispatch
+            # then the pipeline will unconditionally fail, but the
+            # ForceLiteralArg instance that causes the failure will not have
+            # been through the path that adds `fold_arguments` to the exception,
+            # which means there's nothing to call if this exception propagates
+            # up to the dispatcher. As a result, it's best to pretend it didn't
+            # happen and continue to `resolve` as that will trigger a
+            # ForceLiteralArg exception instance that is appropriately formed
+            # for consumption in the dispatcher.
+            try:
+                ir = inline_worker.run_untyped_passes(
+                    disp_type.dispatcher.py_func)
+            except errors.ForceLiteralArg:
+                pass
             resolve = disp_type.dispatcher.get_call_template
             template, pysig, folded_args, kws = resolve(new_args, kws)
 
