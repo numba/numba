@@ -5,11 +5,6 @@ The Numba repository is quite large, and due to age has functionality spread
 around many locations.  To help orient developers, this document will try to
 summarize where different categories of functionality can be found.
 
-.. note::
-    It is likely that the organization of the code base will change in the
-    future to improve organization.  Follow `issue #3807 <https://github.com/numba/numba/issues/3807>`_
-    for more details.
-
 
 Support Files
 -------------
@@ -25,6 +20,7 @@ Build and Packaging
 - :ghfile:`.flake8` - Preferences for code formatting.  Files should be
   fixed and removed from the exception list as time allows.
 - :ghfile:`.pre-commit-config.yaml` - Configuration file for pre-commit hooks.
+- :ghfile:`.readthedocs.yml` - Configuration file for Read the Docs.
 - :ghfile:`buildscripts/condarecipe.local` - Conda build recipe
 - :ghfile:`buildscripts/condarecipe_clone_icc_rt` - Recipe to build a
   standalone icc_rt package.
@@ -61,6 +57,8 @@ Documentation
 - :ghfile:`docs/gh-pages.py` - Utility script to update Numba docs (stored
   as gh-pages)
 - :ghfile:`docs/make.bat` - Not used (remove?)
+- :ghfile:`docs/requirements.txt` - Pip package requirements for building docs
+  with Read the Docs.
 - :ghfile:`numba/scripts/generate_lower_listing.py` - Dump all registered
   implementations decorated with ``@lower*`` for reference
   documentation.  Currently misses implementations from the higher
