@@ -535,7 +535,9 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
                                                         func_ir)
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("remove_dead alias map:", alias_map)
+        print("args:", args)
+        print("alias map:", alias_map)
+        print("arg_aliases:", arg_aliases)
         print("live_map:", live_map)
         print("usemap:", usedefs.usemap)
         print("defmap:", usedefs.defmap)
@@ -821,12 +823,11 @@ def is_immutable_type(var, typemap):
     typ = typemap[var]
     # TODO: add more immutable types
     if isinstance(typ, (types.Number, types.scalars._NPDatetimeBase,
-                        types.containers.BaseTuple,
                         types.iterators.RangeType)):
         return True
     if typ==types.string:
         return True
-    # consevatively, assume mutable
+    # conservatively, assume mutable
     return False
 
 def copy_propagate(blocks, typemap):
