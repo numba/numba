@@ -40,6 +40,13 @@ initializing each defined fields.  Uninitialized fields contains garbage data.
 Methods and properties (getters and setters only) can be defined.  They will be
 automatically compiled.
 
+.. literalinclude:: ../../../numba/tests/doc_examples/test_jitclass.py
+   :language: python
+   :start-after: magictoken.ex_jitclass_type_hints.begin
+   :end-before: magictoken.ex_jitclass_type_hints.end
+   :dedent: 8
+
+Fields of a ``jitclass`` can also be inferred from Python type annotations.
 Any type annotations on the class will be used to extend the spec if not already
 present.  For example, if we have the class
 
@@ -49,16 +56,19 @@ present.  For example, if we have the class
     class Foo:
         x: int
         y: float
-        z: T
+        z: SomeOtherType
 
-        def __init__(self, x, y, z):
+        def __init__(self, x: int, y: float, z: SomeOtherType):
             ...
 
 then the full spec used for ``Foo`` will be:
 
 * ``"x": int32`` (specified in the original `spec` passed to `jitclass`)
 * ``"y": float64`` (added from type annotation)
-* ``"z": numba.typeof(T)`` (added from type annotation)
+* ``"z": numba.typeof(SomeOtherType)`` (added from type annotation)
+
+Here ``SomeOtherType`` could be any supported Python type (e.g.
+``typing.Dict[int, typing.Tuple[float, float]]``).
 
 Specifying ``numba.typed`` containers as class members
 ======================================================
