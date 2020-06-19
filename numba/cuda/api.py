@@ -24,13 +24,10 @@ gpus = devices.gpus
 
 
 @require_context
-def from_cuda_array_interface(desc, owner=None, sync=True):
+def from_cuda_array_interface(desc, owner=None):
     """Create a DeviceNDArray from a cuda-array-interface description.
     The *owner* is the owner of the underlying memory.
     The resulting DeviceNDArray will acquire a reference from it.
-    If *sync* is True (the default) then the array will be bound to the default
-    stream so that asynchronous operations on it are by default synchronized as
-    per the __cuda_array_interface__ synchronization requirements.
     """
     version = desc.get('version')
     # Mask introduced in version 1
@@ -51,14 +48,17 @@ def from_cuda_array_interface(desc, owner=None, sync=True):
     devptr = driver.get_devptr_for_active_ctx(desc['data'][0])
     data = driver.MemoryPointer(
         current_context(), devptr, size=size, owner=owner)
-    stream = sync and default_stream() or 0
+    stream_ptr = desc.get('stream', 0)
+    stream = external_stream(stream_ptr) if stream_ptr else legacy_default_stream()
+    if desc.get('sync', False):
+        stream.synchronize()
     da = devicearray.DeviceNDArray(shape=shape, strides=strides,
                                    dtype=dtype, gpu_data=data,
                                    stream=stream)
     return da
 
 
-def as_cuda_array(obj, sync=True):
+def as_cuda_array(obj):
     """Create a DeviceNDArray from any object that implements
     the :ref:`cuda array interface <cuda-array-interface>`.
 
@@ -69,7 +69,7 @@ def as_cuda_array(obj, sync=True):
         raise TypeError("*obj* doesn't implement the cuda array interface.")
     else:
         return from_cuda_array_interface(obj.__cuda_array_interface__,
-                                         owner=obj, sync=sync)
+                                         owner=obj)
 
 
 def is_cuda_array(obj):

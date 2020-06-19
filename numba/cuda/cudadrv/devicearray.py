@@ -127,6 +127,8 @@ class DeviceNDArrayBase(object):
             'strides': None if is_contiguous(self) else tuple(self.strides),
             'data': (ptr, False),
             'typestr': self.dtype.str,
+            'stream': int(self.stream),
+            'sync': True,
             'version': 3,
         }
 

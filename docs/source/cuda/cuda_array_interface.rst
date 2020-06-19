@@ -4,9 +4,9 @@
 CUDA Array Interface (Version 3)
 ================================
 
-The *cuda array interface* is created for interoperability between different
-implementation of GPU array-like objects in various projects.  The idea is
-borrowed from the `numpy array interface`_.
+The *Cuda Array Interface* (or CAI) is created for interoperability between
+different implementation of GPU array-like objects in various projects.  The
+idea is borrowed from the `NumPy array interface`_.
 
 
 .. note::
@@ -76,71 +76,205 @@ The following are optional entries:
             and will raise a `NotImplementedError` exception if one is passed
             to a GPU function.
 
+- **stream**: ``integer``
+
+  An optional stream upon which synchronization may take place. See the
+  :ref:`cuda-array-interface-synchronization` section below.
+
+- **sync**: ``bool``
+
+  Generally, if **sync** is given and is ``True``, then the consumer must either
+  synchronize on the provided **stream** at the point of consumption, or enqueue
+  operations on the data on the given **stream**. See
+  :ref:`cuda-array-interface-synchronization` for further details.
+
+
+.. _cuda-array-interface-synchronization:
 
 Synchronization
 ---------------
 
-For its implicit synchronization, the consumer is expected to operate on the
-data on the default stream, or synchronized with an event on the default stream.
-There are various mechanisms that could be used for this synchronization
-depending on the environment in which the framework(s) exchanging data using the
-interface are in. These include:
+Definitions
+~~~~~~~~~~~
 
-- Using ``cudaStreamWaitEvent`` in the runtime API,
-- Using ``cuStreamWaitEvent`` in the Driver API,
-- Using :func:`numba.cuda.cudadrv.driver.Event.wait` in Numba,
-- or, some other similar mechanism provided by another framework.
+When discussing synchronization, the following definitions are used:
 
-Conversely, the producer is expected to synchronize the default stream with any
-operations on other streams that could be operating on the data at the time of
-export. This can be achieved by recording an event in the non-default
-stream that is operating on the data, and waiting on it in the default stream.
-If there are multiple streams operating on the data, then one event per
-non-default stream could be recorded, and all waited on in the default stream.
+- *Producer*: The library / object on which ``__cuda_array_interface__`` is
+  accessed.
+- *Consumer*: The library / function that accesses the
+  ``__cuda_array_interface__`` of the Producer.
+- *User Code*: Code that induces a Producer and Consumer to share data through
+  the CAI.
+- *User*: The person writing or maintaining the User Code. The User may
+  implement User Code without knowledge of the CAI, since the CAI accesses can
+  be  hidden from their view.
 
-There can exist a scenario in which the consumer knows that no synchronization
-is required - for example, if they are using the same stream across two
-different frameworks. In this case they may choose to avoid waiting on an event
-in the default stream.
+In the following example:
+
+.. code-block:: python
+
+   import cupy
+   from numba import cuda
+
+   @cuda.jit
+   def add(x, y, out):
+       start = cuda.grid(1)
+       stride = cuda.gridsize(1)
+       for i in range(start, x.shape[0], stride):
+           out[i] = x[i] + y[i]
+
+   a = cupy.arange(10)
+   b = a * 2
+   out = cupy.zeros_like(a)
+
+   add[1, 32](a, b, out)
+
+When the ``add`` kernel is launched:
+
+- ``a``, ``b``, ``c`` are Producers.
+- The ``add`` kernel is the Consumer.
+- The User Code is specifically ``add[1, 32](a, b, out)``.
+- The author of the code is the User.
+
+
+Design Motivations
+~~~~~~~~~~~~~~~~~~
+
+Elements of the CAI design related to synchronization seek to fulfil these
+requirements:
+
+1. Producers and Consumers that exchange data through the CAI must be able to do
+   so avoiding data races.
+2. Requirement 1 should be met without requiring the user to be
+   aware of any particulars of the CAI - in other words, exchanging data between
+   Producers and Consumers that operate on data asynchronously should be correct
+   by default.
+3. Where the User is aware of the particulars of the CAI and implementation
+   details of the Producer and Consumer, they should be able to, at their
+   discretion, override some of the synchronization semantics of the interface
+   to reduce the synchronization overhead. Overriding synchronization semantics
+   implies that:
+
+   - The CAI design, and the design and implementation of the Producer and
+     Consumer do not specify or guarantee correctness with respect to data
+     races.
+   - Instead, the User is responsible for ensuring correctness with respect to
+     data races.
+4. All operations and exchange of data are orchestrated from a single host
+   thread. Use of multiple threads on the host is outside of the scope of this
+   version of the CAI. A future revision to the interface specification may
+   consider the use of multiple host threads once the current version and its
+   implementations have matured and become well-understood.
+
+
+Interface Requirements
+~~~~~~~~~~~~~~~~~~~~~~
+
+The ``sync`` and ``stream`` items of the interface indicate whether and how
+synchronization is expected so that producers and consumers that operate
+asynchronously can avoid hazards when exchanging data through the CUDA Array
+Interface.
+
+From the Consumer's perspective:
+
+* ``stream`` indicates the stream on which the Producer may have in-progress
+  operations on the data, and which the Consumer may be expected to either:
+
+  - synchronize on before accessing the data, or,
+  - enqueue operations in when accessing the data.
+
+  Whether one of these requirements applies depends partly on the ``sync``
+  parameter, and partly on the User's choice.
+
+* ``sync`` indicates the requirement for synchronization on the given
+  ``stream``.
+
+  - When ``sync`` is ``False``, or the User has set the Consumer to ignore CAI
+    synchronization semantics, the Consumer may assume that operating
+    on the data is immediately permitted, with no further synchronization.
+  - When ``sync`` is ``True``, and the User has not overridden CAI
+    synchronization semantics, then the Consumer must either:
+
+    - Synchronize on the provided stream prior to accessing the data. If after
+      synchronization the Consumer operates on the data in another stream, it
+      must ensure that no computation can take place in the provided stream
+      until its operations in its own choice of stream have taken place. This
+      could be achieved by either:
+
+      - Placing a wait on an event in the provided stream that occurs once all
+        of the Consumer's operations on the data are completed, or
+      - Avoiding returning control to the user code until after its operations
+        on its own stream have completed.
+
+    - Only enqueuing operations on the data in the provided stream. The Consumer
+      may return control to the User code immediately after enqueueing its work,
+      as the work will all be serialized on the exported array's stream, ensuring
+      correctness even if the User code were to induce the Producer to
+      subsequently start enqueueing more work on the same stream.
+
+When exporting an array through the CAI, Producers must ensure that:
+
+* There is work on the data enqueued on at most one stream.
+* If there is work on the data enqueued on a stream, then ``sync`` should be
+  ``True``, and ``stream`` is the stream on which pending operations on the data
+  are enqueued. There must not be any work enqueued on the data in any other
+  streams.
+* If there is no work enqueued on the data, then ``sync`` should be ``False``,
+  and ``stream`` may be either ``None``, or a stream on which it is suggested
+  that work on the data is enqueued.
+
+Optionally, to facilitate the User to relax the conformance to synchronization
+semantics:
+
+* Producers may provide a configuration option to always set ``sync`` to
+  ``False``.
+* Consumers may provide a configuration option to ignore the value of ``sync``,
+  therefore eliding synchronizations on the Producer-provided streams, and/or
+  enqueuing work on streams other than that provided by the Producer.
+
+These options should be not be set by default in either a Producer or a
+Consumer. The exact mechanism by which these options are set, and related
+options that Producers or Consumers might provide to allow the user further
+control over synchronization behavior are not prescribed by the CAI
+specification.
 
 
 Synchronization in Numba
-------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-Numba is neither strictly a producer nor a consumer - it may be used to
-implement either by a user. In order to facilitate the correct implementation of
-sychronization semantics, Numba exhibits the following behaviors related to
+Numba is neither strictly a Producer nor a Consumer - it may be used to
+implement either by a User. In order to facilitate the correct implementation of
+synchronization semantics, Numba exhibits the following behaviors related to
 synchronization of the interface:
 
-- If a device array is bound to a stream, then when the interface is exported
-  (i.e. at the time the ``__cuda_array_interface__`` property of a device array
-  is accessed), Numba will record an event in the array's stream and insert a
-  wait on the event in the default stream.
-- If a device array is imported (e.g. using :func:`cuda.as_cuda_array` on an
-  object providing ``__cuda_array_interface__``, then Numba will bind the
-  imported array to the default stream so that any operations on it will be
-  synchronized correctly even if the user does nothing to bind the array to a
-  stream.
-- If the synchronization on the default stream when importing is undesired (e.g.
-  in the scenario described above where no synchronization is necessary) then
-  the binding of the array to the default stream can be avoided by passing
-  ``sync=False`` to either of :func:`cuda.from_cuda_array_interface` or
-  :func:`as_cuda_array`.
+- When Numba acts as a Consumer (for example when an array-like object is passed
+  to a kernel launch), if the ``sync`` item is ``True``, then Numba will
+  immediately synchronize on the provided ``stream``.
+- When Numba acts as a Producer (when the ``__cuda_array_interface__`` property
+  of a Numba Device Array is accessed), the default stream for the Device Array
+  is given as the ``stream``, and ``sync`` is always set to ``True``.
 
-This means that:
+.. note:: In Numba's terminology, the default stream for a Device Array is a
+          property of the Device Array specifying the stream in which Numba will
+          enqueue asynchronous transfers on if no other stream is provided as an
+          argument to the function invoking the transfer. It is not the same as
+          the *Default Stream* in normal CUDA terminology.
 
-- If the user is only operating on the default stream, then no further action on
-  the part of the user is required.
-- If the user performs operations on non-default streams, then device arrays
-  they use that may be exported to other frameworks should be operated on in the
-  stream that they are bound to - this binding can take place either at
-  construction time, or by using the
-  :func:`numba.cuda.cudadrv.devicearray.DeviceNDArray.bind` method.
-- If synchronization is to be avoided on both import and export, then device
-  arrays should not be bound to a particular stream (instead the stream must be
-  specified for operations on the arrays, such as kernel launches and data
-  transfers), and ``sync=False`` should be passed to functions importing arrays
-  through the interface.
+Resulting from these properties, these consequences are intended:
+
+- Exchanging data either as a Producer or a Consumer should generally be
+  correct, provided the other side of the interaction also follows the CAI
+  synchronization semantics.
+- The User is expected not to launch kernels or other operations on streams that
+  are not the default stream for their parameters, because doing so would
+  violate the requirements for a Producer.
+
+  - Warning the user when they do this could be added, the present
+    implementation is a minimal prototype to help illustrate the interface
+    specification.
+
+- There is presently no option in Numba for the User to override synchronization
+  semantics. This may be added to the implementation at a later stage.
 
 
 Lifetime management
@@ -210,7 +344,7 @@ Differences with CUDA Array Interface (Version 2)
 -------------------------------------------------
 
 Prior versions of the CUDA Array Interface made no statement about
-synchronization or lifetime management.
+synchronization.
 
 
 Interoperability
