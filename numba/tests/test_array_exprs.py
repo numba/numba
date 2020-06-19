@@ -531,7 +531,6 @@ class TestOptionals(MemoryLeakMixin, unittest.TestCase):
         self.assertTrue(isinstance(oty, types.Optional))
         self.assertTrue(isinstance(oty.type, types.Float))
 
-
     def test_optional_array_type(self):
 
         @njit

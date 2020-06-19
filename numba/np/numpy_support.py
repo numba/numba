@@ -382,7 +382,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                   for letter in ufunc_letters[len(numba_types):]]
         return types
 
-    def set_output_dt_units(inputs, outputs):
+    def set_output_dt_units(inputs, outputs, ufunc_inputs):
         """
         Sets the output unit of a datetime type based on the input units
 
@@ -391,25 +391,46 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         leads to an output of timedelta output. However, for those that do,
         the unit of output must be inferred based on the units of the inputs.
 
-        At the moment this function takes care of the case where all
-        inputs have the same unit, and therefore the output unit has the same.
-        If in the future this should be extended to a case with mixed units,
+        At the moment this function takes care of two cases:
+        a) where all inputs are timedelta with the same unit (mm), and
+        therefore the output has the same unit.
+        This case is used for arr.sum, and for arr1+arr2 where all arrays
+        are timedeltas.
+        If in the future this needs to be extended to a case with mixed units,
         the rules should be implemented in `npdatetime_helpers` and called
         from this function to set the correct output unit.
+        b) where left operand is a timedelta, i.e. the "m?" case. This case
+        is used for division, eg timedelta / int.
+
+        At the time of writing, Numba does not support addition of timedelta
+        and other types, so this function does not consider the case "?m",
+        i.e. where timedelta is the right operand to a non-timedelta left
+        operand. To extend it in the future, just add another elif clause.
         """
-        if all(inp.unit == inputs[0].unit for inp in inputs):
-            # Case with operation on same units. Operations on different units
-            # not adjusted for now but might need to be added in the future
-            unit = inputs[0].unit
+        def make_specific(outputs, unit):
             new_outputs = []
             for out in outputs:
                 if isinstance(out, types.NPTimedelta) and out.unit == "":
                     new_outputs.append(types.NPTimedelta(unit))
                 else:
                     new_outputs.append(out)
-        else:
-            return outputs
-        return new_outputs
+            return new_outputs
+
+        if ufunc_inputs == 'mm':
+            if all(inp.unit == inputs[0].unit for inp in inputs):
+                # Case with operation on same units. Operations on different
+                # units not adjusted for now but might need to be
+                # added in the future
+                unit = inputs[0].unit
+                new_outputs = make_specific(outputs, unit)
+            else:
+                return outputs
+            return new_outputs
+        elif ufunc_inputs[0] == 'm':
+            # case where the left operand has timedelta type
+            unit = inputs[0].unit
+            new_outputs = make_specific(outputs, unit)
+            return new_outputs
 
     # In NumPy, the loops are evaluated from first to last. The first one
     # that is viable is the one used. One loop is viable if it is possible
@@ -452,8 +473,10 @@ def ufunc_find_matching_loop(ufunc, arg_types):
             try:
                 inputs = choose_types(input_types, ufunc_inputs)
                 outputs = choose_types(output_types, ufunc_outputs)
-                if ufunc_inputs == 'mm':
-                    outputs = set_output_dt_units(inputs, outputs)
+                # if the left operand or both are timedeltas, then the output
+                # units need to be determined.
+                if ufunc_inputs[0] == 'm':
+                    outputs = set_output_dt_units(inputs, outputs, ufunc_inputs)
 
             except NotImplementedError:
                 # One of the selected dtypes isn't supported by Numba
