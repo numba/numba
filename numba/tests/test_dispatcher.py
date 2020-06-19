@@ -594,7 +594,7 @@ class TestDispatcher(BaseTest):
         expected_sigs = [(types.complex128,)]
         self.assertEqual(jitfoo.signatures, expected_sigs)
 
-    def test_dispatcher_throws(self):
+    def test_dispatcher_raises_for_invalid_decoration(self):
         # For context see https://github.com/numba/numba/issues/4750.
 
         @jit(nopython=True)
