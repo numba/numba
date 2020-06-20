@@ -45,6 +45,10 @@ class TestAsNumbaType(TestCase):
             types.Set(self.complex_nb_type),
         )
         self.assertEqual(
+            as_numba_type(py_typing.Tuple[float, float]),
+            types.Tuple([self.float_nb_type, self.float_nb_type]),
+        )
+        self.assertEqual(
             as_numba_type(py_typing.Tuple[float, complex]),
             types.Tuple([self.float_nb_type, self.complex_nb_type]),
         )
@@ -136,12 +140,12 @@ class TestAsNumbaType(TestCase):
     def test_bad_union_throws(self):
         bad_unions = [
             py_typing.Union[str, int],
-            py_typing.Union[int, type(None), bool],
+            py_typing.Union[int, type(None), py_typing.Tuple[bool, bool]],
         ]
 
         for bad_py_type in bad_unions:
             with self.assertRaises(TypingError) as raises:
-                print(as_numba_type(bad_py_type))
+                as_numba_type(bad_py_type)
             self.assertIn("Cannot type Union", str(raises.exception))
 
 
