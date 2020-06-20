@@ -18,7 +18,7 @@ from numba.core import types, errors
 # Re-export typeof
 from numba.misc.special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
-    literally, literal_unroll
+    literally, literal_unroll, as_numba_type, register_py_type_infer,
 )
 
 # Re-export error classes

@@ -2,7 +2,6 @@ from collections import namedtuple
 from functools import singledispatch
 import ctypes
 import enum
-import typing as py_typing
 
 import numpy as np
 
@@ -102,83 +101,6 @@ def _typeof_type(val, c):
     from numba.typed import List
     if issubclass(val, List):
         return types.TypeRef(types.ListType)
-
-    if c.purpose == Purpose.argument:
-        # We only return for argument contexts.
-        # For situations like x = int(y), we want typeof(int) to return None,
-        # so that Context.resolve_value_type calls Context._get_global_type.
-
-        if val in (int, float, complex):
-            return typeof_impl(val(0), c)
-
-        if val is str:
-            return typeof_impl(str("numba"), c)
-
-
-# type(py_typing.List) is different in Python 3.6 vs. 3.7+.
-@typeof_impl.register(type(py_typing.List))
-def _typeof_typing(val, c):
-    # The type hierarchy of python typing library changes in 3.7.
-    if utils.PYVERSION < (3, 7):
-        list_check = lambda x: issubclass(x, py_typing.List)
-        dict_check = lambda x: issubclass(x, py_typing.Dict)
-        set_check = lambda x: issubclass(x, py_typing.Set)
-        tuple_check = lambda x: issubclass(x, py_typing.Tuple)
-        union_check = lambda x: x.__origin__ == py_typing.Union
-    else:
-        list_check = lambda x: x.__origin__ is list
-        dict_check = lambda x: x.__origin__ is dict
-        set_check = lambda x: x.__origin__ is set
-        tuple_check = lambda x: x.__origin__ is tuple
-        union_check = lambda x: x.__origin__ is py_typing.Union
-
-    if union_check(val):
-        (arg_1_py, arg_2_py) = val.__args__
-        if arg_2_py is not type(None): # noqa: E721
-            raise ValueError(
-                "Cannot type Union that is not an Optional "
-                f"(second type {arg_2_py} is not NoneType")
-        arg_1_nb = typeof_impl(arg_1_py, c)
-        if arg_1_nb is None:
-            raise ValueError(f"Cannot type optional inner type {arg_1_py}")
-        return types.Optional(arg_1_nb)
-
-    if list_check(val):
-        (element_py,) = val.__args__
-        element_nb = typeof_impl(element_py, c)
-        if element_nb is None:
-            raise ValueError(
-                f"Cannot type list element type {element_py}")
-        return types.List(element_nb)
-
-    if dict_check(val):
-        key_py, value_py = val.__args__
-        key_nb = typeof_impl(key_py, c)
-        value_nb = typeof_impl(value_py, c)
-        if key_nb is None:
-            raise ValueError(f"Cannot type dict key type {key_py}")
-        if value_nb is None:
-            raise ValueError(f"Cannot type dict value type {value_py}")
-        return types.DictType(key_nb, value_nb)
-
-    if set_check(val):
-        (element_py,) = val.__args__
-        element_nb = typeof_impl(element_py, c)
-        if element_nb is None:
-            raise ValueError(
-                f"Cannot type set element type {element_py}")
-        return types.Set(element_nb)
-
-    if tuple_check(val):
-        tys = tuple(typeof_impl(elem, c) for elem in val.__args__)
-        if any(ty is None for ty in tys):
-            return
-        return types.BaseTuple.from_types(tys)
-
-
-# Before Python 3.7, there is not a common shared metaclass for typing.
-if utils.PYVERSION < (3, 7):
-    typeof_impl.register(type(py_typing.Union), _typeof_typing)
 
 
 @typeof_impl.register(bool)

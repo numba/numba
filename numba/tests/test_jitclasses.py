@@ -1,28 +1,24 @@
-from collections import OrderedDict
 import ctypes
-import random
 import pickle
+import random
 import typing as py_typing
+import unittest
 import warnings
+
+from collections import OrderedDict
 
 import numba
 import numpy as np
-
-from numba import (float32, float64, int16, int32, boolean, deferred_type,
-                   optional)
-from numba import njit, typeof
-from numba.core import types, errors
+from numba import (boolean, deferred_type, float32, float64, int16, int32,
+                   njit, optional, typeof)
+from numba.core import errors, types
 from numba.core.dispatcher import Dispatcher
-from numba.tests.support import TestCase, MemoryLeakMixin
-from numba.experimental.jitclass import _box
-from numba.experimental.jitclass.base import JitClassType
-from numba.core.runtime.nrt import MemInfo
 from numba.core.errors import LoweringError
 from numba.core.runtime.nrt import MemInfo
 from numba.experimental import jitclass
 from numba.experimental.jitclass import _box
-from numba.tests.support import TestCase, MemoryLeakMixin
-import unittest
+from numba.experimental.jitclass.base import JitClassType
+from numba.tests.support import MemoryLeakMixin, TestCase
 
 
 class TestClass1(object):
