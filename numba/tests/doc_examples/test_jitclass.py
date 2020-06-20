@@ -54,10 +54,7 @@ class DocsJitclassUsageTest(TestCase):
 
     def test_ex_jitclass_type_hints(self):
         # magictoken.ex_jitclass_type_hints.begin
-        import numpy as np
-
         from typing import List
-        from numba import float32
         from numba.experimental import jitclass
 
         @jitclass
@@ -71,7 +68,6 @@ class DocsJitclassUsageTest(TestCase):
                 ret = self.value
                 self.value += 1
                 return ret
-
 
         @jitclass
         class ListLoopIterator:
