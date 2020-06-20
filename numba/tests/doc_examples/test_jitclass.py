@@ -61,27 +61,39 @@ class DocsJitclassUsageTest(TestCase):
         from numba.experimental import jitclass
 
         @jitclass
+        class Counter:
+            value: int
+
+            def __init__(self):
+                self.value = 0
+
+            def get(self) -> int:
+                ret = self.value
+                self.value += 1
+                return ret
+
+
+        @jitclass
         class ListLoopIterator:
-            idx: int
+            counter: Counter
             items: List[float]
 
             def __init__(self, items: List[float]):
                 self.items = items
-                self.idx = 0
+                self.counter = Counter()
 
             def get(self) -> float:
-                value = self.items[self.idx]
-                self.idx = (self.idx + 1) % len(self.items)
-                return value
+                idx = self.counter.get() % len(self.items)
+                return self.items[idx]
 
         items = [3.14, 2.718, 0.123, -4.]
         loop_itr = ListLoopIterator(items)
         # magictoken.ex_jitclass_type_hints.end
 
         for idx in range(10):
-            self.assertEqual(loop_itr.idx, idx % len(items))
+            self.assertEqual(loop_itr.counter.value, idx)
             self.assertAlmostEqual(loop_itr.get(), items[idx % len(items)])
-            self.assertEqual(loop_itr.idx, (idx + 1) % len(items))
+            self.assertEqual(loop_itr.counter.value, idx + 1)
 
 
 if __name__ == '__main__':

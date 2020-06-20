@@ -8,7 +8,9 @@ import unittest
 
 from numba.core import types
 from numba.core.errors import TypingError
-from numba.misc.special import typeof, as_numba_type, register_py_type_infer
+from numba.core.typing.typeof import typeof
+from numba.core.typing.asnumbatype import as_numba_type, AsNumbaTypeRegistry
+from numba.experimental.jitclass import jitclass
 from numba.tests.support import TestCase
 
 
@@ -18,12 +20,16 @@ class TestAsNumbaType(TestCase):
     float_nb_type = typeof(0.0)
     complex_nb_type = typeof(complex(0))
     str_nb_type = typeof("numba")
+    bool_nb_type = typeof(True)
+    none_nb_type = typeof(None)
 
     def test_simple_types(self):
         self.assertEqual(as_numba_type(int), self.int_nb_type)
         self.assertEqual(as_numba_type(float), self.float_nb_type)
         self.assertEqual(as_numba_type(complex), self.complex_nb_type)
         self.assertEqual(as_numba_type(str), self.str_nb_type)
+        self.assertEqual(as_numba_type(bool), self.bool_nb_type)
+        self.assertEqual(as_numba_type(type(None)), self.none_nb_type)
 
     def test_single_containers(self):
         self.assertEqual(
@@ -52,6 +58,10 @@ class TestAsNumbaType(TestCase):
             as_numba_type(py_typing.Union[str, None]),
             types.Optional(self.str_nb_type),
         )
+        self.assertEqual(
+            as_numba_type(py_typing.Union[None, bool]),
+            types.Optional(self.bool_nb_type),
+        )
 
         # Optional[x] is a special case of Union[x, None].  We raise a
         # TypingError if the right type is not NoneType.
@@ -67,8 +77,8 @@ class TestAsNumbaType(TestCase):
             types.List(types.List(self.int_nb_type)),
         )
         self.assertEqual(
-            as_numba_type(py_typing.List[py_typing.Dict[float, int]]),
-            types.List(types.DictType(self.float_nb_type, self.int_nb_type)),
+            as_numba_type(py_typing.List[py_typing.Dict[float, bool]]),
+            types.List(types.DictType(self.float_nb_type, self.bool_nb_type)),
         )
         self.assertEqual(
             as_numba_type(
@@ -76,6 +86,32 @@ class TestAsNumbaType(TestCase):
             types.Set(types.Tuple(
                 [types.Optional(self.int_nb_type), self.float_nb_type])),
         )
+
+    def test_jitclass_registers(self):
+
+        @jitclass
+        class MyInt:
+            x: int
+
+            def __init__(self, value):
+                self.x = value
+
+        self.assertEqual(as_numba_type(MyInt), MyInt.class_type.instance_type)
+
+    def test_type_alias(self):
+        Pair = py_typing.Tuple[int, int]
+        ListOfPairs = py_typing.List[Pair]
+
+        pair_nb_type = types.Tuple((self.int_nb_type, self.int_nb_type))
+        self.assertEqual(as_numba_type(Pair), pair_nb_type)
+        self.assertEqual(as_numba_type(ListOfPairs), types.List(pair_nb_type))
+
+    def test_overwrite_type(self):
+        as_numba_type = AsNumbaTypeRegistry()
+        self.assertEqual(as_numba_type(float), self.float_nb_type)
+        as_numba_type.register(float, types.float32)
+        self.assertEqual(as_numba_type(float), types.float32)
+        self.assertNotEqual(as_numba_type(float), self.float_nb_type)
 
     def test_any_throws(self):
         Any = py_typing.Any
@@ -96,6 +132,17 @@ class TestAsNumbaType(TestCase):
                 "Cannot infer numba type of python type",
                 str(raises.exception),
             )
+
+    def test_bad_union_throws(self):
+        bad_unions = [
+            py_typing.Union[str, int],
+            py_typing.Union[int, type(None), bool],
+        ]
+
+        for bad_py_type in bad_unions:
+            with self.assertRaises(TypingError) as raises:
+                print(as_numba_type(bad_py_type))
+            self.assertIn("Cannot type Union", str(raises.exception))
 
 
 if __name__ == '__main__':

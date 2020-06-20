@@ -8,7 +8,7 @@ from llvmlite import ir as llvmir
 
 from numba.core import types, utils, errors, cgutils, imputils
 from numba.core.registry import cpu_target
-from numba import njit, as_numba_type, register_py_type_infer
+from numba import njit, as_numba_type
 from numba.core.typing import templates
 from numba.core.datamodel import default_manager, models
 from numba.experimental.jitclass import _box
@@ -249,11 +249,7 @@ def register_class_type(cls, spec, class_ctor, builder):
     # Register class
     targetctx = cpu_target.target_context
     builder(class_type, typingctx, targetctx).register()
-
-    @register_py_type_infer
-    def type_jit_class(py_type):
-        if py_type is cls:
-            return class_type.instance_type
+    as_numba_type.register(cls, class_type.instance_type)
 
     return cls
 

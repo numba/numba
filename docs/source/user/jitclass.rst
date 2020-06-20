@@ -40,15 +40,21 @@ initializing each defined fields.  Uninitialized fields contains garbage data.
 Methods and properties (getters and setters only) can be defined.  They will be
 automatically compiled.
 
+
+Inferred class member types with ``as_numba_type``
+==================================================
+
+Fields of a ``jitclass`` can also be inferred from Python type annotations.
+
 .. literalinclude:: ../../../numba/tests/doc_examples/test_jitclass.py
    :language: python
    :start-after: magictoken.ex_jitclass_type_hints.begin
    :end-before: magictoken.ex_jitclass_type_hints.end
    :dedent: 8
 
-Fields of a ``jitclass`` can also be inferred from Python type annotations.
-Any type annotations on the class will be used to extend the spec if not already
-present.  For example, if we have the class
+Any type annotations on the class will be used to extend the spec if that field
+is not already present.  The Numba type corresponding to given Python type is
+inferred using ``as_numba_type``.  For example, if we have the class
 
 .. code-block:: python
 
@@ -63,18 +69,20 @@ present.  For example, if we have the class
 
 then the full spec used for ``Foo`` will be:
 
-* ``"x": int32`` (specified in the original `spec` passed to `jitclass`)
+* ``"x": int32`` (specified in the original ``spec`` passed to ``jitclass``)
 * ``"y": float64`` (added from type annotation)
-* ``"z": numba.typeof(SomeOtherType)`` (added from type annotation)
+* ``"z": numba.as_numba_type(SomeOtherType)`` (added from type annotation)
 
 Here ``SomeOtherType`` could be any supported Python type (e.g.
-``typing.Dict[int, typing.Tuple[float, float]]``).
+``bool``, ``typing.Dict[int, typing.Tuple[float, float]]``, or another
+``jitclass``).
 
-Specifying ``numba.typed`` containers as class members
-======================================================
-It is often desirable to use a ``numba.typed.Dict`` or a ``numba.typed.List`` as
-a class member in a ``jitclass``. Methods for using these types and various
-common patterns are presented in the following:
+
+Specifying ``numba.typed`` containers as class members explicitly
+=================================================================
+
+The following patterns demonstrate how to specify a ``numba.typed.Dict`` or
+``numba.typed.List`` explicitly as part of the ``spec`` passed to ``jitclass``.
 
 First, using explicit Numba types and explicit construction.
 
@@ -174,7 +182,7 @@ Values encapsulated by a jitclass does not get boxed into Python object when
 the jitclass instance is handed to the interpreter.  It is during attribute
 access to the field values that they are boxed.
 Calling static methods as class attributes is only supported outside of the
-class definition (i.e. you can't call ``Bag.add()`` from within another method
+class definition (i.e. code cannot call ``Bag.add()`` from within another method
 of ``Bag``).
 
 
