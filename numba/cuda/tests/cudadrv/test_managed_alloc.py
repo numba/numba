@@ -1,4 +1,5 @@
 import numpy as np
+import platform
 from numba.cuda.cudadrv import driver
 from numba import cuda
 from numba.cuda.testing import unittest, ContextResettingTestCase
@@ -33,7 +34,7 @@ class TestManagedAlloc(ContextResettingTestCase):
 
         total_mem_size = ctx.get_memory_info().total
 
-        if compute_capability_major >= 6:
+        if compute_capability_major >= 6 and platform.system() == 'Linux':
             n_bytes = int(2 * total_mem_size)
         else:
             n_bytes = int(0.5 * total_mem_size)
