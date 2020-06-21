@@ -55,6 +55,24 @@ class TestManagedAlloc(ContextResettingTestCase):
 
         self.assertTrue(np.all(ary == magic))
 
+    def test_managed_array(self):
+        # Check the managed_array interface on both host and device.
+
+        ary = cuda.managed_array(100, dtype=np.double)
+        ary.fill(123.456)
+        self.assertTrue(all(ary == 123.456))
+
+        @cuda.jit('void(double[:])')
+        def kernel(x):
+            i = cuda.grid(1)
+            if i < x.shape[0]:
+                x[i] = 1.0
+
+        kernel[10, 10](ary)
+        cuda.current_context().synchronize()
+
+        self.assertTrue(all(ary == 1.0))
+
 
 
 if __name__ == '__main__':
