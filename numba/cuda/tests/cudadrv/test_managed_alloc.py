@@ -11,34 +11,50 @@ class TestManagedAlloc(ContextResettingTestCase):
         # Verify that we can allocate and operate on managed
         # memory through the CUDA driver interface.
 
-        n = 32
-        mem = cuda.current_context().memallocmanaged(n)
+        ctx = cuda.current_context()
+
+        # CUDA Unified Memory comes in two flavors. For GPUs in the
+        # NVIDIA Kepler and Maxwell generations, managed memory
+        # allocations work as opaque, contiguous segments that can
+        # either be on the device or the host. For GPUs in the Pascal
+        # or later generations, managed memory operates on a per-page
+        # basis, so we can have arrays larger than GPU memory, where
+        # only part of them is resident on the device at one time. To
+        # ensure that this test works correctly on all supported GPUs,
+        # we'll select the size of our memory such that we only
+        # oversubscribe the GPU memory if we're on a Pascal or newer GPU
+        # (compute capability at least 6.0).
+
+        compute_capability_major = ctx.device.compute_capability[0]
+
+        # This test is unsupported on GPUs prior to the Kepler generation.
+
+        self.assertGreaterEqual(compute_capability_major, 3)
+
+        total_mem_size = ctx.get_memory_info().total
+
+        if compute_capability_major >= 6:
+            n_bytes = int(2 * total_mem_size)
+        else:
+            n_bytes = int(0.5 * total_mem_size)
 
         dtype = np.dtype(np.uint8)
-        ary = np.ndarray(shape=n // dtype.itemsize, dtype=dtype,
-                         buffer=mem)
+        n_elems = n_bytes // dtype.itemsize
+
+        mem = ctx.memallocmanaged(n_bytes)
+
+        ary = np.ndarray(shape=n_elems, dtype=dtype, buffer=mem)
 
         magic = 0xab
-        driver.device_memset(mem, magic, n)
+        driver.device_memset(mem, magic, n_bytes)
+        ctx.synchronize()
+
+        # Note that this assertion operates on the CPU, so this
+        # test effectively drives both the CPU and the GPU on
+        # managed memory.
 
         self.assertTrue(np.all(ary == magic))
 
-
-    def test_managed_alloc_oversubscription(self):
-        # Verify we can correctly operate on a managed array
-        # larger than the GPU memory, on both CPU and GPU.
-
-        ctx = cuda.current_context()
-        total_mem_size = ctx.get_memory_info().total
-
-        dtype = np.dtype(np.float32)
-        n_bytes = 2 * total_mem_size
-        n_elems = int(n_bytes / dtype.itemsize)
-
-        ary = cuda.managed_array(n_elems, dtype=dtype)
-
-        ary.fill(123)
-        self.assertTrue(all(ary == 123))
 
 
 if __name__ == '__main__':
