@@ -725,11 +725,11 @@ class StaticRaise(Terminator):
 
     def __str__(self):
         if self.exc_class is None:
-            return "raise"
+            return "<static> raise"
         elif self.exc_args is None:
-            return "raise %s" % (self.exc_class,)
+            return "<static> raise %s" % (self.exc_class,)
         else:
-            return "raise %s(%s)" % (self.exc_class,
+            return "<static> raise %s(%s)" % (self.exc_class,
                                      ", ".join(map(repr, self.exc_args)))
 
     def get_targets(self):

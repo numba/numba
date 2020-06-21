@@ -467,6 +467,21 @@ class TestRewriteIssues(MemoryLeakMixin, TestCase):
         self.assertIn("#   u.1 = ", res)
         self.assertIn("#   u.2 = ", res)
 
+    def test_issue_5599_name_collision(self):
+        # The original error will fail in lowering of the array_expr
+        @njit
+        def f(x):
+            arr = np.ones(x)
+
+            for _ in range(2):
+                val =  arr * arr
+                arr = arr.copy()
+            return arr
+
+        got = f(5)
+        expect = f.py_func(5)
+        np.testing.assert_array_equal(got, expect)
+
 
 class TestSemantics(MemoryLeakMixin, unittest.TestCase):
 
@@ -515,7 +530,6 @@ class TestOptionals(MemoryLeakMixin, unittest.TestCase):
         oty = s[0][1]
         self.assertTrue(isinstance(oty, types.Optional))
         self.assertTrue(isinstance(oty.type, types.Float))
-
 
     def test_optional_array_type(self):
 

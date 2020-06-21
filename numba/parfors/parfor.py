@@ -2864,7 +2864,8 @@ def _arrayexpr_tree_to_ir(
             el_typ1 = typemap[arg_vars[0].name]
             if len(arg_vars) == 2:
                 el_typ2 = typemap[arg_vars[1].name]
-                func_typ = typingctx.resolve_function_type(op, (el_typ1, el_typ), {})
+                func_typ = typingctx.resolve_function_type(op, (el_typ1,
+                                                                el_typ2), {})
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
@@ -3169,12 +3170,41 @@ def get_parfor_params(blocks, options_fusion, fusion_info):
             dummy_block.body = block.body[:i]
             before_defs = compute_use_defs({0: dummy_block}).defmap[0]
             pre_defs |= before_defs
-            parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info) | parfor.races
+            params = get_parfor_params_inner(
+                parfor, pre_defs, options_fusion, fusion_info,
+            )
+            parfor.params, parfor.races = _combine_params_races_for_ssa_names(
+                block.scope, params, parfor.races,
+            )
             parfor_ids.add(parfor.id)
             parfors.append(parfor)
 
         pre_defs |= all_defs[label]
     return parfor_ids, parfors
+
+
+def _combine_params_races_for_ssa_names(scope, params, races):
+    """Returns `(params|races1, races1)`, where `races1` contains all variables
+    in `races` are NOT referring to the same unversioned (SSA) variables in
+    `params`.
+    """
+    def unversion(k):
+        try:
+            return scope.get_exact(k).unversioned_name
+        except ir.NotDefinedError:
+            # XXX: it's a bug that something references an undefined name
+            return k
+
+    races1 = set(races)
+    unver_params = list(map(unversion, params))
+
+    for rv in races:
+        if any(unversion(rv) == pv for pv in unver_params):
+            races1.discard(rv)
+        else:
+            break
+
+    return params | races1, races1
 
 
 def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
@@ -3283,17 +3313,24 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
         # param already
         param_name = param.name
         if param_name in used_vars and param_name not in reduce_varnames:
-            reduce_varnames.append(param_name)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
-            check_conflicting_reduction_operators(param, reduce_nodes)
-            gri_out = guard(get_reduction_init, reduce_nodes)
-            if gri_out is not None:
-                init_val, redop = gri_out
-            else:
-                init_val = None
-                redop = None
-            reductions[param_name] = (init_val, reduce_nodes, redop)
+            # Certain kinds of ill-formed Python (like potentially undefined
+            # variables) in combination with SSA can make things look like
+            # reductions except that they don't have reduction operators.
+            # If we get to this point but don't find a reduction operator
+            # then assume it is this situation and just don't treat this
+            # variable as a reduction.
+            if reduce_nodes is not None:
+                reduce_varnames.append(param_name)
+                check_conflicting_reduction_operators(param, reduce_nodes)
+                gri_out = guard(get_reduction_init, reduce_nodes)
+                if gri_out is not None:
+                    init_val, redop = gri_out
+                else:
+                    init_val = None
+                    redop = None
+                reductions[param_name] = (init_val, reduce_nodes, redop)
 
     return reduce_varnames, reductions
 
@@ -3391,7 +3428,6 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 replace_vars_inner(rhs, replace_dict)
                 reduce_nodes = nodes[i:]
                 break;
-    assert reduce_nodes, "Invalid reduction format"
     return reduce_nodes
 
 def get_expr_args(expr):
@@ -3487,7 +3523,7 @@ def parfor_defs(parfor, use_set=None, def_set=None):
     loop_vars |= {
         l.step.name for l in parfor.loop_nests if isinstance(
             l.step, ir.Var)}
-    use_set.update(loop_vars)
+    use_set.update(loop_vars - def_set)
     use_set |= get_parfor_pattern_vars(parfor)
 
     return analysis._use_defs_result(usemap=use_set, defmap=def_set)

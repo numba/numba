@@ -205,7 +205,7 @@ class NumbaTestProgram(unittest.main):
                             help='Slice the test sequence')
         parser.add_argument('-g', '--gitdiff', dest='gitdiff',
                             action='store_true',
-                            help=('Run tests from changes made against'
+                            help=('Run tests from changes made against '
                                   'origin/master as identified by `git diff`'))
         return parser
 
