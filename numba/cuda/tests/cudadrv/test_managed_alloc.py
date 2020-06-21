@@ -40,9 +40,6 @@ class TestManagedAlloc(ContextResettingTestCase):
         ary.fill(123)
         self.assertTrue(all(ary == 123))
 
-        driver.device_memset(ary, 0, n_bytes)
-        self.assertTrue(all(ary == 0))
-
 
 if __name__ == '__main__':
     unittest.main()
