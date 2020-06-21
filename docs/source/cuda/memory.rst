@@ -53,6 +53,13 @@ Pinned memory
 .. autofunction:: numba.cuda.pinned_array
    :noindex:
 
+Managed memory
+==============
+
+.. autofunction:: numba.cuda.managed_array
+   :noindex:
+
+
 Streams
 =======
 
