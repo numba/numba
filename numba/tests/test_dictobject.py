@@ -100,6 +100,19 @@ class TestDictObject(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(5, 3, -1), 3)
         self.assertEqual(foo(5, 5, -1), -1)
 
+    def test_dict_get_with_non_none_default(self):
+        # Issue 5896
+        tup_type = types.Tuple.from_types([int32, int32])
+        @njit
+        def foo():
+            d = dictobject.new_dict(int32, tup_type)
+            d[1] = (2, 3)
+            valid = d.get(1, (4, 5))
+            invalid = d.get(0, (4, 5))
+            return valid, invalid
+
+        self.assertEqual(foo(), ((2, 3), (4, 5)))
+
     def test_dict_getitem(self):
         """
         Exercise dictionary __getitem__
