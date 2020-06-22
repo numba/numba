@@ -72,18 +72,11 @@ class BaseCallConv(object):
                 self.return_value(builder, retval)
 
             self.return_native_none(builder)
-
-        elif not isinstance(valty, types.Optional):
-            # Value is not an optional, need a cast
-            if valty != retty.type:
-                value = self.context.cast(builder, value, fromty=valty,
-                                          toty=retty.type)
-            retval = self.context.get_return_value(builder, retty.type, value)
-            self.return_value(builder, retval)
-
         else:
-            raise NotImplementedError("returning {0} for {1}".format(valty,
-                                                                     retty))
+            # Cast to returning optional type
+            value = self.context.cast(builder, value, fromty=valty, toty=retty.type)
+            retval = self.context.get_return_value(builder, retty.type, value)
+            return self.return_value(builder, retval)
 
     def return_native_none(self, builder):
         self._return_errcode_raw(builder, RETCODE_NONE)

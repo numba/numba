@@ -1188,7 +1188,6 @@ class Lower(BaseLower):
                     raise
                 # Fall back on the generic getitem() implementation
                 # for this type.
-                signature = self.fndesc.calltypes[expr]
                 return self.lower_getitem(resty, expr, expr.value,
                                           expr.index_var, signature)
         elif expr.op == "typed_getitem":
