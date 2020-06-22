@@ -1,4 +1,5 @@
 import ctypes
+import inspect
 import os
 import sys
 
@@ -8,7 +9,7 @@ from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
 from numba.core import (types, typing, utils, funcdesc, serialize, config,
                         compiler, sigutils)
 from numba.core.compiler_lock import global_compiler_lock
-
+import numba
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, driver
 from .errors import normalize_kernel_dimensions
@@ -137,6 +138,8 @@ class DeviceFunctionTemplate(object):
         self.debug = debug
         self.inline = inline
         self._compileinfos = {}
+        name = getattr(pyfunc, '__name__', 'unknown')
+        self.__name__ = f"{name} <CUDA device function>".format(name)
 
     def __reduce__(self):
         glbls = serialize._get_function_globals_for_reduction(self.py_func)
@@ -230,6 +233,21 @@ def compile_device_template(pyfunc, debug=False, inline=False):
         def generic(self, args, kws):
             assert not kws
             return dft.compile(args).signature
+
+        def get_template_info(cls):
+            basepath = os.path.dirname(os.path.dirname(numba.__file__))
+            code, firstlineno = inspect.getsourcelines(pyfunc)
+            path = inspect.getsourcefile(pyfunc)
+            sig = str(utils.pysignature(pyfunc))
+            info = {
+                'kind': "overload",
+                'name': getattr(cls.key, '__name__', "unknown"),
+                'sig': sig,
+                'filename': os.path.relpath(path, start=basepath),
+                'lines': (firstlineno, firstlineno + len(code) - 1),
+                'docstring': pyfunc.__doc__
+            }
+            return info
 
     typingctx = CUDATargetDesc.typingctx
     typingctx.insert_user_function(dft, device_function_template)

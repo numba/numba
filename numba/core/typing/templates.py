@@ -246,7 +246,24 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     return args
 
 
-class FunctionTemplate(object):
+class _Template(object):
+
+    def get_template_info(self):
+        """
+        Override to specialise the template information that will govern display
+        in error messages that appear to users"""
+        info = {
+            'kind': "unknown",
+            'name': "unknown",
+            'sig': "unknown",
+            'filename': "unknown",
+            'lines': ("unknown", "unknown"),
+            'docstring': "unknown"
+        }
+        return info
+
+
+class FunctionTemplate(_Template):
     # Set to true to disable unsafe cast.
     # subclass overide-able
     unsafe_casting = True
@@ -310,6 +327,22 @@ class AbstractTemplate(FunctionTemplate):
 
         return sig
 
+    def get_template_info(self):
+        impl = getattr(self, "generic")
+        basepath = os.path.dirname(os.path.dirname(numba.__file__))
+        code, firstlineno = inspect.getsourcelines(impl)
+        path = inspect.getsourcefile(impl)
+        sig = str(utils.pysignature(impl))
+        info = {
+            'kind': "overload",
+            'name': getattr(impl, '__qualname__', impl.__name__),
+            'sig': sig,
+            'filename': os.path.relpath(path, start=basepath),
+            'lines': (firstlineno, firstlineno + len(code) - 1),
+            'docstring': impl.__doc__
+        }
+        return info
+
 
 class CallableTemplate(FunctionTemplate):
     """
@@ -369,6 +402,23 @@ class CallableTemplate(FunctionTemplate):
         cases = [sig]
         return self._select(cases, bound.args, bound.kwargs)
 
+    def get_template_info(self):
+        impl = getattr(self, "generic")
+        basepath = os.path.dirname(os.path.dirname(numba.__file__))
+        code, firstlineno = inspect.getsourcelines(impl)
+        path = inspect.getsourcefile(impl)
+        sig = str(utils.pysignature(impl))
+        info = {
+            'kind': "overload",
+            'name': getattr(self.key, '__name__',
+                            getattr(impl, '__qualname__', impl.__name__),),
+            'sig': sig,
+            'filename': os.path.relpath(path, start=basepath),
+            'lines': (firstlineno, firstlineno + len(code) - 1),
+            'docstring': impl.__doc__
+        }
+        return info
+
 
 class ConcreteTemplate(FunctionTemplate):
     """
@@ -379,6 +429,25 @@ class ConcreteTemplate(FunctionTemplate):
     def apply(self, args, kws):
         cases = getattr(self, 'cases')
         return self._select(cases, args, kws)
+
+    def get_template_info(self):
+        import operator
+        name = getattr(self.key, '__name__', "unknown")
+        op_func = getattr(operator, name, None)
+
+        kind = "Type restricted function"
+        if op_func is not None:
+            if self.key is op_func:
+                kind = "operator overload"
+        info = {
+            'kind': kind,
+            'name': name,
+            'sig': "unknown",
+            'filename': "unknown",
+            'lines': ("unknown", "unknown"),
+            'docstring': "unknown"
+        }
+        return info
 
 
 class _EmptyImplementationEntry(InternalError):
@@ -667,6 +736,22 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         }
         return info
 
+    def get_template_info(self):
+        basepath = os.path.dirname(os.path.dirname(numba.__file__))
+        impl = self._overload_func
+        code, firstlineno = inspect.getsourcelines(impl)
+        path = inspect.getsourcefile(impl)
+        sig = str(utils.pysignature(impl))
+        info = {
+            'kind': "overload",
+            'name': getattr(impl, '__qualname__', impl.__name__),
+            'sig': sig,
+            'filename': os.path.relpath(path, start=basepath),
+            'lines': (firstlineno, firstlineno + len(code) - 1),
+            'docstring': impl.__doc__
+        }
+        return info
+
 
 def make_overload_template(func, overload_func, jit_options, strict,
                            inline):
@@ -719,6 +804,22 @@ class _IntrinsicTemplate(AbstractTemplate):
         signature on the target context.
         """
         return self._overload_cache[sig.args]
+
+    def get_template_info(self):
+        basepath = os.path.dirname(os.path.dirname(numba.__file__))
+        impl = self._definition_func
+        code, firstlineno = inspect.getsourcelines(impl)
+        path = inspect.getsourcefile(impl)
+        sig = str(utils.pysignature(impl))
+        info = {
+            'kind': "intrinsic",
+            'name': getattr(impl, '__qualname__', impl.__name__),
+            'sig': sig,
+            'filename': os.path.relpath(path, start=basepath),
+            'lines': (firstlineno, firstlineno + len(code) - 1),
+            'docstring': impl.__doc__
+        }
+        return info
 
 
 def make_intrinsic_template(handle, defn, name):
@@ -877,7 +978,7 @@ def make_overload_attribute_template(typ, attr, overload_func, inline,
     *overload_func*.
     """
     assert isinstance(typ, types.Type) or issubclass(typ, types.Type)
-    name = "OverloadTemplate_%s_%s" % (typ, attr)
+    name = "OverloadAttributeTemplate_%s_%s" % (typ, attr)
     # Note the implementation cache is subclass-specific
     dct = dict(key=typ, _attr=attr, _impl_cache={},
                _inline=staticmethod(InlineOptions(inline)),
