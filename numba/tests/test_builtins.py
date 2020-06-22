@@ -508,7 +508,7 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_hex(flags=no_pyobj_flags)
 
-    def test_str(self, flags=nrt_no_pyobj_flags):
+    def test_int_str(self, flags=nrt_no_pyobj_flags):
         pyfunc = str_usecase
 
         small_inputs = [
@@ -540,13 +540,12 @@ class TestBuiltins(TestCase):
             types.ulonglong,
         ]
 
+        cfunc = jit(nopython=True)(pyfunc)
+
         for typ in typs:
             for v in args:
                 if v in large_inputs and typ.bitwidth < 32:
                     continue
-
-                cr = compile_isolated(pyfunc, (typ,), flags=flags)
-                cfunc = cr.entry_point
                 self.assertPreciseEqual(cfunc(typ(v)), pyfunc(typ(v)))
 
         # negative inputs
@@ -554,11 +553,7 @@ class TestBuiltins(TestCase):
             for v in args:
                 if v in large_inputs and typ.bitwidth < 32:
                     continue
-                cr = compile_isolated(pyfunc, (typ,), flags=flags)
-                cfunc = cr.entry_point
                 self.assertPreciseEqual(cfunc(typ(-v)), pyfunc(typ(-v)))
-
-
 
     def test_int(self, flags=enable_pyobj_flags):
         pyfunc = int_usecase

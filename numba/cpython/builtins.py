@@ -595,3 +595,17 @@ def ol_filter(func, iterable):
                 if func(x):
                     yield x
     return impl
+
+# ------------------------------------------------------------------------------
+# str overload
+
+@overload(str)
+def ol_str(s):
+    def impl(s):
+        return s.__str__()
+    return impl
+
+
+@overload(repr)
+def ol_repr(s):
+    return lambda s: s.__repr__()
