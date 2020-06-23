@@ -186,11 +186,10 @@ vary with target operating system and hardware. The following lists them all
   * ``llvmlite``
   * Compiler toolchain mentioned above
 
-* Build time toggles:
-  * ``NUMBA_NO_OPENMP=1``
-    DEFAULT: undefined
-    set the environment variable to ``1`` when building using ``setup.py``
-    to disable compilations of OpenMP threading backend.
+* Build time environment variables:
+  * ``NUMBA_NO_OPENMP``
+    Set this environment variable to ``1`` when building using ``setup.py``
+    to disable compilation of the OpenMP threading backend.
     If enabled you need OpenMP C headers and runtime libraries compatible
     with the compiler toolchain mentioned above and accessible to the
     compiler via standard flags (Linux, Windows)
@@ -203,6 +202,8 @@ vary with target operating system and hardware. The following lists them all
   * ``NUMBA_NO_TBB=1 TBBROOT=/usr``
     DEFAULT: both undefined
     set the environment variable ``NUMBA_NO_TBB`` to ``1`` when building using
+  * ``NUMBA_NO_TBB``
+    Set this environment variable to ``1`` when building using
     ``setup.py`` to disable the compilation of the TBB threading backend.
     If not setting it to ``1`` you can also add the location where the
     TBB headers are going to be searched for, which is generally in ``/usr``,
