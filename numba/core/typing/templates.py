@@ -518,21 +518,16 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                                          compiler_inst, flags, None,)
 
             # If the inlinee contains something to trigger literal arg dispatch
-            # then the pipeline will unconditionally fail, but the
-            # ForceLiteralArg instance that causes the failure will not have
-            # been through the path that adds `fold_arguments` to the exception,
-            # which means there's nothing to call if this exception propagates
-            # up to the dispatcher. As a result, it's best to pretend it didn't
-            # happen and continue to `resolve` as that will trigger a
-            # ForceLiteralArg exception instance that is appropriately formed
-            # for consumption in the dispatcher.
-            try:
-                ir = inline_worker.run_untyped_passes(
-                    disp_type.dispatcher.py_func)
-            except errors.ForceLiteralArg:
-                pass
+            # then the pipeline call will unconditionally fail due to a raised
+            # ForceLiteralArg exception. Therefore `resolve` is run first, as
+            # type resolution must occur at some point, this will hit any
+            # `literally` calls and because it's going via the dispatcher will
+            # handle them correctly i.e. ForceLiteralArg propagates. This having
+            # the desired effect of ensuring the pipeline call is only made in
+            # situations that will succeed. For context see #5887.
             resolve = disp_type.dispatcher.get_call_template
             template, pysig, folded_args, kws = resolve(new_args, kws)
+            ir = inline_worker.run_untyped_passes(disp_type.dispatcher.py_func)
 
             typemap, return_type, calltypes = typed_passes.type_inference_stage(
                 self.context, ir, folded_args, None)
