@@ -5,7 +5,7 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppy
-import dppy.core as ocldrv
+import dppy as ocldrv
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
 
@@ -14,56 +14,46 @@ def data_parallel_sum(a, b, c):
     i = dppy.get_global_id(0)
     c[i] = a[i] + b[i]
 
-class TestDPPYDeviceArrayArgs(DPPYTestCase):
-    global_size = 64
-    N = global_size
 
-    a = np.array(np.random.random(N), dtype=np.float32)
-    b = np.array(np.random.random(N), dtype=np.float32)
-    d = a + b
+global_size = 64
+N = global_size
 
+a = np.array(np.random.random(N), dtype=np.float32)
+b = np.array(np.random.random(N), dtype=np.float32)
+d = a + b
+
+
+@unittest.skipUnless(ocldrv.has_cpu_device, 'test only on CPU system')
+class TestDPPYDeviceArrayArgsGPU(DPPYTestCase):
     def test_device_array_args_cpu(self):
-        c = np.ones_like(self.a)
-        # Select a device for executing the kernel
-        device_env = None
+        c = np.ones_like(a)
 
-        try:
-            device_env = ocldrv.runtime.get_cpu_device()
-            print("Selected CPU device")
-        except:
-            print("No OpenCL devices found on the system")
-            raise SystemExit()
+        with ocldrv.cpu_context(0) as device_env:
+            # Copy the data to the device
+            dA = device_env.copy_array_to_device(a)
+            dB = device_env.copy_array_to_device(b)
+            dC = device_env.create_device_array(c)
+            data_parallel_sum[global_size, dppy.DEFAULT_LOCAL_SIZE](dA, dB, dC)
+            device_env.copy_array_from_device(dC)
 
-        # Copy the data to the device
-        dA = device_env.copy_array_to_device(self.a)
-        dB = device_env.copy_array_to_device(self.b)
-        dC = ocldrv.DeviceArray(device_env.get_env_ptr(), c)
-        data_parallel_sum[device_env, self.global_size](dA, dB, dC)
-        device_env.copy_array_from_device(dC)
+            self.assertTrue(np.all(c == d))
 
-        self.assertTrue(np.all(c == self.d))
 
+@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+class TestDPPYDeviceArrayArgsCPU(DPPYTestCase):
     def test_device_array_args_gpu(self):
-        c = np.ones_like(self.a)
+        c = np.ones_like(a)
 
-        # Select a device for executing the kernel
-        device_env = None
+        with ocldrv.igpu_context(0) as device_env:
+            # Copy the data to the device
+            dA = device_env.copy_array_to_device(a)
+            dB = device_env.copy_array_to_device(b)
+            dC = device_env.create_device_array(c)
+            data_parallel_sum[global_size, dppy.DEFAULT_LOCAL_SIZE](dA, dB, dC)
+            device_env.copy_array_from_device(dC)
 
-        try:
-            device_env = ocldrv.runtime.get_gpu_device()
-            print("Selected GPU device")
-        except:
-            print("No OpenCL devices found on the system")
-            raise SystemExit()
+        self.assertTrue(np.all(c == d))
 
-        # Copy the data to the device
-        dA = device_env.copy_array_to_device(self.a)
-        dB = device_env.copy_array_to_device(self.b)
-        dC = ocldrv.DeviceArray(device_env.get_env_ptr(), c)
-        data_parallel_sum[device_env, self.global_size](dA, dB, dC)
-        device_env.copy_array_from_device(dC)
-
-        self.assertTrue(np.all(c == self.d))
 
 if __name__ == '__main__':
     unittest.main()

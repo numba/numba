@@ -17,6 +17,7 @@ from numba.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                 InlineOverloads)
 
 from .dppy_passes import (
+        DPPyConstantSizeStaticLocalMemoryPass,
         DPPyPreParforPass,
         DPPyParforPass,
         SpirvFriendlyLowering,
@@ -39,6 +40,11 @@ class DPPyPassBuilder(object):
             pm.add_pass(FixupArgs, "fix up args")
         pm.add_pass(IRProcessing, "processing IR")
         pm.add_pass(WithLifting, "Handle with contexts")
+
+        # Add pass to ensure when users are allocating static
+        # constant memory the size is a constant and can not
+        # come from a closure variable
+        pm.add_pass(DPPyConstantSizeStaticLocalMemoryPass, "dppy constant size for static local memory")
 
         # pre typing
         if not state.flags.no_rewrites:

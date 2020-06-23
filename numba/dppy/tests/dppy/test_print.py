@@ -8,9 +8,10 @@ from numba import dppy, njit, prange
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
 
-import dppy.core as ocldrv
+import dppy as ocldrv
 
 
+@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
 class TestPrint(DPPYTestCase):
     def test_print_prange(self):
         @njit(parallel={'spirv':True})
@@ -43,19 +44,12 @@ class TestPrint(DPPYTestCase):
             print("value of b at:", i, "is", b[i])
 
         N = 10
-        device_env = None
-
-        try:
-            device_env = ocldrv.runtime.get_gpu_device()
-            print("Selected GPU device")
-        except:
-            print("GPU device not found")
-            exit()
 
         a = np.ones(N)
         b = np.ones(N)
 
-        f[device_env, N](a, b)
+        with ocldrv.igpu_context(0) as device_env:
+            f[N, dppy.DEFAULT_LOCAL_SIZE](a, b)
 
 
 if __name__ == '__main__':

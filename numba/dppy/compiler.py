@@ -8,6 +8,7 @@ from numba import types, compiler, ir
 from numba.typing.templates import AbstractTemplate
 from numba import ctypes_support as ctypes
 from types import FunctionType
+from inspect import signature
 
 import dppy.core as driver
 from . import spirv_generator
@@ -30,6 +31,21 @@ def _raise_invalid_kernel_enqueue_args():
                      "Usage: device_env, global size, local size. "
                      "The local size argument is optional.")
     raise ValueError(error_message)
+
+
+def get_ordered_arg_access_types(pyfunc, access_types):
+    # Construct a list of access type of each arg according to their position
+    ordered_arg_access_types = []
+    sig = signature(pyfunc, follow_wrapped=False)
+    for idx, arg_name in enumerate(sig.parameters):
+        if access_types:
+            for key in access_types:
+                if arg_name in access_types[key]:
+                    ordered_arg_access_types.append(key)
+        if len(ordered_arg_access_types) <= idx:
+            ordered_arg_access_types.append(None)
+
+    return ordered_arg_access_types
 
 class DPPyCompiler(CompilerBase):
     """ DPPy Compiler """
@@ -62,7 +78,8 @@ def compile_with_dppy(pyfunc, return_type, args, debug):
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
-    flags.set('nrt')
+    #flags.set('nrt')
+
     # Run compilation pipeline
     if isinstance(pyfunc, FunctionType):
         cres = compiler.compile_extra(typingctx=typingctx,
@@ -95,6 +112,9 @@ def compile_with_dppy(pyfunc, return_type, args, debug):
 def compile_kernel(device, pyfunc, args, access_types, debug=False):
     if DEBUG:
         print("compile_kernel", args)
+    if not device:
+        device = driver.runtime.get_current_device()
+
     cres = compile_with_dppy(pyfunc, None, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
@@ -241,7 +261,8 @@ def _ensure_valid_work_group_size(val, work_item_grid):
         val = [val]
 
     if len(val) != len(work_item_grid):
-        error_message = ("Unsupported number of work item dimensions ")
+        error_message = ("Unsupported number of work item dimensions, " +
+                         "dimensions of global and local work items has to be the same ")
         raise ValueError(error_message)
 
     return list(val)
@@ -283,19 +304,19 @@ class DPPyKernelBase(object):
     def __getitem__(self, args):
         """Mimick CUDA python's square-bracket notation for configuration.
         This assumes the argument to be:
-            `device_env, global size, local size`
+            `global size, local size`
         """
         ls = None
         nargs = len(args)
         # Check if the kernel enquing arguments are sane
-        if nargs < 2 or nargs > 3:
+        if nargs < 1 or nargs > 2:
             _raise_invalid_kernel_enqueue_args
 
-        device_env = args[0]
-        gs = _ensure_valid_work_item_grid(args[1], device_env)
+        device_env = driver.runtime.get_current_device()
+        gs = _ensure_valid_work_item_grid(args[0], device_env)
         # If the optional local size argument is provided
-        if nargs == 3:
-            ls = _ensure_valid_work_group_size(args[2], gs)
+        if nargs == 2 and args[1] != []:
+            ls = _ensure_valid_work_group_size(args[1], gs)
 
         return self.configure(device_env, gs, ls)
 
@@ -400,7 +421,7 @@ class DPPyKernel(DPPyKernelBase):
                 dArr = device_env.copy_array_to_device(val)
             elif self.valid_access_types[access_type] == _NUMBA_PVC_WRITE_ONLY:
                 # write_only case, we do not copy the host data
-                dArr = driver.DeviceArray(device_env.get_env_ptr(), val)
+                dArr = device_env.create_device_array(val)
 
             assert (dArr != None), "Problem in allocating device buffer"
             device_arrs[-1] = dArr
@@ -466,7 +487,7 @@ class JitDPPyKernel(DPPyKernelBase):
         assert not kwargs, "Keyword Arguments are not supported"
         if self.device_env is None:
             try:
-                self.device_env = driver.runtime.get_gpu_device()
+                self.device_env = driver.runtime.get_current_device()
             except:
                 _raise_no_device_found_error()
 
