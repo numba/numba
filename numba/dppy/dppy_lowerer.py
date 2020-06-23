@@ -423,8 +423,7 @@ def _create_gufunc_for_parfor_body(
 
 
     # Determine the unique names of the scheduling and gufunc functions.
-    gufunc_name = "__numba_parfor_gufunc_%s" % (
-        hex(hash(parfor)).replace("-", "_"))
+    gufunc_name = "__numba_parfor_gufunc_%s" % (parfor.id)
 
     if config.DEBUG_ARRAY_OPT:
         # print("sched_func_name ", type(sched_func_name), sched_func_name)
