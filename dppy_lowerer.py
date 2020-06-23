@@ -618,7 +618,7 @@ def _create_gufunc_for_parfor_body(
     # FIXME : We should not always use gpu device, instead select the default
     # device as configured in dppy.
     kernel_func = numba.dppy.compiler.compile_kernel_parfor(
-        driver.runtime.get_gpu_device(),
+        driver.runtime.get_current_device(),
         gufunc_ir,
         gufunc_param_types,
         param_types_addrspaces)
