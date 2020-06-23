@@ -188,7 +188,7 @@ vary with target operating system and hardware. The following lists them all
 
 * Build time environment variables:
   * ``NUMBA_NO_OPENMP``
-    Set this environment variable to ``1`` when building using ``setup.py``
+    Set this environment variable to ``1`` when building
     to disable compilation of the OpenMP threading backend.
     If enabled you need OpenMP C headers and runtime libraries compatible
     with the compiler toolchain mentioned above and accessible to the
@@ -203,11 +203,13 @@ vary with target operating system and hardware. The following lists them all
     DEFAULT: both undefined
     set the environment variable ``NUMBA_NO_TBB`` to ``1`` when building using
   * ``NUMBA_NO_TBB``
-    Set this environment variable to ``1`` when building using
-    ``setup.py`` to disable the compilation of the TBB threading backend.
+    Set this environment variable to ``1`` when building
+    to disable the compilation of the TBB threading backend.
     If not setting it to ``1`` you can also add the location where the
     TBB headers are going to be searched for, which is generally in ``/usr``,
-    as they are installed in ``/usr/include/tbb/tbb.h``.
+    as they are installed in ``/usr/include/tbb/tbb.h`` for linux, by setting 
+    ``TBBROOT=/usr`` or as required based on your platform: `Intel documentation
+    <https://software.intel.com/content/www/us/en/develop/documentation/advisor-user-guide/top/appendix/adding-parallelism-to-your-program/adding-the-parallel-framework-to-your-build-environment/defining-the-tbbroot-environment-variable.html>`_  
     If enabled ``tbb-devel`` is a requirement. It provides TBB headers/libraries
     for compiling TBB support into Numba's threading backend
 
