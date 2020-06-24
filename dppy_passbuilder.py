@@ -9,15 +9,15 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
                                   InlineInlinables, FindLiterallyCalls,
                                   MakeFunctionToJitFunction,
                                   CanonicalizeLoopExit, CanonicalizeLoopEntry,
-                                  ReconstructSSA,
                                   LiteralUnroll)
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                 NopythonRewrites, PreParforPass, ParforPass,
                                 DumpParforDiagnostics, IRLegalization,
-                                InlineOverloads, PreLowerStripPhis)
+                                InlineOverloads)
 
 from .dppy_passes import (
+        DPPyConstantSizeStaticLocalMemoryPass,
         DPPyPreParforPass,
         DPPyParforPass,
         SpirvFriendlyLowering,
@@ -41,6 +41,11 @@ class DPPyPassBuilder(object):
         pm.add_pass(IRProcessing, "processing IR")
         pm.add_pass(WithLifting, "Handle with contexts")
 
+        # Add pass to ensure when users are allocating static
+        # constant memory the size is a constant and can not
+        # come from a closure variable
+        pm.add_pass(DPPyConstantSizeStaticLocalMemoryPass, "dppy constant size for static local memory")
+
         # pre typing
         if not state.flags.no_rewrites:
             pm.add_pass(RewriteSemanticConstants, "rewrite semantic constants")
@@ -63,17 +68,15 @@ class DPPyPassBuilder(object):
         pm.add_pass(FindLiterallyCalls, "find literally calls")
         pm.add_pass(LiteralUnroll, "handles literal_unroll")
 
-        if state.flags.enable_ssa:
-            pm.add_pass(ReconstructSSA, "ssa")
         # typing
         pm.add_pass(NopythonTypeInference, "nopython frontend")
         pm.add_pass(AnnotateTypes, "annotate types")
 
-        # strip phis
-        pm.add_pass(PreLowerStripPhis, "remove phis nodes")
-
         # optimisation
         pm.add_pass(InlineOverloads, "inline overloaded functions")
+
+        # legalise
+        pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
 
 
     @staticmethod
@@ -87,13 +90,12 @@ class DPPyPassBuilder(object):
         pm.add_pass(DPPyPreParforPass, "Preprocessing for parfors")
         if not state.flags.no_rewrites:
             pm.add_pass(NopythonRewrites, "nopython rewrites")
-        pm.add_pass(DPPyParforPass, "dppy convert to parfors")
-
-        # legalise
-        pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
+        pm.add_pass(DPPyParforPass, "convert to parfors")
+        #pm.add_pass(InlineParforVectorize, "inline vectorize inside parfors ")
 
         # lower
         pm.add_pass(SpirvFriendlyLowering, "SPIRV-friendly lowering pass")
         pm.add_pass(DPPyNoPythonBackend, "nopython mode backend")
         pm.finalize()
         return pm
+>>>>>>> devel

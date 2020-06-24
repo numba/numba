@@ -8,6 +8,7 @@ from numba.core import types, compiler, ir
 from numba.core.typing.templates import AbstractTemplate
 import ctypes
 from types import FunctionType
+from inspect import signature
 
 import dppy.core as driver
 from . import spirv_generator
@@ -30,6 +31,21 @@ def _raise_invalid_kernel_enqueue_args():
                      "Usage: device_env, global size, local size. "
                      "The local size argument is optional.")
     raise ValueError(error_message)
+
+
+def get_ordered_arg_access_types(pyfunc, access_types):
+    # Construct a list of access type of each arg according to their position
+    ordered_arg_access_types = []
+    sig = signature(pyfunc, follow_wrapped=False)
+    for idx, arg_name in enumerate(sig.parameters):
+        if access_types:
+            for key in access_types:
+                if arg_name in access_types[key]:
+                    ordered_arg_access_types.append(key)
+        if len(ordered_arg_access_types) <= idx:
+            ordered_arg_access_types.append(None)
+
+    return ordered_arg_access_types
 
 class DPPyCompiler(CompilerBase):
     """ DPPy Compiler """
@@ -63,6 +79,7 @@ def compile_with_dppy(pyfunc, return_type, args, debug):
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
     flags.unset('nrt')
+
     # Run compilation pipeline
     if isinstance(pyfunc, FunctionType):
         cres = compiler.compile_extra(typingctx=typingctx,
@@ -95,6 +112,9 @@ def compile_with_dppy(pyfunc, return_type, args, debug):
 def compile_kernel(device, pyfunc, args, access_types, debug=False):
     if DEBUG:
         print("compile_kernel", args)
+    if not device:
+        device = driver.runtime.get_current_device()
+
     cres = compile_with_dppy(pyfunc, None, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
@@ -137,6 +157,83 @@ def compile_kernel_parfor(device, func_ir, args, args_with_addrspaces,
     return oclkern
 
 
+def compile_dppy_func(pyfunc, return_type, args, debug=False):
+    cres = compile_with_dppy(pyfunc, return_type, args, debug=debug)
+    func = cres.library.get_function(cres.fndesc.llvm_func_name)
+    cres.target_context.mark_ocl_device(func)
+    devfn = DPPYFunction(cres)
+
+    class dppy_function_template(ConcreteTemplate):
+        key = devfn
+        cases = [cres.signature]
+
+    cres.typing_context.insert_user_function(devfn, dppy_function_template)
+    libs = [cres.library]
+    cres.target_context.insert_user_function(devfn, cres.fndesc, libs)
+    return devfn
+
+
+# Compile dppy function template
+def compile_dppy_func_template(pyfunc):
+    """Compile a DPPYFunctionTemplate
+    """
+    from .descriptor import dppy_target
+
+    dft = DPPYFunctionTemplate(pyfunc)
+
+    class dppy_function_template(AbstractTemplate):
+        key = dft
+
+        def generic(self, args, kws):
+            assert not kws
+            return dft.compile(args)
+
+    typingctx = dppy_target.typing_context
+    typingctx.insert_user_function(dft, dppy_function_template)
+    return dft
+
+
+class DPPYFunctionTemplate(object):
+    """Unmaterialized dppy function
+    """
+    def __init__(self, pyfunc, debug=False):
+        self.py_func = pyfunc
+        self.debug = debug
+        # self.inline = inline
+        self._compileinfos = {}
+
+    def compile(self, args):
+        """Compile the function for the given argument types.
+
+        Each signature is compiled once by caching the compiled function inside
+        this object.
+        """
+        if args not in self._compileinfos:
+            cres = compile_with_dppy(self.py_func, None, args, debug=self.debug)
+            func = cres.library.get_function(cres.fndesc.llvm_func_name)
+            cres.target_context.mark_ocl_device(func)
+            first_definition = not self._compileinfos
+            self._compileinfos[args] = cres
+            libs = [cres.library]
+
+            if first_definition:
+                # First definition
+                cres.target_context.insert_user_function(self, cres.fndesc,
+                                                         libs)
+            else:
+                cres.target_context.add_user_function(self, cres.fndesc, libs)
+
+        else:
+            cres = self._compileinfos[args]
+
+        return cres.signature
+
+
+class DPPYFunction(object):
+    def __init__(self, cres):
+        self.cres = cres
+
+
 def _ensure_valid_work_item_grid(val, device_env):
 
     if not isinstance(val, (tuple, list, int)):
@@ -164,7 +261,8 @@ def _ensure_valid_work_group_size(val, work_item_grid):
         val = [val]
 
     if len(val) != len(work_item_grid):
-        error_message = ("Unsupported number of work item dimensions ")
+        error_message = ("Unsupported number of work item dimensions, " +
+                         "dimensions of global and local work items has to be the same ")
         raise ValueError(error_message)
 
     return list(val)
@@ -206,52 +304,21 @@ class DPPyKernelBase(object):
     def __getitem__(self, args):
         """Mimick CUDA python's square-bracket notation for configuration.
         This assumes the argument to be:
-            `device_env, global size, local size`
+            `global size, local size`
         """
         ls = None
         nargs = len(args)
         # Check if the kernel enquing arguments are sane
-        if nargs < 2 or nargs > 3:
+        if nargs < 1 or nargs > 2:
             _raise_invalid_kernel_enqueue_args
 
-        device_env = args[0]
-        gs = _ensure_valid_work_item_grid(args[1], device_env)
+        device_env = driver.runtime.get_current_device()
+        gs = _ensure_valid_work_item_grid(args[0], device_env)
         # If the optional local size argument is provided
-        if nargs == 3:
-            ls = _ensure_valid_work_group_size(args[2], gs)
+        if nargs == 2 and args[1] != []:
+            ls = _ensure_valid_work_group_size(args[1], gs)
 
         return self.configure(device_env, gs, ls)
-
-
-#_CacheEntry = namedtuple("_CachedEntry", ['symbol', 'executable',
-#                                          'kernarg_region'])
-
-
-# class _CachedProgram(object):
-#    def __init__(self, entry_name, binary):
-#        self._entry_name = entry_name
-#        self._binary = binary
-#        # key: ocl context
-#        self._cache = {}
-#
-#    def get(self, device):
-#        context = device.get_context()
-#        result = self._cache.get(context)
-#
-#        if result is not None:
-#            program = result[1]
-#            kernel = result[2]
-#        else:
-#            # First-time compilation
-#            spirv_bc = spirv.llvm_to_spirv(self._binary)
-#            program = context.create_program_from_il(spirv_bc)
-#            program.build()
-#            kernel = program.create_kernel(self._entry_name)
-#
-#            # Cache the just built cl_program, its cl_device and a cl_kernel
-#            self._cache[context] = (device, program, kernel)
-#
-#        return context, device, program, kernel
 
 
 class DPPyKernel(DPPyKernelBase):
@@ -268,24 +335,15 @@ class DPPyKernel(DPPyKernelBase):
         self.argument_types = tuple(argtypes)
         self.ordered_arg_access_types = ordered_arg_access_types
         self._argloc = []
-        # cached finalized program
-        # self._cacheprog = _CachedProgram(entry_name=self.entry_name,
-        #                                 binary=self.binary)
         # First-time compilation using SPIRV-Tools
         if DEBUG:
             with open("llvm_kernel.ll", "w") as f:
                 f.write(self.binary)
         self.spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
-        #print("DPPyKernel:", self.spirv_bc, type(self.spirv_bc))
         # create a program
         self.program = driver.Program(device_env, self.spirv_bc)
         #  create a kernel
         self.kernel = driver.Kernel(device_env, self.program, self.entry_name)
-    # def bind(self):
-    #    """
-    #    Bind kernel to device
-    #    """
-    #    return self._cacheprog.get(self.device)
 
     def __call__(self, *args):
 
@@ -348,10 +406,6 @@ class DPPyKernel(DPPyKernelBase):
         """
         Convert arguments to ctypes and append to kernelargs
         """
-        # DRD : Check if the val is of type driver.DeviceArray before checking
-        # if ty is of type ndarray. Argtypes returns ndarray for both
-        # DeviceArray and ndarray. This is a hack to get around the issue,
-        # till I understand the typing infrastructure of NUMBA better.
         device_arrs.append(None)
         if isinstance(val, driver.DeviceArray):
             self._unpack_device_array_argument(val, kernelargs)
@@ -367,7 +421,7 @@ class DPPyKernel(DPPyKernelBase):
                 dArr = device_env.copy_array_to_device(val)
             elif self.valid_access_types[access_type] == _NUMBA_PVC_WRITE_ONLY:
                 # write_only case, we do not copy the host data
-                dArr = driver.DeviceArray(device_env.get_env_ptr(), val)
+                dArr = device_env.create_device_array(val)
 
             assert (dArr != None), "Problem in allocating device buffer"
             device_arrs[-1] = dArr
@@ -422,10 +476,7 @@ class JitDPPyKernel(DPPyKernelBase):
         super(JitDPPyKernel, self).__init__()
 
         self.py_func = func
-        # DRD: Caching definitions this way can lead to unexpected consequences
-        # E.g. A kernel compiled for a given device would not get recompiled
-        # and lead to OpenCL runtime errors.
-        #self.definitions = {}
+        self.definitions = {}
         self.access_types = access_types
 
         from .descriptor import dppy_target
@@ -436,7 +487,7 @@ class JitDPPyKernel(DPPyKernelBase):
         assert not kwargs, "Keyword Arguments are not supported"
         if self.device_env is None:
             try:
-                self.device_env = driver.runtime.get_gpu_device()
+                self.device_env = driver.runtime.get_current_device()
             except:
                 _raise_no_device_found_error()
 
@@ -448,10 +499,10 @@ class JitDPPyKernel(DPPyKernelBase):
     def specialize(self, *args):
         argtypes = tuple([self.typingctx.resolve_argument_type(a)
                           for a in args])
-        kernel = None #self.definitions.get(argtypes)
-
+        key_definitions = (self.device_env._env_ptr, argtypes)
+        kernel = self.definitions.get(key_definitions)
         if kernel is None:
             kernel = compile_kernel(self.device_env, self.py_func, argtypes,
                                     self.access_types)
-            #self.definitions[argtypes] = kernel
+            self.definitions[key_definitions] = kernel
         return kernel

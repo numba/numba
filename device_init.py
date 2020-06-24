@@ -11,14 +11,18 @@ from .ocl.stubs import (
     get_num_groups,
     barrier,
     mem_fence,
-#    shared,
     sub_group_barrier,
     atomic,
+    local,
+    CLK_LOCAL_MEM_FENCE,
+    CLK_GLOBAL_MEM_FENCE,
 )
+
+DEFAULT_LOCAL_SIZE = []
 
 from . import initialize
 
-from .decorators import kernel, autojit
+from .decorators import kernel, func, autojit
 from dppy.core import runtime
 from . import target
 
