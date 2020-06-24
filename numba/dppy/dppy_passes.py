@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import warnings
 
-from numba import ir
+from numba.core import ir
 import weakref
 from collections import namedtuple, deque
 import operator
