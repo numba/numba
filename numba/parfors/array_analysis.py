@@ -2811,9 +2811,12 @@ class ArrayAnalysis(object):
                 arrs[0],
                 self._call_assert_equiv(scope, loc, equiv_set, arrs),
             )
-        return self._broadcast_assert_shapes(
-            scope, equiv_set, loc, shapes, names
-        )
+        if None not in shapes:
+            return self._broadcast_assert_shapes(
+                scope, equiv_set, loc, shapes, names
+            )
+        else:
+            return None, []
 
     def _broadcast_assert_shapes(self, scope, equiv_set, loc, shapes, names):
         """Produce assert_equiv for sizes in each dimension, taking into
