@@ -18,6 +18,15 @@ parser.add_argument('-l', type=int, default=1, help='local_work_size')
 
 args = parser.parse_args()
 
+# Global work size is equal to the number of points
+global_size = args.n
+# Local Work size is optional
+local_size = args.l
+
+X = np.random.random((args.n, args.d))
+D = np.empty((args.n, args.n))
+
+
 @dppy.kernel
 def pairwise_distance(X, D, xshape0, xshape1):
     idx = dppy.get_global_id(0)
@@ -31,28 +40,7 @@ def pairwise_distance(X, D, xshape0, xshape1):
         D[idx, j] = sqrt(d)
 
 
-def main():
-    # Global work size is equal to the number of points
-    global_size = args.n
-    # Local Work size is optional
-    local_size = args.l
-
-    X = np.random.random((args.n, args.d))
-    D = np.empty((args.n, args.n))
-
-    device_env = None
-    try:
-        device_env = ocldrv.runtime.get_gpu_device()
-        print("Selected GPU device")
-    except:
-        try:
-            device_env = ocldrv.runtime.get_cpu_device()
-            print("Selected CPU device")
-        except:
-            print("No OpenCL devices found on the system")
-            raise SystemExit()
-
-
+def driver(device_env):
     #measure running time
     times = list()
 
@@ -62,10 +50,7 @@ def main():
 
     for repeat in range(args.r):
         start = time()
-        if local_size == 1:
-            pairwise_distance[device_env, global_size](dX, dD, X.shape[0], X.shape[1])
-        else:
-            pairwise_distance[device_env, global_size, local_size](dX, dD, X.shape[0], X.shape[1])
+        pairwise_distance[global_size, local_size](dX, dD, X.shape[0], X.shape[1])
         end = time()
 
         total_time = end - start
@@ -73,6 +58,22 @@ def main():
 
     # Get the data back from device to host
     device_env.copy_array_from_device(dD)
+
+    return times
+
+
+def main():
+    times = None
+
+    if ocldrv.has_gpu_device:
+        with ocldrv.igpu_context(0) as device_env:
+            times = driver(device_env)
+    elif ocldrv.has_cpu_device:
+        with ocldrv.cpu_context(0) as device_env:
+            times = driver(device_env)
+    else:
+        print("No device found")
+        exit()
 
     times =  np.asarray(times, dtype=np.float32)
     print("Average time of %d runs is = %fs" % (args.r, times.mean()))
