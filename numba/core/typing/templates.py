@@ -2,6 +2,7 @@
 Define typing templates
 """
 
+from abc import ABC, abstractmethod
 import functools
 import sys
 import inspect
@@ -246,24 +247,7 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     return args
 
 
-class _Template(object):
-
-    def get_template_info(self):
-        """
-        Override to specialise the template information that will govern display
-        in error messages that appear to users"""
-        info = {
-            'kind': "unknown",
-            'name': "unknown",
-            'sig': "unknown",
-            'filename': "unknown",
-            'lines': ("unknown", "unknown"),
-            'docstring': "unknown"
-        }
-        return info
-
-
-class FunctionTemplate(_Template):
+class FunctionTemplate(ABC):
     # Set to true to disable unsafe cast.
     # subclass overide-able
     unsafe_casting = True
@@ -293,6 +277,24 @@ class FunctionTemplate(_Template):
             assert key.im_self is None
             key = key.im_func
         return key
+
+    @abstractmethod
+    def get_template_info(self):
+        """
+        Returns a dictionary with information specific to the template that will
+        govern how error messages are displayed to users. The dictionary must
+        be of the form:
+        info = {
+            'kind': "unknown", # str: The kind of template, e.g. "Overload"
+            'name': "unknown", # str: The name of the source function
+            'sig': "unknown",  # str: The signature(s) of the source function
+            'filename': "unknown", # str: The filename of the source function
+            'lines': ("start", "end"), # tuple(int, int): The start and
+                                         end line of the source function.
+            'docstring': "unknown" # str: The docstring of the source function
+        }
+        """
+        pass
 
 
 class AbstractTemplate(FunctionTemplate):
