@@ -5,6 +5,7 @@ Serialization support for compiled functions.
 
 from importlib.util import MAGIC_NUMBER as bc_magic
 
+import pickle
 import marshal
 import sys
 from types import FunctionType, ModuleType
@@ -110,3 +111,26 @@ def _rebuild_code(marshal_version, bytecode_magic, marshalled):
         raise RuntimeError("incompatible bytecode version")
     return marshal.loads(marshalled)
 
+
+# Keep unpickled object via `numba_unpickle` alive.
+_unpickled_memo = {}
+
+
+def _numba_unpickle(address, bytedata):
+    """Used by `numba_unpickle`.
+
+    Parameters
+    ----------
+    address : int
+    bytedata: bytes
+
+    Returns
+    -------
+    obj : object
+        unpickled object
+    """
+    try:
+        obj = _unpickled_memo[address]
+    except KeyError:
+        _unpickled_memo[address] = obj = pickle.loads(bytedata)
+    return obj

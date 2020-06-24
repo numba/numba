@@ -992,16 +992,16 @@ raise_error:
 NUMBA_EXPORT_FUNC(PyObject *)
 numba_unpickle(const char *data, int n)
 {
-    PyObject *buf, *obj;
+    PyObject *buf, *obj, *addr;
     static PyObject *loads;
 
     /* Caching the pickle.loads function shaves a couple µs here. */
     if (loads == NULL) {
         PyObject *picklemod;
-        picklemod = PyImport_ImportModule("pickle");
+        picklemod = PyImport_ImportModule("numba.core.serialize");
         if (picklemod == NULL)
             return NULL;
-        loads = PyObject_GetAttrString(picklemod, "loads");
+        loads = PyObject_GetAttrString(picklemod, "_numba_unpickle");
         Py_DECREF(picklemod);
         if (loads == NULL)
             return NULL;
@@ -1010,7 +1010,9 @@ numba_unpickle(const char *data, int n)
     buf = PyBytes_FromStringAndSize(data, n);
     if (buf == NULL)
         return NULL;
-    obj = PyObject_CallFunctionObjArgs(loads, buf, NULL);
+
+    addr = PyLong_FromVoidPtr(data);
+    obj = PyObject_CallFunctionObjArgs(loads, addr, buf, NULL);
     Py_DECREF(buf);
     return obj;
 }
