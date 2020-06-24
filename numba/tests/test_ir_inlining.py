@@ -6,7 +6,7 @@ LLVM or low level inlining.
 from itertools import product
 import numpy as np
 
-from numba import njit, typeof
+from numba import njit, typeof, literally
 from numba.core import types, ir, ir_utils, cgutils
 from numba.core.extending import (
     overload,
@@ -815,6 +815,48 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
                   if isinstance(getattr(x, 'value', None), ir.Const)]
         for val in consts:
             self.assertNotEqual(val.value, 1234)
+
+    def test_overload_inline_always_with_literally_in_inlinee(self):
+        # See issue #5887
+
+        def foo_ovld(dtype):
+
+            if not isinstance(dtype, types.StringLiteral):
+                def foo_noop(dtype):
+                    return literally(dtype)
+                return foo_noop
+
+            if dtype.literal_value == 'str':
+                def foo_as_str_impl(dtype):
+                    return 10
+                return foo_as_str_impl
+
+            if dtype.literal_value in ('int64', 'float64'):
+                def foo_as_num_impl(dtype):
+                    return 20
+                return foo_as_num_impl
+
+        # define foo for literal str 'str'
+        def foo(dtype):
+            return 10
+
+        overload(foo, inline='always')(foo_ovld)
+
+        def test_impl(dtype):
+            return foo(dtype)
+
+        # check literal dispatch on 'str'
+        dtype = 'str'
+        self.check(test_impl, dtype, inline_expect={'foo': True})
+
+        # redefine foo to be correct for literal str 'int64'
+        def foo(dtype):
+            return 20
+        overload(foo, inline='always')(foo_ovld)
+
+        # check literal dispatch on 'int64'
+        dtype = 'int64'
+        self.check(test_impl, dtype, inline_expect={'foo': True})
 
 
 class TestOverloadMethsAttrsInlining(InliningBase):
