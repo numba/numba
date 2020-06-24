@@ -1475,7 +1475,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 func_glbls = self.func_id.func.__globals__
                 if (nm not in func_glbls.keys() and
                         nm not in special.__all__ and
-                        nm not in __builtins__.keys()):
+                        nm not in __builtins__.keys() and
+                        nm not in self.func_id.code.co_freevars):
                     errstr = "NameError: name '%s' is not defined"
                     msg = _termcolor.errmsg(errstr % nm)
                     e.patch_message(msg)
