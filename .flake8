@@ -305,7 +305,6 @@ exclude =
     numba/tests/test_nested_calls.py
     numba/tests/test_chained_assign.py
     numba/tests/test_withlifting.py
-    numba/tests/test_errorhandling.py
     numba/tests/test_parfors.py
     numba/tests/test_sets.py
     numba/tests/test_dyn_array.py
