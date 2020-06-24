@@ -1,9 +1,11 @@
 from __future__ import print_function, absolute_import, division
 
+from functools import singledispatch
+
 import llvmlite.llvmpy.core as lc
 
-from numba import types, typing, cgutils, utils
-from numba.targets.imputils import Registry
+from numba.core import types, typing, cgutils
+from numba.core.imputils import Registry
 
 from .target import SPIR_GENERIC_ADDRSPACE
 
@@ -18,7 +20,7 @@ def declare_print(lmod):
     return printf
 
 
-@utils.singledispatch
+@singledispatch
 def print_item(ty, context, builder, val):
     """
     Handle printing of a single value of the given Numba type.

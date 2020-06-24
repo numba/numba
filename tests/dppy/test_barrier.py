@@ -2,7 +2,8 @@ from __future__ import print_function, division, absolute_import
 
 import numpy as np
 
-from numba import unittest_support as unittest
+from numba.dppy.testing import unittest
+from numba.dppy.testing import DPPYTestCase
 from numba import dppy, float32
 import dppy as ocldrv
 
