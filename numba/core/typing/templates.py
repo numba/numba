@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from types import MethodType, FunctionType
 
 import numba
-from numba.core import types, utils, errors
+from numba.core import types, utils
 from numba.core.errors import TypingError, InternalError
 from numba.core.cpu_options import InlineOptions
 
