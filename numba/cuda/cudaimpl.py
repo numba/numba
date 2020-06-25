@@ -688,8 +688,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 
     context.populate_array(ary,
                            data=builder.bitcast(dataptr, ary.data.type),
-                           shape=cgutils.pack_array(builder, kshape),
-                           strides=cgutils.pack_array(builder, kstrides),
+                           shape=kshape,
+                           strides=kstrides,
                            itemsize=context.get_constant(types.intp, itemsize),
                            meminfo=None)
     return ary._getvalue()
