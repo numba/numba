@@ -243,7 +243,7 @@ def hsail_smem_alloc_array(context, builder, sig, args):
 
 
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
-    elemcount = reduce(operator.mul, shape)
+    elemcount = reduce(operator.mul, shape, 1)
     lldtype = context.get_data_type(dtype)
     laryty = Type.array(lldtype, elemcount)
 

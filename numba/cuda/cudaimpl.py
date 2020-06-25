@@ -605,7 +605,7 @@ def _get_target_data(context):
 
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                    can_dynsized=False):
-    elemcount = reduce(operator.mul, shape)
+    elemcount = reduce(operator.mul, shape, 1)
 
     # Check for valid shape for this type of allocation
     dynamic_smem = elemcount <= 0 and can_dynsized
