@@ -37,7 +37,7 @@ import operator
 import warnings
 from ..errors import NumbaParallelSafetyWarning
 
-import dppy.core as driver
+import dppy.ocldrv as driver
 
 #multi_tile = True
 multi_tile = False

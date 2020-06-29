@@ -5,7 +5,7 @@ from __future__ import print_function, absolute_import, division
 
 from numba import config
 import numba.testing
-from dppy.core import *
+from dppy.ocldrv import *
 from .device_init import *
 
 def test(*args, **kwargs):

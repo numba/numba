@@ -47,7 +47,7 @@ from ..errors import NumbaParallelSafetyWarning
 from .target import SPIR_GENERIC_ADDRSPACE
 from .dufunc_inliner import dufunc_inliner
 from . import dppy_host_fn_call_gen as dppy_call_gen
-import dppy.core as driver
+import dppy.ocldrv as driver
 
 
 def _print_block(block):

@@ -16,7 +16,7 @@ from .typeof import typeof, Purpose
 from numba import utils
 from numba.six import Sequence
 
-import dppy.core as driver
+import dppy.ocldrv as driver
 
 
 class Rating(object):

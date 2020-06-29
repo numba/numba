@@ -3,7 +3,7 @@ import numpy as np
 from numba import dppy, int32
 import math
 
-import dppy as ocldrv
+import dppy.ocldrv as ocldrv
 
 
 def sum_reduction_device_plus_host():

@@ -8,7 +8,7 @@ from numba import dppy, njit, vectorize
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
 
-import dppy.core as ocldrv
+import dppy.ocldrv as ocldrv
 
 
 class TestVectorize(DPPYTestCase):

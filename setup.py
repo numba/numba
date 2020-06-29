@@ -215,6 +215,7 @@ def get_ext_modules():
         else:
             omplinkflags = ['-fopenmp']
 
+    tbb_root = None
     if tbb_root:
         print("Using Intel TBB from:", tbb_root)
         ext_npyufunc_tbb_workqueue = Extension(

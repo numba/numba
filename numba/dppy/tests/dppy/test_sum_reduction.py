@@ -7,7 +7,7 @@ import time
 from numba import dppy
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
-import dppy.core as ocldrv
+import dppy.ocldrv as ocldrv
 
 @dppy.kernel
 def reduction_kernel(A, R, stride):

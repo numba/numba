@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import unittest_support as unittest
 from numba import dppy, float32
-import dppy as ocldrv
+import dppy.ocldrv as ocldrv
 
 
 @unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
