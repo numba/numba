@@ -10,7 +10,7 @@ from numba import ctypes_support as ctypes
 from types import FunctionType
 from inspect import signature
 
-import dppy.core as driver
+import dppy.ocldrv as driver
 from . import spirv_generator
 
 import os

@@ -23,7 +23,7 @@ DEFAULT_LOCAL_SIZE = []
 from . import initialize
 
 from .decorators import kernel, func, autojit
-from dppy.core import runtime
+from dppy.ocldrv import runtime
 from . import target
 
 

@@ -6,7 +6,7 @@ import numba
 from numba import dppy
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
-import dppy as ocldrv
+import dppy.ocldrv as ocldrv
 
 
 def atomic_add(ary):

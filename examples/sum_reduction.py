@@ -5,7 +5,7 @@ import math
 import time
 
 from numba import dppy
-import dppy as ocldrv
+import dppy.ocldrv as ocldrv
 
 
 @dppy.kernel

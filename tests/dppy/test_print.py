@@ -8,7 +8,7 @@ from numba import dppy, njit, prange
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
 
-import dppy as ocldrv
+import dppy.ocldrv as ocldrv
 
 
 @unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')

@@ -7,7 +7,7 @@ from numba import dppy, njit
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
 
-import dppy.core as ocldrv
+import dppy.ocldrv as ocldrv
 
 class TestNumpy_floating_functions(DPPYTestCase):
     def test_isfinite(self):
