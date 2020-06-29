@@ -3,7 +3,8 @@ import threading
 import multiprocessing
 import numpy as np
 from numba import cuda
-from numba.cuda.testing import skip_on_cudasim, CUDATestCase
+from numba.cuda.testing import (skip_on_cudasim, skip_under_cuda_memcheck,
+                                CUDATestCase)
 import unittest
 
 try:
@@ -44,6 +45,7 @@ def spawn_process_entry(q):
         q.put(None)
 
 
+@skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @skip_on_cudasim('disabled for cudasim')
 class TestMultiThreadCompiling(CUDATestCase):
 

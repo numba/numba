@@ -154,6 +154,22 @@ skip_bad_access = unittest.skipUnless(_access_preventable, _access_msg)
 
 class TestDispatcher(BaseTest):
 
+    def test_equality(self):
+        @jit
+        def foo(x):
+            return x
+
+        @jit
+        def bar(x):
+            return x
+
+        # Written this way to verify `==` returns a bool (gh-5838). Using
+        # `assertTrue(foo == foo)` or `assertEqual(foo, foo)` would defeat the
+        # purpose of this test.
+        self.assertEqual(foo == foo, True)
+        self.assertEqual(foo == bar, False)
+        self.assertEqual(foo == None, False)  # noqa: E711
+
     def test_dyn_pyfunc(self):
         @jit
         def foo(x):
@@ -577,6 +593,27 @@ class TestDispatcher(BaseTest):
         self.assertEqual(len(jitfoo.signatures), 1)
         expected_sigs = [(types.complex128,)]
         self.assertEqual(jitfoo.signatures, expected_sigs)
+
+    def test_dispatcher_raises_for_invalid_decoration(self):
+        # For context see https://github.com/numba/numba/issues/4750.
+
+        @jit(nopython=True)
+        def foo(x):
+            return x
+
+        with self.assertRaises(TypeError) as raises:
+            jit(foo)
+        err_msg = str(raises.exception)
+        self.assertIn(
+            "A jit decorator was called on an already jitted function", err_msg)
+        self.assertIn("foo", err_msg)
+        self.assertIn(".py_func", err_msg)
+
+        with self.assertRaises(TypeError) as raises:
+            jit(BaseTest)
+        err_msg = str(raises.exception)
+        self.assertIn("The decorated object is not a function", err_msg)
+        self.assertIn(f"{type(BaseTest)}", err_msg)
 
 
 class TestSignatureHandling(BaseTest):

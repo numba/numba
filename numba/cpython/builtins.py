@@ -400,11 +400,16 @@ def bool_sequence(x):
         types.UnicodeType,
         types.Set,
     )
-    
+
     if isinstance(x, valid_types):
         def bool_impl(x):
             return len(x) > 0
         return bool_impl
+
+@overload(bool, inline='always')
+def bool_none(x):
+    if isinstance(x, types.NoneType) or x is None:
+        return lambda x: False
 
 # -----------------------------------------------------------------------------
 

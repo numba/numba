@@ -2188,6 +2188,24 @@ class TestPrange(TestPrangeBase):
                            check_fastmath=True, check_fastmath_result=True)
 
     @skip_parfors_unsupported
+    def test_prange27(self):
+        # issue5597: usedef error in parfor
+        def test_impl(a, b, c):
+            for j in range(b[0]-1):
+                for k in range(2):
+                    z = np.abs(a[c-1:c+1])
+            return 0
+
+        # patch inner loop to 'prange'
+        self.prange_tester(test_impl,
+                           np.arange(20),
+                           np.asarray([4,4,4,4,4,4,4,4,4,4]),
+                           0,
+                           patch_instance=[1],
+                           scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_parfors_unsupported
     def test_prange_two_instances_same_reduction_var(self):
         # issue4922 - multiple uses of same reduction variable
         def test_impl(n):
@@ -2495,6 +2513,28 @@ class TestPrange(TestPrangeBase):
         x = [np.array([1,2,3], dtype=int),np.array([1,2], dtype=int)]
         self.prange_tester(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_ssa_false_reduction(self):
+        # issue5698
+        # SSA for h creates assignments to h that make it look like a
+        # reduction variable except that it lacks an associated
+        # reduction operator.  Test here that h is excluded as a
+        # reduction variable.
+        def test_impl(image, a, b):
+            empty = np.zeros(image.shape)
+            for i in range(image.shape[0]):
+                r = image[i][0] / 255.0
+                if a == 0:
+                    h = 0
+                if b == 0:
+                    h = 0
+                empty[i] = [h, h, h]
+            return empty
+
+        image = np.zeros((3, 3), dtype=np.int32)
+        self.prange_tester(test_impl, image, 0, 0)
+
+
 @skip_parfors_unsupported
 @x86_only
 class TestParforsVectorizer(TestPrangeBase):
@@ -2507,9 +2547,12 @@ class TestParforsVectorizer(TestPrangeBase):
         fastmath = kwargs.pop('fastmath', False)
         cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
         assertions = kwargs.pop('assertions', True)
+        # force LLVM to use zmm registers for vectorization
+        # https://reviews.llvm.org/D67259
+        cpu_features = kwargs.pop('cpu_features', '-prefer-256-bit')
 
         env_opts = {'NUMBA_CPU_NAME': cpu_name,
-                    'NUMBA_CPU_FEATURES': '',
+                    'NUMBA_CPU_FEATURES': cpu_features,
                     }
 
         overrides = []
@@ -2983,6 +3026,25 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.arange(4))
 
+    @skip_parfors_unsupported
+    def test_parfor_slice27(self):
+        # issue5601: tests array analysis of the slice with
+        # n_valid_vals of unknown size.
+        def test_impl(a):
+            n_valid_vals = 0
+
+            for i in prange(a.shape[0]):
+                if a[i] != 0:
+                    n_valid_vals += 1
+
+                if n_valid_vals:
+                    unused = a[:n_valid_vals]
+
+            return 0
+
+        self.check(test_impl, np.arange(3))
+
+
 class TestParforsOptions(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
@@ -3427,6 +3489,26 @@ class TestParforsMisc(TestParforsBase):
         arr = np.zeros(size, dtype=int)
 
         self.check(parallel_test, size, arr)
+
+    @skip_parfors_unsupported
+    def test_issue5570_ssa_races(self):
+        @njit(parallel=True)
+        def foo(src, method, out):
+            for i in prange(1):
+                for j in range(1):
+                    out[i, j] = 1
+            if method:
+                out += 1
+            return out
+
+        src = np.zeros((5,5))
+        method = 57
+        out = np.zeros((2, 2))
+
+        self.assertPreciseEqual(
+            foo(src, method, out),
+            foo.py_func(src, method, out)
+        )
 
 
 @skip_parfors_unsupported
