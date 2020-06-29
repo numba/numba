@@ -1998,7 +1998,7 @@ class TestMultiprocessingDefaultParameters(SerialMixin, unittest.TestCase):
 
         @njit
         def mult(x, y):
-            return x*y
+            return x * y
 
         @njit
         def add(x, func=mult):
