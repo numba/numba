@@ -735,6 +735,13 @@ def is_const_call(module_name, func_name):
 alias_analysis_extensions = {}
 alias_func_extensions = {}
 
+def get_canonical_alias(v, alias_map):
+    if v not in alias_map:
+        return v
+
+    v_aliases = sorted(list(alias_map[v]))
+    return v_aliases[0]
+
 def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                                                             arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
