@@ -1969,7 +1969,7 @@ class TestNoRetryFailedSignature(unittest.TestCase):
 class TestMultiprocessingDefaultParameters(SerialMixin, unittest.TestCase):
     def run_fc_multiproc(self, fc):
         try:
-            ctx = multiprocessing.get_context('fork')
+            ctx = multiprocessing.get_context('spawn')
         except AttributeError:
             ctx = multiprocessing
         with ctx.Pool(1) as p:
