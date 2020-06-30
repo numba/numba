@@ -121,6 +121,14 @@ class FakeCUDAAtomic(object):
             array[index] = min(old, val)
         return old
 
+    def nanmax(self, array, index, val):
+        with maxlock:
+            array[index] = np.nanmax([array[index], val])
+
+    def nanmin(self, array, index, val):
+        with maxlock:
+            array[index] = np.nanmin([array[index], val])
+
     def compare_and_swap(self, array, old, val):
         with caslock:
             index = (0,) * array.ndim
