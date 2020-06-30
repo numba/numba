@@ -400,7 +400,7 @@ done:
 
 
 ir_numba_atomic_max = """
-define internal {T} @___numba_atomic_{T}_max({T}* %ptr, {T} %val) alwaysinline {{
+define internal {T} @___numba_atomic_{T}_{NAN}max({T}* %ptr, {T} %val) alwaysinline {{
 entry:
     %ptrval = load volatile {T}, {T}* %ptr
     ; Check if either value is a NaN and return *ptr early if so
@@ -431,7 +431,7 @@ done:
 
 
 ir_numba_atomic_min = """
-define internal {T} @___numba_atomic_{T}_min({T}* %ptr, {T} %val) alwaysinline{{
+define internal {T} @___numba_atomic_{T}_{NAN}min({T}* %ptr, {T} %val) alwaysinline{{
 entry:
     %ptrval = load volatile {T}, {T}* %ptr
     ; Check if either value is a NaN and return *ptr early if so
@@ -495,28 +495,28 @@ def llvm_to_ptx(llvmir, **opts):
         ('declare double @___numba_atomic_double_add(double*, double)',
          ir_numba_atomic_double_add),
         ('declare float @___numba_atomic_float_max(float*, float)',
-         ir_numba_atomic_max.format(T='float', Ti='i32', OP='nnan olt',
+         ir_numba_atomic_max.format(T='float', Ti='i32', NAN='', OP='nnan olt',
                                     PTR_OR_VAL='ptr')),
         ('declare double @___numba_atomic_double_max(double*, double)',
-         ir_numba_atomic_max.format(T='double', Ti='i64', OP='nnan olt',
+         ir_numba_atomic_max.format(T='double', Ti='i64', NAN='', OP='nnan olt',
                                     PTR_OR_VAL='ptr')),
         ('declare float @___numba_atomic_float_min(float*, float)',
-         ir_numba_atomic_min.format(T='float', Ti='i32', OP='nnan ogt',
+         ir_numba_atomic_min.format(T='float', Ti='i32', NAN='', OP='nnan ogt',
                                     PTR_OR_VAL='ptr')),
         ('declare double @___numba_atomic_double_min(double*, double)',
-         ir_numba_atomic_min.format(T='double', Ti='i64', OP='nnan ogt',
+         ir_numba_atomic_min.format(T='double', Ti='i64', NAN='', OP='nnan ogt',
                                     PTR_OR_VAL='ptr')),
         ('declare float @___numba_atomic_float_nanmax(float*, float)',
-         ir_numba_atomic_max.format(T='float', Ti='i32', OP='ult',
+         ir_numba_atomic_max.format(T='float', Ti='i32', NAN='nan', OP='ult',
                                     PTR_OR_VAL='ptr')),
         ('declare double @___numba_atomic_double_nanmax(double*, double)',
-         ir_numba_atomic_max.format(T='double', Ti='i64', OP='ult',
+         ir_numba_atomic_max.format(T='double', Ti='i64', NAN='nan', OP='ult',
                                     PTR_OR_VAL='ptr')),
         ('declare float @___numba_atomic_float_nanmin(float*, float)',
-         ir_numba_atomic_min.format(T='float', Ti='i32', OP='ugt',
+         ir_numba_atomic_min.format(T='float', Ti='i32', NAN='nan', OP='ugt',
                                     PTR_OR_VAL='ptr')),
         ('declare double @___numba_atomic_double_nanmin(double*, double)',
-         ir_numba_atomic_min.format(T='double', Ti='i64', OP='ugt',
+         ir_numba_atomic_min.format(T='double', Ti='i64', NAN='nan', OP='ugt',
                                     PTR_OR_VAL='ptr')),
         ('immarg', '')
     ]

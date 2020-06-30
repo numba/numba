@@ -602,7 +602,7 @@ def ptx_atomic_nanmax(context, builder, dtype, ptr, val):
 @lower(stubs.atomic.nanmin, types.Array, types.Tuple, types.Any)
 @lower(stubs.atomic.nanmin, types.Array, types.UniTuple, types.Any)
 @_atomic_dispatcher
-def ptx_atomic_min(context, builder, dtype, ptr, val):
+def ptx_atomic_nanmin(context, builder, dtype, ptr, val):
     lmod = builder.module
     if dtype == types.float64:
         return builder.call(nvvmutils.declare_atomic_nanmin_float64(lmod),
