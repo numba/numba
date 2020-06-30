@@ -151,8 +151,8 @@ class DUFunc(_internal._DUFunc):
         Disable the compilation of new signatures at call time.
         """
         # If disabling compilation then there must be at least one signature
-        assert len(self._dispatcher.overloads) > 0
-        self._frozen = True
+        # assert len(self._dispatcher.overloads) > 0
+        # self._frozen = True
 
     def add(self, sig):
         """

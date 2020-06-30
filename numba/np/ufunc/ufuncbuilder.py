@@ -9,6 +9,7 @@ from numba.core.options import TargetOptions
 from numba.core.registry import dispatcher_registry, cpu_target
 from numba.core.cpu import FastMathOptions
 from numba.core import utils, types, serialize, compiler, sigutils
+from numba import typeof
 from numba.np.numpy_support import as_dtype
 from numba.np.ufunc import _internal
 from numba.np.ufunc.sigparse import parse_signature
@@ -299,6 +300,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         self.cache = cache
         self._sigs = []
         self._cres = {}
+        self._ufunc = None
 
     def _finalize_signature(self, cres, args, return_type):
         if not cres.objectmode and cres.signature.return_type != types.void:
@@ -336,7 +338,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
             ptrlist, dtypelist, inct, outct, datlist,
             keepalive, self.identity, self.signature,
         )
-        return ufunc
+        self._ufunc = ufunc
 
     def build(self, cres):
         """
@@ -360,3 +362,12 @@ class GUFuncBuilder(_BaseUFuncBuilder):
                 ty = a
             dtypenums.append(as_dtype(ty).num)
         return dtypenums, ptr, env
+
+    def __call__(self, *args, **kwargs):
+        sig = types.none(*[typeof(arg) for arg in args])
+        try:
+            return self._ufunc(*args, **kwargs)
+        except:
+            self.add(sig)
+            self.build_ufunc()
+            return self._ufunc(*args, **kwargs)

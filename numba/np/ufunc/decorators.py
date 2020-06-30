@@ -118,14 +118,14 @@ def vectorize(ftylist_or_function=(), **kws):
         vec = Vectorize(func, **kws)
         for sig in ftylist:
             vec.add(sig)
-        if len(ftylist) > 0:
-            vec.disable_compile()
+        # if len(ftylist) > 0:
+        #     vec.disable_compile()
         return vec.build_ufunc()
 
     return wrap
 
 
-def guvectorize(ftylist, signature, **kws):
+def guvectorize(*args, **kwargs):
     """guvectorize(ftylist, signature, target='cpu', identity=None, **kws)
 
     A decorator to create numpy generialized-ufunc object from Numba compiled
@@ -169,6 +169,16 @@ def guvectorize(ftylist, signature, **kws):
                     c[i, j] = a[i, j] + b[i, j]
 
     """
+    if len(args) == 1:
+        ftylist = []
+        signature = args[0]
+    elif len(args) == 2:
+        ftylist = args[0]
+        signature = args[1]
+    else:
+        raise TypeError('guvectorize() takes one or two positional arguments')
+
+
     if isinstance(ftylist, str):
         # Common user mistake
         ftylist = [ftylist]
@@ -177,6 +187,8 @@ def guvectorize(ftylist, signature, **kws):
         guvec = GUVectorize(func, signature, **kws)
         for fty in ftylist:
             guvec.add(fty)
-        return guvec.build_ufunc()
+        guvec.build_ufunc()
+        return guvec
+        # return guvec.build_ufunc()
 
     return wrap
