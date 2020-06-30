@@ -1515,12 +1515,13 @@ class ArrayAnalysis(object):
             )
             if (canonical_value, expr.attr) in self.object_attrs:
                 return ArrayAnalysis.AnalyzeResult(
-                         shape=self.object_attrs[(canonical_value, expr.attr)])
+                    shape=self.object_attrs[(canonical_value, expr.attr)]
+                )
             else:
                 typ = self.typemap[lhs.name]
                 post = []
                 shape = self._gen_shape_call(
-                     equiv_set, lhs, typ.ndim, None, post
+                    equiv_set, lhs, typ.ndim, None, post
                 )
                 self.object_attrs[(canonical_value, expr.attr)] = shape
                 return ArrayAnalysis.AnalyzeResult(shape=shape, post=post)
