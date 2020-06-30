@@ -1106,11 +1106,11 @@ class ArrayAnalysis(object):
             init_equiv_set = equiv_set
 
         self.alias_map, self.arg_aliases = find_potential_aliases(
-                                               blocks,
-                                               self.func_ir.arg_names,
-                                               self.typemap,
-                                               self.func_ir
-                                           )
+            blocks,
+            self.func_ir.arg_names,
+            self.typemap,
+            self.func_ir
+        )
 
         aa_count_save = ArrayAnalysis.aa_count
         ArrayAnalysis.aa_count += 1
@@ -1511,8 +1511,8 @@ class ArrayAnalysis(object):
             return ArrayAnalysis.AnalyzeResult(shape=shape)
         elif self._isarray(lhs.name):
             canonical_value = get_canonical_alias(
-                                  expr.value.name, self.alias_map
-                              )
+                expr.value.name, self.alias_map
+            )
             if (canonical_value, expr.attr) in self.object_attrs:
                 return ArrayAnalysis.AnalyzeResult(
                          shape=self.object_attrs[(canonical_value, expr.attr)])
@@ -1520,8 +1520,8 @@ class ArrayAnalysis(object):
                 typ = self.typemap[lhs.name]
                 post = []
                 shape = self._gen_shape_call(
-                            equiv_set, lhs, typ.ndim, None, post
-                        )
+                     equiv_set, lhs, typ.ndim, None, post
+                )
                 self.object_attrs[(canonical_value, expr.attr)] = shape
                 return ArrayAnalysis.AnalyzeResult(shape=shape, post=post)
 
@@ -2112,9 +2112,9 @@ class ArrayAnalysis(object):
         else:
             out = tuple([ir.Const(x, expr.loc) for x in consts])
             return ArrayAnalysis.AnalyzeResult(
-                       shape=out,
-                       rhs=ir.Const(tuple(consts), expr.loc)
-                   )
+                shape=out,
+                rhs=ir.Const(tuple(consts), expr.loc)
+            )
         # default return for non-const
         return ArrayAnalysis.AnalyzeResult(shape=tuple(expr.items))
 
@@ -2223,8 +2223,8 @@ class ArrayAnalysis(object):
             # equivalence class ids so return a WrapIndexMeta so that
             # _analyze_inst can establish the connection to the lhs var.
             return ArrayAnalysis.AnalyzeResult(
-                       shape=WrapIndexMeta(slice_eq, dim_eq)
-                   )
+                shape=WrapIndexMeta(slice_eq, dim_eq)
+            )
 
     def _analyze_numpy_create_array(self, scope, equiv_set, loc, args, kws):
         shape_var = None
@@ -2681,9 +2681,9 @@ class ArrayAnalysis(object):
                     size = sizes[0]
                 new_shape.append(size)
         return ArrayAnalysis.AnalyzeResult(
-                   shape=tuple(new_shape),
-                   pre=sum(asserts, [])
-               )
+            shape=tuple(new_shape),
+            pre=sum(asserts, [])
+        )
 
     def _analyze_op_call_numpy_stack(self, scope, equiv_set, loc, args, kws):
         assert len(args) > 0
@@ -2804,25 +2804,25 @@ class ArrayAnalysis(object):
                 scope, loc, equiv_set, [shapes[0][0], shapes[1][-2]]
             )
             return ArrayAnalysis.AnalyzeResult(
-                       shape=tuple(shapes[1][0:-2] + shapes[1][-1:]),
-                       pre=asserts
-                   )
+                shape=tuple(shapes[1][0:-2] + shapes[1][-1:]),
+                pre=asserts
+            )
         if dims[1] == 1:
             asserts = self._call_assert_equiv(
                 scope, loc, equiv_set, [shapes[0][-1], shapes[1][0]]
             )
             return ArrayAnalysis.AnalyzeResult(
-                       shape=tuple(shapes[0][0:-1]),
-                       pre=asserts
-                   )
+                shape=tuple(shapes[0][0:-1]),
+                pre=asserts
+            )
         if dims[0] == 2 and dims[1] == 2:
             asserts = self._call_assert_equiv(
                 scope, loc, equiv_set, [shapes[0][1], shapes[1][0]]
             )
             return ArrayAnalysis.AnalyzeResult(
-                       shape=(shapes[0][0], shapes[1][1]),
-                       pre=asserts
-                   )
+                shape=(shapes[0][0], shapes[1][1]),
+                pre=asserts
+            )
         if dims[0] > 2:  # TODO: handle higher dimension cases
             pass
         return None
@@ -2869,9 +2869,9 @@ class ArrayAnalysis(object):
             shapes = [equiv_set.get_shape(x) for x in arrs]
         except errors.GuardException:
             return ArrayAnalysis.AnalyzeResult(
-                       shape=arrs[0],
-                       pre=self._call_assert_equiv(scope, loc, equiv_set, arrs)
-                   )
+                shape=arrs[0],
+                pre=self._call_assert_equiv(scope, loc, equiv_set, arrs)
+            )
         return self._broadcast_assert_shapes(
             scope, equiv_set, loc, shapes, names
         )
@@ -2907,9 +2907,9 @@ class ArrayAnalysis(object):
             )
             new_shape.append(sizes[0])
         return ArrayAnalysis.AnalyzeResult(
-                   shape=tuple(reversed(new_shape)),
-                   pre=sum(asserts, [])
-               )
+            shape=tuple(reversed(new_shape)),
+            pre=sum(asserts, [])
+        )
 
     def _call_assert_equiv(self, scope, loc, equiv_set, args, names=None):
         insts = self._make_assert_equiv(
