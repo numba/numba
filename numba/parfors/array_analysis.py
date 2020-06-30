@@ -93,20 +93,9 @@ def wrap_index(typingctx, idx, size):
     require(isinstance(idx, types.scalars.Integer))
     require(isinstance(size, types.scalars.Integer))
 
-    # We need both idx and size to be the same size so that we can compare.
-    # Compute that size by taking the max of idx and size bitwidths.
-    unified_bitwidth = max(idx.bitwidth, size.bitwidth)
-
-    # Create the unified types to extend to while maintaining signedness
-    # of the originals.
-    unified_ty = types.scalars.Integer(
-        "%sint%d" % ("" if size.signed else "u", unified_bitwidth),
-        bitwidth=unified_bitwidth,
-        signed=size.signed)
-    idx_unified = types.scalars.Integer(
-        "%sint%d" % ("" if idx.signed else "u", unified_bitwidth),
-        bitwidth=unified_bitwidth,
-        signed=idx.signed)
+    # We need both idx and size to be platform size so that we can compare.
+    unified_ty = types.intp if size.signed else types.uintp
+    idx_unified = types.intp if idx.signed else types.uintp
 
     def codegen(context, builder, sig, args):
         ll_idx_unified_ty = context.get_data_type(idx_unified)
