@@ -17,9 +17,9 @@ import os
 from numba.compiler import DefaultPassBuilder, CompilerBase
 
 DEBUG=os.environ.get('NUMBA_DPPY_DEBUG', None)
-_NUMBA_PVC_READ_ONLY  = "read_only"
-_NUMBA_PVC_WRITE_ONLY = "write_only"
-_NUMBA_PVC_READ_WRITE = "read_write"
+_NUMBA_DPPY_READ_ONLY  = "read_only"
+_NUMBA_DPPY_WRITE_ONLY = "write_only"
+_NUMBA_DPPY_READ_WRITE = "read_write"
 
 def _raise_no_device_found_error():
     error_message = ("No OpenCL device specified. "
@@ -279,9 +279,9 @@ class DPPyKernelBase(object):
 
         # list of supported access types, stored in dict for fast lookup
         self.valid_access_types = {
-                _NUMBA_PVC_READ_ONLY: _NUMBA_PVC_READ_ONLY,
-                _NUMBA_PVC_WRITE_ONLY: _NUMBA_PVC_WRITE_ONLY,
-                _NUMBA_PVC_READ_WRITE: _NUMBA_PVC_READ_WRITE}
+                _NUMBA_DPPY_READ_ONLY: _NUMBA_DPPY_READ_ONLY,
+                _NUMBA_DPPY_WRITE_ONLY: _NUMBA_DPPY_WRITE_ONLY,
+                _NUMBA_DPPY_READ_WRITE: _NUMBA_DPPY_READ_WRITE}
 
     def copy(self):
         return copy.copy(self)
@@ -372,7 +372,7 @@ class DPPyKernel(DPPyKernelBase):
         """
         if (device_arr and (access_type not in self.valid_access_types or
             access_type in self.valid_access_types and
-            self.valid_access_types[access_type] != _NUMBA_PVC_READ_ONLY)):
+            self.valid_access_types[access_type] != _NUMBA_DPPY_READ_ONLY)):
             # we get the date back to host if have created a
             # device_array or if access_type of this device_array
             # is not of type read_only and read_write
@@ -415,11 +415,11 @@ class DPPyKernel(DPPyKernelBase):
             dArr = None
 
             if (default_behavior or
-                self.valid_access_types[access_type] == _NUMBA_PVC_READ_ONLY or
-                self.valid_access_types[access_type] == _NUMBA_PVC_READ_WRITE):
+                self.valid_access_types[access_type] == _NUMBA_DPPY_READ_ONLY or
+                self.valid_access_types[access_type] == _NUMBA_DPPY_READ_WRITE):
                 # default, read_only and read_write case
                 dArr = device_env.copy_array_to_device(val)
-            elif self.valid_access_types[access_type] == _NUMBA_PVC_WRITE_ONLY:
+            elif self.valid_access_types[access_type] == _NUMBA_DPPY_WRITE_ONLY:
                 # write_only case, we do not copy the host data
                 dArr = device_env.create_device_array(val)
 
