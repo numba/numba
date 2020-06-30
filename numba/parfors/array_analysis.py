@@ -1105,10 +1105,12 @@ class ArrayAnalysis(object):
         else:
             init_equiv_set = equiv_set
 
-        self.alias_map, self.arg_aliases = find_potential_aliases(blocks,
+        self.alias_map, self.arg_aliases = find_potential_aliases(
+                                               blocks,
                                                self.func_ir.arg_names,
                                                self.typemap,
-                                               self.func_ir)
+                                               self.func_ir
+                                           )
 
         aa_count_save = ArrayAnalysis.aa_count
         ArrayAnalysis.aa_count += 1
@@ -1277,6 +1279,12 @@ class ArrayAnalysis(object):
                         inst.value = result.kwargs['rhs']
             elif isinstance(inst.value, (ir.Var, ir.Const)):
                 shape = inst.value
+            elif isinstance(inst.value, ir.Global):
+                gvalue = inst.value.value
+                if isinstance(gvalue, tuple):
+                    shape = gvalue
+                elif isinstance(gvalue, int):
+                    shape = (gvalue,)
 
             if isinstance(shape, ir.Const):
                 if isinstance(shape.value, tuple):
@@ -1502,14 +1510,18 @@ class ArrayAnalysis(object):
             shape = equiv_set.get_shape(expr.value)
             return ArrayAnalysis.AnalyzeResult(shape=shape)
         elif self._isarray(lhs.name):
-            canonical_value = get_canonical_alias(expr.value.name, self.alias_map)
+            canonical_value = get_canonical_alias(
+                                  expr.value.name, self.alias_map
+                              )
             if (canonical_value, expr.attr) in self.object_attrs:
                 return ArrayAnalysis.AnalyzeResult(
                          shape=self.object_attrs[(canonical_value, expr.attr)])
             else:
                 typ = self.typemap[lhs.name]
                 post = []
-                shape = self._gen_shape_call(equiv_set, lhs, typ.ndim, None, post)
+                shape = self._gen_shape_call(
+                            equiv_set, lhs, typ.ndim, None, post
+                        )
                 self.object_attrs[(canonical_value, expr.attr)] = shape
                 return ArrayAnalysis.AnalyzeResult(shape=shape, post=post)
 
