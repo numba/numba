@@ -578,6 +578,46 @@ def ptx_atomic_min(context, builder, dtype, ptr, val):
         raise TypeError('Unimplemented atomic min with %s array' % dtype)
 
 
+@lower(stubs.atomic.nanmax, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.nanmax, types.Array, types.Tuple, types.Any)
+@lower(stubs.atomic.nanmax, types.Array, types.UniTuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_nanmax(context, builder, dtype, ptr, val):
+    lmod = builder.module
+    if dtype == types.float64:
+        return builder.call(nvvmutils.declare_atomic_nanmax_float64(lmod),
+                            (ptr, val))
+    elif dtype == types.float32:
+        return builder.call(nvvmutils.declare_atomic_nanmax_float32(lmod),
+                            (ptr, val))
+    elif dtype in (types.int32, types.int64):
+        return builder.atomic_rmw('max', ptr, val, ordering='monotonic')
+    elif dtype in (types.uint32, types.uint64):
+        return builder.atomic_rmw('umax', ptr, val, ordering='monotonic')
+    else:
+        raise TypeError('Unimplemented atomic max with %s array' % dtype)
+
+
+@lower(stubs.atomic.nanmin, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.nanmin, types.Array, types.Tuple, types.Any)
+@lower(stubs.atomic.nanmin, types.Array, types.UniTuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_min(context, builder, dtype, ptr, val):
+    lmod = builder.module
+    if dtype == types.float64:
+        return builder.call(nvvmutils.declare_atomic_nanmin_float64(lmod),
+                            (ptr, val))
+    elif dtype == types.float32:
+        return builder.call(nvvmutils.declare_atomic_nanmin_float32(lmod),
+                            (ptr, val))
+    elif dtype in (types.int32, types.int64):
+        return builder.atomic_rmw('min', ptr, val, ordering='monotonic')
+    elif dtype in (types.uint32, types.uint64):
+        return builder.atomic_rmw('umin', ptr, val, ordering='monotonic')
+    else:
+        raise TypeError('Unimplemented atomic min with %s array' % dtype)
+
+
 @lower(stubs.atomic.compare_and_swap, types.Array, types.Any, types.Any)
 def ptx_atomic_cas_tuple(context, builder, sig, args):
     aryty, oldty, valty = sig.args
