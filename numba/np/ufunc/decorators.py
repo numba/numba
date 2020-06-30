@@ -1,11 +1,11 @@
 import inspect
 
 from numba.np.ufunc import _internal
-from numba.np.ufunc.ufuncbuilder import GUFuncBuilder
 from numba.np.ufunc.parallel import ParallelUFuncBuilder, ParallelGUFuncBuilder
 
 from numba.core.registry import TargetRegistry
 from numba.np.ufunc import dufunc
+from numba.np.ufunc import gufunc
 
 
 class _BaseVectorize(object):
@@ -39,7 +39,7 @@ class Vectorize(_BaseVectorize):
 
 
 class GUVectorize(_BaseVectorize):
-    target_registry = TargetRegistry({'cpu': GUFuncBuilder,
+    target_registry = TargetRegistry({'cpu': gufunc.GUFunc,
                                       'parallel': ParallelGUFuncBuilder,})
 
     def __new__(cls, func, signature, **kws):
@@ -125,7 +125,7 @@ def vectorize(ftylist_or_function=(), **kws):
     return wrap
 
 
-def guvectorize(ftylist, signature, **kws):
+def guvectorize(*args, **kwargs):
     """guvectorize(ftylist, signature, target='cpu', identity=None, **kws)
 
     A decorator to create numpy generialized-ufunc object from Numba compiled
@@ -169,14 +169,25 @@ def guvectorize(ftylist, signature, **kws):
                     c[i, j] = a[i, j] + b[i, j]
 
     """
+    if len(args) == 1:
+        ftylist = []
+        signature = args[0]
+    elif len(args) == 2:
+        ftylist = args[0]
+        signature = args[1]
+    else:
+        raise TypeError('guvectorize() takes one or two positional arguments')
+
     if isinstance(ftylist, str):
         # Common user mistake
         ftylist = [ftylist]
 
     def wrap(func):
-        guvec = GUVectorize(func, signature, **kws)
+        guvec = GUVectorize(func, signature, **kwargs)
         for fty in ftylist:
             guvec.add(fty)
+        if len(ftylist) > 0:
+            guvec.disable_compile()
         return guvec.build_ufunc()
 
     return wrap
