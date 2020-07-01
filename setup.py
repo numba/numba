@@ -238,9 +238,8 @@ def get_ext_modules():
     else:
         print("TBB not found")
 
-    # Disable OpenMP if we are building a wheel or
-    # forced by user with NUMBA_NO_OPENMP=1
-    if is_building_wheel() or os.getenv('NUMBA_NO_OPENMP'):
+    # Disable OpenMP if forced by user with NUMBA_NO_OPENMP=1
+    if os.getenv('NUMBA_NO_OPENMP'):
         print("OpenMP disabled")
     elif have_openmp:
         print("Using OpenMP from:", have_openmp)
