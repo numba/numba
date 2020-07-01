@@ -1283,3 +1283,7 @@ def cast_LiteralStrKeyDict_LiteralStrKeyDict(context, builder, fromty, toty,
     else:
         return val
 
+@lower_cast(types.DictType, types.DictType)
+def cast_DictType_DictType(context, builder, fromty, toty, val):
+    # should have been picked up by typing
+    return val
