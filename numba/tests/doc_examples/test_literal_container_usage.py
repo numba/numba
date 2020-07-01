@@ -68,6 +68,8 @@ class DocsLiteralContainerUsageTest(unittest.TestCase):
             @overload(specialize)
             def ol_specialize(x):
                 iv = x.initial_value
+                if iv is None:
+                    return lambda x: literally(x) # Force literal dispatch
                 assert iv == {'a': 1, 'b': 2, 'c': 3} # INITIAL VALUE
                 return lambda x: literally(x)
 
@@ -119,7 +121,7 @@ class DocsLiteralContainerUsageTest(unittest.TestCase):
             # magictoken.test_ex_literal_list.end
 
         expected = ('Literal[str](a)', 'Literal[int](10)', 'complex128',
-                    'list(unicode_type)')
+                    "list(unicode_type)<iv=['another', 'list']>")
         self.assertEqual(result, expected)
 
     def test_ex_initial_value_list_compile_time_consts(self):
@@ -135,8 +137,10 @@ class DocsLiteralContainerUsageTest(unittest.TestCase):
             @overload(specialize)
             def ol_specialize(x):
                 iv = x.initial_value
+                if iv is None:
+                    return lambda x: literally(x) # Force literal dispatch
                 assert iv == [1, 2, 3] # INITIAL VALUE
-                return lambda x: literally(x)
+                return lambda x: x
 
             @njit
             def foo():

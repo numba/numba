@@ -1504,7 +1504,8 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
             self.assertEqual(lv[0], types.literal(1))
             self.assertEqual(lv[1], types.literal('a'))
             self.assertEqual(lv[2], types.Array(types.float64, 1, 'C'))
-            self.assertEqual(lv[3], types.List(types.intp, reflected=False))
+            self.assertEqual(lv[3], types.List(types.intp, reflected=False,
+                                               initial_value=[1, 2, 3]))
             self.assertTrue(isinstance(lv[4], types.LiteralList))
             self.assertEqual(lv[4].literal_value[0], types.literal('cat'))
             self.assertEqual(lv[4].literal_value[1], types.literal(10))
@@ -1538,7 +1539,8 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
                                                types.literal('a'),
                                                types.DictType(
                                                    types.unicode_type,
-                                                   types.intp),
+                                                   types.intp,
+                                                   initial_value={'f': 1}),
                                                inner_dict]),
                         types.literal('b'): types.literal(2),
                         types.literal('c'): types.List(types.complex128,

@@ -398,7 +398,7 @@ class List(MutableSequence, InitialValue):
         self.dtype = dtype
         self.reflected = reflected
         cls_name = "reflected list" if reflected else "list"
-        name = "%s(%s)" % (cls_name, self.dtype)
+        name = "%s(%s)<iv=%s>" % (cls_name, self.dtype, initial_value)
         super(List, self).__init__(name=name)
         InitialValue.__init__(self, initial_value)
 
@@ -418,7 +418,7 @@ class List(MutableSequence, InitialValue):
 
     @property
     def key(self):
-        return self.dtype, self.reflected
+        return self.dtype, self.reflected, str(self.initial_value)
 
     @property
     def iterator_type(self):
@@ -637,10 +637,11 @@ class DictType(IterableType, InitialValue):
         self.key_type = keyty
         self.value_type = valty
         self.keyvalue_type = Tuple([keyty, valty])
-        name = '{}[{},{}]'.format(
+        name = '{}[{},{}]<iv={}>'.format(
             self.__class__.__name__,
             keyty,
             valty,
+            initial_value
         )
         super(DictType, self).__init__(name)
         InitialValue.__init__(self, initial_value)
@@ -672,6 +673,10 @@ class DictType(IterableType, InitialValue):
             if not other.is_precise():
                 return self
 
+    @property
+    def key(self):
+        return self.key_type, self.value_type, str(self.initial_value)
+
 
 class LiteralStrKeyDict(Literal, NamedTuple):
     def __init__(self, literal_value, value_index=None):
@@ -702,6 +707,10 @@ class LiteralStrKeyDict(Literal, NamedTuple):
                     break
             else:
                 return self
+
+    @property
+    def key(self):
+        return self.tuple_ty, self.types, str(self.literal_value)
 
 
 class DictItemsIterableType(SimpleIterableType):

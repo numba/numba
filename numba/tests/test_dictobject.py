@@ -1806,9 +1806,10 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
         @overload(bar)
         def ol_bar(x):
             self.assertEqual(x.literal_value,
-                             {types.literal('a'): types.literal(1),
-                              types.literal('b'): types.List(types.intp),
-                              types.literal('c'): typeof(np.arange(5))})
+                            {types.literal('a'): types.literal(1),
+                            types.literal('b'):
+                                types.List(types.intp, initial_value=[1,2,3]),
+                            types.literal('c'): typeof(np.arange(5))})
             def impl(x):
                 pass
             return impl
@@ -2055,8 +2056,6 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
 
         @overload(bar)
         def ol_bar(x):
-            #import pdb; pdb.set_trace()
-            #pass
             def impl(x):
                 pass
             return impl
@@ -2067,7 +2066,6 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
             bar(a)
 
         foo()
-
 
 
 if __name__ == '__main__':
