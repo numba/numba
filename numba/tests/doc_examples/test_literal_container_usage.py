@@ -58,7 +58,7 @@ class DocsLiteralContainerUsageTest(unittest.TestCase):
     def test_ex_initial_value_dict_compile_time_consts(self):
         with captured_stdout():
             # magictoken.test_ex_initial_value_dict_compile_time_consts.begin
-            from numba import njit
+            from numba import njit, literally
             from numba.extending import overload
 
             # overload this function
@@ -69,7 +69,7 @@ class DocsLiteralContainerUsageTest(unittest.TestCase):
             def ol_specialize(x):
                 iv = x.initial_value
                 assert iv == {'a': 1, 'b': 2, 'c': 3} # INITIAL VALUE
-                return lambda x: x
+                return lambda x: literally(x)
 
             @njit
             def foo():
@@ -125,7 +125,7 @@ class DocsLiteralContainerUsageTest(unittest.TestCase):
     def test_ex_initial_value_list_compile_time_consts(self):
         with captured_stdout():
             # magictoken.test_ex_initial_value_list_compile_time_consts.begin
-            from numba import njit
+            from numba import njit, literally
             from numba.extending import overload
 
             # overload this function
@@ -136,7 +136,7 @@ class DocsLiteralContainerUsageTest(unittest.TestCase):
             def ol_specialize(x):
                 iv = x.initial_value
                 assert iv == [1, 2, 3] # INITIAL VALUE
-                return lambda x: x
+                return lambda x: literally(x)
 
             @njit
             def foo():
