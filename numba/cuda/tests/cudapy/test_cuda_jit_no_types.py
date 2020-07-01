@@ -1,7 +1,12 @@
-from numba import cuda
+from numba import jit, cuda
+from numba.core import config
 import numpy as np
 from numba.cuda.testing import CUDATestCase
 import unittest
+
+target = 'cuda'
+if config.ENABLE_CUDASIM:
+    target = 'cpu'
 
 
 class TestCudaJitNoTypes(CUDATestCase):
@@ -75,6 +80,16 @@ class TestCudaJitNoTypes(CUDATestCase):
         d_b.copy_to_host(b, stream)
 
         self.assertEqual(b[0], (a[0] + 1) + (2 + 1))
+
+    def test_jit(self):
+        N = 100
+
+        @jit(target=target)
+        def func(a):
+            for i in range(N):
+                a[i] += 1
+
+        func(np.ones(N, dtype=np.float64))
 
 
 if __name__ == '__main__':

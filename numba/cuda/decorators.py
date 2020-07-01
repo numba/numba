@@ -51,7 +51,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
 
-    if kws.get('boundscheck') == True:
+    if kws.pop('boundscheck', False):
         raise NotImplementedError("bounds checking is not supported for CUDA")
 
     fastmath = kws.get('fastmath', False)
