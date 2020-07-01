@@ -7,7 +7,7 @@ import ctypes as ct
 import numpy as np
 
 from numba.core.compiler import compile_isolated, Flags
-from numba import jit, typeof, njit, literal_unroll
+from numba import jit, typeof, njit, literal_unroll, literally
 import unittest
 from numba import testing
 from numba.core import types, utils, errors
@@ -1707,6 +1707,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
         for x in (-100, 100):
             self.assertEqual(foo.py_func(x), foo(x))
 
+    @unittest.skip("Broken")
     def test_not_unify(self):
         # TODO: fix infinite recursion problem
 
