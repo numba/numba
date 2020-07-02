@@ -1248,19 +1248,14 @@ class TestCache(BaseCacheUsecasesTest):
     def test_closure(self):
         mod = self.import_module()
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', NumbaWarning)
 
             f = mod.closure1
             self.assertPreciseEqual(f(3), 6)
             f = mod.closure2
-            self.assertPreciseEqual(f(3), 8)
-            self.check_pycache(0)
-
-        self.assertEqual(len(w), 2)
-        for item in w:
-            self.assertIn('Cannot cache compiled function "closure"',
-                          str(item.message))
+            self.assertPreciseEqual(f(3), 6)
+            self.check_pycache(2)
 
     def test_cache_reuse(self):
         mod = self.import_module()

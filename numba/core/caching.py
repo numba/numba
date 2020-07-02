@@ -330,7 +330,6 @@ class _CacheImpl(object):
                         _IPythonCacheLocator]
 
     def __init__(self, py_func):
-        self._is_closure = bool(py_func.__closure__)
         self._lineno = py_func.__code__.co_firstlineno
         # Get qualname
         try:
@@ -409,9 +408,7 @@ class CompileResultCacheImpl(_CacheImpl):
         Check cachability of the given compile result.
         """
         cannot_cache = None
-        if self._is_closure:
-            cannot_cache = "as it uses outer variables in a closure"
-        elif any(not x.can_cache for x in cres.lifted):
+        if any(not x.can_cache for x in cres.lifted):
             cannot_cache = "as it uses lifted code"
         elif cres.library.has_dynamic_globals:
             cannot_cache = ("as it uses dynamic globals "
@@ -448,7 +445,7 @@ class CodeLibraryCacheImpl(_CacheImpl):
         """
         Check cachability of the given CodeLibrary.
         """
-        return not self._is_closure
+        return not codelib.has_dynamic_globals
 
     def get_filename_base(self, fullname, abiflags):
         parent = super(CodeLibraryCacheImpl, self)

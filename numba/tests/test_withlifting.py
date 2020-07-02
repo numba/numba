@@ -832,10 +832,7 @@ class TestLiftObjCaching(MemoryLeak, TestCase):
                 output = other_pyfunc(x)
             return output
 
-        # TODO: we can make closure work by disabling the check in caching.py
-        with self.assertRaises(errors.NumbaWarning) as raises:
-            self.check(pyfunc)
-        self.assertIn("Cannot cache", str(raises.exception))
+        self.check(pyfunc)
 
     def test_objmode_caching_call_closure_good(self):
         self.check(case_objmode_cache)
