@@ -11,7 +11,7 @@ import warnings
 
 import numpy as np
 
-from numba import njit, literal_unroll, literally
+from numba import njit, literally
 from numba import int32, int64, float32, float64
 from numba import typeof
 from numba.typed import Dict, dictobject
@@ -21,7 +21,7 @@ from numba.core import types
 from numba.tests.support import (TestCase, MemoryLeakMixin, unittest,
                                  override_config, forbid_codegen)
 from numba.experimental import jitclass
-from numba.extending import overload, overload_method
+from numba.extending import overload
 
 
 class TestDictObject(MemoryLeakMixin, TestCase):
@@ -1685,6 +1685,7 @@ class TestTypedDictInitialValues(MemoryLeakMixin, TestCase):
         @overload(bar)
         def ol_bar(d):
             a = {'a': 1, 'b': 2j, 'c': 3}
+
             def specific_ty(z):
                 return types.literal(z) if types.maybe_literal(z) else typeof(z)
             expected = {types.literal(x): specific_ty(y) for x, y in a.items()}
@@ -1765,6 +1766,7 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
                               types.literal('b'): typeof(2j),
                               types.literal('c'): types.literal('d'),
                               types.literal('d'): types.literal(5)})
+
             def impl(x):
                 pass
             return impl
@@ -1787,6 +1789,7 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
                              {types.literal('a'): types.literal(1),
                               types.literal('b'): typeof(2j),
                               types.literal('c'): types.literal('d')})
+
             def impl(x):
                 pass
             return impl
@@ -1806,10 +1809,11 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
         @overload(bar)
         def ol_bar(x):
             self.assertEqual(x.literal_value,
-                            {types.literal('a'): types.literal(1),
-                            types.literal('b'):
-                                types.List(types.intp, initial_value=[1,2,3]),
-                            types.literal('c'): typeof(np.zeros(5))})
+                             {types.literal('a'): types.literal(1),
+                              types.literal('b'):
+                              types.List(types.intp, initial_value=[1,2,3]),
+                              types.literal('c'): typeof(np.zeros(5))})
+
             def impl(x):
                 pass
             return impl
@@ -1834,13 +1838,14 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
                              {types.literal('a'): types.literal('aaaa'),
                               types.literal('b'): typeof(2j),
                               types.literal('c'): types.literal('d')})
+
             def impl(x):
                 pass
             return impl
 
         @njit
         def foo():
-            ld = {'a': 1, 'a': 10, 'b': 2j, 'c': 'd', 'a': 'aaaa'}
+            ld = {'a': 1, 'a': 10, 'b': 2j, 'c': 'd', 'a': 'aaaa'} # noqa #F601
             bar(ld)
 
         foo()
@@ -2012,19 +2017,18 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
     def test_dict_value_coercion(self):
         # checks that things coerce or not!
 
-        p = { # safe convertible: TypedDict
-            (np.int32, np.int32): types.DictType,
-            # unsafe but convertible: TypedDict
-            (np.int8, np.int32): types.DictType,
+        #    safe convertible: TypedDict
+        p = {(np.int32, np.int32): types.DictType,
+             # unsafe but convertible: TypedDict
+             (np.int8, np.int32): types.DictType,
              # safe convertible: TypedDict
-            (np.complex128, np.int32): types.DictType,
-            # unsafe not convertible: LiteralStrKey
-            (np.int32, np.complex128): types.LiteralStrKeyDict,
-            # unsafe not convertible: LiteralStrKey
-            (np.int32, np.array): types.LiteralStrKeyDict,
-            # unsafe not convertible: LiteralStrKey
-            (np.array, np.int32): types.LiteralStrKeyDict,
-            }
+             (np.complex128, np.int32): types.DictType,
+             # unsafe not convertible: LiteralStrKey
+             (np.int32, np.complex128): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey
+             (np.int32, np.array): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey
+             (np.array, np.int32): types.LiteralStrKeyDict,}
 
         def bar(x):
             pass
@@ -2033,6 +2037,7 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
             @overload(bar)
             def ol_bar(x):
                 self.assertTrue(isinstance(x, container))
+
                 def impl(x):
                     pass
                 return impl

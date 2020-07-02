@@ -17,7 +17,6 @@ from numba.core.extending import (
     models,
     lower_builtin,
     lower_cast,
-    register_jitable,
 )
 from numba.core.imputils import iternext_impl, impl_ret_untracked
 from numba.core import types, cgutils
@@ -1063,7 +1062,7 @@ def build_map(context, builder, dict_type, item_types, items):
         ty = typeof(dict_type.tuple_inst)
         sig = typing.signature(ty)
 
-        unliteral_tys = [types.unliteral(x) for x in 
+        unliteral_tys = [types.unliteral(x) for x in
                          dict_type.literal_value.values()]
         nbty = types.NamedTuple(unliteral_tys,
                                 dict_type.tuple_ty)
@@ -1121,8 +1120,8 @@ def build_map(context, builder, dict_type, item_types, items):
 @intrinsic
 def _mixed_values_to_tuple(tyctx, d):
     keys = [x for x in d.literal_value.keys()]
-    fnty = tyctx.resolve_value_type('static_getitem')
     literal_tys = [x for x in d.literal_value.values()]
+
     def impl(cgctx, builder, sig, args):
         lld, = args
         impl = cgctx.get_function('static_getitem',
@@ -1138,25 +1137,28 @@ def _mixed_values_to_tuple(tyctx, d):
     sig = types.Tuple(d.types)(d)
     return sig, impl
 
+
 @overload_method(types.LiteralStrKeyDict, 'values')
-def impl_values(d):
+def literalstrkeydict_impl_values(d):
     # This requires faking a values() iterator simply as a tuple, creating a
     # type specialising iterator would be possible but horrendous and end up
     # down the "versioned" loop body route.
     if not isinstance(d, types.LiteralStrKeyDict):
         return
+
     def impl(d):
         return _mixed_values_to_tuple(d)
     return impl
 
 
 @overload_method(types.LiteralStrKeyDict, 'keys')
-def impl_keys(d):
+def literalstrkeydict_impl_keys(d):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
     # create a key iterator by specialising a DictType instance with the
     # literal keys and returning that
     t = tuple([x.literal_value for x in d.literal_value.keys()])
+
     def impl(d):
         d = dict()
         for x in t:
@@ -1185,7 +1187,7 @@ def tuple_ne(context, builder, sig, args):
 
 @overload(operator.getitem)
 @overload_method(types.LiteralStrKeyDict, 'get')
-def impl_get(dct, *args):
+def literalstrkeydict_impl_get(dct, *args):
     if not isinstance(dct, types.LiteralStrKeyDict):
         return
     msg = ("Cannot get{item}() on a literal dictionary, return type cannot be "
@@ -1197,15 +1199,17 @@ def impl_get(dct, *args):
 def literalstrkeydict_impl_copy(d):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
+
     def impl(d):
         return d
     return impl
 
+
 @intrinsic
 def _str_items_mixed_values_to_tuple(tyctx, d):
     keys = [x for x in d.literal_value.keys()]
-    fnty = tyctx.resolve_value_type('static_getitem')
     literal_tys = [x for x in d.literal_value.values()]
+
     def impl(cgctx, builder, sig, args):
 
         lld, = args
@@ -1216,8 +1220,12 @@ def _str_items_mixed_values_to_tuple(tyctx, d):
             item = impl(builder, (lld, k),)
             casted = cgctx.cast(builder, item, literal_tys[k], d.types[k])
             cgctx.nrt.incref(builder, d.types[k], item)
-            keydata = make_string_from_constant(cgctx, builder, types.unicode_type, keys[k].literal_value)
-            pair = cgctx.make_tuple(builder, types.Tuple([types.unicode_type, d.types[k]]), (keydata, casted))
+            keydata = make_string_from_constant(cgctx, builder,
+                                                types.unicode_type,
+                                                keys[k].literal_value)
+            pair = cgctx.make_tuple(builder,
+                                    types.Tuple([types.unicode_type,
+                                                d.types[k]]), (keydata, casted))
             items.append(pair)
         ret = cgctx.make_tuple(builder, sig.return_type, items)
         return ret
@@ -1230,6 +1238,7 @@ def _str_items_mixed_values_to_tuple(tyctx, d):
 def literalstrkeydict_impl_items(d):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
+
     def impl(d):
         return _str_items_mixed_values_to_tuple(d)
     return impl
@@ -1239,6 +1248,7 @@ def literalstrkeydict_impl_items(d):
 def literalstrkeydict_impl_contains(d, k):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
+
     def impl(d, k):
         for key in d.keys():
             if k == key:
@@ -1248,14 +1258,14 @@ def literalstrkeydict_impl_contains(d, k):
 
 
 @overload(operator.setitem)
-def banned_impl_setitem(d, key, value):
+def literalstrkeydict_banned_impl_setitem(d, key, value):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
     raise TypingError("Cannot mutate a literal dictionary")
 
 
 @overload(operator.delitem)
-def banned_impl_delitem(d, k):
+def literalstrkeydict_banned_impl_delitem(d, k):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
     raise TypingError("Cannot mutate a literal dictionary")
@@ -1265,7 +1275,7 @@ def banned_impl_delitem(d, k):
 @overload_method(types.LiteralStrKeyDict, 'pop')
 @overload_method(types.LiteralStrKeyDict, 'clear')
 @overload_method(types.LiteralStrKeyDict, 'setdefault')
-def impl_values(d, *args):
+def literalstrkeydict_banned_impl_mutators(d, *args):
     if not isinstance(d, types.LiteralStrKeyDict):
         return
     raise TypingError("Cannot mutate a literal dictionary")
@@ -1284,6 +1294,7 @@ def cast_LiteralStrKeyDict_LiteralStrKeyDict(context, builder, fromty, toty,
             assert 0
     else:
         return val
+
 
 @lower_cast(types.DictType, types.DictType)
 def cast_DictType_DictType(context, builder, fromty, toty, val):

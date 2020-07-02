@@ -27,8 +27,6 @@ from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
                                ForceLiteralArg, CompilerError)
 from numba.core.funcdesc import qualifying_prefix
-from numba.core.interpreter import _UNKNOWN_VALUE
-from numba import typeof
 
 _logger = logging.getLogger(__name__)
 
@@ -341,6 +339,7 @@ class BuildMapConstraint(object):
                 vt0 = types.unliteral(vtys[0])
                 # homogeneous values comes in the form of being able to cast
                 # all the other values in the ctor to the type of the first
+
                 def check(other):
                     return typeinfer.context.can_convert(other, vt0) is not None
                 homogeneous = all([check(types.unliteral(x)) for x in vtys])
@@ -356,10 +355,9 @@ class BuildMapConstraint(object):
 
                 if strkey and not homogeneous:
                     resolved_dict = {x: y for x, y in zip(ktys, vtys)}
-                    typeinfer.add_type(self.target,
-                                       types.LiteralStrKeyDict(resolved_dict,
-                                                               self.value_indexes),
-                            loc=self.loc)
+                    ty = types.LiteralStrKeyDict(resolved_dict,
+                                                 self.value_indexes)
+                    typeinfer.add_type(self.target, ty, loc=self.loc)
                 else:
                     init_value = self.special_value if literalvty else None
                     key_type, value_type = tsets[0]
@@ -390,10 +388,11 @@ class BuildLiteralHomogeneousMapConstraint(object):
             for k, v in self.literal_value.items():
                 resolved_dict[types.literal(k)] = types.literal(v)
             typeinfer.add_type(self.target,
-                                types.LiteralDict(key_type,
-                                                  value_type,
-                                                  resolved_dict,),
-                                loc=self.loc)
+                               types.LiteralDict(key_type,
+                                                 value_type,
+                                                 resolved_dict,),
+                               loc=self.loc)
+
 
 class ExhaustIterConstraint(object):
     def __init__(self, target, count, iterator, loc):

@@ -1219,8 +1219,8 @@ class Lower(BaseLower):
             itemtys = [self.typeof(i.name) for i in expr.items]
             if isinstance(resty, types.LiteralList):
                 castvals = [self.context.cast(self.builder, val, fromty, toty)
-                        for val, toty, fromty in zip(itemvals, resty.types,
-                                                     itemtys)]
+                            for val, toty, fromty in zip(itemvals, resty.types,
+                                                         itemtys)]
                 tup = self.context.make_tuple(self.builder,
                                               types.Tuple(resty.types),
                                               castvals)
@@ -1228,7 +1228,7 @@ class Lower(BaseLower):
                 return tup
             else:
                 castvals = [self.context.cast(self.builder, val, fromty,
-                                            resty.dtype)
+                                              resty.dtype)
                             for val, fromty in zip(itemvals, itemtys)]
                 return self.context.build_list(self.builder, resty, castvals)
 
