@@ -1809,7 +1809,7 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
                             {types.literal('a'): types.literal(1),
                             types.literal('b'):
                                 types.List(types.intp, initial_value=[1,2,3]),
-                            types.literal('c'): typeof(np.arange(5))})
+                            types.literal('c'): typeof(np.zeros(5))})
             def impl(x):
                 pass
             return impl
@@ -1817,7 +1817,7 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
         @njit
         def foo():
             b = [1, 2, 3]
-            ld = {'a': 1, 'b': b, 'c': np.arange(5)}
+            ld = {'a': 1, 'b': b, 'c': np.zeros(5)}
             bar(ld)
 
         foo()
