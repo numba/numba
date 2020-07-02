@@ -1125,7 +1125,8 @@ def _mixed_values_to_tuple(tyctx, d):
     literal_tys = [x for x in d.literal_value.values()]
     def impl(cgctx, builder, sig, args):
         lld, = args
-        impl = cgctx.get_function('static_getitem', types.none(d, 0))
+        impl = cgctx.get_function('static_getitem',
+                                  types.none(d, types.literal('dummy')))
         items = []
         for k in range(len(keys)):
             item = impl(builder, (lld, k),)
@@ -1208,7 +1209,8 @@ def _str_items_mixed_values_to_tuple(tyctx, d):
     def impl(cgctx, builder, sig, args):
 
         lld, = args
-        impl = cgctx.get_function('static_getitem', types.none(d, 0))
+        impl = cgctx.get_function('static_getitem',
+                                  types.none(d, types.literal('dummy')))
         items = []
         for k in range(len(keys)):
             item = impl(builder, (lld, k),)
