@@ -15,7 +15,7 @@ from io import StringIO
 
 import numpy as np
 
-from numba import jit, generated_jit, typeof
+from numba import njit, jit, generated_jit, typeof
 from numba.core import types, errors, codegen
 from numba import _dispatcher
 from numba.core.compiler import compile_isolated
@@ -26,7 +26,8 @@ from numba.tests.support import (TestCase, temp_directory, import_dynamic,
 from numba.np.numpy_support import as_dtype
 from numba.core.caching import _UserWideCacheLocator
 from numba.core.dispatcher import Dispatcher
-from numba.tests.support import skip_parfors_unsupported, needs_lapack
+from numba.tests.support import (skip_parfors_unsupported, needs_lapack,
+                                 SerialMixin)
 
 import llvmlite.binding as ll
 import unittest
@@ -1963,6 +1964,47 @@ class TestNoRetryFailedSignature(unittest.TestCase):
         # compilation.
         self.assertEqual(ct_ok, 1)
         self.assertEqual(ct_bad, 1)
+
+
+class TestMultiprocessingDefaultParameters(SerialMixin, unittest.TestCase):
+    def run_fc_multiproc(self, fc):
+        try:
+            ctx = multiprocessing.get_context('spawn')
+        except AttributeError:
+            ctx = multiprocessing
+        with ctx.Pool(1) as p:
+            self.assertEqual(p.map(fc, [1, 2, 3]), list(map(fc, [1, 2, 3])))
+
+    def test_int_def_param(self):
+        """ Tests issue #4888"""
+
+        @njit
+        def add(x, y=1):
+            return x + y
+
+        self.run_fc_multiproc(add)
+
+    def test_none_def_param(self):
+        """ Tests None as a default parameter"""
+
+        @njit
+        def add(x, y=None):
+            return x + (1 if y else 2)
+
+        self.run_fc_multiproc(add)
+
+    def test_function_def_param(self):
+        """ Tests a function as a default parameter"""
+
+        @njit
+        def mult(x, y):
+            return x * y
+
+        @njit
+        def add(x, func=mult):
+            return x + func(x, x)
+
+        self.run_fc_multiproc(add)
 
 
 if __name__ == '__main__':
