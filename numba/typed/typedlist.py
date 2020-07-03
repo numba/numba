@@ -173,6 +173,7 @@ def _from_meminfo_ptr(ptr, listtype):
 
 T = TypeVar('T')
 
+
 class List(MutableSequence, Generic[T]):
     """A typed-list usable in Numba compiled functions.
 
