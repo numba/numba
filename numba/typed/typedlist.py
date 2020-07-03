@@ -282,7 +282,7 @@ class List(MutableSequence, Generic[T]):
         lsttype = types.ListType(typeof(item))
         self._list_type, self._opaque = self._parse_arg(lsttype)
 
-    def __len__(self):
+    def __len__(self) -> int:
         if not self._typed:
             return 0
         else:
@@ -341,7 +341,7 @@ class List(MutableSequence, Generic[T]):
         for i in range(len(self)):
             yield self[i]
 
-    def __contains__(self, item: T):
+    def __contains__(self, item: T) -> bool:
         return _contains(self, item)
 
     def __delitem__(self, i):
