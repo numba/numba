@@ -76,14 +76,6 @@ def is_building():
     return True
 
 
-def is_building_wheel():
-    if len(sys.argv) < 2:
-        # No command is given.
-        return False
-
-    return 'bdist_wheel' in sys.argv[1:]
-
-
 def get_ext_modules():
     """
     Return a list of Extension instances for the setup() call.
