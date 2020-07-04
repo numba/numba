@@ -93,7 +93,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
             def __init__(self):
                 pass
 
-        self._check_spec(spec, Test1, spec + [("y", types.List(float64))])
+        self._check_spec(spec, Test1, spec + [("y", types.ListType(float64))])
 
     def test_spec_errors(self):
         spec1 = [("x", int), ("y", float32[:])]
