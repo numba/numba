@@ -119,6 +119,10 @@ def ctor(cls, {args}):
     def add_typecheck(cls):
         assert issubclass(cls, tuple)
 
+        if hasattr(cls, "_numba_type_"):
+            # Assume it's already a typed_tuple
+            return
+
         # Get numba type for fields.
         annotations = getattr(cls, "__annotations__", dict())
         nb_types = []
@@ -153,10 +157,12 @@ def ctor(cls, {args}):
         )
         functools.update_wrapper(ctor, cls.__new__, assignment_fields)
 
+        cls.__typecheck_tuple = typecheck_tuple
         cls.__untyped_new__ = cls.__new__
         cls.__new__ = ctor
         cls._numba_type_ = types.BaseTuple.from_types(nb_types, cls)
 
+        as_numba_type.register(cls, cls._numba_type_)
         return cls
 
     if cls_or_spec is None:
