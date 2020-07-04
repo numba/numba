@@ -406,7 +406,7 @@ class Literal(Type):
     # for constructing a numba type for a given Python type.
     # It is used in `literal(val)` function.
     # To add new Literal subclass, register a new mapping to this dict.
-    ctor_map: mpDict[type, mpType[Literal]] = {}
+    ctor_map: mpDict[type, mpType['Literal']] = {}
 
     # *_literal_type_cache* is used to cache the numba type of the given value.
     _literal_type_cache = None
