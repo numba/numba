@@ -64,7 +64,7 @@ class AsNumbaTypeRegistry:
 
         if getattr(py_type, "__origin__", None) is list_origin:
             (element_py,) = py_type.__args__
-            return types.List(self.infer(element_py))
+            return types.ListType(self.infer(element_py))
 
         if getattr(py_type, "__origin__", None) is dict_origin:
             key_py, value_py = py_type.__args__
