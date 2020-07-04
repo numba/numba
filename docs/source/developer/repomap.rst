@@ -42,8 +42,8 @@ Continuous Integration
 - :ghfile:`codecov.yml` - Codecov.io coverage reporting
 
 
-Documentation / Examples
-''''''''''''''''''''''''
+Documentation
+'''''''''''''
 - :ghfile:`LICENSE` - License for Numba
 - :ghfile:`LICENSES.third-party` - License for third party code vendored
   into Numba
@@ -61,19 +61,10 @@ Documentation / Examples
 - :ghfile:`docs/gh-pages.py` - Utility script to update Numba docs (stored
   as gh-pages)
 - :ghfile:`docs/make.bat` - Not used (remove?)
-- :ghfile:`examples/` - Example scripts demonstrating numba (re/move to
-  numba-examples repo?)
-- :ghfile:`examples/notebooks/` - Example notebooks (re/move to
-  numba-examples repo?)
-- :ghfile:`benchmarks/` - Benchmark scripts (re/move to numba-examples
-  repo?)
-- :ghfile:`tutorials/` - Tutorial notebooks (definitely out of date, should
-  remove and direct to external tutorials)
 - :ghfile:`numba/scripts/generate_lower_listing.py` - Dump all registered
   implementations decorated with ``@lower*`` for reference
   documentation.  Currently misses implementations from the higher
   level extension API.
-
 
 
 Numba Source Code
@@ -369,6 +360,8 @@ that must be matched during type inference.
 - :ghfile:`numba/core/typing/cffi_utils.py` - Typing of CFFI objects
 - :ghfile:`numba/core/typing/typeof.py` - Implementation of typeof operations
   (maps Python object to Numba type)
+- :ghfile:`numba/core/typing/asnumbatype.py` - Implementation of as_numba_type
+  operations (maps Python types to Numba type)
 - :ghfile:`numba/core/typing/npdatetime.py` - Datetime dtype support for NumPy
   arrays
 
@@ -402,6 +395,8 @@ typing and implementation to be specified together.
   needed to link generated code
 - :ghfile:`numba/core/fastmathpass.py` - Rewrite pass to add fastmath
   attributes to function call sites and binary operations
+- :ghfile:`numba/core/removerefctpass.py` - Rewrite pass to remove
+  unnecessary incref/decref pairs
 - :ghfile:`numba/core/descriptors.py` - empty base class for all target
   descriptors (is this needed?)
 - :ghfile:`numba/cpython/builtins.py` - Python builtin functions and

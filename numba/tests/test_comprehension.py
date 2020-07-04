@@ -10,6 +10,7 @@ from numba.core.compiler import compile_isolated
 from numba import jit
 from numba.core import types, utils
 from numba.core.errors import TypingError, LoweringError
+from numba.core.types.functions import _header_lead
 from numba.tests.support import tag, _32bit, captured_stdout
 
 
@@ -347,7 +348,7 @@ class TestArrayComprehension(unittest.TestCase):
         # test is expected to fail
         with self.assertRaises(TypingError) as raises:
             self.check(comp_nest_with_dependency, 5)
-        self.assertIn('Invalid use of Function', str(raises.exception))
+        self.assertIn(_header_lead, str(raises.exception))
         self.assertIn('array(undefined,', str(raises.exception))
 
     def test_no_array_comp(self):
@@ -432,7 +433,7 @@ class TestArrayComprehension(unittest.TestCase):
             cfunc = jit(nopython=True)(array_comp)
             cfunc(10, 2.3j)
         self.assertIn(
-            "Invalid use of Function({})".format(operator.setitem),
+            _header_lead + " Function({})".format(operator.setitem),
             str(raises.exception),
         )
         self.assertIn(

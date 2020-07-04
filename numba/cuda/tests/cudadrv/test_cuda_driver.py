@@ -1,6 +1,6 @@
-from ctypes import c_int, sizeof
-from numba.cuda.cudadrv.driver import host_to_device, device_to_host
-from numba.cuda.cudadrv import devices
+from ctypes import byref, c_int, sizeof
+from numba.cuda.cudadrv.driver import host_to_device, device_to_host, driver
+from numba.cuda.cudadrv import devices, drvapi
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
 
@@ -120,14 +120,49 @@ class TestCudaDriver(CUDATestCase):
         # version should be used. So the default (0) stream should be true-ish
         # even though 0 is usually false-ish in Python.
         self.assertTrue(ds)
+        self.assertFalse(ds.external)
+
+    def test_cuda_driver_legacy_default_stream(self):
+        # Test properties of the legacy default stream
+        ds = self.context.get_legacy_default_stream()
+        self.assertIn("Legacy default CUDA stream", repr(ds))
+        self.assertEqual(1, int(ds))
+        self.assertTrue(ds)
+        self.assertFalse(ds.external)
+
+    def test_cuda_driver_per_thread_default_stream(self):
+        # Test properties of the per-thread default stream
+        ds = self.context.get_per_thread_default_stream()
+        self.assertIn("Per-thread default CUDA stream", repr(ds))
+        self.assertEqual(2, int(ds))
+        self.assertTrue(ds)
+        self.assertFalse(ds.external)
 
     def test_cuda_driver_stream(self):
         # Test properties of non-default streams
         s = self.context.create_stream()
         self.assertIn("CUDA stream", repr(s))
         self.assertNotIn("Default", repr(s))
+        self.assertNotIn("External", repr(s))
         self.assertNotEqual(0, int(s))
         self.assertTrue(s)
+        self.assertFalse(s.external)
+
+    def test_cuda_driver_external_stream(self):
+        # Test properties of a stream created from an external stream object.
+        # We use the driver API directly to create a stream, to emulate an
+        # external library creating a stream
+        handle = drvapi.cu_stream()
+        driver.cuStreamCreate(byref(handle), 0)
+        ptr = handle.value
+        s = self.context.create_external_stream(ptr)
+
+        self.assertIn("External CUDA stream", repr(s))
+        # Ensure neither "Default" nor "default"
+        self.assertNotIn("efault", repr(s))
+        self.assertEqual(ptr, int(s))
+        self.assertTrue(s)
+        self.assertTrue(s.external)
 
     def test_cuda_driver_occupancy(self):
         module = self.context.create_module_ptx(self.ptx)

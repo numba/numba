@@ -8,6 +8,7 @@ from numba.core import types, errors, utils, config
 
 # Exported symbols
 from numba.core.typing.typeof import typeof_impl  # noqa: F401
+from numba.core.typing.asnumbatype import as_numba_type  # noqa: F401
 from numba.core.typing.templates import infer, infer_getattr  # noqa: F401
 from numba.core.imputils import (  # noqa: F401
     lower_builtin, lower_getattr, lower_getattr_generic,  # noqa: F401
@@ -138,6 +139,7 @@ def register_jitable(*args, **kwargs):
     def wrap(fn):
         # It is just a wrapper for @overload
         inline = kwargs.pop('inline', 'never')
+
         @overload(fn, jit_options=kwargs, inline=inline, strict=False)
         def ov_wrap(*args, **kwargs):
             return fn

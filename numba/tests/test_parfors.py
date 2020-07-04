@@ -2513,6 +2513,28 @@ class TestPrange(TestPrangeBase):
         x = [np.array([1,2,3], dtype=int),np.array([1,2], dtype=int)]
         self.prange_tester(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_ssa_false_reduction(self):
+        # issue5698
+        # SSA for h creates assignments to h that make it look like a
+        # reduction variable except that it lacks an associated
+        # reduction operator.  Test here that h is excluded as a
+        # reduction variable.
+        def test_impl(image, a, b):
+            empty = np.zeros(image.shape)
+            for i in range(image.shape[0]):
+                r = image[i][0] / 255.0
+                if a == 0:
+                    h = 0
+                if b == 0:
+                    h = 0
+                empty[i] = [h, h, h]
+            return empty
+
+        image = np.zeros((3, 3), dtype=np.int32)
+        self.prange_tester(test_impl, image, 0, 0)
+
+
 @skip_parfors_unsupported
 @x86_only
 class TestParforsVectorizer(TestPrangeBase):
@@ -2525,9 +2547,12 @@ class TestParforsVectorizer(TestPrangeBase):
         fastmath = kwargs.pop('fastmath', False)
         cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
         assertions = kwargs.pop('assertions', True)
+        # force LLVM to use zmm registers for vectorization
+        # https://reviews.llvm.org/D67259
+        cpu_features = kwargs.pop('cpu_features', '-prefer-256-bit')
 
         env_opts = {'NUMBA_CPU_NAME': cpu_name,
-                    'NUMBA_CPU_FEATURES': '',
+                    'NUMBA_CPU_FEATURES': cpu_features,
                     }
 
         overrides = []

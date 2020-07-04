@@ -52,7 +52,7 @@ class FunctionType(Type):
             # first-class function may not use the same argument names
             # that the caller assumes. [numba/issues/5540].
             raise errors.UnsupportedError(
-                f'first-class function call cannot use keyword arguments')
+                'first-class function call cannot use keyword arguments')
 
         if len(args) != self.nargs:
             raise ValueError(

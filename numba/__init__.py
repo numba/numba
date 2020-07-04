@@ -18,7 +18,7 @@ from numba.core import types, errors
 # Re-export typeof
 from numba.misc.special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
-    literally, literal_unroll
+    literally, literal_unroll, as_numba_type,
 )
 
 # Re-export error classes
@@ -81,8 +81,8 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 31, 0)
-_min_llvm_version = (7, 0, 0)
+_min_llvmlite_version = (0, 33, 0)
+_min_llvm_version = (9, 0, 0)
 
 def _ensure_llvm():
     """

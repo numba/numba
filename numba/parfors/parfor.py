@@ -3313,17 +3313,24 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
         # param already
         param_name = param.name
         if param_name in used_vars and param_name not in reduce_varnames:
-            reduce_varnames.append(param_name)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
-            check_conflicting_reduction_operators(param, reduce_nodes)
-            gri_out = guard(get_reduction_init, reduce_nodes)
-            if gri_out is not None:
-                init_val, redop = gri_out
-            else:
-                init_val = None
-                redop = None
-            reductions[param_name] = (init_val, reduce_nodes, redop)
+            # Certain kinds of ill-formed Python (like potentially undefined
+            # variables) in combination with SSA can make things look like
+            # reductions except that they don't have reduction operators.
+            # If we get to this point but don't find a reduction operator
+            # then assume it is this situation and just don't treat this
+            # variable as a reduction.
+            if reduce_nodes is not None:
+                reduce_varnames.append(param_name)
+                check_conflicting_reduction_operators(param, reduce_nodes)
+                gri_out = guard(get_reduction_init, reduce_nodes)
+                if gri_out is not None:
+                    init_val, redop = gri_out
+                else:
+                    init_val = None
+                    redop = None
+                reductions[param_name] = (init_val, reduce_nodes, redop)
 
     return reduce_varnames, reductions
 
@@ -3421,7 +3428,6 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 replace_vars_inner(rhs, replace_dict)
                 reduce_nodes = nodes[i:]
                 break;
-    assert reduce_nodes, "Invalid reduction format"
     return reduce_nodes
 
 def get_expr_args(expr):

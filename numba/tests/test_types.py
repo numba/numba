@@ -18,6 +18,7 @@ import numpy as np
 
 from numba.core import types, typing, errors, sigutils
 from numba.core.types.abstract import _typecache
+from numba.core.types.functions import _header_lead
 from numba.core.typing.templates import make_overload_template
 from numba import jit, njit, typeof
 from numba.core.extending import (overload, register_model, models, unbox,
@@ -180,12 +181,26 @@ class TestTypes(TestCase):
             self.assertIs(arrty.dtype, scalar)
             self.assertEqual(arrty.ndim, ndim)
             self.assertEqual(arrty.layout, layout)
+
+        def check_index_error(callable):
+            with self.assertRaises(KeyError) as raises:
+                callable()
+            self.assertIn(
+                "Can only index numba types with slices with no start or "
+                "stop, got", str(raises.exception))
+
         scalar = types.int32
         check(scalar[:], scalar, 1, 'A')
         check(scalar[::1], scalar, 1, 'C')
         check(scalar[:, :], scalar, 2, 'A')
         check(scalar[:, ::1], scalar, 2, 'C')
         check(scalar[::1, :], scalar, 2, 'F')
+
+        check_index_error(lambda: scalar[0])
+        check_index_error(lambda: scalar[:, 4])
+        check_index_error(lambda: scalar[::1, 1:])
+        check_index_error(lambda: scalar[:2])
+        check_index_error(lambda: list(scalar))
 
     def test_array_notation_for_dtype(self):
         def check(arrty, scalar, ndim, layout):
@@ -740,7 +755,7 @@ class FooType(types.Type):
             with self.assertRaises(errors.TypingError) as raises:
                 call_false_if_not_array_closed_system(Foo())
             estr = str(raises.exception)
-            self.assertIn("Invalid use of Function", estr)
+            self.assertIn(_header_lead, estr)
             self.assertIn("false_if_not_array_closed_system", estr)
             self.assertIn("(Foo)", estr)
 
