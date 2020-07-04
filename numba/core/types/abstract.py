@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
+from typing import Dict as mpDict, Type as mpType
 import itertools
 import weakref
 
@@ -21,7 +22,7 @@ def _autoincr():
     assert n < 2 ** 32, "Limited to 4 billion types"
     return n
 
-_typecache = {}
+_typecache: mpDict[weakref.ref, weakref.ref] = {}
 
 def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
@@ -405,7 +406,7 @@ class Literal(Type):
     # for constructing a numba type for a given Python type.
     # It is used in `literal(val)` function.
     # To add new Literal subclass, register a new mapping to this dict.
-    ctor_map = {}
+    ctor_map: mpDict[type, mpType[Literal]] = {}
 
     # *_literal_type_cache* is used to cache the numba type of the given value.
     _literal_type_cache = None
