@@ -1,7 +1,7 @@
 """
 Python wrapper that connects CPython interpreter to the numba dictobject.
 """
-from collections.abc import MutableMapping
+from typing import MutableMapping, TypeVar, Iterator, Tuple
 
 from numba.core.types import DictType, TypeRef
 from numba.core.imputils import numba_typeref_ctor
@@ -79,7 +79,11 @@ def _from_meminfo_ptr(ptr, dicttype):
     return d
 
 
-class Dict(MutableMapping):
+KT = TypeVar('KT')
+VT = TypeVar('VT')
+
+
+class Dict(MutableMapping[KT, VT]):
     """A typed-dictionary usable in Numba compiled functions.
 
     Implements the MutableMapping interface.
@@ -144,35 +148,35 @@ class Dict(MutableMapping):
         dcttype = types.DictType(typeof(key), typeof(value))
         self._dict_type, self._opaque = self._parse_arg(dcttype)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: KT) -> VT:
         if not self._typed:
             raise KeyError(key)
         else:
             return _getitem(self, key)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: KT, value: VT) -> None:
         if not self._typed:
             self._initialise_dict(key, value)
         return _setitem(self, key, value)
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: KT) -> None:
         if not self._typed:
             raise KeyError(key)
         _delitem(self, key)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[KT]:
         if not self._typed:
             return iter(())
         else:
             return iter(_iter(self))
 
-    def __len__(self):
+    def __len__(self) -> int:
         if not self._typed:
             return 0
         else:
             return _length(self)
 
-    def __contains__(self, key):
+    def __contains__(self, key: KT) -> bool:
         if len(self) == 0:
             return False
         else:
@@ -189,18 +193,18 @@ class Dict(MutableMapping):
         prefix = str(self._dict_type)
         return "{prefix}({body})".format(prefix=prefix, body=body)
 
-    def get(self, key, default=None):
+    def get(self, key: KT, default: VT = None) -> VT:
         if not self._typed:
             return default
         return _get(self, key, default)
 
-    def setdefault(self, key, default=None):
+    def setdefault(self, key: KT, default: VT = None) -> VT:
         if not self._typed:
             if default is not None:
                 self._initialise_dict(key, default)
         return _setdefault(self, key, default)
 
-    def popitem(self):
+    def popitem(self) -> Tuple[KT, VT]:
         if len(self) == 0:
             raise KeyError('dictionary is empty')
         return _popitem(self)
@@ -269,7 +273,7 @@ def unbox_dicttype(typ, val, c):
     sig = signature(typ, *argtypes)
     nil_typeref = context.get_constant_null(argtypes[1])
     args = (mi, nil_typeref)
-    is_error, dctobj = c.pyapi.call_jit_code(convert , sig, args)
+    is_error, dctobj = c.pyapi.call_jit_code(convert, sig, args)
     # decref here because we are stealing a reference.
     c.context.nrt.decref(c.builder, typ, dctobj)
 
