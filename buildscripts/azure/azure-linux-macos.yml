@@ -36,7 +36,7 @@ jobs:
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH
         conda install -y mypy
-        mypy -p numba.core.types
+        mypy
       displayName: 'Mypy'
       condition: eq(variables['RUN_MYPY'], 'yes')
 
