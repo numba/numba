@@ -1,6 +1,6 @@
 import functools
 
-from numba import typeof, types, njit
+from numba import as_numba_type, types, njit
 
 
 def typed_tuple(cls_or_spec=None, spec=None):
@@ -126,7 +126,7 @@ def ctor(cls, {args}):
             if f in spec:
                 nb_types.append(spec[f])
             elif f in annotations:
-                nb_types.append(typeof(annotations[f]))
+                nb_types.append(as_numba_type(annotations[f]))
             else:
                 raise RuntimeError(f"Field {f} has no spec or annotation")
         nb_types = tuple(nb_types)
