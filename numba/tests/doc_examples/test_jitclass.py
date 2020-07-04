@@ -56,6 +56,7 @@ class DocsJitclassUsageTest(TestCase):
         # magictoken.ex_jitclass_type_hints.begin
         from typing import List
         from numba.experimental import jitclass
+        from numba.typed import List as NumbaList
 
         @jitclass
         class Counter:
@@ -82,7 +83,7 @@ class DocsJitclassUsageTest(TestCase):
                 idx = self.counter.get() % len(self.items)
                 return self.items[idx]
 
-        items = [3.14, 2.718, 0.123, -4.]
+        items = NumbaList([3.14, 2.718, 0.123, -4.])
         loop_itr = ListLoopIterator(items)
         # magictoken.ex_jitclass_type_hints.end
 

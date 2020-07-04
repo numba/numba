@@ -31,6 +31,19 @@ class TestAsNumbaType(TestCase):
         self.assertEqual(as_numba_type(bool), self.bool_nb_type)
         self.assertEqual(as_numba_type(type(None)), self.none_nb_type)
 
+    def test_numba_types(self):
+        numba_types = [
+            types.intp,
+            types.boolean,
+            types.ListType(types.float64),
+            types.DictType(
+                types.intp, types.Tuple([types.float32, types.float32])
+            ),
+        ]
+
+        for ty in numba_types:
+            self.assertEqual(as_numba_type(ty), ty)
+
     def test_single_containers(self):
         self.assertEqual(
             as_numba_type(py_typing.List[float]),
@@ -82,7 +95,9 @@ class TestAsNumbaType(TestCase):
         )
         self.assertEqual(
             as_numba_type(py_typing.List[py_typing.Dict[float, bool]]),
-            types.ListType(types.DictType(self.float_nb_type, self.bool_nb_type)),
+            types.ListType(
+                types.DictType(self.float_nb_type, self.bool_nb_type)
+            ),
         )
         self.assertEqual(
             as_numba_type(
@@ -108,7 +123,9 @@ class TestAsNumbaType(TestCase):
 
         pair_nb_type = types.Tuple((self.int_nb_type, self.int_nb_type))
         self.assertEqual(as_numba_type(Pair), pair_nb_type)
-        self.assertEqual(as_numba_type(ListOfPairs), types.ListType(pair_nb_type))
+        self.assertEqual(
+            as_numba_type(ListOfPairs), types.ListType(pair_nb_type)
+        )
 
     def test_overwrite_type(self):
         as_numba_type = AsNumbaTypeRegistry()

@@ -29,7 +29,11 @@ class AsNumbaTypeRegistry:
             ]
         }
 
-        self.functions = [self._builtin_infer]
+        self.functions = [self._builtin_infer, self._numba_type_infer]
+
+    def _numba_type_infer(self, py_type):
+        if isinstance(py_type, types.Type):
+            return py_type
 
     def _builtin_infer(self, py_type):
         # The type hierarchy of python typing library changes in 3.7.
