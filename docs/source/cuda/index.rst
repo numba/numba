@@ -20,4 +20,5 @@ Numba for CUDA GPUs
    ufunc.rst
    ipc.rst
    cuda_array_interface.rst
+   external-memory.rst
    faq.rst

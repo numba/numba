@@ -1,7 +1,6 @@
-from __future__ import print_function, absolute_import, division
 import sys
 import numpy as np
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 from numba import cuda, float32, float64, int32
 import math
 
@@ -181,7 +180,7 @@ def math_mod_binop(A, B, C):
     C[i] = A[i] % B[i]
 
 
-class TestCudaMath(SerialMixin, unittest.TestCase):
+class TestCudaMath(CUDATestCase):
     def unary_template_float32(self, func, npfunc, start=0, stop=1):
         self.unary_template(func, npfunc, np.float32, float32, start, stop)
 

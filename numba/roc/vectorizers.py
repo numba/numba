@@ -1,9 +1,7 @@
-from __future__ import print_function, absolute_import
-
 from numba import roc
-from numba.npyufunc import deviceufunc
 
 from numba.roc import dispatch
+from numba.np.ufunc import deviceufunc
 
 vectorizer_stager_source = '''
 def __vectorized_{name}({args}, __out__):

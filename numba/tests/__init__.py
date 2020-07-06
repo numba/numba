@@ -1,10 +1,9 @@
-from numba import unittest_support as unittest
-
 import gc
 from os.path import dirname, join
 import multiprocessing
 import sys
 import time
+import unittest
 import warnings
 
 from unittest.suite import TestSuite

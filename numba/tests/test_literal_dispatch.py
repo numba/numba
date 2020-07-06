@@ -1,17 +1,16 @@
-from __future__ import print_function
-
 import numpy as np
 
 import numba
-import numba.unittest_support as unittest
+import unittest
 from numba.tests.support import TestCase
-from numba import njit, types, errors, cgutils
-from numba.typing import signature
-from numba.datamodel import models
-from numba.extending import (
+from numba import njit
+from numba.core import types, errors, cgutils
+from numba.core.typing import signature
+from numba.core.datamodel import models
+from numba.core.extending import (
     overload, SentryLiteralArgs, overload_method, register_model, intrinsic,
 )
-from numba.special import literally
+from numba.misc.special import literally
 
 
 class TestLiteralDispatch(TestCase):
@@ -336,7 +335,7 @@ class TestLiteralDispatchWithCustomType(TestCase):
             def lit(self, a):
                 return a
 
-        class DummyType(numba.types.Type):
+        class DummyType(types.Type):
             def __init__(self):
                 super(DummyType, self).__init__(name="dummy")
 

@@ -1,7 +1,6 @@
 """
 This is a direct translation of nvvm.h
 """
-from __future__ import print_function, absolute_import, division
 import sys, logging, re
 from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
                     c_char)
@@ -10,9 +9,9 @@ import threading
 
 from llvmlite import ir
 
-from numba import config
 from .error import NvvmError, NvvmSupportError
 from .libs import get_libdevice, open_libdevice, open_cudalib
+from numba.core import config
 
 
 logger = logging.getLogger(__name__)

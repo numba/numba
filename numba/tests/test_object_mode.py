@@ -2,14 +2,14 @@
 Testing object mode specifics.
 
 """
-from __future__ import print_function
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import utils, jit
-from .support import TestCase
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba import jit
+from numba.core import utils
+from numba.tests.support import TestCase
 
 
 def complex_constant(n):

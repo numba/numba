@@ -1,24 +1,22 @@
-from __future__ import print_function
-
-import numba.unittest_support as unittest
-from .support import TestCase
+import unittest
+from numba.tests.support import TestCase
 
 import sys
 import operator
-
-# deliberately imported twice for different use cases
 import numpy as np
 import numpy
 
-from numba.compiler import compile_isolated
-from numba import types, utils, jit, types
-from numba.errors import TypingError, LoweringError
-from .support import tag
-from numba.tests.support import captured_stdout
+from numba.core.compiler import compile_isolated
+from numba import jit
+from numba.core import types, utils
+from numba.core.errors import TypingError, LoweringError
+from numba.tests.support import tag, _32bit, captured_stdout
 
-from .test_parfors import _windows_py27, _32bit
 
-PARALLEL_SUPPORTED = not (_windows_py27 or _32bit)
+# deliberately imported twice for different use cases
+
+
+PARALLEL_SUPPORTED = not _32bit
 
 def comp_list(n):
     l = [i for i in range(n)]
@@ -30,7 +28,6 @@ def comp_list(n):
 
 class TestListComprehension(TestCase):
 
-    @tag('important')
     def test_comp_list(self):
         pyfunc = comp_list
         cres = compile_isolated(pyfunc, [types.intp])
@@ -39,7 +36,6 @@ class TestListComprehension(TestCase):
         self.assertEqual(cfunc(0), pyfunc(0))
         self.assertEqual(cfunc(-1), pyfunc(-1))
 
-    @tag('important')
     def test_bulk_use_cases(self):
         """ Tests the large number of use cases defined below """
 
@@ -194,10 +190,7 @@ class TestListComprehension(TestCase):
              list6, list7, list8, list9, list10, list11,
              list12, list13, list14, list15,
              list16, list17, list18, list19, list20,
-             list21, list23, list24]
-
-        if utils.PYVERSION >= (3, 0):
-            f.append(list22)
+             list21, list22, list23, list24]
 
         var = [1, 2, 3, 4, 5]
         for ref in f:
@@ -221,13 +214,6 @@ class TestListComprehension(TestCase):
             bits = 64
         else:
             bits = 32
-
-        if utils.PYVERSION < (3, 0):
-            with self.assertRaises(TypingError) as raises:
-                cfunc = jit(nopython=True)(list22)
-                cfunc(var)
-            msg = "Cannot unify reflected list(int%d) and int%d" % (bits, bits)
-            self.assertIn(msg, str(raises.exception))
 
     def test_objmode_inlining(self):
         def objmode_func(y):
@@ -265,7 +251,6 @@ class TestArrayComprehension(unittest.TestCase):
         if run_parallel:
             self.assertIn('@do_scheduling', cfunc.inspect_llvm(cfunc.signatures[0]))
 
-    @tag('important')
     def test_comp_with_array_1(self):
         def comp_with_array_1(n):
             m = n * 2
@@ -276,7 +261,6 @@ class TestArrayComprehension(unittest.TestCase):
         if PARALLEL_SUPPORTED:
             self.check(comp_with_array_1, 5, run_parallel=True)
 
-    @tag('important')
     def test_comp_with_array_2(self):
         def comp_with_array_2(n, threshold):
             A = np.arange(-n, n)
@@ -284,21 +268,19 @@ class TestArrayComprehension(unittest.TestCase):
 
         self.check(comp_with_array_2, 5, 0)
 
-    @tag('important')
     def test_comp_with_array_noinline(self):
         def comp_with_array_noinline(n):
             m = n * 2
             l = np.array([i + m for i in range(n)])
             return l
 
-        import numba.inline_closurecall as ic
+        import numba.core.inline_closurecall as ic
         try:
             ic.enable_inline_arraycall = False
             self.check(comp_with_array_noinline, 5, assert_allocate_list=True)
         finally:
             ic.enable_inline_arraycall = True
 
-    @tag('important')
     def test_comp_nest_with_array(self):
         def comp_nest_with_array(n):
             l = np.array([[i * j for j in range(n)] for i in range(n)])
@@ -308,7 +290,6 @@ class TestArrayComprehension(unittest.TestCase):
         if PARALLEL_SUPPORTED:
             self.check(comp_nest_with_array, 5, run_parallel=True)
 
-    @tag('important')
     def test_comp_nest_with_array_3(self):
         def comp_nest_with_array_3(n):
             l = np.array([[[i * j * k for k in range(n)] for j in range(n)] for i in range(n)])
@@ -318,13 +299,12 @@ class TestArrayComprehension(unittest.TestCase):
         if PARALLEL_SUPPORTED:
             self.check(comp_nest_with_array_3, 5, run_parallel=True)
 
-    @tag('important')
     def test_comp_nest_with_array_noinline(self):
         def comp_nest_with_array_noinline(n):
             l = np.array([[i * j for j in range(n)] for i in range(n)])
             return l
 
-        import numba.inline_closurecall as ic
+        import numba.core.inline_closurecall as ic
         try:
             ic.enable_inline_arraycall = False
             self.check(comp_nest_with_array_noinline, 5,
@@ -332,7 +312,6 @@ class TestArrayComprehension(unittest.TestCase):
         finally:
             ic.enable_inline_arraycall = True
 
-    @tag('important')
     def test_comp_with_array_range(self):
         def comp_with_array_range(m, n):
             l = np.array([i for i in range(m, n)])
@@ -340,7 +319,6 @@ class TestArrayComprehension(unittest.TestCase):
 
         self.check(comp_with_array_range, 5, 10)
 
-    @tag('important')
     def test_comp_with_array_range_and_step(self):
         def comp_with_array_range_and_step(m, n):
             l = np.array([i for i in range(m, n, 2)])
@@ -348,7 +326,6 @@ class TestArrayComprehension(unittest.TestCase):
 
         self.check(comp_with_array_range_and_step, 5, 10)
 
-    @tag('important')
     def test_comp_with_array_conditional(self):
         def comp_with_array_conditional(n):
             l = np.array([i for i in range(n) if i % 2 == 1])
@@ -356,7 +333,6 @@ class TestArrayComprehension(unittest.TestCase):
         # arraycall inline would not happen when conditional is present
         self.check(comp_with_array_conditional, 10, assert_allocate_list=True)
 
-    @tag('important')
     def test_comp_nest_with_array_conditional(self):
         def comp_nest_with_array_conditional(n):
             l = np.array([[i * j for j in range(n)] for i in range(n) if i % 2 == 1])
@@ -364,7 +340,6 @@ class TestArrayComprehension(unittest.TestCase):
         self.check(comp_nest_with_array_conditional, 5,
                    assert_allocate_list=True)
 
-    @tag('important')
     def test_comp_nest_with_dependency(self):
         def comp_nest_with_dependency(n):
             l = np.array([[i * j for j in range(i+1)] for i in range(n)])
@@ -375,7 +350,6 @@ class TestArrayComprehension(unittest.TestCase):
         self.assertIn('Invalid use of Function', str(raises.exception))
         self.assertIn('array(undefined,', str(raises.exception))
 
-    @tag('important')
     def test_no_array_comp(self):
         def no_array_comp1(n):
             l = [1,2,3,4]
@@ -390,7 +364,6 @@ class TestArrayComprehension(unittest.TestCase):
             return a
         self.check(no_array_comp2, 10, assert_allocate_list=True)
 
-    @tag('important')
     def test_nested_array(self):
         def nested_array(n):
             l = np.array([ np.array([x for x in range(n)]) for y in range(n)])
@@ -398,7 +371,6 @@ class TestArrayComprehension(unittest.TestCase):
 
         self.check(nested_array, 10)
 
-    @tag('important')
     def test_nested_array_with_const(self):
         def nested_array(n):
             l = np.array([ np.array([x for x in range(3)]) for y in range(4)])
@@ -406,7 +378,6 @@ class TestArrayComprehension(unittest.TestCase):
 
         self.check(nested_array, 0)
 
-    @tag('important')
     def test_array_comp_with_iter(self):
         def array_comp(a):
             l = np.array([ x * x for x in a ])

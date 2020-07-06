@@ -1,16 +1,14 @@
-from __future__ import print_function, absolute_import
-
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, CUDATestCase
 
 
 def noop(x):
     pass
 
 
-class TestJitErrors(unittest.TestCase):
+class TestJitErrors(CUDATestCase):
     """
     Test compile-time errors with @jit.
     """
@@ -40,6 +38,20 @@ class TestJitErrors(unittest.TestCase):
             kernfunc[2, 3.0]
         self.assertIn("blockdim must be a sequence of integers, got [3.0]",
                       str(raises.exception))
+
+    def _test_unconfigured(self, kernfunc):
+        with self.assertRaises(ValueError) as raises:
+            kernfunc(0)
+        self.assertIn("launch configuration was not specified",
+                      str(raises.exception))
+
+    def test_unconfigured_typed_cudakernel(self):
+        kernfunc = cuda.jit("void(int32)")(noop)
+        self._test_unconfigured(kernfunc)
+
+    def test_unconfigured_untyped_cudakernel(self):
+        kernfunc = cuda.jit(noop)
+        self._test_unconfigured(kernfunc)
 
 
 if __name__ == '__main__':

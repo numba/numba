@@ -1,12 +1,11 @@
 '''
 Contains CUDA API functions
 '''
-from __future__ import absolute_import
 
 from contextlib import contextmanager
 from .cudadrv.devices import require_context, reset, gpus
 from .kernel import FakeCUDAKernel
-from numba.typing import Signature
+from numba.core.typing import Signature
 from warnings import warn
 from ..args import In, Out, InOut
 
@@ -77,7 +76,7 @@ def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
         boundscheck=None,
         ):
     # Here for API compatibility
-    if boundscheck is not None:
+    if boundscheck == True:
         raise NotImplementedError("bounds checking is not supported for CUDA")
 
     if link is not None:
@@ -91,8 +90,6 @@ def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
                                   fastmath=fastmath)
         return jitwrapper
     return FakeCUDAKernel(func_or_sig, device=device)
-
-autojit = jit
 
 
 @contextmanager

@@ -1,6 +1,4 @@
-from __future__ import absolute_import, print_function
-
-
+import ctypes
 import os
 from functools import reduce, wraps
 import operator
@@ -10,13 +8,10 @@ import warnings
 
 import numpy as np
 
-from numba import ctypes_support as ctypes
-from numba import config, compiler, types, sigutils
-from numba.typing.templates import AbstractTemplate, ConcreteTemplate
-from numba import funcdesc, typing, utils, serialize
-from numba.compiler_lock import global_compiler_lock
+from numba.core.typing.templates import AbstractTemplate, ConcreteTemplate
+from numba.core import types, typing, utils, funcdesc, serialize, config, compiler, sigutils
+from numba.core.compiler_lock import global_compiler_lock
 
-from .cudadrv.autotune import AutoTuner
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import normalize_kernel_dimensions
@@ -36,6 +31,7 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
+    flags.set('no_cfunc_wrapper')
     if debug:
         flags.set('debuginfo')
     if inline:
@@ -284,7 +280,7 @@ class ForAll(object):
         # Prefer user-specified config
         if tpb != 0:
             return tpb
-        # Else, ask the driver to give a good cofnig
+        # Else, ask the driver to give a good config
         else:
             ctx = get_context()
             kwargs = dict(
@@ -293,23 +289,8 @@ class ForAll(object):
                 memsize=self.sharedmem,
                 blocksizelimit=1024,
             )
-            try:
-                # Raises from the driver if the feature is unavailable
-                _, tpb = ctx.get_max_potential_block_size(**kwargs)
-            except AttributeError:
-                # Fallback to table-based approach.
-                tpb = self._fallback_autotune_best(kernel)
-                raise
+            _, tpb = ctx.get_max_potential_block_size(**kwargs)
             return tpb
-
-    def _fallback_autotune_best(self, kernel):
-        try:
-            tpb = kernel.autotune.best()
-        except ValueError:
-            warnings.warn('Could not autotune, using default tpb of 128')
-            tpb = 128
-
-        return tpb
 
 
 class CUDAKernelBase(object):
@@ -317,8 +298,8 @@ class CUDAKernelBase(object):
     """
 
     def __init__(self):
-        self.griddim = (1, 1)
-        self.blockdim = (1, 1, 1)
+        self.griddim = None
+        self.blockdim = None
         self.sharedmem = 0
         self.stream = 0
 
@@ -535,9 +516,10 @@ class CUDAKernel(CUDAKernelBase):
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
+        griddim, blockdim = normalize_kernel_dimensions(self.griddim, self.blockdim)
         self._kernel_call(args=args,
-                          griddim=self.griddim,
-                          blockdim=self.blockdim,
+                          griddim=griddim,
+                          blockdim=blockdim,
                           stream=self.stream,
                           sharedmem=self.sharedmem)
 
@@ -636,7 +618,7 @@ class CUDAKernel(CUDAKernelBase):
                     locinfo = ''
                 else:
                     sym, filepath, lineno = loc
-                    filepath = os.path.relpath(filepath)
+                    filepath = os.path.abspath(filepath)
                     locinfo = 'In function %r, file %s, line %s, ' % (
                         sym, filepath, lineno,
                         )
@@ -718,34 +700,6 @@ class CUDAKernel(CUDAKernelBase):
 
         else:
             raise NotImplementedError(ty, val)
-
-    @property
-    def autotune(self):
-        """Return the autotuner object associated with this kernel."""
-        warnings.warn(_deprec_warn_msg.format('autotune'), DeprecationWarning)
-        has_autotune = hasattr(self, '_autotune')
-        if has_autotune and self._autotune.dynsmem == self.sharedmem:
-            return self._autotune
-        else:
-            # Get CUDA Function
-            cufunc = self._func.get()
-            at = AutoTuner(info=cufunc.attrs, cc=cufunc.device.compute_capability)
-            self._autotune = at
-            return self._autotune
-
-    @property
-    def occupancy(self):
-        """Occupancy is the ratio of the number of active warps per multiprocessor to the maximum
-        number of warps that can be active on the multiprocessor at once.
-        Calculate the theoretical occupancy of the kernel given the
-        current configuration."""
-        warnings.warn(_deprec_warn_msg.format('occupancy'), DeprecationWarning)
-        thread_per_block = reduce(operator.mul, self.blockdim, 1)
-        return self.autotune.closest(thread_per_block)
-
-
-_deprec_warn_msg = ("The .{} attribute is is deprecated and will be "
-                    "removed in a future release")
 
 
 class AutoJitCUDAKernel(CUDAKernelBase):

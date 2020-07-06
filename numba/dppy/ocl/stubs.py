@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import
-from numba import types, ir, typing, macro
+from numba.core import types, ir, typing
+from numba.core.rewrites.macros import Macro
 
 _stub_error = NotImplementedError("This is a stub.")
 
@@ -108,7 +109,7 @@ class local(Stub):
     """
     _description_ = '<local>'
 
-    static_alloc = macro.Macro('local.static_alloc', local_alloc, callable=True,
+    static_alloc = Macro('local.static_alloc', local_alloc, callable=True,
                         argnames=['shape', 'dtype'])
 
 

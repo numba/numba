@@ -1,9 +1,7 @@
-from __future__ import division
-
 import numba
 
-from numba import unittest_support as unittest
-from .support import TestCase, tag
+from numba.tests.support import TestCase
+import unittest
 
 
 class TestNumbaModule(TestCase):
@@ -15,7 +13,6 @@ class TestNumbaModule(TestCase):
         self.assertTrue(hasattr(numba, name), name)
         self.assertIn(name, numba.__all__)
 
-    @tag('important')
     def test_numba_module(self):
         # jit
         self.check_member("jit")

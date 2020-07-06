@@ -10,7 +10,7 @@ Talks on Numba
 --------------
 
 * AnacondaCON 2018 - Accelerating Scientific Workloads with Numba - Siu Kwan Lam (`Video <https://www.youtube.com/watch?v=6oXedk2tGfk>`__)
-* `DIANA-HEP Meeting, 23 April 2018 <https://indico.cern.ch/event/709711/>`__ - Overview of Numba - Stan Seibert 
+* `DIANA-HEP Meeting, 23 April 2018 <https://indico.cern.ch/event/709711/>`__ - Overview of Numba - Stan Seibert
 
 Talks on Applications of Numba
 ------------------------------
@@ -23,9 +23,13 @@ Talks on Applications of Numba
 * PyData Berlin 2018 - Extending Pandas using Apache Arrow and Numba - Uwe L. Korn (`Video <https://www.youtube.com/watch?v=tvmX8YAFK80>`__, `Blog <https://uwekorn.com/2018/08/03/use-numba-to-work-with-apache-arrow-in-pure-python.html>`__)
 * FOSDEM 2019 - Extending Numba - Joris Geessels  (`Video, Slides & Examples <https://fosdem.org/2019/schedule/event/python_extending_numba/>`__)
 * PyCon India 2019 - Real World Numba: Taking the Path of Least Resistance - Ankit Mahato (`Video <https://www.youtube.com/watch?v=rhbegsr8stc>`__)
+* SciPy 2019 - How to Accelerate an Existing Codebase with Numba - Siu Kwan Lam & Stanley Seibert (`Video <https://www.youtube.com/watch?v=-4tD8kNHdXs>`__)
+* SciPy 2019 - Real World Numba: Creating a Skeleton Analysis Library - Juan Nunez-Iglesias (`Video <https://www.youtube.com/watch?v=0pUPNMglnaE>`__)
+* SciPy 2019 - Fast Gradient Boosting Decision Trees with PyGBM and Numba - Nicholas Hug (`Video <https://www.youtube.com/watch?v=cLpIh8Aiy2w>`__)
 
 Tutorials
 ---------
 
 * SciPy 2017 - Numba: Tell those C++ Bullies to Get Lost - Gil Forsyth & Lorena Barba (`Video <https://www.youtube.com/watch?v=1AwG0T4gaO0>`__, `Notebooks <https://github.com/gforsyth/numba_tutorial_scipy2017>`__)
 * GPU Technology Conference 2018 - GPU Computing in Python with Numba - Stan Seibert (`Notebooks <https://github.com/ContinuumIO/gtc2018-numba>`__)
+* PyData Amsterdam 2019 - Create CUDA kernels from Python using Numba and CuPy - Valentin Haenel (`Video <https://www.youtube.com/watch?v=CQDsT81GyS8>`__)

@@ -1,10 +1,8 @@
-from __future__ import print_function, absolute_import, division
-
 import numpy as np
 import math
 import time
 from numba import cuda, double
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
 RISKFREE = 0.02
@@ -47,7 +45,7 @@ def randfloat(rand_var, low, high):
     return (1.0 - rand_var) * low + rand_var * high
 
 
-class TestBlackScholes(SerialMixin, unittest.TestCase):
+class TestBlackScholes(CUDATestCase):
     def test_blackscholes(self):
         OPT_N = 400
         iterations = 2

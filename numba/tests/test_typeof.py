@@ -1,27 +1,25 @@
 """
 Tests for the typeof() machinery.
 """
-
-from __future__ import print_function
-
 import array
 from collections import namedtuple
 import enum
 import mmap
-import sys
 
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba import cffi_support, numpy_support, types
-from numba.special import typeof
-from numba.dispatcher import OmittedArg
+import unittest
+import numba.core.typing.cffi_utils as cffi_support
+from numba.core import types
+from numba.misc.special import typeof
+from numba.core.dispatcher import OmittedArg
 from numba._dispatcher import compute_fingerprint
 
-from .support import TestCase, tag
-from .test_numpy_support import ValueTypingTestBase
-from .ctypes_usecases import *
-from .enum_usecases import *
+from numba.tests.support import TestCase, tag
+from numba.tests.test_numpy_support import ValueTypingTestBase
+from numba.tests.ctypes_usecases import *
+from numba.tests.enum_usecases import *
+from numba.np import numpy_support
 
 
 recordtype = np.dtype([('a', np.float64),
@@ -56,7 +54,6 @@ class TestTypeof(ValueTypingTestBase, TestCase):
     Test typeof() and, implicitly, typing.Context.get_argument_type().
     """
 
-    @tag('important')
     def test_number_values(self):
         """
         Test special.typeof() with scalar number values.
@@ -70,21 +67,18 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(typeof(2**63 - 1), types.int64)
         self.assertEqual(typeof(-2**63), types.int64)
 
-    @tag('important')
     def test_datetime_values(self):
         """
         Test special.typeof() with np.timedelta64 values.
         """
         self.check_datetime_values(typeof)
 
-    @tag('important')
     def test_timedelta_values(self):
         """
         Test special.typeof() with np.timedelta64 values.
         """
         self.check_timedelta_values(typeof)
 
-    @tag('important')
     def test_array_values(self):
         """
         Test special.typeof() with ndarray values.
@@ -116,7 +110,6 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertIn("Unsupported array dtype: %s" % (a5.dtype,),
                       str(raises.exception))
 
-    @tag('important')
     def test_structured_arrays(self):
         def check(arr, dtype, ndim, layout, aligned):
             ty = typeof(arr)
@@ -143,30 +136,27 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         check(arr, rec_ty, 1, "C", True)
 
     def test_buffers(self):
-        if sys.version_info >= (3,):
-            b = b"xx"
-            ty = typeof(b)
-            self.assertEqual(ty, types.Bytes(types.uint8, 1, "C"))
-            self.assertFalse(ty.mutable)
-            ty = typeof(memoryview(b))
-            self.assertEqual(ty, types.MemoryView(types.uint8, 1, "C",
-                                                  readonly=True))
-            self.assertFalse(ty.mutable)
-            ty = typeof(array.array('i', [0, 1, 2]))
-            self.assertEqual(ty, types.PyArray(types.int32, 1, "C"))
-            self.assertTrue(ty.mutable)
+        b = b"xx"
+        ty = typeof(b)
+        self.assertEqual(ty, types.Bytes(types.uint8, 1, "C"))
+        self.assertFalse(ty.mutable)
+        ty = typeof(memoryview(b))
+        self.assertEqual(ty, types.MemoryView(types.uint8, 1, "C",
+                                                readonly=True))
+        self.assertFalse(ty.mutable)
+        ty = typeof(array.array('i', [0, 1, 2]))
+        self.assertEqual(ty, types.PyArray(types.int32, 1, "C"))
+        self.assertTrue(ty.mutable)
 
         b = bytearray(10)
         ty = typeof(b)
         self.assertEqual(ty, types.ByteArray(types.uint8, 1, "C"))
         self.assertTrue(ty.mutable)
 
-    @tag('important')
     def test_none(self):
         ty = typeof(None)
         self.assertEqual(ty, types.none)
 
-    @tag('important')
     def test_ellipsis(self):
         ty = typeof(Ellipsis)
         self.assertEqual(ty, types.ellipsis)
@@ -175,7 +165,6 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         ty = typeof("abc")
         self.assertEqual(ty, types.string)
 
-    @tag('important')
     def test_slices(self):
         for args in [(1,), (1, 2), (1, 2, 1), (1, 2, None)]:
             v = slice(*args)
@@ -184,7 +173,6 @@ class TestTypeof(ValueTypingTestBase, TestCase):
             v = slice(*args)
             self.assertIs(typeof(v), types.slice3_type)
 
-    @tag('important')
     def test_tuples(self):
         v = (1, 2)
         self.assertEqual(typeof(v), types.UniTuple(types.intp, 2))
@@ -194,12 +182,10 @@ class TestTypeof(ValueTypingTestBase, TestCase):
                                       types.Tuple((types.float64, types.intp))))
                          )
 
-    @tag('important')
     def test_lists(self):
         v = [1.0] * 100
         self.assertEqual(typeof(v), types.List(types.float64, reflected=True))
 
-    @tag('important')
     def test_sets(self):
         v = set([1.0, 2.0, 3.0])
         self.assertEqual(typeof(v), types.Set(types.float64, reflected=True))
@@ -207,7 +193,6 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         with self.assertRaises(ValueError):
             typeof(v)
 
-    @tag('important')
     def test_namedtuple(self):
         v = Point(1, 2)
         tp_point = typeof(v)
@@ -223,7 +208,6 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertNotEqual(tp_rect, tp_point)
         self.assertNotEqual(tp_rect, types.UniTuple(tp_rect.dtype, tp_rect.count))
 
-    @tag('important')
     def test_enum(self):
         tp_red = typeof(Color.red)
         self.assertEqual(tp_red, types.EnumMember(Color, types.intp))
@@ -241,7 +225,6 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(str(raises.exception),
                          "Cannot type heterogeneous enum: got value types complex128, float64")
 
-    @tag('important')
     def test_enum_class(self):
         tp_color = typeof(Color)
         self.assertEqual(tp_color, types.EnumClass(Color, types.intp))
@@ -260,7 +243,6 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertEqual(str(raises.exception),
                          "Cannot type heterogeneous enum: got value types complex128, float64")
 
-    @tag('important')
     def test_dtype(self):
         dtype = np.dtype('int64')
         self.assertEqual(typeof(dtype), types.DType(types.int64))
@@ -269,14 +251,12 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         rec_ty = numpy_support.from_struct_dtype(dtype)
         self.assertEqual(typeof(dtype), types.DType(rec_ty))
 
-    @tag('important')
     def test_dtype_values(self):
         self.assertEqual(typeof(np.int64), types.NumberClass(types.int64))
         self.assertEqual(typeof(np.float64), types.NumberClass(types.float64))
         self.assertEqual(typeof(np.int32), types.NumberClass(types.int32))
         self.assertEqual(typeof(np.int8), types.NumberClass(types.int8))
 
-    @tag('important')
     def test_ctypes(self):
         ty_cos = typeof(c_cos)
         ty_sin = typeof(c_sin)
@@ -287,10 +267,9 @@ class TestTypeof(ValueTypingTestBase, TestCase):
         self.assertNotEqual(ty_cos.get_pointer(c_cos),
                             ty_sin.get_pointer(c_sin))
 
-    @tag('important')
     @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
     def test_cffi(self):
-        from . import cffi_usecases as mod
+        from numba.tests import cffi_usecases as mod
         mod.init()
         ty_cffi_cos = typeof(mod.cffi_cos)
         ty_cffi_sin = typeof(mod.cffi_sin)
@@ -459,14 +438,13 @@ class TestFingerprint(TestCase):
         m_uint8_1d = compute_fingerprint(memoryview(bytearray()))
         distinct.add(m_uint8_1d)
 
-        if sys.version_info >= (3,):
-            arr = array.array('B', [42])
+        arr = array.array('B', [42])
+        distinct.add(compute_fingerprint(arr))
+        self.assertEqual(compute_fingerprint(memoryview(arr)), m_uint8_1d)
+        for array_code in 'bi':
+            arr = array.array(array_code, [0, 1, 2])
             distinct.add(compute_fingerprint(arr))
-            self.assertEqual(compute_fingerprint(memoryview(arr)), m_uint8_1d)
-            for array_code in 'bi':
-                arr = array.array(array_code, [0, 1, 2])
-                distinct.add(compute_fingerprint(arr))
-                distinct.add(compute_fingerprint(memoryview(arr)))
+            distinct.add(compute_fingerprint(memoryview(arr)))
 
         arr = np.empty(16, dtype=np.uint8)
         distinct.add(compute_fingerprint(arr))
@@ -481,10 +459,9 @@ class TestFingerprint(TestCase):
         distinct.add(compute_fingerprint(arr))
         distinct.add(compute_fingerprint(memoryview(arr)))
 
-        if sys.version_info >= (3,):
-            m = mmap.mmap(-1, 16384)
-            distinct.add(compute_fingerprint(m))
-            self.assertEqual(compute_fingerprint(memoryview(m)), m_uint8_1d)
+        m = mmap.mmap(-1, 16384)
+        distinct.add(compute_fingerprint(m))
+        self.assertEqual(compute_fingerprint(memoryview(m)), m_uint8_1d)
 
     def test_dtype(self):
         distinct = DistinctChecker()

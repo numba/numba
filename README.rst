@@ -33,8 +33,6 @@ The following requisites will need to be present in the system. Refer to next se
 
 - LLVM-SPIRV translator: Used for SPIRV generation from LLVM IR.
 
-- SPIRV-Tools          : Used internally for code-generation.
-
 - LLVMDEV              : To support LLVM IR generation.
 
 - Others               : All existing dependecies for NUMBA, such as llvmlite, also apply to DPPy.
@@ -95,6 +93,8 @@ To run the test suite execute the following:
 
 Refer the HowTo.rst guide for an overview of the programming semantics,
 examples, supported functionalities, and known issues.
+
+*Installing while Intel OneAPI basekit is actvated have shown to throw error while installation of NUMBA-DPPY because of incompatible TBB interface, one way around that is to temporaily move env variable TBBROOT to something else*
 
 
 ===================

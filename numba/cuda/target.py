@@ -1,21 +1,19 @@
-from __future__ import print_function, absolute_import
 import re
 from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
                        Constant, ICMP_EQ)
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba import typing, types, cgutils, debuginfo, dispatcher
-from numba.utils import cached_property
-from numba.targets.base import BaseContext
-from numba.targets.callconv import MinimalCallConv
-from numba.targets import cmathimpl
-from numba.typing import cmathdecl
+from numba.core import typing, types, dispatcher, debuginfo, itanium_mangler, cgutils
+from numba.core.utils import cached_property
+from numba.core.base import BaseContext
+from numba.core.callconv import MinimalCallConv
+from numba.core.typing import cmathdecl
 
-from numba import itanium_mangler
 from .cudadrv import nvvm
-from . import codegen, nvvmutils
+from numba.cuda import codegen, nvvmutils
 from .decorators import jitdevice
+from numba.cpython import cmathimpl
 
 
 # -----------------------------------------------------------------------------

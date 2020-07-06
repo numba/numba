@@ -1,9 +1,7 @@
-from __future__ import print_function, absolute_import
-
 import numpy as np
 
 from numba import cuda, float64
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
 def builtin_max(A, B, C):
@@ -25,7 +23,7 @@ def builtin_min(A, B, C):
 
 
 @skip_on_cudasim('Tests PTX emission')
-class TestCudaMinMax(SerialMixin, unittest.TestCase):
+class TestCudaMinMax(CUDATestCase):
     def _run(
             self,
             kernel,

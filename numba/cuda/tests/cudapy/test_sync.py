@@ -1,8 +1,7 @@
-from __future__ import print_function, absolute_import
 import numpy as np
 from numba import cuda, int32, float32
-from numba.cuda.testing import unittest, SerialMixin
-from numba.config import ENABLE_CUDASIM
+from numba.cuda.testing import unittest, CUDATestCase
+from numba.core.config import ENABLE_CUDASIM
 
 
 def useless_sync(ary):
@@ -72,7 +71,7 @@ def use_syncthreads_or(ary_in, ary_out):
 
 
 
-class TestCudaSync(SerialMixin, unittest.TestCase):
+class TestCudaSync(CUDATestCase):
     def test_useless_sync(self):
         compiled = cuda.jit("void(int32[::1])")(useless_sync)
         nelem = 10

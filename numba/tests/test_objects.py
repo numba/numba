@@ -2,13 +2,11 @@
 Test generic manipulation of objects.
 """
 
-from __future__ import print_function
 
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba.utils import PYVERSION
-from numba import types
-from .support import TestCase
+import unittest
+from numba.core.compiler import compile_isolated, Flags
+from numba.core import types
+from numba.tests.support import TestCase
 
 
 enable_pyobj_flags = Flags()
