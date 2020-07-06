@@ -7,11 +7,11 @@ from llvmlite.llvmpy import core as lc
 from llvmlite import ir as llvmir
 from llvmlite import binding as ll
 
-from numba import typing, types, utils, cgutils
-from numba.utils import cached_property
-from numba import datamodel
-from numba.targets.base import BaseContext
-from numba.targets.callconv import MinimalCallConv
+from numba.core import typing, types, utils, cgutils
+from numba.core.utils import cached_property
+from numba.core import datamodel
+from numba.core.base import BaseContext
+from numba.core.callconv import MinimalCallConv
 from . import codegen
 
 
@@ -27,7 +27,7 @@ class DPPyTypingContext(typing.BaseContext):
     def load_additional_registries(self):
         # Declarations for OpenCL API functions and OpenCL Math functions
         from .ocl import ocldecl, mathdecl
-        from numba.typing import cmathdecl, npydecl
+        from numba.core.typing import cmathdecl, npydecl
 
         self.install_registry(ocldecl.registry)
         self.install_registry(mathdecl.registry)
@@ -69,7 +69,7 @@ def _init_data_model_manager():
 spirv_data_model_manager = _init_data_model_manager()
 
 def _replace_numpy_ufunc_with_opencl_supported_functions():
-    from numba.targets.ufunc_db import _ufunc_db as ufunc_db
+    from numba.np.ufunc_db import _ufunc_db as ufunc_db
     from numba.dppy.ocl.mathimpl import lower_ocl_impl, sig_mapper
 
     ufuncs = [("fabs", np.fabs), ("exp", np.exp), ("log", np.log),
@@ -98,11 +98,34 @@ class DPPyTargetContext(BaseContext):
                                 .SPIR_DATA_LAYOUT[utils.MACHINE_BITS]))
         # Override data model manager to SPIR model
         self.data_model_manager = spirv_data_model_manager
-        self.done_once = False
+
+        from numba.np.ufunc_db import _ufunc_db as ufunc_db, _lazy_init_db
+        import copy
+        _lazy_init_db()
+        self.ufunc_db = copy.deepcopy(ufunc_db)
+
+
+    def replace_numpy_ufunc_with_opencl_supported_functions(self):
+        from numba.dppy.ocl.mathimpl import lower_ocl_impl, sig_mapper
+
+        ufuncs = [("fabs", np.fabs), ("exp", np.exp), ("log", np.log),
+                  ("log10", np.log10), ("expm1", np.expm1), ("log1p", np.log1p),
+                  ("sqrt", np.sqrt), ("sin", np.sin), ("cos", np.cos),
+                  ("tan", np.tan), ("asin", np.arcsin), ("acos", np.arccos),
+                  ("atan", np.arctan), ("atan2", np.arctan2), ("sinh", np.sinh),
+                  ("cosh", np.cosh), ("tanh", np.tanh), ("asinh", np.arcsinh),
+                  ("acosh", np.arccosh), ("atanh", np.arctanh), ("ldexp", np.ldexp),
+                  ("floor", np.floor), ("ceil", np.ceil), ("trunc", np.trunc)]
+
+        for name, ufunc in ufuncs:
+            for sig in self.ufunc_db[ufunc].keys():
+                if sig in sig_mapper and (name, sig_mapper[sig]) in lower_ocl_impl:
+                    self.ufunc_db[ufunc][sig] = lower_ocl_impl[(name, sig_mapper[sig])]
+
 
     def load_additional_registries(self):
         from .ocl import oclimpl, mathimpl
-        from numba.targets import npyimpl
+        from numba.np import npyimpl
         from . import printimpl
 
         self.insert_func_defn(oclimpl.registry.functions)
@@ -114,9 +137,7 @@ class DPPyTargetContext(BaseContext):
             functions we will redirect some of NUMBA's NumPy
             ufunc with OpenCL's.
         """
-        if not self.done_once:
-            _replace_numpy_ufunc_with_opencl_supported_functions()
-            self.done_once = True
+        self.replace_numpy_ufunc_with_opencl_supported_functions()
 
 
     @cached_property

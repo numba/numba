@@ -1,5 +1,5 @@
 from __future__ import print_function, absolute_import, division
-from numba import sigutils, types
+from numba.core import sigutils, types
 from .compiler import (compile_kernel, JitDPPyKernel, compile_dppy_func_template,
                        compile_dppy_func, get_ordered_arg_access_types)
 
