@@ -5,7 +5,8 @@ import math
 import time
 
 from numba import dppy
-import dppy.core as ocldrv
+import dppy as ocldrv
+
 
 @dppy.kernel
 def reduction_kernel(A, R, stride):
@@ -14,6 +15,7 @@ def reduction_kernel(A, R, stride):
     R[i] = A[i] + A[i+stride]
     # store the sum to be used in nex iteration
     A[i] = R[i]
+
 
 def test_sum_reduction():
     # Select a device for executing the kernel
@@ -38,22 +40,28 @@ def test_sum_reduction():
     # at max we will require half the size of A to store sum
     R = np.array(np.random.random(math.ceil(N/2)), dtype=np.float32)
 
-    # create device array
-    dA = device_env.copy_array_to_device(A)
-    dR = device_env.copy_array_to_device(R)
+    if ocldrv.has_gpu_device:
+        with ocldrv.igpu_context(0) as device_env:
+            # create device array
+            dA = device_env.copy_array_to_device(A)
+            dR = device_env.copy_array_to_device(R)
 
-    total = N
+            total = N
 
-    while (total > 1):
-        # call kernel
-        global_size = total // 2
-        reduction_kernel[device_env, global_size](dA, dR, global_size)
-        total = total // 2
+            while (total > 1):
+                # call kernel
+                global_size = total // 2
+                reduction_kernel[global_size, dppy.DEFAULT_LOCAL_SIZE](dA, dR, global_size)
+                total = total // 2
 
-    device_env.copy_array_from_device(dR)
+            device_env.copy_array_from_device(dR)
+    else:
+        print("No device found")
+        exit()
+
     result = A.sum()
     max_abs_err = result - R[0]
-    assert(max_abs_err < 1e-13)
+    assert(max_abs_err < 1e-2)
 
 if __name__ == '__main__':
     test_sum_reduction()

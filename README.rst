@@ -67,7 +67,7 @@ all the needed dependencies already installed. **Please activate the numba-dppy-
 Install DPPY backend
 ***********************
 NUMBA-DPPY also depend on DPPY backend. It can be found `here <https://github.intel.com/SAT/dppy>`_. Please run 
-`build_for_conda.sh` to install DPPY backend.
+`build_for_develop.sh` to install DPPY backend.
 
 Install NUMBA-DPPY
 *********************
