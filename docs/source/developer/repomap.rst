@@ -82,6 +82,7 @@ These define aspects of the public Numba interface.
   regular functions on the CPU
 - :ghfile:`numba/core/extending.py` - Public decorators for extending Numba
   (``overload``, ``intrinsic``, etc)
+  - :ghfile:`numba/core/structref.py` - Public API for defining mutable struct
 - :ghfile:`numba/core/ccallback.py` - ``@cfunc`` decorator for compiling
   functions to a fixed C signature.  Used to make callbacks.
 - :ghfile:`numba/np/ufunc/decorators.py` - ufunc/gufunc compilation

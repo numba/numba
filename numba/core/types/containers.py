@@ -690,3 +690,18 @@ class DictIteratorType(SimpleIteratorType):
         name = "iter[{}->{}],{}".format(iterable.parent, yield_type,
                                         iterable.name)
         super(DictIteratorType, self).__init__(name, yield_type)
+
+
+class StructPayloadType(Type):
+    """The type of the payload of a mutable struct.
+    """
+    mutable = True
+
+    def __init__(self, typename, fields):
+        self._typename = typename
+        self._fields = tuple(fields)
+        super().__init__(name=f"mutstruct.payload.{typename}")
+
+    @property
+    def fields(self):
+        return self._fields
