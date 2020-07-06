@@ -1,8 +1,12 @@
 from __future__ import print_function, absolute_import
 from numba.core import types, ir, typing
-
+from numba.core.rewrites.macros import Macro
 
 _stub_error = NotImplementedError("This is a stub.")
+
+# mem fence
+CLK_LOCAL_MEM_FENCE  = 0x1
+CLK_GLOBAL_MEM_FENCE = 0x2
 
 
 def get_global_id(*args, **kargs):
@@ -87,6 +91,36 @@ class Stub(object):
 
     def __repr__(self):
         return self._description_
+
+#-------------------------------------------------------------------------------
+# local memory
+
+def local_alloc(shape, dtype):
+    shape = _legalize_shape(shape)
+    ndim = len(shape)
+    fname = "dppy.lmem.alloc"
+    restype = types.Array(dtype, ndim, 'C')
+    sig = typing.signature(restype, types.UniTuple(types.intp, ndim), types.Any)
+    return ir.Intrinsic(fname, sig, args=(shape, dtype))
+
+
+class local(Stub):
+    """local namespace
+    """
+    _description_ = '<local>'
+
+    static_alloc = Macro('local.static_alloc', local_alloc, callable=True,
+                        argnames=['shape', 'dtype'])
+
+
+def _legalize_shape(shape):
+    if isinstance(shape, tuple):
+        return shape
+    elif isinstance(shape, int):
+        return (shape,)
+    else:
+        raise TypeError("invalid type for shape; got {0}".format(type(shape)))
+
 
 #-------------------------------------------------------------------------------
 # atomic

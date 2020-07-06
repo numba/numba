@@ -45,48 +45,40 @@ def dppy_tan(a,b):
     i = dppy.get_global_id(0)
     b[i] = math.tan(a[i])
 
-global_size = 128
+global_size = 10
 N = global_size
 
 a = np.array(np.random.random(N), dtype=np.float32)
 
+def driver(a, device_env, jitfunc):
+    b = np.ones_like(a)
+    # Device buffers
+    dA = device_env.copy_array_to_device(a)
+    dB = device_env.create_device_array(b)
+    jitfunc[global_size, dppy.DEFAULT_LOCAL_SIZE](dA, dB)
+    device_env.copy_array_from_device(dB)
+    return dB.get_ndarray()
+
+
 def test_driver(input_arr, device_ty, jitfunc):
-    out_actual = np.ones_like(input_arr)
-    device_env = None
+    out_actual = None
     if device_ty == "GPU":
-        try:
-            device_env = ocldrv.runtime.get_gpu_device()
-        except:
-            print("No GPU devices found on the system")
-            raise SystemExit()
+        with ocldrv.igpu_context(0) as device_env:
+            out_actual = driver(input_arr, device_env, jitfunc)
     elif device_ty == "CPU":
-        try:
-            device_env = ocldrv.runtime.get_cpu_device()
-        except:
-            print("No CPU devices found on the system")
-            raise SystemExit()
+        with ocldrv.cpu_context(0) as device_env:
+            out_actual = driver(input_arr, device_env, jitfunc)
     else:
         print("Unknown device type")
         raise SystemExit()
 
-    # Device buffers
-    dA = device_env.copy_array_to_device(a)
-    dB = ocldrv.DeviceArray(device_env.get_env_ptr(), out_actual)
-    jitfunc[device_env, global_size](dA, dB)
-    device_env.copy_array_from_device(dB)
-
     return out_actual
 
 
-class TestDPPYMathFunctions(DPPYTestCase):
-
+@unittest.skipUnless(ocldrv.has_cpu_device, 'test only on CPU system')
+class TestDPPYMathFunctionsCPU(DPPYTestCase):
     def test_fabs_cpu(self):
         b_actual = test_driver(a, "CPU", dppy_fabs)
-        b_expected = np.fabs(a)
-        self.assertTrue(np.all(b_actual == b_expected))
-
-    def test_fabs_gpu(self):
-        b_actual = test_driver(a, "GPU", dppy_fabs)
         b_expected = np.fabs(a)
         self.assertTrue(np.all(b_actual == b_expected))
 
@@ -95,18 +87,8 @@ class TestDPPYMathFunctions(DPPYTestCase):
         b_expected = np.sin(a)
         self.assertTrue(np.allclose(b_actual,b_expected))
 
-    def test_sin_gpu(self):
-        b_actual = test_driver(a, "GPU", dppy_sin)
-        b_expected = np.sin(a)
-        self.assertTrue(np.allclose(b_actual,b_expected))
-
     def test_cos_cpu(self):
         b_actual = test_driver(a, "CPU", dppy_cos)
-        b_expected = np.cos(a)
-        self.assertTrue(np.allclose(b_actual,b_expected))
-
-    def test_cos_gpu(self):
-        b_actual = test_driver(a, "GPU", dppy_cos)
         b_expected = np.cos(a)
         self.assertTrue(np.allclose(b_actual,b_expected))
 
@@ -115,18 +97,8 @@ class TestDPPYMathFunctions(DPPYTestCase):
         b_expected = np.exp(a)
         self.assertTrue(np.allclose(b_actual,b_expected))
 
-    def test_exp_gpu(self):
-        b_actual = test_driver(a, "GPU", dppy_exp)
-        b_expected = np.exp(a)
-        self.assertTrue(np.allclose(b_actual,b_expected))
-
     def test_sqrt_cpu(self):
         b_actual = test_driver(a, "CPU", dppy_sqrt)
-        b_expected = np.sqrt(a)
-        self.assertTrue(np.allclose(b_actual,b_expected))
-
-    def test_sqrt_gpu(self):
-        b_actual = test_driver(a, "GPU", dppy_sqrt)
         b_expected = np.sqrt(a)
         self.assertTrue(np.allclose(b_actual,b_expected))
 
@@ -135,10 +107,39 @@ class TestDPPYMathFunctions(DPPYTestCase):
         b_expected = np.log(a)
         self.assertTrue(np.allclose(b_actual,b_expected))
 
+
+@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+class TestDPPYMathFunctionsGPU(DPPYTestCase):
+    def test_fabs_gpu(self):
+        b_actual = test_driver(a, "GPU", dppy_fabs)
+        b_expected = np.fabs(a)
+        self.assertTrue(np.all(b_actual == b_expected))
+
+    def test_sin_gpu(self):
+        b_actual = test_driver(a, "GPU", dppy_sin)
+        b_expected = np.sin(a)
+        self.assertTrue(np.allclose(b_actual,b_expected))
+
+    def test_cos_gpu(self):
+        b_actual = test_driver(a, "GPU", dppy_cos)
+        b_expected = np.cos(a)
+        self.assertTrue(np.allclose(b_actual,b_expected))
+
+    def test_exp_gpu(self):
+        b_actual = test_driver(a, "GPU", dppy_exp)
+        b_expected = np.exp(a)
+        self.assertTrue(np.allclose(b_actual,b_expected))
+
+    def test_sqrt_gpu(self):
+        b_actual = test_driver(a, "GPU", dppy_sqrt)
+        b_expected = np.sqrt(a)
+        self.assertTrue(np.allclose(b_actual,b_expected))
+
     def test_log_gpu(self):
         b_actual = test_driver(a, "GPU", dppy_log)
         b_expected = np.log(a)
         self.assertTrue(np.allclose(b_actual,b_expected))
+
 
 if __name__ == '__main__':
     unittest.main()

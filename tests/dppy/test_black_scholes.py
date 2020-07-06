@@ -7,7 +7,8 @@ import time
 from numba import dppy
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
-import dppy.core as ocldrv
+import dppy as ocldrv
+
 
 RISKFREE = 0.02
 VOLATILITY = 0.30
@@ -47,22 +48,9 @@ def randfloat(rand_var, low, high):
     return (1.0 - rand_var) * low + rand_var * high
 
 
+@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
 class TestDPPYBlackScholes(DPPYTestCase):
     def test_black_scholes(self):
-        # Select a device for executing the kernel
-        device_env = None
-
-        try:
-            device_env = ocldrv.runtime.get_cpu_device()
-            print("Selected GPU device")
-        except:
-            try:
-                device_env = ocldrv.runtime.get_cpu_device()
-                print("Selected CPU device")
-            except:
-                print("No OpenCL devices found on the system")
-                raise SystemExit()
-
         OPT_N = 400
         iterations = 2
 
@@ -112,22 +100,23 @@ class TestDPPYBlackScholes(DPPYTestCase):
         blockdim = 512, 1
         griddim = int(math.ceil(float(OPT_N) / blockdim[0])), 1
 
-        # Get data to device
-        d_callResult = device_env.copy_array_to_device(callResultNumbapro)
-        d_putResult = device_env.copy_array_to_device(putResultNumbapro)
-        d_stockPrice = device_env.copy_array_to_device(stockPrice)
-        d_optionStrike = device_env.copy_array_to_device(optionStrike)
-        d_optionYears = device_env.copy_array_to_device(optionYears)
+        with ocldrv.igpu_context(0) as device_env:
+            # Get data to device
+            d_callResult = device_env.copy_array_to_device(callResultNumbapro)
+            d_putResult = device_env.copy_array_to_device(putResultNumbapro)
+            d_stockPrice = device_env.copy_array_to_device(stockPrice)
+            d_optionStrike = device_env.copy_array_to_device(optionStrike)
+            d_optionYears = device_env.copy_array_to_device(optionYears)
 
-        time1 = time.time()
-        for i in range(iterations):
-            black_scholes_dppy[device_env, blockdim, griddim](
-                d_callResult, d_putResult, d_stockPrice, d_optionStrike,
-                d_optionYears, RISKFREE, VOLATILITY)
+            time1 = time.time()
+            for i in range(iterations):
+                black_scholes_dppy[blockdim, griddim](
+                    d_callResult, d_putResult, d_stockPrice, d_optionStrike,
+                    d_optionYears, RISKFREE, VOLATILITY)
 
-        # Get data from device
-        device_env.copy_array_from_device(d_callResult)
-        device_env.copy_array_from_device(d_putResult)
+            # Get data from device
+            device_env.copy_array_from_device(d_callResult)
+            device_env.copy_array_from_device(d_putResult)
 
         dt = (time1 - time0)
 

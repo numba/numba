@@ -5,7 +5,7 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppy
-import dppy.core as ocldrv
+import dppy as ocldrv
 
 
 @dppy.kernel
@@ -18,6 +18,7 @@ def dppy_gemm(a, b, c):
     for k in range(c.shape[0]):
         c[i, j] += a[i, k] * b[k, j]
 
+
 # Array dimesnions
 X = 1024
 Y = 16
@@ -26,38 +27,42 @@ global_size = X,X
 griddim = X, X
 blockdim = Y, Y
 
-a = np.arange(X*X, dtype=np.float32).reshape(X,X)
-b = np.array(np.random.random(X*X), dtype=np.float32).reshape(X,X)
-c = np.ones_like(a).reshape(X,X)
 
-# Select a device for executing the kernel
-device_env = None
+def driver(device_env, a, b, c):
+    # Copy the data to the device
+    dA = device_env.copy_array_to_device(a)
+    dB = device_env.copy_array_to_device(b)
+    dC = device_env.create_device_array(c)
+    # Invoke the kernel
+    dppy_gemm[griddim,blockdim](dA, dB, dC)
+    # Copy results back to host
+    device_env.copy_array_from_device(dC)
 
-try:
-    device_env = ocldrv.runtime.get_gpu_device()
-    print("Selected GPU device")
-except:
-    try:
-        device_env = ocldrv.runtime.get_cpu_device()
-        print("Selected CPU device")
-    except:
-        print("No OpenCL devices found on the system")
-        raise SystemExit()
 
-# Copy the data to the device
-dA = device_env.copy_array_to_device(a)
-dB = device_env.copy_array_to_device(b)
-dC = ocldrv.DeviceArray(device_env.get_env_ptr(), c)
-# Invoke the kernel
-dppy_gemm[device_env,griddim,blockdim](dA, dB, dC)
-# Copy results back to host
-device_env.copy_array_from_device(dC)
+def main():
+    a = np.arange(X*X, dtype=np.float32).reshape(X,X)
+    b = np.array(np.random.random(X*X), dtype=np.float32).reshape(X,X)
+    c = np.ones_like(a).reshape(X,X)
 
-# Host compute using standard Numpy
-Amat = np.matrix(a)
-Bmat = np.matrix(b)
-Cans = Amat * Bmat
+    if ocldrv.has_gpu_device:
+        with ocldrv.igpu_context(0) as device_env:
+            driver(device_env, a, b, c)
+    elif ocldrv.has_cpu_device:
+        with ocldrv.cpu_context(0) as device_env:
+            driver(device_env, a, b, c)
+    else:
+        print("No device found")
+        exit()
 
-# Check result
-assert np.allclose(c, Cans)
-print("Done...")
+    # Host compute using standard Numpy
+    Amat = np.matrix(a)
+    Bmat = np.matrix(b)
+    Cans = Amat * Bmat
+
+    # Check result
+    assert np.allclose(c, Cans)
+    print("Done...")
+
+
+if __name__ == '__main__':
+    main()
