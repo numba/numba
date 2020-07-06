@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import warnings
 
+from numba import ir
 import weakref
 from collections import namedtuple, deque
 import operator
@@ -32,7 +33,81 @@ from .dppy_lowerer import DPPyLower
 from numba.parfor import PreParforPass as _parfor_PreParforPass
 from numba.parfor import ParforPass as _parfor_ParforPass
 from numba.parfor import Parfor
-#from numba.npyufunc.dufunc import DUFunc
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class DPPyConstantSizeStaticLocalMemoryPass(FunctionPass):
+
+    _name = "dppy_constant_size_static_local_memory_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Preprocessing for data-parallel computations.
+        """
+        # Ensure we have an IR and type information.
+        assert state.func_ir
+        func_ir = state.func_ir
+
+        _DEBUG = False
+
+        if _DEBUG:
+            print('Checks if size of OpenCL local address space alloca is a compile-time constant.'.center(80, '-'))
+            print(func_ir.dump())
+
+        work_list = list(func_ir.blocks.items())
+        while work_list:
+            label, block = work_list.pop()
+            for i, instr in enumerate(block.body):
+                if isinstance(instr, ir.Assign):
+                    expr = instr.value
+                    if isinstance(expr, ir.Expr):
+                        if expr.op == 'call':
+                            call_node = block.find_variable_assignment(expr.func.name).value
+                            if isinstance(call_node, ir.Expr) and call_node.attr == "static_alloc":
+                                arg = None
+                                # at first look in keyword arguments to get the shape, which has to be
+                                # constant
+                                if expr.kws:
+                                    for _arg in expr.kws:
+                                        if _arg[0] == "shape":
+                                            arg = _arg[1]
+
+                                if not arg:
+                                    arg = expr.args[0]
+
+                                error = False
+                                # arg can be one constant or a tuple of constant items
+                                arg_type = func_ir.get_definition(arg.name)
+                                if isinstance(arg_type, ir.Expr):
+                                    # we have a tuple
+                                    for item in arg_type.items:
+                                        if not isinstance(func_ir.get_definition(item.name), ir.Const):
+                                            error = True
+                                            break
+
+                                else:
+                                    if not isinstance(func_ir.get_definition(arg.name), ir.Const):
+                                        error = True
+                                        break
+
+                                if error:
+                                    warnings.warn_explicit("The size of the Local memory has to be constant",
+                                                           errors.NumbaError,
+                                                           state.func_id.filename,
+                                                           state.func_id.firstlineno)
+                                    raise
+
+
+
+        if config.DEBUG or config.DUMP_IR:
+            name = state.func_ir.func_id.func_qualname
+            print(("IR DUMP: %s" % name).center(80, "-"))
+            state.func_ir.dump()
+
+        return True
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)

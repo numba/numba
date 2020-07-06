@@ -5,57 +5,57 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppy
-import dppy.core as ocldrv
+import dppy as ocldrv
+
 
 @dppy.kernel
 def data_parallel_sum(a, b, c):
     i = dppy.get_global_id(0)
     c[i] = a[i] + b[i]
 
+
 N = 50*32
 global_size = N,
-print("N", N)
 
-# Select a device for executing the kernel
-gpu_env = None
-cpu_env = None
 
-try:
-    gpu_env = ocldrv.runtime.get_gpu_device()
-    print("Found GPU device")
-    gpu_env.dump()
-except:
-    print("No GPU device")
+def main():
+    if ocldrv.has_cpu_device:
+        with ocldrv.cpu_context(0) as device_env:
+            print("-----Running in CPU-----")
+            a = np.array(np.random.random(N), dtype=np.float32)
+            b = np.array(np.random.random(N), dtype=np.float32)
+            c = np.ones_like(a)
+            dA = device_env.copy_array_to_device(a)
+            dB = device_env.copy_array_to_device(b)
+            dC = device_env.create_device_array(c)
+            print("before A: ", dA.get_ndarray())
+            print("before B: ", dB.get_ndarray())
+            data_parallel_sum[global_size, dppy.DEFAULT_LOCAL_SIZE](dA, dB, dC)
+            device_env.copy_array_from_device(dC)
+            print("after  C: ", dC.get_ndarray())
+    else:
+        print("CPU device not found")
 
-try:
-    cpu_env = ocldrv.runtime.get_cpu_device()
-    print("Selected CPU device")
-    cpu_env.dump()
-except:
-    print("No CPU device")
+    if ocldrv.has_gpu_device:
+        with ocldrv.igpu_context(0) as device_env:
+            print("-----Running in GPU-----")
+            a = np.array(np.random.random(N), dtype=np.float32)
+            b = np.array(np.random.random(N), dtype=np.float32)
+            c = np.ones_like(a)
+            dA = device_env.copy_array_to_device(a)
+            dB = device_env.copy_array_to_device(b)
+            dC = device_env.create_device_array(c)
+            print("before A: ", dA.get_ndarray())
+            print("before B: ", dB.get_ndarray())
+            data_parallel_sum[global_size, dppy.DEFAULT_LOCAL_SIZE](dA, dB, dC)
+            device_env.copy_array_from_device(dC)
+            print("after  C: ", dC.get_ndarray())
+    else:
+        print("GPU device not found")
+        exit()
 
-if cpu_env is not None:
-    a = np.array(np.random.random(N), dtype=np.float32)
-    b = np.array(np.random.random(N), dtype=np.float32)
-    c = np.ones_like(a)
-    dA = cpu_env.copy_array_to_device(a)
-    dB = cpu_env.copy_array_to_device(b)
-    dC = ocldrv.DeviceArray(cpu_env.get_env_ptr(), c)
-    print("before : ", dC._ndarray)
-    data_parallel_sum[cpu_env,global_size](dA, dB, dC)
-    cpu_env.copy_array_from_device(dC)
-    print("after : ", dC._ndarray)
+    print("Done...")
 
-if gpu_env is not None:
-    aa = np.array(np.random.random(N), dtype=np.float32)
-    bb = np.array(np.random.random(N), dtype=np.float32)
-    cc = np.ones_like(aa)
-    dAA = gpu_env.copy_array_to_device(aa)
-    dBB = gpu_env.copy_array_to_device(bb)
-    dCC = ocldrv.DeviceArray(gpu_env.get_env_ptr(), cc)
-    print("before : ", dCC._ndarray)
-    data_parallel_sum[gpu_env,global_size](dAA, dBB, dCC)
-    gpu_env.copy_array_from_device(dCC)
-    print("after : ", dCC._ndarray)
 
-print("Done...")
+if __name__ == '__main__':
+    main()

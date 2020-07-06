@@ -58,8 +58,8 @@ class Ocl_get_local_size(ConcreteTemplate):
 @intrinsic
 class Ocl_barrier(ConcreteTemplate):
     key = dppy.barrier
-    cases = [signature(types.intp, types.int32),
-             signature(types.uintp, types.uint32)]
+    cases = [signature(types.void, types.uint32),
+             signature(types.void)]
 
 
 @intrinsic
@@ -71,10 +71,11 @@ class Ocl_mem_fence(ConcreteTemplate):
 @intrinsic
 class Ocl_sub_group_barrier(ConcreteTemplate):
     key = dppy.sub_group_barrier
+
     cases = [signature(types.void)]
 
 
-# ocl.atomic submodule -------------------------------------------------------
+# dppy.atomic submodule -------------------------------------------------------
 
 @intrinsic
 class Ocl_atomic_add(AbstractTemplate):
@@ -114,18 +115,19 @@ class OclAtomicTemplate(AttributeTemplate):
         return types.Function(Ocl_atomic_sub)
 
 
-# ocl.shared submodule -------------------------------------------------------
+# dppy.local submodule -------------------------------------------------------
 
-#class Ocl_shared_array(MacroTemplate):
-#    key = ocl.shared.array
+class Ocl_local_alloc(MacroTemplate):
+    key = dppy.local.static_alloc
 
 
 @intrinsic_attr
-#class OclSharedTemplate(AttributeTemplate):
-#    key = types.Module(ocl.shared)
+class OclLocalTemplate(AttributeTemplate):
+    key = types.Module(dppy.local)
 
-#    def resolve_array(self, mod):
-#        return types.Macro(Ocl_shared_array)
+    def resolve_static_alloc(self, mod):
+        return types.Macro(Ocl_local_alloc)
+
 
 # OpenCL module --------------------------------------------------------------
 
@@ -166,8 +168,8 @@ class OclModuleTemplate(AttributeTemplate):
     def resolve_atomic(self, mod):
         return types.Module(dppy.atomic)
 
-#    def resolve_shared(self, mod):
-#        return types.Module(ocl.shared)
+    def resolve_local(self, mod):
+        return types.Module(dppy.local)
 
 # intrinsic
 

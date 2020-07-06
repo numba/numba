@@ -15,10 +15,10 @@ class DPPyHostFunctionCallsGenerator(object):
         self.context = self.lowerer.context
         self.builder = self.lowerer.builder
 
-        self.gpu_device = driver.runtime.get_gpu_device()
-        self.gpu_device_env = self.gpu_device.get_env_ptr()
-        self.gpu_device_int = int(driver.ffi.cast("uintptr_t",
-                                                  self.gpu_device_env))
+        self.current_device = driver.runtime.get_current_device()
+        self.current_device_env = self.current_device.get_env_ptr()
+        self.current_device_int = int(driver.ffi.cast("uintptr_t",
+                                                  self.current_device_env))
 
         self.kernel_t_obj = cres.kernel._kernel_t_obj[0]
         self.kernel_int = int(driver.ffi.cast("uintptr_t",
@@ -65,8 +65,9 @@ class DPPyHostFunctionCallsGenerator(object):
         self.void_ptr_t      = self.context.get_value_type(types.voidptr)
         self.void_ptr_ptr_t  = lc.Type.pointer(self.void_ptr_t)
         self.sizeof_void_ptr = self.context.get_abi_sizeof(self.intp_t)
-        self.gpu_device_int_const = self.context.get_constant(
-                                        types.uintp, self.gpu_device_int)
+        self.current_device_int_const = self.context.get_constant(
+                                            types.uintp,
+                                            self.current_device_int)
 
     def _declare_functions(self):
         create_dppy_kernel_arg_fnty = lc.Type.function(
@@ -173,7 +174,7 @@ class DPPyHostFunctionCallsGenerator(object):
                                              size=self.one, name=buffer_name)
 
             # env, buffer_size, buffer_ptr
-            args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
+            args = [self.builder.inttoptr(self.current_device_int_const, self.void_ptr_t),
                     self.builder.load(total_size),
                     buffer_ptr]
             self.builder.call(self.create_dppy_rw_mem_buffer, args)
@@ -186,7 +187,7 @@ class DPPyHostFunctionCallsGenerator(object):
 
             # We really need to detect when an array needs to be copied over
             if index < self.num_inputs:
-                args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
+                args = [self.builder.inttoptr(self.current_device_int_const, self.void_ptr_t),
                         self.builder.load(buffer_ptr),
                         self.one,
                         self.zero,
@@ -263,7 +264,7 @@ class DPPyHostFunctionCallsGenerator(object):
             self.builder.store(stop,
                                self.builder.gep(dim_stops, [self.context.get_constant(types.uintp, i)]))
 
-        args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
+        args = [self.builder.inttoptr(self.current_device_int_const, self.void_ptr_t),
                 self.builder.inttoptr(self.context.get_constant(types.uintp, self.kernel_int), self.void_ptr_t),
                 self.context.get_constant(types.uintp, self.total_kernel_args),
                 self.kernel_arg_array,
@@ -276,7 +277,7 @@ class DPPyHostFunctionCallsGenerator(object):
         # read buffers back to host
         for read_buf in self.read_bufs_after_enqueue:
             buffer_ptr, array_size_member, data_member = read_buf
-            args = [self.builder.inttoptr(self.gpu_device_int_const, self.void_ptr_t),
+            args = [self.builder.inttoptr(self.current_device_int_const, self.void_ptr_t),
                     self.builder.load(buffer_ptr),
                     self.one,
                     self.zero,

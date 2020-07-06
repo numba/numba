@@ -1,8 +1,7 @@
 from __future__ import print_function, absolute_import, division
 from numba import sigutils, types
-from .compiler import (compile_kernel, JitDPPyKernel,
-                       compile_dppy_func_template, compile_dppy_func)
-from inspect import signature
+from .compiler import (compile_kernel, JitDPPyKernel, compile_dppy_func_template,
+                       compile_dppy_func, get_ordered_arg_access_types)
 
 
 def kernel(signature=None, access_types=None, debug=False):
@@ -17,34 +16,25 @@ def kernel(signature=None, access_types=None, debug=False):
         func = signature
         return autojit(debug=False, access_types=access_types)(func)
     else:
-        return _kernel_jit(signature, debug)
+        return _kernel_jit(signature, debug, access_types)
 
 
 def autojit(debug=False, access_types=None):
     def _kernel_autojit(pyfunc):
-        # Construct a list of access type of each arg according to their position
-        ordered_arg_access_types = []
-        sig = signature(pyfunc, follow_wrapped=False)
-        for idx, arg_name in enumerate(sig.parameters):
-            if access_types:
-                for key in access_types:
-                    if arg_name in access_types[key]:
-                        ordered_arg_access_types.append(key)
-            if len(ordered_arg_access_types) <= idx:
-                ordered_arg_access_types.append(None)
-
+        ordered_arg_access_types = get_ordered_arg_access_types(pyfunc, access_types)
         return JitDPPyKernel(pyfunc, ordered_arg_access_types)
     return _kernel_autojit
 
 
-def _kernel_jit(signature, debug):
+def _kernel_jit(signature, debug, access_types):
     argtypes, restype = sigutils.normalize_signature(signature)
     if restype is not None and restype != types.void:
         msg = ("DPPy kernel must have void return type but got {restype}")
         raise TypeError(msg.format(restype=restype))
 
     def _wrapped(pyfunc):
-        return compile_kernel(pyfunc, argtypes, debug)
+        ordered_arg_access_types = get_ordered_arg_access_types(pyfunc, access_types)
+        return compile_kernel(None, pyfunc, argtypes, ordered_arg_access_types, debug)
 
     return _wrapped
 

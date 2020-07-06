@@ -423,8 +423,7 @@ def _create_gufunc_for_parfor_body(
 
 
     # Determine the unique names of the scheduling and gufunc functions.
-    gufunc_name = "__numba_parfor_gufunc_%s" % (
-        hex(hash(parfor)).replace("-", "_"))
+    gufunc_name = "__numba_parfor_gufunc_%s" % (parfor.id)
 
     if config.DEBUG_ARRAY_OPT:
         # print("sched_func_name ", type(sched_func_name), sched_func_name)
@@ -618,7 +617,7 @@ def _create_gufunc_for_parfor_body(
     # FIXME : We should not always use gpu device, instead select the default
     # device as configured in dppy.
     kernel_func = numba.dppy.compiler.compile_kernel_parfor(
-        driver.runtime.get_gpu_device(),
+        driver.runtime.get_current_device(),
         gufunc_ir,
         gufunc_param_types,
         param_types_addrspaces)
