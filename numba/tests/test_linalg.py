@@ -8,7 +8,7 @@ import platform
 
 import numpy as np
 
-from numba import jit
+from numba import jit, njit, typeof
 from numba.core import errors
 from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
                                  _is_armv7l, skip_ppc64le_issue4026)
@@ -1577,8 +1577,8 @@ class TestLinalgLstsq(TestLinalgSystems):
         empties = [
         [(0, 1), (1,)], # empty A, valid b
         [(1, 0), (1,)], # empty A, valid b
-        [(1, 1), (0,)], # valid A, empty 1D b 
-        [(1, 1), (1, 0)],  # valid A, empty 2D b 
+        [(1, 1), (0,)], # valid A, empty 1D b
+        [(1, 1), (1, 0)],  # valid A, empty 2D b
         ]
 
         for A, b in empties:
@@ -2645,6 +2645,47 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
         msg = "only supports 'C' or 'F' layout"
         self.assert_error(cfunc, args, msg, err=errors.TypingError)
 
+
+class TestHelpers(TestCase):
+    def test_copy_to_fortran_order(self):
+        from numba.np.linalg import _copy_to_fortran_order
+
+        def check(udt, expectfn, shapes, dtypes, orders):
+            for shape, dtype, order in product(shapes, dtypes, orders):
+                a = np.arange(np.prod(shape)).reshape(shape, order=order)
+
+                r = udt(a)
+                # check correct operation
+                self.assertPreciseEqual(expectfn(a), r)
+                # check new copy has made
+                self.assertNotEqual(a.ctypes.data, r.ctypes.data)
+
+        @njit
+        def direct_call(a):
+            return _copy_to_fortran_order(a)
+
+        shapes = [(3, 4), (3, 2, 5)]
+        dtypes = [np.intp]
+        orders = ['C', 'F']
+        check(direct_call, np.asfortranarray, shapes, dtypes, orders)
+
+
+        @njit
+        def slice_to_any(a):
+            # make a 'any' layout slice
+            sliced = a[::2][0]
+            return _copy_to_fortran_order(sliced)
+
+        shapes = [(3, 3, 4), (3, 3, 2, 5)]
+        dtypes = [np.intp]
+        orders = ['C', 'F']
+
+        def expected_slice_to_any(a):
+            # make a 'any' layout slice
+            sliced = a[::2][0]
+            return np.asfortranarray(sliced)
+
+        check(slice_to_any, expected_slice_to_any, shapes, dtypes, orders)
 
 if __name__ == '__main__':
     unittest.main()
