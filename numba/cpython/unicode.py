@@ -2359,10 +2359,9 @@ def integer_str(n):
             c = chr(int(ord('0') + (n % 10)))
             n = n // 10
             l.append(c)
-        l = l[::-1]
         if flag:
-            '-'.join(l)
-        return ''.join(l)
+            l.append('-')
+        return ''.join(l[::-1])
     return impl
 # ------------------------------------------------------------------------------
 # iteration
