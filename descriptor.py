@@ -1,11 +1,11 @@
 from __future__ import print_function, division, absolute_import
-from numba.targets.descriptors import TargetDescriptor
-from numba.targets.options import TargetOptions
+from numba.core.descriptors import TargetDescriptor
+from numba.core.options import TargetOptions
 
-from .. import dispatcher, utils, typing
+from numba.core import dispatcher, utils, typing
 from .target import DPPyTargetContext, DPPyTypingContext
 
-from numba.targets.cpu import CPUTargetOptions
+from numba.core.cpu import CPUTargetOptions
 
 
 class DPPyTarget(TargetDescriptor):
