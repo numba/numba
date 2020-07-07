@@ -1709,9 +1709,7 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
         for x in (-100, 100):
             self.assertEqual(foo.py_func(x), foo(x))
 
-    @unittest.skip("Broken")
     def test_not_unify(self):
-        # TODO: fix infinite recursion problem
 
         @njit
         def foo(x):
@@ -1721,7 +1719,11 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
                 l = ['b', 2]
             return l[0]
 
-        foo(100)
+        with self.assertRaises(errors.TypingError) as raises:
+            foo(100)
+        expect = "Cannot unify LiteralList"
+        self.assertIn(expect, str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

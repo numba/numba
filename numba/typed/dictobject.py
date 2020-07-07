@@ -1061,8 +1061,7 @@ def build_map(context, builder, dict_type, item_types, items):
     if isinstance(dict_type, types.LiteralStrKeyDict):
         ty = typeof(dict_type.tuple_inst)
         sig = typing.signature(ty)
-
-        unliteral_tys = [types.unliteral(x) for x in
+        unliteral_tys = [x for x in
                          dict_type.literal_value.values()]
         nbty = types.NamedTuple(unliteral_tys,
                                 dict_type.tuple_ty)

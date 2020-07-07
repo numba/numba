@@ -468,3 +468,21 @@ class InitialValue(object):
     @property
     def initial_value(self):
         return self._initial_value
+
+
+class Poison(Type):
+    """
+    This is the "bottom" type in the type system. It won't unify and it's
+    unliteral version is Poison of itself. It's advisable for debugging purposes
+    to call the constructor with the type that's being poisoned (for whatever
+    reason) but this isn't strictly required.
+    """
+    def __init__(self, ty):
+        self.ty = ty
+        super(Poison, self).__init__(name="Poison<%s>" % ty)
+
+    def __unliteral__(self):
+        return Poison(self)
+
+    def unify(self, typingctx, other):
+        return None

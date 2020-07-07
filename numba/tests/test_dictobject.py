@@ -1985,7 +1985,6 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
         self.assertEqual(foo(100), foo.py_func(100))
         self.assertEqual(foo(-100), foo.py_func(-100))
 
-    @unittest.skip("Broken")
     def test_dict_not_unify(self):
 
         @njit

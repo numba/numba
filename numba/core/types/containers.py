@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 from .abstract import (ConstSized, Container, Hashable, MutableSequence,
-                       Sequence, Type, TypeRef, Literal, InitialValue)
+                       Sequence, Type, TypeRef, Literal, InitialValue, Poison)
 from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
@@ -448,7 +448,7 @@ class LiteralList(Literal, _HeterogeneousTuple):
         literal_vals = [getattr(x, 'literal_value', None) for x in literal_value]
 
     def __unliteral__(self):
-        return self
+        return Poison(self)
 
     def unify(self, typingctx, other):
         """
@@ -458,7 +458,7 @@ class LiteralList(Literal, _HeterogeneousTuple):
             tys = []
             for i1, i2 in zip(self.types, other.types):
                 tys.append(typingctx.unify_pairs(i1, i2))
-            if tys:
+            if all(tys):
                 return LiteralList(tys)
 
 
@@ -686,13 +686,13 @@ class LiteralStrKeyDict(Literal, NamedTuple):
         strkeys = [x.literal_value for x in literal_value.keys()]
         self.tuple_ty = namedtuple('_ntclazz', ' '.join(strkeys))
         self.tuple_inst = self.tuple_ty(*literal_value.values())
-        tys = [unliteral(x) for x in literal_value.values()]
+        tys = [x for x in literal_value.values()]
         NamedTuple.__init__(self, tys, self.tuple_ty)
         self.name = 'LiteralStrKey[Dict]({})'.format(literal_value)
         literal_vals = [getattr(x, 'literal_value', None) for x in literal_value.values()]
 
     def __unliteral__(self):
-        return self
+        return Poison(self)
 
     def unify(self, typingctx, other):
         """
