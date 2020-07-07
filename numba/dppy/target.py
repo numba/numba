@@ -99,9 +99,10 @@ class DPPyTargetContext(BaseContext):
         # Override data model manager to SPIR model
         self.data_model_manager = spirv_data_model_manager
 
-        from numba.np.ufunc_db import _ufunc_db as ufunc_db, _lazy_init_db
+        from numba.np.ufunc_db import _lazy_init_db
         import copy
         _lazy_init_db()
+        from numba.np.ufunc_db import _ufunc_db as ufunc_db
         self.ufunc_db = copy.deepcopy(ufunc_db)
 
 
