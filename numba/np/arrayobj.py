@@ -14,7 +14,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import pndindex, typeof
+from numba import pndindex
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran)
@@ -4967,13 +4967,6 @@ def np_flip(a):
 @overload(np.array_split)
 def np_array_split(ary, indices_or_sections, axis=0):
     # If this statement is put at the top of the file, numba fails to import
-    from numba.typed import List
-
-    if ary.ndim > 1:
-        a_type = types.Array(ary.dtype, ary.ndim, "A")
-    else:
-        a_type = typeof(ary)
-
     if isinstance(indices_or_sections, types.Integer):
 
         def impl(ary, indices_or_sections, axis=0):
@@ -4986,7 +4979,7 @@ def np_array_split(ary, indices_or_sections, axis=0):
 
         def impl(ary, indices_or_sections, axis=0):
             slice_tup = build_full_slice_tuple(ary.ndim)
-            out = List.empty_list(a_type, len(indices_or_sections) + 1)
+            out = list()
             prev = 0
             for cur in indices_or_sections:
                 idx = tuple_setitem(slice_tup, axis, slice(prev, cur))
