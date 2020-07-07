@@ -743,6 +743,7 @@ The following built-in functions are supported:
 
 * :func:`abs`
 * :class:`bool`
+* :func:`chr`
 * :class:`complex`
 * :func:`divmod`
 * :func:`enumerate`
@@ -756,6 +757,7 @@ The following built-in functions are supported:
 * :func:`map`
 * :func:`max`
 * :func:`next`: only the one-argument form
+* :func:`ord`
 * :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
 * :class:`range`: The only permitted use of range is as a callable function
   (cannot pass range as an argument to a jitted function or return a range from
@@ -1055,12 +1057,12 @@ type may be registered with Numba. This may include struct types, though it is
 only permitted to call functions that accept pointers to structs - passing a
 struct by value is unsupported. For registering a mapping, use:
 
-.. function:: numba.cffi_support.register_type(cffi_type, numba_type)
+.. function:: numba.core.typing.cffi_utils.register_type(cffi_type, numba_type)
 
 Out-of-line cffi modules must be registered with Numba prior to the use of any
 of their functions from within Numba-compiled functions:
 
-.. function:: numba.cffi_support.register_module(mod)
+.. function:: numba.core.typing.cffi_utils.register_module(mod)
 
    Register the cffi out-of-line module ``mod`` with Numba.
 

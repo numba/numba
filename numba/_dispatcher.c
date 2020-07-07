@@ -294,10 +294,12 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
 {
     PyCFunctionWithKeywords fn;
     PyThreadState *tstate;
+
     assert(PyCFunction_Check(cfunc));
     assert(PyCFunction_GET_FLAGS(cfunc) == METH_VARARGS | METH_KEYWORDS);
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     tstate = PyThreadState_GET();
+
     if (tstate->use_tracing && tstate->c_profilefunc)
     {
         /*
@@ -325,17 +327,20 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
         if (PyDict_SetItemString(globals, "__builtins__", builtins)) {
             goto error;
         }
-        frame = PyFrame_New(tstate, code, globals, NULL);
+
+        /* unset the CO_OPTIMIZED flag, make the frame get a new locals dict */
+        code->co_flags &= 0xFFFE;
+
+        frame = PyFrame_New(tstate, code, globals, locals);
         if (frame == NULL) {
             goto error;
         }
         /* Populate the 'fast locals' in `frame` */
-        Py_XDECREF(frame->f_locals);
-        frame->f_locals = locals;
-        Py_XINCREF(frame->f_locals);
         PyFrame_LocalsToFast(frame, 0);
         tstate->frame = frame;
         C_TRACE(result, fn(PyCFunction_GET_SELF(cfunc), args, kws));
+        /* write changes back to locals? */
+        PyFrame_FastToLocals(frame);
         tstate->frame = frame->f_back;
 
     error:
@@ -496,7 +501,7 @@ static PyObject*
 Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 {
     PyObject *tmptype, *retval = NULL;
-    int *tys;
+    int *tys = NULL;
     int argct;
     int i;
     int prealloc[24];
@@ -504,8 +509,12 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     PyObject *cfunc;
     PyThreadState *ts = PyThreadState_Get();
     PyObject *locals = NULL;
-    if (ts->use_tracing && ts->c_profilefunc)
+    if (ts->use_tracing && ts->c_profilefunc) {
         locals = PyEval_GetLocals();
+        if (locals == NULL) {
+            goto CLEANUP;
+        }
+    }
     if (self->fold_args) {
         if (find_named_args(self, &args, &kws))
             return NULL;
@@ -608,12 +617,7 @@ static PyMemberDef Dispatcher_members[] = {
 
 
 static PyTypeObject DispatcherType = {
-#if (PY_MAJOR_VERSION < 3)
-    PyObject_HEAD_INIT(NULL)
-    0,                                           /* ob_size */
-#else
     PyVarObject_HEAD_INIT(NULL, 0)
-#endif
     "_dispatcher.Dispatcher",                    /* tp_name */
     sizeof(DispatcherObject),                    /* tp_basicsize */
     0,                                           /* tp_itemsize */

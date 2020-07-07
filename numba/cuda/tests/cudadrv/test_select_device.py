@@ -1,16 +1,12 @@
 #
 # Test does not work on some cards.
 #
-from __future__ import print_function, absolute_import, division
 import threading
-try:
-    from Queue import Queue  # Python 2
-except:
-    from queue import Queue  # Python 3
+from queue import Queue
 
 import numpy as np
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, ContextResettingTestCase
 
 
 def newthread(exception_queue):
@@ -27,7 +23,7 @@ def newthread(exception_queue):
         exception_queue.put(e)
 
 
-class TestSelectDevice(CUDATestCase):
+class TestSelectDevice(ContextResettingTestCase):
     def test_select_device(self):
         exception_queue = Queue()
         for i in range(10):

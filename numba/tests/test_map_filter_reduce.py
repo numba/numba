@@ -1,9 +1,7 @@
-from __future__ import print_function, division, absolute_import
-
 from numba import njit
 
-from numba import unittest_support as unittest
 from functools import reduce
+import unittest
 
 
 class TestMap(unittest.TestCase):

@@ -1,10 +1,7 @@
-from __future__ import print_function
-
 import numpy as np
 
-import numba.unittest_support as unittest
-from numba import compiler, types, utils
-from numba.targets import cpu_dispatcher as registry
+import unittest
+from numba.core import types, utils, compiler, registry, cpu_dispatcher
 
 
 def overhead(x):
@@ -27,7 +24,7 @@ class TestWrapper(unittest.TestCase):
         """
         cr = compiler.compile_isolated(overhead, [types.int32])
         cfunc = cr.entry_point
-        disp = registry.CPUDispatcher(overhead)
+        disp = cpu_dispatcher.CPUDispatcher(overhead)
         disp.add_overload(cr)
 
         x = 321
@@ -53,7 +50,7 @@ class TestWrapper(unittest.TestCase):
         """
         cr = compiler.compile_isolated(array_overhead, [types.int32[::1]])
         cfunc = cr.entry_point
-        disp = registry.CPUDispatcher(array_overhead)
+        disp = cpu_dispatcher.CPUDispatcher(array_overhead)
         disp.add_overload(cr)
 
         self.assertEqual(cr.signature.args[0].layout, 'C')
@@ -82,7 +79,7 @@ class TestWrapper(unittest.TestCase):
         """
         cr = compiler.compile_isolated(add, [types.int32])
         cfunc = cr.entry_point
-        disp = registry.CPUDispatcher(add)
+        disp = cpu_dispatcher.CPUDispatcher(add)
         disp.add_overload(cr)
 
         x = 321

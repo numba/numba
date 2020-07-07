@@ -1,5 +1,3 @@
-from __future__ import print_function, absolute_import
-
 import numbers
 
 
@@ -12,6 +10,18 @@ class KernelRuntimeError(RuntimeError):
              "\t%s")
         msg = t % (self.tid, self.ctaid, self.msg)
         super(KernelRuntimeError, self).__init__(msg)
+
+
+_launch_help_url = ("https://numba.pydata.org/numba-doc/"
+                    "latest/cuda/kernels.html#kernel-invocation")
+_missing_launch_config_msg = """
+Kernel launch configuration was not specified. Use the syntax:
+
+kernel_function[blockspergrid, threadsperblock](arg0, arg1, ..., argn)
+
+See {} for help.
+
+""".format(_launch_help_url)
 
 
 def normalize_kernel_dimensions(griddim, blockdim):
@@ -34,6 +44,9 @@ def normalize_kernel_dimensions(griddim, blockdim):
         while len(dim) < 3:
             dim.append(1)
         return dim
+
+    if None in (griddim, blockdim):
+        raise ValueError(_missing_launch_config_msg)
 
     griddim = check_dim(griddim, 'griddim')
     blockdim = check_dim(blockdim, 'blockdim')

@@ -1,8 +1,3 @@
-"""
-A subpackage hosting Numba IR rewrite passes.
-"""
-
-from .registry import register_rewrite, rewrite_registry, Rewrite
-
-# Register various built-in rewrite passes
-from . import static_getitem, static_raise, static_binop, ir_print, macros
+import sys
+from numba.core.errors import _MovedModule
+sys.modules[__name__] = _MovedModule(locals(), "numba.core.rewrites")

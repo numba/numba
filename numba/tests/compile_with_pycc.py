@@ -4,7 +4,7 @@ import numpy as np
 
 from numba import float32
 from numba.pycc import CC, exportmany, export
-from numba.tests.matmul_usecase import has_blas
+from numba.tests.support import has_blas
 from numba import typed
 
 

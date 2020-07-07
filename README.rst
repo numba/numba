@@ -33,8 +33,6 @@ The following requisites will need to be present in the system. Refer to next se
 
 - LLVM-SPIRV translator: Used for SPIRV generation from LLVM IR.
 
-- SPIRV-Tools          : Used internally for code-generation.
-
 - LLVMDEV              : To support LLVM IR generation.
 
 - Others               : All existing dependecies for NUMBA, such as llvmlite, also apply to DPPy.
@@ -49,7 +47,7 @@ and to make sure the dependencies are installed with consistent version of LLVM 
 installation script that will create a CONDA environment and install LLVM-SPIRV translator,
 SPIRV-Tools and llvmlite in that environment. **To use this CONDA has to be available in the system**.
 
-The above mentioned installation script can be found `here <https://github.intel.com/SAT/numba-pvc-build-scripts>`_. Please follow the README to run the installation script. 
+The above mentioned installation script can be found `here <https://github.intel.com/SAT/numba-dppy-build-scripts>`_. Please follow the README to run the installation script. 
 
 After successful installation the following message should be displayed:
 
@@ -95,6 +93,8 @@ To run the test suite execute the following:
 
 Refer the HowTo.rst guide for an overview of the programming semantics,
 examples, supported functionalities, and known issues.
+
+*Installing while Intel OneAPI basekit is actvated have shown to throw error while installation of NUMBA-DPPY because of incompatible TBB interface, one way around that is to temporaily move env variable TBBROOT to something else*
 
 
 ===================

@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import re
 from numba.cuda.testing import unittest, skip_on_cudasim
 from llvmlite import ir

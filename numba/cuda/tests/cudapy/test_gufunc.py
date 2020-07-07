@@ -1,17 +1,15 @@
-from __future__ import print_function, absolute_import
-
 import numpy as np
 import numpy.core.umath_tests as ut
 
 from numba import void, float32, float64
 from numba import guvectorize
 from numba import cuda
-from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
+import unittest
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestCUDAGufunc(SerialMixin, unittest.TestCase):
+class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_small(self):
 

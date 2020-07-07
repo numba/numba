@@ -1,3 +1,3 @@
-from __future__ import absolute_import
-
-from .nrt import rtsys
+import sys
+from numba.core.errors import _MovedModule
+sys.modules[__name__] = _MovedModule(locals(), "numba.core.runtime")

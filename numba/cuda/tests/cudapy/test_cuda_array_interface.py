@@ -2,8 +2,8 @@ import numpy as np
 
 from numba import vectorize, guvectorize
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import unittest, ContextResettingTestCase
+from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
 
 
 class MyArray(object):
@@ -13,7 +13,7 @@ class MyArray(object):
 
 
 @skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
-class TestCudaArrayInterface(CUDATestCase):
+class TestCudaArrayInterface(ContextResettingTestCase):
     def test_as_cuda_array(self):
         h_arr = np.arange(10)
         self.assertFalse(cuda.is_cuda_array(h_arr))
@@ -30,10 +30,11 @@ class TestCudaArrayInterface(CUDATestCase):
         self.assertEqual(wrapped.device_ctypes_pointer.value,
                          d_arr.device_ctypes_pointer.value)
 
+    @skip_if_external_memmgr('Ownership not relevant with external memmgr')
     def test_ownership(self):
         # Get the deallocation queue
         ctx = cuda.current_context()
-        deallocs = ctx.deallocations
+        deallocs = ctx.memory_manager.deallocations
         # Flush all deallocations
         deallocs.clear()
         self.assertEqual(len(deallocs), 0)

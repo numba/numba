@@ -1,10 +1,8 @@
-from __future__ import division, print_function
-
 import sys
 import subprocess
 
-from numba import unittest_support as unittest
 from numba import cuda
+import unittest
 
 
 class TestCase(unittest.TestCase):
@@ -76,8 +74,6 @@ class TestCase(unittest.TestCase):
     def test_subpackage(self):
         self.check_testsuite_size(['numba.tests.npyufunc'], 50)
 
-    @unittest.skipIf(sys.version_info < (3, 4),
-                     "'--random' only supported on Python 3.4 or higher")
     def test_random(self):
         self.check_testsuite_size(
             ['--random', '0.1', 'numba.tests.npyufunc'], 5)

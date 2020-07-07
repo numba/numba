@@ -4,8 +4,8 @@ import multiprocessing as mp
 import numpy as np
 
 from numba import cuda
-from numba import unittest_support as unittest
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
+import unittest
 
 has_mp_get_context = hasattr(mp, 'get_context')
 is_unix = os.name == 'posix'
@@ -22,7 +22,7 @@ def fork_test(q):
 
 
 @skip_on_cudasim('disabled for cudasim')
-class TestMultiprocessing(SerialMixin, unittest.TestCase):
+class TestMultiprocessing(CUDATestCase):
     @unittest.skipUnless(has_mp_get_context, 'requires mp.get_context')
     @unittest.skipUnless(is_unix, 'requires Unix')
     def test_fork(self):

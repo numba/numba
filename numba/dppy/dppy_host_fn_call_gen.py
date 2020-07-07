@@ -5,9 +5,9 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.ir.values as liv
 import llvmlite.ir as lir
 import llvmlite.binding as lb
-from .. import types, cgutils
+from numba.core import types, cgutils
 
-from numba.ir_utils import legalize_names
+from numba.core.ir_utils import legalize_names
 
 class DPPyHostFunctionCallsGenerator(object):
     def __init__(self, lowerer, cres, num_inputs):

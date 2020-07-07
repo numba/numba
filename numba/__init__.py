@@ -1,8 +1,8 @@
 """
 Expose top-level symbols that are safe for import *
 """
-from __future__ import print_function, division, absolute_import
 
+import importlib
 import platform
 import re
 import sys
@@ -12,43 +12,135 @@ from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 
-from . import config, errors, _runtests as runtests, types
+from numba.core import config
+from numba.testing import _runtests as runtests
+from numba.core import types, errors
 
 # Re-export typeof
-from .special import (
+from numba.misc.special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
     literally, literal_unroll
 )
 
 # Re-export error classes
-from .errors import *
+from numba.core.errors import *
+
+# Re-export types itself
+import numba.core.types as types
 
 # Re-export all type names
-from .types import *
+from numba.core.types import *
 
 # Re-export decorators
-from .decorators import (cfunc, generated_jit, jit, njit, stencil, jit_module)
+from numba.core.decorators import (cfunc, generated_jit, jit, njit, stencil,
+                                   jit_module)
 
 # Re-export vectorize decorators and the thread layer querying function
-from .npyufunc import vectorize, guvectorize, threading_layer
+from numba.np.ufunc import (vectorize, guvectorize, threading_layer,
+                            get_num_threads, set_num_threads)
 
 # Re-export Numpy helpers
-from .numpy_support import carray, farray, from_dtype
+from numba.np.numpy_support import carray, farray, from_dtype
 
-# Re-export jitclass
-from .jitclass import jitclass
+# Re-export experimental
+from numba import experimental
+
+# Re-export experimental.jitclass as jitclass, this is deprecated
+from numba.experimental.jitclass.decorators import _warning_jitclass as jitclass
 
 # Initialize withcontexts
-import numba.withcontexts
-from numba.withcontexts import objmode_context as objmode
+import numba.core.withcontexts
+from numba.core.withcontexts import objmode_context as objmode
 
-# Enable bytes/unicode array support (Python 3.x only)
-from .utils import IS_PY3
-if IS_PY3:
-    import numba.charseq
+# Bytes/unicode array support
+import numba.cpython.charseq
 
 # Keep this for backward compatibility.
 test = runtests.main
+
+
+# needed for compatibility until 0.50.0. Note that accessing members of
+# any of these modules, or the modules themselves, will raise DeprecationWarning
+_auto_import_submodules = {
+    'numba.numpy_support': 'numba.np.numpy_support',
+    'numba.special': 'numba.misc.special',
+    'numba.analysis': 'numba.core.analysis',
+    'numba.datamodel': 'numba.core.datamodel',
+    'numba.unsafe': 'numba.core.unsafe',
+    'numba.annotations': 'numba.core.annotations',
+    'numba.appdirs': 'numba.misc.appdirs',
+    'numba.array_analysis': 'numba.parfors.array_analysis',
+    'numba.bytecode': 'numba.core.bytecode',
+    'numba.byteflow': 'numba.core.byteflow',
+    'numba.caching': 'numba.core.caching',
+    'numba.callwrapper': 'numba.core.callwrapper',
+    'numba.cgutils': 'numba.core.cgutils',
+    'numba.charseq': 'numba.cpython.charseq',
+    'numba.compiler': 'numba.core.compiler',
+    'numba.compiler_lock': 'numba.core.compiler_lock',
+    'numba.compiler_machinery': 'numba.core.compiler_machinery',
+    'numba.consts': 'numba.core.consts',
+    'numba.controlflow': 'numba.core.controlflow',
+    'numba.dataflow': 'numba.core.dataflow',
+    'numba.debuginfo': 'numba.core.debuginfo',
+    'numba.decorators': 'numba.core.decorators',
+    'numba.dictobject': 'numba.typed.dictobject',
+    'numba.dispatcher': 'numba.core.dispatcher',
+    'numba.entrypoints': 'numba.core.entrypoints',
+    'numba.funcdesc': 'numba.core.funcdesc',
+    'numba.generators': 'numba.core.generators',
+    'numba.inline_closurecall': 'numba.core.inline_closurecall',
+    'numba.interpreter': 'numba.core.interpreter',
+    'numba.ir': 'numba.core.ir',
+    'numba.ir_utils': 'numba.core.ir_utils',
+    'numba.itanium_mangler': 'numba.core.itanium_mangler',
+    'numba.listobject': 'numba.typed.listobject',
+    'numba.lowering': 'numba.core.lowering',
+    'numba.npdatetime': 'numba.np.npdatetime',
+    'numba.object_mode_passes': 'numba.core.object_mode_passes',
+    'numba.parfor': 'numba.parfors.parfor',
+    'numba.postproc': 'numba.core.postproc',
+    'numba.pylowering': 'numba.core.pylowering',
+    'numba.pythonapi': 'numba.core.pythonapi',
+    'numba.rewrites': 'numba.core.rewrites',
+    'numba.runtime': 'numba.core.runtime',
+    'numba.serialize': 'numba.core.serialize',
+    'numba.sigutils': 'numba.core.sigutils',
+    'numba.stencilparfor': 'numba.stencils.stencilparfor',
+    'numba.tracing': 'numba.core.tracing',
+    'numba.transforms': 'numba.core.transforms',
+    'numba.typeconv': 'numba.core.typeconv',
+    'numba.withcontexts': 'numba.core.withcontexts',
+    'numba.typed_passes': 'numba.core.typed_passes',
+    'numba.untyped_passes': 'numba.core.untyped_passes',
+    'numba.utils': 'numba.core.utils',
+    'numba.unicode_support': 'numba.cpython.unicode_support',
+    'numba.unicode': 'numba.cpython.unicode',
+    'numba.typing': 'numba.core.typing',
+    'numba.typeinfer': 'numba.core.typeinfer',
+    'numba.typedobjectutils': 'numba.typed.typedobjectutils',
+}
+
+if sys.version_info < (3, 7):
+    with warnings.catch_warnings():
+        # Ignore warnings from making top-level alias.
+        warnings.simplefilter(
+            "ignore", category=errors.NumbaDeprecationWarning,
+        )
+        for _old_mod in _auto_import_submodules.keys():
+            importlib.import_module(_old_mod)
+else:
+    def __getattr__(attr):
+        submodule_name = 'numba.{}'.format(attr)
+        try:
+            new_name = _auto_import_submodules[submodule_name]
+        except KeyError:
+            raise AttributeError(
+                f"module {__name__!r} has no attribute {attr!r}",
+            ) from None
+        else:
+            errors.deprecate_moved_module(submodule_name, new_name)
+            return importlib.import_module(new_name)
 
 
 __all__ = """
@@ -56,19 +148,21 @@ __all__ = """
     from_dtype
     guvectorize
     jit
-    jitclass
+    experimental
     njit
     stencil
     jit_module
+    jitclass
     typeof
     prange
     gdb
     gdb_breakpoint
     gdb_init
-    stencil
     vectorize
     objmode
     literal_unroll
+    get_num_threads
+    set_num_threads
     """.split() + types.__all__ + errors.__all__
 
 
@@ -109,20 +203,28 @@ def _ensure_llvm():
 
     check_jit_execution()
 
-def _ensure_pynumpy():
+def _ensure_critical_deps():
     """
-    Make sure Python and Numpy have supported versions.
+    Make sure Python, NumPy and SciPy have supported versions.
     """
-    import warnings
-    from . import numpy_support
+    from numba.np.numpy_support import numpy_version
+    from numba.core.utils import PYVERSION
 
-    pyver = sys.version_info[:2]
-    if pyver < (2, 7) or ((3,) <= pyver < (3, 4)):
-        raise ImportError("Numba needs Python 2.7 or greater, or 3.4 or greater")
+    if PYVERSION < (3, 6):
+        raise ImportError("Numba needs Python 3.6 or greater")
 
-    np_version = numpy_support.version[:2]
-    if np_version < (1, 7):
-        raise ImportError("Numba needs Numpy 1.7 or greater")
+    if numpy_version < (1, 15):
+        raise ImportError("Numba needs NumPy 1.15 or greater")
+
+    try:
+        import scipy
+    except ImportError:
+        pass
+    else:
+        sp_version = tuple(map(int, scipy.__version__.split('.')[:2]))
+        if sp_version < (1, 0):
+            raise ImportError("Numba requires SciPy version 1.0 or greater")
+
 
 def _try_enable_svml():
     """
@@ -172,7 +274,7 @@ def _try_enable_svml():
     return False
 
 _ensure_llvm()
-_ensure_pynumpy()
+_ensure_critical_deps()
 
 # we know llvmlite is working as the above tests passed, import it now as SVML
 # needs to mutate runtime options (sets the `-vector-library`).

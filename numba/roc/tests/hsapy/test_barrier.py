@@ -1,9 +1,7 @@
-from __future__ import print_function, division, absolute_import
-
 import numpy as np
 
-from numba import unittest_support as unittest
 from numba import roc, float32
+import unittest
 
 
 class TestBarrier(unittest.TestCase):

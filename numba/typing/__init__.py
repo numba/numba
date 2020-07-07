@@ -1,4 +1,3 @@
-from __future__ import absolute_import
-from .context import BaseContext, Context
-from .templates import (signature, make_concrete_template, Signature,
-                        fold_arguments)
+import sys
+from numba.core.errors import _MovedModule
+sys.modules[__name__] = _MovedModule(locals(), "numba.core.typing")

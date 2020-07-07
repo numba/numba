@@ -1,6 +1,5 @@
-from __future__ import print_function, absolute_import
-from numba import types, ir, typing, macro
-
+from numba.core.rewrites.macros import Macro
+from numba.core import types, typing, ir
 
 _stub_error = NotImplementedError("This is a stub.")
 
@@ -141,8 +140,8 @@ class shared(Stub):
     """
     _description_ = '<shared>'
 
-    array = macro.Macro('shared.array', shared_array, callable=True,
-                        argnames=['shape', 'dtype'])
+    array = Macro('shared.array', shared_array, callable=True,
+                  argnames=['shape', 'dtype'])
 
 
 def _legalize_shape(shape):

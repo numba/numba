@@ -1,15 +1,10 @@
-from __future__ import print_function, absolute_import
 import ctypes
 import os
 import threading
-try:
-    import queue
-except ImportError:
-    import Queue as queue
 
 import numpy as np
 
-import numba.unittest_support as unittest
+import unittest
 from numba.roc.hsadrv.driver import hsa, Queue, Program, Executable,\
                                     BrigModule, Context, dgpu_present
 
@@ -21,7 +16,12 @@ from numba.roc.hsadrv import drvapi
 from numba.roc.hsadrv import enums
 from numba.roc.hsadrv import enums_ext
 
-from numba import config
+from numba.core import config
+
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 
 class TestLowLevelApi(unittest.TestCase):
     """This test checks that all the functions defined in drvapi

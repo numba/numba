@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 
-from __future__ import print_function, division, absolute_import
 
 import sys
 import numpy as np
@@ -15,22 +14,16 @@ from contextlib import contextmanager
 from copy import deepcopy
 
 import numba
-from numba import unittest_support as unittest
-from numba import njit, stencil, types
-from numba.compiler import compile_extra, Flags
-from numba.targets import registry
-from numba.targets.cpu import ParallelOptions
-from .support import tag
-from numba.errors import LoweringError, TypingError
+from numba import njit, stencil
+from numba.core import types, registry
+from numba.core.compiler import compile_extra, Flags
+from numba.core.cpu import ParallelOptions
+from numba.tests.support import tag, skip_parfors_unsupported, _32bit
+from numba.core.errors import LoweringError, TypingError
+import unittest
 
 
-# for decorating tests, marking that Windows with Python 2.7 is not supported
-_py27 = sys.version_info[:2] == (2, 7)
-_windows_py27 = (sys.platform.startswith('win32') and _py27)
-_32bit = sys.maxsize <= 2 ** 32
-_reason = 'parfors not supported'
-_unsupported = _32bit or _windows_py27
-skip_unsupported = unittest.skipIf(_unsupported, _reason)
+skip_unsupported = skip_parfors_unsupported
 
 
 @stencil
@@ -78,9 +71,8 @@ def stencil_with_standard_indexing_2d(a, b):
 def addone_njit(a):
     return a + 1
 
-# guard against the decorator being run on unsupported platforms
-# as it will raise and stop test discovery from working
-if not _unsupported:
+
+if not _32bit: # prevent compilation on unsupported 32bit targets
     @njit(parallel=True)
     def addone_pjit(a):
         return a + 1
@@ -147,7 +139,6 @@ class TestStencil(TestStencilBase):
         super(TestStencil, self).__init__(*args, **kwargs)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil1(self):
         """Tests whether the optional out argument to stencil calls works.
         """
@@ -176,7 +167,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_without_out, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil2(self):
         """Tests whether the optional neighborhood argument to the stencil
         decorate works.
@@ -262,7 +252,6 @@ class TestStencil(TestStencilBase):
         self.assertIn('@do_scheduling', cpfunc.library.get_llvm_str())
 
     @skip_unsupported
-    @tag('important')
     def test_stencil3(self):
         """Tests whether a non-zero optional cval argument to the stencil
         decorator works.  Also tests integer result type.
@@ -285,7 +274,6 @@ class TestStencil(TestStencilBase):
         self.assertTrue(par_res[0, 0] == 1.0 and par_res[4, 4] == 1.0)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_standard_indexing_1d(self):
         """Tests standard indexing with a 1d array.
         """
@@ -308,7 +296,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_standard_indexing_2d(self):
         """Tests standard indexing with a 2d array and multiple stencil calls.
         """
@@ -339,7 +326,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_multiple_inputs(self):
         """Tests whether multiple inputs of the same size work.
         """
@@ -375,7 +361,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_seq, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_call(self):
         """Tests 2D numba.stencil calls.
         """
@@ -409,7 +394,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_impl2, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_call_1D(self):
         """Tests 1D numba.stencil calls.
         """
@@ -430,7 +414,6 @@ class TestStencil(TestStencilBase):
         self.check(test_impl_seq, test_impl, n)
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_call_const(self):
         """Tests numba.stencil call that has an index that can be inferred as
         constant from a unary expr. Otherwise, this would raise an error since
@@ -511,7 +494,6 @@ class TestStencil(TestStencilBase):
                       "'neighborhood' option required", str(e.exception))
 
     @skip_unsupported
-    @tag('important')
     def test_stencil_parallel_off(self):
         """Tests 1D numba.stencil calls without parallel translation
            turned off.
@@ -1277,10 +1259,7 @@ class pyStencilGenerator:
             returner = self.gen_return(retvar)
             ast.copy_location(returner, node)
 
-            if _py27:
-                add_kwarg = [ast.Name('neighborhood', ast.Param())]
-            else:
-                add_kwarg = [ast.arg('neighborhood', None)]
+            add_kwarg = [ast.arg('neighborhood', None)]
             defaults = [ast.Name(id='None', ctx=ast.Load())]
 
             newargs = ast.arguments(
@@ -1326,11 +1305,7 @@ class pyStencilGenerator:
             if self._argnames is not None or self._kwargnames is not None:
                 raise RuntimeError("multiple definition of function/args?")
 
-            if _py27:
-                attr = 'id'
-            else:
-                attr = 'arg'
-
+            attr = 'arg'
             self._argnames = [getattr(x, attr) for x in node.args.args]
             if node.args.kwarg:
                 self._kwargnames = [x.arg for x in node.args.kwarg]

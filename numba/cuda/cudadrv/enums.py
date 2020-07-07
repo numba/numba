@@ -1,7 +1,6 @@
 """
 Enum values for CUDA driver
 """
-from __future__ import print_function, absolute_import, division
 
 
 CUDA_SUCCESS                              = 0
