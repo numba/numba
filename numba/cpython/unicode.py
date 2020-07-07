@@ -665,6 +665,7 @@ def unicode_rindex(s, sub, start=None, end=None):
 
     return rindex_impl
 
+
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11692-L11718    # noqa: E501
 @overload_method(types.UnicodeType, 'index')
 def unicode_index(s, sub, start=None, end=None):

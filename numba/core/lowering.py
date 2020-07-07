@@ -7,7 +7,7 @@ from llvmlite.llvmpy.core import Constant, Type, Builder
 
 from numba import _dynfunc
 from numba.core import (typing, utils, types, ir, debuginfo, funcdesc,
-                        generators, config, ir_utils, cgutils)
+                        generators, config, ir_utils, cgutils, removerefctpass)
 from numba.core.errors import (LoweringError, new_error_context, TypingError,
                                LiteralTypingError, UnsupportedError)
 from numba.core.funcdesc import default_mangler
@@ -203,6 +203,12 @@ class BaseLower(object):
             else:
                 print(self.module)
             print('=' * 80)
+
+        # Special optimization to remove NRT on functions that do not need it.
+        if self.context.enable_nrt and self.generator_info is None:
+            removerefctpass.remove_unnecessary_nrt_usage(self.function,
+                                                         context=self.context,
+                                                         fndesc=self.fndesc)
 
         # Run target specific post lowering transformation
         self.context.post_lowering(self.module, self.library)
@@ -550,10 +556,12 @@ class Lower(BaseLower):
             argty = self.typeof("arg." + value.name)
             if isinstance(argty, types.Omitted):
                 pyval = argty.value
+                tyctx = self.context.typing_context
+                valty = tyctx.resolve_value_type_prefer_literal(pyval)
                 # use the type of the constant value
-                valty = self.context.typing_context.resolve_value_type(pyval)
-                const = self.context.get_constant_generic(self.builder, valty,
-                                                          pyval)
+                const = self.context.get_constant_generic(
+                    self.builder, valty, pyval,
+                )
                 # cast it to the variable type
                 res = self.context.cast(self.builder, const, valty, ty)
             else:
@@ -1250,6 +1258,9 @@ class Lower(BaseLower):
 
         elif expr.op == "phi":
             raise LoweringError("PHI not stripped")
+
+        elif expr.op == 'null':
+            return self.context.get_constant_null(resty)
 
         elif expr.op in self.context.special_ops:
             res = self.context.special_ops[expr.op](self, expr)

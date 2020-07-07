@@ -84,12 +84,17 @@ class FunctionDescriptor(object):
         """
         Return the module in which this function is supposed to exist.
         This may be a dummy module if the function was dynamically
-        generated.
+        generated. Raise exception if the module can't be found.
         """
         if self.modname == _dynamic_modname:
             return _dynamic_module
         else:
-            return sys.modules[self.modname]
+            try:
+                return sys.modules[self.modname]
+            except:
+                raise ModuleNotFoundError(
+                    f"can't compile {self.qualname}: "
+                    f"import of module {self.modname} failed")
 
     def lookup_function(self):
         """

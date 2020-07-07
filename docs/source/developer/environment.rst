@@ -11,6 +11,7 @@ In nopython-mode, the Env is used for:
 
 * Storing pyobjects for reconstruction from native values,
   such as:
+  
   * for printing native values of NumPy arrays;
   * for returning or yielding native values back to the interpreter.
 
