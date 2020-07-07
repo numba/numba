@@ -368,32 +368,6 @@ class BuildMapConstraint(object):
                                        loc=self.loc)
 
 
-class BuildLiteralHomogeneousMapConstraint(object):
-    # Constraint for literal dictionaries where keys are homogeneous in type and
-    # values are homogeneous in type.
-
-    def __init__(self, target, items, literal_value, loc):
-        self.target = target
-        self.items = items
-        self.literal_value = literal_value
-        self.loc = loc
-
-    def __call__(self, typeinfer):
-        with new_error_context("typing of literal dict at {0}", self.loc):
-            typevars = typeinfer.typevars
-            tsets = [(typevars[k.name].getone(), typevars[v.name].getone())
-                     for k, v in self.items]
-            key_type, value_type = tsets[0]
-            resolved_dict = {}
-            for k, v in self.literal_value.items():
-                resolved_dict[types.literal(k)] = types.literal(v)
-            typeinfer.add_type(self.target,
-                               types.LiteralDict(key_type,
-                                                 value_type,
-                                                 resolved_dict,),
-                               loc=self.loc)
-
-
 class ExhaustIterConstraint(object):
     def __init__(self, target, count, iterator, loc):
         self.target = target
