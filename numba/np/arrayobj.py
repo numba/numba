@@ -31,7 +31,7 @@ from numba.core.extending import (register_jitable, overload, overload_method,
                                   intrinsic)
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
-from numba.cpython.unsafe.tuple import tuple_setitem
+from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -4964,33 +4964,6 @@ def np_flip(a):
     return impl
 
 
-@intrinsic
-def _build_full_slice_tuple(tyctx, sz):
-    """Creates a sz-tuple of full slices"""
-    size = int(sz.literal_value)
-    tuple_type = types.UniTuple(dtype=types.slice2_type, count=size)
-    sig = tuple_type(sz)
-
-    def codegen(context, builder, signature, args):
-        def impl(length, empty_tuple):
-            out = empty_tuple
-            for i in range(length):
-                out = tuple_setitem(out, i, slice(None, None))
-            return out
-
-        inner_argtypes = [types.intp, tuple_type]
-        inner_sig = typing.signature(tuple_type, *inner_argtypes)
-        ll_idx_type = context.get_value_type(types.intp)
-        # Allocate an empty tuple
-        empty_tuple = context.get_constant_undef(tuple_type)
-        inner_args = [ll_idx_type(size), empty_tuple]
-
-        res = context.compile_internal(builder, impl, inner_sig, inner_args)
-        return res
-
-    return sig, codegen
-
-
 @overload(np.array_split)
 def np_array_split(ary, indices_or_sections, axis=0):
     # If this statement is put at the top of the file, numba fails to import
@@ -5012,7 +4985,7 @@ def np_array_split(ary, indices_or_sections, axis=0):
     else:
 
         def impl(ary, indices_or_sections, axis=0):
-            slice_tup = _build_full_slice_tuple(ary.ndim)
+            slice_tup = build_full_slice_tuple(ary.ndim)
             out = List.empty_list(a_type, len(indices_or_sections) + 1)
             prev = 0
             for cur in indices_or_sections:
