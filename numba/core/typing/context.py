@@ -14,7 +14,7 @@ from .typeof import typeof, Purpose
 
 from numba.core import utils
 
-import dppy.core as driver
+import dppy.ocldrv as driver
 
 
 class Rating(object):

@@ -5,7 +5,7 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppy
-import dppy.core as ocldrv
+import dppy.ocldrv as ocldrv
 
 
 @dppy.kernel

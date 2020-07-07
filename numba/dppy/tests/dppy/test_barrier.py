@@ -5,7 +5,7 @@ import numpy as np
 from numba.dppy.testing import unittest
 from numba.dppy.testing import DPPYTestCase
 from numba import dppy, float32
-import dppy as ocldrv
+import dppy.ocldrv as ocldrv
 
 
 @unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
