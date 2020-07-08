@@ -344,10 +344,9 @@ def static_getitem_tuple(context, builder, sig, args):
         res = context.make_tuple(builder, sig.return_type, items)
     elif isinstance(tupty, types.LiteralStrKeyDict):
         # pretend to be a dictionary
-        if isinstance(idxty, types.Literal):
-            idx_val = idxty.literal_value
-            idx_offset = tupty.fields.index(idx_val)
-            res = builder.extract_value(tup, idx_offset)
+        idx_val = idxty.literal_value
+        idx_offset = tupty.fields.index(idx_val)
+        res = builder.extract_value(tup, idx_offset)
     else:
         raise NotImplementedError("unexpected index %r for %s"
                                   % (idx, sig.args[0]))
