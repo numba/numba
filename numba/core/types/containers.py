@@ -436,7 +436,8 @@ class List(MutableSequence, InitialValue):
 
 
 class LiteralList(Literal, _HeterogeneousTuple):
-
+    """A heterogeneous immutable list (basically a tuple with list semantics).
+    """
     mutable = False
 
     def __init__(self, literal_value):
@@ -680,8 +681,11 @@ class DictType(IterableType, InitialValue):
 
 
 class LiteralStrKeyDict(Literal, NamedTuple):
-    """A Dictionary of string keys to heterogeneous values.
+    """A Dictionary of string keys to heterogeneous values (basically a
+    namedtuple with dict semantics).
     """
+    mutable = False
+
     def __init__(self, literal_value, value_index=None):
         self._literal_init(literal_value)
         self.value_index = value_index
