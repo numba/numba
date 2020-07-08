@@ -540,9 +540,9 @@ class TestBuiltins(TestCase):
             types.ulonglong,
         ]
 
-        cfunc = jit(nopython=True)(pyfunc)
-
         for typ in typs:
+            cr = compile_isolated(pyfunc, (typ,), flags=flags)
+            cfunc = cr.entry_point
             for v in args:
                 if v in large_inputs and typ.bitwidth < 32:
                     continue
@@ -550,6 +550,8 @@ class TestBuiltins(TestCase):
 
         # negative inputs
         for typ in [types.int8, types.int16, types.int32, types.int64]:
+            cr = compile_isolated(pyfunc, (typ,), flags=flags)
+            cfunc = cr.entry_point
             for v in args:
                 if v in large_inputs and typ.bitwidth < 32:
                     continue
