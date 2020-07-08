@@ -1,3 +1,4 @@
+from collections import namedtuple
 from collections.abc import Iterable
 from .abstract import (ConstSized, Container, Hashable, MutableSequence,
                        Sequence, Type, TypeRef, Literal, InitialValue, Poison)
@@ -679,17 +680,16 @@ class DictType(IterableType, InitialValue):
 
 
 class LiteralStrKeyDict(Literal, NamedTuple):
+    """A Dictionary of string keys to heterogeneous values.
+    """
     def __init__(self, literal_value, value_index=None):
         self._literal_init(literal_value)
         self.value_index = value_index
-        from collections import namedtuple
         strkeys = [x.literal_value for x in literal_value.keys()]
         self.tuple_ty = namedtuple('_ntclazz', ' '.join(strkeys))
-        self.tuple_inst = self.tuple_ty(*literal_value.values())
         tys = [x for x in literal_value.values()]
         NamedTuple.__init__(self, tys, self.tuple_ty)
         self.name = 'LiteralStrKey[Dict]({})'.format(literal_value)
-        literal_vals = [getattr(x, 'literal_value', None) for x in literal_value.values()]
 
     def __unliteral__(self):
         return Poison(self)
@@ -709,7 +709,6 @@ class LiteralStrKeyDict(Literal, NamedTuple):
                 if all(tys):
                     d = {k: v for k, v in zip(self.literal_value.keys(), tys)}
                     return LiteralStrKeyDict(d)
-
 
     @property
     def key(self):

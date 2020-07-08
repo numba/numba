@@ -36,7 +36,6 @@ from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
                                           _get_incref_decref,
                                           _get_equal, _container_get_data,)
 from numba.cpython.unicode import make_string_from_constant
-from numba.cpython.tupleobj import tuple_to_tuple as cast_tuple
 
 
 ll_dict_type = cgutils.voidptr_t
@@ -1060,8 +1059,6 @@ def impl_iterator_iternext(context, builder, sig, args, result):
 def build_map(context, builder, dict_type, item_types, items):
 
     if isinstance(dict_type, types.LiteralStrKeyDict):
-        ty = typeof(dict_type.tuple_inst)
-        sig = typing.signature(ty)
         unliteral_tys = [x for x in
                          dict_type.literal_value.values()]
         nbty = types.NamedTuple(unliteral_tys,
@@ -1290,16 +1287,19 @@ def cast_LiteralStrKeyDict_LiteralStrKeyDict(context, builder, fromty, toty,
         # these checks are just guards, typing should have picked up any
         # problems
         if k1 != k2: # keys must be same
-            msg = "LiteralStrKeyDict keys are not the same {} != {}"
+            msg = "LiteralDictionary keys are not the same {} != {}"
             raise LoweringError(msg.format(k1, k2))
         # values must be same ty
         if context.typing_context.unify_pairs(v1, v2) is None:
-            msg = "LiteralStrKeyDict values cannot by unified, have {} and {}"
+            msg = "LiteralDictionary values cannot by unified, have {} and {}"
             raise LoweringError(msg.format(v1, v2))
     else:
-        fromtup = types.Tuple(fromty.types)
-        totup = types.Tuple(toty.types)
-        return cast_tuple(context, builder, fromtup, totup, val)
+        fromty = types.Tuple(fromty.types)
+        toty = types.Tuple(toty.types)
+        olditems = cgutils.unpack_tuple(builder, val, len(fromty))
+        items = [context.cast(builder, v, f, t)
+                for v, f, t in zip(olditems, fromty, toty)]
+        return context.make_tuple(builder, toty, items)
 
 
 @lower_cast(types.DictType, types.DictType)
