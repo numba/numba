@@ -7,7 +7,7 @@ from enum import IntEnum
 
 from llvmlite import ir
 
-from numba import _helperlib, typeof
+from numba import _helperlib
 
 from numba.core.extending import (
     overload,
@@ -1298,7 +1298,7 @@ def cast_LiteralStrKeyDict_LiteralStrKeyDict(context, builder, fromty, toty,
         toty = types.Tuple(toty.types)
         olditems = cgutils.unpack_tuple(builder, val, len(fromty))
         items = [context.cast(builder, v, f, t)
-                for v, f, t in zip(olditems, fromty, toty)]
+                 for v, f, t in zip(olditems, fromty, toty)]
         return context.make_tuple(builder, toty, items)
 
 
