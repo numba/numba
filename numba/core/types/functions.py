@@ -255,7 +255,23 @@ class WeakType(Type):
         return Type.__hash__(self)
 
 
-class Dispatcher(WeakType, Callable, Dummy):
+class TypeCodeStable(Type):
+    """ Mixin class for Type classes that require type codes to be stable
+    even after the original type instance is not alive and was collected.
+    """
+    _typecodecache = {}
+
+    @property
+    def _typecodecache_key(self) -> str:
+        """ string version of the type instance key
+        if necessary this method can be overwritten in children classes,
+        but it must ensure uniqueness across type classes, since `_typecodecache`
+        is shared across all classes that inherit from TypeCodeStable
+        """
+        return str(self.key)
+
+
+class Dispatcher(WeakType, Callable, Dummy, TypeCodeStable):
     """
     Type class for @jit-compiled functions.
     """

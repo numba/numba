@@ -22,7 +22,7 @@ def _autoincr():
     return n
 
 _typecache = {}
-_typecodecache ={}
+
 
 def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
@@ -49,26 +49,34 @@ class _TypeMetaclass(ABCMeta):
         # Try to intern the created instance
         wr = weakref.ref(inst, _on_type_disposal)
         from numba.core import types
-        #### TEMPORARY DEBUGGING CODE
-        if isinstance(inst, types.Tuple) and isinstance(inst[0], types.Dispatcher):
-            print("Creating new tuple ",
-                  "\n\t Type:", inst,
-                  "\n\t id:", id(inst), "\n\t hash:", hash(inst),
-                  "\n\t Found in typecache:", wr in _typecache,
-                  )
-        ####
+        # #### TEMPORARY DEBUGGING CODE
+        # if isinstance(inst, types.Tuple) and isinstance(inst[0], types.Dispatcher):
+        #     print("Creating new tuple ",
+        #           "\n\t Type:", inst,
+        #           "\n\t id:", id(inst), "\n\t hash:", hash(inst),
+        #           "\n\t Found in typecache:", wr in _typecache,
+        #           )
+        # ####
         orig = _typecache.get(wr)
         orig = orig and orig()
 
         if orig is not None:
             return orig
         else:
-            #### TEMPORARY DEBUGGING CODE
-            if isinstance(inst, types.Tuple) and isinstance(inst[0], types.Dispatcher)\
-                    and hash(inst) in _typecodecache:
-                print("\t Found in typecodecache. re-using code", _typecodecache[hash(inst)])
-            ####
-            code = _typecodecache.setdefault(hash(inst), _autoincr())
+            # the type instance couldn't be found in _typecache but the Type
+            # class might have type code cache, since some types require
+            # a stable type code, e.g. for subtyping
+
+            # #### TEMPORARY DEBUGGING CODE
+            # if isinstance(inst, types.Tuple) and isinstance(inst[0], types.Dispatcher)\
+            #         and hash(inst) in _typecodecache:
+            #     print("\t Found in typecodecache. re-using code", _typecodecache[hash(inst)])
+            # ####
+            if hasattr(cls, '_typecodecache'):
+                key = inst._typecodecache_key
+                code = cls._typecodecache.setdefault(key, _autoincr())
+            else:
+                code =  _autoincr()
             inst._code = code
             _typecache[wr] = wr
             return inst
