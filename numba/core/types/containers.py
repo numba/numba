@@ -699,18 +699,23 @@ class LiteralStrKeyDict(Literal, NamedTuple):
         Unify this with the *other* one.
         """
         if isinstance(other, LiteralStrKeyDict):
+            tys = []
             for (k1, v1), (k2, v2) in zip(self.literal_value.items(),
                                           other.literal_value.items()):
                 if k1 != k2: # keys must be same
                     break
-                if unliteral(v1) != unliteral(v2): # values must be same type
-                    break
+                tys.append(typingctx.unify_pairs(v1, v2))
             else:
-                return self
+                if all(tys):
+                    d = {k: v for k, v in zip(self.literal_value.keys(), tys)}
+                    return LiteralStrKeyDict(d)
+
 
     @property
     def key(self):
-        return self.tuple_ty, self.types, str(self.literal_value)
+        # use the namedtuple fields not the namedtuple itself as it's created
+        # locally in the ctor and comparison would always be False.
+        return self.tuple_ty._fields, self.types, str(self.literal_value)
 
 
 class DictItemsIterableType(SimpleIterableType):
