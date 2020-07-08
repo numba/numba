@@ -259,9 +259,7 @@ class PyLower(BaseLower):
             elif expr.fn == operator.not_:
                 res = self.pyapi.object_not(value)
                 self.check_int_status(res)
-
-                longval = self.builder.zext(res, self.pyapi.long)
-                res = self.pyapi.bool_from_long(longval)
+                res = self.pyapi.bool_from_bool(res)
             elif expr.fn == operator.invert:
                 res = self.pyapi.number_invert(value)
             else:

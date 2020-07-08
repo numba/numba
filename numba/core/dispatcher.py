@@ -20,6 +20,7 @@ from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
 from numba.core.utils import reraise
 from numba.core.caching import NullCache, FunctionCache
+from numba.core import entrypoints
 
 
 class OmittedArg(object):
@@ -226,6 +227,16 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self._compiling_counter = _CompilingCounter()
         weakref.finalize(self, self._make_finalizer())
 
+    def _compilation_chain_init_hook(self):
+        """
+        This will be called ahead of any part of compilation taking place (this
+        even includes being ahead of working out the types of the arguments).
+        This permits activities such as initialising extension entry points so
+        that the compiler knows about additional externally defined types etc
+        before it does anything.
+        """
+        entrypoints.init_all()
+
     def _reset_overloads(self):
         self._clear()
         self.overloads.clear()
@@ -329,6 +340,9 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         for the given *args* and *kws*, and return the resulting callable.
         """
         assert not kws
+        # call any initialisation required for the compilation chain (e.g.
+        # extension point registration).
+        self._compilation_chain_init_hook()
 
         def error_rewrite(e, issue_type):
             """

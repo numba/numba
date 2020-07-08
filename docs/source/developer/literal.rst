@@ -45,9 +45,9 @@ use the following function:
 Code Example
 ~~~~~~~~~~~~
 
-.. literalinclude:: ../../../examples/literally_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_literally_usage.py
    :language: python
-   :caption: from ``ex_literally_usage`` of ``examples/literally_usage.py``
+   :caption: from ``test_literally_usage`` of ``numba/tests/doc_examples/test_literally_usage.py``
    :start-after: magictoken.ex_literally_usage.begin
    :end-before: magictoken.ex_literally_usage.end
    :dedent: 4

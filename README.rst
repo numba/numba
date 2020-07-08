@@ -6,6 +6,10 @@ Numba
    :target: https://gitter.im/numba/numba?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge
    :alt: Gitter
 
+.. image:: https://img.shields.io/badge/discuss-on%20discourse-blue
+   :target: https://numba.discourse.group/
+   :alt: Discourse
+
 A Just-In-Time Compiler for Numerical Functions in Python
 #########################################################
 
@@ -41,7 +45,7 @@ Dependencies
 ============
 
 * Python versions: 3.6-3.8
-* llvmlite 0.32.*
+* llvmlite 0.33.*
 * NumPy >=1.15 (can build with 1.11 for ABI compatibility)
 
 Optionally:

@@ -25,7 +25,7 @@ from numba.core import types, utils, typing, ir, config
 from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
-                               ForceLiteralArg)
+                               ForceLiteralArg, CompilerError)
 from numba.core.funcdesc import qualifying_prefix
 
 
@@ -81,7 +81,13 @@ class TypeVar(object):
 
     def lock(self, tp, loc, literal_value=NOTSET):
         assert isinstance(tp, types.Type), type(tp)
-        assert not self.locked
+
+        if self.locked:
+            msg = ("Invalid reassignment of a type-variable detected, type "
+                   "variables are locked according to the user provided "
+                   "function signature or from an ir.Const node. This is a "
+                   "bug! Type={}. {}").format(tp, self.type)
+            raise CompilerError(msg, loc)
 
         # If there is already a type, ensure we can convert it to the
         # locked type.
@@ -208,7 +214,9 @@ class ArgConstraint(object):
                 return
             ty = src.getone()
             if isinstance(ty, types.Omitted):
-                ty = typeinfer.context.resolve_value_type(ty.value)
+                ty = typeinfer.context.resolve_value_type_prefer_literal(
+                    ty.value,
+                )
             if not ty.is_precise():
                 raise TypingError('non-precise type {}'.format(ty))
             typeinfer.add_type(self.dst, ty, loc=self.loc)
@@ -1460,13 +1468,26 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 # as a global variable
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
             else:
+                from numba.misc import special
+
                 nm = gvar.name
-                msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
+                # check if the problem is actually a name error
+                func_glbls = self.func_id.func.__globals__
+                if (nm not in func_glbls.keys() and
+                        nm not in special.__all__ and
+                        nm not in __builtins__.keys() and
+                        nm not in self.func_id.code.co_freevars):
+                    errstr = "NameError: name '%s' is not defined"
+                    msg = _termcolor.errmsg(errstr % nm)
+                    e.patch_message(msg)
+                    raise
+                else:
+                    msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
                 msg += " %s"  # interps the actual error
 
                 # if the untyped global is a numba internal function then add
                 # to the error message asking if it's been imported.
-                from numba.misc import special
+
                 if nm in special.__all__:
                     tmp = ("\n'%s' looks like a Numba internal function, has "
                            "it been imported (i.e. 'from numba import %s')?\n" %
