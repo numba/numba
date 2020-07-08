@@ -29,13 +29,14 @@ from numba.core.types import (
     Type,
 )
 from numba.core.imputils import impl_ret_borrowed, RefType
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, LoweringError
 from numba.core import typing
 from numba.typed.typedobjectutils import (_as_bytes, _cast, _nonoptional,
                                           _sentry_safe_cast_default,
                                           _get_incref_decref,
                                           _get_equal, _container_get_data,)
 from numba.cpython.unicode import make_string_from_constant
+from numba.cpython.tupleobj import tuple_to_tuple as cast_tuple
 
 
 ll_dict_type = cgutils.voidptr_t
@@ -1286,13 +1287,19 @@ def cast_LiteralStrKeyDict_LiteralStrKeyDict(context, builder, fromty, toty,
     # should have been picked up by typing
     for (k1, v1), (k2, v2) in zip(fromty.literal_value.items(),
                                   toty.literal_value.items()):
+        # these checks are just guards, typing should have picked up any
+        # problems
         if k1 != k2: # keys must be same
-            assert 0
+            msg = "LiteralStrKeyDict keys are not the same {} != {}"
+            raise LoweringError(msg.format(k1, k2))
         # values must be same ty
-        if types.unliteral(v1) != types.unliteral(v2):
-            assert 0
+        if context.typing_context.unify_pairs(v1, v2) is None:
+            msg = "LiteralStrKeyDict values cannot by unified, have {} and {}"
+            raise LoweringError(msg.format(v1, v2))
     else:
-        return val
+        fromtup = types.Tuple(fromty.types)
+        totup = types.Tuple(toty.types)
+        return cast_tuple(context, builder, fromtup, totup, val)
 
 
 @lower_cast(types.DictType, types.DictType)
