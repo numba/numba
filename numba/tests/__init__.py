@@ -31,8 +31,10 @@ def load_tests(loader, tests, pattern):
     suite.addTests(loader.discover(cuda_dir))
 
     # Numba DPPy tests are located in a separate directory
-    dppy_dir = join(dirname(dirname(__file__)), 'dppy/tests')
-    suite.addTests(loader.discover(dppy_dir))
+    from numba.dppy_config import dppy_present
+    if dppy_present:
+        dppy_dir = join(dirname(dirname(__file__)), 'dppy/tests')
+        suite.addTests(loader.discover(dppy_dir))
 
     # Numba ROC tests are located in a separate directory
     roc_dir = join(dirname(dirname(__file__)), 'roc/tests')

@@ -5,11 +5,15 @@ from __future__ import print_function, absolute_import, division
 
 from numba import config
 import numba.testing
-from dppy.ocldrv import *
-from .device_init import *
+
+from numba.dppy_config import *
+if dppy_present:
+    from .device_init import *
+else:
+    raise ImportError("Importing dppy failed")
 
 def test(*args, **kwargs):
-    if not is_available():
+    if not dppy_present and not is_available():
         dppy_error()
 
     return numba.testing.test("numba.dppy.tests", *args, **kwargs)

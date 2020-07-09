@@ -14,8 +14,6 @@ from .typeof import typeof, Purpose
 
 from numba.core import utils
 
-import dppy.ocldrv as driver
-
 
 class Rating(object):
     __slots__ = 'promote', 'safe_convert', "unsafe_convert"
@@ -357,13 +355,17 @@ class BaseContext(object):
         try:
             return typeof(val, Purpose.argument)
         except ValueError:
-            if(type(val) == driver.DeviceArray):
-                return typeof(val._ndarray, Purpose.argument)
-            # DRD : Hmmm... is the assumption that this error is encountered
-            # when someone is using cuda, and already has done an import
-            # cuda? 
-            #elif numba.cuda.is_cuda_array(val):
-            #    return typeof(numba.cuda.as_cuda_array(val), Purpose.argument)
+            from numba.dppy_config import dppy_present, DeviceArray
+            if dppy_present:
+                if(type(val) == DeviceArray):
+                    return typeof(val._ndarray, Purpose.argument)
+                # DRD : Hmmm... is the assumption that this error is encountered
+                # when someone is using cuda, and already has done an import
+                # cuda? 
+                #elif numba.cuda.is_cuda_array(val):
+                #    return typeof(numba.cuda.as_cuda_array(val), Purpose.argument)
+                else:
+                    raise
             else:
                 raise
 
