@@ -14,9 +14,9 @@ class CPUDispatcher(dispatcher.Dispatcher):
                 dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
                         targetoptions=targetoptions, impl_kind=impl_kind, pipeline_class=DPPyCompiler)
             else:
-                print("-------------------------------------------------------------------------------------")
-                print("WARNING : offload = True was set but since dppy is not present, we are not offloading")
-                print("-------------------------------------------------------------------------------------")
+                print("------------------------------------------------------------------------")
+                print("WARNING : offload = True was ignored, please make sure dppy is available")
+                print("------------------------------------------------------------------------")
                 dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
                     targetoptions=targetoptions, impl_kind=impl_kind, pipeline_class=pipeline_class)
         else:
