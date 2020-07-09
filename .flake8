@@ -47,7 +47,6 @@ exclude =
     numba/core/annotations/pretty_annotate.py
     numba/misc/dummyarray.py
     numba/core/dataflow.py
-    numba/runtests.py
     numba/core/pythonapi.py
     numba/core/decorators.py
     numba/core/typeconv/typeconv.py
