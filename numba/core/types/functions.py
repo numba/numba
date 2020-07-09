@@ -1,18 +1,15 @@
 import traceback
 from collections import namedtuple, defaultdict
-import inspect
 import itertools
 import logging
 import textwrap
-from os import path
 from shutil import get_terminal_size
 
-from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
+from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref, TypeCodeStable
 from .common import Opaque
 from .misc import unliteral
 from numba.core.typeconv import Conversion
 from numba.core import errors, utils, types, config
-import numba
 
 _logger = logging.getLogger(__name__)
 
@@ -455,22 +452,6 @@ class WeakType(Type):
 
     def __hash__(self):
         return Type.__hash__(self)
-
-
-class TypeCodeStable(Type):
-    """ Mixin class for Type classes that require type codes to be stable
-    even after the original type instance is not alive and was collected.
-    """
-    _typecodecache = {}
-
-    @property
-    def _typecodecache_key(self) -> str:
-        """ string version of the type instance key
-        if necessary this method can be overwritten in children classes,
-        but it must ensure uniqueness across type classes, since `_typecodecache`
-        is shared across all classes that inherit from TypeCodeStable
-        """
-        return str(self.key)
 
 
 class Dispatcher(WeakType, Callable, Dummy, TypeCodeStable):

@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
+from typing import Optional as mpOptional
 import itertools
 import weakref
 
@@ -48,15 +49,6 @@ class _TypeMetaclass(ABCMeta):
     def _intern(cls, inst):
         # Try to intern the created instance
         wr = weakref.ref(inst, _on_type_disposal)
-        from numba.core import types
-        # #### TEMPORARY DEBUGGING CODE
-        # if isinstance(inst, types.Tuple) and isinstance(inst[0], types.Dispatcher):
-        #     print("Creating new tuple ",
-        #           "\n\t Type:", inst,
-        #           "\n\t id:", id(inst), "\n\t hash:", hash(inst),
-        #           "\n\t Found in typecache:", wr in _typecache,
-        #           )
-        # ####
         orig = _typecache.get(wr)
         orig = orig and orig()
 
@@ -66,17 +58,10 @@ class _TypeMetaclass(ABCMeta):
             # the type instance couldn't be found in _typecache but the Type
             # class might have type code cache, since some types require
             # a stable type code, e.g. for subtyping
-
-            # #### TEMPORARY DEBUGGING CODE
-            # if isinstance(inst, types.Tuple) and isinstance(inst[0], types.Dispatcher)\
-            #         and hash(inst) in _typecodecache:
-            #     print("\t Found in typecodecache. re-using code", _typecodecache[hash(inst)])
-            # ####
-            if hasattr(cls, '_typecodecache'):
-                key = inst._typecodecache_key
-                code = cls._typecodecache.setdefault(key, _autoincr())
+            if issubclass(cls, TypeCodeStable):
+                code = cls._load_typecode(inst)
             else:
-                code =  _autoincr()
+                code = _autoincr()
             inst._code = code
             _typecache[wr] = wr
             return inst
@@ -472,7 +457,6 @@ class Literal(Type):
         return self._literal_type_cache
 
 
-
 class TypeRef(Dummy):
     """Reference to a type.
 
@@ -482,3 +466,28 @@ class TypeRef(Dummy):
         self.instance_type = instance_type
         super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
 
+
+class TypeCodeStable(Type):
+    """ Mixin class for Type classes that require type codes to be stable
+    even after the original type instance is not alive and was collected.
+    """
+    _typecodecache = {}
+
+    @property
+    def _typecodecache_key(self) -> mpOptional[str]:
+        """ string identifier for the class instance. It must be unique
+        within the type class and also across type classes.
+        if necessary this method can be overwritten in children classes,
+        but it must ensure uniqueness across type classes, since `_typecodecache`
+        is shared across all classes that inherit from TypeCodeStable
+        """
+        return self.name
+
+    @classmethod
+    def _load_typecode(cls, inst):
+        key = inst._typecodecache_key
+        if key is None or key not in cls._typecodecache:
+            code = _autoincr()
+            cls._typecodecache[key] = code
+            return code
+        return cls._typecodecache[key]

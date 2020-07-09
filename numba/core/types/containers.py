@@ -1,6 +1,7 @@
 from collections.abc import Iterable
+from typing import Optional as mpOptional
 from .abstract import (ConstSized, Container, Hashable, MutableSequence,
-                       Sequence, Type, TypeRef)
+                       Sequence, Type, TypeRef, TypeCodeStable)
 from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
@@ -154,7 +155,8 @@ class BaseTuple(ConstSized, Hashable):
         return Tuple(tys)
 
 
-class BaseAnonymousTuple(BaseTuple):
+
+class BaseAnonymousTuple(BaseTuple, TypeCodeStable):
     """
     Mixin for non-named tuples.
     """
@@ -178,6 +180,12 @@ class BaseAnonymousTuple(BaseTuple):
 
     def __unliteral__(self):
         return BaseTuple.from_types([unliteral(t) for t in self])
+
+    @property
+    def _typecodecache_key(self) -> mpOptional[str]:
+        if all(isinstance(ty, TypeCodeStable) for ty in self):
+            return self.name
+        return None
 
 
 class _HomogeneousTuple(Sequence, BaseTuple):

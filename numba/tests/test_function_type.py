@@ -1124,6 +1124,7 @@ class TestMiscIssues(TestCase):
         self.assertEqual(bar(((foo1, foo2),)), 4)
         self.assertEqual(bar(((foo1, foo2), (foo1, foo3))), 9)  # reproducer
 
+
 class TestBasicSubtyping(TestCase):
     def test_basic(self):
         """
