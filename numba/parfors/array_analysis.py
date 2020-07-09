@@ -25,9 +25,10 @@ from numba.core.ir_utils import (
 from numba.core.analysis import compute_cfg_from_blocks
 from numba.core.typing import npydecl, signature
 import copy
-from numba.core.extending import intrinsic
+from numba.core.extending import intrinsic, register_jitable
 import llvmlite.llvmpy.core as lc
 import llvmlite
+from np.unsafe.ndarray import to_fixed_tuple
 
 UNKNOWN_CLASS = -1
 CONST_CLASS = 0
@@ -1045,6 +1046,27 @@ class WrapIndexMeta(object):
     def __init__(self, slice_size, dim_size):
         self.slice_size = slice_size
         self.dim_size = dim_size
+
+
+@register_jitable
+def runtime_broadcast_assert_shapes(max_dim, arg0, arg1):
+    new_shape = []
+    shapes = []
+    shapes.append(list(arg0.shape))
+    shapes.append(list(arg1.shape))
+    for i in range(max_dim):
+        sizes = []
+        for shape in shapes:
+            if i < len(shape):
+                size = shape[len(shape) - 1 - i]
+                if size != 1:
+                    sizes.append(size)  # non-1 size to front
+        if len(sizes) == 0:
+            sizes.append(1)
+        new_shape.append(sizes[0])
+
+    rev = new_shape[::-1]
+    return to_fixed_tuple(rev, max_dim)
 
 
 class ArrayAnalysis(object):
@@ -2855,6 +2877,58 @@ class ArrayAnalysis(object):
         require(len(args) >= 1)
         return ArrayAnalysis.AnalyzeResult(shape=equiv_set._get_shape(args[0]))
 
+    def _insert_runtime_broadcast_call(self, scope, loc, arrs, max_dim):
+        pre = []
+
+        typs = [self.typemap[x.name] for x in arrs]
+        dims = [self.typemap[x.name].ndim for x in arrs]
+        max_dim = max(dims)
+
+        runtime_broadcast_shape = ir.Var(
+            scope, mk_unique_var("runtime_broadcast_shape"), loc
+        )
+        runtime_broadcast_type = types.containers.List(types.intp)
+        self.typemap[runtime_broadcast_shape.name] = runtime_broadcast_type
+
+        func_var = ir.Var(scope, mk_unique_var("runtime_broadcast_call"), loc)
+        func_def = ir.Global(
+            "runtime_broadcast_assert_shapes",
+            runtime_broadcast_assert_shapes,
+            loc=loc
+        )
+        pre.append(
+            ir.Assign(value=func_def, target=func_var, loc=loc)
+        )
+        func_fnty = get_global_func_typ(runtime_broadcast_assert_shapes)
+        print("func_fnty:", func_fnty)
+        self.typemap[func_var.name] = func_fnty
+        fargs = [types.literal(max_dim)] + typs
+        print("typs:", typs)
+        print("dims:", dims, max_dim)
+        print("fargs:", fargs)
+        func_sig = self.context.resolve_function_type(func_fnty, fargs, {})
+        print("func_sig:", func_sig)
+
+        max_dim_var = ir.Var(scope, mk_unique_var("max_dim"), loc)
+        max_dim_val = ir.Const(max_dim, loc)
+        max_dim_typ = types.IntegerLiteral(max_dim)
+        self.typemap[max_dim_var.name] = max_dim_typ
+        pre.append(
+            ir.Assign(value=max_dim_val, target=max_dim_var, loc=loc)
+        )
+
+        func_call = ir.Expr.call(func_var, [max_dim_var] + arrs, {}, loc)
+
+        self.calltypes[func_call] = func_sig
+        pre.append(
+            ir.Assign(value=func_call, target=runtime_broadcast_shape, loc=loc)
+        )
+
+        return ArrayAnalysis.AnalyzeResult(
+            shape=runtime_broadcast_shape,
+            pre=pre
+        )
+
     def _analyze_broadcast(self, scope, equiv_set, loc, args):
         """Infer shape equivalence of arguments based on Numpy broadcast rules
         and return shape of output
@@ -2866,16 +2940,24 @@ class ArrayAnalysis(object):
         dims = [self.typemap[x.name].ndim for x in arrs]
         max_dim = max(dims)
         require(max_dim > 0)
+        print("analyze_broadcast:", arrs, names, dims)
         try:
             shapes = [equiv_set.get_shape(x) for x in arrs]
+            print("shapes:", shapes)
         except errors.GuardException:
+            print("GuardException")
             return ArrayAnalysis.AnalyzeResult(
                 shape=arrs[0],
                 pre=self._call_assert_equiv(scope, loc, equiv_set, arrs)
             )
-        return self._broadcast_assert_shapes(
-            scope, equiv_set, loc, shapes, names
-        )
+        if None not in shapes:
+            return self._broadcast_assert_shapes(
+                scope, equiv_set, loc, shapes, names
+            )
+        else:
+            return self._insert_runtime_broadcast_call(
+                scope, loc, arrs, max_dim
+            )
 
     def _broadcast_assert_shapes(self, scope, equiv_set, loc, shapes, names):
         """Produce assert_equiv for sizes in each dimension, taking into
