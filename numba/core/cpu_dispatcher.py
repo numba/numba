@@ -14,9 +14,9 @@ class CPUDispatcher(dispatcher.Dispatcher):
                 dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
                         targetoptions=targetoptions, impl_kind=impl_kind, pipeline_class=DPPyCompiler)
             else:
-                print("------------------------------------------------------------------------")
-                print("WARNING : offload = True was ignored, please make sure dppy is available")
-                print("------------------------------------------------------------------------")
+                print("---------------------------------------------------------------------------")
+                print("WARNING : offload=True option ignored. Ensure OpenCL drivers are installed.")
+                print("---------------------------------------------------------------------------")
                 dispatcher.Dispatcher.__init__(self, py_func, locals=locals,
                     targetoptions=targetoptions, impl_kind=impl_kind, pipeline_class=pipeline_class)
         else:
