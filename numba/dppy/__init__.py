@@ -13,7 +13,7 @@ else:
     raise ImportError("Importing dppy failed")
 
 def test(*args, **kwargs):
-    if dppy_present and not is_available():
+    if not dppy_present and not is_available():
         dppy_error()
 
     return numba.testing.test("numba.dppy.tests", *args, **kwargs)
