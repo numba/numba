@@ -18,7 +18,7 @@ class TestVectorize(DPPYTestCase):
         def axy(a, x, y):
             return a * x + y
 
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a0, a1):
             return np.cos(axy(a0, np.sin(a1) - 1., 1.) )
 

@@ -13,7 +13,7 @@ import dppy.ocldrv as ocldrv
 
 class TestNumpy_bit_twiddling_functions(DPPYTestCase):
     def test_bitwise_and(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.bitwise_and(a, b)
             return c
@@ -27,7 +27,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_bitwise_or(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.bitwise_or(a, b)
             return c
@@ -41,7 +41,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_bitwise_xor(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.bitwise_xor(a, b)
             return c
@@ -55,7 +55,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_bitwise_not(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.bitwise_not(a)
             return c
@@ -68,7 +68,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_invert(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.invert(a)
             return c
@@ -81,7 +81,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_left_shift(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.left_shift(a, b)
             return c
@@ -95,7 +95,7 @@ class TestNumpy_bit_twiddling_functions(DPPYTestCase):
 
 
     def test_right_shift(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.right_shift(a, b)
             return c
