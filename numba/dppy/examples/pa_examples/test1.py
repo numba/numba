@@ -2,7 +2,7 @@ from numba import njit, gdb
 import numpy as np
 
 #@njit(target='dppy')
-@njit(parallel={'spirv':True})
+@njit(parallel={'offload':True})
 def f1(a, b):
     c = a + b
     return c

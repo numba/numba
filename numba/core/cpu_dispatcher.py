@@ -7,7 +7,7 @@ class CPUDispatcher(dispatcher.Dispatcher):
 
     def __init__(self, py_func, locals={}, targetoptions={}, impl_kind='direct', pipeline_class=compiler.Compiler):
         if ('parallel' in targetoptions and isinstance(targetoptions['parallel'], dict) and
-                'spirv' in targetoptions['parallel'] and  targetoptions['parallel']['spirv'] == True):
+                'offload' in targetoptions['parallel'] and  targetoptions['parallel']['offload'] == True):
             import numba.dppy_config as dppy_config
             if dppy_config.dppy_present:
                 from numba.dppy.compiler import DPPyCompiler

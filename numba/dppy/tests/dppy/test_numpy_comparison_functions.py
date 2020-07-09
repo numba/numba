@@ -14,7 +14,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
     a = np.array([4,5,6])
     b = np.array([2,6,6])
     def test_greater(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.greater(a, b)
             return c
@@ -25,7 +25,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_greater_equal(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.greater_equal(a, b)
             return c
@@ -36,7 +36,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_less(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.less(a, b)
             return c
@@ -47,7 +47,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_less_equal(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.less_equal(a, b)
             return c
@@ -58,7 +58,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_not_equal(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.not_equal(a, b)
             return c
@@ -69,7 +69,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_equal(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.equal(a, b)
             return c
@@ -80,7 +80,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_logical_and(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.logical_and(a, b)
             return c
@@ -94,7 +94,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_logical_or(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.logical_or(a, b)
             return c
@@ -108,7 +108,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_logical_xor(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.logical_xor(a, b)
             return c
@@ -122,7 +122,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_logical_not(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.logical_not(a)
             return c
@@ -135,7 +135,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_maximum(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.maximum(a, b)
             return c
@@ -149,7 +149,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_minimum(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.minimum(a, b)
             return c
@@ -163,7 +163,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_fmax(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.fmax(a, b)
             return c
@@ -177,7 +177,7 @@ class TestNumpy_comparison_functions(DPPYTestCase):
 
 
     def test_fmin(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.fmin(a, b)
             return c

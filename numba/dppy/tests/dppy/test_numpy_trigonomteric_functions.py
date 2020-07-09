@@ -16,7 +16,7 @@ class TestNumpy_math_functions(DPPYTestCase):
     b = np.array(np.random.random(N), dtype=np.float32)
 
     def test_sin(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.sin(a)
             return c
@@ -28,7 +28,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_cos(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.cos(a)
             return c
@@ -40,7 +40,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_tan(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.tan(a)
             return c
@@ -52,7 +52,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_arcsin(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.arcsin(a)
             return c
@@ -64,7 +64,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_arccos(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.arccos(a)
             return c
@@ -76,7 +76,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_arctan(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.arctan(a)
             return c
@@ -88,7 +88,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_arctan2(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             c = np.arctan2(a, b)
             return c
@@ -100,7 +100,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_sinh(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.sinh(a)
             return c
@@ -112,7 +112,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_cosh(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.cosh(a)
             return c
@@ -124,7 +124,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_tanh(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.tanh(a)
             return c
@@ -136,7 +136,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_arcsinh(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.arcsinh(a)
             return c
@@ -148,7 +148,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_arccosh(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.arccosh(a)
             return c
@@ -161,7 +161,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_arctanh(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.arctanh(a)
             return c
@@ -173,7 +173,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_deg2rad(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.deg2rad(a)
             return c
@@ -185,7 +185,7 @@ class TestNumpy_math_functions(DPPYTestCase):
 
 
     def test_rad2deg(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.rad2deg(a)
             return c
@@ -196,7 +196,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(max_abs_err < 1e-2)
 
     def test_degrees(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.degrees(a)
             return c
@@ -207,7 +207,7 @@ class TestNumpy_math_functions(DPPYTestCase):
         self.assertTrue(max_abs_err < 1e-2)
 
     def test_radians(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a):
             c = np.radians(a)
             return c

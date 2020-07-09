@@ -64,7 +64,7 @@ class ParallelOptions(object):
             self.stencil = value.pop('stencil', True)
             self.fusion = value.pop('fusion', True)
             self.prange = value.pop('prange', True)
-            self.gen_spirv = value.pop('spirv', False)
+            self.gen_spirv = value.pop('offload', False)
             if value:
                 msg = "Unrecognized parallel options: %s" % value.keys()
                 raise NameError(msg)

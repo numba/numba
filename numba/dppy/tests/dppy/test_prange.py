@@ -13,7 +13,7 @@ import dppy.ocldrv as ocldrv
 
 class TestPrange(DPPYTestCase):
     def test_one_prange(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             for i in prange(4):
                 b[i, 0] = a[i, 0] * 10
@@ -30,7 +30,7 @@ class TestPrange(DPPYTestCase):
 
 
     def test_nested_prange(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             # dimensions must be provided as scalar
             m, n = a.shape
@@ -48,7 +48,7 @@ class TestPrange(DPPYTestCase):
 
 
     def test_multiple_prange(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             # dimensions must be provided as scalar
             m, n = a.shape
@@ -73,7 +73,7 @@ class TestPrange(DPPYTestCase):
 
 
     def test_three_prange(self):
-        @njit(parallel={'spirv':True})
+        @njit(parallel={'offload':True})
         def f(a, b):
             # dimensions must be provided as scalar
             m, n, o = a.shape
