@@ -1132,6 +1132,7 @@ class TestBasicSubtyping(TestCase):
         can be used as input to another function with locked-down signature
         """
         a = 1
+
         @njit
         def foo(x):
             return x + 1
@@ -1171,6 +1172,7 @@ class TestBasicSubtyping(TestCase):
         that it behaves as a truly generic function (foo1 does not get locked)
         """
         a = 1
+
         @njit
         def foo1(x):
             return x + 1
@@ -1185,7 +1187,7 @@ class TestBasicSubtyping(TestCase):
         def bar(fc):
             return fc(a)
 
-        self.assertEqual(bar(foo1)+1, bar(foo2))
+        self.assertEqual(bar(foo1) + 1, bar(foo2))
 
     def test_basic4(self):
         """
@@ -1211,4 +1213,4 @@ class TestBasicSubtyping(TestCase):
             for i in range(2):
                 x += fcs[i](a)
             return x
-        self.assertEqual(bar(tup), foo1(a)+foo2(a))
+        self.assertEqual(bar(tup), foo1(a) + foo2(a))
