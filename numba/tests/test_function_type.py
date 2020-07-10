@@ -1211,6 +1211,4 @@ class TestBasicSubtyping(TestCase):
             for i in range(2):
                 x += fcs[i](a)
             return x
-        from numba import typeof
-        print("Type of tuple in test code", typeof(tup), ' code: ', typeof(tup)._code)
         self.assertEqual(bar(tup), foo1(a)+foo2(a))
