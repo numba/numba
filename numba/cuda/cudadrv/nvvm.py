@@ -283,12 +283,22 @@ except:
 if NVVM_VERSION < (1, 4):
     # CUDA 8.0
     SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2)
-else:
+elif NVVM_VERSION < (1, 5):
     # CUDA 9.0 and later
     SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0)
+else:
+    # CUDA 10.0 and later
+    SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5)
 
 
-def _find_arch(mycc):
+def find_closest_arch(mycc):
+    """
+    Given a compute capability, return the closest compute capability supported
+    by the CUDA toolkit.
+
+    :param mycc: Compute capability as a tuple ``(MAJOR, MINOR)``
+    :return: Closest supported CC as a tuple ``(MAJOR, MINOR)``
+    """
     for i, cc in enumerate(SUPPORTED_CC):
         if cc == mycc:
             # Matches
@@ -313,7 +323,7 @@ def get_arch_option(major, minor):
     if config.FORCE_CUDA_CC:
         arch = config.FORCE_CUDA_CC
     else:
-        arch = _find_arch((major, minor))
+        arch = find_closest_arch((major, minor))
     return 'compute_%d%d' % arch
 
 
@@ -388,18 +398,19 @@ done:
 }
 """
 
+
 ir_numba_atomic_max = """
 define internal {T} @___numba_atomic_{T}_max({T}* %ptr, {T} %val) alwaysinline {{
 entry:
     %ptrval = load volatile {T}, {T}* %ptr
-    ; Check if val is a NaN and return *ptr early if so
-    %valnan = fcmp uno {T} %val, %val
+    ; Check if either value is a NaN and return *ptr early if so
+    %valnan = fcmp uno {T} %val, %ptrval
     br i1 %valnan, label %done, label %lt_check
 
 lt_check:
     %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
-    ; Continue attempts if dold < val or dold is NaN (using ult semantics)
-    %lt = fcmp ult {T} %dold, %val
+    ; Continue attempts if dold < val
+    %lt = fcmp nnan olt {T} %dold, %val
     br i1 %lt, label %attempt, label %done
 
 attempt:
@@ -423,14 +434,14 @@ ir_numba_atomic_min = """
 define internal {T} @___numba_atomic_{T}_min({T}* %ptr, {T} %val) alwaysinline{{
 entry:
     %ptrval = load volatile {T}, {T}* %ptr
-    ; Check if val is a NaN and return *ptr early if so
-    %valnan = fcmp uno {T} %val, %val
+    ; Check if either value is a NaN and return *ptr early if so
+    %valnan = fcmp uno {T} %val, %ptrval
     br i1 %valnan, label %done, label %gt_check
 
 gt_check:
     %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
-    ; Continue attempts if dold > val or dold is NaN (using ugt semantics)
-    %lt = fcmp ugt {T} %dold, %val
+    ; Continue attempts if dold > val
+    %lt = fcmp nnan ogt {T} %dold, %val
     br i1 %lt, label %attempt, label %done
 
 attempt:
@@ -464,6 +475,14 @@ def _replace_datalayout(llvmir):
 
 
 def llvm_to_ptx(llvmir, **opts):
+    if opts.pop('fastmath', False):
+        opts.update({
+            'ftz': True,
+            'fma': True,
+            'prec_div': False,
+            'prec_sqrt': False,
+        })
+
     cu = CompilationUnit()
     libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
     # New LLVM generate a shorthand for datalayout that NVVM does not know
@@ -483,6 +502,7 @@ def llvm_to_ptx(llvmir, **opts):
          ir_numba_atomic_min.format(T='float', Ti='i32')),
         ('declare double @___numba_atomic_double_min(double*, double)',
          ir_numba_atomic_min.format(T='double', Ti='i64')),
+        ('immarg', '')
     ]
 
     for decl, fn in replacements:

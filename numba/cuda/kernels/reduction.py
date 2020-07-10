@@ -160,17 +160,18 @@ def _gpu_reduce_factory(fn, nbtype):
 
 
 class Reduce(object):
+    """Create a reduction object that reduces values using a given binary
+    function. The binary function is compiled once and cached inside this
+    object. Keeping this object alive will prevent re-compilation.
+    """
+
     _cache = {}
 
     def __init__(self, functor):
-        """Create a reduction object that reduces values using a given binary
-        function. The binary function is compiled once and cached inside this
-        object. Keeping this object alive will prevent re-compilation.
-
-        :param binop: A function to be compiled as a CUDA device function that
-                    will be used as the binary operation for reduction on a
-                    CUDA device. Internally, it is compiled using
-                    ``cuda.jit(device=True)``.
+        """
+        :param functor: A function implementing a binary operation for
+                        reduction. It will be compiled as a CUDA device
+                        function using ``cuda.jit(device=True)``.
         """
         self._functor = functor
 
@@ -186,10 +187,7 @@ class Reduce(object):
     def __call__(self, arr, size=None, res=None, init=0, stream=0):
         """Performs a full reduction.
 
-        :param arr: A host or device array. If a device array is given, the
-                    reduction is performed inplace and the values in the array
-                    are overwritten. If a host array is given, it is copied to
-                    the device automatically.
+        :param arr: A host or device array.
         :param size: Optional integer specifying the number of elements in
                     ``arr`` to reduce. If this parameter is not specified, the
                     entire array is reduced.

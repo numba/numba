@@ -53,9 +53,22 @@ def make_tag_decorator(known_tags):
     return tag
 
 
-def test_mtime(x):
-    return str(os.path.getmtime(inspect.getfile(x.__class__))) + str(x)
+def cuda_sensitive_mtime(x):
+    """
+    Return a key for sorting tests bases on mtime and test name. For CUDA
+    tests, interleaving tests from different classes is dangerous as the CUDA
+    context might get reset unexpectedly between methods of a class, so for
+    CUDA tests the key prioritises the test module and class ahead of the
+    mtime.
+    """
+    cls = x.__class__
+    key = str(os.path.getmtime(inspect.getfile(cls))) + str(x)
 
+    from numba.cuda.testing import CUDATestCase
+    if CUDATestCase in cls.mro():
+        key = "%s.%s %s" % (str(cls.__module__), str(cls.__name__), key)
+
+    return key
 
 def parse_slice(useslice):
     """Parses the argument string "useslice" as the arguments to the `slice()`
@@ -81,7 +94,7 @@ class TestLister(object):
         result = runner.TextTestResult(sys.stderr, descriptions=True, verbosity=1)
         self._test_list = _flatten_suite(test)
         masked_list = self._test_list[self.useslice]
-        self._test_list.sort(key=test_mtime)
+        self._test_list.sort(key=cuda_sensitive_mtime)
         for t in masked_list:
             print(t.id())
         print('%d tests found. %s selected' % (len(self._test_list), len(masked_list)))
@@ -115,7 +128,7 @@ class BasicTestRunner(runner.TextTestRunner):
 
     def run(self, test):
         run = _flatten_suite(test)[self.useslice]
-        run.sort(key=test_mtime)
+        run.sort(key=cuda_sensitive_mtime)
         wrapped = unittest.TestSuite(run)
         return super(BasicTestRunner, self).run(wrapped)
 
@@ -192,7 +205,7 @@ class NumbaTestProgram(unittest.main):
                             help='Slice the test sequence')
         parser.add_argument('-g', '--gitdiff', dest='gitdiff',
                             action='store_true',
-                            help=('Run tests from changes made against'
+                            help=('Run tests from changes made against '
                                   'origin/master as identified by `git diff`'))
         return parser
 
@@ -321,17 +334,52 @@ class NumbaTestProgram(unittest.main):
             run_tests_real()
 
 
+# These are tests which are generated and injected into the test suite, what
+# gets injected depends on features of the test environment, e.g. TBB presence
+# it's important for doing the CI "slice tests" that these are run at the end
+# See notes in `_flatten_suite` for why. Simple substring matching is used to
+# determine a match.
+_GENERATED = ("numba.tests.test_num_threads",
+              "numba.tests.test_parallel_backend",
+              "numba.tests.test_svml",
+              "numba.tests.test_ufuncs",)
+
+
+def _flatten_suite_inner(test):
+    """
+    Workhorse for _flatten_suite
+    """
+    tests = []
+    if isinstance(test, (unittest.TestSuite, list, tuple)):
+        for x in test:
+            tests.extend(_flatten_suite_inner(x))
+    else:
+        tests.append(test)
+    return tests
+
+
 def _flatten_suite(test):
     """
     Expand nested suite into list of test cases.
     """
-    if isinstance(test, (unittest.TestSuite, list, tuple)):
-        tests = []
-        for x in test:
-            tests.extend(_flatten_suite(x))
-        return tests
-    else:
-        return [test]
+    tests = _flatten_suite_inner(test)
+    # Strip out generated tests and stick them at the end, this is to make sure
+    # that tests appear in a consistent order regardless of features available.
+    # This is so that a slice through the test suite e.g. (1::N) would likely be
+    # consistent up to the point of the generated tests, which rely on specific
+    # features.
+    generated = set()
+    for t in tests:
+        for g in _GENERATED:
+            if g in str(t):
+                generated.add(t)
+    normal = set(tests) - generated
+    def key(x):
+        return x.__module__, type(x).__name__, x._testMethodName
+    tests = sorted(normal, key=key)
+    tests.extend(sorted(list(generated), key=key))
+    return tests
+
 
 def _choose_gitdiff_tests(tests):
     try:
@@ -702,7 +750,7 @@ class ParallelTestRunner(runner.TextTestRunner):
 
     def _run_parallel_tests(self, result, pool, child_runner, tests):
         remaining_ids = set(t.id() for t in tests)
-        tests.sort(key=test_mtime)
+        tests.sort(key=cuda_sensitive_mtime)
         it = pool.imap_unordered(child_runner, tests)
         while True:
             try:

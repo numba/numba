@@ -138,6 +138,7 @@ def register_jitable(*args, **kwargs):
     def wrap(fn):
         # It is just a wrapper for @overload
         inline = kwargs.pop('inline', 'never')
+
         @overload(fn, jit_options=kwargs, inline=inline, strict=False)
         def ov_wrap(*args, **kwargs):
             return fn

@@ -6,6 +6,10 @@ Numba
    :target: https://gitter.im/numba/numba?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge
    :alt: Gitter
 
+.. image:: https://img.shields.io/badge/discuss-on%20discourse-blue
+   :target: https://numba.discourse.group/
+   :alt: Discourse
+
 A Just-In-Time Compiler for Numerical Functions in Python
 #########################################################
 
@@ -41,7 +45,7 @@ Dependencies
 ============
 
 * Python versions: 3.6-3.8
-* llvmlite 0.31.*
+* llvmlite 0.33.*
 * NumPy >=1.15 (can build with 1.11 for ABI compatibility)
 
 Optionally:
@@ -78,10 +82,6 @@ Some old archives are at: http://librelist.com/browser/numba/
 
 Continuous Integration
 ======================
-
-.. image:: https://travis-ci.org/numba/numba.svg?branch=master
-    :target: https://travis-ci.org/numba/numba
-    :alt: Travis CI
 
 .. image:: https://dev.azure.com/numba/numba/_apis/build/status/numba.numba?branchName=master
     :target: https://dev.azure.com/numba/numba/_build/latest?definitionId=1?branchName=master

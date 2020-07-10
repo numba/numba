@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import cuda, int32, complex128
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
 def culocal(A, B):
@@ -28,7 +28,7 @@ def culocal1tuple(A, B):
         B[i] = C[i]
 
 
-class TestCudaLocalMem(SerialMixin, unittest.TestCase):
+class TestCudaLocalMem(CUDATestCase):
     def test_local_array(self):
         jculocal = cuda.jit('void(int32[:], int32[:])')(culocal)
         self.assertTrue('.local' in jculocal.ptx)

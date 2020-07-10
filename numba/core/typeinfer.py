@@ -25,7 +25,7 @@ from numba.core import types, utils, typing, ir, config
 from numba.core.typing.templates import Signature
 from numba.core.errors import (TypingError, UntypedAttributeError,
                                new_error_context, termcolor, UnsupportedError,
-                               ForceLiteralArg)
+                               ForceLiteralArg, CompilerError)
 from numba.core.funcdesc import qualifying_prefix
 
 
@@ -81,7 +81,13 @@ class TypeVar(object):
 
     def lock(self, tp, loc, literal_value=NOTSET):
         assert isinstance(tp, types.Type), type(tp)
-        assert not self.locked
+
+        if self.locked:
+            msg = ("Invalid reassignment of a type-variable detected, type "
+                   "variables are locked according to the user provided "
+                   "function signature or from an ir.Const node. This is a "
+                   "bug! Type={}. {}").format(tp, self.type)
+            raise CompilerError(msg, loc)
 
         # If there is already a type, ensure we can convert it to the
         # locked type.
@@ -208,7 +214,9 @@ class ArgConstraint(object):
                 return
             ty = src.getone()
             if isinstance(ty, types.Omitted):
-                ty = typeinfer.context.resolve_value_type(ty.value)
+                ty = typeinfer.context.resolve_value_type_prefer_literal(
+                    ty.value,
+                )
             if not ty.is_precise():
                 raise TypingError('non-precise type {}'.format(ty))
             typeinfer.add_type(self.dst, ty, loc=self.loc)
@@ -338,7 +346,8 @@ class PairFirstConstraint(object):
                 if not isinstance(tp, types.Pair):
                     # XXX is this an error?
                     continue
-                assert tp.first_type.is_precise()
+                assert (isinstance(tp.first_type, types.UndefinedFunctionType)
+                        or tp.first_type.is_precise())
                 typeinfer.add_type(self.target, tp.first_type, loc=self.loc)
 
 
@@ -1090,6 +1099,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                     typdict[var] = types.unknown
                     return
             tp = tv.getone()
+
+            if isinstance(tp, types.UndefinedFunctionType):
+                tp = tp.get_precise()
+
             if not tp.is_precise():
                 offender = find_offender(name, exhaustive=True)
                 msg = ("Cannot infer the type of variable '%s'%s, "
@@ -1217,6 +1230,10 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
     def _unify_return_types(self, rettypes):
         if rettypes:
             unified = self.context.unify_types(*rettypes)
+            if isinstance(unified, types.FunctionType):
+                # unified is allowed to be UndefinedFunctionType
+                # instance (that is imprecise).
+                return unified
             if unified is None or not unified.is_precise():
                 def check_type(atype):
                     lst = []
@@ -1405,6 +1422,8 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
         """
         Resolve a call to a given function type.  A signature is returned.
         """
+        if isinstance(fnty, types.FunctionType):
+            return fnty.get_call_type(self, pos_args, kw_args)
         if isinstance(fnty, types.RecursiveCall) and not self._skip_recursion:
             # Recursive call
             disp = fnty.dispatcher_type.dispatcher
@@ -1449,13 +1468,26 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
                 # as a global variable
                 typ = types.Dispatcher(_temporary_dispatcher_map[gvar.name])
             else:
+                from numba.misc import special
+
                 nm = gvar.name
-                msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
+                # check if the problem is actually a name error
+                func_glbls = self.func_id.func.__globals__
+                if (nm not in func_glbls.keys() and
+                        nm not in special.__all__ and
+                        nm not in __builtins__.keys() and
+                        nm not in self.func_id.code.co_freevars):
+                    errstr = "NameError: name '%s' is not defined"
+                    msg = _termcolor.errmsg(errstr % nm)
+                    e.patch_message(msg)
+                    raise
+                else:
+                    msg = _termcolor.errmsg("Untyped global name '%s':" % nm)
                 msg += " %s"  # interps the actual error
 
                 # if the untyped global is a numba internal function then add
                 # to the error message asking if it's been imported.
-                from numba.misc import special
+
                 if nm in special.__all__:
                     tmp = ("\n'%s' looks like a Numba internal function, has "
                            "it been imported (i.e. 'from numba import %s')?\n" %
@@ -1480,9 +1512,11 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             typ = typ.copy(readonly=True)
 
         if isinstance(typ, types.BaseAnonymousTuple):
-            types_with_literals = (types.Integer, types.UnicodeType)
-            if all(isinstance(ty, types_with_literals) for ty in typ):
-                typ = types.Tuple([types.literal(val) for val in gvar.value])
+            # if it's a tuple of literal types, swap the type for the more
+            # specific literal version
+            literaled = [types.maybe_literal(x) for x in gvar.value]
+            if all(literaled):
+                typ = types.Tuple(literaled)
 
         self.sentry_modified_builtin(inst, gvar)
         # Setting literal_value for globals because they are handled
@@ -1565,6 +1599,12 @@ http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-u
             self.constraints.append(Propagate(dst=target.name,
                                               src=expr.value.name,
                                               loc=inst.loc))
+        elif expr.op == 'phi':
+            for iv in expr.incoming_values:
+                if iv is not ir.UNDEFINED:
+                    self.constraints.append(Propagate(dst=target.name,
+                                                      src=iv.name,
+                                                      loc=inst.loc))
         elif expr.op == 'make_function':
             self.lock_type(target.name, types.MakeFunctionLiteral(expr),
                            loc=inst.loc, literal_value=expr)

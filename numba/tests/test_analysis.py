@@ -351,9 +351,12 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
             self.assertEqual(len(before_branches), 1)
 
             # check the condition in the branch is a binop
-            condition_var = before_branches[0].cond
-            condition_defn = ir_utils.get_definition(func_ir, condition_var)
-            self.assertEqual(condition_defn.op, 'binop')
+            pred_var = before_branches[0].cond
+            pred_defn = ir_utils.get_definition(func_ir, pred_var)
+            self.assertEqual(pred_defn.op, 'call')
+            condition_var = pred_defn.args[0]
+            condition_op = ir_utils.get_definition(func_ir, condition_var)
+            self.assertEqual(condition_op.op, 'binop')
 
             # do the prune, this should kill the dead branch and rewrite the
             #'condition to a true/false const bit
@@ -697,7 +700,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
                 def func(x):
                     if const:
-                        return 3.14159
+                        return 3.14159, const
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
 
@@ -707,7 +710,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
                 def func(x):
                     if not const:
-                        return 3.14159
+                        return 3.14159, const
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
 
@@ -717,9 +720,9 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
                 def func(x):
                     if const:
-                        return 3.14159
+                        return 3.14159, const
                     else:
-                        return 1.61803
+                        return 1.61803, const
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
 
@@ -729,9 +732,9 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
                 def func(x):
                     if not const:
-                        return 3.14159
+                        return 3.14159, const
                     else:
-                        return 1.61803
+                        return 1.61803, const
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
 
@@ -746,7 +749,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
                 def func(x):
                     if c_test_single_if_global:
-                        return 3.14159
+                        return 3.14159, c_test_single_if_global
 
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
@@ -760,7 +763,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
                 def func(x):
                     if c_test_single_if_negate_global:
-                        return 3.14159
+                        return 3.14159, c_test_single_if_negate_global
 
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
@@ -774,9 +777,9 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
                 def func(x):
                     if c_test_single_if_else_global:
-                        return 3.14159
+                        return 3.14159, c_test_single_if_else_global
                     else:
-                        return 1.61803
+                        return 1.61803, c_test_single_if_else_global
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
 
@@ -789,11 +792,24 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
 
                 def func(x):
                     if not c_test_single_if_else_negate_global:
-                        return 3.14159
+                        return 3.14159, c_test_single_if_else_negate_global
                     else:
-                        return 1.61803
+                        return 1.61803, c_test_single_if_else_negate_global
                 self.assert_prune(func, (types.NoneType('none'),), [prune],
                                   None)
+
+    def test_issue_5618(self):
+
+        @njit
+        def foo():
+            values = np.zeros(1)
+            tmp = 666
+            if tmp:
+                values[0] = tmp
+            return values
+
+        self.assertPreciseEqual(foo.py_func()[0], 666.)
+        self.assertPreciseEqual(foo()[0], 666.)
 
 
 class TestBranchPrunePostSemanticConstRewrites(TestBranchPruneBase):

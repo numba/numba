@@ -28,6 +28,7 @@ def compile_hsa(pyfunc, return_type, args, debug):
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
+    flags.set('no_cfunc_wrapper')
     flags.unset('nrt')
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,

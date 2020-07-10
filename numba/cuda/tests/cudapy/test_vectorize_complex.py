@@ -1,11 +1,11 @@
 import numpy as np
 from numba import vectorize
-from numba.cuda.testing import skip_on_cudasim, SerialMixin
+from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import unittest
 
 
 @skip_on_cudasim('ufunc API unsupported in the simulator')
-class TestVectorizeComplex(SerialMixin, unittest.TestCase):
+class TestVectorizeComplex(CUDATestCase):
     def test_vectorize_complex(self):
         @vectorize(['complex128(complex128)'], target='cuda')
         def vcomp(a):

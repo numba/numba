@@ -2,24 +2,18 @@ import numpy as np
 
 from numba import vectorize, guvectorize
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
-from numba.cuda.testing import skip_on_cudasim
-
-
-class MyArray(object):
-    def __init__(self, arr):
-        self._arr = arr
-        self.__cuda_array_interface__ = arr.__cuda_array_interface__
+from numba.cuda.testing import unittest, ContextResettingTestCase, ForeignArray
+from numba.cuda.testing import skip_on_cudasim, skip_if_external_memmgr
 
 
 @skip_on_cudasim('CUDA Array Interface is not supported in the simulator')
-class TestCudaArrayInterface(CUDATestCase):
+class TestCudaArrayInterface(ContextResettingTestCase):
     def test_as_cuda_array(self):
         h_arr = np.arange(10)
         self.assertFalse(cuda.is_cuda_array(h_arr))
         d_arr = cuda.to_device(h_arr)
         self.assertTrue(cuda.is_cuda_array(d_arr))
-        my_arr = MyArray(d_arr)
+        my_arr = ForeignArray(d_arr)
         self.assertTrue(cuda.is_cuda_array(my_arr))
         wrapped = cuda.as_cuda_array(my_arr)
         self.assertTrue(cuda.is_cuda_array(wrapped))
@@ -30,10 +24,11 @@ class TestCudaArrayInterface(CUDATestCase):
         self.assertEqual(wrapped.device_ctypes_pointer.value,
                          d_arr.device_ctypes_pointer.value)
 
+    @skip_if_external_memmgr('Ownership not relevant with external memmgr')
     def test_ownership(self):
         # Get the deallocation queue
         ctx = cuda.current_context()
-        deallocs = ctx.deallocations
+        deallocs = ctx.memory_manager.deallocations
         # Flush all deallocations
         deallocs.clear()
         self.assertEqual(len(deallocs), 0)
@@ -57,7 +52,7 @@ class TestCudaArrayInterface(CUDATestCase):
     def test_kernel_arg(self):
         h_arr = np.arange(10)
         d_arr = cuda.to_device(h_arr)
-        my_arr = MyArray(d_arr)
+        my_arr = ForeignArray(d_arr)
         wrapped = cuda.as_cuda_array(my_arr)
 
         @cuda.jit
@@ -77,13 +72,13 @@ class TestCudaArrayInterface(CUDATestCase):
 
         # Case 1: use custom array as argument
         h_arr = np.random.random(10)
-        arr = MyArray(cuda.to_device(h_arr))
+        arr = ForeignArray(cuda.to_device(h_arr))
         val = 6
         out = vadd(arr, val)
         np.testing.assert_array_equal(out.copy_to_host(), h_arr + val)
 
         # Case 2: use custom array as return
-        out = MyArray(cuda.device_array(h_arr.shape))
+        out = ForeignArray(cuda.device_array(h_arr.shape))
         returned = vadd(h_arr, val, out=out)
         np.testing.assert_array_equal(returned.copy_to_host(), h_arr + val)
 
@@ -94,13 +89,13 @@ class TestCudaArrayInterface(CUDATestCase):
 
         # Case 1: use custom array as argument
         h_arr = np.random.random(10)
-        arr = MyArray(cuda.to_device(h_arr))
+        arr = ForeignArray(cuda.to_device(h_arr))
         val = np.float64(7)
         out = vadd(arr, val)
         np.testing.assert_array_equal(out.copy_to_host(), h_arr + val)
 
         # Case 2: use custom array as return
-        out = MyArray(cuda.device_array(h_arr.shape))
+        out = ForeignArray(cuda.device_array(h_arr.shape))
         returned = vadd(h_arr, val, out=out)
         np.testing.assert_array_equal(returned.copy_to_host(), h_arr + val)
         self.assertEqual(returned.device_ctypes_pointer.value,
@@ -232,7 +227,7 @@ class TestCudaArrayInterface(CUDATestCase):
             if x < N:
                 arr[x] += 1
 
-        d_arr = MyArray(c_arr)
+        d_arr = ForeignArray(c_arr)
         add_one[1, 10](d_arr)  # this should pass
 
     def test_strides(self):
