@@ -11,7 +11,7 @@ import dppl.ocldrv as ocldrv
 
 parser = argparse.ArgumentParser(description='Program to compute pairwise distance')
 
-parser.add_argument('-n', type=int, required=True, help='Number of points')
+parser.add_argument('-n', type=int, default=10, required=True, help='Number of points')
 parser.add_argument('-d', type=int, default=3, help='Dimensions')
 parser.add_argument('-r', type=int, default=1, help='repeat')
 parser.add_argument('-l', type=int, default=1, help='local_work_size')
