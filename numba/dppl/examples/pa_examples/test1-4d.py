@@ -6,7 +6,7 @@ def f1(a, b):
     c = a + b
     return c
 
-N = 100
+N = 10
 print("N", N)
 
 a = np.ones((N,N,N,N), dtype=np.float32)

@@ -1,7 +1,7 @@
-from numba import njit, gdb
+from numba import njit
 import numpy as np
 
-#@njit(target='dppl')
+
 @njit(parallel={'offload':True})
 def f1(a, b):
     c = a + b
