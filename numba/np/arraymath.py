@@ -4063,6 +4063,7 @@ def np_asarray(a, dtype=None):
             return ret
     elif isinstance(a, types.StringLiteral):
         arr = np.asarray(a.literal_value)
+
         def impl(a, dtype=None):
             return arr.copy()
 
