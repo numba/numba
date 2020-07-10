@@ -91,7 +91,7 @@ def bar(st):
 
 class TestStructRef(MemoryLeakMixin, TestCase):
     def test_basic(self):
-        vs = np.arange(10)
+        vs = np.arange(10, dtype=np.intp)
         ctr = 10
 
         foo_expected = vs + vs
