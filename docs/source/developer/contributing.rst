@@ -10,16 +10,6 @@ questions, don't hesitate to ask them (see below).
 Communication
 -------------
 
-Mailing-list
-''''''''''''
-
-We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
-If you have any questions about contributing to Numba, it is ok to ask them
-on this mailing-list.  You can subscribe and read the archives on
-`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_,
-and there is also a `Gmane mirror <http://news.gmane.org/gmane.comp.python.numba.user>`_
-allowing NNTP access.
-
 Real-time Chat
 ''''''''''''''
 
@@ -37,6 +27,22 @@ developers to keep up with.
 
 Note that the Github issue tracker is the best place to report bugs.  Bug
 reports in chat are difficult to track and likely to be lost.
+
+Forum
+.....
+
+Numba uses Discourse as a forum for longer running threads such as design
+discussions and roadmap planning. There are various categories available and it
+can reached at: `numba.discourse.group https://numba.discourse.group/`.
+
+Mailing-list
+''''''''''''
+
+We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
+ You can subscribe and read the archives on
+`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_,
+and there is also a `Gmane mirror <http://news.gmane.org/gmane.comp.python.numba.user>`_
+allowing NNTP access.
 
 Weekly Meetings
 '''''''''''''''
