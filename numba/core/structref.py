@@ -4,7 +4,6 @@ A mutable struct is passed by reference;
 hence, structref (a reference to a struct).
 
 """
-
 from numba.core import types, imputils, cgutils
 from numba.core.datamodel import default_manager, models
 from numba.core.extending import (
@@ -180,6 +179,7 @@ def ctor({params}):
 def register(struct_type):
     default_manager.register(struct_type, models.StructRefModel)
     define_attributes(struct_type)
+    return struct_type
 
 
 @intrinsic
@@ -212,3 +212,25 @@ def new(typingctx, struct_type):
 
     sig = inst_type(struct_type)
     return sig, codegen
+
+
+class StructRefProxy:
+    def __init__(self, ty, mi):
+        self._ty = ty
+        self._mi = mi
+
+    @property
+    def _numba_type_(self):
+        return self._ty
+
+
+def _StructRefProxy_wrapper(ty, mi):
+    return StructRefProxy(ty, mi)
+
+
+def _init():
+    register(types.StructRef)
+    define_boxing(types.StructRef, _StructRefProxy_wrapper)
+
+
+_init()

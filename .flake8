@@ -60,7 +60,6 @@ exclude =
     numba/core/types/abstract.py
     numba/core/types/functions.py
     numba/core/types/misc.py
-    numba/core/types/containers.py
     numba/core/types/npytypes.py
     numba/core/types/common.py
     numba/core/types/iterators.py

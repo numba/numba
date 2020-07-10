@@ -1,9 +1,6 @@
 """
 Test mutable struct, aka, structref
 """
-
-from types import MappingProxyType
-
 import numpy as np
 
 from numba.core import types
@@ -14,52 +11,20 @@ from numba.core import structref
 from numba.tests.support import MemoryLeakMixin, TestCase
 
 
-class MyStruct(types.Type):
-    def __init__(self, fields):
-        self._fields = tuple(fields)
-        classname = self.__class__.__name__
-        super().__init__(name=f"numba.structref.{classname}{self._fields}")
-
-    @property
-    def fields(self):
-        return self._fields
-
-    @property
-    def field_dict(self):
-        return MappingProxyType(dict(self._fields))
-
-    def get_data_type(self):
-        return types.StructPayloadType(
-            typename=self.__class__.__name__, fields=self._fields,
-        )
-
-
-structref.register(MyStruct)
-
-my_struct_ty = MyStruct(
+my_struct_ty = types.StructRef(
     fields=[("values", types.intp[:]), ("counter", types.intp)]
 )
 
 
-class MyStructWrap:
-    def __init__(self, ty, mi):
-        self._ty = ty
-        self._mi = mi
+class MyStruct(structref.StructRefProxy):
+    pass
 
-    @property
-    def _numba_type_(self):
-        return self._ty
-
-
-def _my_struct_wrap_ctor(ty, mi):
-    return MyStructWrap(ty, mi)
-
-
-structref.define_boxing(MyStruct, _my_struct_wrap_ctor)
 
 structref.define_constructor(
-    lambda xs: MyStruct(fields=xs),
-    MyStructWrap,
+    # The lambda function here is not necessary, but as a test to show that
+    # the first arg can be a callable that makes a StructRef.
+    lambda xs: types.StructRef(fields=xs),
+    MyStruct,
     ['values', 'counter'],
 )
 
@@ -87,7 +52,7 @@ def ctor_by_intrinsic(vs, ctr):
 
 @njit
 def ctor_by_class(vs, ctr):
-    return MyStructWrap(values=vs, counter=ctr)
+    return MyStruct(values=vs, counter=ctr)
 
 
 @njit
@@ -103,7 +68,7 @@ def compute_fields(st):
 class TestStructRef(MemoryLeakMixin, TestCase):
     def test_ctor_by_intrinsic(self):
         vs = np.arange(10, dtype=np.intp)
-        ctr = 10
+        ctr = 13
 
         first_expected = vs + vs
         first_got = ctor_by_intrinsic(vs, ctr)
@@ -115,7 +80,7 @@ class TestStructRef(MemoryLeakMixin, TestCase):
 
     def test_ctor_by_class(self):
         vs = np.arange(10, dtype=np.float64)
-        ctr = 10
+        ctr = 11
 
         first_expected = vs.copy()
         first_got = ctor_by_class(vs, ctr)
