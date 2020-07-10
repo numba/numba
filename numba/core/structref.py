@@ -95,14 +95,17 @@ def define_attributes(struct_typeclass):
         [instance, val] = args
         utils = _Utils(context, builder, inst_type)
         dataval = utils.get_data_struct(instance)
+        # cast val to the correct type
+        field_type = inst_type.field_dict[attr]
+        casted = context.cast(builder, val, val_type, field_type)
         # read old
-        old_value = getattr(dataval, attr, val)
+        old_value = getattr(dataval, attr)
         # incref new value
-        context.nrt.incref(builder, val_type, val)
+        context.nrt.incref(builder, val_type, casted)
         # decref old value (must be last in case new value is old value)
         context.nrt.decref(builder, val_type, old_value)
         # write new
-        setattr(dataval, attr, val)
+        setattr(dataval, attr, casted)
 
 
 def define_boxing(struct_type, obj_ctor):
