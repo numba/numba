@@ -2,28 +2,28 @@
 Features
 ========
 
-DPPy is currently implemented using OpenCL 2.1. The features currently available
+DPPL is currently implemented using OpenCL 2.1. The features currently available
 are listed below with the help of sample code snippets. In this release we have
 the implementation of the OAK approach described in MS138 in section 4.3.2. The
 new decorator is described below.
 
-To access the features driver module have to be imported from numba.dppy.dppy_driver
+To access the features driver module have to be imported from numba.dppl.dppl_driver
 
 New Decorator
 =============
 
-The new decorator included in this release is *dppy.kernel*. Currently this decorator
+The new decorator included in this release is *dppl.kernel*. Currently this decorator
 takes only one option *access_types* which is explained below with the help of an example.
 Users can write OpenCL tpye kernels where they can identify the global id of the work item
 being executed. The supported methods inside a decorated function are:
 
-- dppy.get_global_id(dimidx)
-- dppy.get_local_id(dimidx)
-- dppy.get_group_num(dimidx)
-- dppy.get_num_groups(dimidx)
-- dppy.get_work_dim()
-- dppy.get_global_size(dimidx)
-- dppy.get_local_size(dimidx)
+- dppl.get_global_id(dimidx)
+- dppl.get_local_id(dimidx)
+- dppl.get_group_num(dimidx)
+- dppl.get_num_groups(dimidx)
+- dppl.get_work_dim()
+- dppl.get_global_size(dimidx)
+- dppl.get_local_size(dimidx)
 
 Currently no support is provided for local memory in the device and everything is in the
 global memory. Barrier and other memory fences will be provided once support for local
@@ -61,7 +61,7 @@ Primitive types are passed by value to the kernel, currently supported are int, 
 Math Kernels
 ============
 
-This release has support for math kernels. See numba/dppy/tests/dppy/test_math_functions.py
+This release has support for math kernels. See numba/dppl/tests/dppl/test_math_functions.py
 for more details.
 
 
@@ -72,7 +72,7 @@ Examples
 Sum of two 1d arrays
 ====================
 
-Full example can be found at numba/dppy/examples/sum.py.
+Full example can be found at numba/dppl/examples/sum.py.
 
 To write a program that sums two 1d arrays we at first need a OpenCL device environment.
 We can get the environment by using *ocldrv.runtime.get_gpu_device()* for getting the
@@ -82,7 +82,7 @@ where *device_env.copy_array_to_device(data)* will read the ndarray and copy tha
 and *ocldrv.DeviceArray(device_env.get_env_ptr(), data)* will create a buffer in the device
 that has the same memory size as the ndarray being passed. The OpenCL Kernel in the
 folllowing example is *data_parallel_sum*. To get the id of the work item we are currently
-executing we need to use the  *dppy.get_global_id(0)*, since this example only 1 dimension
+executing we need to use the  *dppl.get_global_id(0)*, since this example only 1 dimension
 we only need to get the id in dimension 0.
 
 While invoking the kernel we need to pass the device environment and the global work size.
@@ -91,9 +91,9 @@ back to the host and we can use *device_env.copy_array_from_device(ddata)*.
 
 .. code-block:: python
 
-    @dppy.kernel
+    @dppl.kernel
     def data_parallel_sum(a, b, c):
-        i = dppy.get_global_id(0)
+        i = dppl.get_global_id(0)
         c[i] = a[i] + b[i]
 
     global_size = 10
@@ -126,7 +126,7 @@ ndArray Support
 
 Support for passing ndarray directly to kernels is also supported.
 
-Full example can be found at numba/dppy/examples/sum_ndarray.py
+Full example can be found at numba/dppl/examples/sum_ndarray.py
 
 For availing this feature instead of creating device buffers explicitly like the previous
 example, users can directly pass the ndarray to the kernel. Internally it will result in
@@ -148,7 +148,7 @@ Reduction
 
 This example will demonstrate a sum reduction of 1d array.
 
-Full example can be found at numba/dppy/examples/sum_reduction.py.
+Full example can be found at numba/dppl/examples/sum_reduction.py.
 
 In this example to sum the 1d array we invoke the Kernel multiple times.
 This can be implemented by invoking the kernel once, but that requires
@@ -161,15 +161,15 @@ ParFor Support
 
 *Parallel For* is supported in this release for upto 3 dimensions.
 
-Full examples can be found in numba/dppy/examples/pa_examples/
+Full examples can be found in numba/dppl/examples/pa_examples/
 
 
 =======
 Testing
 =======
 
-All examples can be found in numba/dppy/examples/
+All examples can be found in numba/dppl/examples/
 
-All tests can be found in numba/dppy/tests/dppy and can be triggered by the following command:
+All tests can be found in numba/dppl/tests/dppl and can be triggered by the following command:
 
-``python -m numba.runtests numba.dppy.tests`` 
+``python -m numba.runtests numba.dppl.tests``
