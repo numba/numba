@@ -172,10 +172,10 @@ class BaseLower(object):
         self.context.declare_env_global(self.module, envname)
 
     def lower(self):
-        # DRD : Add this hack for the time ebing. Having a global env pointer, 
-        # even if it is a null pointer, breaks spirv-val. 
+        # DRD : Add this hack for the time ebing. Having a global env pointer,
+        # even if it is a null pointer, breaks spirv-val.
         context_name = getattr(self.context, 'context_name', '')
-        if not context_name in ("dppy.jit",):
+        if not context_name in ("dppl.jit",):
                 # Emit the Env into the module
                 self.emit_environment_object()
 

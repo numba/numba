@@ -26,19 +26,18 @@ def load_tests(loader, tests, pattern):
     suite = TestSuite()
     suite.addTests(load_testsuite(loader, dirname(__file__)))
 
-    # Numba CUDA / DPPy / HSA tests are located in a separate directory:
+    # Numba CUDA / DPPL / HSA tests are located in a separate directory:
     cuda_dir = join(dirname(dirname(__file__)), 'cuda/tests')
     suite.addTests(loader.discover(cuda_dir))
 
-    # Numba DPPy tests are located in a separate directory
-    from numba.dppy_config import dppy_present
-    if dppy_present:
-        dppy_dir = join(dirname(dirname(__file__)), 'dppy/tests')
-        suite.addTests(loader.discover(dppy_dir))
+    # Numba DPPL tests are located in a separate directory
+    from numba.dppl_config import dppl_present
+    if dppl_present:
+        dppl_dir = join(dirname(dirname(__file__)), 'dppl/tests')
+        suite.addTests(loader.discover(dppl_dir))
 
     # Numba ROC tests are located in a separate directory
     roc_dir = join(dirname(dirname(__file__)), 'roc/tests')
     suite.addTests(loader.discover(roc_dir))
 
     return suite
-
