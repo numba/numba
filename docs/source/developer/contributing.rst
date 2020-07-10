@@ -40,9 +40,7 @@ Mailing-list
 
 We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
  You can subscribe and read the archives on
-`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_,
-and there is also a `Gmane mirror <http://news.gmane.org/gmane.comp.python.numba.user>`_
-allowing NNTP access.
+`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_.
 
 Weekly Meetings
 '''''''''''''''
