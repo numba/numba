@@ -33,7 +33,7 @@ Forum
 
 Numba uses Discourse as a forum for longer running threads such as design
 discussions and roadmap planning. There are various categories available and it
-can reached at: `numba.discourse.group https://numba.discourse.group/`.
+can reached at: `numba.discourse.group https://numba.discourse.group/`_.
 
 Mailing-list
 ''''''''''''
