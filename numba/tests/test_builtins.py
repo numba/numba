@@ -546,16 +546,11 @@ class TestBuiltins(TestCase):
             for v in args:
                 if v in large_inputs and typ.bitwidth < 32:
                     continue
+
                 self.assertPreciseEqual(cfunc(typ(v)), pyfunc(typ(v)))
 
-        # negative inputs
-        for typ in [types.int8, types.int16, types.int32, types.int64]:
-            cr = compile_isolated(pyfunc, (typ,), flags=flags)
-            cfunc = cr.entry_point
-            for v in args:
-                if v in large_inputs and typ.bitwidth < 32:
-                    continue
-                self.assertPreciseEqual(cfunc(typ(-v)), pyfunc(typ(-v)))
+                if typ in [types.int8, types.int16, types.int32, types.int64]:
+                    self.assertPreciseEqual(cfunc(typ(-v)), pyfunc(typ(-v)))
 
     def test_int(self, flags=enable_pyobj_flags):
         pyfunc = int_usecase

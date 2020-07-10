@@ -2343,26 +2343,27 @@ def ol_chr(i):
         return impl
 
 
-@overload_method(types.Integer, '__str__')
-@overload_method(types.Integer, '__repr__')
+@overload(str)
 def integer_str(n):
-    def impl(n):
-        flag = False
-        if n < 0:
-            n = -n
-            flag = True
-        if n == 0:
-            return '0'
-        l = []
-        while n > 0:
-            # there is an implicit conversion of n to float here
-            c = chr(int(ord('0') + (n % 10)))
-            n = n // 10
-            l.append(c)
-        if flag:
-            l.append('-')
-        return ''.join(l[::-1])
-    return impl
+    if isinstance(n, types.Integer):
+        def impl(n):
+            flag = False
+            if n < 0:
+                n = -n
+                flag = True
+            if n == 0:
+                return '0'
+            l = []
+            while n > 0:
+                # there is an implicit conversion of n to float here
+                c = chr(int(ord('0') + (n % 10)))
+                n = n // 10
+                l.append(c)
+            if flag:
+                l.append('-')
+            return ''.join(l[::-1])
+        return impl
+
 # ------------------------------------------------------------------------------
 # iteration
 # ------------------------------------------------------------------------------
