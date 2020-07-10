@@ -519,7 +519,8 @@ class TestBuiltins(TestCase):
 
         large_inputs = [
             123456789,
-            2222222
+            2222222,
+            ~0x0
         ]
 
         args = [*small_inputs, *large_inputs]

@@ -2346,6 +2346,7 @@ def ol_chr(i):
 @overload(str)
 def integer_str(n):
     if isinstance(n, types.Integer):
+        ten = n(10)
         def impl(n):
             flag = False
             if n < 0:
@@ -2356,8 +2357,8 @@ def integer_str(n):
             l = []
             while n > 0:
                 # there is an implicit conversion of n to float here
-                c = chr(int(ord('0') + (n % 10)))
-                n = n // 10
+                c = chr(ord('0') + (n % ten))
+                n = n // ten 
                 l.append(c)
             if flag:
                 l.append('-')
