@@ -7,7 +7,7 @@ import logging
 
 import numpy as np
 
-from numba import njit, types
+from numba import njit, jit, types
 from numba.core import errors
 from numba.extending import overload
 from numba.tests.support import TestCase, override_config
@@ -149,6 +149,57 @@ class TestSSA(SSABaseTest):
 
         self.check_func(foo, np.array([1, 2]))
 
+    def test_unhandled_undefined(self):
+        def function1(arg1, arg2, arg3, arg4, arg5):
+            # This function is auto-generated.
+            if arg1:
+                var1 = arg2
+                var2 = arg3
+                var3 = var2
+                var4 = arg1
+                return
+            else:
+                if arg2:
+                    if arg4:
+                        var5 = arg4         # noqa: F841
+                        return
+                    else:
+                        var6 = var4
+                        return
+                    return var6
+                else:
+                    if arg5:
+                        if var1:
+                            if arg5:
+                                var1 = var6
+                                return
+                            else:
+                                var7 = arg2     # noqa: F841
+                                return arg2
+                            return
+                        else:
+                            if var2:
+                                arg5 = arg2
+                                return arg1
+                            else:
+                                var6 = var3
+                                return var4
+                            return
+                        return
+                    else:
+                        var8 = var1
+                        return
+                    return var8
+                var9 = var3         # noqa: F841
+                var10 = arg5        # noqa: F841
+                return var1
+
+        # The argument values is not critical for re-creating the bug
+        # because the bug is in compile-time.
+        expect = function1(2, 3, 6, 0, 7)
+        got = njit(function1)(2, 3, 6, 0, 7)
+        self.assertEqual(expect, got)
+
 
 class TestReportedSSAIssues(SSABaseTest):
     # Tests from issues
@@ -281,3 +332,164 @@ class TestReportedSSAIssues(SSABaseTest):
             return lin[0]
 
         self.check_func(foo, np.zeros((2, 2)))
+
+    def test_issue5482_missing_variable_init(self):
+        # Test error that lowering fails because variable is missing
+        # a definition before use.
+        @njit("(intp, intp, intp)")
+        def foo(x, v, n):
+            for i in range(n):
+                if i == 0:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = v
+                else:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = problematic + v
+            return problematic
+
+    def test_issue5482_objmode_expr_null_lowering(self):
+        # Existing pipelines will not have the Expr.null in objmode.
+        # We have to create a custom pipeline to force a SSA reconstruction
+        # and stripping.
+        from numba.core.compiler import CompilerBase, DefaultPassBuilder
+        from numba.core.untyped_passes import ReconstructSSA, IRProcessing
+        from numba.core.typed_passes import PreLowerStripPhis
+
+        class CustomPipeline(CompilerBase):
+            def define_pipelines(self):
+                pm = DefaultPassBuilder.define_objectmode_pipeline(self.state)
+                # Force SSA reconstruction and stripping
+                pm.add_pass_after(ReconstructSSA, IRProcessing)
+                pm.add_pass_after(PreLowerStripPhis, ReconstructSSA)
+                pm.finalize()
+                return [pm]
+
+        @jit("(intp, intp, intp)", looplift=False,
+             pipeline_class=CustomPipeline)
+        def foo(x, v, n):
+            for i in range(n):
+                if i == n:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = v
+                else:
+                    if i == x:
+                        pass
+                    else:
+                        problematic = problematic + v
+            return problematic
+
+    def test_issue5493_unneeded_phi(self):
+        # Test error that unneeded phi is inserted because variable does not
+        # have a dominance definition.
+        data = (np.ones(2), np.ones(2))
+        A = np.ones(1)
+        B = np.ones((1,1))
+
+        def foo(m, n, data):
+            if len(data) == 1:
+                v0 = data[0]
+            else:
+                v0 = data[0]
+                # Unneeded PHI node for `problematic` would be placed here
+                for _ in range(1, len(data)):
+                    v0 += A
+
+            for t in range(1, m):
+                for idx in range(n):
+                    t = B
+
+                    if idx == 0:
+                        if idx == n - 1:
+                            pass
+                        else:
+                            problematic = t
+                    else:
+                        if idx == n - 1:
+                            pass
+                        else:
+                            problematic = problematic + t
+            return problematic
+
+        expect = foo(10, 10, data)
+        res1 = njit(foo)(10, 10, data)
+        res2 = jit(forceobj=True, looplift=False)(foo)(10, 10, data)
+        np.testing.assert_array_equal(expect, res1)
+        np.testing.assert_array_equal(expect, res2)
+
+    def test_issue5623_equal_statements_in_same_bb(self):
+
+        def foo(pred, stack):
+            i = 0
+            c = 1
+
+            if pred is True:
+                stack[i] = c
+                i += 1
+                stack[i] = c
+                i += 1
+
+        python = np.array([0, 666])
+        foo(True, python)
+
+        nb = np.array([0, 666])
+        njit(foo)(True, nb)
+
+        expect = np.array([1, 1])
+
+        np.testing.assert_array_equal(python, expect)
+        np.testing.assert_array_equal(nb, expect)
+
+    def test_issue5678_non_minimal_phi(self):
+        # There should be only one phi for variable "i"
+
+        from numba.core.compiler import CompilerBase, DefaultPassBuilder
+        from numba.core.untyped_passes import (
+            ReconstructSSA, FunctionPass, register_pass,
+        )
+
+        phi_counter = []
+
+        @register_pass(mutates_CFG=False, analysis_only=True)
+        class CheckSSAMinimal(FunctionPass):
+            # A custom pass to count the number of phis
+
+            _name = self.__class__.__qualname__ + ".CheckSSAMinimal"
+
+            def __init__(self):
+                super().__init__(self)
+
+            def run_pass(self, state):
+                ct = 0
+                for blk in state.func_ir.blocks.values():
+                    ct += len(list(blk.find_exprs('phi')))
+                phi_counter.append(ct)
+                return True
+
+        class CustomPipeline(CompilerBase):
+            def define_pipelines(self):
+                pm = DefaultPassBuilder.define_nopython_pipeline(self.state)
+                pm.add_pass_after(CheckSSAMinimal, ReconstructSSA)
+                pm.finalize()
+                return [pm]
+
+        @njit(pipeline_class=CustomPipeline)
+        def while_for(n, max_iter=1):
+            a = np.empty((n,n))
+            i = 0
+            while i <= max_iter:
+                for j in range(len(a)):
+                    for k in range(len(a)):
+                        a[j,k] = j + k
+                i += 1
+            return a
+
+        # Runs fine?
+        self.assertPreciseEqual(while_for(10), while_for.py_func(10))
+        # One phi?
+        self.assertEqual(phi_counter, [1])

@@ -220,7 +220,8 @@ class TestCTypesUseCases(MemoryLeakMixin, TestCase):
         # Non-compatible pointers are not accepted (here float32* vs. float64*)
         with self.assertRaises(errors.TypingError) as raises:
             cfunc(np.float32([0.0]))
-        self.assertIn("Invalid use of ExternalFunctionPointer",
+
+        self.assertIn("No implementation of function ExternalFunctionPointer",
                       str(raises.exception))
 
     def test_storing_voidptr_to_int_array(self):
