@@ -700,7 +700,7 @@ class StructPayloadType(Type):
     def __init__(self, typename, fields):
         self._typename = typename
         self._fields = tuple(fields)
-        super().__init__(name=f"mutstruct.payload.{typename}")
+        super().__init__(name=f"mutstruct.payload.{typename}.{self._fields}")
 
     @property
     def fields(self):

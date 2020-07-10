@@ -15,10 +15,10 @@ from numba.tests.support import MemoryLeakMixin, TestCase
 
 
 class MyStruct(types.Type):
-    def __init__(self, typename, fields):
-        self._typename = typename
+    def __init__(self, fields):
         self._fields = tuple(fields)
-        super().__init__(name=f"numba.structref.{self.__class__.__name__}")
+        classname = self.__class__.__name__
+        super().__init__(name=f"numba.structref.{classname}{self._fields}")
 
     @property
     def fields(self):
@@ -30,14 +30,14 @@ class MyStruct(types.Type):
 
     def get_data_type(self):
         return types.StructPayloadType(
-            typename=self._typename, fields=self._fields,
+            typename=self.__class__.__name__, fields=self._fields,
         )
 
 
 structref.register(MyStruct)
 
 my_struct_ty = MyStruct(
-    "MyStruct", fields=[("values", types.intp[:]), ("counter", types.intp)]
+    fields=[("values", types.intp[:]), ("counter", types.intp)]
 )
 
 
@@ -51,11 +51,17 @@ class MyStructWrap:
         return self._ty
 
 
-def object_ctor(ty, mi):
+def _my_struct_wrap_ctor(ty, mi):
     return MyStructWrap(ty, mi)
 
 
-structref.define_boxing(MyStruct, object_ctor)
+structref.define_boxing(MyStruct, _my_struct_wrap_ctor)
+
+structref.define_constructor(
+    lambda xs: MyStruct(fields=xs),
+    MyStructWrap,
+    ['values', 'counter'],
+)
 
 
 @njit
@@ -72,11 +78,16 @@ def my_struct_init(self, values, counter):
 
 
 @njit
-def foo(vs, ctr):
+def ctor_by_intrinsic(vs, ctr):
     st = my_struct(vs, counter=ctr)
     st.values += st.values
     st.counter *= ctr
     return st
+
+
+@njit
+def ctor_by_class(vs, ctr):
+    return MyStructWrap(values=vs, counter=ctr)
 
 
 @njit
@@ -85,19 +96,31 @@ def get_values(st):
 
 
 @njit
-def bar(st):
+def compute_fields(st):
     return st.values + st.counter
 
 
 class TestStructRef(MemoryLeakMixin, TestCase):
-    def test_basic(self):
+    def test_ctor_by_intrinsic(self):
         vs = np.arange(10, dtype=np.intp)
         ctr = 10
 
-        foo_expected = vs + vs
-        foo_got = foo(vs, ctr)
-        self.assertPreciseEqual(foo_expected, get_values(foo_got))
+        first_expected = vs + vs
+        first_got = ctor_by_intrinsic(vs, ctr)
+        self.assertPreciseEqual(first_expected, get_values(first_got))
 
-        bar_expected = foo_expected + (ctr * ctr)
-        bar_got = bar(foo_got)
-        self.assertPreciseEqual(bar_expected, bar_got)
+        second_expected = first_expected + (ctr * ctr)
+        second_got = compute_fields(first_got)
+        self.assertPreciseEqual(second_expected, second_got)
+
+    def test_ctor_by_class(self):
+        vs = np.arange(10, dtype=np.float64)
+        ctr = 10
+
+        first_expected = vs.copy()
+        first_got = ctor_by_class(vs, ctr)
+        self.assertPreciseEqual(first_expected, get_values(first_got))
+
+        second_expected = first_expected + ctr
+        second_got = compute_fields(first_got)
+        self.assertPreciseEqual(second_expected, second_got)

@@ -15,6 +15,7 @@ from numba.core.extending import (
     unbox,
     NativeValue,
     intrinsic,
+    overload,
 )
 from numba.core.typing.templates import AttributeTemplate
 
@@ -145,6 +146,35 @@ def define_boxing(struct_type, obj_ctor):
 
         c.pyapi.decref(mi_obj)
         return NativeValue(out)
+
+
+def define_constructor(struct_typeclass, py_class, fields):
+
+    def _names(text):
+        return [name.strip() for name in text.split(',')]
+
+    params = ', '.join(fields)
+
+    indent = ' ' * 8
+    init_fields_buf = []
+    for k in fields:
+        init_fields_buf.append(f"st.{k} = {k}")
+    init_fields = f'\n{indent}'.join(init_fields_buf)
+
+    source = f"""
+def ctor({params}):
+    struct_type = struct_typeclass(list(zip({list(fields)}, [{params}])))
+    def impl({params}):
+        st = new(struct_type)
+        {init_fields}
+        return st
+    return impl
+"""
+
+    glbs = dict(struct_typeclass=struct_typeclass, new=new)
+    exec(source, glbs)
+    ctor = glbs['ctor']
+    overload(py_class)(ctor)
 
 
 def register(struct_type):
