@@ -4062,12 +4062,9 @@ def np_asarray(a, dtype=None):
                 ret[i] = v
             return ret
     elif isinstance(a, types.StringLiteral):
-        val = a.literal_value
-        l = '1' if len(val) == 0 else str(len(val))
-        dt = 'U' + l
-
+        arr = np.asarray(a.literal_value)
         def impl(a, dtype=None):
-            return np.array(val, dtype=np.dtype(dt))
+            return arr.copy()
 
     return impl
 
