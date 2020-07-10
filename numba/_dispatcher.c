@@ -3,7 +3,6 @@
 #include <string.h>
 #include <time.h>
 #include <assert.h>
-#include <stdio.h>
 #include "_dispatcher.h"
 #include "_typeof.h"
 #include "frameobject.h"
@@ -533,7 +532,6 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     for (i = 0; i < argct; ++i) {
         tmptype = PySequence_Fast_GET_ITEM(args, i);
         tys[i] = typeof_typecode((PyObject *) self, tmptype);
-        printf("Inside _dispatcher.c - Dispatcher_call: type code %d \n", tys[i]);
         if (tys[i] == -1) {
             if (self->can_fallback){
                 /* We will clear the exception if fallback is allowed. */
@@ -572,7 +570,6 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
                                        exact_match_required);
         }
     }
-    //printf("Matches %d\n", matches);
     if (matches == 1) {
         /* Definition is found */
         retval = call_cfunc(self, cfunc, args, kws, locals);
