@@ -401,8 +401,8 @@ class BoundFunction(Callable, Opaque):
                     else:
                         bt = [""]
                     nd2indent = '\n{}'.format(2 * indent)
-                    errstr += _termcolor.reset(nd2indent +
-                                               nd2indent.join(bt_as_lines))
+                    errstr = _termcolor.reset(nd2indent +
+                                               nd2indent.join(_bt_as_lines(bt)))
                     return _termcolor.reset(errstr)
             else:
                 add_bt = lambda X: ''
