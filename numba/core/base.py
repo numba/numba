@@ -336,6 +336,13 @@ class BaseContext(object):
         raise NotImplementedError
 
     @utils.cached_property
+    def nonconst_module_attrs(self):
+        """
+        All module attrs are constant for targets using BaseContext.
+        """
+        return tuple()
+
+    @utils.cached_property
     def nrt(self):
         from numba.core.runtime.context import NRTContext
         return NRTContext(self, self.enable_nrt)
@@ -586,9 +593,11 @@ class BaseContext(object):
         The return value is a callable with the signature
         (context, builder, typ, val, attr).
         """
-        if isinstance(typ, types.Module):
-            # Implement getattr for module-level globals.
-            # We are treating them as constants.
+        const_attr = (typ, attr) not in self.nonconst_module_attrs
+        is_module = isinstance(typ, types.Module)
+        if is_module and const_attr:
+            # Implement getattr for module-level globals that we treat as
+            # constants.
             # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
             if attrty is None or isinstance(attrty, types.Dummy):

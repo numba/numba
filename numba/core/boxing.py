@@ -16,8 +16,7 @@ from numba.np import numpy_support
 
 @box(types.Boolean)
 def box_bool(typ, val, c):
-    longval = c.builder.zext(val, c.pyapi.long)
-    return c.pyapi.bool_from_long(longval)
+    return c.pyapi.bool_from_bool(val)
 
 @unbox(types.Boolean)
 def unbox_boolean(typ, obj, c):

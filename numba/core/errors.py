@@ -14,8 +14,6 @@ from collections import defaultdict
 from numba.core.utils import add_metaclass, reraise, chain_exception
 from functools import wraps
 from abc import abstractmethod
-from importlib import import_module
-from types import ModuleType
 
 # Filled at the end
 __all__ = []
@@ -104,6 +102,10 @@ class _ColorScheme(object):
     def highlight(self, msg):
         pass
 
+    @abstractmethod
+    def reset(self, msg):
+        pass
+
 
 class _DummyColorScheme(_ColorScheme):
 
@@ -123,6 +125,9 @@ class _DummyColorScheme(_ColorScheme):
         pass
 
     def highlight(self, msg):
+        pass
+
+    def reset(self, msg):
         pass
 
 
@@ -174,6 +179,9 @@ except ImportError:
         def highlight(self, msg):
             return msg
 
+        def reset(self, msg):
+            return msg
+
     def termcolor():
         global _termcolor_inst
         if _termcolor_inst is None:
@@ -217,35 +225,40 @@ else:
                           'errmsg': None,
                           'filename': None,
                           'indicate': None,
-                          'highlight': None, }
+                          'highlight': None,
+                          'reset': None, }
 
     # suitable for terminals with a dark background
     themes['dark_bg'] = {'code': Fore.BLUE,
                          'errmsg': Fore.YELLOW,
                          'filename': Fore.WHITE,
                          'indicate': Fore.GREEN,
-                         'highlight': Fore.RED, }
+                         'highlight': Fore.RED,
+                         'reset': Style.RESET_ALL, }
 
     # suitable for terminals with a light background
     themes['light_bg'] = {'code': Fore.BLUE,
                           'errmsg': Fore.BLACK,
                           'filename': Fore.MAGENTA,
                           'indicate': Fore.BLACK,
-                          'highlight': Fore.RED, }
+                          'highlight': Fore.RED,
+                          'reset': Style.RESET_ALL, }
 
     # suitable for terminals with a blue background
     themes['blue_bg'] = {'code': Fore.WHITE,
                          'errmsg': Fore.YELLOW,
                          'filename': Fore.MAGENTA,
                          'indicate': Fore.CYAN,
-                         'highlight': Fore.RED, }
+                         'highlight': Fore.RED,
+                         'reset': Style.RESET_ALL, }
 
     # suitable for use in jupyter notebooks
     themes['jupyter_nb'] = {'code': Fore.BLACK,
                             'errmsg': Fore.BLACK,
                             'filename': Fore.GREEN,
                             'indicate': Fore.CYAN,
-                            'highlight': Fore.RED, }
+                            'highlight': Fore.RED,
+                            'reset': Style.RESET_ALL, }
 
     default_theme = themes['no_color']
 
@@ -256,6 +269,7 @@ else:
             self._filename = theme['filename']
             self._indicate = theme['indicate']
             self._highlight = theme['highlight']
+            self._reset = theme['reset']
             _DummyColorScheme.__init__(self, theme=theme)
 
         def _markup(self, msg, color=None, style=Style.BRIGHT):
@@ -284,6 +298,9 @@ else:
 
         def highlight(self, msg):
             return self._markup(msg, self._highlight)
+
+        def reset(self, msg):
+            return self._markup(msg, self._reset)
 
     def termcolor():
         global _termcolor_inst
@@ -400,79 +417,6 @@ def deprecated(arg):
         return decorator
 
 
-_moved_msg1 = ("An import was requested from a module that has moved location."
-               "\nImport requested from: '{}', please update to use "
-               "'{}' or pin to Numba version 0.48.0. This alias will not be "
-               "present in Numba version 0.50.0.")
-
-
-_moved_msg2 = ("An import was requested from a module that has moved location"
-               ".\nImport of '{}' requested from: '{}', please update to use "
-               "'{}' or pin to Numba version 0.48.0. This alias will not be "
-               "present in Numba version 0.50.0.")
-
-
-_moved_no_replacement = ("No direct replacement for '{}' available. Visit "
-                         "https://gitter.im/numba/numba-dev to request help. "
-                         "Thanks!")
-
-
-def deprecate_moved_module(old_module, new_module, stacklevel=2):
-    """Warn about a module level location move of some part of Numba's
-    internals. stacklevel is 3 by default as most warning locations are
-    from `numba.XYZ` shims.
-    """
-    if new_module is None:
-        msg = _moved_no_replacement.format(old_module)
-    else:
-        msg = _moved_msg1.format(old_module, new_module)
-    warnings.warn(
-        msg, category=NumbaDeprecationWarning, stacklevel=stacklevel + 1)
-
-
-class _MovedModule(ModuleType):
-    def __init__(self, old_module_locals, new_module):
-        old_module = old_module_locals['__name__']
-        super().__init__(old_module)
-
-        # copy across dunders so that package imports work too
-        for attr, value in old_module_locals.items():
-            if attr.startswith('__') and attr.endswith('__'):
-                setattr(self, attr, value)
-
-        self.__new_module = new_module
-        deprecate_moved_module(old_module, new_module, stacklevel=3)
-
-    def __getattr__(self, attr):
-        """ warn users above modules moving locations """
-        try:
-            # import from the moved module
-            if self.__new_module is not None:
-                mod = import_module(self.__new_module)
-                ret_attr = getattr(mod, attr)
-                msg = _moved_msg2.format(attr, self.__name__, self.__new_module)
-                warnings.warn(
-                    msg, category=NumbaDeprecationWarning, stacklevel=2)
-                return ret_attr
-            else:
-                # produce the usual error
-                return super().__getattribute__(attr)
-        except AttributeError:
-            # not a package, so no submodules to attempt to import.
-            # can't use hasattr here because that would recurse.
-            if '__path__' not in self.__dict__:
-                raise
-
-            # perhaps this is a submodule name that was previous importer, but
-            # is no longer
-            try:
-                return import_module("." + attr, package=self.__name__)
-            except ModuleNotFoundError:
-                raise AttributeError(
-                    "Moved module {!r} has no attribute or submodule {!r}"
-                    .format(self.__name__, attr))
-
-
 class WarningsFixer(object):
     """
     An object "fixing" warnings of a given category caught during
@@ -534,11 +478,12 @@ class NumbaError(Exception):
         else:
             def highlight(x):
                 return x
+
         if loc:
-            super(NumbaError, self).__init__(
-                highlight("%s\n%s\n" % (msg, loc.strformat())))
+            new_msg = "%s\n%s\n" % (msg, loc.strformat())
         else:
-            super(NumbaError, self).__init__(highlight("%s" % (msg,)))
+            new_msg = "%s" % (msg,)
+        super(NumbaError, self).__init__(highlight(new_msg))
 
     @property
     def contexts(self):
@@ -554,9 +499,8 @@ class NumbaError(Exception):
         contextual information.
         """
         self.contexts.append(msg)
-        f = termcolor().errmsg('{0}\n') + termcolor().filename(
-            '[{1}] During: {2}')
-        newmsg = f.format(self, len(self.contexts), msg)
+        f = termcolor().errmsg('{0}\n') + termcolor().filename('During: {1}')
+        newmsg = f.format(self, msg)
         self.args = (newmsg,)
         return self
 

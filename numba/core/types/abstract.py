@@ -201,7 +201,10 @@ class Type(object):
     def _determine_array_spec(self, args):
         # XXX non-contiguous by default, even for 1d arrays,
         # doesn't sound very intuitive
-        if isinstance(args, (tuple, list)):
+        def validate_slice(s):
+            return isinstance(s, slice) and s.start is None and s.stop is None
+
+        if isinstance(args, (tuple, list)) and all(map(validate_slice, args)):
             ndim = len(args)
             if args[0].step == 1:
                 layout = 'F'
@@ -209,15 +212,15 @@ class Type(object):
                 layout = 'C'
             else:
                 layout = 'A'
-        elif isinstance(args, slice):
+        elif validate_slice(args):
             ndim = 1
             if args.step == 1:
                 layout = 'C'
             else:
                 layout = 'A'
         else:
-            ndim = 1
-            layout = 'A'
+            # Raise a KeyError to not be handled by collection constructors (e.g. list).
+            raise KeyError(f"Can only index numba types with slices with no start or stop, got {args}.")
 
         return ndim, layout
 

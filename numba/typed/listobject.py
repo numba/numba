@@ -661,24 +661,11 @@ def handle_slice(l, s):
 
 @intrinsic
 def _list_getitem(typingctx, l, index):
-    return _list_getitem_pop_helper(typingctx, l, index, 'getitem')
-
-
-@intrinsic
-def _list_pop(typingctx, l, index):
-    return _list_getitem_pop_helper(typingctx, l, index, 'pop')
-
-
-def _list_getitem_pop_helper(typingctx, l, index, op):
-    """Wrap numba_list_getitem and numba_list_pop
+    """Wrap numba_list_getitem
 
     Returns 2-tuple of (int32, ?item_type)
 
-    This is a helper that is parametrized on the type of operation, which can
-    be either 'pop' or 'getitem'. This is because, signature wise, getitem and
-    pop and are the same.
     """
-    assert(op in ("pop", "getitem"))
     IS_NOT_NONE = not isinstance(l.item_type, types.NoneType)
     resty = types.Tuple([types.int32,
                          types.Optional(l.item_type
@@ -694,7 +681,7 @@ def _list_getitem_pop_helper(typingctx, l, index, op):
         [tl, tindex] = sig.args
         [l, index] = args
         fn = builder.module.get_or_insert_function(
-            fnty, name='numba_list_{}'.format(op))
+            fnty, name='numba_list_getitem')
 
         dm_item = context.data_model_manager[tl.item_type]
         ll_item = context.get_data_type(tl.item_type)
@@ -900,19 +887,36 @@ def impl_pop(l, index=-1):
         def impl(l, index=-1):
             if len(l) == 0:
                 raise IndexError("pop from empty list")
-            index = handle_index(l, index)
-            castedindex = _cast(index, indexty)
-            status, item = _list_pop(l, castedindex)
-            if status == ListStatus.LIST_OK:
-                return _nonoptional(item)
-            elif status == ListStatus.LIST_ERR_IMMUTABLE:
-                raise ValueError("list is immutable")
-            else:
-                raise AssertionError("internal list error during pop")
+            cindex = _cast(handle_index(l, index), indexty)
+            item = l[cindex]
+            del l[cindex]
+            return item
         return impl
 
     else:
         raise TypingError("argument for pop must be an integer")
+
+
+@intrinsic
+def _list_delitem(typingctx, l, index):
+    resty = types.int32
+    sig = resty(l, index)
+
+    def codegen(context, builder, sig, args):
+        fnty = ir.FunctionType(
+            ll_status,
+            [ll_list_type, ll_ssize_t],
+        )
+        [tl, tindex] = sig.args
+        [l, index] = args
+        fn = builder.module.get_or_insert_function(
+            fnty, name='numba_list_delitem')
+
+        lp = _container_get_data(context, builder, tl, l)
+        status = builder.call(fn, [lp, index])
+        return status
+
+    return sig, codegen
 
 
 @intrinsic
@@ -952,10 +956,18 @@ def impl_delitem(l, index):
     if not isinstance(l, types.ListType):
         return
 
+    _check_for_none_typed(l, 'delitem')
+
     if index in index_types:
         def integer_impl(l, index):
-            l.pop(index)
-
+            cindex = _cast(handle_index(l, index), INDEXTY)
+            status = _list_delitem(l, cindex)
+            if status == ListStatus.LIST_OK:
+                return
+            elif status == ListStatus.LIST_ERR_IMMUTABLE:
+                raise ValueError("list is immutable")
+            else:
+                raise AssertionError("internal list error during delitem")
         return integer_impl
 
     elif isinstance(index, types.SliceType):
@@ -1123,7 +1135,7 @@ def impl_remove(l, item):
         casteditem = _cast(item, itemty)
         for i, n in enumerate(l):
             if casteditem == n:
-                l.pop(i)
+                del l[i]
                 return
         else:
             raise ValueError("list.remove(x): x not in list")
@@ -1138,7 +1150,7 @@ def impl_clear(l):
 
     def impl(l):
         while len(l):
-            l.pop()
+            del l[-1]
 
     return impl
 

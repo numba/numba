@@ -705,6 +705,22 @@ class NumberAttribute(AttributeTemplate):
 
 
 @infer_getattr
+class NPTimedeltaAttribute(AttributeTemplate):
+    key = types.NPTimedelta
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
+
+
+@infer_getattr
+class NPDatetimeAttribute(AttributeTemplate):
+    key = types.NPDatetime
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
+
+
+@infer_getattr
 class SliceAttribute(AttributeTemplate):
     key = types.SliceType
 
@@ -992,7 +1008,9 @@ class TypeBuiltin(AbstractTemplate):
         assert not kws
         if len(args) == 1:
             # One-argument type() -> return the __class__
-            classty = self.context.resolve_getattr(args[0], "__class__")
+            # Avoid literal types
+            arg = types.unliteral(args[0])
+            classty = self.context.resolve_getattr(arg, "__class__")
             if classty is not None:
                 return signature(classty, *args)
 
