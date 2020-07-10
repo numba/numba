@@ -109,6 +109,9 @@ def define_attributes(struct_typeclass):
 
 
 def define_boxing(struct_type, obj_ctor):
+    if struct_type is types.StructRef:
+        raise TypeError(f"cannot register {types.StructRef}")
+
     @box(struct_type)
     def box_struct_ref(typ, val, c):
         """
@@ -133,7 +136,7 @@ def define_boxing(struct_type, obj_ctor):
 
     @unbox(struct_type)
     def unbox_struct_ref(typ, obj, c):
-        mi_obj = c.pyapi.object_getattr_string(obj, "_mi")
+        mi_obj = c.pyapi.object_getattr_string(obj, "_meminfo")
 
         mip_type = types.MemInfoPointer(types.voidptr)
 
@@ -147,13 +150,8 @@ def define_boxing(struct_type, obj_ctor):
         return NativeValue(out)
 
 
-def define_constructor(struct_typeclass, py_class, fields):
-
-    def _names(text):
-        return [name.strip() for name in text.split(',')]
-
+def define_contructor(py_class, struct_typeclass, fields):
     params = ', '.join(fields)
-
     indent = ' ' * 8
     init_fields_buf = []
     for k in fields:
@@ -176,7 +174,14 @@ def ctor({params}):
     overload(py_class)(ctor)
 
 
+def define_proxy(py_class, struct_typeclass, fields):
+    define_contructor(py_class, struct_typeclass, fields)
+    define_boxing(struct_typeclass, py_class._numba_box_)
+
+
 def register(struct_type):
+    if struct_type is types.StructRef:
+        raise TypeError(f"cannot register {types.StructRef}")
     default_manager.register(struct_type, models.StructRefModel)
     define_attributes(struct_type)
     return struct_type
@@ -215,22 +220,18 @@ def new(typingctx, struct_type):
 
 
 class StructRefProxy:
-    def __init__(self, ty, mi):
-        self._ty = ty
-        self._mi = mi
+    __slots__ = ('_type', '_meminfo')
+
+    @classmethod
+    def _numba_box_(cls, ty, mi):
+        return cls(ty, mi)
+
+    def __new__(cls, ty, mi):
+        instance = super().__new__(cls)
+        instance._type = ty
+        instance._meminfo = mi
+        return instance
 
     @property
     def _numba_type_(self):
-        return self._ty
-
-
-def _StructRefProxy_wrapper(ty, mi):
-    return StructRefProxy(ty, mi)
-
-
-def _init():
-    register(types.StructRef)
-    define_boxing(types.StructRef, _StructRefProxy_wrapper)
-
-
-_init()
+        return self._type

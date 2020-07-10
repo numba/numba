@@ -719,8 +719,9 @@ class StructRef(Type):
     """
     def __init__(self, fields):
         self._fields = tuple(fields)
-        classname = self.__class__.__name__
-        super().__init__(name=f"numba.structref.{classname}{self._fields}")
+        self._typename = self.__class__.__qualname__
+        name = f"numba.{self._typename}.{self._fields}"
+        super().__init__(name=name)
 
     @property
     def field_dict(self):
