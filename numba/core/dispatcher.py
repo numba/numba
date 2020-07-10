@@ -611,11 +611,6 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         args = [self.typeof_pyval(a) for a in args]
         msg = ("No matching definition for argument type(s) %s"
                % ', '.join(map(str, args)))
-        #### TEMPORARY DEBUG CODE
-        inst = args[0]
-        print("Details on failed argument type", "\n\t Type:", inst, "\n\t id:", id(inst), "\n\t hash:", hash(inst),
-              "\n\t code:", inst._code)
-        ####
         raise TypeError(msg)
 
     def _search_new_conversions(self, *args, **kws):

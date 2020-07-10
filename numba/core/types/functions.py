@@ -515,17 +515,6 @@ class Dispatcher(WeakType, Callable, Dummy):
         if isinstance(other, types.FunctionType):
             if self.dispatcher.get_compile_result(other.signature):
                 return Conversion.safe
-            # for ovrld in self.dispatcher.overloads.values():
-            #     if ovrld.signature == other.signature:
-            #         return Conversion.safe
-            # if self.dispatcher._can_compile:
-            #     try:
-            #         self.dispatcher.compile(other.signature)
-            #     except:
-            #         raise
-            #     else:
-            #         return Conversion.safe
-
 
 
 class ObjModeDispatcher(Dispatcher):

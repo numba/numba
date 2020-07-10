@@ -47,25 +47,12 @@ class _TypeMetaclass(ABCMeta):
     def _intern(cls, inst):
         # Try to intern the created instance
         wr = weakref.ref(inst, _on_type_disposal)
-        #### TEMPORARY DEBUGGING CODE
-        from numba.core import types
-        if isinstance(inst, types.Tuple) and isinstance(inst[0], types.Dispatcher):
-            print("Creating new tuple ",
-                  "\n\t Type:", inst,
-                  "\n\t id:", id(inst), "\n\t hash:", hash(inst),
-                  "\n\t Found in typecache:", wr in _typecache,
-                  )
-        ####
         orig = _typecache.get(wr)
         orig = orig and orig()
         if orig is not None:
             return orig
         else:
             inst._code = _autoincr()
-            #### TEMPORARY DEBUGGING CODE
-            if isinstance(inst, types.Tuple) and isinstance(inst[0], types.Dispatcher):
-                print("\t Assigned typecode", inst._code)
-            ####
             _typecache[wr] = wr
             return inst
 
