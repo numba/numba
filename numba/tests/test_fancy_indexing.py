@@ -180,9 +180,9 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         # Test setitem with a 0d-array
         pyfunc = setitem_usecase
         cfunc = jit(nopython=True)(pyfunc)
+
         x1 = np.zeros(3)
         v1 = np.array(3.14)
-
         exp1 = pyfunc(x1.copy(), 0, v1)
         got1 = cfunc(x1.copy(), 0, v1)
         self.assertPreciseEqual(exp1, got1)
@@ -212,6 +212,14 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         v_ucs = np.array('abc')
         exp5 = pyfunc(x_ucs.copy(), 0, v_ucs)
         got5 = cfunc(x_ucs.copy(), 0, v_ucs)
+        self.assertPreciseEqual(exp5, got5)
+
+        # --------------
+        # Complex
+        x_cp = np.zeros(3, dtype=np.complex)
+        v_cp = np.array(2+3j, dtype=np.complex)
+        exp5 = pyfunc(x_cp.copy(), 0, v_cp)
+        got5 = cfunc(x_cp.copy(), 0, v_cp)
         self.assertPreciseEqual(exp5, got5)
 
 
