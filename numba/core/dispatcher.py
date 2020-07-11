@@ -365,6 +365,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 argtypes.append(types.Omitted(a.value))
             else:
                 argtypes.append(self.typeof_pyval(a))
+
+        return_val = None
         try:
             return_val = self.compile(tuple(argtypes))
         except errors.ForceLiteralArg as e:
@@ -434,8 +436,8 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                     e.patch_message('\n'.join((str(e).rstrip(), help_msg)))
             # ignore the FULL_TRACEBACKS config, this needs reporting!
             raise e
-        else:
-            self._types_active_call = None
+
+        self._types_active_call = None
         return return_val
 
 
