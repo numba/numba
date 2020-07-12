@@ -2,6 +2,7 @@ import os
 import uuid
 import weakref
 import collections
+from types import MappingProxyType
 
 import numba
 from numba.core import types, errors, utils, config
@@ -101,7 +102,7 @@ def overload(func, jit_options=None, strict=True, inline='never'):
       to determine whether to inline, this essentially permitting custom
       inlining rules (typical use might be cost models).
     """
-    jit_options = jit_options if jit_options is not None else {}
+    jit_options = MappingProxyType({} if jit_options is None else jit_options)
     from numba.core.typing.templates import make_overload_template, infer_global
 
     # set default options

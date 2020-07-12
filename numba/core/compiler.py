@@ -1,4 +1,5 @@
 from collections import namedtuple
+from types import MappingProxyType
 import copy
 import warnings
 from numba.core.tracing import event
@@ -181,7 +182,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
     context).
     Good for testing.
     """
-    locals = locals if locals is not None else {}
+    locals = MappingProxyType({} if locals is None else locals)
     from numba.core.registry import cpu_target
     typingctx = typing.Context()
     targetctx = cpu.CPUContext(typingctx)

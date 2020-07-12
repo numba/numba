@@ -7,6 +7,7 @@ import sys
 import warnings
 import inspect
 import logging
+from types import MappingProxyType
 
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
@@ -139,7 +140,7 @@ def jit(signature_or_function=None, locals=None, target='cpu', cache=False,
                 return x + y
 
     """
-    locals = locals if locals is not None else {}
+    locals = MappingProxyType({} if locals is None else locals)
     if 'argtypes' in options:
         raise DeprecationError(_msg_deprecated_signature_arg.format('argtypes'))
     if 'restype' in options:
@@ -248,7 +249,7 @@ def cfunc(sig, locals=None, cache=False, **options):
             return a + b
 
     """
-    locals = locals if locals is not None else {}
+    locals = MappingProxyType({} if locals is None else locals)
     sig = sigutils.normalize_signature(sig)
 
     def wrapper(func):

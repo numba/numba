@@ -10,6 +10,7 @@ import types as pytypes
 import uuid
 import weakref
 from copy import deepcopy
+from types import MappingProxyType
 
 from numba import _dispatcher
 from numba.core import utils, types, errors, typing, serialize, config, compiler, sigutils
@@ -680,8 +681,8 @@ class Dispatcher(_DispatcherBase):
         pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type.
         """
-        locals = locals if locals is not None else {}
-        targetoptions = targetoptions if targetoptions is not None else {}
+        locals = MappingProxyType({} if locals is None else locals)
+        targetoptions = MappingProxyType({} if targetoptions is None else targetoptions)
         self.typingctx = self.targetdescr.typing_context
         self.targetctx = self.targetdescr.target_context
 

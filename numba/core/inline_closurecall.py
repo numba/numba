@@ -61,7 +61,7 @@ class InlineClosureCallPass(object):
     def __init__(self, func_ir, parallel_options, swapped=None, typed=False):
         self.func_ir = func_ir
         self.parallel_options = parallel_options
-        self.swapped = swapped if swapped is not None else {}
+        self.swapped = {} if swapped is None else swapped
         self._processed_stencils = []
         self.typed = typed
 

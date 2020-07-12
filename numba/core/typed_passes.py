@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from collections import defaultdict
+from types import MappingProxyType
 from copy import copy
 import warnings
 
@@ -49,7 +50,7 @@ def fallback_context(state, msg):
 
 def type_inference_stage(typingctx, interp, args, return_type, locals=None,
                          raise_errors=True):
-    locals = locals if locals is not None else {}
+    locals = MappingProxyType({} if locals is None else locals)
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
     warnings = errors.WarningsFixer(errors.NumbaWarning)
