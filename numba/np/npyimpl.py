@@ -479,7 +479,7 @@ def register_ufunc_kernel(ufunc, kernel):
     _any = types.Any
     in_args = (_any,) * ufunc.nin
 
-    # Add an overload for each out argument being missing.
+    # Add a lowering for each out argument that is missing.
     for n_explicit_out in range(ufunc.nout + 1):
         out_args = (types.Array,) * n_explicit_out
         lower(ufunc, *in_args, *out_args)(do_ufunc)
