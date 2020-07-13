@@ -23,7 +23,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
 
-def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
+def jit(signature_or_function=None, locals={}, cache=False,
         pipeline_class=None, boundscheck=False, **options):
     """
     This decorator is used to compile a Python function into native code.
@@ -41,7 +41,7 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         Mapping of local variable names to Numba types. Used to override the
         types deduced by Numba's type inference engine.
 
-    target: str
+    target (deprecated): str
         Specifies the target platform to compile for. Valid targets are cpu,
         gpu, npyufunc, and cuda. Defaults to cpu.
 
@@ -145,6 +145,11 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
     if options.get('nopython', False) and options.get('forceobj', False):
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
+    if 'target' in options:
+        target = options.pop('target')
+        warnings.warn("The 'target' keyword argument is deprecated for the numba.jit decorator.", NumbaDeprecationWarning)
+    else:
+        target = options.pop('_target', 'cpu')
 
     options['boundscheck'] = boundscheck
 

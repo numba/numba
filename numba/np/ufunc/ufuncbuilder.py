@@ -227,7 +227,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(target='npyufunc',
+        self.nb_func = jit(_target='npyufunc',
                            cache=cache,
                            **targetoptions)(py_func)
         self._sigs = []
@@ -292,7 +292,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
                  targetoptions={}):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(target='npyufunc', cache=cache)(py_func)
+        self.nb_func = jit(_target='npyufunc', cache=cache)(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
