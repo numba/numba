@@ -797,8 +797,7 @@ class TestLiftObj(MemoryLeak, TestCase):
 
 
 class TestLiftObjCaching(MemoryLeak, TestCase):
-    # Warnings in this testclass is converted to error
-    #
+    # Warnings in this test class are converted to errors
 
     def setUp(self):
         warnings.simplefilter("error", errors.NumbaWarning)

@@ -149,12 +149,12 @@ loads = pickle.loads
 
 
 class _CustomPickled:
-    """Wrapper for objects that must be pickled with `NumbaPickler`.
+    """A wrapper for objects that must be pickled with `NumbaPickler`.
 
-    Standard `pickle` will pickup the implementation registered via `copyreg`.
+    Standard `pickle` will pick up the implementation registered via `copyreg`.
     This will spawn a `NumbaPickler` instance to serialize the data.
 
-    `NumbaPickler` override the handling of this type so not to spawn a
+    `NumbaPickler` overrides the handling of this type so as not to spawn a
     new pickler for the object when it is already being pickled by a
     `NumbaPickler`.
     """
@@ -198,7 +198,7 @@ copyreg.pickle(_CustomPickled, _pickle__CustomPickled)
 def custom_reduce(cls, states):
     """For customizing object serialization in `__reduce__`.
 
-    Object states provided here is used as keyword arguments to `._rebuild()`
+    Object states provided here are used as keyword arguments to the `._rebuild()`
     class method.
 
     Parameters
@@ -292,7 +292,7 @@ class SlowNumbaPickler(pickle._Pickler):
         if _is_importable(func):
             return self.save_global(func)
         if id(func) in self.__memo:
-            # Detect recursive pickling; i.e. functions references itself.
+            # Detect recursive pickling; i.e. function references itself.
             # NOTE: this is not ideal, but we prefer the fast pickler which
             #       does this properly.
             msg = f"Recursive function reference on {func}"
@@ -323,8 +323,8 @@ class SlowNumbaPickler(pickle._Pickler):
 
 
 class FastNumbaPickler(pickle.Pickler):
-    """Faster version of NumbaPickler by using Python3.8+ features from
-    the C Pickler or install `pickle5` for older Python versions.
+    """Faster version of the NumbaPickler through use of Python3.8+ features from
+    the C Pickler, install `pickle5` for similar on older Python versions.
     """
     def reducer_override(self, obj):
         if isinstance(obj, FunctionType):
@@ -362,7 +362,7 @@ NumbaPickler = FastNumbaPickler if pickle38 else SlowNumbaPickler
 
 
 class ReduceMixin:
-    """A mixin class for objects should be reduced by the NumbaPickler instead
+    """A mixin class for objects that should be reduced by the NumbaPickler instead
     of the standard pickler.
     """
     # Subclass MUST override the below methods
@@ -386,7 +386,7 @@ class ReduceMixin:
 
 
 # ----------------------------------------------------------------------------
-# The following code are adapted from cloudpickle.
+# The following code is adapted from cloudpickle.
 # commit: 9518ae3cc71b7a6c14478a6881c0db41d73812b8
 # Please see LICENSE.third-party file for full copyright information.
 
@@ -480,7 +480,7 @@ def _make_cell_set_template_code():
 
     _cell_set_template_code = CodeType(
         co.co_argcount,
-        co.co_kwonlyargcount,   # Python 3 only argument
+        co.co_kwonlyargcount,
         co.co_nlocals,
         co.co_stacksize,
         co.co_flags,

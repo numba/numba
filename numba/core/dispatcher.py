@@ -658,7 +658,7 @@ class _MemoMixin:
         An instance-specific UUID, to avoid multiple deserializations of
         a given instance.
 
-        Note this is lazily-generated, for performance reasons.
+        Note: this is lazily-generated, for performance reasons.
         """
         u = self.__uuid
         if u is None:
