@@ -132,7 +132,7 @@ def define_boxing(struct_type, obj_class):
 
     - boxing turns an instance of `struct_type` into a PyObject of `obj_class`
     - unboxing turns an instance of `obj_class` into an instance of
-    `strruct_type` in jit-code.
+    `struct_type` in jit-code.
 
     Use this directly instead of `define_proxy()` when the user does not
     want any constructor to be defined.
@@ -240,7 +240,7 @@ def register(struct_type):
     """Register a `numba.core.types.StructRef` for use in jit-code.
 
     This defines the data-model for lowering an instance of `struct_type`.
-    This defines attributes accessor and mutators for an instance of
+    This defines attributes accessor and mutator for an instance of
     `struct_type`.
 
     Parameters
@@ -274,7 +274,7 @@ def new(typingctx, struct_type):
 
     A jit-code only intrinsic. Used to allocate an **empty** mutable struct.
     The fields are zero-initialized and must be set manually after calling
-    thie function.
+    the function.
 
     Example:
 

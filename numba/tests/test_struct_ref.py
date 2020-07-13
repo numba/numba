@@ -5,9 +5,8 @@ import warnings
 
 import numpy as np
 
-from numba.core import types
-from numba import njit
-from numba.core import structref
+from numba import typed, njit, errors
+from numba.core import types, structref
 from numba.extending import overload_method
 from numba.tests.support import (
     MemoryLeakMixin, TestCase, temp_directory, override_config,
@@ -16,6 +15,9 @@ from numba.tests.support import (
 
 @structref.register
 class MySimplerStructType(types.StructRef):
+    """
+    Test associated to this type represent the lowest level uses of structref.
+    """
     pass
 
 
@@ -27,6 +29,7 @@ structref.define_boxing(MySimplerStructType, structref.StructRefProxy)
 
 
 class MyStruct(structref.StructRefProxy):
+
     def __new__(cls, values, counter):
         # Define this method to customize the constructor.
         # The default takes `*args`. Customizing allow the use of keyword-arg.
@@ -39,6 +42,10 @@ class MyStruct(structref.StructRefProxy):
     def values(self):
         return get_values(self)
 
+    @values.setter
+    def values(self, val):
+        return set_values(self, val)
+
     @property
     def counter(self):
         return get_counter(self)
@@ -49,6 +56,9 @@ class MyStruct(structref.StructRefProxy):
 
 @structref.register
 class MyStructType(types.StructRef):
+    """Test associated with this type represent the higher-level uses of
+    structef.
+    """
     pass
 
 
@@ -94,6 +104,11 @@ def get_values(st):
 
 
 @njit
+def set_values(st, val):
+    st.values = val
+
+
+@njit
 def get_counter(st):
     return st.counter
 
@@ -119,20 +134,70 @@ class TestStructRefBasic(MemoryLeakMixin, TestCase):
         second_got = compute_fields(first_got)
         self.assertPreciseEqual(second_expected, second_got)
 
+    def test_MySimplerStructType_wrapper_has_no_attrs(self):
+        vs = np.arange(10, dtype=np.intp)
+        ctr = 13
+        wrapper = ctor_by_intrinsic(vs, ctr)
+        self.assertIsInstance(wrapper, structref.StructRefProxy)
+        with self.assertRaisesRegex(AttributeError, 'values'):
+            wrapper.values
+        with self.assertRaisesRegex(AttributeError, 'counter'):
+            wrapper.counter
+
     def test_MyStructType(self):
         vs = np.arange(10, dtype=np.float64)
         ctr = 11
 
-        first_expected = vs.copy()
+        first_expected_arr = vs.copy()
         first_got = ctor_by_class(vs, ctr)
         self.assertIsInstance(first_got, MyStruct)
-        self.assertPreciseEqual(first_expected, first_got.values)
+        self.assertPreciseEqual(first_expected_arr, first_got.values)
 
-        second_expected = first_expected + ctr
+        second_expected = first_expected_arr + ctr
         second_got = compute_fields(first_got)
         self.assertPreciseEqual(second_expected, second_got)
-
         self.assertEqual(first_got.counter, ctr)
+
+    def test_MyStructType_mixed_types(self):
+        # structref constructor is generic
+        @njit
+        def mixed_type(x, y, m, n):
+            return MyStruct(x, y), MyStruct(m, n)
+
+        a, b = mixed_type(1, 2.3, 3.4j, (4,))
+        self.assertEqual(a.values, 1)
+        self.assertEqual(a.counter, 2.3)
+        self.assertEqual(b.values, 3.4j)
+        self.assertEqual(b.counter, (4,))
+
+    def test_MyStructType_in_dict(self):
+        td = typed.Dict()
+        td['a'] = MyStruct(1, 2.3)
+        self.assertEqual(td['a'].values, 1)
+        self.assertEqual(td['a'].counter, 2.3)
+        # overwrite
+        td['a'] = MyStruct(2, 3.3)
+        self.assertEqual(td['a'].values, 2)
+        self.assertEqual(td['a'].counter, 3.3)
+        # mutate
+        td['a'].values += 10
+        self.assertEqual(td['a'].values, 12)    # changed
+        self.assertEqual(td['a'].counter, 3.3)  # unchanged
+
+    def test_MyStructType_in_dict_mixed_type_error(self):
+        self.disable_leak_check()
+
+        td = typed.Dict()
+        td['a'] = MyStruct(1, 2.3)
+        self.assertEqual(td['a'].values, 1)
+        self.assertEqual(td['a'].counter, 2.3)
+
+        # ERROR: store different types
+        with self.assertRaisesRegex(errors.TypingError,
+                                    r"Cannot cast numba.MyStructType"):
+            # because first field is not a float;
+            # the second field is now an integer.
+            td['b'] = MyStruct(2.3, 1)
 
 
 @overload_method(MyStructType, "testme")

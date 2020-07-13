@@ -1349,7 +1349,7 @@ class StructPayloadModel(StructModel):
     """Model for the payload of a mutable struct
     """
     def __init__(self, dmm, fe_typ):
-        members = fe_typ.fields
+        members = tuple(fe_typ.field_dict.items())
         super().__init__(dmm, fe_typ, members)
 
 

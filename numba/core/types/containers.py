@@ -718,16 +718,32 @@ class StructRef(Type):
     """A mutable struct.
     """
     def __init__(self, fields):
-        self._fields = tuple(fields)
+        """
+        Parameters
+        ----------
+        fields : Sequence
+            A sequence of field description, which is a 2-tuple-like object
+            containing `(name, type)`, where `name` is a `str` for the field
+            name, and `type` is a numba type for the field type.
+        """
+        self._fields = tuple(map(tuple, fields))
         self._typename = self.__class__.__qualname__
-        name = f"numba.{self._typename}.{self._fields}"
+        name = f"numba.{self._typename}{self._fields}"
         super().__init__(name=name)
 
     @property
     def field_dict(self):
+        """Return a immutable mapping for the field names and their
+        corresponding types.
+        """
         return MappingProxyType(dict(self._fields))
 
     def get_data_type(self):
+        """Get the payload type for the actual underlying structure referred
+        to by this struct reference.
+
+        See also: `ClassInstanceType.get_data_type`
+        """
         return StructRefPayload(
             typename=self.__class__.__name__, fields=self._fields,
         )
@@ -742,8 +758,8 @@ class StructRefPayload(Type):
     def __init__(self, typename, fields):
         self._typename = typename
         self._fields = tuple(fields)
-        super().__init__(name=f"mutstruct.payload.{typename}.{self._fields}")
+        super().__init__(name=f"numba.{typename}{self._fields}.payload")
 
     @property
-    def fields(self):
-        return self._fields
+    def field_dict(self):
+        return MappingProxyType(dict(self._fields))
