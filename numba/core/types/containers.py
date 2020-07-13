@@ -728,12 +728,12 @@ class StructRef(Type):
         return MappingProxyType(dict(self._fields))
 
     def get_data_type(self):
-        return StructPayloadType(
+        return StructRefPayload(
             typename=self.__class__.__name__, fields=self._fields,
         )
 
 
-class StructPayloadType(Type):
+class StructRefPayload(Type):
     """The type of the payload of a mutable struct.
     """
 

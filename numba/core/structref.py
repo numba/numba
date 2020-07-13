@@ -4,6 +4,7 @@ A mutable struct is passed by reference;
 hence, structref (a reference to a struct).
 
 """
+from numba import njit
 from numba.core import types, imputils, cgutils
 from numba.core.datamodel import default_manager, models
 from numba.core.extending import (
@@ -20,12 +21,16 @@ from numba.core.typing.templates import AttributeTemplate
 
 
 class _Utils:
+    """Internal builder-code utils for structref definitions.
+    """
     def __init__(self, context, builder, struct_type):
         self.context = context
         self.builder = builder
         self.struct_type = struct_type
 
     def new_struct_ref(self, mi):
+        """Turn a MemInfo of `StructRefPayload` to a `StructRef`
+        """
         context = self.context
         builder = self.builder
         struct_type = self.struct_type
@@ -35,6 +40,8 @@ class _Utils:
         return st
 
     def get_struct_ref(self, val):
+        """Return a helper for accessing a StructRefType
+        """
         context = self.context
         builder = self.builder
         struct_type = self.struct_type
@@ -44,6 +51,8 @@ class _Utils:
         )
 
     def get_data_pointer(self, val):
+        """Get the data pointer to the payload from a `StructRefType`.
+        """
         context = self.context
         builder = self.builder
         struct_type = self.struct_type
@@ -59,6 +68,8 @@ class _Utils:
         return data_ptr
 
     def get_data_struct(self, val):
+        """Get a getter/setter helper for accessing a `StructRefPayload`
+        """
         context = self.context
         builder = self.builder
         struct_type = self.struct_type
@@ -72,6 +83,12 @@ class _Utils:
 
 
 def define_attributes(struct_typeclass):
+    """Define attributes on `struct_typeclass`.
+
+    Defines both setters and getters in jit-code.
+
+    This is called directly in `register()`.
+    """
     @infer_getattr
     class StructAttribute(AttributeTemplate):
         key = struct_typeclass
@@ -139,6 +156,7 @@ def define_boxing(struct_type, obj_class):
 
         ctor_pyfunc = c.pyapi.unserialize(c.pyapi.serialize_object(obj_ctor))
         ty_pyobj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
+
         res = c.pyapi.call_function_objargs(
             ctor_pyfunc, [ty_pyobj, boxed_meminfo],
         )
@@ -163,7 +181,14 @@ def define_boxing(struct_type, obj_class):
         return NativeValue(out)
 
 
-def define_contructor(py_class, struct_typeclass, fields):
+def define_constructor(py_class, struct_typeclass, fields):
+    """Define the jit-code constructor for `struct_typeclass` using the
+    Python type `py_class` and the required `fields`.
+
+    Use this instead of `define_proxy()` if the user does not want boxing
+    logic defined.
+    """
+    # Build source code for the constructor
     params = ', '.join(fields)
     indent = ' ' * 8
     init_fields_buf = []
@@ -184,6 +209,7 @@ def ctor({params}):
     glbs = dict(struct_typeclass=struct_typeclass, new=new)
     exec(source, glbs)
     ctor = glbs['ctor']
+    # Make it an overload
     overload(py_class)(ctor)
 
 
@@ -211,6 +237,30 @@ def define_proxy(py_class, struct_typeclass, fields):
 
 
 def register(struct_type):
+    """Register a `numba.core.types.StructRef` for use in jit-code.
+
+    This defines the data-model for lowering an instance of `struct_type`.
+    This defines attributes accessor and mutators for an instance of
+    `struct_type`.
+
+    Parameters
+    ----------
+    struct_type : type
+        A subclass of `numba.core.types.StructRef`.
+
+    Returns
+    -------
+    struct_type : type
+        Returns the input argument so this can act like a decorator.
+
+    Example
+
+        class MyStruct(numba.core.types.StructRef):
+            ...  # the simplest subclass can be empty
+
+        numba.core.structref.register(MyStruct)
+
+    """
     if struct_type is types.StructRef:
         raise TypeError(f"cannot register {types.StructRef}")
     default_manager.register(struct_type, models.StructRefModel)
@@ -220,6 +270,17 @@ def register(struct_type):
 
 @intrinsic
 def new(typingctx, struct_type):
+    """new(struct_type)
+
+    A jit-code only intrinsic. Used to allocate an **empty** mutable struct.
+    The fields are zero-initialized and must be set manually after calling
+    thie function.
+
+    Example:
+
+        instance = new(MyStruct)
+        instance.field = field_value
+    """
     from numba.experimental.jitclass.base import imp_dtor
 
     inst_type = struct_type.instance_type
@@ -302,4 +363,3 @@ class StructRefProxy:
         Subclass should NOT override.
         """
         return self._type
-

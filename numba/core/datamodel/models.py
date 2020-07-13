@@ -1344,7 +1344,7 @@ class DeferredStructModel(CompositeModel):
                  lambda value: builder.extract_value(value, [0]))]
 
 
-@register_default(types.StructPayloadType)
+@register_default(types.StructRefPayload)
 class StructPayloadModel(StructModel):
     """Model for the payload of a mutable struct
     """
