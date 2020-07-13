@@ -108,9 +108,22 @@ def define_attributes(struct_typeclass):
         setattr(dataval, attr, casted)
 
 
-def define_boxing(struct_type, obj_ctor):
+def define_boxing(struct_type, obj_class):
+    """Define the boxing & unboxing logic for `struct_type` to `obj_class`.
+
+    Defines both boxing and unboxing.
+
+    - boxing turns an instance of `struct_type` into a PyObject of `obj_class`
+    - unboxing turns an instance of `obj_class` into an instance of
+    `strruct_type` in jit-code.
+
+    Use this directly instead of `define_proxy()` when the user does not
+    want any constructor to be defined.
+    """
     if struct_type is types.StructRef:
         raise TypeError(f"cannot register {types.StructRef}")
+
+    obj_ctor = obj_class._numba_box_
 
     @box(struct_type)
     def box_struct_ref(typ, val, c):
@@ -175,8 +188,26 @@ def ctor({params}):
 
 
 def define_proxy(py_class, struct_typeclass, fields):
-    define_contructor(py_class, struct_typeclass, fields)
-    define_boxing(struct_typeclass, py_class._numba_box_)
+    """Defines a PyObject proxy for a structref.
+
+    This makes `py_class` a valid constructor for creating a instance of
+    `struct_typeclass` that contains the members as defined by `fields`.
+
+    Parameters
+    ----------
+    py_class : type
+        The Python class for constructing an instance of `struct_typeclass`.
+    struct_typeclass : numba.core.types.Type
+        The structref type class to bind to.
+    fields : Sequence[str]
+        A sequence of field names.
+
+    Returns
+    -------
+    None
+    """
+    define_constructor(py_class, struct_typeclass, fields)
+    define_boxing(struct_typeclass, py_class)
 
 
 def register(struct_type):
@@ -220,18 +251,55 @@ def new(typingctx, struct_type):
 
 
 class StructRefProxy:
+    """A PyObject proxy to the Numba allocated structref data structure.
+    """
     __slots__ = ('_type', '_meminfo')
 
     @classmethod
     def _numba_box_(cls, ty, mi):
-        return cls(ty, mi)
+        """Called by boxing logic, the conversion of Numba internal
+        representation into a PyObject.
 
-    def __new__(cls, ty, mi):
+        Parameters
+        ----------
+        ty :
+            a Numba type instance.
+        mi :
+            a wrapped MemInfoPointer.
+
+        Returns
+        -------
+        instance :
+             a StructRefProxy instance.
+        """
         instance = super().__new__(cls)
         instance._type = ty
         instance._meminfo = mi
         return instance
 
+    def __new__(cls, *args):
+        """Construct a new instance of the structref.
+
+        This takes positional-arguments only due to limitation of the compiler.
+        The arguments are mapped to ``cls(*args)`` in jit-code.
+        """
+        try:
+            # use cached ctor if available
+            ctor = cls.__numba_ctor
+        except AttributeError:
+            # lazily define the ctor
+            @njit
+            def ctor(*args):
+                return cls(*args)
+            # cache it to attribute to avoid recompilation
+            cls.__numba_ctor = ctor
+        return ctor(*args)
+
     @property
     def _numba_type_(self):
+        """Returns the Numba type instance for this structref instance.
+
+        Subclass should NOT override.
+        """
         return self._type
+

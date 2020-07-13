@@ -6,7 +6,9 @@ import numpy as np
 from numba.core import types
 from numba import njit
 from numba.core import structref
+from numba.extending import overload_method
 from numba.tests.support import MemoryLeakMixin, TestCase
+
 
 
 @structref.register
@@ -22,6 +24,14 @@ structref.define_boxing(MySimplerStructType, structref.StructRefProxy)
 
 
 class MyStruct(structref.StructRefProxy):
+    def __new__(cls, values, counter):
+        # Define this method to customize the constructor.
+        # The default takes `*args`. Customizing allow the use of keyword-arg.
+        # The impl of the method calls `StructRefProxy.__new__`
+        return structref.StructRefProxy.__new__(cls, values, counter)
+
+    # The below defines wrappers for attributes and methods manually
+
     @property
     def values(self):
         return get_values(self)
@@ -30,12 +40,18 @@ class MyStruct(structref.StructRefProxy):
     def counter(self):
         return get_counter(self)
 
+    def testme(self, arg):
+        return self.values * arg + self.counter
+
 
 @structref.register
 class MyStructType(types.StructRef):
     pass
 
 
+# Call to define_proxy is needed to register the use of `MyStruct` as a
+# PyObject proxy for creating a Numba-allocated structref.
+# The `MyStruct` class and then be used in both jit-code and interpreted-code.
 structref.define_proxy(
     MyStruct,
     MyStructType,
@@ -84,7 +100,7 @@ def compute_fields(st):
     return st.values + st.counter
 
 
-class TestStructRef(MemoryLeakMixin, TestCase):
+class TestStructRefBasic(MemoryLeakMixin, TestCase):
     def test_MySimplerStructType(self):
         vs = np.arange(10, dtype=np.intp)
         ctr = 13
@@ -114,3 +130,24 @@ class TestStructRef(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(second_expected, second_got)
 
         self.assertEqual(first_got.counter, ctr)
+
+
+class TestStructRefExtending(MemoryLeakMixin, TestCase):
+    def test_overload_method(self):
+        @overload_method(MyStructType, "testme")
+        def _(self, arg):
+            def impl(self, arg):
+                return self.values * arg + self.counter
+            return impl
+
+        @njit
+        def check(x):
+            vs = np.arange(10, dtype=np.float64)
+            ctr = 11
+            obj = MyStruct(vs, ctr)
+            return obj.testme(x)
+
+        x = 3
+        got = check(x)
+        expect = check.py_func(x)
+        self.assertPreciseEqual(got, expect)
