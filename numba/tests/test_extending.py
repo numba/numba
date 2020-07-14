@@ -1696,6 +1696,12 @@ class TestBoxingCallingJIT(TestCase):
         )
 
 
+def with_objmode_cache_ov_example(x):
+    # This is the function stub for overloading inside
+    # TestCachingOverloadObjmode.test_caching_overload_objmode
+    pass
+
+
 class TestCachingOverloadObjmode(TestCase):
     """Test caching of the use of overload implementation that uses
     `with objmode`
@@ -1747,12 +1753,6 @@ class TestCachingOverloadObjmode(TestCase):
             self.assertEqual(
                 testcase_cached._cache_misses[testcase.signatures[0]], 0,
             )
-
-
-def with_objmode_cache_ov_example(x):
-    # This is the function stub for overloading inside
-    # TestCachingOverloadObjmode.test_caching_overload_objmode
-    pass
 
 
 class TestMisc(TestCase):

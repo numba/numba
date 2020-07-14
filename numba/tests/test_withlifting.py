@@ -796,6 +796,16 @@ class TestLiftObj(MemoryLeak, TestCase):
         return output
 
 
+def case_inner_pyfunc(x):
+    return x / 10
+
+
+def case_objmode_cache(x):
+    with objmode(output='float64'):
+        output = case_inner_pyfunc(x)
+    return output
+
+
 class TestLiftObjCaching(MemoryLeak, TestCase):
     # Warnings in this test class are converted to errors
 
@@ -835,15 +845,6 @@ class TestLiftObjCaching(MemoryLeak, TestCase):
 
     def test_objmode_caching_call_closure_good(self):
         self.check(case_objmode_cache)
-
-
-def case_inner_pyfunc(x):
-    return x / 10
-
-def case_objmode_cache(x):
-    with objmode(output='float64'):
-        output = case_inner_pyfunc(x)
-    return output
 
 
 class TestBogusContext(BaseTestWithLifting):
