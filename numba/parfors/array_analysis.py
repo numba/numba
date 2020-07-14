@@ -2813,10 +2813,10 @@ class ArrayAnalysis(object):
                 shapes = [equiv_set.get_shape(x) for x in tups]
                 concat_shapes = sum(shapes, ())
                 return (concat_shapes, [])
-            # else arrays
             except errors.GuardException:
                 return None
 
+        # else arrays
         arrs = list(filter(lambda a: self._isarray(a.name), args))
         require(len(arrs) > 0)
         names = [x.name for x in arrs]
