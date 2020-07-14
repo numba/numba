@@ -85,17 +85,34 @@ def wrap_index(typingctx, idx, size):
     (idx < 0 ? idx + size : idx) because we may have situations
     where idx > size due to the way indices are calculated
     during slice/range analysis.
+
+    Both idx and size have to be Integer types.
+    size should be from the array size vars that array_analysis
+    adds and the bidwidth should match the platform maximum.
     """
-    unified_ty = typingctx.unify_types(idx, size)
-    if not unified_ty:
-        raise ValueError("Argument types for wrap_index must match")
+    require(isinstance(idx, types.scalars.Integer))
+    require(isinstance(size, types.scalars.Integer))
+
+    # We need both idx and size to be platform size so that we can compare.
+    unified_ty = types.intp if size.signed else types.uintp
+    idx_unified = types.intp if idx.signed else types.uintp
 
     def codegen(context, builder, sig, args):
+        ll_idx_unified_ty = context.get_data_type(idx_unified)
         ll_unified_ty = context.get_data_type(unified_ty)
-        idx = builder.sext(args[0], ll_unified_ty)
-        size = builder.sext(args[1], ll_unified_ty)
+        if idx_unified.signed:
+            idx = builder.sext(args[0], ll_idx_unified_ty)
+        else:
+            idx = builder.zext(args[0], ll_idx_unified_ty)
+        if unified_ty.signed:
+            size = builder.sext(args[1], ll_unified_ty)
+        else:
+            size = builder.zext(args[1], ll_unified_ty)
         neg_size = builder.neg(size)
         zero = llvmlite.ir.Constant(ll_unified_ty, 0)
+        # If idx is unsigned then these signed comparisons will fail in those
+        # cases where the idx has the highest bit set, namely more than 2**31
+        # on 32-bit platforms and 2**63 on 64-bit platforms.
         idx_negative = builder.icmp_signed("<", idx, zero)
         pos_oversize = builder.icmp_signed(">=", idx, size)
         neg_oversize = builder.icmp_signed("<=", idx, neg_size)
