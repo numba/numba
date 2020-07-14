@@ -10,7 +10,7 @@ By default, instead of causing an :class:`IndexError`, accessing an
 out-of-bound index of an array in a Numba-compiled function will return
 garbage results or cause a segfault. Bounds checking can be enabled on a
 specific function via the :ref:`boundscheck <jit-decorator-boundscheck>`
-option of the jit decorator. Additionally, the `NUMBA_BOUNDSCHECK`` can be set
+option of the jit decorator. Additionally, the `NUMBA_BOUNDSCHECK` can be set
 to 0 or 1 to globally override this flag.
 
 Bounds checking will slow down typical functions so it is recommended to only
