@@ -16,7 +16,9 @@ import operator
 from numba.np import arrayobj, ufunc_db, numpy_support
 from numba.core.imputils import Registry, impl_ret_new_ref, force_error_model
 from numba.core import typing, types, utils, cgutils, callconv
-from numba.np.numpy_support import ufunc_find_matching_loop, select_array_wrapper, from_dtype, _ufunc_loop_sig
+from numba.np.numpy_support import (
+    ufunc_find_matching_loop, select_array_wrapper, from_dtype, _ufunc_loop_sig
+)
 from numba.core.typing import npydecl
 from numba.core.extending import overload, intrinsic
 
@@ -374,7 +376,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
 
     indices = [inp.create_iter_indices() for inp in inputs]
 
-    # assume outputs are all the same size
+    # assume outputs are all the same size, which numpy requires
 
     loopshape = outputs[0].shape
     with cgutils.loop_nest(builder, loopshape, intp=intpty) as loop_indices:

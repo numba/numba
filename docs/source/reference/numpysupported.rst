@@ -608,7 +608,7 @@ Math operations
  remainder           Yes          Yes
  mod                 Yes          Yes
  fmod                Yes          Yes
- divmod (*)          ???          Yes
+ divmod (*)          Yes          Yes
  abs                 Yes          Yes
  absolute            Yes          Yes
  fabs                Yes          Yes
