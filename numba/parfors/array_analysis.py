@@ -19,6 +19,7 @@ from numba.core.ir_utils import (
     find_const,
     is_namedtuple_class,
     build_definitions,
+    GuardException,
 )
 from numba.core.analysis import compute_cfg_from_blocks
 from numba.core.typing import npydecl, signature
@@ -2800,6 +2801,17 @@ class ArrayAnalysis(object):
         and return shape of output
         https://docs.scipy.org/doc/numpy/user/basics.broadcasting.html
         """
+        tups = list(filter(lambda a: self._istuple(a.name), args))
+        # Here we have a tuple concatenation.
+        if len(tups) == 2 and fn.__name__ == 'add':
+            try:
+                shapes = [equiv_set.get_shape(x) for x in tups]
+                concat_shapes = sum(shapes, ())
+                return (concat_shapes, [])
+            except GuardException:
+                return None
+
+        # else arrays
         arrs = list(filter(lambda a: self._isarray(a.name), args))
         require(len(arrs) > 0)
         names = [x.name for x in arrs]
