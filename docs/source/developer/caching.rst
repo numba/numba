@@ -20,6 +20,10 @@ overloaded signatures compiled for the function. The *object code* is stored in
 files with an ``.nbc`` extension, one file per overload. The data in both files
 is serialized with :mod:`pickle`.
 
+.. note:: On Python <=3.7, Numba extends ``pickle`` using the pure-Python
+          pickler. To use the faster C Pickler, install ``pickle5``
+          from ``pip``. ``pickle5`` backports Python 3.8 pickler features.
+
 
 Requirements for Cacheability
 -----------------------------
