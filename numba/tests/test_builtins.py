@@ -545,9 +545,6 @@ class TestBuiltins(TestCase):
             cr = compile_isolated(pyfunc, (typ,), flags=flags)
             cfunc = cr.entry_point
             for v in args:
-                if v in large_inputs and typ.bitwidth < 32:
-                    continue
-
                 self.assertPreciseEqual(cfunc(typ(v)), pyfunc(typ(v)))
 
                 if typ.signed:
