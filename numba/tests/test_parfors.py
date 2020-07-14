@@ -1568,6 +1568,22 @@ class TestParfors(TestParforsBase):
                                      types.Array(types.float64, 1, 'C'))) == 1)
 
     @skip_parfors_unsupported
+    def test_tuple_concat(self):
+        # issue5383
+        def test_impl(a):
+            n = len(a)
+            array_shape = n, n
+            indices = np.zeros(((1,) + array_shape + (1,))[:-1], dtype=np.uint64)
+            k_list = indices[0, :]
+
+            for i, g in enumerate(a):
+                k_list[i, i] = i
+            return k_list
+
+        x = np.array([1, 1])
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
     def test_tuple1(self):
         def test_impl(a):
             atup = (3, 4)
