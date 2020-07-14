@@ -5,7 +5,6 @@ import copy
 import inspect
 import os
 import re
-import sys
 import textwrap
 from io import StringIO
 
@@ -89,10 +88,11 @@ class TypeAnnotation(object):
                         atype = 'XXX Lifted Loop XXX'
                         found_lifted_loop = False
                     elif (isinstance(inst.value, ir.Expr) and
-                            inst.value.op ==  'call'):
+                            inst.value.op == 'call'):
                         atype = self.calltypes[inst.value]
                     elif (isinstance(inst.value, ir.Const) and
-                            isinstance(inst.value.value, numba.core.dispatcher.LiftedLoop)):
+                            isinstance(inst.value.value,
+                                       numba.core.dispatcher.LiftedLoop)):
                         atype = 'XXX Lifted Loop XXX'
                         found_lifted_loop = True
                     else:
@@ -169,8 +169,6 @@ class TypeAnnotation(object):
                     idents[line] = ['&nbsp;' * amount for amount in ir_id]
                 this_func[key] = idents
 
-
-
         try:
             from jinja2 import Template
         except ImportError:
@@ -205,9 +203,11 @@ class TypeAnnotation(object):
             indent_len = len(_getindent(line))
             func_data['ir_indent'][num].append(indent_len)
 
-        func_key = (self.func_id.filename + ':' + str(self.func_id.firstlineno + 1),
+        func_key = (self.func_id.filename + ':' +
+                    str(self.func_id.firstlineno + 1),
                     self.signature)
-        if self.lifted_from is not None and self.lifted_from[1]['num_lifted_loops'] > 0:
+        if self.lifted_from is not None and \
+           self.lifted_from[1]['num_lifted_loops'] > 0:
             # This is a lifted loop function that is being compiled. Get the
             # numba ir for lines in loop function to use for annotating
             # original python function that the loop was lifted from.

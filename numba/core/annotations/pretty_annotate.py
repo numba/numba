@@ -5,7 +5,8 @@ This module implements code highlighting of numba function annotations.
 from warnings import warn
 
 warn("The pretty_annotate functionality is experimental and might change API",
-         FutureWarning)
+     FutureWarning)
+
 
 def hllines(code, style):
     try:
@@ -36,6 +37,7 @@ def htlines(code, style):
     res = highlight(code, pylex, hf)
     return res.splitlines()
 
+
 def get_ansi_template():
     try:
         from jinja2 import Template
@@ -61,7 +63,7 @@ def get_ansi_template():
             {%- endfor -%}
     {%- endfor -%}
     """)
-    return ansi_template
+
 
 def get_html_template():
     try:
@@ -82,7 +84,7 @@ def get_html_template():
             /* override JupyterLab style */
             .annotation_table td {
                 text-align: left;
-                background-color: transparent; 
+                background-color: transparent;
                 padding: 1px;
             }
 
@@ -92,7 +94,7 @@ def get_html_template():
 
             .annotation_table code
             {
-                background-color: transparent; 
+                background-color: transparent;
                 white-space: normal;
             }
 
@@ -209,15 +211,15 @@ def get_html_template():
 
 def reform_code(annotation):
     """
-    Extract the code from the Numba annotation datastructure. 
+    Extract the code from the Numba annotation datastructure.
 
     Pygments can only highlight full multi-line strings, the Numba
     annotation is list of single lines, with indentation removed.
     """
     ident_dict = annotation['python_indent']
-    s= ''
+    s = ''
     for n,l in annotation['python_lines']:
-        s = s+' '*ident_dict[n]+l+'\n'
+        s = s + ' ' * ident_dict[n] + l + '\n'
     return s
 
 
@@ -260,20 +262,23 @@ class Annotate:
     7.0
     >>> add.signatures
     [(int64, int64), (float64, float64)]
-    >>> Annotate(add, signature=add.signatures[1])  # annotation for (float64, float64)
+    >>> # annotation for (float64, float64)
+    >>> Annotate(add, signature=add.signatures[1])
     """
     def __init__(self, function, signature=None, **kwargs):
 
         style = kwargs.get('style', 'default')
         if not function.signatures:
-            raise ValueError('function need to be jitted for at least one signature')
+            raise ValueError(
+                'function need to be jitted for at least one signature')
         ann = function.get_annotation_info(signature=signature)
         self.ann = ann
 
         for k,v in ann.items():
             res = hllines(reform_code(v), style)
             rest = htlines(reform_code(v), style)
-            v['pygments_lines'] = [(a,b,c, d) for (a,b),c, d in zip(v['python_lines'], res, rest)]
+            v['pygments_lines'] = [(a,b,c, d) for (a,b),c, d in
+                                   zip(v['python_lines'], res, rest)]
 
     def _repr_html_(self):
         return get_html_template().render(func_data=self.ann)

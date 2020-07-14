@@ -44,7 +44,6 @@ exclude =
     numba/core/interpreter.py
     numba/core/caching.py
     numba/core/debuginfo.py
-    numba/core/annotations/pretty_annotate.py
     numba/misc/dummyarray.py
     numba/core/dataflow.py
     numba/core/pythonapi.py
@@ -258,7 +257,6 @@ exclude =
     numba/tests/test_conversion.py
     numba/tests/test_indexing.py
     numba/tests/test_pycc.py
-    numba/tests/annotation_usecases.py
     numba/tests/test_extended_arg.py
     numba/tests/test_alignment.py
     numba/tests/test_multi3.py
