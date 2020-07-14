@@ -115,6 +115,24 @@ class TestParforsBase(TestCase):
                            scheduler is to be asserted.
             fastmath_pcres - a fastmath parallel compile result, if supplied
                              will be run to make sure the result is correct
+            check_arg_equality - some functions need to check that a
+                                 parameter is modified rather than a certain
+                                 value returned.  If this keyword argument
+                                 is supplied, it should be a list of
+                                 comparison functions such that the i'th
+                                 function in the list is used to compare the
+                                 i'th parameter of the njit and parallel=True
+                                 functions against the i'th parameter of the
+                                 standard Python function, asserting if they
+                                 differ.  The length of this list may be less
+                                 than the number of parameters if only that
+                                 lesser number of parameters are modified by
+                                 the function.  We recommend putting parameters
+                                 that are modified and need to be checked at
+                                 the beginning of the parameter list but
+                                 this is not required as null comparators may
+                                 be provided that never assert for unmodified
+                                 paramters.
             Remaining kwargs are passed to np.testing.assert_almost_equal
         """
         scheduler_type = kwargs.pop('scheduler_type', None)
