@@ -1703,7 +1703,7 @@ def with_objmode_cache_ov_example(x):
 
 
 class TestCachingOverloadObjmode(TestCase):
-    """Test caching of the use of overload implementation that uses
+    """Test caching of the use of overload implementations that use
     `with objmode`
     """
 
