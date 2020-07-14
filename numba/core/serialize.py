@@ -2,9 +2,9 @@
 Serialization support for compiled functions.
 """
 
-
 from importlib.util import MAGIC_NUMBER as bc_magic
 
+import abc
 import io
 import marshal
 import sys
@@ -365,20 +365,21 @@ class FastNumbaPickler(pickle.Pickler):
 NumbaPickler = FastNumbaPickler if pickle38 else SlowNumbaPickler
 
 
-class ReduceMixin:
+class ReduceMixin(abc.ABC):
     """A mixin class for objects that should be reduced by the NumbaPickler instead
     of the standard pickler.
     """
     # Subclass MUST override the below methods
 
+    @abc.abstractmethod
     def _reduce_states(self):
         raise NotImplementedError
 
-    @classmethod
+    @abc.abstractclassmethod
     def _rebuild(cls, **kwargs):
         raise NotImplementedError
 
-    # Subclass should override the below methods
+    # Subclass can override the below methods
 
     def _reduce_class(self):
         return self.__class__
