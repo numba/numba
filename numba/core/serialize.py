@@ -223,7 +223,7 @@ def custom_rebuild(custom_pickled):
     return cls._rebuild(**states)
 
 
-def check(obj):
+def is_serialiable(obj):
     """Check if *obj* can be serialized.
 
     Parameters

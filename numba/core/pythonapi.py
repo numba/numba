@@ -1593,7 +1593,7 @@ class ObjModeUtils:
 
         cached = builder.load(gv)
         with builder.if_then(cgutils.is_null(builder, cached)):
-            if serialize.check(fnty.dispatcher):
+            if serialize.is_serialiable(fnty.dispatcher):
                 cls = type(self)
                 compiler = self.pyapi.unserialize(
                     self.pyapi.serialize_object(cls._call_objmode_dispatcher)
