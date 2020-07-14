@@ -198,8 +198,8 @@ copyreg.pickle(_CustomPickled, _pickle__CustomPickled)
 def custom_reduce(cls, states):
     """For customizing object serialization in `__reduce__`.
 
-    Object states provided here are used as keyword arguments to the `._rebuild()`
-    class method.
+    Object states provided here are used as keyword arguments to the
+    `._rebuild()` class method.
 
     Parameters
     ----------
