@@ -197,6 +197,8 @@ vary with target operating system and hardware. The following lists them all
     threading backend.
   * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
     into Numba's threading backend
+  * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
+    Python 3.6 and 3.7.
 
 * Required run time:
 
