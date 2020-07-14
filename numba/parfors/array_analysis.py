@@ -19,6 +19,7 @@ from numba.core.ir_utils import (
     find_const,
     is_namedtuple_class,
     build_definitions,
+    GuardException,
 )
 from numba.core.analysis import compute_cfg_from_blocks
 from numba.core.typing import npydecl, signature
@@ -2810,7 +2811,7 @@ class ArrayAnalysis(object):
                 shapes = [equiv_set.get_shape(x) for x in tups]
                 concat_shapes = sum(shapes, ())
                 return (concat_shapes, [])
-            except errors.GuardException:
+            except GuardException:
                 return None
 
         arrs = list(filter(lambda a: self._isarray(a.name), args))
