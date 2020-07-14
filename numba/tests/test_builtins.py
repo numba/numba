@@ -550,7 +550,7 @@ class TestBuiltins(TestCase):
 
                 self.assertPreciseEqual(cfunc(typ(v)), pyfunc(typ(v)))
 
-                if typ in [types.int8, types.int16, types.int32, types.int64]:
+                if typ.signed:
                     self.assertPreciseEqual(cfunc(typ(-v)), pyfunc(typ(-v)))
 
     def test_int(self, flags=enable_pyobj_flags):
