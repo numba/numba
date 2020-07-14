@@ -287,7 +287,7 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
                 // Compute the number of items to do in this thread as
                 // the floor of the amount of work left (ra_len-cur) divided
                 // by the number of threads left to which to allocate work.
-                intp ilen = (ra_len-cur) / (num_sched-i);
+                intp ilen = ((ra_len-cur-1) / (num_sched-i)) + 1;
 
                 // Compute the start iteration number for that thread as the start iteration
                 // plus the modal number of iterations times the thread number.
