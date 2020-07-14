@@ -1573,6 +1573,8 @@ class PythonAPI(object):
 
 
 class ObjModeUtils:
+    """Internal utils for calling objmode dispatcher from within NPM code.
+    """
     def __init__(self, pyapi):
         self.pyapi = pyapi
 

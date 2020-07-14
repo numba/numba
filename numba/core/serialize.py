@@ -253,6 +253,10 @@ class _TracedPicklingError(pickle.PicklingError):
 class SlowNumbaPickler(pickle._Pickler):
     """Extends the pure-python Pickler to support the pickling need in Numba.
 
+    Adds pickling for closure functions, modules.
+    Adds customized pickling for _CustomPickled to avoid invoking a new
+    Pickler instance.
+
     Note: this is used on Python < 3.8 unless `pickle5` is installed.
 
     Note: This is good for debugging because the C-pickler hides the traceback
@@ -386,8 +390,8 @@ class ReduceMixin:
 
 
 # ----------------------------------------------------------------------------
-# The following code is adapted from cloudpickle.
-# commit: 9518ae3cc71b7a6c14478a6881c0db41d73812b8
+# The following code is adapted from cloudpickle as of
+# https://github.com/cloudpipe/cloudpickle/commit/9518ae3cc71b7a6c14478a6881c0db41d73812b8    # noqa: E501
 # Please see LICENSE.third-party file for full copyright information.
 
 def _is_importable(obj):
@@ -415,7 +419,8 @@ def _is_importable(obj):
 
 
 def _function_setstate(obj, states):
-    """The setstate function is executed after
+    """The setstate function is executed after creating the function instance
+    to add `cells` into it.
     """
     cells = states.pop('cells')
     for i, v in enumerate(cells):
@@ -437,6 +442,8 @@ def _reduce_function_no_cells(func, globs):
 
 
 def _cell_rebuild(contents):
+    """Rebuild a cell from cell contents
+    """
     if contents is None:
         return CellType()
     else:
@@ -444,6 +451,8 @@ def _cell_rebuild(contents):
 
 
 def _cell_reduce(obj):
+    """Reduce a CellType
+    """
     try:
         # .cell_contents attr lookup raises the wrong exception?
         obj.cell_contents
@@ -459,8 +468,7 @@ def _cell_set(cell, value):
     """Set *value* into *cell* because `.cell_contents` is not writable
     before python 3.7.
 
-    See cloudpickle/cloudpickle.py#L298
-    commit: 9518ae3cc71b7a6c14478a6881c0db41d73812b8
+    See https://github.com/cloudpipe/cloudpickle/blob/9518ae3cc71b7a6c14478a6881c0db41d73812b8/cloudpickle/cloudpickle.py#L298   # noqa: E501
     """
     if PYVERSION >= (3, 7):  # pragma: no branch
         cell.cell_contents = value
