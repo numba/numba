@@ -2809,8 +2809,19 @@ class ArrayAnalysis(object):
         tups = list(filter(lambda a: self._istuple(a.name), args))
         # Here we have a tuple concatenation.
         if len(tups) == 2 and fn.__name__ == 'add':
+            # If either of the tuples is empty then the resulting shape
+            # is just the other tuple.
+            tup0typ = self.typemap[tups[0].name]
+            tup1typ = self.typemap[tups[1].name]
+            if tup0typ.count == 0:
+                return (equiv_set.get_shape(tups[1]), [])
+            if tup1typ.count == 0:
+                return (equiv_set.get_shape(tups[0]), [])
+
             try:
                 shapes = [equiv_set.get_shape(x) for x in tups]
+                if None in shapes:
+                    return None
                 concat_shapes = sum(shapes, ())
                 return (concat_shapes, [])
             except errors.GuardException:
@@ -2825,7 +2836,7 @@ class ArrayAnalysis(object):
         require(max_dim > 0)
         try:
             shapes = [equiv_set.get_shape(x) for x in arrs]
-        except errors.GuardException:
+        except GuardException:
             return (
                 arrs[0],
                 self._call_assert_equiv(scope, loc, equiv_set, arrs),
