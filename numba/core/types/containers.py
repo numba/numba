@@ -1,6 +1,7 @@
+from collections import namedtuple
 from collections.abc import Iterable
 from .abstract import (ConstSized, Container, Hashable, MutableSequence,
-                       Sequence, Type, TypeRef)
+                       Sequence, Type, TypeRef, Literal, InitialValue, Poison)
 from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
@@ -387,19 +388,20 @@ class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
         return self.instance_class, self.types
 
 
-class List(MutableSequence):
+class List(MutableSequence, InitialValue):
     """
     Type class for (arbitrary-sized) homogeneous lists.
     """
     mutable = True
 
-    def __init__(self, dtype, reflected=False):
+    def __init__(self, dtype, reflected=False, initial_value=None):
         dtype = unliteral(dtype)
         self.dtype = dtype
         self.reflected = reflected
         cls_name = "reflected list" if reflected else "list"
-        name = "%s(%s)" % (cls_name, self.dtype)
+        name = "%s(%s)<iv=%s>" % (cls_name, self.dtype, initial_value)
         super(List, self).__init__(name=name)
+        InitialValue.__init__(self, initial_value)
 
     def copy(self, dtype=None, reflected=None):
         if dtype is None:
@@ -417,7 +419,7 @@ class List(MutableSequence):
 
     @property
     def key(self):
-        return self.dtype, self.reflected
+        return self.dtype, self.reflected, str(self.initial_value)
 
     @property
     def iterator_type(self):
@@ -431,6 +433,35 @@ class List(MutableSequence):
         Overrides the default __getitem__ from Type.
         """
         return self.dtype
+
+
+class LiteralList(Literal, _HeterogeneousTuple):
+    """A heterogeneous immutable list (basically a tuple with list semantics).
+    """
+    mutable = False
+
+    def __init__(self, literal_value):
+        _HeterogeneousTuple.is_types_iterable(literal_value)
+        self._literal_init(list(literal_value))
+        tys = [unliteral(x) for x in literal_value]
+        self.types = tuple(literal_value)
+        self.count = len(self.types)
+        self.name = 'LiteralList({})'.format(literal_value)
+        literal_vals = [getattr(x, 'literal_value', None) for x in literal_value]
+
+    def __unliteral__(self):
+        return Poison(self)
+
+    def unify(self, typingctx, other):
+        """
+        Unify this with the *other* one.
+        """
+        if isinstance(other, LiteralList) and self.count == other.count:
+            tys = []
+            for i1, i2 in zip(self.types, other.types):
+                tys.append(typingctx.unify_pairs(i1, i2))
+            if all(tys):
+                return LiteralList(tys)
 
 
 class ListIter(BaseContainerIterator):
@@ -590,10 +621,10 @@ def _sentry_forbidden_types(key, value):
         raise TypingError('{} as value is forbidden'.format(value))
 
 
-class DictType(IterableType):
+class DictType(IterableType, InitialValue):
     """Dictionary type
     """
-    def __init__(self, keyty, valty):
+    def __init__(self, keyty, valty, initial_value=None):
         assert not isinstance(keyty, TypeRef)
         assert not isinstance(valty, TypeRef)
         keyty = unliteral(keyty)
@@ -608,12 +639,14 @@ class DictType(IterableType):
         self.key_type = keyty
         self.value_type = valty
         self.keyvalue_type = Tuple([keyty, valty])
-        name = '{}[{},{}]'.format(
+        name = '{}[{},{}]<iv={}>'.format(
             self.__class__.__name__,
             keyty,
             valty,
+            initial_value
         )
         super(DictType, self).__init__(name)
+        InitialValue.__init__(self, initial_value)
 
     def is_precise(self):
         return not any((
@@ -641,6 +674,51 @@ class DictType(IterableType):
         if isinstance(other, DictType):
             if not other.is_precise():
                 return self
+
+    @property
+    def key(self):
+        return self.key_type, self.value_type, str(self.initial_value)
+
+
+class LiteralStrKeyDict(Literal, NamedTuple):
+    """A Dictionary of string keys to heterogeneous values (basically a
+    namedtuple with dict semantics).
+    """
+    mutable = False
+
+    def __init__(self, literal_value, value_index=None):
+        self._literal_init(literal_value)
+        self.value_index = value_index
+        strkeys = [x.literal_value for x in literal_value.keys()]
+        self.tuple_ty = namedtuple('_ntclazz', ' '.join(strkeys))
+        tys = [x for x in literal_value.values()]
+        NamedTuple.__init__(self, tys, self.tuple_ty)
+        self.name = 'LiteralStrKey[Dict]({})'.format(literal_value)
+
+    def __unliteral__(self):
+        return Poison(self)
+
+    def unify(self, typingctx, other):
+        """
+        Unify this with the *other* one.
+        """
+        if isinstance(other, LiteralStrKeyDict):
+            tys = []
+            for (k1, v1), (k2, v2) in zip(self.literal_value.items(),
+                                          other.literal_value.items()):
+                if k1 != k2: # keys must be same
+                    break
+                tys.append(typingctx.unify_pairs(v1, v2))
+            else:
+                if all(tys):
+                    d = {k: v for k, v in zip(self.literal_value.keys(), tys)}
+                    return LiteralStrKeyDict(d)
+
+    @property
+    def key(self):
+        # use the namedtuple fields not the namedtuple itself as it's created
+        # locally in the ctor and comparison would always be False.
+        return self.tuple_ty._fields, self.types, str(self.literal_value)
 
 
 class DictItemsIterableType(SimpleIterableType):
