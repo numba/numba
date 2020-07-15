@@ -6,7 +6,8 @@ import warnings
 import numpy as np
 
 from numba import typed, njit, errors
-from numba.core import types, structref
+from numba.core import types
+from numba.experimental import structref
 from numba.extending import overload_method
 from numba.tests.support import (
     MemoryLeakMixin, TestCase, temp_directory, override_config,
