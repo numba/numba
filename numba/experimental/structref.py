@@ -141,7 +141,8 @@ def define_boxing(struct_type, obj_class):
 
     - boxing turns an instance of `struct_type` into a PyObject of `obj_class`
     - unboxing turns an instance of `obj_class` into an instance of
-    `struct_type` in jit-code.
+      `struct_type` in jit-code.
+
 
     Use this directly instead of `define_proxy()` when the user does not
     want any constructor to be defined.
@@ -262,7 +263,10 @@ def register(struct_type):
     struct_type : type
         Returns the input argument so this can act like a decorator.
 
-    Example
+    Examples
+    --------
+
+    .. code-block::
 
         class MyStruct(numba.core.types.StructRef):
             ...  # the simplest subclass can be empty
@@ -322,6 +326,12 @@ def new(typingctx, struct_type):
 
 class StructRefProxy:
     """A PyObject proxy to the Numba allocated structref data structure.
+
+    Notes
+    -----
+
+    * Subclasses should not define ``__init__``.
+    * Subclasses can override ``__new__``.
     """
     __slots__ = ('_type', '_meminfo')
 
