@@ -29,7 +29,7 @@ class _Utils:
         self.struct_type = struct_type
 
     def new_struct_ref(self, mi):
-        """Turn a MemInfo of `StructRefPayload` to a `StructRef`
+        """Encapsulate the MemInfo from a `StructRefPayload` in a `StructRef`
         """
         context = self.context
         builder = self.builder
@@ -360,6 +360,6 @@ class StructRefProxy:
     def _numba_type_(self):
         """Returns the Numba type instance for this structref instance.
 
-        Subclass should NOT override.
+        Subclasses should NOT override.
         """
         return self._type

@@ -16,7 +16,7 @@ from numba.tests.support import (
 @structref.register
 class MySimplerStructType(types.StructRef):
     """
-    Test associated to this type represent the lowest level uses of structref.
+    Test associated with this type represent the lowest level uses of structref.
     """
     pass
 
@@ -64,7 +64,7 @@ class MyStructType(types.StructRef):
 
 # Call to define_proxy is needed to register the use of `MyStruct` as a
 # PyObject proxy for creating a Numba-allocated structref.
-# The `MyStruct` class and then be used in both jit-code and interpreted-code.
+# The `MyStruct` class can then be used in both jit-code and interpreted-code.
 structref.define_proxy(
     MyStruct,
     MyStructType,

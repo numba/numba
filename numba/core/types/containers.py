@@ -722,7 +722,7 @@ class StructRef(Type):
         Parameters
         ----------
         fields : Sequence
-            A sequence of field description, which is a 2-tuple-like object
+            A sequence of field descriptions, which is a 2-tuple-like object
             containing `(name, type)`, where `name` is a `str` for the field
             name, and `type` is a numba type for the field type.
         """
@@ -733,7 +733,7 @@ class StructRef(Type):
 
     @property
     def field_dict(self):
-        """Return a immutable mapping for the field names and their
+        """Return an immutable mapping for the field names and their
         corresponding types.
         """
         return MappingProxyType(dict(self._fields))
