@@ -1735,6 +1735,14 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
         expect = "list.index is unsupported for literal lists"
         self.assertIn(expect, str(raises.exception))
 
+    def test_copy(self):
+        @njit
+        def foo():
+            l = ['a', 1].copy()
+            return l[0], l[1]
+
+        self.assertEqual(foo(), foo.py_func())
+
 
 if __name__ == '__main__':
     unittest.main()
