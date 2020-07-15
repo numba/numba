@@ -24,6 +24,15 @@ class _Utils:
     """Internal builder-code utils for structref definitions.
     """
     def __init__(self, context, builder, struct_type):
+        """
+        Parameters
+        ----------
+        context :
+            a numba target context
+        builder :
+            a llvmlite IRBuilder
+        struct_type : numba.core.types.StructRef
+        """
         self.context = context
         self.builder = builder
         self.struct_type = struct_type
