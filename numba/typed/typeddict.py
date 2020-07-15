@@ -277,11 +277,6 @@ def unbox_dicttype(typ, val, c):
     return NativeValue(dctobj, is_error=is_error)
 
 
-#
-# The following contains the logic for the type-inferred constructor
-#
-
-
 @type_callable(DictType)
 def typeddict_call(context):
     """

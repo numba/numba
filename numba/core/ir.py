@@ -444,10 +444,11 @@ class Expr(Inst):
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
-    def build_map(cls, items, size, loc):
+    def build_map(cls, items, size, literal_value, value_indexes, loc):
         assert isinstance(loc, Loc)
         op = 'build_map'
-        return cls(op=op, loc=loc, items=items, size=size)
+        return cls(op=op, loc=loc, items=items, size=size,
+                   literal_value=literal_value, value_indexes=value_indexes)
 
     @classmethod
     def pair_first(cls, value, loc):

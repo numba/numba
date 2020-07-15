@@ -1217,10 +1217,20 @@ class Lower(BaseLower):
         elif expr.op == "build_list":
             itemvals = [self.loadvar(i.name) for i in expr.items]
             itemtys = [self.typeof(i.name) for i in expr.items]
-            castvals = [self.context.cast(self.builder, val, fromty,
-                                          resty.dtype)
-                        for val, fromty in zip(itemvals, itemtys)]
-            return self.context.build_list(self.builder, resty, castvals)
+            if isinstance(resty, types.LiteralList):
+                castvals = [self.context.cast(self.builder, val, fromty, toty)
+                            for val, toty, fromty in zip(itemvals, resty.types,
+                                                         itemtys)]
+                tup = self.context.make_tuple(self.builder,
+                                              types.Tuple(resty.types),
+                                              castvals)
+                self.incref(resty, tup)
+                return tup
+            else:
+                castvals = [self.context.cast(self.builder, val, fromty,
+                                              resty.dtype)
+                            for val, fromty in zip(itemvals, itemtys)]
+                return self.context.build_list(self.builder, resty, castvals)
 
         elif expr.op == "build_set":
             # Insert in reverse order, as Python does
@@ -1297,7 +1307,6 @@ class Lower(BaseLower):
         Store the value into the given variable.
         """
         fetype = self.typeof(name)
-
         # Define if not already
         self._alloca_var(name, fetype)
 
