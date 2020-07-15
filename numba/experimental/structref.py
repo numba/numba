@@ -258,7 +258,7 @@ def register(struct_type):
         class MyStruct(numba.core.types.StructRef):
             ...  # the simplest subclass can be empty
 
-        numba.core.structref.register(MyStruct)
+        numba.experimental.structref.register(MyStruct)
 
     """
     if struct_type is types.StructRef:
