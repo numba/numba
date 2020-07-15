@@ -8,7 +8,7 @@ import numpy as np
 from numba import typed, njit, errors
 from numba.core import types
 from numba.experimental import structref
-from numba.extending import overload_method
+from numba.extending import overload_method, overload_attribute
 from numba.tests.support import (
     MemoryLeakMixin, TestCase, temp_directory, override_config,
 )
@@ -53,6 +53,10 @@ class MyStruct(structref.StructRefProxy):
 
     def testme(self, arg):
         return self.values * arg + self.counter
+
+    @property
+    def prop(self):
+        return self.values, self.counter
 
 
 @structref.register
@@ -184,6 +188,8 @@ class TestStructRefBasic(MemoryLeakMixin, TestCase):
         td['a'].values += 10
         self.assertEqual(td['a'].values, 12)    # changed
         self.assertEqual(td['a'].counter, 3.3)  # unchanged
+        # insert
+        td['b'] = MyStruct(4, 5.6)
 
     def test_MyStructType_in_dict_mixed_type_error(self):
         self.disable_leak_check()
@@ -202,10 +208,17 @@ class TestStructRefBasic(MemoryLeakMixin, TestCase):
 
 
 @overload_method(MyStructType, "testme")
-def _(self, arg):
+def _ol_mystructtype_testme(self, arg):
     def impl(self, arg):
         return self.values * arg + self.counter
     return impl
+
+
+@overload_attribute(MyStructType, "prop")
+def _ol_mystructtype_prop(self):
+    def get(self):
+        return self.values, self.counter
+    return get
 
 
 class TestStructRefExtending(MemoryLeakMixin, TestCase):
@@ -220,6 +233,18 @@ class TestStructRefExtending(MemoryLeakMixin, TestCase):
         x = 3
         got = check(x)
         expect = check.py_func(x)
+        self.assertPreciseEqual(got, expect)
+
+    def test_overload_attribute(self):
+        @njit
+        def check():
+            vs = np.arange(10, dtype=np.float64)
+            ctr = 11
+            obj = MyStruct(vs, ctr)
+            return obj.prop
+
+        got = check()
+        expect = check.py_func()
         self.assertPreciseEqual(got, expect)
 
 
