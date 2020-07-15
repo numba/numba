@@ -147,7 +147,7 @@ def define_boxing(struct_type, obj_class):
     want any constructor to be defined.
     """
     if struct_type is types.StructRef:
-        raise TypeError(f"cannot register {types.StructRef}")
+        raise ValueError(f"cannot register {types.StructRef}")
 
     obj_ctor = obj_class._numba_box_
 
@@ -271,7 +271,7 @@ def register(struct_type):
 
     """
     if struct_type is types.StructRef:
-        raise TypeError(f"cannot register {types.StructRef}")
+        raise ValueError(f"cannot register {types.StructRef}")
     default_manager.register(struct_type, models.StructRefModel)
     define_attributes(struct_type)
     return struct_type

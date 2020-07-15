@@ -124,6 +124,26 @@ def compute_fields(st):
 
 
 class TestStructRefBasic(MemoryLeakMixin, TestCase):
+    def test_structref_type(self):
+        sr = types.StructRef([('a', types.int64)])
+        self.assertEqual(sr.field_dict['a'], types.int64)
+        sr = types.StructRef([('a', types.int64), ('b', types.float64)])
+        self.assertEqual(sr.field_dict['a'], types.int64)
+        self.assertEqual(sr.field_dict['b'], types.float64)
+        # bad case
+        with self.assertRaisesRegex(ValueError,
+                                    "expecting a str for field name"):
+            types.StructRef([(1, types.int64)])
+        with self.assertRaisesRegex(ValueError,
+                                    "expecting a Numba Type for field type"):
+            types.StructRef([('a', 123)])
+
+    def test_invalid_uses(self):
+        with self.assertRaisesRegex(ValueError, "cannot register"):
+            structref.register(types.StructRef)
+        with self.assertRaisesRegex(ValueError, "cannot register"):
+            structref.define_boxing(types.StructRef, MyStruct)
+
     def test_MySimplerStructType(self):
         vs = np.arange(10, dtype=np.intp)
         ctr = 13

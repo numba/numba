@@ -726,7 +726,17 @@ class StructRef(Type):
             containing `(name, type)`, where `name` is a `str` for the field
             name, and `type` is a numba type for the field type.
         """
-        self._fields = tuple(map(tuple, fields))
+        def check_field_pair(fieldpair):
+            name, typ = fieldpair
+            if not isinstance(name, str):
+                msg = "expecting a str for field name"
+                raise ValueError(msg)
+            if not isinstance(typ, Type):
+                msg = f"expecting a Numba Type for field type"
+                raise ValueError(msg)
+            return name, typ
+
+        self._fields = tuple(map(check_field_pair, fields))
         self._typename = self.__class__.__qualname__
         name = f"numba.{self._typename}{self._fields}"
         super().__init__(name=name)
