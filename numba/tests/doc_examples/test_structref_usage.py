@@ -9,6 +9,9 @@ from numba import njit
 from numba.core import types
 from numba.experimental import structref
 
+from numba.tests.support import skip_unless_scipy
+
+
 # Define a StructRef.
 # `structref.register` associates the type with the default data model.
 # This will also install getters and setters to the fields of
@@ -70,6 +73,7 @@ structref.define_proxy(MyStruct, MyStructType, ["name", "vector"])
 # magictoken.ex_structref_type_definition.end
 
 
+@skip_unless_scipy
 class TestStructRefUsage(unittest.TestCase):
     def test_type_definition(self):
         numpy.random.seed(0)
