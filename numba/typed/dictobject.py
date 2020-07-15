@@ -1293,3 +1293,9 @@ def cast_LiteralStrKeyDict_LiteralStrKeyDict(context, builder, fromty, toty,
         items = [context.cast(builder, v, f, t)
                  for v, f, t in zip(olditems, fromty, toty)]
         return context.make_tuple(builder, toty, items)
+
+
+@lower_cast(types.DictType, types.DictType)
+def cast_DictType_DictType(context, builder, fromty, toty, val):
+    # should have been picked up by typing
+    return val
