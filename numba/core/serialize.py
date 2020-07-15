@@ -82,7 +82,8 @@ def _reduce_function(func, globs):
         cells = [cell.cell_contents for cell in func.__closure__]
     else:
         cells = None
-    return _reduce_code(func.__code__), globs, func.__name__, cells, func.__defaults__
+    return (_reduce_code(func.__code__), globs, func.__name__, cells,
+            func.__defaults__)
 
 
 def _reduce_code(code):
@@ -439,7 +440,9 @@ def _reduce_function_no_cells(func, globs):
     else:
         oldcells = ()
         cells = None
-    return (_reduce_code(func.__code__), globs, func.__name__, cells), oldcells
+    rebuild_args = (_reduce_code(func.__code__), globs, func.__name__, cells,
+                    func.__defaults__)
+    return rebuild_args, oldcells
 
 
 def _cell_rebuild(contents):
