@@ -535,10 +535,6 @@ class TestBuiltins(TestCase):
             types.uint16,
             types.uint32,
             types.uint64,
-            types.uintp,
-            types.ushort,
-            types.ulong,
-            types.ulonglong,
         ]
 
         for typ in typs:
