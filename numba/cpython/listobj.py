@@ -1125,18 +1125,49 @@ def list_to_list(context, builder, fromty, toty, val):
 # Implementations for types.LiteralList
 # -----------------------------------------------------------------------------
 
+_banned_error = errors.TypingError("Cannot mutate a literal list")
+
+
 # Things that mutate literal lists are banned
 @overload_method(types.LiteralList, 'append')
+def literal_list_banned_append(lst, obj):
+    raise _banned_error
+
+
 @overload_method(types.LiteralList, 'extend')
+def literal_list_banned_extend(lst, iterable):
+    raise _banned_error
+
+
 @overload_method(types.LiteralList, 'insert')
+def literal_list_banned_insert(lst, index, obj):
+    raise _banned_error
+
+
 @overload_method(types.LiteralList, 'remove')
+def literal_list_banned_remove(lst, value):
+    raise _banned_error
+
+
 @overload_method(types.LiteralList, 'pop')
+def literal_list_banned_pop(lst, index=-1):
+    raise _banned_error
+
+
 @overload_method(types.LiteralList, 'clear')
+def literal_list_banned_clear(lst):
+    raise _banned_error
+
+
 @overload_method(types.LiteralList, 'sort')
+def literal_list_banned_sort(lst, key=None, reverse=False):
+    raise _banned_error
+
+
 @overload_method(types.LiteralList, 'reverse')
-def banned_mutators(*args):
-    # heterogeneous lists are a trick, they are really tuples
-    raise errors.TypingError("Cannot mutate a literal list")
+def literal_list_banned_reverse(lst):
+    raise _banned_error
+
 
 _index_end = types.intp.maxval
 @overload_method(types.LiteralList, 'index')
@@ -1169,7 +1200,7 @@ def literal_list_count(lst):
 @overload(operator.delitem)
 def literal_list_delitem(lst, index):
     if isinstance(lst, types.LiteralList):
-        raise errors.TypingError("Cannot mutate a literal list")
+        raise _banned_error
 
 @overload(operator.setitem)
 def literal_list_setitem(lst, index, value):
