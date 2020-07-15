@@ -311,6 +311,7 @@ class EnumModel(ProxyModel):
 @register_default(types.DType)
 @register_default(types.RecursiveCall)
 @register_default(types.MakeFunctionLiteral)
+@register_default(types.Poison)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
@@ -718,6 +719,8 @@ class ComplexModel(StructModel):
         super(ComplexModel, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.LiteralList)
+@register_default(types.LiteralStrKeyDict)
 @register_default(types.Tuple)
 @register_default(types.NamedTuple)
 @register_default(types.StarArgTuple)
