@@ -732,7 +732,7 @@ class StructRef(Type):
                 msg = "expecting a str for field name"
                 raise ValueError(msg)
             if not isinstance(typ, Type):
-                msg = f"expecting a Numba Type for field type"
+                msg = "expecting a Numba Type for field type"
                 raise ValueError(msg)
             return name, typ
 
