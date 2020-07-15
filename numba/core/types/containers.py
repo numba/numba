@@ -1,12 +1,30 @@
 from collections import namedtuple
 from collections.abc import Iterable
-from .abstract import (ConstSized, Container, Hashable, MutableSequence,
-                       Sequence, Type, TypeRef, Literal, InitialValue, Poison)
-from .common import Buffer, IterableType, SimpleIterableType, SimpleIteratorType
+from types import MappingProxyType
+
+from .abstract import (
+    ConstSized,
+    Container,
+    Hashable,
+    MutableSequence,
+    Sequence,
+    Type,
+    TypeRef,
+    Literal,
+    InitialValue,
+    Poison,
+)
+from .common import (
+    Buffer,
+    IterableType,
+    SimpleIterableType,
+    SimpleIteratorType,
+)
 from .misc import Undefined, unliteral, Optional, NoneType
 from ..typeconv import Conversion
 from ..errors import TypingError
 from .. import utils
+
 
 class Pair(Type):
     """
@@ -42,7 +60,7 @@ class BaseContainerIterator(SimpleIteratorType):
         assert isinstance(container, self.container_class), container
         self.container = container
         yield_type = container.dtype
-        name = 'iter(%s)' % container
+        name = "iter(%s)" % container
         super(BaseContainerIterator, self).__init__(name, yield_type)
 
     def unify(self, typingctx, other):
@@ -67,7 +85,7 @@ class BaseContainerPayload(Type):
     def __init__(self, container):
         assert isinstance(container, self.container_class)
         self.container = container
-        name = 'payload(%s)' % container
+        name = "payload(%s)" % container
         super(BaseContainerPayload, self).__init__(name)
 
     @property
@@ -79,6 +97,7 @@ class Bytes(Buffer):
     """
     Type class for Python 3.x bytes objects.
     """
+
     mutable = False
     # Actually true but doesn't matter since bytes is immutable
     slice_is_copy = False
@@ -88,6 +107,7 @@ class ByteArray(Buffer):
     """
     Type class for bytearray objects.
     """
+
     slice_is_copy = True
 
 
@@ -95,6 +115,7 @@ class PyArray(Buffer):
     """
     Type class for array.array objects.
     """
+
     slice_is_copy = True
 
 
@@ -171,8 +192,9 @@ class BaseAnonymousTuple(BaseTuple):
         if len(self) == 0:
             return Conversion.safe
         if isinstance(other, BaseTuple):
-            kinds = [typingctx.can_convert(ta, tb)
-                     for ta, tb in zip(self, other)]
+            kinds = [
+                typingctx.can_convert(ta, tb) for ta, tb in zip(self, other)
+            ]
             if any(kind is None for kind in kinds):
                 return
             return max(kinds)
@@ -182,7 +204,6 @@ class BaseAnonymousTuple(BaseTuple):
 
 
 class _HomogeneousTuple(Sequence, BaseTuple):
-
     @property
     def iterator_type(self):
         return UniTupleIter(self)
@@ -212,9 +233,7 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
-        name = "%s(%s x %d)" % (
-            self.__class__.__name__, dtype, count,
-        )
+        name = "%s(%s x %d)" % (self.__class__.__name__, dtype, count,)
         super(UniTuple, self).__init__(name)
 
     @property
@@ -239,11 +258,11 @@ class UniTupleIter(BaseContainerIterator):
     """
     Type class for homogeneous tuple iterators.
     """
+
     container_class = _HomogeneousTuple
 
 
 class _HeterogeneousTuple(BaseTuple):
-
     def __getitem__(self, i):
         """
         Return element at position i
@@ -266,8 +285,8 @@ class _HeterogeneousTuple(BaseTuple):
 
 class UnionType(Type):
     def __init__(self, types):
-        self.types = tuple(sorted(set(types), key=lambda x:x.name))
-        name = 'Union[{}]'.format(','.join(map(str, self.types)))
+        self.types = tuple(sorted(set(types), key=lambda x: x.name))
+        name = "Union[{}]".format(",".join(map(str, self.types)))
         super(UnionType, self).__init__(name=name)
 
     def get_type_tag(self, typ):
@@ -275,7 +294,6 @@ class UnionType(Type):
 
 
 class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
-
     def __new__(cls, types):
 
         t = utils.unified_function_type(types, require_precise=True)
@@ -295,7 +313,7 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
         self.dtype = UnionType(types)
         name = "%s(%s)" % (
             self.__class__.__name__,
-            ', '.join(str(i) for i in self.types),
+            ", ".join(str(i) for i in self.types),
         )
         super(Tuple, self).__init__(name)
 
@@ -313,15 +331,15 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
         """
         # Other is UniTuple or Tuple
         if isinstance(other, BaseTuple) and len(self) == len(other):
-            unified = [typingctx.unify_pairs(ta, tb)
-                       for ta, tb in zip(self, other)]
+            unified = [
+                typingctx.unify_pairs(ta, tb) for ta, tb in zip(self, other)
+            ]
 
             if all(t is not None for t in unified):
                 return Tuple(unified)
 
 
 class _StarArgTupleMixin:
-
     @classmethod
     def _make_homogeneous_tuple(cls, dtype, count):
         return StarArgUniTuple(dtype, count)
@@ -334,6 +352,7 @@ class _StarArgTupleMixin:
 class StarArgTuple(_StarArgTupleMixin, Tuple):
     """To distinguish from Tuple() used as argument to a `*args`.
     """
+
     def __new__(cls, types):
         _HeterogeneousTuple.is_types_iterable(types)
 
@@ -353,7 +372,6 @@ class BaseNamedTuple(BaseTuple):
 
 
 class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
-
     def __init__(self, dtype, count, cls):
         self.dtype = dtype
         self.count = count
@@ -372,7 +390,6 @@ class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
 
 
 class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
-
     def __init__(self, types, cls):
         _HeterogeneousTuple.is_types_iterable(types)
 
@@ -380,7 +397,7 @@ class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
         self.count = len(self.types)
         self.fields = tuple(cls._fields)
         self.instance_class = cls
-        name = "%s(%s)" % (cls.__name__, ', '.join(str(i) for i in self.types))
+        name = "%s(%s)" % (cls.__name__, ", ".join(str(i) for i in self.types))
         super(NamedTuple, self).__init__(name)
 
     @property
@@ -392,6 +409,7 @@ class List(MutableSequence, InitialValue):
     """
     Type class for (arbitrary-sized) homogeneous lists.
     """
+
     mutable = True
 
     def __init__(self, dtype, reflected=False, initial_value=None):
@@ -438,16 +456,15 @@ class List(MutableSequence, InitialValue):
 class LiteralList(Literal, _HeterogeneousTuple):
     """A heterogeneous immutable list (basically a tuple with list semantics).
     """
+
     mutable = False
 
     def __init__(self, literal_value):
         _HeterogeneousTuple.is_types_iterable(literal_value)
         self._literal_init(list(literal_value))
-        tys = [unliteral(x) for x in literal_value]
         self.types = tuple(literal_value)
         self.count = len(self.types)
-        self.name = 'LiteralList({})'.format(literal_value)
-        literal_vals = [getattr(x, 'literal_value', None) for x in literal_value]
+        self.name = "LiteralList({})".format(literal_value)
 
     def __unliteral__(self):
         return Poison(self)
@@ -468,6 +485,7 @@ class ListIter(BaseContainerIterator):
     """
     Type class for list iterators.
     """
+
     container_class = List
 
 
@@ -475,6 +493,7 @@ class ListPayload(BaseContainerPayload):
     """
     Internal type class for the dynamically-allocated payload of a list.
     """
+
     container_class = List
 
 
@@ -482,6 +501,7 @@ class Set(Container):
     """
     Type class for homogeneous sets.
     """
+
     mutable = True
 
     def __init__(self, dtype, reflected=False):
@@ -522,6 +542,7 @@ class SetIter(BaseContainerIterator):
     """
     Type class for set iterators.
     """
+
     container_class = Set
 
 
@@ -529,6 +550,7 @@ class SetPayload(BaseContainerPayload):
     """
     Internal type class for the dynamically-allocated payload of a set.
     """
+
     container_class = Set
 
 
@@ -536,9 +558,10 @@ class SetEntry(Type):
     """
     Internal type class for the entries of a Set's hash table.
     """
+
     def __init__(self, set_type):
         self.set_type = set_type
-        name = 'entry(%s)' % set_type
+        name = "entry(%s)" % set_type
         super(SetEntry, self).__init__(name)
 
     @property
@@ -556,15 +579,12 @@ class ListType(IterableType):
         assert not isinstance(itemty, TypeRef)
         itemty = unliteral(itemty)
         if isinstance(itemty, Optional):
-            fmt = 'List.item_type cannot be of type {}'
+            fmt = "List.item_type cannot be of type {}"
             raise TypingError(fmt.format(itemty))
         # FIXME: _sentry_forbidden_types(itemty)
         self.item_type = itemty
         self.dtype = itemty
-        name = '{}[{}]'.format(
-            self.__class__.__name__,
-            itemty,
-        )
+        name = "{}[{}]".format(self.__class__.__name__, itemty,)
         super(ListType, self).__init__(name)
 
     def is_precise(self):
@@ -595,6 +615,7 @@ class ListType(IterableType):
 class ListTypeIterableType(SimpleIterableType):
     """List iterable type
     """
+
     def __init__(self, parent):
         assert isinstance(parent, ListType)
         self.parent = parent
@@ -616,43 +637,43 @@ class ListTypeIteratorType(SimpleIteratorType):
 def _sentry_forbidden_types(key, value):
     # Forbids List and Set for now
     if isinstance(key, (Set, List)):
-        raise TypingError('{} as key is forbidden'.format(key))
+        raise TypingError("{} as key is forbidden".format(key))
     if isinstance(value, (Set, List)):
-        raise TypingError('{} as value is forbidden'.format(value))
+        raise TypingError("{} as value is forbidden".format(value))
 
 
 class DictType(IterableType, InitialValue):
     """Dictionary type
     """
+
     def __init__(self, keyty, valty, initial_value=None):
         assert not isinstance(keyty, TypeRef)
         assert not isinstance(valty, TypeRef)
         keyty = unliteral(keyty)
         valty = unliteral(valty)
         if isinstance(keyty, (Optional, NoneType)):
-            fmt = 'Dict.key_type cannot be of type {}'
+            fmt = "Dict.key_type cannot be of type {}"
             raise TypingError(fmt.format(keyty))
         if isinstance(valty, (Optional, NoneType)):
-            fmt = 'Dict.value_type cannot be of type {}'
+            fmt = "Dict.value_type cannot be of type {}"
             raise TypingError(fmt.format(valty))
         _sentry_forbidden_types(keyty, valty)
         self.key_type = keyty
         self.value_type = valty
         self.keyvalue_type = Tuple([keyty, valty])
-        name = '{}[{},{}]<iv={}>'.format(
-            self.__class__.__name__,
-            keyty,
-            valty,
-            initial_value
+        name = "{}[{},{}]<iv={}>".format(
+            self.__class__.__name__, keyty, valty, initial_value
         )
         super(DictType, self).__init__(name)
         InitialValue.__init__(self, initial_value)
 
     def is_precise(self):
-        return not any((
-            isinstance(self.key_type, Undefined),
-            isinstance(self.value_type, Undefined),
-        ))
+        return not any(
+            (
+                isinstance(self.key_type, Undefined),
+                isinstance(self.value_type, Undefined),
+            )
+        )
 
     @property
     def iterator_type(self):
@@ -684,16 +705,17 @@ class LiteralStrKeyDict(Literal, NamedTuple):
     """A Dictionary of string keys to heterogeneous values (basically a
     namedtuple with dict semantics).
     """
+
     mutable = False
 
     def __init__(self, literal_value, value_index=None):
         self._literal_init(literal_value)
         self.value_index = value_index
         strkeys = [x.literal_value for x in literal_value.keys()]
-        self.tuple_ty = namedtuple('_ntclazz', ' '.join(strkeys))
+        self.tuple_ty = namedtuple("_ntclazz", " ".join(strkeys))
         tys = [x for x in literal_value.values()]
         NamedTuple.__init__(self, tys, self.tuple_ty)
-        self.name = 'LiteralStrKey[Dict]({})'.format(literal_value)
+        self.name = "LiteralStrKey[Dict]({})".format(literal_value)
 
     def __unliteral__(self):
         return Poison(self)
@@ -704,9 +726,10 @@ class LiteralStrKeyDict(Literal, NamedTuple):
         """
         if isinstance(other, LiteralStrKeyDict):
             tys = []
-            for (k1, v1), (k2, v2) in zip(self.literal_value.items(),
-                                          other.literal_value.items()):
-                if k1 != k2: # keys must be same
+            for (k1, v1), (k2, v2) in zip(
+                self.literal_value.items(), other.literal_value.items()
+            ):
+                if k1 != k2:  # keys must be same
                     break
                 tys.append(typingctx.unify_pairs(v1, v2))
             else:
@@ -724,6 +747,7 @@ class LiteralStrKeyDict(Literal, NamedTuple):
 class DictItemsIterableType(SimpleIterableType):
     """Dictionary iterable type for .items()
     """
+
     def __init__(self, parent):
         assert isinstance(parent, DictType)
         self.parent = parent
@@ -737,6 +761,7 @@ class DictItemsIterableType(SimpleIterableType):
 class DictKeysIterableType(SimpleIterableType):
     """Dictionary iterable type for .keys()
     """
+
     def __init__(self, parent):
         assert isinstance(parent, DictType)
         self.parent = parent
@@ -750,6 +775,7 @@ class DictKeysIterableType(SimpleIterableType):
 class DictValuesIterableType(SimpleIterableType):
     """Dictionary iterable type for .values()
     """
+
     def __init__(self, parent):
         assert isinstance(parent, DictType)
         self.parent = parent
@@ -765,6 +791,70 @@ class DictIteratorType(SimpleIteratorType):
         self.parent = iterable.parent
         self.iterable = iterable
         yield_type = iterable.yield_type
-        name = "iter[{}->{}],{}".format(iterable.parent, yield_type,
-                                        iterable.name)
+        name = "iter[{}->{}],{}".format(
+            iterable.parent, yield_type, iterable.name
+        )
         super(DictIteratorType, self).__init__(name, yield_type)
+
+
+class StructRef(Type):
+    """A mutable struct.
+    """
+
+    def __init__(self, fields):
+        """
+        Parameters
+        ----------
+        fields : Sequence
+            A sequence of field descriptions, which is a 2-tuple-like object
+            containing `(name, type)`, where `name` is a `str` for the field
+            name, and `type` is a numba type for the field type.
+        """
+
+        def check_field_pair(fieldpair):
+            name, typ = fieldpair
+            if not isinstance(name, str):
+                msg = "expecting a str for field name"
+                raise ValueError(msg)
+            if not isinstance(typ, Type):
+                msg = "expecting a Numba Type for field type"
+                raise ValueError(msg)
+            return name, typ
+
+        self._fields = tuple(map(check_field_pair, fields))
+        self._typename = self.__class__.__qualname__
+        name = f"numba.{self._typename}{self._fields}"
+        super().__init__(name=name)
+
+    @property
+    def field_dict(self):
+        """Return an immutable mapping for the field names and their
+        corresponding types.
+        """
+        return MappingProxyType(dict(self._fields))
+
+    def get_data_type(self):
+        """Get the payload type for the actual underlying structure referred
+        to by this struct reference.
+
+        See also: `ClassInstanceType.get_data_type`
+        """
+        return StructRefPayload(
+            typename=self.__class__.__name__, fields=self._fields,
+        )
+
+
+class StructRefPayload(Type):
+    """The type of the payload of a mutable struct.
+    """
+
+    mutable = True
+
+    def __init__(self, typename, fields):
+        self._typename = typename
+        self._fields = tuple(fields)
+        super().__init__(name=f"numba.{typename}{self._fields}.payload")
+
+    @property
+    def field_dict(self):
+        return MappingProxyType(dict(self._fields))
