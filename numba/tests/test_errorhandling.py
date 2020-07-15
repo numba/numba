@@ -18,7 +18,8 @@ from numba.core.typed_passes import (NopythonTypeInference, DeadCodeElimination,
 from numba.core.compiler_machinery import PassManager
 from numba.core.types.functions import _err_reasons as error_reasons
 
-from numba.tests.support import skip_parfors_unsupported
+from numba.tests.support import (skip_parfors_unsupported, override_config,
+                                 SerialMixin)
 import unittest
 
 # used in TestMiscErrorHandling::test_handling_of_write_to_*_global
@@ -421,6 +422,23 @@ class TestErrorMessages(unittest.TestCase):
 
         excstr = str(raises.exception)
         self.assertIn("Type Restricted Function in function 'unknown'", excstr)
+
+
+class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):
+
+    def test_bound_function_error_string(self):
+        # See PR #5952
+        def foo(x):
+            x.max(-1) # axis not supported
+
+        with override_config('DEVELOPER_MODE', 1):
+            with self.assertRaises(errors.TypingError) as raises:
+                njit("void(int64[:,:])")(foo)
+
+        excstr = str(raises.exception)
+        self.assertIn("AssertionError()", excstr)
+        self.assertIn("BoundFunction(array.max for array(int64, 2d, A))",
+                      excstr)
 
 
 if __name__ == '__main__':

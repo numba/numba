@@ -954,10 +954,10 @@ class PythonAPI(object):
             return self.builder.call(fn, (lhs, rhs, lopid))
         elif opstr == 'is':
             bitflag = self.builder.icmp(lc.ICMP_EQ, lhs, rhs)
-            return self.from_native_value(types.boolean, bitflag)
+            return self.bool_from_bool(bitflag)
         elif opstr == 'is not':
             bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
-            return self.from_native_value(types.boolean, bitflag)
+            return self.bool_from_bool(bitflag)
         elif opstr in ('in', 'not in'):
             fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
             fn = self._get_function(fnty, name="PySequence_Contains")

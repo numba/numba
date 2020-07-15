@@ -82,7 +82,7 @@ def _reduce_function(func, globs):
         cells = [cell.cell_contents for cell in func.__closure__]
     else:
         cells = None
-    return _reduce_code(func.__code__), globs, func.__name__, cells
+    return _reduce_code(func.__code__), globs, func.__name__, cells, func.__defaults__
 
 
 def _reduce_code(code):
@@ -100,7 +100,7 @@ def _make_cell(x):
     return (lambda: x).__closure__[0]
 
 
-def _rebuild_function(code_reduced, globals, name, cell_values):
+def _rebuild_function(code_reduced, globals, name, cell_values, defaults):
     """
     Rebuild a function from its _reduce_function() results.
     """
@@ -116,7 +116,7 @@ def _rebuild_function(code_reduced, globals, name, cell_values):
         # If the module can't be found, avoid passing it (it would produce
         # errors when lowering).
         del globals['__name__']
-    return FunctionType(code, globals, name, (), cells)
+    return FunctionType(code, globals, name, defaults, cells)
 
 
 def _rebuild_code(marshal_version, bytecode_magic, marshalled):
