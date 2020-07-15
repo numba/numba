@@ -18,12 +18,14 @@ from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
 from numba.core.unsafe import eh
 
 class _UNKNOWN_VALUE(object):
+    """Represents an unknown value, this is for ease of debugging purposes only.
+    """
 
     def __init__(self, varname):
-        self.varname = varname
+        self._varname = varname
 
     def __repr__(self):
-        return "_UNKNOWN_VALUE({})".format(self.varname)
+        return "_UNKNOWN_VALUE({})".format(self._varname)
 
 _logger = logging.getLogger(__name__)
 
