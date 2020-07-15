@@ -1706,6 +1706,7 @@ class TestCachingOverloadObjmode(TestCase):
     """Test caching of the use of overload implementations that use
     `with objmode`
     """
+    _numba_parallel_test_ = False
 
     def setUp(self):
         warnings.simplefilter("error", errors.NumbaWarning)
