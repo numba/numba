@@ -1184,15 +1184,6 @@ def literal_list_getitem(lst, *args):
            "statically determined.")
     raise errors.TypingError(msg)
 
-@overload(len)
-def literal_list_len(lst):
-    if not isinstance(lst, types.LiteralList):
-        return
-    llen = len(lst.types)
-    def impl(lst):
-        return llen
-    return impl
-
 @overload(operator.contains)
 def literal_list_contains(lst, item):
     if isinstance(lst, types.LiteralList):
