@@ -1175,13 +1175,6 @@ def literalstrkeydict_impl_equals(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.ne, types.BaseTuple, types.BaseTuple)
-def tuple_ne(context, builder, sig, args):
-    res = builder.not_(literalstrkeydict_impl_equals(context, builder, sig,
-                                                     args))
-    return impl_ret_untracked(context, builder, sig.return_type, res)
-
-
 @overload(operator.getitem)
 @overload_method(types.LiteralStrKeyDict, 'get')
 def literalstrkeydict_impl_get(dct, *args):
