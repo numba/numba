@@ -1724,6 +1724,17 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
         expect = "Cannot unify LiteralList"
         self.assertIn(expect, str(raises.exception))
 
+    def test_index(self):
+        @njit
+        def foo():
+            l = ['a', 1]
+            l.index('a')
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        expect = "list.index is unsupported for literal lists"
+        self.assertIn(expect, str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
