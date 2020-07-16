@@ -1078,9 +1078,12 @@ class BaseCacheUsecasesTest(BaseCacheTest):
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = popen.communicate()
         if popen.returncode != 0:
-            raise AssertionError("process failed with code %s: "
-                                 "stderr follows\n%s\n"
-                                 % (popen.returncode, err.decode()))
+            raise AssertionError(
+                "process failed with code %s: \n"
+                "stdout follows\n%s\n"
+                "stderr follows\n%s\n"
+                % (popen.returncode, out.decode(), err.decode()),
+            )
 
     def check_module(self, mod):
         self.check_pycache(0)
@@ -1209,7 +1212,7 @@ class TestCache(BaseCacheUsecasesTest):
 
         self.assertEqual(len(w), 1)
         self.assertIn('Cannot cache compiled function "looplifted" '
-                      'as it uses lifted loops', str(w[0].message))
+                      'as it uses lifted code', str(w[0].message))
 
     def test_big_array(self):
         # Code references big array globals cannot be cached
@@ -1246,19 +1249,14 @@ class TestCache(BaseCacheUsecasesTest):
     def test_closure(self):
         mod = self.import_module()
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', NumbaWarning)
 
             f = mod.closure1
             self.assertPreciseEqual(f(3), 6)
             f = mod.closure2
-            self.assertPreciseEqual(f(3), 8)
-            self.check_pycache(0)
-
-        self.assertEqual(len(w), 2)
-        for item in w:
-            self.assertIn('Cannot cache compiled function "closure"',
-                          str(item.message))
+            self.assertPreciseEqual(f(3), 6)
+            self.check_pycache(2)
 
     def test_cache_reuse(self):
         mod = self.import_module()
@@ -1758,14 +1756,16 @@ def function2(x):
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
         out, err = popen.communicate()
-        self.assertEqual(popen.returncode, 0)
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
+        self.assertEqual(popen.returncode, 0, msg=msg)
 
         # Execute file2.py
         popen = subprocess.Popen([sys.executable, self.file2],
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
         out, err = popen.communicate()
-        self.assertEqual(popen.returncode, 0)
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
+        self.assertEqual(popen.returncode, 0, msg)
 
 
 class TestDispatcherFunctionBoundaries(TestCase):

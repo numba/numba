@@ -34,11 +34,12 @@ jobs:
         CONDA_ENV: travisci
         TEST_THREADING: 'tbb'
         TEST_START_INDEX: 2
-      py37_np117:
+      py37_np117_pickle5:
         PYTHON: '3.7'
         NUMPY: '1.17'
         CONDA_ENV: travisci
         TEST_START_INDEX: 3
+        TEST_PICKLE5: yes
       py36_np115_cov:
         PYTHON: '3.6'
         NUMPY: '1.15'
