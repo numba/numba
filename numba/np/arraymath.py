@@ -4061,6 +4061,11 @@ def np_asarray(a, dtype=None):
             for i, v in enumerate(a):
                 ret[i] = v
             return ret
+    elif isinstance(a, types.StringLiteral):
+        arr = np.asarray(a.literal_value)
+
+        def impl(a, dtype=None):
+            return arr.copy()
 
     return impl
 
