@@ -158,10 +158,12 @@ class Numpy_rules_ufunc(AbstractTemplate):
                 assert layout is not None
                 out_arr = types.Array(dtype=out_loop, ndim=ndims, layout=layout)
                 out_arr = resolve_output_type(self.context, args, out_arr)
+                out_tys.append(out_arr)
 
-            out_tys.append(out_arr)
+        in_args = args[:ufunc.nin]
+        out_opts = [types.Optional(out_ty) for out_ty in out_tys]
 
-        return _ufunc_loop_sig(out, args)
+        return _ufunc_loop_sig(out_opts, in_args)
 
 
 class NumpyRulesArrayOperator(Numpy_rules_ufunc):
