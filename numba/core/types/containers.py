@@ -821,10 +821,23 @@ class StructRef(Type):
                 raise ValueError(msg)
             return name, typ
 
-        self._fields = tuple(map(check_field_pair, fields))
+        fields = tuple(map(check_field_pair, fields))
+        self._fields = tuple(map(check_field_pair,
+                                 self.preprocess_fields(fields)))
         self._typename = self.__class__.__qualname__
         name = f"numba.{self._typename}{self._fields}"
         super().__init__(name=name)
+
+    def preprocess_fields(self, fields):
+        """Subclasses can override this to do additional clean up on fields.
+
+        The default is an identity function.
+
+        Parameters:
+        -----------
+        fields : Sequence[Tuple[str, Type]]
+        """
+        return fields
 
     @property
     def field_dict(self):
