@@ -76,7 +76,7 @@ structref.define_proxy(MyStruct, MyStructType, ["name", "vector"])
 @skip_unless_scipy
 class TestStructRefUsage(unittest.TestCase):
     def test_type_definition(self):
-        numpy.random.seed(0)
+        np.random.seed(0)
         # Redirect print
         buf = []
 
@@ -87,15 +87,15 @@ class TestStructRefUsage(unittest.TestCase):
         # Let's test our new StructRef.
 
         # Define one in Python
-        alice = MyStruct("Alice", vector=numpy.random.random(3))
+        alice = MyStruct("Alice", vector=np.random.random(3))
 
         # Define one in jit-code
         @njit
         def make_bob():
-            bob = MyStruct("unnamed", vector=numpy.zeros(3))
+            bob = MyStruct("unnamed", vector=np.zeros(3))
             # Mutate the attributes
             bob.name = "Bob"
-            bob.vector = numpy.random.random(3)
+            bob.vector = np.random.random(3)
             return bob
 
         bob = make_bob()
@@ -108,7 +108,7 @@ class TestStructRefUsage(unittest.TestCase):
         # Define a jit function to operate on the structs.
         @njit
         def distance(a, b):
-            return numpy.linalg.norm(a.vector - b.vector)
+            return np.linalg.norm(a.vector - b.vector)
 
         # Out: 0.4332647200356598
         print(distance(alice, bob))
@@ -133,15 +133,15 @@ class TestStructRefUsage(unittest.TestCase):
                 )
 
             def impl(self, other):
-                return numpy.linalg.norm(self.vector - other.vector)
+                return np.linalg.norm(self.vector - other.vector)
 
             return impl
 
         # Test
         @njit
         def test():
-            alice = MyStruct("Alice", vector=numpy.random.random(3))
-            bob = MyStruct("Bob", vector=numpy.random.random(3))
+            alice = MyStruct("Alice", vector=np.random.random(3))
+            bob = MyStruct("Bob", vector=np.random.random(3))
             # Use the method
             return alice.distance(bob)
         # magictoken.ex_structref_method.end
