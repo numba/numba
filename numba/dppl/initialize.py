@@ -11,5 +11,5 @@ def initialize_all():
     from numba.core.registry import dispatcher_registry
     dispatcher_registry.ondemand['dppl'] = init_jit
 
-    ll.load_library_permanently('libdpglue.so')
+    ll.load_library_permanently('libDPPLOpenCLInterface.so')
     ll.load_library_permanently('libOpenCL.so')
