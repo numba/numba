@@ -158,7 +158,7 @@ class _CacheLocator(object):
         """Given the Python file path, compute a suitable path inside the
         cache directory.
 
-        This will reduce file path that are too long, which can be a problem
+        This will reduce a file path that is too long, which can be a problem
         on some operating system (i.e. Windows 7).
         """
         path = os.path.abspath(py_file)
@@ -732,5 +732,4 @@ def make_library_cache(prefix):
         _impl_class = CustomCodeLibraryCacheImpl
 
     return LibraryCache
-
 
