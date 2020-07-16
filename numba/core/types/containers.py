@@ -829,7 +829,7 @@ class StructRef(Type):
         super().__init__(name=name)
 
     def preprocess_fields(self, fields):
-        """Subclass can override this to do additional clean up on fields.
+        """Subclasses can override this to do additional clean up on fields.
 
         The default is an identity function.
 

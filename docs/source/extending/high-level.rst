@@ -187,11 +187,11 @@ and the output of ``.inspect_types()`` demonstrates the cast (note the
 Implementing mutable structures
 -------------------------------
 
-.. warning:: Experimental feature. The API may change without warning.
+.. warning:: This is an experimental feature, the API may change without warning.
 
 The ``numba.experimental.structref`` module provides utilities for defining
-mutable pass-by-reference structures. The following example demonstrate the
-how to define a basic mutable struct:
+mutable pass-by-reference structures, a ``StructRef``. The following example demonstrate the
+how to define a basic mutable structure:
 
 Defining a StructRef
 ''''''''''''''''''''
@@ -204,7 +204,7 @@ Defining a StructRef
    :dedent: 0
    :linenos:
 
-The following tests the above mutable struct definition:
+The following demonstrates using the above mutable struct definition:
 
 .. literalinclude:: ../../../numba/tests/doc_examples/test_structref_usage.py
    :language: python
@@ -222,7 +222,7 @@ Methods and attributes can be attached using ``@overload_*`` as shown in the
 previous sections.
 
 The following demonstrates the use of ``@overload_method`` to insert a
-method to instances of ``MyStructType``:
+method for instances of ``MyStructType``:
 
 .. literalinclude:: ../../../numba/tests/doc_examples/test_structref_usage.py
    :language: python

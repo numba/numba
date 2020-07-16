@@ -3,7 +3,7 @@
 import unittest
 
 # magictoken.ex_structref_type_definition.begin
-import numpy
+import numpy as np
 
 from numba import njit
 from numba.core import types
@@ -30,16 +30,16 @@ class MyStructType(types.StructRef):
 # the constructor for this type in python code and jit-code.
 class MyStruct(structref.StructRefProxy):
     def __new__(cls, name, vector):
-        # It is optional to override the __new__ method.
-        # Doing so allow Python code to use keyword arguments,
+        # Overriding the __new__ method is optional, doing so
+        # allows Python code to use keyword arguments,
         # or add other customized behavior.
         # The default __new__ takes `*args`.
-        # In addition, user should not override the __init__.
+        # IMPORTANT: Users should not override __init__.
         return structref.StructRefProxy.__new__(cls, name, vector)
 
     # By default, the proxy type does not reflect the attributes or
-    # methods to the Python side. It is up to the users to define
-    # these. (These maybe automated in the future.)
+    # methods to the Python side. It is up to users to define
+    # these. (This may be automated in the future.)
 
     @property
     def name(self):
@@ -56,7 +56,7 @@ class MyStruct(structref.StructRefProxy):
 
 @njit
 def MyStruct_get_name(self):
-    # In jit-code, the StructRef's attribute is exposed at
+    # In jit-code, the StructRef's attribute is exposed via
     # structref.register
     return self.name
 
@@ -92,7 +92,7 @@ class TestStructRefUsage(unittest.TestCase):
         # Define one in jit-code
         @njit
         def make_bob():
-            bob = MyStruct("unname", vector=numpy.zeros(3))
+            bob = MyStruct("unnamed", vector=numpy.zeros(3))
             # Mutate the attributes
             bob.name = "Bob"
             bob.vector = numpy.random.random(3)
