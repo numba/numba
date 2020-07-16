@@ -5,6 +5,7 @@ import re
 import numpy as np
 
 from numba.core import errors, types, utils
+from numba.core.typing.templates import signature
 
 
 # re-export
@@ -318,6 +319,13 @@ class UFuncLoopSpec(collections.namedtuple('_UFuncLoopSpec',
     @property
     def numpy_outputs(self):
         return [as_dtype(x) for x in self.outputs]
+
+
+def _ufunc_loop_sig(out_tys, in_tys):
+    if len(out_tys) == 1:
+        return signature(out_tys[0], *in_tys)
+    else:
+        return signature(types.Tuple(out_tys), *in_tys)
 
 
 def ufunc_can_cast(from_, to, has_mixed_inputs, casting='safe'):
