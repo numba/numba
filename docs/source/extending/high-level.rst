@@ -190,8 +190,8 @@ Implementing mutable structures
 .. warning:: This is an experimental feature, the API may change without warning.
 
 The ``numba.experimental.structref`` module provides utilities for defining
-mutable pass-by-reference structures, a ``StructRef``. The following example demonstrate the
-how to define a basic mutable structure:
+mutable pass-by-reference structures, a ``StructRef``. The following example
+demonstrates how to define a basic mutable structure:
 
 Defining a StructRef
 ''''''''''''''''''''
