@@ -11,13 +11,17 @@ This is a bugfix release for 0.50.0, it fixes a critical bug in error reporting
 and a number of other smaller issues:
 
 * PR #5861: Added except for possible Windows get_terminal_size exception
+* PR #5876: Improve undefined variable error message
 * PR #5884: Update the deprecation notices for 0.50.1
 * PR #5889: Fixes literally not forcing re-dispatch for inline='always'
 * PR #5912: Fix bad attr access on certain typing templates breaking exceptions.
+* PR #5918: Fix cuda test due to #5876
 
 Authors:
 
 * ``@pepping_dore``
+* Lucio Fernandez-Arjona
+* Siu Kwan Lam (core dev)
 * Stuart Archibald (core dev)
 
 

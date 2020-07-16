@@ -608,6 +608,6 @@ def find_literally_calls(func_ir, argtypes):
                     first_loc.setdefault(argindex, assign.loc)
     # Signal the dispatcher to force literal typing
     for pos in marked_args:
-        if not isinstance(argtypes[pos], types.Literal):
+        if not isinstance(argtypes[pos], (types.Literal, types.InitialValue)):
             loc = first_loc[pos]
             raise errors.ForceLiteralArg(marked_args, loc=loc)

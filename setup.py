@@ -11,8 +11,8 @@ import versioneer
 min_python_version = "3.6"
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
-min_llvmlite_version = "0.33.0.dev0"
-max_llvmlite_version = "0.34"
+min_llvmlite_version = "0.33"
+max_llvmlite_version = "0.35"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
