@@ -73,6 +73,20 @@ def opaque_is(context, builder, sig, args):
         return cgutils.false_bit
 
 
+@lower_builtin(operator.is_, types.Boolean, types.Boolean)
+def bool_is_impl(context, builder, sig, args):
+    arg1, arg2 = args
+    arg1_type, arg2_type = sig.args
+    _arg1 = context.cast(builder, arg1, arg1_type, types.boolean)
+    _arg2 = context.cast(builder, arg2, arg2_type, types.boolean)
+    eq_impl = context.get_function(
+        operator.eq,
+        typing.signature(types.boolean, types.boolean, types.boolean)
+    )
+    return eq_impl(builder, (_arg1, _arg2))
+
+
+# keep types.IntegerLiteral, as otherwise there's ambiguity between this and int_eq_impl
 @lower_builtin(operator.eq, types.Literal, types.Literal)
 @lower_builtin(operator.eq, types.IntegerLiteral, types.IntegerLiteral)
 def const_eq_impl(context, builder, sig, args):
@@ -84,7 +98,8 @@ def const_eq_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.ne, types.StringLiteral, types.StringLiteral)
+@lower_builtin(operator.ne, types.Literal, types.Literal)
+@lower_builtin(operator.ne, types.IntegerLiteral, types.IntegerLiteral)
 def const_ne_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
