@@ -236,6 +236,20 @@ and then running::
 from the root of the Numba repository. Now ``flake8`` will be run each time
 you commit changes. You can skip this check with ``git commit --no-verify``.
 
+Numba has started the process of using `type hints <https://www.python.org/dev/peps/pep-0484/>`_ in its code base. This
+will be a gradual process of extending the number of files that use type hints, as well as going from voluntary to
+mandatory type hints for new features. `Mypy <http://mypy-lang.org/>`_ is used for automated static checking.
+
+At the moment, only certain files are checked by mypy. The list can be found in ``mypy.ini``. When making changes to
+those files, it is necessary to add the required type hints such that mypy tests will pass. Only in exceptional
+circumstances should ``type: ignore`` comments be used.
+
+If you are contributing a new feature, we encourage you to use type hints, even if the file is not currently in the
+checklist. If you want to contribute type hints to enable a new file to be in the checklist, please add the file to the
+``files`` variable in ``mypy.ini``, and decide what level of compliance you are targetting. Level 3 is basic static
+checks, while levels 2 and 1 represent stricter checking. The levels are described in details in ``mypy.ini``.
+
+
 Stability
 '''''''''
 
