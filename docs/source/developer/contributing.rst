@@ -249,6 +249,10 @@ checklist. If you want to contribute type hints to enable a new file to be in th
 ``files`` variable in ``mypy.ini``, and decide what level of compliance you are targetting. Level 3 is basic static
 checks, while levels 2 and 1 represent stricter checking. The levels are described in details in ``mypy.ini``.
 
+There is potential for confusion between the Numba module ``typing`` and Python built-in module ``typing`` used for type
+hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``typing`` types of the same name.
+To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
+imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
 
 Stability
 '''''''''
