@@ -2547,7 +2547,7 @@ class TestPrange(TestPrangeBase):
         def test_impl():
             n = 5
             a = np.empty(n, dtype=np.int64)
-            for k in nb.prange(5):
+            for k in range(5):
                 X = [0]
                 X[0] = 1
                 a[k] = X[0]
