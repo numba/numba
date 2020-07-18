@@ -452,6 +452,11 @@ class List(MutableSequence, InitialValue):
         """
         return self.dtype
 
+    def can_convert_to(self, typingctx, other):
+        if not isinstance(other, List):
+            return
+        return typingctx.can_convert(self.dtype, other.dtype)
+
 
 class LiteralList(Literal, _HeterogeneousTuple):
     """A heterogeneous immutable list (basically a tuple with list semantics).
@@ -536,6 +541,11 @@ class Set(Container):
             reflected = self.reflected or other.reflected
             if dtype is not None:
                 return Set(dtype, reflected)
+
+    def can_convert_to(self, typingctx, other):
+        if not isinstance(other, Set):
+            return
+        return typingctx.can_convert(self.dtype, other.dtype)
 
 
 class SetIter(BaseContainerIterator):

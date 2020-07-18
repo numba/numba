@@ -1457,5 +1457,5 @@ def set_is(context, builder, sig, args):
 @lower_cast(types.Set, types.Set)
 def set_to_set(context, builder, fromty, toty, val):
     # Casting from non-reflected to reflected
-    assert fromty.dtype == toty.dtype
+    assert unliteral(fromty.dtype) == unliteral(toty.dtype)
     return val

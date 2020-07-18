@@ -75,8 +75,7 @@ class SetAttribute(AttributeTemplate):
         assert not kws
         return signature(types.none, set.dtype)
 
-    @bound_function("set.update")
-    def resolve_update(self, set, args, kws):
+    def _resolve_xxx_update(self, set, args, kws):
         iterable, = args
         assert not kws
         if not isinstance(iterable, types.IterableType):
@@ -89,13 +88,9 @@ class SetAttribute(AttributeTemplate):
             sig = sig.replace(recvr=set.copy(dtype=unified))
             return sig
 
-    def _resolve_xxx_update(self, set, args, kws):
-        assert not kws
-        iterable, = args
-        # Set arguments only supported for now
-        # (note we can mix non-reflected and reflected arguments)
-        if isinstance(iterable, types.Set) and iterable.dtype == set.dtype:
-            return signature(types.none, iterable)
+    @bound_function("set.update")
+    def resolve_update(self, set, args, kws):
+        return self._resolve_xxx_update(set, args, kws)
 
     @bound_function("set.difference_update")
     def resolve_difference_update(self, set, args, kws):
@@ -114,7 +109,10 @@ class SetAttribute(AttributeTemplate):
         iterable, = args
         # Set arguments only supported for now
         # (note we can mix non-reflected and reflected arguments)
-        if isinstance(iterable, types.Set) and iterable.dtype == set.dtype:
+        if (
+            isinstance(iterable, types.Set) and
+            self.context.can_convert(iterable.dtype, set.dtype)
+        ):
             return signature(set, iterable)
 
     @bound_function("set.difference")
@@ -135,9 +133,12 @@ class SetAttribute(AttributeTemplate):
 
     def _resolve_comparator(self, set, args, kws):
         assert not kws
-        arg, = args
-        if arg == set:
-            return signature(types.boolean, arg)
+        iterable, = args
+        if (
+            isinstance(iterable, types.Set) and
+            self.context.can_convert(iterable.dtype, set.dtype)
+        ):
+            return signature(types.boolean, iterable)
 
     @bound_function("set.isdisjoint")
     def resolve_isdisjoint(self, set, args, kws):
@@ -158,9 +159,14 @@ class SetOperator(AbstractTemplate):
         if len(args) != 2:
             return
         a, b = args
-        if (isinstance(a, types.Set) and isinstance(b, types.Set)
-            and a.dtype == b.dtype):
-            return signature(a, *args)
+        if isinstance(a, types.Set) and isinstance(b, types.Set):
+            unified = self.context.unify_pairs(a.dtype, b.dtype)
+            if unified is not None:
+                return signature(
+                    types.Set(dtype=unified),
+                    a.copy(dtype=unified),
+                    b.copy(dtype=unified)
+                )
 
 
 class SetComparison(AbstractTemplate):
@@ -169,8 +175,11 @@ class SetComparison(AbstractTemplate):
         if len(args) != 2:
             return
         a, b = args
-        if isinstance(a, types.Set) and isinstance(b, types.Set) and a == b:
-            return signature(types.boolean, *args)
+        if isinstance(a, types.Set) and isinstance(b, types.Set):
+            unified = self.context.unify_pairs(a.dtype, b.dtype)
+            if unified is not None:
+                return signature(
+                    types.boolean, a.copy(dtype=unified), b.copy(dtype=unified))
 
 
 for op_key in (operator.add, operator.sub, operator.and_, operator.or_, operator.xor, operator.invert):

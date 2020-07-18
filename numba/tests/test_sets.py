@@ -175,6 +175,10 @@ def set_return_usecase(a):
     return s
 
 
+def maybe_cast_string(name: str, cast: bool):
+    return f"set({name})" if cast else name
+
+
 def make_operator_usecase(op):
     code = """if 1:
     def operator_usecase(a, b):
@@ -194,12 +198,28 @@ def make_inplace_operator_usecase(op):
     """ % dict(op=op)
     return compile_function('inplace_operator_usecase', code, globals())
 
-def make_comparison_usecase(op):
-    code = """if 1:
-    def comparison_usecase(a, b):
-        return set(a) %(op)s set(b)
-    """ % dict(op=op)
+
+def make_unary_usecase(op, cast=True):
+    a_str = maybe_cast_string("a", cast)
+    code = f"""
+def comparison_usecase(a, b):
+    return {a_str} {op} {{1, 2}}
+    """
     return compile_function('comparison_usecase', code, globals())
+
+
+def make_binary_usecase(op, cast_a=True, cast_b=True):
+    a_str = maybe_cast_string("a", cast_a)
+    b_str = maybe_cast_string("b", cast_b)
+    code = f"""
+def comparison_usecase(a, b):
+    return {a_str} {op} {b_str}
+    """
+    return compile_function('comparison_usecase', code, globals())
+
+
+def maybe_cast(x, cast):
+    return set(x) if cast else x
 
 
 def noop(x):
@@ -531,17 +551,37 @@ class TestSets(BaseTest):
         a = self.sparse_array(50)
         check(a, a[len(a) // 2])
 
-    def _test_set_operator(self, pyfunc):
+    def _test_set_operator(self, pyfunc, raw_a=True, raw_b=True):
         check = self.unordered_checker(pyfunc)
 
-        a, b = (1, 2, 4, 11), (2, 3, 5, 11, 42)
-        check(a, b)
+        b = maybe_cast((2, 3, 5, 11, 42), not raw_b)
+        # With unary operators we compare to {1, 2}.
+        for a in [
+            (1, 2, 4, 11),
+            (1, 4, 11),
+            (-4, 10),
+        ]:
+            check(maybe_cast(a, not raw_a), b)
+
+        if not (raw_a and raw_b):
+            return
 
         sizes = (0, 50, 500)
         for na, nb in itertools.product(sizes, sizes):
             a = self.sparse_array(na)
             b = self.sparse_array(nb)
             check(a, b)
+
+    def _test_all_forms_set_operator(self, op):
+        for to_cast in itertools.product((True, False), (True, False)):
+            usecase = make_binary_usecase(op, *to_cast)
+            self._test_set_operator(usecase, *to_cast)
+
+        for to_cast in (True, False):
+            self._test_set_operator(
+                make_unary_usecase(op, to_cast),
+                to_cast
+            )
 
     def test_difference(self):
         self._test_set_operator(difference_usecase)
@@ -556,34 +596,34 @@ class TestSets(BaseTest):
         self._test_set_operator(union_usecase)
 
     def test_and(self):
-        self._test_set_operator(make_operator_usecase('&'))
+        self._test_all_forms_set_operator("&")
 
     def test_or(self):
-        self._test_set_operator(make_operator_usecase('|'))
+        self._test_all_forms_set_operator("|")
 
     def test_sub(self):
-        self._test_set_operator(make_operator_usecase('-'))
+        self._test_all_forms_set_operator("-")
 
     def test_xor(self):
-        self._test_set_operator(make_operator_usecase('^'))
+        self._test_all_forms_set_operator("^")
 
     def test_eq(self):
-        self._test_set_operator(make_comparison_usecase('=='))
+        self._test_all_forms_set_operator("==")
 
     def test_ne(self):
-        self._test_set_operator(make_comparison_usecase('!='))
+        self._test_all_forms_set_operator("!=")
 
     def test_le(self):
-        self._test_set_operator(make_comparison_usecase('<='))
+        self._test_all_forms_set_operator("<=")
 
     def test_lt(self):
-        self._test_set_operator(make_comparison_usecase('<'))
+        self._test_all_forms_set_operator("<")
 
     def test_ge(self):
-        self._test_set_operator(make_comparison_usecase('>='))
+        self._test_all_forms_set_operator(">=")
 
     def test_gt(self):
-        self._test_set_operator(make_comparison_usecase('>'))
+        self._test_all_forms_set_operator(">")
 
     def test_iand(self):
         self._test_set_operator(make_inplace_operator_usecase('&='))
