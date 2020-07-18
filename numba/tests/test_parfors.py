@@ -3683,7 +3683,7 @@ class TestParforsDiagnostics(TestParforsBase):
         self.check(test_impl,)
         cpfunc = self.compile_parallel(test_impl, ())
         diagnostics = cpfunc.metadata['parfor_diagnostics']
-        self.assert_diagnostics(diagnostics, hoisted_allocations=1)
+        self.assert_diagnostics(diagnostics, hoisted_allocations=0)
 
 
 if __name__ == "__main__":
