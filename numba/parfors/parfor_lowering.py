@@ -677,7 +677,7 @@ def compute_def_once(loop_body, typemap):
     getattr_taken = {}
     module_assigns = {}
     compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap, module_assigns)
-    return def_once
+    return def_once, def_more
 
 def find_vars(var, varset):
     assert isinstance(var, ir.Var)
@@ -744,7 +744,7 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     not_hoisted = []
 
     # Compute the set of variable defined exactly once in the loop body.
-    def_once = compute_def_once(loop_body, typemap)
+    def_once, def_more = compute_def_once(loop_body, typemap)
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
 
     setitems = set()
@@ -753,6 +753,8 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = list(set(dep_on_param).difference(setitems))
     if config.DEBUG_ARRAY_OPT >= 1:
         print("hoist - def_once:", def_once, "setitems:", setitems, "itemsset:", itemsset, "dep_on_param:", dep_on_param, "parfor_params:", parfor_params)
+    for si in setitems:
+        add_to_def_once_sets(si, def_once, def_more)
 
     for label, block in loop_body.items():
         new_block = []
