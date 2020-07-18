@@ -2540,6 +2540,21 @@ class TestPrange(TestPrangeBase):
         image = np.zeros((3, 3), dtype=np.int32)
         self.prange_tester(test_impl, image, 0, 0)
 
+    @skip_parfors_unsupported
+    def test_list_setitem_hoisting(self):
+        # issue5979
+        # Don't hoist list initialization if list item set.
+        def test_impl():
+            n = 5
+            a = np.empty(n, dtype=np.int64)
+            for k in nb.prange(5):
+                X = [0]
+                X[0] = 1
+                a[k] = X[0]
+            return a
+
+        self.prange_tester(test_impl)
+
 
 @skip_parfors_unsupported
 @x86_only
