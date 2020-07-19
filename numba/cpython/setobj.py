@@ -16,6 +16,7 @@ from numba.core.imputils import (lower_builtin, lower_cast,
                                     for_iter, call_len, RefType)
 from numba.core.utils import cached_property
 from numba.misc import quicksort
+from numba.core.types.misc import unliteral
 from numba.cpython import slicing
 from numba.extending import intrinsic
 
