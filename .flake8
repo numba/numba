@@ -64,7 +64,6 @@ exclude =
     numba/core/types/iterators.py
     numba/core/types/scalars.py
     numba/core/fastmathpass.py
-    numba/cpython/setobj.py
     numba/core/options.py
     numba/cpython/printimpl.py
     numba/cpython/cmathimpl.py
@@ -304,7 +303,6 @@ exclude =
     numba/tests/test_chained_assign.py
     numba/tests/test_withlifting.py
     numba/tests/test_parfors.py
-    numba/tests/test_sets.py
     numba/tests/test_dyn_array.py
     numba/tests/test_objects.py
     numba/tests/test_random.py
@@ -322,7 +320,6 @@ exclude =
     numba/core/typing/listdecl.py
     numba/core/typing/builtins.py
     numba/core/typing/randomdecl.py
-    numba/core/typing/setdecl.py
     numba/core/typing/npydecl.py
     numba/core/typing/arraydecl.py
     numba/core/typing/collections.py

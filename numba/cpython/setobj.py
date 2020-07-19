@@ -5,19 +5,14 @@ Support for native homogeneous sets.
 
 import collections
 import contextlib
-import math
 import operator
 
 from llvmlite import ir
 from numba.core import types, typing, cgutils
 from numba.core.imputils import (lower_builtin, lower_cast,
-                                    iternext_impl, impl_ret_borrowed,
-                                    impl_ret_new_ref, impl_ret_untracked,
-                                    for_iter, call_len, RefType)
-from numba.core.utils import cached_property
-from numba.misc import quicksort
+                                 iternext_impl, impl_ret_borrowed,
+                                 impl_ret_new_ref, for_iter, call_len, RefType)
 from numba.core.types.misc import unliteral
-from numba.cpython import slicing
 from numba.extending import intrinsic
 
 
@@ -87,12 +82,14 @@ def is_hash_empty(context, builder, h):
     empty = ir.Constant(h.type, EMPTY)
     return builder.icmp_unsigned('==', h, empty)
 
+
 def is_hash_deleted(context, builder, h):
     """
     Whether the hash value denotes a deleted entry.
     """
     deleted = ir.Constant(h.type, DELETED)
     return builder.icmp_unsigned('==', h, deleted)
+
 
 def is_hash_used(context, builder, h):
     """
@@ -199,8 +196,9 @@ class _SetPayload(object):
 
         mask = self.mask
         dtype = self._ty.dtype
-        eqfn = context.get_function(operator.eq,
-                                    typing.signature(types.boolean, dtype, dtype))
+        eqfn = context.get_function(
+            operator.eq, typing.signature(types.boolean, dtype, dtype)
+        )
 
         one = ir.Constant(intp_t, 1)
         five = ir.Constant(intp_t, 5)
@@ -239,10 +237,15 @@ class _SetPayload(object):
 
             if for_insert:
                 # Memorize the index of the first deleted entry
-                with builder.if_then(is_hash_deleted(context, builder, entry_hash)):
+                with builder.if_then(
+                    is_hash_deleted(context, builder, entry_hash)
+                ):
                     j = builder.load(free_index)
-                    j = builder.select(builder.icmp_unsigned('==', j, free_index_sentinel),
-                                       i, j)
+                    j = builder.select(
+                        builder.icmp_unsigned('==', j, free_index_sentinel),
+                        i,
+                        j,
+                    )
                     builder.store(j, free_index)
 
         # First linear probing.  When the number of collisions is small,
@@ -282,8 +285,11 @@ class _SetPayload(object):
                 # lookup chain (issue #1913).
                 i = builder.load(index)
                 j = builder.load(free_index)
-                i = builder.select(builder.icmp_unsigned('==', j, free_index_sentinel),
-                                   i, j)
+                i = builder.select(
+                    builder.icmp_unsigned('==', j, free_index_sentinel),
+                    i,
+                    j,
+                )
                 builder.store(i, index)
             builder.branch(bb_end)
 
@@ -328,7 +334,6 @@ class _SetPayload(object):
         builder = self._builder
 
         intp_t = context.get_value_type(types.intp)
-        zero = ir.Constant(intp_t, 0)
         one = ir.Constant(intp_t, 1)
         mask = self.mask
 
@@ -469,7 +474,6 @@ class SetInstance(object):
         self.set_dirty(True)
 
     def _remove_key(self, payload, item, h, do_resize=True):
-        context = self._context
         builder = self._builder
 
         found, i = payload._lookup(item, h)
@@ -551,7 +555,6 @@ class SetInstance(object):
 
     def clear(self):
         context = self._context
-        builder = self._builder
 
         intp_t = context.get_value_type(types.intp)
         minsize = ir.Constant(intp_t, MINSIZE)
@@ -573,7 +576,7 @@ class SetInstance(object):
 
         no_deleted_entries = builder.icmp_unsigned('==', used, fill)
         with builder.if_else(no_deleted_entries, likely=True) \
-            as (if_no_deleted, if_deleted):
+                as (if_no_deleted, if_deleted):
             with if_no_deleted:
                 # No deleted entries => raw copy the payload
                 ok = other._copy_payload(payload)
@@ -601,7 +604,6 @@ class SetInstance(object):
         """
         In-place intersection with *other* set.
         """
-        context = self._context
         builder = self._builder
         payload = self.payload
         other_payload = other.payload
@@ -619,8 +621,6 @@ class SetInstance(object):
         """
         In-place difference with *other* set.
         """
-        context = self._context
-        builder = self._builder
         payload = self.payload
         other_payload = other.payload
 
@@ -635,7 +635,6 @@ class SetInstance(object):
         """
         In-place symmetric difference with *other* set.
         """
-        context = self._context
         builder = self._builder
         other_payload = other.payload
 
@@ -656,7 +655,6 @@ class SetInstance(object):
         self.downsize(self.payload.used)
 
     def issubset(self, other, strict=False):
-        context = self._context
         builder = self._builder
         payload = self.payload
         other_payload = other.payload
@@ -666,7 +664,7 @@ class SetInstance(object):
         res = cgutils.alloca_once_value(builder, cgutils.true_bit)
         with builder.if_else(
             builder.icmp_unsigned(cmp_op, payload.used, other_payload.used)
-            ) as (if_smaller, if_larger):
+        ) as (if_smaller, if_larger):
             with if_larger:
                 # self larger than other => self cannot possibly a subset
                 builder.store(cgutils.false_bit, res)
@@ -682,7 +680,6 @@ class SetInstance(object):
         return builder.load(res)
 
     def isdisjoint(self, other):
-        context = self._context
         builder = self._builder
         payload = self.payload
         other_payload = other.payload
@@ -700,7 +697,7 @@ class SetInstance(object):
 
         with builder.if_else(
             builder.icmp_unsigned('>', payload.used, other_payload.used)
-            ) as (if_larger, otherwise):
+        ) as (if_larger, otherwise):
 
             with if_larger:
                 # len(self) > len(other)
@@ -713,7 +710,6 @@ class SetInstance(object):
         return builder.load(res)
 
     def equals(self, other):
-        context = self._context
         builder = self._builder
         payload = self.payload
         other_payload = other.payload
@@ -721,7 +717,7 @@ class SetInstance(object):
         res = cgutils.alloca_once_value(builder, cgutils.true_bit)
         with builder.if_else(
             builder.icmp_unsigned('==', payload.used, other_payload.used)
-            ) as (if_same_size, otherwise):
+        ) as (if_same_size, otherwise):
             with if_same_size:
                 # same sizes => check whether each key of self is in other
                 with payload._iterate() as loop:
@@ -849,7 +845,8 @@ class SetInstance(object):
                 new_size = builder.load(new_size_p)
                 new_size = builder.shl(new_size, two)
                 builder.store(new_size, new_size_p)
-                is_too_small = builder.icmp_unsigned('>=', min_entries, new_size)
+                is_too_small = builder.icmp_unsigned(
+                    '>=', min_entries, new_size)
                 builder.cbranch(is_too_small, bb_body, bb_end)
 
             builder.position_at_end(bb_end)
@@ -879,8 +876,11 @@ class SetInstance(object):
 
         # Ensure entries >= max(2 * used, MINSIZE)
         min_entries = builder.shl(nitems, one)
-        min_entries = builder.select(builder.icmp_unsigned('>=', min_entries, minsize),
-                                     min_entries, minsize)
+        min_entries = builder.select(
+            builder.icmp_unsigned('>=', min_entries, minsize),
+            min_entries,
+            minsize,
+        )
         # Shrink only if size >= 4 * min_entries && size > MINSIZE
         max_size = builder.shl(min_entries, two)
         size = builder.add(payload.mask, one)
@@ -989,21 +989,23 @@ class SetInstance(object):
         payload_size -= entry_size
 
         # Total allocation size = <payload header size> + nentries * entry_size
-        allocsize, ovf = cgutils.muladd_with_overflow(builder, nentries,
-                                                      ir.Constant(intp_t, entry_size),
-                                                      ir.Constant(intp_t, payload_size))
+        allocsize, ovf = cgutils.muladd_with_overflow(
+            builder,
+            nentries,
+            ir.Constant(intp_t, entry_size),
+            ir.Constant(intp_t, payload_size),
+        )
         with builder.if_then(ovf, likely=False):
             builder.store(cgutils.false_bit, ok)
 
         with builder.if_then(builder.load(ok), likely=True):
             if realloc:
                 meminfo = self._set.meminfo
-                ptr = context.nrt.meminfo_varsize_alloc(builder, meminfo,
-                                                        size=allocsize)
-                alloc_ok = cgutils.is_null(builder, ptr)
+                context.nrt.meminfo_varsize_alloc(
+                    builder, meminfo, size=allocsize)
             else:
-                meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
-                alloc_ok = cgutils.is_null(builder, meminfo)
+                meminfo = context.nrt.meminfo_new_varsize(
+                    builder, size=allocsize)
 
             with builder.if_else(cgutils.is_null(builder, meminfo),
                                  likely=False) as (if_error, if_ok):
@@ -1012,7 +1014,8 @@ class SetInstance(object):
                 with if_ok:
                     if not realloc:
                         self._set.meminfo = meminfo
-                        self._set.parent = context.get_constant_null(types.pyobject)
+                        self._set.parent = context.get_constant_null(
+                            types.pyobject)
                     payload = self.payload
                     # Initialize entries to 0xff (EMPTY)
                     cgutils.memset(builder, payload.ptr, allocsize, 0xFF)
@@ -1023,9 +1026,10 @@ class SetInstance(object):
                     payload.mask = new_mask
 
                     if DEBUG_ALLOCS:
-                        context.printf(builder,
-                                       "allocated %zd bytes for set at %p: mask = %zd\n",
-                                       allocsize, payload.ptr, new_mask)
+                        context.printf(
+                            builder,
+                            "allocated %zd bytes for set at %p: mask = %zd\n",
+                            allocsize, payload.ptr, new_mask)
 
         return builder.load(ok)
 
@@ -1066,7 +1070,6 @@ class SetInstance(object):
 
         with builder.if_then(builder.load(ok), likely=True):
             meminfo = context.nrt.meminfo_new_varsize(builder, size=allocsize)
-            alloc_ok = cgutils.is_null(builder, meminfo)
 
             with builder.if_else(cgutils.is_null(builder, meminfo),
                                  likely=False) as (if_error, if_ok):
@@ -1084,9 +1087,13 @@ class SetInstance(object):
                                        entry_size)
 
                     if DEBUG_ALLOCS:
-                        context.printf(builder,
-                                       "allocated %zd bytes for set at %p: mask = %zd\n",
-                                       allocsize, payload.ptr, mask)
+                        context.printf(
+                            builder,
+                            "allocated %zd bytes for set at %p: mask = %zd\n",
+                            allocsize,
+                            payload.ptr,
+                            mask,
+                        )
 
         return builder.load(ok)
 
@@ -1142,7 +1149,7 @@ class SetIterInstance(object):
             loop.do_break()
 
 
-#-------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Constructors
 
 def build_set(context, builder, set_type, items):
@@ -1171,6 +1178,7 @@ def set_empty_constructor(context, builder, sig, args):
     inst = SetInstance.allocate(context, builder, set_type)
     return impl_ret_new_ref(context, builder, set_type, inst.value)
 
+
 @lower_builtin(set, types.IterableType)
 def set_constructor(context, builder, sig, args):
     set_type = sig.return_type
@@ -1187,7 +1195,7 @@ def set_constructor(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, set_type, inst.value)
 
 
-#-------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Various operations
 
 @lower_builtin(len, types.Set)
@@ -1195,15 +1203,18 @@ def set_len(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     return inst.get_size()
 
+
 @lower_builtin(operator.contains, types.Set, types.Any)
 def in_set(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     return inst.contains(args[1])
 
+
 @lower_builtin('getiter', types.Set)
 def getiter_set(context, builder, sig, args):
     inst = SetIterInstance.from_set(context, builder, sig.return_type, args[0])
     return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
+
 
 @lower_builtin('iternext', types.SetIter)
 @iternext_impl(RefType.BORROWED)
@@ -1212,7 +1223,7 @@ def iternext_listiter(context, builder, sig, args, result):
     inst.iternext(result)
 
 
-#-------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Methods
 
 # One-item-at-a-time operations
@@ -1225,6 +1236,7 @@ def set_add(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+
 @lower_builtin("set.discard", types.Set, types.Any)
 def set_discard(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
@@ -1232,6 +1244,7 @@ def set_discard(context, builder, sig, args):
     inst.discard(item)
 
     return context.get_dummy_value()
+
 
 @lower_builtin("set.pop", types.Set)
 def set_pop(context, builder, sig, args):
@@ -1242,6 +1255,7 @@ def set_pop(context, builder, sig, args):
                                           ("set.pop(): empty set",))
 
     return inst.pop()
+
 
 @lower_builtin("set.remove", types.Set, types.Any)
 def set_remove(context, builder, sig, args):
@@ -1263,11 +1277,13 @@ def set_clear(context, builder, sig, args):
     inst.clear()
     return context.get_dummy_value()
 
+
 @lower_builtin("set.copy", types.Set)
 def set_copy(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = inst.copy()
     return impl_ret_new_ref(context, builder, sig.return_type, other.value)
+
 
 @lower_builtin("set.difference_update", types.Set, types.IterableType)
 def set_difference_update(context, builder, sig, args):
@@ -1278,6 +1294,7 @@ def set_difference_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+
 @lower_builtin("set.intersection_update", types.Set, types.Set)
 def set_intersection_update(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
@@ -1287,6 +1304,7 @@ def set_intersection_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+
 @lower_builtin("set.symmetric_difference_update", types.Set, types.Set)
 def set_symmetric_difference_update(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
@@ -1295,6 +1313,7 @@ def set_symmetric_difference_update(context, builder, sig, args):
     inst.symmetric_difference(other)
 
     return context.get_dummy_value()
+
 
 @lower_builtin("set.update", types.Set, types.IterableType)
 def set_update(context, builder, sig, args):
@@ -1318,12 +1337,13 @@ def set_update(context, builder, sig, args):
 
     return context.get_dummy_value()
 
+
 for op_, op_impl in [
     (operator.iand, set_intersection_update),
     (operator.ior, set_update),
     (operator.isub, set_difference_update),
     (operator.ixor, set_symmetric_difference_update),
-    ]:
+]:
     @lower_builtin(op_, types.Set, types.Set)
     def set_inplace(context, builder, sig, args, op_impl=op_impl):
         assert sig.return_type == sig.args[0]
@@ -1343,6 +1363,7 @@ def set_difference(context, builder, sig, args):
 
     return context.compile_internal(builder, difference_impl, sig, args)
 
+
 @lower_builtin(operator.and_, types.Set, types.Set)
 @lower_builtin("set.intersection", types.Set, types.Set)
 def set_intersection(context, builder, sig, args):
@@ -1357,6 +1378,7 @@ def set_intersection(context, builder, sig, args):
             return s
 
     return context.compile_internal(builder, intersection_impl, sig, args)
+
 
 @lower_builtin(operator.xor, types.Set, types.Set)
 @lower_builtin("set.symmetric_difference", types.Set, types.Set)
@@ -1373,6 +1395,7 @@ def set_symmetric_difference(context, builder, sig, args):
 
     return context.compile_internal(builder, symmetric_difference_impl,
                                     sig, args)
+
 
 @lower_builtin(operator.or_, types.Set, types.Set)
 @lower_builtin("set.union", types.Set, types.Set)
@@ -1399,6 +1422,7 @@ def set_isdisjoint(context, builder, sig, args):
 
     return inst.isdisjoint(other)
 
+
 @lower_builtin(operator.le, types.Set, types.Set)
 @lower_builtin("set.issubset", types.Set, types.Set)
 def set_issubset(context, builder, sig, args):
@@ -1406,6 +1430,7 @@ def set_issubset(context, builder, sig, args):
     other = SetInstance(context, builder, sig.args[1], args[1])
 
     return inst.issubset(other)
+
 
 @lower_builtin(operator.ge, types.Set, types.Set)
 @lower_builtin("set.issuperset", types.Set, types.Set)
@@ -1415,12 +1440,14 @@ def set_issuperset(context, builder, sig, args):
 
     return context.compile_internal(builder, superset_impl, sig, args)
 
+
 @lower_builtin(operator.eq, types.Set, types.Set)
-def set_isdisjoint(context, builder, sig, args):
+def set_eq(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
     other = SetInstance(context, builder, sig.args[1], args[1])
 
     return inst.equals(other)
+
 
 @lower_builtin(operator.ne, types.Set, types.Set)
 def set_ne(context, builder, sig, args):
@@ -1429,6 +1456,7 @@ def set_ne(context, builder, sig, args):
 
     return context.compile_internal(builder, ne_impl, sig, args)
 
+
 @lower_builtin(operator.lt, types.Set, types.Set)
 def set_lt(context, builder, sig, args):
     inst = SetInstance(context, builder, sig.args[0], args[0])
@@ -1436,12 +1464,14 @@ def set_lt(context, builder, sig, args):
 
     return inst.issubset(other, strict=True)
 
+
 @lower_builtin(operator.gt, types.Set, types.Set)
 def set_gt(context, builder, sig, args):
     def gt_impl(a, b):
         return b < a
 
     return context.compile_internal(builder, gt_impl, sig, args)
+
 
 @lower_builtin(operator.is_, types.Set, types.Set)
 def set_is(context, builder, sig, args):
@@ -1452,7 +1482,7 @@ def set_is(context, builder, sig, args):
     return builder.icmp_signed('==', ma, mb)
 
 
-# -----------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Implicit casting
 
 @lower_cast(types.Set, types.Set)
