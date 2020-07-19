@@ -1,11 +1,9 @@
 import operator
 
 from numba.core import types
-from .templates import (ConcreteTemplate, AbstractTemplate, AttributeTemplate,
-                        CallableTemplate,  Registry, signature, bound_function,
-                        make_callable_template)
-# Ensure set is typed as a collection as well
-from numba.core.typing import collections
+from numba.core.typing.templates import (
+    AbstractTemplate, AttributeTemplate, Registry, signature, bound_function,
+)
 
 
 registry = Registry()
@@ -182,20 +180,30 @@ class SetComparison(AbstractTemplate):
                     types.boolean, a.copy(dtype=unified), b.copy(dtype=unified))
 
 
-for op_key in (operator.add, operator.sub, operator.and_, operator.or_, operator.xor, operator.invert):
+for op_key in (
+    operator.add,
+    operator.sub,
+    operator.and_,
+    operator.or_,
+    operator.xor,
+    operator.invert
+):
     @infer_global(op_key)
     class ConcreteSetOperator(SetOperator):
         key = op_key
 
 
-for op_key in (operator.iadd, operator.isub, operator.iand, operator.ior, operator.ixor):
+for op_key in (
+    operator.iadd, operator.isub, operator.iand, operator.ior, operator.ixor
+):
     @infer_global(op_key)
     class ConcreteInplaceSetOperator(SetOperator):
         key = op_key
 
 
-for op_key in (operator.eq, operator.ne, operator.lt, operator.le, operator.ge, operator.gt):
+for op_key in (
+    operator.eq, operator.ne, operator.lt, operator.le, operator.ge, operator.gt
+):
     @infer_global(op_key)
     class ConcreteSetComparison(SetComparison):
         key = op_key
-
