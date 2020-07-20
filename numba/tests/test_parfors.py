@@ -1628,8 +1628,8 @@ class TestParfors(TestParforsBase):
             b += a
             return b
 
-        X = np.ones(10)
-        Y = np.zeros(10)
+        X = np.arange(10) + 10
+        Y = np.arange(10) + 100
         self.check(test_impl, X, Y)
         self.assertTrue(countParfors(test_impl,
                                     (types.Array(types.float64, 1, 'C'),
