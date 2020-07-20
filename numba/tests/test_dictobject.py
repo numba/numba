@@ -2071,6 +2071,25 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
 
         foo()
 
+    def test_dict_as_arg(self):
+        @njit
+        def bar(fake_kwargs=None):
+            if fake_kwargs is not None:
+                # Add 10 to array in key 'd'
+                fake_kwargs['d'][:] += 10
+
+        @njit
+        def foo():
+            a = 1
+            b = 2j
+            c = 'string'
+            d = np.zeros(3)
+            e = {'a': a, 'b': b, 'c': c, 'd': d}
+            bar(fake_kwargs=e)
+            return e['d']
+
+        np.testing.assert_allclose(foo(), np.ones(3) * 10)
+
 
 if __name__ == '__main__':
     unittest.main()

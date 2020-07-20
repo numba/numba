@@ -440,7 +440,15 @@ class Literal(Type):
         if self._literal_type_cache is None:
             from numba.core import typing
             ctx = typing.Context()
-            res = ctx.resolve_value_type(self.literal_value)
+            try:
+                res = ctx.resolve_value_type(self.literal_value)
+            except ValueError:
+                # Not all literal types have a literal_value that can be
+                # resolved to a type, for example, LiteralStrKeyDict has a
+                # literal_value that is a python dict for which there's no
+                # `typeof` support.
+                msg = "{} has no attribute 'literal_type'".format(self)
+                raise AttributeError(msg)
             self._literal_type_cache = res
 
         return self._literal_type_cache
