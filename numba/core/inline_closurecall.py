@@ -1,4 +1,5 @@
 import types as pytypes  # avoid confusion with numba.types
+import copy
 import ctypes
 import numba.core.analysis
 from numba.core import utils, types, typing, errors, ir, rewrites, config, ir_utils
@@ -345,6 +346,22 @@ class InlineWorker(object):
         instance was initialized with a typemap and calltypes then they will be
         appropriately updated based on the arg_typs.
         """
+
+        # Always copy the callee IR, it gets mutated
+        def copy_ir(the_ir):
+            kernel_copy = the_ir.copy()
+            kernel_copy.blocks = {}
+            for block_label, block in the_ir.blocks.items():
+                new_block = copy.deepcopy(the_ir.blocks[block_label])
+                new_block.body = []
+                for stmt in the_ir.blocks[block_label].body:
+                    scopy = copy.deepcopy(stmt)
+                    new_block.body.append(scopy)
+                kernel_copy.blocks[block_label] = new_block
+            return kernel_copy
+
+        callee_ir = copy_ir(callee_ir)
+
         # check that the contents of the callee IR is something that can be
         # inlined if a validator is present
         if self.validator is not None:

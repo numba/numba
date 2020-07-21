@@ -61,7 +61,6 @@ creating a specialized instance:
              extensions
 
 
-
 Intrinsic Attributes and Functions
 ----------------------------------
 

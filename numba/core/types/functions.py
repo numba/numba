@@ -4,7 +4,8 @@ import inspect
 import itertools
 import logging
 import textwrap
-from os import path, get_terminal_size
+from os import path
+from shutil import get_terminal_size
 
 from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
@@ -19,10 +20,8 @@ _termcolor = errors.termcolor()
 
 _FAILURE = namedtuple('_FAILURE', 'template matched error literal')
 
-try:
-    _termwidth = get_terminal_size()[0]
-except OSError: # lack of active console
-    _termwidth = 120
+_termwidth = get_terminal_size().columns
+
 
 # pull out the lead line as unit tests often use this
 _header_lead = "No implementation of function"
@@ -38,7 +37,7 @@ def _wrapper(tmp, indent=0):
     return textwrap.indent(tmp, ' ' * indent,  lambda line: True)
 
 _overload_template = ("- Of which {nduplicates} did not match due to:\n"
-                      "Overload in function '{function}': File: {file}: "
+                      "{kind} {inof} function '{function}': File: {file}: "
                       "Line {line}.\n  With argument(s): '({args})':")
 
 _err_reasons = {}
@@ -87,21 +86,6 @@ class _ResolutionFailures(object):
         self._failures[key].append(_FAILURE(calltemplate, matched, error,
                                             literal))
 
-    def _get_source_info(self, source_fn):
-        source_line = "<N/A>"
-        if 'builtin_function' in str(type(source_fn)):
-            source_file = "<built-in>"
-        else:
-            try:
-                source_file = path.abspath(inspect.getsourcefile(source_fn))
-                source_line = inspect.getsourcelines(source_fn)[1]
-                here = path.abspath(__file__)
-                common = path.commonpath([here, source_file])
-                source_file = source_file.replace(common, 'numba')
-            except:
-                source_file = "Unknown"
-        return source_file, source_line
-
     def format(self):
         """Return a formatted error message from all the gathered errors.
         """
@@ -109,12 +93,14 @@ class _ResolutionFailures(object):
         argstr = argsnkwargs_to_str(self._args, self._kwargs)
         ncandidates = sum([len(x) for x in self._failures.values()])
 
+
         # sort out a display name for the function
         tykey = self._function_type.typing_key
         # most things have __name__
         fname = getattr(tykey, '__name__', None)
         is_external_fn_ptr = isinstance(self._function_type,
                                         ExternalFunctionPointer)
+
         if fname is None:
             if is_external_fn_ptr:
                 fname = "ExternalFunctionPointer"
@@ -129,53 +115,87 @@ class _ResolutionFailures(object):
         nolitkwargs = {k: unliteral(v) for k, v in self._kwargs.items()}
         nolitargstr = argsnkwargs_to_str(nolitargs, nolitkwargs)
 
-        key = self._function_type.key[0]
-        fn_name = getattr(key, '__name__', str(key))
-
         # depth could potentially get massive, so limit it.
         ldepth = min(max(self._depth, 0), self._max_depth)
+
+        def template_info(tp):
+            src_info = tp.get_template_info()
+            unknown = "unknown"
+            source_name = src_info.get('name', unknown)
+            source_file = src_info.get('filename', unknown)
+            source_lines = src_info.get('lines', unknown)
+            source_kind = src_info.get('kind', 'Unknown template')
+            return source_name, source_file, source_lines, source_kind
 
         for i, (k, err_list) in enumerate(self._failures.items()):
             err = err_list[0]
             nduplicates = len(err_list)
             template, error = err.template, err.error
-            source_fn = template.key
-            if isinstance(source_fn, numba.core.extending._Intrinsic):
-                source_fn = template.key._defn
-            elif (is_external_fn_ptr and
-                  isinstance(source_fn, numba.core.typing.templates.Signature)):
-                source_fn = template.__class__
-            source_file, source_line = self._get_source_info(source_fn)
+            ifo = template_info(template)
+            source_name, source_file, source_lines, source_kind = ifo
             largstr = argstr if err.literal else nolitargstr
-            msgbuf.append(_termcolor.errmsg(
-                _wrapper(_overload_template.format(nduplicates=nduplicates,
-                                                  function=source_fn.__name__,
-                                                  file=source_file,
-                                                  line=source_line,
-                                                  args=largstr),
-                ldepth + 1)))
 
-            if isinstance(error, BaseException):
-                reason = indent + self.format_error(error)
-                errstr = _err_reasons['specific_error'].format(reason)
-            else:
-                errstr = error
-            # if you are a developer, show the back traces
-            if config.DEVELOPER_MODE:
-                if isinstance(error, BaseException):
-                    # if the error is an actual exception instance, trace it
-                    bt = traceback.format_exception(type(error), error,
-                                                    error.__traceback__)
+            if err.error == "No match.":
+                err_dict = defaultdict(set)
+                for errs in err_list:
+                    err_dict[errs.template].add(errs.literal)
+                # if there's just one template, and it's erroring on
+                # literal/nonliteral be specific
+                if len(err_dict) == 1:
+                    template = [_ for _ in err_dict.keys()][0]
+                    source_name, source_file, source_lines, source_kind = \
+                        template_info(template)
+                    source_lines = source_lines[0]
                 else:
-                    bt = [""]
-                bt_as_lines = _bt_as_lines(bt)
-                nd2indent = '\n{}'.format(2 * indent)
-                errstr += _termcolor.reset(nd2indent +
-                                            nd2indent.join(bt_as_lines))
-            msgbuf.append(_termcolor.highlight(_wrapper(errstr, ldepth + 2)))
-            loc = self.get_loc(template, error)
-            if loc:
-                msgbuf.append('{}raised from {}'.format(indent, loc))
+                    source_file = "<numerous>"
+                    source_lines = "N/A"
+
+                msgbuf.append(_termcolor.errmsg(
+                    _wrapper(_overload_template.format(nduplicates=nduplicates,
+                                                    kind = source_kind.title(),
+                                                    function=fname,
+                                                    inof='of',
+                                                    file=source_file,
+                                                    line=source_lines,
+                                                    args=largstr),
+                    ldepth + 1)))
+                msgbuf.append(_termcolor.highlight(_wrapper(err.error,
+                                                            ldepth + 2)))
+            else:
+                # There was at least one match in this failure class, but it
+                # failed for a specific reason try and report this.
+                msgbuf.append(_termcolor.errmsg(
+                    _wrapper(_overload_template.format(nduplicates=nduplicates,
+                                                    kind = source_kind.title(),
+                                                    function=source_name,
+                                                    inof='in',
+                                                    file=source_file,
+                                                    line=source_lines[0],
+                                                    args=largstr),
+                    ldepth + 1)))
+
+                if isinstance(error, BaseException):
+                    reason = indent + self.format_error(error)
+                    errstr = _err_reasons['specific_error'].format(reason)
+                else:
+                    errstr = error
+                # if you are a developer, show the back traces
+                if config.DEVELOPER_MODE:
+                    if isinstance(error, BaseException):
+                        # if the error is an actual exception instance, trace it
+                        bt = traceback.format_exception(type(error), error,
+                                                        error.__traceback__)
+                    else:
+                        bt = [""]
+                    bt_as_lines = _bt_as_lines(bt)
+                    nd2indent = '\n{}'.format(2 * indent)
+                    errstr += _termcolor.reset(nd2indent +
+                                                nd2indent.join(bt_as_lines))
+                msgbuf.append(_termcolor.highlight(_wrapper(errstr,
+                                                            ldepth + 2)))
+                loc = self.get_loc(template, error)
+                if loc:
+                    msgbuf.append('{}raised from {}'.format(indent, loc))
 
         # the commented bit rewraps each block, may not be helpful?!
         return _wrapper('\n'.join(msgbuf) + '\n') # , self._scale * ldepth)
@@ -381,8 +401,8 @@ class BoundFunction(Callable, Opaque):
                     else:
                         bt = [""]
                     nd2indent = '\n{}'.format(2 * indent)
-                    errstr += _termcolor.reset(nd2indent +
-                                               nd2indent.join(bt_as_lines))
+                    errstr = _termcolor.reset(nd2indent +
+                                               nd2indent.join(_bt_as_lines(bt)))
                     return _termcolor.reset(errstr)
             else:
                 add_bt = lambda X: ''
@@ -430,6 +450,7 @@ class WeakType(Type):
         if type(self) is type(other):
             obj = self._wr()
             return obj is not None and obj is other._wr()
+        return NotImplemented
 
     def __hash__(self):
         return Type.__hash__(self)
