@@ -878,7 +878,6 @@ numba_do_raise(PyObject *exc_packed)
         Py_XINCREF(value);
         Py_XINCREF(loc);
         if (PyExceptionClass_Check(exc)) {
-            Py_DECREF(exc_packed);
             /* It is a class, type used here just as a tmp var */
             type = PyObject_CallObject(exc, value);
             if (type == NULL)
@@ -891,8 +890,6 @@ numba_do_raise(PyObject *exc_packed)
             /* all ok, set type to the exc */
             Py_DECREF(type);
             type = exc;
-            Py_INCREF(type);
-            Py_INCREF(value);
         } else {
             /* this should be unreachable as typing should catch it */
             /* Not something you can raise.  You get an exception
@@ -1016,7 +1013,6 @@ numba_unpickle(const char *data, int n)
 
     addr = PyLong_FromVoidPtr(data);
     obj = PyObject_CallFunctionObjArgs(loads, addr, buf, NULL);
-    Py_DECREF(addr);
     Py_DECREF(buf);
     return obj;
 }
