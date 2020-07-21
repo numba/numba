@@ -452,6 +452,8 @@ def dot_2_mm(context, builder, sig, args):
     def dot_impl(a, b):
         m, k = a.shape
         _k, n = b.shape
+        if k == 0:
+            return np.zeros((m, n), a.dtype)
         out = np.empty((m, n), a.dtype)
         return np.dot(a, b, out)
 
@@ -466,6 +468,8 @@ def dot_2_vm(context, builder, sig, args):
     def dot_impl(a, b):
         m, = a.shape
         _m, n = b.shape
+        if m == 0:
+            return np.zeros((n, ), a.dtype)
         out = np.empty((n, ), a.dtype)
         return np.dot(a, b, out)
 
@@ -480,6 +484,8 @@ def dot_2_mv(context, builder, sig, args):
     def dot_impl(a, b):
         m, n = a.shape
         _n, = b.shape
+        if n == 0:
+            return np.zeros((m, ), a.dtype)
         out = np.empty((m, ), a.dtype)
         return np.dot(a, b, out)
 
@@ -571,6 +577,7 @@ def dot_3_mv_check_args(a, b, out):
         raise ValueError("incompatible output array size for "
                          "np.dot(a, b, out) (matrix * vector)")
 
+
 def dot_3_vm(context, builder, sig, args):
     """
     np.dot(vector, matrix, out)
@@ -591,28 +598,38 @@ def dot_3_vm(context, builder, sig, args):
         # Asked for x * y, we will compute y.T * x
         mty = yty
         m_shapes = y_shapes
+        v_shape = x_shapes[0]
+        lda = m_shapes[1]
         do_trans = yty.layout == 'F'
         m_data, v_data = y.data, x.data
         check_args = dot_3_vm_check_args
-
-
     else:
         # Matrix * vector
         # We will compute x * y
         mty = xty
         m_shapes = x_shapes
+        v_shape = y_shapes[0]
+        lda = m_shapes[0]
         do_trans = xty.layout == 'C'
         m_data, v_data = x.data, y.data
         check_args = dot_3_mv_check_args
-
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
     for val in m_shapes:
         check_c_int(context, builder, val)
 
-    call_xxgemv(context, builder, do_trans, mty, m_shapes, m_data,
-                v_data, out.data)
+    zero = context.get_constant(types.intp, 0)
+    both_empty = builder.icmp_signed('==', v_shape, zero)
+    matrix_empty = builder.icmp_signed('==', lda, zero)
+    is_empty = builder.or_(both_empty, matrix_empty)
+    with builder.if_else(is_empty, likely=False) as (empty, nonempty):
+        with empty:
+            cgutils.memset(builder, out.data,
+                           builder.mul(out.itemsize, out.nitems), 0)
+        with nonempty:
+            call_xxgemv(context, builder, do_trans, mty, m_shapes, m_data,
+                        v_data, out.data)
 
     return impl_ret_borrowed(context, builder, sig.return_type,
                              out._getvalue())
@@ -650,6 +667,7 @@ def dot_3_mm(context, builder, sig, args):
 
     context.compile_internal(builder, check_args,
                              signature(types.none, *sig.args), args)
+
     check_c_int(context, builder, m)
     check_c_int(context, builder, k)
     check_c_int(context, builder, n)
@@ -658,38 +676,49 @@ def dot_3_mm(context, builder, sig, args):
     y_data = y.data
     out_data = out.data
 
-    # Check whether any of the operands is really a 1-d vector represented
-    # as a (1, k) or (k, 1) 2-d array.  In those cases, it is pessimal
-    # to call the generic matrix * matrix product BLAS function.
-    one = ir.Constant(intp_t, 1)
-    is_left_vec = builder.icmp_signed('==', m, one)
-    is_right_vec = builder.icmp_signed('==', n, one)
+    # If eliminated dimension is zero, set all entries to zero and return
+    zero = context.get_constant(types.intp, 0)
+    both_empty = builder.icmp_signed('==', k, zero)
+    x_empty = builder.icmp_signed('==', m, zero)
+    y_empty = builder.icmp_signed('==', n, zero)
+    is_empty = builder.or_(both_empty, builder.or_(x_empty, y_empty))
+    with builder.if_else(is_empty, likely=False) as (empty, nonempty):
+        with empty:
+            cgutils.memset(builder, out.data,
+                           builder.mul(out.itemsize, out.nitems), 0)
+        with nonempty:
+            # Check if any of the operands is really a 1-d vector represented
+            # as a (1, k) or (k, 1) 2-d array.  In those cases, it is pessimal
+            # to call the generic matrix * matrix product BLAS function.
+            one = context.get_constant(types.intp, 1)
+            is_left_vec = builder.icmp_signed('==', m, one)
+            is_right_vec = builder.icmp_signed('==', n, one)
 
-    with builder.if_else(is_right_vec) as (r_vec, r_mat):
-        with r_vec:
-            with builder.if_else(is_left_vec) as (v_v, m_v):
-                with v_v:
-                    # V * V
-                    call_xxdot(context, builder, False, dtype,
-                               k, x_data, y_data, out_data)
-                with m_v:
-                    # M * V
-                    do_trans = xty.layout == outty.layout
-                    call_xxgemv(context, builder, do_trans,
-                                xty, x_shapes, x_data, y_data, out_data)
-        with r_mat:
-            with builder.if_else(is_left_vec) as (v_m, m_m):
-                with v_m:
-                    # V * M
-                    do_trans = yty.layout != outty.layout
-                    call_xxgemv(context, builder, do_trans,
-                                yty, y_shapes, y_data, x_data, out_data)
-                with m_m:
-                    # M * M
-                    call_xxgemm(context, builder,
-                                xty, x_shapes, x_data,
-                                yty, y_shapes, y_data,
-                                outty, out_shapes, out_data)
+            with builder.if_else(is_right_vec) as (r_vec, r_mat):
+                with r_vec:
+                    with builder.if_else(is_left_vec) as (v_v, m_v):
+                        with v_v:
+                            # V * V
+                            call_xxdot(context, builder, False, dtype,
+                                       k, x_data, y_data, out_data)
+                        with m_v:
+                            # M * V
+                            do_trans = xty.layout == outty.layout
+                            call_xxgemv(context, builder, do_trans,
+                                        xty, x_shapes, x_data, y_data, out_data)
+                with r_mat:
+                    with builder.if_else(is_left_vec) as (v_m, m_m):
+                        with v_m:
+                            # V * M
+                            do_trans = yty.layout != outty.layout
+                            call_xxgemv(context, builder, do_trans,
+                                        yty, y_shapes, y_data, x_data, out_data)
+                        with m_m:
+                            # M * M
+                            call_xxgemm(context, builder,
+                                        xty, x_shapes, x_data,
+                                        yty, y_shapes, y_data,
+                                        outty, out_shapes, out_data)
 
     return impl_ret_borrowed(context, builder, sig.return_type,
                              out._getvalue())
@@ -753,6 +782,38 @@ def _check_homogeneous_types(func_name, *types):
             raise TypingError(msg, highlighting=False)
 
 
+def _copy_to_fortran_order():
+    pass
+
+
+@overload(_copy_to_fortran_order)
+def ol_copy_to_fortran_order(a):
+    # This function copies the array 'a' into a new array with fortran order.
+    # This exists because the copy routines don't take order flags yet.
+    F_layout = a.layout == 'F'
+    A_layout = a.layout == 'A'
+    def impl(a):
+        if F_layout:
+            # it's F ordered at compile time, just copy
+            acpy = np.copy(a)
+        elif A_layout:
+            # decide based on runtime value
+            flag_f = a.flags.f_contiguous
+            if flag_f:
+                # it's already F ordered, so copy but in a round about way to
+                # ensure that the copy is also F ordered
+                acpy = np.copy(a.T).T
+            else:
+                # it's something else ordered, so let asfortranarray deal with
+                # copying and making it fortran ordered
+                acpy = np.asfortranarray(a)
+        else:
+            # it's C ordered at compile time, asfortranarray it.
+            acpy = np.asfortranarray(a)
+        return acpy
+    return impl
+
+
 @register_jitable
 def _inv_err_handler(r):
     if r != 0:
@@ -781,8 +842,6 @@ def inv_impl(a):
 
     kind = ord(get_blas_kind(a.dtype, "inv"))
 
-    F_layout = a.layout == 'F'
-
     def inv_impl(a):
         n = a.shape[-1]
         if a.shape[-2] != n:
@@ -791,10 +850,7 @@ def inv_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         if n == 0:
             return acpy
@@ -900,8 +956,6 @@ def eig_impl(a):
     JOBVL = ord('N')
     JOBVR = ord('V')
 
-    F_layout = a.layout == 'F'
-
     def real_eig_impl(a):
         """
         eig() implementation for real arrays.
@@ -913,10 +967,7 @@ def eig_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ldvl = 1
         ldvr = n
@@ -972,10 +1023,7 @@ def eig_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ldvl = 1
         ldvr = n
@@ -1023,8 +1071,6 @@ def eigvals_impl(a):
     JOBVL = ord('N')
     JOBVR = ord('N')
 
-    F_layout = a.layout == 'F'
-
     def real_eigvals_impl(a):
         """
         eigvals() implementation for real arrays.
@@ -1036,10 +1082,7 @@ def eigvals_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ldvl = 1
         ldvr = 1
@@ -1098,10 +1141,7 @@ def eigvals_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ldvl = 1
         ldvr = 1
@@ -1142,8 +1182,6 @@ def eigh_impl(a):
 
     _check_linalg_matrix(a, "eigh")
 
-    F_layout = a.layout == 'F'
-
     # convert typing floats to numpy floats for use in the impl
     w_type = getattr(a.dtype, "underlying_float", a.dtype)
     w_dtype = np_support.as_dtype(w_type)
@@ -1164,10 +1202,7 @@ def eigh_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         w = np.empty(n, dtype=w_dtype)
 
@@ -1196,8 +1231,6 @@ def eigvalsh_impl(a):
 
     _check_linalg_matrix(a, "eigvalsh")
 
-    F_layout = a.layout == 'F'
-
     # convert typing floats to numpy floats for use in the impl
     w_type = getattr(a.dtype, "underlying_float", a.dtype)
     w_dtype = np_support.as_dtype(w_type)
@@ -1218,10 +1251,7 @@ def eigvalsh_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         w = np.empty(n, dtype=w_dtype)
 
@@ -1250,8 +1280,6 @@ def svd_impl(a, full_matrices=1):
 
     _check_linalg_matrix(a, "svd")
 
-    F_layout = a.layout == 'F'
-
     # convert typing floats to numpy floats for use in the impl
     s_type = getattr(a.dtype, "underlying_float", a.dtype)
     s_dtype = np_support.as_dtype(s_type)
@@ -1272,10 +1300,7 @@ def svd_impl(a, full_matrices=1):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ldu = m
         minmn = min(m, n)
@@ -1332,8 +1357,6 @@ def qr_impl(a):
 
     kind = ord(get_blas_kind(a.dtype, "qr"))
 
-    F_layout = a.layout == 'F'
-
     def qr_impl(a):
         n = a.shape[-1]
         m = a.shape[-2]
@@ -1344,10 +1367,7 @@ def qr_impl(a):
         _check_finite_matrix(a)
 
         # copy A as it will be destroyed
-        if F_layout:
-            q = np.copy(a)
-        else:
-            q = np.asfortranarray(a)
+        q = _copy_to_fortran_order(a)
 
         lda = m
 
@@ -1569,9 +1589,6 @@ def lstsq_impl(a, b, rcond=-1.0):
     # B can be 1D or 2D.
     _check_linalg_1_or_2d_matrix(b, "lstsq")
 
-    a_F_layout = a.layout == 'F'
-    b_F_layout = b.layout == 'F'
-
     _check_homogeneous_types("lstsq", a, b)
 
     np_dt = np_support.as_dtype(a.dtype)
@@ -1611,10 +1628,7 @@ def lstsq_impl(a, b, rcond=-1.0):
         maxmn = max(m, n)
 
         # a is destroyed on exit, copy it
-        if a_F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         # b is overwritten on exit with the solution, copy allocate
         bcpy = np.empty((nrhs, maxmn), dtype=np_dt).T
@@ -1688,9 +1702,6 @@ def solve_impl(a, b):
     _check_linalg_matrix(a, "solve")
     _check_linalg_1_or_2d_matrix(b, "solve")
 
-    a_F_layout = a.layout == 'F'
-    b_F_layout = b.layout == 'F'
-
     _check_homogeneous_types("solve", a, b)
 
     np_dt = np_support.as_dtype(a.dtype)
@@ -1713,10 +1724,7 @@ def solve_impl(a, b):
         _system_check_dimensionally_valid(a, b)
 
         # a is destroyed on exit, copy it
-        if a_F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         # b is overwritten on exit with the solution, copy allocate
         bcpy = np.empty((nrhs, n), dtype=np_dt).T
@@ -1761,8 +1769,6 @@ def pinv_impl(a, rcond=1.e-15):
     numba_ez_gesdd = _LAPACK().numba_ez_gesdd(a.dtype)
 
     numba_xxgemm = _BLAS().numba_xxgemm(a.dtype)
-
-    F_layout = a.layout == 'F'
 
     kind = ord(get_blas_kind(a.dtype, "pinv"))
     JOB = ord('S')
@@ -1820,10 +1826,7 @@ def pinv_impl(a, rcond=1.e-15):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         if m == 0 or n == 0:
             return acpy.T.ravel().reshape(a.shape).T
@@ -1963,8 +1966,6 @@ def slogdet_impl(a):
 
     kind = ord(get_blas_kind(a.dtype, "slogdet"))
 
-    F_layout = a.layout == 'F'
-
     diag_walker = _get_slogdet_diag_walker(a)
 
     ONE = a.dtype(1)
@@ -1981,10 +1982,7 @@ def slogdet_impl(a):
 
         _check_finite_matrix(a)
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         ipiv = np.empty(n, dtype=F_INT_nptype)
 
@@ -2059,8 +2057,6 @@ def _compute_singular_values_impl(a):
     u = np.empty((1, 1), dtype=np_dtype)
     vt = np.empty((1, 1), dtype=np_dtype)
 
-    F_layout = a.layout == 'F'
-
     def sv_function(a):
         """
         Computes singular values.
@@ -2082,10 +2078,7 @@ def _compute_singular_values_impl(a):
         ucol = 1
         ldvt = 1
 
-        if F_layout:
-            acpy = np.copy(a)
-        else:
-            acpy = np.asfortranarray(a)
+        acpy = _copy_to_fortran_order(a)
 
         # u and vt are not referenced however need to be
         # allocated (as done above) for MKL as it

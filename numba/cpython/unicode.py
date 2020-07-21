@@ -2342,6 +2342,29 @@ def ol_chr(i):
             return _PyUnicode_FromOrdinal(i)
         return impl
 
+
+@overload(str)
+def integer_str(n):
+    if isinstance(n, types.Integer):
+        ten = n(10)
+
+        def impl(n):
+            flag = False
+            if n < 0:
+                n = -n
+                flag = True
+            if n == 0:
+                return '0'
+            l = []
+            while n > 0:
+                c = chr(ord('0') + (n % ten))
+                n = n // ten
+                l.append(c)
+            if flag:
+                l.append('-')
+            return ''.join(l[::-1])
+        return impl
+
 # ------------------------------------------------------------------------------
 # iteration
 # ------------------------------------------------------------------------------

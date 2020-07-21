@@ -440,7 +440,15 @@ class Literal(Type):
         if self._literal_type_cache is None:
             from numba.core import typing
             ctx = typing.Context()
-            res = ctx.resolve_value_type(self.literal_value)
+            try:
+                res = ctx.resolve_value_type(self.literal_value)
+            except ValueError:
+                # Not all literal types have a literal_value that can be
+                # resolved to a type, for example, LiteralStrKeyDict has a
+                # literal_value that is a python dict for which there's no
+                # `typeof` support.
+                msg = "{} has no attribute 'literal_type'".format(self)
+                raise AttributeError(msg)
             self._literal_type_cache = res
 
         return self._literal_type_cache
@@ -456,3 +464,33 @@ class TypeRef(Dummy):
         self.instance_type = instance_type
         super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
 
+
+class InitialValue(object):
+    """
+    Used as a mixin for a type will potentially have an initial value that will
+    be carried in the .initial_value attribute.
+    """
+    def __init__(self, initial_value):
+        self._initial_value = initial_value
+
+    @property
+    def initial_value(self):
+        return self._initial_value
+
+
+class Poison(Type):
+    """
+    This is the "bottom" type in the type system. It won't unify and it's
+    unliteral version is Poison of itself. It's advisable for debugging purposes
+    to call the constructor with the type that's being poisoned (for whatever
+    reason) but this isn't strictly required.
+    """
+    def __init__(self, ty):
+        self.ty = ty
+        super(Poison, self).__init__(name="Poison<%s>" % ty)
+
+    def __unliteral__(self):
+        return Poison(self)
+
+    def unify(self, typingctx, other):
+        return None
