@@ -508,16 +508,16 @@ def llvm_to_ptx(llvmir, **opts):
                                     PTR_OR_VAL='ptr')),
         ('declare float @___numba_atomic_float_nanmax(float*, float)',
          ir_numba_atomic_max.format(T='float', Ti='i32', NAN='nan', OP='ult',
-                                    PTR_OR_VAL='ptr')),
+                                    PTR_OR_VAL='')),
         ('declare double @___numba_atomic_double_nanmax(double*, double)',
          ir_numba_atomic_max.format(T='double', Ti='i64', NAN='nan', OP='ult',
-                                    PTR_OR_VAL='ptr')),
+                                    PTR_OR_VAL='')),
         ('declare float @___numba_atomic_float_nanmin(float*, float)',
          ir_numba_atomic_min.format(T='float', Ti='i32', NAN='nan', OP='ugt',
-                                    PTR_OR_VAL='ptr')),
+                                    PTR_OR_VAL='')),
         ('declare double @___numba_atomic_double_nanmin(double*, double)',
          ir_numba_atomic_min.format(T='double', Ti='i64', NAN='nan', OP='ugt',
-                                    PTR_OR_VAL='ptr')),
+                                    PTR_OR_VAL='')),
         ('immarg', '')
     ]
 
