@@ -116,7 +116,6 @@ exclude =
     numba/cuda/tests/cudapy/test_ipc.py
     numba/cuda/tests/cudapy/test_vectorize.py
     numba/cuda/tests/cudapy/test_smart_array.py
-    numba/cuda/tests/cudapy/test_atomics.py
     numba/cuda/tests/cudapy/test_py2_div_issue.py
     numba/cuda/tests/cudapy/test_freevar.py
     numba/cuda/tests/cudapy/test_const_string.py
