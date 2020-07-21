@@ -285,6 +285,28 @@ class FunctionTemplate(ABC):
             key = key.im_func
         return key
 
+    @classmethod
+    def get_source_code_info(cls, impl):
+        """
+        Gets the source information about function impl.
+        Returns:
+
+        code - # str: source code as a string
+        firstlineno - # int: the first line number of the function impl
+        path - #str: the path to file containing impl
+
+        if any of the above are not available something generic is returned
+        """
+        try:
+            code, firstlineno = inspect.getsourcelines(impl)
+        except OSError: # missing source, probably a string
+            code = "None available (built from string?)"
+            firstlineno = 0
+        path = inspect.getsourcefile(impl)
+        if path is None:
+            path = "<unknown> (built from string?)"
+        return code, firstlineno, path
+
     @abstractmethod
     def get_template_info(self):
         """
@@ -346,8 +368,8 @@ class AbstractTemplate(FunctionTemplate):
     def get_template_info(self):
         impl = getattr(self, "generic")
         basepath = os.path.dirname(os.path.dirname(numba.__file__))
-        code, firstlineno = inspect.getsourcelines(impl)
-        path = inspect.getsourcefile(impl)
+
+        code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
             'kind': "overload",
@@ -421,8 +443,7 @@ class CallableTemplate(FunctionTemplate):
     def get_template_info(self):
         impl = getattr(self, "generic")
         basepath = os.path.dirname(os.path.dirname(numba.__file__))
-        code, firstlineno = inspect.getsourcelines(impl)
-        path = inspect.getsourcefile(impl)
+        code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
             'kind': "overload",
@@ -730,7 +751,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
     @classmethod
     def get_source_info(cls):
-        """Return a dictionary with information about the source code  of the
+        """Return a dictionary with information about the source code of the
         implementation.
 
         Returns
@@ -751,8 +772,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         """
         basepath = os.path.dirname(os.path.dirname(numba.__file__))
         impl = cls._overload_func
-        code, firstlineno = inspect.getsourcelines(impl)
-        path = inspect.getsourcefile(impl)
+        code, firstlineno, path = cls.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
             'kind': "overload",
@@ -767,8 +787,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
     def get_template_info(self):
         basepath = os.path.dirname(os.path.dirname(numba.__file__))
         impl = self._overload_func
-        code, firstlineno = inspect.getsourcelines(impl)
-        path = inspect.getsourcefile(impl)
+        code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
             'kind': "overload",
@@ -836,8 +855,7 @@ class _IntrinsicTemplate(AbstractTemplate):
     def get_template_info(self):
         basepath = os.path.dirname(os.path.dirname(numba.__file__))
         impl = self._definition_func
-        code, firstlineno = inspect.getsourcelines(impl)
-        path = inspect.getsourcefile(impl)
+        code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
             'kind': "intrinsic",
