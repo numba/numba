@@ -850,68 +850,82 @@ void traceback_add_loc(PyObject *loc) {
 }
 
 static
-int process_packed_exc(PyObject *exc_packed) {
-    PyObject *exc = NULL, *type = NULL, *value = NULL, *loc = NULL;
-
-    /* Unpack a (class/inst/tuple, arguments, location) tuple. */
-    if (!PyArg_ParseTuple(exc_packed, "OOO", &exc, &value, &loc)) {
-        traceback_add_loc(loc);
+int reraise_exc_is_none() {
+    /* Reraise */
+    PyThreadState *tstate = PyThreadState_GET();
+    PyObject *tb, *type, *value;
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
+    _PyErr_StackItem *tstate_exc = tstate->exc_info;
+#else
+    PyThreadState *tstate_exc = tstate;
+#endif
+    type = tstate_exc->exc_type;
+    value = tstate_exc->exc_value;
+    tb = tstate_exc->exc_traceback;
+    if (type == Py_None) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "No active exception to reraise");
         return 0;
     }
+    /* incref needed because PyErr_Restore DOES NOT */
+    Py_XINCREF(type);
+    Py_XINCREF(value);
+    Py_XINCREF(tb);
+    PyErr_Restore(type, value, tb);
+    return 1;
+}
 
-    if (exc == Py_None) {
-        /* Reraise */
-        PyThreadState *tstate = PyThreadState_GET();
-        PyObject *tb;
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
-        _PyErr_StackItem *tstate_exc = tstate->exc_info;
-#else
-        PyThreadState *tstate_exc = tstate;
-#endif
-        type = tstate_exc->exc_type;
-        value = tstate_exc->exc_value;
-        tb = tstate_exc->exc_traceback;
-        if (type == Py_None) {
-            PyErr_SetString(PyExc_RuntimeError,
-                            "No active exception to reraise");
-            return 0;
-        }
-        Py_XINCREF(type);
-        Py_XINCREF(value);
-        Py_XINCREF(tb);
-        PyErr_Restore(type, value, tb);
-        return 1;
+/*
+ * PyExceptionClass_Check(exc) must be True
+ * value can be NULL
+ */
+static
+int process_exception_class(PyObject *exc, PyObject *value) {
+    PyObject *type;
+    /* It is a class, type used here just as a tmp var */
+    type = PyObject_CallObject(exc, value);
+    if (type == NULL){
+        return 0;
     }
-
-    /* the unpacked exc should be a class, value and loc are set from above
-        */
-    if (PyExceptionClass_Check(exc)) {
-        /* It is a class, type used here just as a tmp var */
-        type = PyObject_CallObject(exc, value);
-        if (type == NULL){
-            traceback_add_loc(loc);
-            return 0;
-        }
-        if (!PyExceptionInstance_Check(type)) {
-            PyErr_SetString(PyExc_TypeError,
-                            "exceptions must derive from BaseException");
-            traceback_add_loc(loc);
-            Py_DECREF(type);
-            return 0;
-        }
-        /* all ok, set type to the exc */
+    if (!PyExceptionInstance_Check(type)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "exceptions must derive from BaseException");
         Py_DECREF(type);
-        type = exc;
-        PyErr_SetObject(type, value);
-        traceback_add_loc(loc);
-        return 1;
-    } else {
-        /* this should be unreachable as typing should catch it */
+        return 0;
+    }
+    /* all ok, set type to the exc */
+    Py_DECREF(type);
+    type = exc;
+    PyErr_SetObject(type, value);
+    return 1;
+}
+
+/*
+ * exc cannot be NULL
+ * value can be NULL
+ * loc can be NULL
+ */
+static
+int process_raise(PyObject *exc, PyObject *value) {
+    /* exc is None */
+    if (exc == Py_None) {
+        return reraise_exc_is_none();
+    }
+    /* exc should be an exception class */
+    else if (PyExceptionClass_Check(exc)) {
+        return process_exception_class(exc, value);
+    }
+    /* exc is an instance of an Exception */
+    else if (PyExceptionInstance_Check(exc)) {
+        PyObject *type = PyExceptionInstance_Class(exc);
+        PyErr_SetObject(type, exc);
+        return 0;
+    }
+    else {
         /* Not something you can raise.  You get an exception
         anyway, just not what you specified :-) */
         PyErr_SetString(PyExc_TypeError,
                         "exceptions must derive from BaseException");
-        traceback_add_loc(loc);
         return 0;
     }
 }
@@ -921,8 +935,8 @@ int process_packed_exc(PyObject *exc_packed) {
 NUMBA_EXPORT_FUNC(int)
 numba_do_raise(PyObject *exc_packed)
 {
-    PyObject *exc = NULL, *type = NULL, *value = NULL;
     int status;
+    PyObject *exc = NULL, *value = NULL, *loc = NULL;
 
     /* We support the following forms of raise:
        raise
@@ -931,82 +945,21 @@ numba_do_raise(PyObject *exc_packed)
 
     /* could be a tuple from npm (some exc like thing, args, location) */
     if (PyTuple_CheckExact(exc_packed)) {
-        status = process_packed_exc(exc_packed);
-        Py_DECREF(exc_packed);
-        return status;
-    } else {  /* could be a reraise or an exception from objmode */
+        /* Unpack a (class/inst/tuple, arguments, location) tuple. */
+        if (!PyArg_ParseTuple(exc_packed, "OOO", &exc, &value, &loc)) {
+            traceback_add_loc(loc);
+            return 0;
+        }
+    } else {
+        /* could be a reraise or an exception from objmode */
         exc = exc_packed;
-        if (exc == Py_None) {
-            /* Reraise */
-            PyThreadState *tstate = PyThreadState_GET();
-            PyObject *tb;
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
-            _PyErr_StackItem *tstate_exc = tstate->exc_info;
-#else
-            PyThreadState *tstate_exc = tstate;
-#endif
-            Py_DECREF(exc);
-            type = tstate_exc->exc_type;
-            value = tstate_exc->exc_value;
-            tb = tstate_exc->exc_traceback;
-            if (type == Py_None) {
-                PyErr_SetString(PyExc_RuntimeError,
-                                "No active exception to reraise");
-                return 0;
-            }
-            Py_XINCREF(type);
-            Py_XINCREF(value);
-            Py_XINCREF(tb);
-            PyErr_Restore(type, value, tb);
-            return 1;
-        }
-
-        /* exc should be an exception class or an instance of an exception */
-        if (PyExceptionClass_Check(exc)) {
-            type = exc;
-            value = PyObject_CallObject(exc, value);
-            if (value == NULL){
-
-                Py_XDECREF(value);
-                Py_XDECREF(type);
-                return 0;
-            }
-            if (!PyExceptionInstance_Check(value)) {
-                PyErr_SetString(PyExc_TypeError,
-                                "exceptions must derive from BaseException");
-
-                Py_XDECREF(value);
-                Py_XDECREF(type);
-                return 0;
-            }
-
-            Py_INCREF(type);
-            PyErr_SetObject(type, value);
-            Py_XDECREF(value);
-            Py_XDECREF(type);
-            return 1;
-        }
-        else if (PyExceptionInstance_Check(exc)) {
-            value = exc;
-            type = PyExceptionInstance_Class(exc);
-            Py_INCREF(type);
-            PyErr_SetObject(type, value);
-            Py_XDECREF(value);
-            Py_XDECREF(type);
-            return 0;
-        }
-        else {
-            /* Not something you can raise.  You get an exception
-            anyway, just not what you specified :-) */
-            Py_DECREF(exc); // exc points to exc_packed
-            PyErr_SetString(PyExc_TypeError,
-                            "exceptions must derive from BaseException");
-
-            Py_XDECREF(value);
-            Py_XDECREF(type);
-            return 0;
-        }
+        /* branch exit with value = NULL and loc = NULL */
     }
+    /* value is either NULL or borrowed */
+    status = process_raise(exc, value);
+    traceback_add_loc(loc);
+    Py_DECREF(exc_packed);
+    return status;
 }
 
 
