@@ -738,6 +738,18 @@ def find_setitems_body(setitems, itemsset, loop_body, typemap):
     for label, block in loop_body.items():
         find_setitems_block(setitems, itemsset, block, typemap)
 
+def empty_container_allocator_hoist(inst, dep_on_param, call_table, hoisted,
+                                    not_hoisted, typemap, stored_arrays):
+    if (isinstance(inst, ir.Assign) and
+        isinstance(inst.value, ir.Expr) and
+        inst.value.op == 'call' and
+        inst.value.func.name in call_table):
+        call_list = call_table[inst.value.func.name]
+        if call_list == ['empty', np]:
+            return _hoist_internal(inst, dep_on_param, call_table, hoisted,
+                                   not_hoisted, typemap, stored_arrays)
+    return False
+
 def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = copy.copy(parfor_params)
     hoisted = []
@@ -759,7 +771,10 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     for label, block in loop_body.items():
         new_block = []
         for inst in block.body:
-            if isinstance(inst, ir.Assign) and inst.target.name in def_once:
+            if empty_container_allocator_hoist(inst, dep_on_param, call_table,
+                                   hoisted, not_hoisted, typemap, itemsset):
+                continue
+            elif isinstance(inst, ir.Assign) and inst.target.name in def_once:
                 if _hoist_internal(inst, dep_on_param, call_table,
                                    hoisted, not_hoisted, typemap, itemsset):
                     # don't add this instruction to the block since it is
@@ -771,11 +786,14 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     print("parfor")
                     inst.dump()
                 for ib_inst in inst.init_block.body:
-                    if (isinstance(ib_inst, ir.Assign) and
+                    if empty_container_allocator_hoist(ib_inst, dep_on_param,
+                        call_table, hoisted, not_hoisted, typemap, itemsset):
+                        continue
+                    elif (isinstance(ib_inst, ir.Assign) and
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
                                            hoisted, not_hoisted, typemap, itemsset):
-                            # don't add this instuction to the block since it is hoisted
+                            # don't add this instruction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)
                 inst.init_block.body = new_init_block
