@@ -76,14 +76,6 @@ def is_building():
     return True
 
 
-def is_building_wheel():
-    if len(sys.argv) < 2:
-        # No command is given.
-        return False
-
-    return 'bdist_wheel' in sys.argv[1:]
-
-
 def get_ext_modules():
     """
     Return a list of Extension instances for the setup() call.
@@ -238,9 +230,8 @@ def get_ext_modules():
     else:
         print("TBB not found")
 
-    # Disable OpenMP if we are building a wheel or
-    # forced by user with NUMBA_NO_OPENMP=1
-    if is_building_wheel() or os.getenv('NUMBA_NO_OPENMP'):
+    # Disable OpenMP if forced by user with NUMBA_NO_OPENMP=1
+    if os.getenv('NUMBA_NO_OPENMP'):
         print("OpenMP disabled")
     elif have_openmp:
         print("Using OpenMP from:", have_openmp)
