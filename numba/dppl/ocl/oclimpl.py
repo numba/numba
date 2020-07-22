@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 import operator
 from functools import reduce
 
+from llvmlite import ir
 from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
@@ -189,7 +190,29 @@ def atomic_add_tuple(context, builder, sig, args):
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
 
-    return builder.atomic_rmw("add", ptr, val, ordering='monotonic')
+    ll_intc = ir.IntType(32)
+    ll_intc_p = ll_intc.as_pointer()
+    ll_intc_p.addrspace = target.SPIR_GLOBAL_ADDRSPACE
+
+    mod = builder.module
+    if sig.return_type == types.void:
+        llretty = lc.Type.void()
+    else:
+        llretty = context.get_value_type(sig.return_type)
+    llargs = [ll_intc_p, context.get_value_type(sig.args[2])]
+    fnty = ir.FunctionType(llretty, llargs)
+    fn = mod.get_or_insert_function(fnty, "atomic_add_i32")
+    fn.calling_convention = target.CC_SPIR_FUNC
+
+    glbl_ptr = context.addrspacecast(builder, ptr,
+                                    target.SPIR_GLOBAL_ADDRSPACE)
+
+    res = builder.call(fn, [glbl_ptr, val])
+
+
+    return res
+
+    #return builder.atomic_rmw("add", ptr, val, ordering='monotonic')
 
 
 @lower(stubs.atomic.sub, types.Array, types.intp, types.Any)
