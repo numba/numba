@@ -527,12 +527,19 @@ class TestCudaAtomics(CUDATestCase):
 
         self._test_atomic_returns_old(kernel, 10)
 
-    def test_atomic_max_returns_old(self):
+    def test_atomic_max_returns_no_replace(self):
         @cuda.jit
         def kernel(x):
             x[1] = cuda.atomic.max(x, 0, 1)
 
         self._test_atomic_returns_old(kernel, 10)
+
+    def test_atomic_max_returns_old_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.max(x, 0, 10)
+
+        self._test_atomic_returns_old(kernel, 1)
 
     def test_atomic_max_returns_old_nan_in_array(self):
         @cuda.jit
@@ -548,12 +555,19 @@ class TestCudaAtomics(CUDATestCase):
 
         self._test_atomic_returns_old(kernel, 10)
 
-    def test_atomic_min_returns_old(self):
+    def test_atomic_min_returns_old_no_replace(self):
         @cuda.jit
         def kernel(x):
             x[1] = cuda.atomic.min(x, 0, 11)
 
         self._test_atomic_returns_old(kernel, 10)
+
+    def test_atomic_min_returns_old_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.min(x, 0, 10)
+
+        self._test_atomic_returns_old(kernel, 11)
 
     def test_atomic_min_returns_old_nan_in_array(self):
         @cuda.jit
@@ -565,9 +579,9 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_min_returns_old_nan_val(self):
         @cuda.jit
         def kernel(x):
-            x[1] = cuda.atomic.min(x, 0, 11)
+            x[1] = cuda.atomic.min(x, 0, np.nan)
 
-        self._test_atomic_returns_old(kernel, np.nan)
+        self._test_atomic_returns_old(kernel, 11)
 
     # Tests for atomic nanmin/nanmax
 
@@ -688,12 +702,19 @@ class TestCudaAtomics(CUDATestCase):
         else:
             self.assertEqual(x[1], initial)
 
-    def test_atomic_nanmax_returns_old(self):
+    def test_atomic_nanmax_returns_old_no_replace(self):
         @cuda.jit
         def kernel(x):
             x[1] = cuda.atomic.nanmax(x, 0, 1)
 
         self._test_atomic_nan_returns_old(kernel, 10)
+
+    def test_atomic_nanmax_returns_old_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.nanmax(x, 0, 10)
+
+        self._test_atomic_nan_returns_old(kernel, 1)
 
     def test_atomic_nanmax_returns_old_nan_in_array(self):
         @cuda.jit
@@ -709,12 +730,19 @@ class TestCudaAtomics(CUDATestCase):
 
         self._test_atomic_nan_returns_old(kernel, 10)
 
-    def test_atomic_nanmin_returns_old(self):
+    def test_atomic_nanmin_returns_old_no_replace(self):
         @cuda.jit
         def kernel(x):
             x[1] = cuda.atomic.nanmin(x, 0, 11)
 
         self._test_atomic_nan_returns_old(kernel, 10)
+
+    def test_atomic_nanmin_returns_old_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.nanmin(x, 0, 10)
+
+        self._test_atomic_nan_returns_old(kernel, 11)
 
     def test_atomic_nanmin_returns_old_nan_in_array(self):
         @cuda.jit
