@@ -62,6 +62,11 @@ class CmdLine(object):
         if config.SAVE_DPPL_IR_FILES == 0:
             os.unlink(ipath + '.bc')
 
+    def link(self, opath, binaries):
+        params = ["spirv-link","--allow-partial-linkage","-o", opath]
+        params.extend(binaries)
+
+        check_call(params)
 
 class Module(object):
     def __init__(self):
@@ -116,6 +121,10 @@ class Module(object):
         spirv_path = self._track_temp_file("generated-spirv")
         self._cmd.generate(ipath=self._llvmfile, opath=spirv_path)
 
+        linked_spirv_path = self._track_temp_file("linked-spirv")
+        from .ocl.atomics import atomic_spirv_path
+        self._cmd.link(linked_spirv_path, [spirv_path, atomic_spirv_path])
+
         # Validate the SPIR-V code
         if config.SPIRV_VAL == 1:
             try:
@@ -138,7 +147,8 @@ class Module(object):
                         print("".center(80, "="))
 
         # Read and return final SPIR-V (not optimized!)
-        with open(spirv_path, 'rb') as fin:
+        #with open(spirv_path, 'rb') as fin:
+        with open(linked_spirv_path, 'rb') as fin:
             spirv = fin.read()
 
         self._finalized = True
