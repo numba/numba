@@ -26,7 +26,7 @@ def typeof(val, purpose=Purpose.argument):
     """
     # Note the behaviour for Purpose.argument must match _typeof.c.
     c = _TypeofContext(purpose)
-    ty = typeof_impl(val, c)
+    ty = typeof_impl(val, None)
     if ty is None:
         msg = _termcolor.errmsg(
             "cannot determine Numba type of %r") % (type(val),)
