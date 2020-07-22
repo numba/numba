@@ -14,7 +14,7 @@ from llvmlite.llvmpy.core import Constant
 
 import numpy as np
 
-from numba import pndindex
+from numba import pndindex, literal_unroll
 from numba.core import types, utils, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, carray, farray, is_contiguous,
                                     is_fortran)
@@ -4966,17 +4966,19 @@ def np_flip(a):
 
 @overload(np.array_split)
 def np_array_split(ary, indices_or_sections, axis=0):
-    # If this statement is put at the top of the file, numba fails to import
     if isinstance(indices_or_sections, types.Integer):
-
         def impl(ary, indices_or_sections, axis=0):
             l, rem = divmod(ary.shape[axis], indices_or_sections)
             return np.array_split(
                 ary, np.arange(l + rem, ary.shape[axis], l), axis=axis
             )
 
-    else:
+        return impl
 
+    elif (
+        isinstance(indices_or_sections, types.IterableType)
+        and isinstance(indices_or_sections.iterator_type.yield_type, types.Integer)
+    ):
         def impl(ary, indices_or_sections, axis=0):
             slice_tup = build_full_slice_tuple(ary.ndim)
             out = list()
@@ -4988,7 +4990,24 @@ def np_array_split(ary, indices_or_sections, axis=0):
             out.append(ary[tuple_setitem(slice_tup, axis, slice(cur, None))])
             return out
 
-    return impl
+        return impl
+
+    elif  (
+        isinstance(indices_or_sections, types.Tuple)
+        and all(isinstance(t, types.Integer) for t in indices_or_sections.types)
+    ):
+        def impl(ary, indices_or_sections, axis=0):
+            slice_tup = build_full_slice_tuple(ary.ndim)
+            out = list()
+            prev = 0
+            for cur in literal_unroll(indices_or_sections):
+                idx = tuple_setitem(slice_tup, axis, slice(prev, cur))
+                out.append(ary[idx])
+                prev = cur
+            out.append(ary[tuple_setitem(slice_tup, axis, slice(cur, None))])
+            return out
+
+        return impl
 
 
 @overload(np.split)
@@ -5005,10 +5024,12 @@ def np_split(ary, indices_or_sections, axis=0):
             return np.array_split(
                 ary, np.arange(l, ary.shape[axis], l), axis=axis
             )
+
+        return impl
+
     else:
-        def impl(ary, indices_or_sections, axis=0):
-            return np.array_split(ary, indices_or_sections, axis=axis)
-    return impl
+        return np_array_split(ary, indices_or_sections, axis=axis)
+
 
 
 # -----------------------------------------------------------------------------
