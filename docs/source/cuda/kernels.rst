@@ -73,17 +73,15 @@ We notice two steps here:
   (here ``increment_by_one``) and indexing it with a tuple of integers.
 
 * Running the kernel, by passing it the input array (and any separate
-  output arrays if necessary). By default, running the kernel is asynchronous:
-  the function returns immediately. Only if the data that is accessed by the
-  kernel is synchronized back, either manually or implicitly when passing an
-  input array that resides in host memory, the kernel will be synchronous.
-  Use :ref:`cuda.synchronize() <cuda-device-memory>` if you want to force synchronous kernels
-  regardless of this condition.  
+  output arrays if necessary). Kernels run asynchronously: launches queue their
+  execution on the device and then return immediately.  You can use 
+  :ref:`cuda.synchronize() <cuda-host-context-management>` to wait for all previous
+  kernel launches to finish executing.
   
-  Note: if you manually manage device memory (eg. use :ref:`cuda.to_device(h_arr) <cuda-device-memory>`
-  and :ref:`d_arr.copy_to_host() <cuda-device-memory>` ) the kernel function itself will be
-  asynchronous, but the act of copying the data to or from the device will
-  be synchronous.
+.. note:: Passing an array that resides in host memory will implicitly cause a
+   copy back to the host, which will be synchronous. In this case, the kernel
+   launch will not return until the data is copied back, and therefore appears
+   to execute synchronously.
 
 Choosing the block size
 -----------------------
