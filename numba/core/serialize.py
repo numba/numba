@@ -138,12 +138,13 @@ _unpickled_memo = {}
 
 
 def _numba_unpickle(address, bytedata, hashed):
-    """Used by `numba_unpickle`.
+    """Used by `numba_unpickle` from _helperlib.c
 
     Parameters
     ----------
     address : int
-    bytedata: bytes
+    bytedata : bytes
+    hashed : bytes
 
     Returns
     -------
