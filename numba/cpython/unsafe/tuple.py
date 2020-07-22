@@ -35,19 +35,7 @@ def tuple_setitem(typingctx, tup, idx, val):
 
 @intrinsic
 def build_full_slice_tuple(tyctx, sz):
-    """Creates a sz-tuple of full slices.
-
-    Usage
-    -----
-
-    To slice an array of n-dimensions at dim n - 1:
-
-    >>> @jit
-    ... def penultimate_slice(a, idx):
-    ...     n = a.ndim
-    ...     t = build_full_slice_tuple(n)
-    ...     return a[tuple_setitem(t, n-1, idx)]
-    """
+    """Creates a sz-tuple of full slices."""
     size = int(sz.literal_value)
     tuple_type = types.UniTuple(dtype=types.slice2_type, count=size)
     sig = tuple_type(sz)
