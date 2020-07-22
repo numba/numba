@@ -1,6 +1,7 @@
 from collections import namedtuple
 import contextlib
 import pickle
+import hashlib
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
@@ -1298,11 +1299,13 @@ class PythonAPI(object):
         Unserialize some data.  *structptr* should be a pointer to
         a {i8* data, i32 length} structure.
         """
-        fnty = Type.function(self.pyobj, (self.voidptr, ir.IntType(32)))
+        fnty = Type.function(self.pyobj,
+                             (self.voidptr, ir.IntType(32), self.voidptr))
         fn = self._get_function(fnty, name="numba_unpickle")
         ptr = self.builder.extract_value(self.builder.load(structptr), 0)
         n = self.builder.extract_value(self.builder.load(structptr), 1)
-        return self.builder.call(fn, (ptr, n))
+        hashed = self.builder.extract_value(self.builder.load(structptr), 2)
+        return self.builder.call(fn, (ptr, n, hashed))
 
     def serialize_uncached(self, obj):
         """
@@ -1314,11 +1317,19 @@ class PythonAPI(object):
         assert len(data) < 2**31
         name = ".const.pickledata.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
         bdata = cgutils.make_bytearray(data)
+        # Make SHA1 hash on the pickled content
+        # NOTE: update buffer size in numba_unpickle() when changing the
+        #       hash algorithm.
+        hashed = cgutils.make_bytearray(hashlib.sha1(data).digest())
         arr = self.context.insert_unique_const(self.module, name, bdata)
+        hasharr = self.context.insert_unique_const(
+            self.module, f"{name}.sha1", hashed,
+        )
         # Then populate the structure constant
         struct = ir.Constant.literal_struct([
             arr.bitcast(self.voidptr),
             ir.Constant(ir.IntType(32), arr.type.pointee.count),
+            hasharr.bitcast(self.voidptr),
             ])
         return struct
 
