@@ -990,9 +990,9 @@ raise_error:
 }
 
 NUMBA_EXPORT_FUNC(PyObject *)
-numba_unpickle(const char *data, int n)
+numba_unpickle(const char *data, int n, const char *hashed)
 {
-    PyObject *buf, *obj, *addr;
+    PyObject *buf, *obj, *addr, *hashedbuf;
     static PyObject *loads;
 
     /* Caching the pickle.loads function shaves a couple µs here. */
@@ -1010,10 +1010,16 @@ numba_unpickle(const char *data, int n)
     buf = PyBytes_FromStringAndSize(data, n);
     if (buf == NULL)
         return NULL;
+    /* SHA1 produces 160 bit or 20 bytes */
+    hashedbuf = PyBytes_FromStringAndSize(hashed, 20);
 
-    addr = PyLong_FromVoidPtr(data);
-    obj = PyObject_CallFunctionObjArgs(loads, addr, buf, NULL);
+    addr = PyLong_FromVoidPtr((void*)data);
+    obj = PyObject_CallFunctionObjArgs(loads, addr, buf, hashedbuf, NULL);
+    if (obj == NULL)
+        return NULL;
     Py_DECREF(buf);
+    Py_DECREF(hashedbuf);
+    Py_DECREF(addr);
     return obj;
 }
 

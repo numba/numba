@@ -137,7 +137,7 @@ def _rebuild_code(marshal_version, bytecode_magic, marshalled):
 _unpickled_memo = {}
 
 
-def _numba_unpickle(address, bytedata):
+def _numba_unpickle(address, bytedata, hashed):
     """Used by `numba_unpickle`.
 
     Parameters
@@ -150,10 +150,11 @@ def _numba_unpickle(address, bytedata):
     obj : object
         unpickled object
     """
+    key = (address, hashed)
     try:
-        obj = _unpickled_memo[address]
+        obj = _unpickled_memo[key]
     except KeyError:
-        _unpickled_memo[address] = obj = pickle.loads(bytedata)
+        _unpickled_memo[key] = obj = pickle.loads(bytedata)
     return obj
 
 
