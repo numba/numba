@@ -551,4 +551,90 @@ The report is split into the following sections:
     ``$const58.3 = const(int, 1)`` comes from the source ``b[j + 1]``, the
     number ``1`` is clearly a constant and so can be hoisted out of the loop.
 
+.. _numba-parallel-scheduling:
+
+Scheduling
+==========
+
+By default, Numba divides the iterations of a parallel region into approximately equal
+sized chunks and gives one such chunk to each configured thread.
+(See :ref:`setting_the_number_of_threads`).
+This scheduling approach is equivalent to OpenMP's static schedule with no specified
+chunk size and is appropriate when the work required for each iteration is nearly constant.
+
+Conversely, if the work required per iteration varies significantly then this static
+scheduling approach can lead to load imbalances and longer execution times.  In such cases,
+Numba provides a mechanism to control how many iterations of a parallel region go into
+each chunk.  The number of chunks will then be approximately equal to the number of
+iterations divided by the chunk size.  Numba then gives one such chunk to each configured
+thread as above and when a thread finishes a chunk, Numba gives that thread the next
+available chunk.  This scheduling approach is the equivalent of OpenMP's dynamic scheduling
+option with the specified chunk size.  To minimize execution time, the programmer must pick
+a chunk size that strikes a balance between greater load balancing with smaller chunk
+sizes and less scheduling overhead with larger chunk sizes.
+
+The number of iterations of a parallel region in a chunk is stored as a thread-local
+variable and can be set using
+:func:`numba.set_parallel_chunksize`.  This function takes one integer parameter
+whose value must be greater than
+or equal to 0.  A value of 0 is the default value and instructs Numba to use the
+static scheduling approach above.  Values greater than 0 instruct Numba to use that value
+as the chunk size in the dynamic scheduling approach described above.
+The current value of this thread local variable is used by all subsequent parallel regions
+invoked by this thread.
+The current value of the parallel chunk size can be obtained from
+:func:`numba.get_parallel_chunksize`.
+Both of these functions can be used from standard Python and from Numba jitted functions
+as shown below.  Both invocations of func1 would be executed with a chunk size of 4 whereas
+func2 would use a chunk size of 8.
+
+.. code:: python
+
+    from numba import njit, prange, set_parallel_chunksize, get_parallel_chunksize
+
+    @njit(parallel=True)
+    def func1():
+        for i in prange(n):
+            ...
+
+    @njit(parallel=True)
+    def func2():
+        old_chunksize = get_parallel_chunksize()
+        set_parallel_chunksize(8)
+        for i in prange(n):
+            ...
+        set_parallel_chunksize(old_chunksize)
+
+    old_chunksize = get_parallel_chunksize()
+    set_parallel_chunksize(4)
+    func1()
+    func2()
+    func1()
+    set_parallel_chunksize(old_chunksize)
+
+Since this idiom of saving and restoring is so common, Numba provides the
+:func:`parallel_chunksize` with clause to simplify the idiom.  As shown below,
+this with clause can be invoked from both standard Python and within Numba
+jitted functions.
+
+.. code:: python
+
+    from numba import njit, prange, parallel_chunksize
+
+    @njit(parallel=True)
+    def func1():
+        for i in prange(n):
+            ...
+
+    @njit(parallel=True)
+    def func2():
+        with parallel_chunksize(8):
+            for i in prange(n):
+                ...
+
+    with parallel_chunksize(4):
+        func1()
+        func2()
+        func1()
+
 .. seealso:: :ref:`parallel_jit_option`, :ref:`Parallel FAQs <parallel_FAQs>`

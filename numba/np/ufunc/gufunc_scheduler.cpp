@@ -11,6 +11,16 @@
 #include <stdio.h>
 #include "gufunc_scheduler.h"
 
+#ifdef _MSC_VER
+#define THREAD_LOCAL(ty) __declspec(thread) ty
+#else
+/* Non-standard C99 extension that's understood by gcc and clang */
+#define THREAD_LOCAL(ty) __thread ty
+#endif
+
+// Default 0 value means one evenly-sized chunk of work per worker thread.
+THREAD_LOCAL(uintp) parallel_chunksize = 0;
+
 // round not available on VS2010.
 double guround (double number) {
 	return number < 0.0 ? ceil(number - 0.5) : floor(number + 0.5);
@@ -68,7 +78,34 @@ public:
         }
         return ret;
     }
+
+    uintp total_size() const {
+        std::vector<intp> per_dim = iters_per_dim();
+        uintp res = 1;
+        for (unsigned i = 0; i < per_dim.size(); ++i) {
+            res *= per_dim[i];
+        }
+        return res;
+    }
 };
+
+extern "C" void set_parallel_chunksize(uintp n) {
+    parallel_chunksize = n;
+}
+
+extern "C" uintp get_parallel_chunksize() {
+    return parallel_chunksize;
+}
+
+extern "C" uintp get_sched_size(uintp num_threads, uintp num_dim, intp *starts, intp *ends) {
+    if (parallel_chunksize == 0) {
+        return num_threads;
+    }
+    RangeActual ra(num_dim, starts, ends);
+    uintp total_work_size = ra.total_size();
+    uintp num_divisions = total_work_size / parallel_chunksize;
+    return num_divisions < num_threads ? num_threads : num_divisions;
+}
 
 class dimlength {
 public:

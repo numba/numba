@@ -1,6 +1,7 @@
 from numba.core import types, errors, ir, sigutils, ir_utils
 from numba.core.typing.typeof import typeof_impl
 from numba.core.transforms import find_region_inout_vars
+import numba
 
 
 class WithContext(object):
@@ -337,3 +338,63 @@ def _mutate_with_block_callee(blocks, blk_start, blk_end, inputs, outputs):
         outputs=outputs,
     )
 
+class _ParallelChunksize(WithContext):
+    is_callable = True
+
+    """A simple context-manager that tells the compiler to bypass the body
+    of the with-block.
+    """
+    def mutate_with_body(self, func_ir, blocks, blk_start, blk_end,
+                         body_blocks, dispatcher_factory, extra):
+        ir_utils.dprint_func_ir(func_ir, "Before with changes", blocks=blocks)
+        assert extra is not None
+        args = extra["args"]
+        assert len(args) == 1
+        arg = args[0]
+        scope = blocks[blk_start].scope
+        loc = blocks[blk_start].loc
+        if isinstance(arg, ir.Arg):
+            arg = ir.Var(scope, arg.name, loc)
+
+        set_state = []
+        restore_state = []
+
+        # global for Numba itself
+        gvar = ir.Var(scope, ir_utils.mk_unique_var("$ngvar"), loc)
+        set_state.append(ir.Assign(ir.Global('numba', numba, loc), gvar, loc))
+        # getattr for get/set chunksize function in Numba
+        gpcattr = ir.Expr.getattr(gvar, 'get_parallel_chunksize', loc)
+        spcattr = ir.Expr.getattr(gvar, 'set_parallel_chunksize', loc)
+        gpcvar = ir.Var(scope, ir_utils.mk_unique_var("$gpc"), loc)
+        spcvar = ir.Var(scope, ir_utils.mk_unique_var("$spc"), loc)
+        set_state.append(ir.Assign(gpcattr, gpcvar, loc))
+        set_state.append(ir.Assign(spcattr, spcvar, loc))
+        # call get_parallel_chunksize and save result to orig_pc_var
+        orig_pc_var = ir.Var(scope, ir_utils.mk_unique_var("$save_pc"), loc)
+        gpc_call = ir.Expr.call(gpcvar, [], (), loc)
+        set_state.append(ir.Assign(gpc_call, orig_pc_var, loc))
+        # call set_parallel_chunksize
+        unused_var = ir.Var(scope, ir_utils.mk_unique_var("$unused"), loc)
+        spc_call = ir.Expr.call(spcvar, [arg], (), loc)
+        set_state.append(ir.Assign(spc_call, unused_var, loc))
+
+        restore_spc_call = ir.Expr.call(spcvar, [orig_pc_var], (), loc)
+        restore_state.append(ir.Assign(restore_spc_call, unused_var, loc))
+
+        blocks[blk_start].body = blocks[blk_start].body[1:-1] + set_state + [blocks[blk_start].body[-1]]
+        blocks[blk_end].body = restore_state + blocks[blk_end].body
+        ir_utils.dprint_func_ir(func_ir, "After with changes", blocks=blocks)
+
+    def __call__(self, *args, **kwargs):
+        assert len(args) == 1
+        self.chunksize = args[0]
+        return self
+
+    def __enter__(self):
+        self.orig_chunksize = numba.get_parallel_chunksize()
+        numba.set_parallel_chunksize(self.chunksize)
+
+    def __exit__(self, typ, val, tb):
+        numba.set_parallel_chunksize(self.orig_chunksize)
+
+parallel_chunksize = _ParallelChunksize()

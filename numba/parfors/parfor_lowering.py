@@ -13,6 +13,7 @@ import warnings
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.ir.values as liv
+import llvmlite.binding as ll
 
 import numba
 from numba.parfors import parfor
@@ -23,7 +24,6 @@ from numba.core.typing import signature
 from numba.parfors.parfor import print_wrapped, ensure_parallel_support
 from numba.core.errors import NumbaParallelSafetyWarning, NotDefinedError, CompilerError
 from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
-
 
 def _lower_parfor_parallel(lowerer, parfor):
     """Lowerer that handles LLVM code generation for parfor.
@@ -1500,20 +1500,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         builder.store(stop, builder.gep(dim_stops,
                                         [context.get_constant(types.uintp, i)]))
 
-    sched_size = get_thread_count() * num_dim * 2
-    sched = cgutils.alloca_once(
-        builder, sched_type, size=context.get_constant(
-            types.uintp, sched_size), name="sched")
-    debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
-    scheduling_fnty = lc.Type.function(
-        intp_ptr_t, [uintp_t, sched_ptr_type, sched_ptr_type, uintp_t, sched_ptr_type, intp_t])
-    if index_var_typ.signed:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_signed")
-    else:
-        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
-                                                          name="do_scheduling_unsigned")
-
     get_num_threads = builder.module.get_or_insert_function(
         lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
         name="get_num_threads")
@@ -1527,10 +1513,31 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                   ("Invalid number of threads. "
                                                    "This likely indicates a bug in Numba.",))
 
+    get_sched_size_fnty = lc.Type.function(uintp_t, [uintp_t, uintp_t, intp_ptr_t, intp_ptr_t])
+    get_sched_size = builder.module.get_or_insert_function(get_sched_size_fnty, name="get_sched_size")
+    num_divisions = builder.call(get_sched_size, [num_threads,
+                                                  context.get_constant(types.uintp, num_dim),
+                                                  dim_starts,
+                                                  dim_stops])
+
+    multiplier = context.get_constant(types.uintp, num_dim * 2)
+    sched_size = builder.mul(num_divisions, multiplier)
+    sched = cgutils.alloca_once(builder, sched_type, size=sched_size, name="sched", entry_block=False)
+
+    debug_flag = 1 if config.DEBUG_ARRAY_OPT else 0
+    scheduling_fnty = lc.Type.function(
+        intp_ptr_t, [uintp_t, intp_ptr_t, intp_ptr_t, uintp_t, sched_ptr_type, intp_t])
+    if index_var_typ.signed:
+        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
+                                                          name="do_scheduling_signed")
+    else:
+        do_scheduling = builder.module.get_or_insert_function(scheduling_fnty,
+                                                          name="do_scheduling_unsigned")
+
     builder.call(
         do_scheduling, [
             context.get_constant(
-                types.uintp, num_dim), dim_starts, dim_stops, num_threads,
+                types.uintp, num_dim), dim_starts, dim_stops, num_divisions,
             sched, context.get_constant(
                     types.intp, debug_flag)])
 

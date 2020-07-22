@@ -317,6 +317,11 @@ MOD_INIT(tbbpool)
                            PyLong_FromVoidPtr((void*)&get_num_threads));
     PyObject_SetAttrString(m, "get_thread_id",
                            PyLong_FromVoidPtr((void*)&get_thread_id));
-
+    PyObject_SetAttrString(m, "set_parallel_chunksize",
+                           PyLong_FromVoidPtr((void*)&set_parallel_chunksize));
+    PyObject_SetAttrString(m, "get_parallel_chunksize",
+                           PyLong_FromVoidPtr((void*)&get_parallel_chunksize));
+    PyObject_SetAttrString(m, "get_sched_size",
+                           PyLong_FromVoidPtr((void*)&get_sched_size));
     return MOD_SUCCESS_VAL(m);
 }

@@ -50,9 +50,14 @@ from numba.experimental.jitclass.decorators import _warning_jitclass as jitclass
 # Initialize withcontexts
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
+from numba.core.withcontexts import parallel_chunksize
 
 # Bytes/unicode array support
 import numba.cpython.charseq
+
+# Re-export ParallelAccelerator runtime controls
+from numba.np.ufunc.parallel import (set_parallel_chunksize,
+                                     get_parallel_chunksize)
 
 # Keep this for backward compatibility.
 test = runtests.main
@@ -78,6 +83,8 @@ __all__ = """
     literal_unroll
     get_num_threads
     set_num_threads
+    set_parallel_chunksize
+    get_parallel_chunksize
     """.split() + types.__all__ + errors.__all__
 
 
