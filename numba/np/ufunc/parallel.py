@@ -15,7 +15,7 @@ import sys
 import warnings
 from threading import RLock as threadRLock
 import multiprocessing
-from ctypes import CFUNCTYPE, c_int, CDLL
+from ctypes import CFUNCTYPE, c_int, CDLL, POINTER, c_uint
 
 import numpy as np
 
@@ -27,7 +27,6 @@ from numba.core import types, config, errors
 from numba.np.ufunc.wrappers import _wrapper_info
 from numba.np.ufunc import ufuncbuilder
 from numba.extending import overload
-from ctypes import CFUNCTYPE, c_uint, POINTER, c_int
 
 _IS_OSX = sys.platform.startswith('darwin')
 _IS_LINUX = sys.platform.startswith('linux')
@@ -653,6 +652,7 @@ _DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBA_DYLD_WORKAROUND', 0))
 if _DYLD_WORKAROUND_SET and _DYLD_WORKAROUND_VAL:
     _launch_threads()
 
+
 def parfor_load_late(lib):
     ll.add_symbol('set_parallel_chunksize', lib.set_parallel_chunksize)
     ll.add_symbol('get_parallel_chunksize', lib.get_parallel_chunksize)
@@ -662,7 +662,13 @@ def parfor_load_late(lib):
     global _get_parallel_chunksize
     _get_parallel_chunksize = CFUNCTYPE(c_uint)(lib.get_parallel_chunksize)
     global _get_sched_size
-    _get_sched_size = CFUNCTYPE(c_uint, c_uint, c_uint, POINTER(c_int), POINTER(c_int))(lib.get_sched_size)
+    _get_sched_size = CFUNCTYPE(c_uint,
+                                c_uint,
+                                c_uint,
+                                POINTER(c_int),
+                                POINTER(c_int)
+                      )(lib.get_sched_size)
+
 
 def set_parallel_chunksize(n):
     _launch_threads()
@@ -671,10 +677,12 @@ def set_parallel_chunksize(n):
     global _set_parallel_chunksize
     _set_parallel_chunksize(n)
 
+
 def get_parallel_chunksize():
     _launch_threads()
     global _get_parallel_chunksize
     return _get_parallel_chunksize()
+
 
 @overload(set_parallel_chunksize)
 def ol_set_parallel_chunksize(n):
@@ -690,7 +698,7 @@ def ol_set_parallel_chunksize(n):
 @overload(get_parallel_chunksize)
 def ol_get_parallel_chunksize():
     _launch_threads()
+
     def impl():
         return _get_parallel_chunksize()
     return impl
-
