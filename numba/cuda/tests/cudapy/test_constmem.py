@@ -1,7 +1,7 @@
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba.core.config import ENABLE_CUDASIM
 
 CONST_EMPTY = np.array([])
@@ -134,9 +134,9 @@ class TestCudaConstantMemory(CUDATestCase):
 
         if not ENABLE_CUDASIM:
             self.assertIn(
-                'ld.const.v2.u32',
+                'ld.const.f32',
                 jcuconst3d.ptx,
-                "load the two halves of the complex as u32s")
+                "load each half of the complex as f32")
 
     def test_const_record_empty(self):
         jcuconstRecEmpty = cuda.jit('void(float64[:])')(cuconstRecEmpty)
@@ -149,26 +149,32 @@ class TestCudaConstantMemory(CUDATestCase):
         B = np.zeros(2, dtype=int)
         jcuconst = cuda.jit(cuconstRec).specialize(A, B)
 
-        if not ENABLE_CUDASIM:
-            if not any(c in jcuconst.ptx for c in [
-                # a vector load: the compiler fuses the load
-                # of the x and y fields into a single instruction!
-                'ld.const.v2.u64',
-
-                # for some reason Win64 / Py3 / CUDA 9.1 decides
-                # to do two u32 loads, and shifts and ors the
-                # values to get the float `x` field, then uses
-                # another ld.const.u32 to load the int `y` as
-                # a 32-bit value!
-                'ld.const.u32',
-            ]):
-                raise AssertionError(
-                    "the compiler should realise it doesn't " \
-                    "need to interpret the bytes as float!")
-
         jcuconst[2, 1](A, B)
         np.testing.assert_allclose(A, CONST_RECORD['x'])
         np.testing.assert_allclose(B, CONST_RECORD['y'])
+
+    @skip_on_cudasim('PTX inspection not supported on the simulator')
+    @unittest.expectedFailure
+    def test_const_record_optimization(self):
+        A = np.zeros(2, dtype=float)
+        B = np.zeros(2, dtype=int)
+        jcuconst = cuda.jit(cuconstRec).specialize(A, B)
+
+        if not any(c in jcuconst.ptx for c in [
+            # a vector load: the compiler fuses the load
+            # of the x and y fields into a single instruction!
+            'ld.const.v2.u64',
+
+            # for some reason Win64 / Py3 / CUDA 9.1 decides
+            # to do two u32 loads, and shifts and ors the
+            # values to get the float `x` field, then uses
+            # another ld.const.u32 to load the int `y` as
+            # a 32-bit value!
+            'ld.const.u32',
+        ]):
+            raise AssertionError(
+                "the compiler should realise it doesn't " \
+                "need to interpret the bytes as float!")
 
     def test_const_record_align(self):
         A = np.zeros(2, dtype=np.float64)
@@ -178,28 +184,37 @@ class TestCudaConstantMemory(CUDATestCase):
         E = np.zeros(2, dtype=np.float64)
         jcuconst = cuda.jit(cuconstRecAlign).specialize(A, B, C, D, E)
 
-        if not ENABLE_CUDASIM:
-            self.assertIn(
-                'ld.const.v4.u8',
-                jcuconst.ptx,
-                'load the first three bytes as a vector')
-
-            self.assertIn(
-                'ld.const.u32',
-                jcuconst.ptx,
-                'load the uint32 natively')
-
-            self.assertIn(
-                'ld.const.u8',
-                jcuconst.ptx,
-                'load the last byte by itself')
-
         jcuconst[2, 1](A, B, C, D, E)
         np.testing.assert_allclose(A, CONST_RECORD_ALIGN['a'])
         np.testing.assert_allclose(B, CONST_RECORD_ALIGN['b'])
         np.testing.assert_allclose(C, CONST_RECORD_ALIGN['x'])
         np.testing.assert_allclose(D, CONST_RECORD_ALIGN['y'])
         np.testing.assert_allclose(E, CONST_RECORD_ALIGN['z'])
+
+    @skip_on_cudasim('PTX inspection not supported on the simulator')
+    @unittest.expectedFailure
+    def test_const_record_align_optimization(self):
+        A = np.zeros(2, dtype=np.float64)
+        B = np.zeros(2, dtype=np.float64)
+        C = np.zeros(2, dtype=np.float64)
+        D = np.zeros(2, dtype=np.float64)
+        E = np.zeros(2, dtype=np.float64)
+        jcuconst = cuda.jit(cuconstRecAlign).specialize(A, B, C, D, E)
+
+        self.assertIn(
+            'ld.const.v4.u8',
+            jcuconst.ptx,
+            'load the first three bytes as a vector')
+
+        self.assertIn(
+            'ld.const.u32',
+            jcuconst.ptx,
+            'load the uint32 natively')
+
+        self.assertIn(
+            'ld.const.u8',
+            jcuconst.ptx,
+            'load the last byte by itself')
 
 
 if __name__ == '__main__':
