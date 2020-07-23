@@ -74,10 +74,10 @@ We notice two steps here:
 
 * Running the kernel, by passing it the input array (and any separate
   output arrays if necessary). Kernels run asynchronously: launches queue their
-  execution on the device and then return immediately.  You can use 
-  :ref:`cuda.synchronize() <cuda-host-context-management>` to wait for all previous
+  execution on the device and then return immediately.  You can use
+  :func:`cuda.synchronize() <numba.cuda.synchronize>` to wait for all previous
   kernel launches to finish executing.
-  
+
 .. note:: Passing an array that resides in host memory will implicitly cause a
    copy back to the host, which will be synchronous. In this case, the kernel
    launch will not return until the data is copied back, and therefore appears
