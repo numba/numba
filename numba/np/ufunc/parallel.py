@@ -658,7 +658,8 @@ def parfor_load_late(lib):
     ll.add_symbol('get_parallel_chunksize', lib.get_parallel_chunksize)
     ll.add_symbol('get_sched_size', lib.get_sched_size)
     global _set_parallel_chunksize
-    _set_parallel_chunksize = CFUNCTYPE(None, c_uint)(lib.set_parallel_chunksize)
+    _set_parallel_chunksize = CFUNCTYPE(None,
+                                        c_uint)(lib.set_parallel_chunksize)
     global _get_parallel_chunksize
     _get_parallel_chunksize = CFUNCTYPE(c_uint)(lib.get_parallel_chunksize)
     global _get_sched_size
@@ -666,8 +667,7 @@ def parfor_load_late(lib):
                                 c_uint,
                                 c_uint,
                                 POINTER(c_int),
-                                POINTER(c_int)
-                      )(lib.get_sched_size)
+                                POINTER(c_int))(lib.get_sched_size)
 
 
 def set_parallel_chunksize(n):
@@ -694,6 +694,7 @@ def ol_set_parallel_chunksize(n):
     def impl(n):
         _set_parallel_chunksize(n)
     return impl
+
 
 @overload(get_parallel_chunksize)
 def ol_get_parallel_chunksize():
