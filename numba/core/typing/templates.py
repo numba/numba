@@ -296,6 +296,11 @@ class FunctionTemplate(ABC):
         """
         pass
 
+    def __str__(self):
+        info = self.get_template_info()
+        srcinfo = f"{info['filename']}:{info['lines'][0]}"
+        return f"<{self.__class__.__name__} {self.key} {srcinfo}>"
+
 
 class AbstractTemplate(FunctionTemplate):
     """
