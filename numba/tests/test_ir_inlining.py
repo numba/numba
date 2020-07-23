@@ -3,6 +3,7 @@ This tests the inline kwarg to @jit and @overload etc, it has nothing to do with
 LLVM or low level inlining.
 """
 
+import operator
 from itertools import product
 import numpy as np
 
@@ -125,6 +126,8 @@ class InliningBase(TestCase):
                 if getattr(expr, 'op', False) == 'call':
                     func_defn = fir.get_definition(expr.func)
                     found |= func_defn.name == k
+                elif getattr(expr, 'op', False) == 'binop':
+                    found |= expr.fn.__name__ == k
             self.assertFalse(found == v)
 
         return fir  # for use in further analysis
@@ -525,6 +528,36 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
             return foo(3, b=4)
 
         self.check(impl, inline_expect={'foo': True})
+
+    # adapted from #5064
+    def test_inline_always_binop(self):
+
+        DummyType = type('DummyType', (types.Opaque,), {})
+
+        dummy_type = DummyType("my_dummy")
+        register_model(DummyType)(OpaqueModel)
+
+        class Dummy(object):
+            def __eq__(self, other):
+                return True
+
+        @typeof_impl.register(Dummy)
+        def typeof_dummy(val, c):
+            return dummy_type
+
+        @unbox(DummyType)
+        def unbox_dummy(typ, obj, c):
+            return NativeValue(c.context.get_dummy_value())
+
+        @overload(operator.eq, inline='always')
+        def overload_dummy_eq(a, b):
+            if a == dummy_type:
+                return lambda a, b: True
+
+        def impl(x):
+            return x == 1
+
+        self.check(impl, Dummy(), inline_expect={'eq': True})
 
     def test_inline_stararg_error(self):
         def foo(a, *b):

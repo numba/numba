@@ -515,6 +515,8 @@ class InlineOverloads(FunctionPass):
                             workfn = self._do_work_call
                         elif expr.op == 'getattr':
                             workfn = self._do_work_getattr
+                        elif expr.op == 'binop':
+                            workfn = self._do_work_binop
                         else:
                             continue
 
@@ -643,6 +645,42 @@ class InlineOverloads(FunctionPass):
 
         # at this point we know we maybe want to inline something and there's
         # definitely something that could be inlined.
+        return self._run_inliner(
+            state, inline_type, sig, template, arg_typs, expr, i, impl, block,
+            work_list, is_method, inline_worker,
+        )
+
+    def _do_work_binop(self, state, work_list, block, i, expr, inline_worker):
+
+        # search for this binop overloads with this "inline"
+        sig = state.type_annotation.calltypes[expr]
+        arg_typs = sig.args
+
+        templates = state.typingctx._functions[expr.fn]
+        if templates is None:
+            return False
+
+        impl = None
+        for template in templates:
+            inline_type = getattr(template, '_inline', None)
+            if inline_type is None:
+                # inline not defined
+                continue
+            if arg_typs not in template._inline_overloads:
+                # skip overloads not matching signature
+                continue
+            if not inline_type.is_never_inline:
+                try:
+                    impl = template._overload_func(*arg_typs)
+                    if impl is None:
+                        raise Exception  # abort for this template
+                    break
+                except Exception:
+                    continue
+        else:
+            return False
+
+        is_method = False
         return self._run_inliner(
             state, inline_type, sig, template, arg_typs, expr, i, impl, block,
             work_list, is_method, inline_worker,
