@@ -399,57 +399,31 @@ done:
 """
 
 
-ir_numba_atomic_max = """
-define internal {T} @___numba_atomic_{T}_{NAN}max({T}* %ptr, {T} %val) alwaysinline {{
+ir_numba_atomic_minmax = """
+define internal {T} @___numba_atomic_{T}_{NAN}{FUNC}({T}* %ptr, {T} %val) alwaysinline {{
 entry:
     %ptrval = load volatile {T}, {T}* %ptr
-    ; Check if either value is a NaN and return *ptr early if so
-    %valnan = fcmp uno {T} %val, %{PTR_OR_VAL}val
-    br i1 %valnan, label %done, label %lt_check
+    ; Return early when:
+    ; - For nanmin / nanmax when val is a NaN
+    ; - For min / max when val or ptr is a NaN
+    %early_return = fcmp uno {T} %val, %{PTR_OR_VAL}val
+    br i1 %early_return, label %done, label %lt_check
 
 lt_check:
     %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
-    ; Continue attempts if dold < val or dold is NaN (using if ult semantics)
-    %lt = fcmp {OP} {T} %dold, %val
-    br i1 %lt, label %attempt, label %done
+    ; Continue attempts if dold less or greater than val (depending on whether min or max)
+    ; or if dold is NaN (for nanmin / nanmax)
+    %cmp = fcmp {OP} {T} %dold, %val
+    br i1 %cmp, label %attempt, label %done
 
 attempt:
-    ; Attempt to swap in the larger value
+    ; Attempt to swap in the value
     %iold = bitcast {T} %dold to {Ti}
     %iptr = bitcast {T}* %ptr to {Ti}*
     %ival = bitcast {T} %val to {Ti}
     %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %iold, {Ti} %ival monotonic
     %dcas = bitcast {Ti} %cas to {T}
     br label %lt_check
-
-done:
-    ret {T} %ptrval
-}}
-"""
-
-
-ir_numba_atomic_min = """
-define internal {T} @___numba_atomic_{T}_{NAN}min({T}* %ptr, {T} %val) alwaysinline{{
-entry:
-    %ptrval = load volatile {T}, {T}* %ptr
-    ; Check if either value is a NaN and return *ptr early if so
-    %valnan = fcmp uno {T} %val, %{PTR_OR_VAL}val
-    br i1 %valnan, label %done, label %gt_check
-
-gt_check:
-    %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
-    ; Continue attempts if dold > val
-    %lt = fcmp {OP} {T} %dold, %val
-    br i1 %lt, label %attempt, label %done
-
-attempt:
-    ; Attempt to swap in the smaller value
-    %iold = bitcast {T} %dold to {Ti}
-    %iptr = bitcast {T}* %ptr to {Ti}*
-    %ival = bitcast {T} %val to {Ti}
-    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %iold, {Ti} %ival monotonic
-    %dcas = bitcast {Ti} %cas to {T}
-    br label %gt_check
 
 done:
     ret {T} %ptrval
@@ -491,29 +465,29 @@ def llvm_to_ptx(llvmir, **opts):
         ('declare double @___numba_atomic_double_add(double*, double)',
          ir_numba_atomic_double_add),
         ('declare float @___numba_atomic_float_max(float*, float)',
-         ir_numba_atomic_max.format(T='float', Ti='i32', NAN='', OP='nnan olt',
-                                    PTR_OR_VAL='ptr')),
+         ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='', OP='nnan olt',
+                                    PTR_OR_VAL='ptr', FUNC='max')),
         ('declare double @___numba_atomic_double_max(double*, double)',
-         ir_numba_atomic_max.format(T='double', Ti='i64', NAN='', OP='nnan olt',
-                                    PTR_OR_VAL='ptr')),
+         ir_numba_atomic_minmax.format(T='double', Ti='i64', NAN='', OP='nnan olt',
+                                    PTR_OR_VAL='ptr', FUNC='max')),
         ('declare float @___numba_atomic_float_min(float*, float)',
-         ir_numba_atomic_min.format(T='float', Ti='i32', NAN='', OP='nnan ogt',
-                                    PTR_OR_VAL='ptr')),
+         ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='', OP='nnan ogt',
+                                    PTR_OR_VAL='ptr', FUNC='min')),
         ('declare double @___numba_atomic_double_min(double*, double)',
-         ir_numba_atomic_min.format(T='double', Ti='i64', NAN='', OP='nnan ogt',
-                                    PTR_OR_VAL='ptr')),
+         ir_numba_atomic_minmax.format(T='double', Ti='i64', NAN='', OP='nnan ogt',
+                                    PTR_OR_VAL='ptr', FUNC='min')),
         ('declare float @___numba_atomic_float_nanmax(float*, float)',
-         ir_numba_atomic_max.format(T='float', Ti='i32', NAN='nan', OP='ult',
-                                    PTR_OR_VAL='')),
+         ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='nan', OP='ult',
+                                    PTR_OR_VAL='', FUNC='max')),
         ('declare double @___numba_atomic_double_nanmax(double*, double)',
-         ir_numba_atomic_max.format(T='double', Ti='i64', NAN='nan', OP='ult',
-                                    PTR_OR_VAL='')),
+         ir_numba_atomic_minmax.format(T='double', Ti='i64', NAN='nan', OP='ult',
+                                    PTR_OR_VAL='', FUNC='max')),
         ('declare float @___numba_atomic_float_nanmin(float*, float)',
-         ir_numba_atomic_min.format(T='float', Ti='i32', NAN='nan', OP='ugt',
-                                    PTR_OR_VAL='')),
+         ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='nan', OP='ugt',
+                                    PTR_OR_VAL='', FUNC='min')),
         ('declare double @___numba_atomic_double_nanmin(double*, double)',
-         ir_numba_atomic_min.format(T='double', Ti='i64', NAN='nan', OP='ugt',
-                                    PTR_OR_VAL='')),
+         ir_numba_atomic_minmax.format(T='double', Ti='i64', NAN='nan', OP='ugt',
+                                    PTR_OR_VAL='', FUNC='min')),
         ('immarg', '')
     ]
 
