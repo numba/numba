@@ -201,8 +201,8 @@ def get_ext_modules():
         else:
             omplinkflags = ['-fopenmp']
 
-    # Disable tbb if forced by user with NUMBA_NO_TBB=1
-    if os.getenv("NUMBA_NO_TBB") == "1":
+    # Disable tbb if forced by user with NUMBA_DISABLE_TBB=1
+    if os.getenv("NUMBA_DISABLE_TBB"):
         print("TBB disabled")
     else:
         # Search for Intel TBB, first check env var TBBROOT then conda locations
@@ -235,8 +235,8 @@ def get_ext_modules():
         else:
             print("TBB not found")
 
-    # Disable OpenMP if forced by user with NUMBA_NO_OPENMP=1
-    if os.getenv('NUMBA_NO_OPENMP'):
+    # Disable OpenMP if forced by user with NUMBA_DISABLE_OPENMP=1
+    if os.getenv('NUMBA_DISABLE_OPENMP'):
         print("OpenMP disabled")
     elif have_openmp:
         print("Using OpenMP from:", have_openmp)

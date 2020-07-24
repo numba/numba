@@ -170,6 +170,37 @@ Then you can build and install Numba from the top level of the source tree::
 
     $ python setup.py install
 
+.. _numba-source-install-env_vars:
+
+Build time environment variables and configuration of optional components
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Below are environment variables that are applicable to altering how Numba would
+otherwise build by default along with information on configuration options.
+
+.. envvar:: NUMBA_DISABLE_OPENMP (default: not set)
+
+  To disable compilation of the OpenMP threading backend set this environment
+  variable to a Truthy value when building. If not set (default):
+
+  * For Linux and Windows it is necessary to provide OpenMP C headers and
+    runtime  libraries compatible with the compiler tool chain mentioned above,
+    and for these to be accessible to the compiler via standard flags.
+  * For OSX the conda packages ``llvm-openmp`` and ``intel-openmp`` provide
+    suitable C headers and libraries. If the compilation requirements are not
+    met the OpenMP threading backend will not be compiled
+
+.. envvar:: NUMBA_DISABLE_TBB (default: not set)
+
+  To disable the compilation of the TBB threading backend set this environment
+  variable to a Truthy value when building. If not set (default) the TBB C
+  headers and libraries must be available at compile time. If building with
+  ``conda build`` this requirement can be met by installing the ``tbb-devel``
+  package. If not building with ``conda build`` the requirement can be met via a
+  system installation of TBB or through the use of the ``TBBROOT`` environment
+  variable to provide the location of the TBB installation. For more
+  information about setting ``TBBROOT`` see the `Intel documentation <https://software.intel.com/content/www/us/en/develop/documentation/advisor-user-guide/top/appendix/adding-parallelism-to-your-program/adding-the-parallel-framework-to-your-build-environment/defining-the-tbbroot-environment-variable.html>`_.
+
 .. _numba-source-install-check:
 
 Dependency List
@@ -177,7 +208,7 @@ Dependency List
 
 Numba has numerous required and optional dependencies which additionally may
 vary with target operating system and hardware. The following lists them all
-(as of September 2019).
+(as of July 2020).
 
 * Required build time:
 
@@ -186,39 +217,23 @@ vary with target operating system and hardware. The following lists them all
   * ``llvmlite``
   * Compiler toolchain mentioned above
 
-* Build time environment variables:
-  * ``NUMBA_NO_OPENMP``
-    Set this environment variable to ``1`` when building
-    to disable compilation of the OpenMP threading backend.
-    If enabled you need OpenMP C headers and runtime libraries compatible
-    with the compiler toolchain mentioned above and accessible to the
-    compiler via standard flags (Linux, Windows)
-    * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
-    Numba's threading backend
-    * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
-    threading backend.
-  * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
-    into Numba's threading backend
-  * ``NUMBA_NO_TBB=1 TBBROOT=/usr``
-    DEFAULT: both undefined
-    set the environment variable ``NUMBA_NO_TBB`` to ``1`` when building using
-  * ``NUMBA_NO_TBB``
-    Set this environment variable to ``1`` when building
-    to disable the compilation of the TBB threading backend.
-    If not setting it to ``1`` you can also add the location where the
-    TBB headers are going to be searched for, which is generally in ``/usr``,
-    as they are installed in ``/usr/include/tbb/tbb.h`` for linux, by setting 
-    ``TBBROOT=/usr`` or as required based on your platform: `Intel documentation
-    <https://software.intel.com/content/www/us/en/develop/documentation/advisor-user-guide/top/appendix/adding-parallelism-to-your-program/adding-the-parallel-framework-to-your-build-environment/defining-the-tbbroot-environment-variable.html>`_  
-    If enabled ``tbb-devel`` is a requirement. It provides TBB headers/libraries
-    for compiling TBB support into Numba's threading backend
-
-
 * Required run time:
 
   * ``setuptools``
   * ``numpy``
   * ``llvmlite``
+
+* Optional build time:
+
+  See :ref:`numba-source-install-env_vars` for more details about additional
+  options for the configuration and specification of these optional components.
+
+  * ``llvm-openmp`` (OSX) - provides headers for compiling OpenMP support into
+    Numba's threading backend
+  * ``intel-openmp`` (OSX) - provides OpenMP library support for Numba's
+    threading backend.
+  * ``tbb-devel`` - provides TBB headers/libraries for compiling TBB support
+    into Numba's threading backend
 
 * Optional runtime are:
 
@@ -248,6 +263,8 @@ vary with target operating system and hardware. The following lists them all
     inspection. `See here <https://github.com/radareorg/radare2>`_ for
     information on obtaining and installing.
   * ``graphviz`` - for some CFG inspection functionality.
+  * ``pickle5`` - provides Python 3.8 pickling features for faster pickling in
+    Python 3.6 and 3.7.
 
 * To build the documentation:
 
