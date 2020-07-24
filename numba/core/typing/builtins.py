@@ -445,12 +445,8 @@ class ConstOpEq(AbstractTemplate):
 
 
 @infer_global(operator.ne)
-class ConstOpNotEq(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        (arg1, arg2) = args
-        if isinstance(arg1, types.Literal) and isinstance(arg2, types.Literal):
-            return signature(types.boolean, arg1, arg2)
+class ConstOpNotEq(ConstOpEq):
+    pass
 
 
 @infer_global(operator.eq)
