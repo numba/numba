@@ -452,8 +452,6 @@ attempt:
     br label %gt_check
 
 done:
-    ; Return min
-    %ret = phi {T} [ %ptrval, %entry ], [ %dold, %gt_check ]
     ret {T} %ptrval
 }}
 """
