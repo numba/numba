@@ -687,6 +687,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # should be using.
             sig, pyfunc = ovf_result
             args = sig.args
+            kws = {}
             cache_key = None            # don't cache
         else:
             # Regular case
@@ -707,9 +708,9 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         # Make sure that the implementation can be fully compiled
         disp_type = types.Dispatcher(disp)
         try:
-            disp_type.get_call_type(self.context, args, {})
+            disp_type.get_call_type(self.context, args, kws)
         except TypingError:
-            return None, None
+            raise
         if cache_key is not None:
             self._impl_cache[cache_key] = disp, args
         return disp, args
