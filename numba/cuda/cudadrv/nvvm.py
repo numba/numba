@@ -423,9 +423,7 @@ attempt:
     br label %lt_check
 
 done:
-    ; Return max
-    %ret = phi {T} [ %ptrval, %entry ], [ %dold, %lt_check ]
-    ret {T} %ret
+    ret {T} %ptrval
 }}
 """
 
@@ -456,7 +454,7 @@ attempt:
 done:
     ; Return min
     %ret = phi {T} [ %ptrval, %entry ], [ %dold, %gt_check ]
-    ret {T} %ret
+    ret {T} %ptrval
 }}
 """
 
