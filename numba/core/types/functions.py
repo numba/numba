@@ -271,7 +271,9 @@ class BaseFunction(Callable):
         self._depth += 1
         for temp_cls in self.templates:
             temp = temp_cls(context)
-            for uselit in [True, False]:
+            # choice = [True, False]    # oldbehavior
+            choice = [False, True]    # newbehavior
+            for uselit in choice:
                 try:
                     if uselit:
                         sig = temp.apply(args, kws)
