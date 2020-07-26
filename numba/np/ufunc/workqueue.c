@@ -27,7 +27,13 @@ race conditions.
 /* PThread */
 #include <pthread.h>
 #include <unistd.h>
+
+#if defined(__FreeBSD__)
+#include <stdlib.h>
+#else
 #include <alloca.h>
+#endif
+
 #include <sys/types.h>
 #include <unistd.h>
 #include <signal.h>
