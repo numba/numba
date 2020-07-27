@@ -340,6 +340,7 @@ class Numpy_method_redirection(AbstractTemplate):
     A template redirecting a Numpy global function (e.g. np.sum) to an
     array method of the same name (e.g. ndarray.sum).
     """
+    prefer_literal = True
 
     def generic(self, args, kws):
         pysig = None

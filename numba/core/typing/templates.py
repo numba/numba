@@ -252,6 +252,7 @@ class FunctionTemplate(ABC):
     # subclass overide-able
     unsafe_casting = True
     exact_match_required = False
+    prefer_literal = False
 
     def __init__(self, context):
         self.context = context
@@ -300,6 +301,8 @@ class FunctionTemplate(ABC):
         info = self.get_template_info()
         srcinfo = f"{info['filename']}:{info['lines'][0]}"
         return f"<{self.__class__.__name__} {self.key} {srcinfo}>"
+
+    __repr__ = __str__
 
 
 class AbstractTemplate(FunctionTemplate):
