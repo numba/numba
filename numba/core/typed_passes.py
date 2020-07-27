@@ -17,7 +17,7 @@ from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
                                  get_definition, remove_dels,
-                                 build_definitions, compute_cfg_from_blocks)
+                                 build_definitions, compute_cfg_from_blocks, is_operator)
 from numba.core import postproc
 
 
@@ -515,8 +515,8 @@ class InlineOverloads(FunctionPass):
                             workfn = self._do_work_call
                         elif expr.op == 'getattr':
                             workfn = self._do_work_getattr
-                        elif expr.op == 'binop':
-                            workfn = self._do_work_binop
+                        elif is_operator(expr):
+                            workfn = self._do_work_ops
                         else:
                             continue
 
@@ -650,17 +650,22 @@ class InlineOverloads(FunctionPass):
             work_list, is_method, inline_worker,
         )
 
-    def _do_work_binop(self, state, work_list, block, i, expr, inline_worker):
+    def _do_work_ops(self, state, work_list, block, i, expr, inline_worker):
 
         # search for this binop overloads with this "inline"
         sig = state.type_annotation.calltypes[expr]
-        arg_typs = sig.args
+        if sig is None:
+            return False
 
-        templates = state.typingctx._functions[expr.fn]
+        templates = []
+        if expr.op == 'static_getitem':
+            templates = state.typingctx._functions.get(expr.op, [])
+        templates += state.typingctx._functions.get(expr.fn, [])
         if templates is None:
             return False
 
         impl = None
+        arg_typs = sig.args
         for template in templates:
             inline_type = getattr(template, '_inline', None)
             if inline_type is None:

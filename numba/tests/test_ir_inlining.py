@@ -126,7 +126,7 @@ class InliningBase(TestCase):
                 if getattr(expr, 'op', False) == 'call':
                     func_defn = fir.get_definition(expr.func)
                     found |= func_defn.name == k
-                elif getattr(expr, 'op', False) == 'binop':
+                elif getattr(expr, 'op', False) and ir_utils.is_operator(expr):
                     found |= expr.fn.__name__ == k
             self.assertFalse(found == v)
 
@@ -530,7 +530,7 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
         self.check(impl, inline_expect={'foo': True})
 
     # adapted from #5064
-    def test_inline_always_binop(self):
+    def test_inline_always_operators(self):
 
         DummyType = type('DummyType', (types.Opaque,), {})
 
@@ -540,6 +540,9 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
         class Dummy(object):
             def __eq__(self, other):
                 return True
+
+            def __getitem__(self, idx):
+                return None
 
         @typeof_impl.register(Dummy)
         def typeof_dummy(val, c):
@@ -554,10 +557,19 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
             if a == dummy_type:
                 return lambda a, b: True
 
-        def impl(x):
+        @overload(operator.getitem, inline='always')
+        def overload_dummy_getitem(a, idx):
+            if a == dummy_type:
+                return lambda a, idx: None
+
+        def impl_eq(x):
             return x == 1
 
-        self.check(impl, Dummy(), inline_expect={'eq': True})
+        def impl_getitem(x):
+            return x[1]
+
+        self.check(impl_eq, Dummy(), inline_expect={'eq': True})
+        self.check(impl_getitem, Dummy(), inline_expect={'getitem': True})
 
     def test_inline_stararg_error(self):
         def foo(a, *b):

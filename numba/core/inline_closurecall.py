@@ -688,7 +688,7 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
         args = list(call_expr.args)
     elif call_expr.op == 'getattr':
         args = [call_expr.value]
-    elif call_expr.op == 'binop':
+    elif ir_utils.is_operator(call_expr):
         args = call_expr.list_vars()
     else:
         raise TypeError("Unsupported ir.Expr.{}".format(call_expr.op))

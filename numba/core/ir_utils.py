@@ -1737,6 +1737,12 @@ def dump_blocks(blocks):
         for stmt in block.body:
             print("    ", stmt)
 
+def is_operator(expr):
+    """true if expr is unary or binary operator or getitem"""
+    return (isinstance(expr, ir.Expr)
+            and getattr(expr, 'op', False)
+            and expr.op in ['unary', 'binop', 'inplace_binop', 'getitem', 'static_getitem'])
+
 def is_get_setitem(stmt):
     """stmt is getitem assignment or setitem (and static cases)"""
     return is_getitem(stmt) or is_setitem(stmt)
