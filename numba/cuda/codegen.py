@@ -12,6 +12,9 @@ CUDA_TRIPLE = {32: 'nvptx-nvidia-cuda',
 
 
 class CUDACodeLibrary(CodeLibrary):
+    # We don't optimize the IR at the function or module level because it is
+    # optimized by NVVM after we've passed it on.
+
     def _optimize_functions(self, ll_module):
         pass
 

@@ -55,7 +55,8 @@ class TestNvvmWithoutCuda(SerialMixin, unittest.TestCase):
         with self.assertRaises(ValueError) as e:
             nvvm.llvm39_to_34_ir(missing_align)
 
-        self.assertIn(str(e.exception), "No alignment attribute on memset dest")
+        self.assertIn(str(e.exception),
+                      "No alignment attribute found on memset dest")
 
 
 if __name__ == '__main__':
