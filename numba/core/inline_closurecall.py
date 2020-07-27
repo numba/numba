@@ -1269,6 +1269,7 @@ def _fix_nested_array(func_ir):
         size_tuple_def.items += extra_dims
         # In-place modify rhs_def to be getitem
         rhs_def.op = 'getitem'
+        rhs_def.fn = operator.getitem
         rhs_def.value = get_definition(func_ir, lhs, lhs_only=True)
         rhs_def.index = stmt.index
         del rhs_def._kws['func']

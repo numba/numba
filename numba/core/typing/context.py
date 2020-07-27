@@ -307,7 +307,7 @@ class BaseContext(object):
     def resolve_static_getitem(self, value, index):
         assert not isinstance(index, types.Type), index
         args = value, index
-        kws = ()
+        kws = {}
         return self.resolve_function_type("static_getitem", args, kws)
 
     def resolve_static_setitem(self, target, index, value):
