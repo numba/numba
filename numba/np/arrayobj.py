@@ -4969,9 +4969,11 @@ def np_array_split(ary, indices_or_sections, axis=0):
     if isinstance(indices_or_sections, types.Integer):
         def impl(ary, indices_or_sections, axis=0):
             l, rem = divmod(ary.shape[axis], indices_or_sections)
-            return np.array_split(
-                ary, np.arange(l + rem, ary.shape[axis], l), axis=axis
-            )
+            indices = np.cumsum(np.array(
+                [l + 1] * rem +
+                [l] * (indices_or_sections - rem - 1)
+            ))
+            return np.array_split(ary, indices, axis=axis)
 
         return impl
 
