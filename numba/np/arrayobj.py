@@ -4979,7 +4979,10 @@ def np_array_split(ary, indices_or_sections, axis=0):
 
     elif (
         isinstance(indices_or_sections, types.IterableType)
-        and isinstance(indices_or_sections.iterator_type.yield_type, types.Integer)
+        and isinstance(
+            indices_or_sections.iterator_type.yield_type,
+            types.Integer
+        )
     ):
         def impl(ary, indices_or_sections, axis=0):
             slice_tup = build_full_slice_tuple(ary.ndim)
@@ -4994,7 +4997,7 @@ def np_array_split(ary, indices_or_sections, axis=0):
 
         return impl
 
-    elif  (
+    elif (
         isinstance(indices_or_sections, types.Tuple)
         and all(isinstance(t, types.Integer) for t in indices_or_sections.types)
     ):
@@ -5031,7 +5034,6 @@ def np_split(ary, indices_or_sections, axis=0):
 
     else:
         return np_array_split(ary, indices_or_sections, axis=axis)
-
 
 
 # -----------------------------------------------------------------------------
