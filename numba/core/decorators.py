@@ -147,7 +147,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
     if 'target' in options:
         target = options.pop('target')
-        warnings.warn("The 'target' keyword argument is deprecated for the numba.jit decorator.", NumbaDeprecationWarning)
+        warnings.warn("The 'target' keyword argument is deprecated.", NumbaDeprecationWarning)
     else:
         target = options.pop('_target', 'cpu')
 
