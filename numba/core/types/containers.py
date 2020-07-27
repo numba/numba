@@ -200,7 +200,7 @@ class BaseAnonymousTuple(BaseTuple):
             return max(kinds)
 
     def __unliteral__(self):
-        return type(self).from_types([unliteral(t) for t in self])
+        return type(self)([unliteral(t) for t in self])
 
 
 class _HomogeneousTuple(Sequence, BaseTuple):
