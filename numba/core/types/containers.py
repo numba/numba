@@ -253,6 +253,9 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
             if dtype is not None:
                 return UniTuple(dtype=dtype, count=self.count)
 
+    def __unliteral__(self):
+        return type(self)(dtype=unliteral(self.dtype), count=self.count)
+
 
 class UniTupleIter(BaseContainerIterator):
     """
