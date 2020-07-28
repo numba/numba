@@ -280,8 +280,17 @@ class BaseFunction(Callable):
                     if uselit:
                         sig = temp.apply(args, kws)
                     else:
-                        nolitargs = tuple([unliteral(a) for a in args])
-                        nolitkws = {k: unliteral(v) for k, v in kws.items()}
+
+                        def unlit_non_poison(ty):
+                            out = unliteral(ty)
+                            if isinstance(out, types.Poison):
+                                m = "Poison type used in arguments"
+                                raise TypingError(m)
+                            return out
+
+                        nolitargs = tuple([unlit_non_poison(a) for a in args])
+                        nolitkws = {k: unlit_non_poison(v)
+                                    for k, v in kws.items()}
                         sig = temp.apply(nolitargs, nolitkws)
                 except Exception as e:
                     sig = None
