@@ -274,21 +274,27 @@ default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
 
 try:
-    NVVM_VERSION = NVVM().get_version()
+    from numba.cuda.cudadrv.runtime import runtime
+    cudart_version_major = runtime.get_version()[0]
 except:
-    # the CUDA driver may not be present
-    NVVM_VERSION = (0, 0)
+    # The CUDA Runtime may not be present
+    cudart_version_major = 0
 
 # List of supported compute capability in sorted order
-if NVVM_VERSION < (1, 4):
-    # CUDA 8.0
+if cudart_version_major == 0:
+    SUPPORTED_CC = (),
+elif cudart_version_major < 9:
+    # CUDA 8.x
     SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2)
-elif NVVM_VERSION < (1, 5):
-    # CUDA 9.0 and later
+elif cudart_version_major < 10:
+    # CUDA 9.x
     SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0)
-else:
-    # CUDA 10.0 and later
+elif cudart_version_major < 11:
+    # CUDA 10.x
     SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5)
+else:
+    # CUDA 11.0 and later
+    SUPPORTED_CC = (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0)
 
 
 def find_closest_arch(mycc):
