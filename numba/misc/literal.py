@@ -15,7 +15,7 @@ def _ov_literally(obj):
 
 @overload(literal_unroll)
 def literal_unroll_impl(container):
-    if not isinstance(container, (types.Literal, types.InitialValue)):
+    if isinstance(container, types.Poison):
         m = f"Invalid use of non-Literal type in literal_unroll({container})"
         raise TypingError(m)
 
