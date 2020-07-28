@@ -55,7 +55,7 @@ def type_callable(func):
 _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
-def overload(func, jit_options={}, strict=True, inline='never'):
+def overload(func, jit_options={}, strict=True, inline="never", no_unliteral=False):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -109,8 +109,9 @@ def overload(func, jit_options={}, strict=True, inline='never'):
     opts.update(jit_options)  # let user options override
 
     def decorate(overload_func):
-        template = make_overload_template(func, overload_func, opts, strict,
-                                          inline)
+        template = make_overload_template(
+            func, overload_func, opts, strict, inline, no_unliteral
+        )
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))
@@ -205,8 +206,11 @@ def overload_method(typ, attr, **kwargs):
 
     def decorate(overload_func):
         template = make_overload_method_template(
-            typ, attr, overload_func,
-            inline=kwargs.get('inline', 'never'),
+            typ,
+            attr,
+            overload_func,
+            inline=kwargs.get("inline", "never"),
+            no_unliteral=kwargs.get("no_unliteral", False),
         )
         infer_getattr(template)
         overload(overload_func, **kwargs)(overload_func)

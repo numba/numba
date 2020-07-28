@@ -763,19 +763,27 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         return info
 
 
-def make_overload_template(func, overload_func, jit_options, strict,
-                           inline):
+def make_overload_template(
+    func, overload_func, jit_options, strict, inline, no_unliteral
+):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
     """
-    func_name = getattr(func, '__name__', str(func))
+    func_name = getattr(func, "__name__", str(func))
     name = "OverloadTemplate_%s" % (func_name,)
-    base = _OverloadFunctionTemplate
-    dct = dict(key=func, _overload_func=staticmethod(overload_func),
-               _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
-               _strict=strict, _inline=staticmethod(InlineOptions(inline)),
-               _inline_overloads={})
+    base = numba.core.typing.templates._OverloadFunctionTemplate
+    dct = dict(
+        key=func,
+        _overload_func=staticmethod(overload_func),
+        _impl_cache={},
+        _compiled_overloads={},
+        _jit_options=jit_options,
+        _strict=strict,
+        _inline=staticmethod(InlineOptions(inline)),
+        _inline_overloads={},
+        _no_unliteral=no_unliteral,
+    )
     return type(base)(name, (base,), dct)
 
 
@@ -965,6 +973,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         class MethodTemplate(AbstractTemplate):
             key = (self.key, attr)
             _inline = self._inline
+            _no_unliteral = getattr(self, "_no_unliteral", False)
             _overload_func = staticmethod(self._overload_func)
             _inline_overloads = self._inline_overloads
 
@@ -981,8 +990,14 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
         return types.BoundFunction(MethodTemplate, typ)
 
 
-def make_overload_attribute_template(typ, attr, overload_func, inline,
-                                     base=_OverloadAttributeTemplate):
+def make_overload_attribute_template(
+    typ,
+    attr,
+    overload_func,
+    inline,
+    no_unliteral=False,
+    base=_OverloadAttributeTemplate,
+):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
     *overload_func*.
@@ -990,26 +1005,34 @@ def make_overload_attribute_template(typ, attr, overload_func, inline,
     assert isinstance(typ, types.Type) or issubclass(typ, types.Type)
     name = "OverloadAttributeTemplate_%s_%s" % (typ, attr)
     # Note the implementation cache is subclass-specific
-    dct = dict(key=typ, _attr=attr, _impl_cache={},
-               _inline=staticmethod(InlineOptions(inline)),
-               _inline_overloads={},
-               _overload_func=staticmethod(overload_func),
-               )
+    dct = dict(
+        key=typ,
+        _attr=attr,
+        _impl_cache={},
+        _inline=staticmethod(InlineOptions(inline)),
+        _inline_overloads={},
+        _no_unliteral=no_unliteral,
+        _overload_func=staticmethod(overload_func),
+    )
     return type(base)(name, (base,), dct)
 
 
-def make_overload_method_template(typ, attr, overload_func, inline):
+def make_overload_method_template(typ, attr, overload_func, inline, no_unliteral):
     """
     Make a template class for method *attr* of *typ* overloaded by
     *overload_func*.
     """
     return make_overload_attribute_template(
-        typ, attr, overload_func, inline=inline,
+        typ,
+        attr,
+        overload_func,
+        inline=inline,
+        no_unliteral=no_unliteral,
         base=_OverloadMethodTemplate,
     )
 
 
-def bound_function(template_key):
+def bound_function(template_key, no_unliteral=False):
     """
     Wrap an AttributeTemplate resolve_* method to allow it to
     resolve an instance method's signature rather than a instance attribute.
@@ -1026,6 +1049,7 @@ def bound_function(template_key):
     *template_key* (e.g. "complex.conjugate" above) will be used by the
     target to look up the method's implementation, as a regular function.
     """
+
     def wrapper(method_resolver):
         @functools.wraps(method_resolver)
         def attribute_resolver(self, ty):
@@ -1038,8 +1062,11 @@ def bound_function(template_key):
                         sig = sig.replace(recvr=ty)
                     return sig
 
+            MethodTemplate._no_unliteral = no_unliteral
             return types.BoundFunction(MethodTemplate, ty)
+
         return attribute_resolver
+
     return wrapper
 
 

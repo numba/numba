@@ -266,8 +266,7 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
-        failures = _ResolutionFailures(context, self, args, kws,
-                                       depth=self._depth)
+        failures = _ResolutionFailures(context, self, args, kws, depth=self._depth)
         self._depth += 1
         for temp_cls in self.templates:
             temp = temp_cls(context)
@@ -275,7 +274,7 @@ class BaseFunction(Callable):
                 try:
                     if uselit:
                         sig = temp.apply(args, kws)
-                    else:
+                    elif not getattr(temp, "_no_unliteral", False):
                         nolitargs = tuple([unliteral(a) for a in args])
                         nolitkws = {k: unliteral(v) for k, v in kws.items()}
                         sig = temp.apply(nolitargs, nolitkws)
@@ -288,19 +287,22 @@ class BaseFunction(Callable):
                         self._depth -= 1
                         return sig
                     else:
-                        registered_sigs = getattr(temp, 'cases', None)
+                        registered_sigs = getattr(temp, "cases", None)
                         if registered_sigs is not None:
                             msg = "No match for registered cases:\n%s"
-                            msg = msg % '\n'.join(" * {}".format(x) for x in
-                                                  registered_sigs)
+                            msg = msg % "\n".join(
+                                " * {}".format(x) for x in registered_sigs
+                            )
                         else:
-                            msg = 'No match.'
+                            msg = "No match."
                         failures.add_error(temp, True, msg, uselit)
 
         if len(failures) == 0:
-            raise AssertionError("Internal Error. "
-                                 "Function resolution ended with no failures "
-                                 "or successful signature")
+            raise AssertionError(
+                "Internal Error. "
+                "Function resolution ended with no failures "
+                "or successful signature"
+            )
         failures.raise_error()
 
     def get_call_signatures(self):
@@ -361,7 +363,6 @@ class BoundFunction(Callable, Opaque):
         literal_e = None
         nonliteral_e = None
 
-
         # Try with Literal
         try:
             out = template.apply(args, kws)
@@ -380,7 +381,7 @@ class BoundFunction(Callable, Opaque):
         # If the above template application failed and the non-literal args are
         # different to the literal ones, try again with literals rewritten as
         # non-literals
-        if not skip and out is None:
+        if not skip and out is None and not getattr(template, "_no_unliteral", False):
             try:
                 out = template.apply(unliteral_args, unliteral_kws)
             except Exception as exc:
@@ -391,21 +392,23 @@ class BoundFunction(Callable, Opaque):
         if out is None and (nonliteral_e is not None or literal_e is not None):
             header = "- Resolution failure for {} arguments:\n{}\n"
             tmplt = _termcolor.highlight(header)
-            if config.DEVELOPER_MODE:
-                indent = ' ' * 4
+            if numba.core.config.DEVELOPER_MODE:
+                indent = " " * 4
+
                 def add_bt(error):
                     if isinstance(error, BaseException):
                         # if the error is an actual exception instance, trace it
-                        bt = traceback.format_exception(type(error), error,
-                                                        error.__traceback__)
+                        bt = traceback.format_exception(
+                            type(error), error, error.__traceback__
+                        )
                     else:
                         bt = [""]
-                    nd2indent = '\n{}'.format(2 * indent)
-                    errstr = _termcolor.reset(nd2indent +
-                                               nd2indent.join(_bt_as_lines(bt)))
+                    nd2indent = "\n{}".format(2 * indent)
+                    errstr += _termcolor.reset(nd2indent + nd2indent.join(bt_as_lines))
                     return _termcolor.reset(errstr)
+
             else:
-                add_bt = lambda X: ''
+                add_bt = lambda X: ""
 
             def nested_msg(literalness, e):
                 estr = str(e)
@@ -413,8 +416,9 @@ class BoundFunction(Callable, Opaque):
                 new_e = errors.TypingError(textwrap.dedent(estr))
                 return tmplt.format(literalness, str(new_e))
 
-            raise errors.TypingError(nested_msg('literal', literal_e) +
-                                     nested_msg('non-literal', nonliteral_e))
+            raise errors.TypingError(
+                nested_msg("literal", literal_e) + nested_msg("non-literal", nonliteral_e)
+            )
         return out
 
 
