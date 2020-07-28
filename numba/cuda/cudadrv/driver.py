@@ -1899,35 +1899,6 @@ class Function(object):
             flag = enums.CU_FUNC_CACHE_PREFER_NONE
         driver.cuFuncSetCacheConfig(self.handle, flag)
 
-    def configure(self, griddim, blockdim, sharedmem=0, stream=0):
-        while len(griddim) < 3:
-            griddim += (1,)
-
-        while len(blockdim) < 3:
-            blockdim += (1,)
-
-        inst = copy.copy(self)  # shallow clone the object
-        inst.griddim = griddim
-        inst.blockdim = blockdim
-        inst.sharedmem = sharedmem
-        if stream:
-            inst.stream = stream
-        else:
-            inst.stream = 0
-        return inst
-
-    def __call__(self, *args):
-        '''
-        *args -- Must be either ctype objects of DevicePointer instances.
-        '''
-        if self.stream:
-            streamhandle = self.stream.handle
-        else:
-            streamhandle = None
-
-        launch_kernel(self.handle, self.griddim, self.blockdim,
-                      self.sharedmem, streamhandle, args)
-
     @property
     def device(self):
         return self.module.context.device
@@ -1951,9 +1922,12 @@ class Function(object):
                         maxthreads=maxtpb)
 
 
-def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
-    gx, gy, gz = griddim
-    bx, by, bz = blockdim
+def launch_kernel(cufunc_handle,
+                  gx, gy, gz,
+                  bx, by, bz,
+                  sharedmem,
+                  hstream,
+                  args):
 
     param_vals = []
     for arg in args:
