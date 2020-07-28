@@ -658,15 +658,10 @@ class InlineOverloads(FunctionPass):
         if sig is None:
             return False
 
-        templates = []
-        if expr.op == 'static_getitem':
-            templates = state.typingctx._functions.get(expr.op, [])
-        templates += state.typingctx._functions.get(expr.fn, [])
-        if templates is None:
-            return False
+        arg_typs = sig.args
+        templates = state.typingctx._functions.get(expr.fn, [])
 
         impl = None
-        arg_typs = sig.args
         for template in templates:
             inline_type = getattr(template, '_inline', None)
             if inline_type is None:
