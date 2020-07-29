@@ -183,6 +183,8 @@ class DPPLTargetContext(BaseContext):
 
         def sub_gen_with_global(lty):
             if isinstance(lty, llvmir.PointerType):
+                if lty.addrspace == SPIR_LOCAL_ADDRSPACE:
+                    return lty, None
                 # DRD : Cast all pointer types to global address space.
                 if  lty.addrspace != SPIR_GLOBAL_ADDRSPACE: # jcaraban
                     return (lty.pointee.as_pointer(SPIR_GLOBAL_ADDRSPACE),
