@@ -196,8 +196,9 @@ class TestCudaConstantMemory(CUDATestCase):
         np.testing.assert_allclose(E, CONST_RECORD_ALIGN['z'])
 
     @skip_on_cudasim('PTX inspection not supported on the simulator')
-    @unittest.expectedFailure
     def test_const_record_align_optimization(self):
+        rtver = cuda.runtime.get_version()
+
         A = np.zeros(2, dtype=np.float64)
         B = np.zeros(2, dtype=np.float64)
         C = np.zeros(2, dtype=np.float64)
