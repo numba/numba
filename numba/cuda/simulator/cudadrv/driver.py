@@ -13,3 +13,8 @@ class FakeDriver(object):
 driver = FakeDriver()
 
 Linker = None
+
+
+def launch_kernel(*args, **kwargs):
+    msg = 'Launching kernels directly is not supported in the simulator'
+    raise RuntimeError(msg)
