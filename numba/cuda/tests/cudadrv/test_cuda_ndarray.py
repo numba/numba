@@ -16,7 +16,7 @@ class TestCudaNDArray(CUDATestCase):
 
         ary = np.asarray(1.234)
         dary = cuda.to_device(ary)
-        self.assertEquals(dary.ndim, 1)
+        self.assertEquals(dary.ndim, 0)
         devicearray.verify_cuda_ndarray_interface(dary)
 
     def test_device_array_from_readonly(self):

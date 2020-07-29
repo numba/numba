@@ -179,10 +179,18 @@ class TestCudaConstantMemory(CUDATestCase):
         jcuconst = cuda.jit(cuconstRecAlign).specialize(A, B, C, D, E)
 
         if not ENABLE_CUDASIM:
+            # Code generation differs slightly in 10.2 onwards
+            if cuda.runtime.get_version() >= (10, 2):
+                first_bytes = 'ld.const.v2.u8'
+                first_bytes_msg = 'load the first two bytes as a vector'
+            else:
+                first_bytes = 'ld.const.v4.u8'
+                first_bytes_msg = 'load the first three bytes as a vector'
+
             self.assertIn(
-                'ld.const.v4.u8',
+                first_bytes,
                 jcuconst.ptx,
-                'load the first three bytes as a vector')
+                first_bytes_msg)
 
             self.assertIn(
                 'ld.const.u32',

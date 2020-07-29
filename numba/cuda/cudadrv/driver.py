@@ -44,7 +44,7 @@ MIN_REQUIRED_CC = (2, 0)
 SUPPORTS_IPC = sys.platform.startswith('linux')
 
 
-def _make_logger():
+def make_logger():
     logger = logging.getLogger(__name__)
     # is logging configured?
     if not logger.hasHandlers():
@@ -224,7 +224,7 @@ class Driver(object):
     def initialize(self):
         # lazily initialize logger
         global _logger
-        _logger = _make_logger()
+        _logger = make_logger()
 
         self.is_initialized = True
         try:
@@ -804,7 +804,28 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
             yield
 
 
-class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
+class GetIpcHandleMixin:
+    """A class that provides a default implementation of ``get_ipc_handle()``.
+    """
+
+    def get_ipc_handle(self, memory):
+        """Open an IPC memory handle by using ``cuMemGetAddressRange`` to
+        determine the base pointer of the allocation. An IPC handle of type
+        ``cu_ipc_mem_handle`` is constructed and initialized with
+        ``cuIpcGetMemHandle``. A :class:`numba.cuda.IpcHandle` is returned,
+        populated with the underlying ``ipc_mem_handle``.
+        """
+        base, end = device_extents(memory)
+        ipchandle = drvapi.cu_ipc_mem_handle()
+        driver.cuIpcGetMemHandle(byref(ipchandle), base)
+        source_info = self.context.device.get_device_identity()
+        offset = memory.handle.value - base
+
+        return IpcHandle(memory, ipchandle, memory.size, source_info,
+                         offset=offset)
+
+
+class NumbaCUDAMemoryManager(GetIpcHandleMixin, HostOnlyCUDAMemoryManager):
     """Internal on-device memory management for Numba. This is implemented using
     the EMM Plugin interface, but is not part of the public API."""
 
@@ -833,16 +854,6 @@ class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
         total = c_size_t()
         driver.cuMemGetInfo(byref(free), byref(total))
         return MemoryInfo(free=free.value, total=total.value)
-
-    def get_ipc_handle(self, memory):
-        base, end = device_extents(memory)
-        ipchandle = drvapi.cu_ipc_mem_handle()
-        driver.cuIpcGetMemHandle(byref(ipchandle), base)
-        source_info = self.context.device.get_device_identity()
-        offset = memory.handle.value - base
-
-        return IpcHandle(memory, ipchandle, memory.size, source_info,
-                         offset=offset)
 
     @property
     def interface_version(self):
