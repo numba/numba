@@ -28,15 +28,8 @@ def reconstruct_ssa(func_ir):
 
     Produces minimal SSA using Choi et al algorithm.
     """
-    _logger.debug("BEFORE SSA".center(80, "-"))
-    _logger.debug(func_ir.dump_to_string())
-    _logger.debug("=" * 80)
-
     func_ir.blocks = _run_ssa(func_ir.blocks)
 
-    _logger.debug("AFTER SSA".center(80, "-"))
-    _logger.debug(func_ir.dump_to_string())
-    _logger.debug("=" * 80)
     return func_ir
 
 
@@ -46,7 +39,9 @@ def _run_ssa(blocks):
     if not blocks:
         # Empty blocks?
         return {}
-
+    # Run CFG on the blocks
+    cfg = compute_cfg_from_blocks(blocks)
+    df_plus = _iterated_domfronts(cfg)
     # Find SSA violators
     violators = _find_defs_violators(blocks)
     # Process one SSA-violating variable at a time
@@ -60,11 +55,17 @@ def _run_ssa(blocks):
         _logger.debug("Replaced assignments: %s", pformat(defmap))
         # Fix up the RHS
         # Re-associate the variable uses with the reaching definition
-        blocks = _fix_ssa_vars(blocks, varname, defmap)
+        blocks = _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus)
+
+    # Post-condition checks.
+    # CFG invariant
+    cfg_post = compute_cfg_from_blocks(blocks)
+    if cfg_post != cfg:
+        raise errors.CompilerError("CFG mutated in SSA pass")
     return blocks
 
 
-def _fix_ssa_vars(blocks, varname, defmap):
+def _fix_ssa_vars(blocks, varname, defmap, cfg, df_plus):
     """Rewrite all uses to ``varname`` given the definition map
     """
     states = _make_states(blocks)
@@ -72,7 +73,7 @@ def _fix_ssa_vars(blocks, varname, defmap):
     states['defmap'] = defmap
     states['phimap'] = phimap = defaultdict(list)
     states['cfg'] = cfg = compute_cfg_from_blocks(blocks)
-    states['df+'] = _iterated_domfronts(cfg)
+    states['phi_locations'] = _compute_phi_locations(cfg, defmap)
     newblocks = _run_block_rewrite(blocks, states, _FixSSAVars())
     # check for unneeded phi nodes
     _remove_unneeded_phis(phimap)
@@ -130,6 +131,19 @@ def _iterated_domfronts(cfg):
                 vs |= inner
                 keep_going = True
     return domfronts
+
+
+def _compute_phi_locations(cfg, defmap):
+    # See basic algorithm in Ch 4.1 in Inria SSA Book
+    # Compute DF+
+    iterated_df = _iterated_domfronts(cfg)
+    # Compute DF+(defs)
+    # DF of all DFs is the union of all DFs
+    phi_locations = set()
+    for deflabel, defstmts in defmap.items():
+        if defstmts:
+            phi_locations |= iterated_df[deflabel]
+    return phi_locations
 
 
 def _fresh_vars(blocks, varname):
@@ -382,32 +396,31 @@ class _FixSSAVars(_BaseHandler):
         cfg = states['cfg']
         defmap = states['defmap']
         phimap = states['phimap']
-        domfronts = states['df+']
-        for deflabel, defstmt in defmap.items():
-            df = domfronts[deflabel]
-            if label in df:
-                scope = states['scope']
-                loc = states['block'].loc
-                # fresh variable
-                freshvar = scope.redefine(states['varname'], loc=loc)
-                # insert phi
-                phinode = ir.Assign(
-                    target=freshvar,
-                    value=ir.Expr.phi(loc=loc),
-                    loc=loc,
+        phi_locations = states['phi_locations']
+
+        if label in phi_locations:
+            scope = states['scope']
+            loc = states['block'].loc
+            # fresh variable
+            freshvar = scope.redefine(states['varname'], loc=loc)
+            # insert phi
+            phinode = ir.Assign(
+                target=freshvar,
+                value=ir.Expr.phi(loc=loc),
+                loc=loc,
+            )
+            _logger.debug("insert phi node %s at %s", phinode, label)
+            defmap[label].insert(0, phinode)
+            phimap[label].append(phinode)
+            # Find incoming values for the Phi node
+            for pred, _ in cfg.predecessors(label):
+                incoming_def = self._find_def_from_bottom(
+                    states, pred, loc=loc,
                 )
-                _logger.debug("insert phi node %s at %s", phinode, label)
-                defmap[label].insert(0, phinode)
-                phimap[label].append(phinode)
-                # Find incoming values for the Phi node
-                for pred, _ in cfg.predecessors(label):
-                    incoming_def = self._find_def_from_bottom(
-                        states, pred, loc=loc,
-                    )
-                    _logger.debug("incoming_def %s", incoming_def)
-                    phinode.value.incoming_values.append(incoming_def.target)
-                    phinode.value.incoming_blocks.append(pred)
-                return phinode
+                _logger.debug("incoming_def %s", incoming_def)
+                phinode.value.incoming_values.append(incoming_def.target)
+                phinode.value.incoming_blocks.append(pred)
+            return phinode
         else:
             idom = cfg.immediate_dominators()[label]
             if idom == label:

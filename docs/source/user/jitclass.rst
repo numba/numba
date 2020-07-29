@@ -22,34 +22,13 @@ to the underlying data, bypassing the interpreter.
 Basic usage
 ===========
 
-Here's an example of a jitclass::
+Here's an example of a jitclass:
 
-  import numpy as np
-  from numba import jitclass          # import the decorator
-  from numba import int32, float32    # import the types
-
-  spec = [
-      ('value', int32),               # a simple scalar field
-      ('array', float32[:]),          # an array field
-  ]
-
-  @jitclass(spec)
-  class Bag(object):
-      def __init__(self, value):
-          self.value = value
-          self.array = np.zeros(value, dtype=np.float32)
-
-      @property
-      def size(self):
-          return self.array.size
-
-      def increment(self, val):
-          for i in range(self.size):
-              self.array[i] = val
-          return self.array
-
-
-(see full example at `examples/jitclass.py` from the source tree)
+.. literalinclude:: ../../../numba/tests/doc_examples/test_jitclass.py
+   :language: python
+   :start-after: magictoken.ex_jitclass.begin
+   :end-before: magictoken.ex_jitclass.end
+   :dedent: 8
 
 In the above example, a ``spec`` is provided as a list of 2-tuples.  The tuples
 contain the name of the field and the Numba type of the field.  Alternatively,
@@ -152,6 +131,8 @@ compiled functions:
   (e.g. ``mybag = Bag(123)``);
 * read/write access to attributes and properties (e.g. ``mybag.value``);
 * calling methods (e.g. ``mybag.increment(3)``);
+* calling static methods as instance attributes (e.g. ``mybag.add(1, 1)``);
+* calling static methods as class attributes (e.g. ``Bag.add(1, 2)``);
 
 Using jitclasses in Numba compiled function is more efficient.
 Short methods can be inlined (at the discretion of LLVM inliner).
@@ -162,6 +143,9 @@ must be unboxed or boxed between Python objects and native representation.
 Values encapsulated by a jitclass does not get boxed into Python object when
 the jitclass instance is handed to the interpreter.  It is during attribute
 access to the field values that they are boxed.
+Calling static methods as class attributes is only supported outside of the
+class definition (i.e. you can't call ``Bag.add()`` from within another method
+of ``Bag``).
 
 
 Limitations

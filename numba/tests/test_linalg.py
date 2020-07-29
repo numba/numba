@@ -10,7 +10,8 @@ import numpy as np
 
 from numba import jit
 from numba.core import errors
-from numba.tests.support import TestCase, tag, needs_lapack, needs_blas, _is_armv7l
+from numba.tests.support import (TestCase, tag, needs_lapack, needs_blas,
+                                 _is_armv7l, skip_ppc64le_issue4026)
 from .matmul_usecase import matmul_usecase
 import unittest
 
@@ -762,6 +763,7 @@ class TestLinalgInv(TestLinalgBase):
         self.assert_raise_on_singular(cfunc, (np.zeros((2, 2)),))
 
 
+@skip_ppc64le_issue4026
 class TestLinalgCholesky(TestLinalgBase):
     """
     Tests for np.linalg.cholesky.

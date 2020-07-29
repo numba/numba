@@ -191,7 +191,7 @@ Implementing the constructor
 Now we want to implement the two-argument ``Interval`` constructor::
 
    from numba.extending import lower_builtin
-   from numba import cgutils
+   from numba.core import cgutils
 
    @lower_builtin(Interval, types.Float, types.Float)
    def impl_interval(context, builder, sig, args):

@@ -351,9 +351,12 @@ class TestBranchPrune(TestBranchPruneBase, SerialMixin):
             self.assertEqual(len(before_branches), 1)
 
             # check the condition in the branch is a binop
-            condition_var = before_branches[0].cond
-            condition_defn = ir_utils.get_definition(func_ir, condition_var)
-            self.assertEqual(condition_defn.op, 'binop')
+            pred_var = before_branches[0].cond
+            pred_defn = ir_utils.get_definition(func_ir, pred_var)
+            self.assertEqual(pred_defn.op, 'call')
+            condition_var = pred_defn.args[0]
+            condition_op = ir_utils.get_definition(func_ir, condition_var)
+            self.assertEqual(condition_op.op, 'binop')
 
             # do the prune, this should kill the dead branch and rewrite the
             #'condition to a true/false const bit

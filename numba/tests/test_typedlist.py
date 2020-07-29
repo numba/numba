@@ -619,6 +619,7 @@ class TestNoneType(MemoryLeakMixin, TestCase):
             return njit(context["bar"])
         for line1, line2 in (
                 ("lst.append(None)", "lst.pop()"),
+                ("lst.append(None)", "del lst[0]"),
                 ("lst.append(None)", "lst.count(None)"),
                 ("lst.append(None)", "lst.index(None)"),
                 ("lst.append(None)", "lst.insert(0, None)"),
@@ -737,6 +738,33 @@ class TestExtend(MemoryLeakMixin, TestCase):
         expected = impl.py_func()
         got = impl()
         self.assertEqual(expected, got)
+
+    def test_extend_single_value_container(self):
+        @njit
+        def impl():
+            l = List()
+            l.extend((100,))
+            return l
+
+        expected = impl.py_func()
+        got = impl()
+        self.assertEqual(expected, got)
+
+    def test_extend_empty_unrefined(self):
+        # Extending an unrefined list with an empty iterable doesn't work in a
+        # jit compiled function as the list remains untyped.
+        l = List()
+        l.extend(tuple())
+        self.assertEqual(len(l), 0)
+        self.assertFalse(l._typed)
+
+    def test_extend_empty_refiend(self):
+        # Extending a refined list with an empty iterable doesn't work in a
+        # jit compiled function as the (empty) argument can't be typed
+        l = List((1,))
+        l.extend(tuple())
+        self.assertEqual(len(l), 1)
+        self.assertTrue(l._typed)
 
 
 @njit
@@ -988,6 +1016,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     def test_list_as_item_in_list(self):
         nested_type = types.ListType(types.int32)
+
         @njit
         def foo():
             la = List.empty_list(nested_type)
@@ -1002,6 +1031,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     def test_array_as_item_in_list(self):
         nested_type = types.Array(types.float64, 1, 'C')
+
         @njit
         def foo():
             l = List.empty_list(nested_type)
@@ -1013,6 +1043,28 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
         got = foo()
         # Need to compare the nested arrays
         self.assertTrue(np.all(expected[0] == got[0]))
+
+    def test_array_pop_from_single_value_list(self):
+        @njit
+        def foo():
+            l = List((np.zeros((1,)),))
+            l.pop()
+            return l
+
+        expected, got = foo.py_func(), foo()
+        # Need to compare the nested arrays
+        self.assertEqual(len(expected), 0)
+        self.assertEqual(len(got), 0)
+        # FIXME comparison of empty array-typed lists fails
+        # self.assertEqual(expected, got)
+
+    def test_5264(self):
+        # Test the reproducer from #5264 and make sure it doesn't segfault
+        float_array = types.float64[:]
+        l = List.empty_list(float_array)
+        l.append(np.ones(3,dtype=np.float64))
+        l.pop()
+        self.assertEqual(0, len(l))
 
     def test_jitclass_as_item_in_list(self):
 
@@ -1053,6 +1105,22 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             np.testing.assert_allclose(one.array, two.array)
 
         [bag_equal(a, b) for a, b in zip(expected, got)]
+
+    def test_4960(self):
+        # Test the reproducer from #4960 and make sure it doesn't segfault
+        @jitclass([('value', int32)])
+        class Simple(object):
+            def __init__(self, value):
+                self.value = value
+
+        @njit
+        def foo():
+            l = List((Simple(23),Simple(24)))
+            l.pop()
+            return l
+
+        l = foo()
+        self.assertEqual(1, len(l))
 
     def test_storage_model_mismatch(self):
         # https://github.com/numba/numba/issues/4520
@@ -1255,6 +1323,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
 
     def test_append_fails(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = List()
@@ -1404,21 +1473,27 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
     def test_ndarray_twod(self):
 
         @njit
-        def foo():
-            return List(np.array([[1,2],[3,4]]))
+        def foo(x):
+            return List(x)
 
-        expected = List()
-        expected.append(np.array([1,2]))
-        expected.append(np.array([3,4]))
-        received = foo()
+        carr = np.array([[1, 2], [3, 4]])
+        farr = np.asfortranarray(carr)
+        aarr = np.arange(8).reshape((2, 4))[:, ::2]
 
-        np.testing.assert_equal(expected[0], received[0])
-        np.testing.assert_equal(expected[1], received[1])
+        for layout, arr in zip('CFA', (carr, farr, aarr)):
+            self.assertEqual(typeof(arr).layout, layout)
+            expected = List()
+            expected.append(arr[0, :])
+            expected.append(arr[1, :])
+            received = foo(arr)
 
-        pyreceived = foo.py_func()
+            np.testing.assert_equal(expected[0], received[0])
+            np.testing.assert_equal(expected[1], received[1])
 
-        np.testing.assert_equal(expected[0], pyreceived[0])
-        np.testing.assert_equal(expected[1], pyreceived[1])
+            pyreceived = foo.py_func(arr)
+
+            np.testing.assert_equal(expected[0], pyreceived[0])
+            np.testing.assert_equal(expected[1], pyreceived[1])
 
     def test_exception_on_plain_int(self):
         @njit

@@ -47,7 +47,7 @@ and to make sure the dependencies are installed with consistent version of LLVM 
 installation script that will create a CONDA environment and install LLVM-SPIRV translator,
 SPIRV-Tools and llvmlite in that environment. **To use this CONDA has to be available in the system**.
 
-The above mentioned installation script can be found `here <https://github.intel.com/SAT/numba-dppl-build-scripts>`_. Please follow the README to run the installation script.
+The above mentioned installation script can be found `here <https://github.intel.com/SAT/numba-pvc-build-scripts>`_. Please follow the README to run the installation script.
 
 After successful installation the following message should be displayed:
 
