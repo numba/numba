@@ -17,7 +17,7 @@ All Numba deprecations are issued via ``NumbaDeprecationWarning`` or
 ``NumbaPendingDeprecationWarning`` s, to suppress the reporting of
 these the following code snippet can be used::
 
-    from numba.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
+    from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
     import warnings
 
     warnings.simplefilter('ignore', category=NumbaDeprecationWarning)

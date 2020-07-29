@@ -44,7 +44,7 @@ MIN_REQUIRED_CC = (2, 0)
 SUPPORTS_IPC = sys.platform.startswith('linux')
 
 
-def _make_logger():
+def make_logger():
     logger = logging.getLogger(__name__)
     # is logging configured?
     if not logger.hasHandlers():
@@ -224,7 +224,7 @@ class Driver(object):
     def initialize(self):
         # lazily initialize logger
         global _logger
-        _logger = _make_logger()
+        _logger = make_logger()
 
         self.is_initialized = True
         try:
