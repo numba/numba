@@ -206,28 +206,38 @@ class TestCudaConstantMemory(CUDATestCase):
         E = np.zeros(2, dtype=np.float64)
         jcuconst = cuda.jit(cuconstRecAlign).specialize(A, B, C, D, E)
 
-        # Code generation differs slightly in 10.2 onwards
-        if cuda.runtime.get_version() >= (10, 2):
-            first_bytes = 'ld.const.v2.u8'
-            first_bytes_msg = 'load the first two bytes as a vector'
+        if rtver >= (10, 2):
+            # Code generation differs slightly in 10.2 onwards - the first
+            # bytes are loaded as individual bytes, so we'll check that
+            # ld.const.u8 occurs at least four times (the first three bytes,
+            # then the last byte by itself)
+            msg = 'load first three bytes and last byte individually'
+            u8_load_count = len([s for s in jcuconst.ptx.split()
+                                 if 'ld.const.u8' in s])
+            self.assertGreaterEqual(u8_load_count, 4, msg)
         else:
+            # On earlier versions, a vector of 4 bytes is used to load the
+            # first three bytes.
             first_bytes = 'ld.const.v4.u8'
             first_bytes_msg = 'load the first three bytes as a vector'
 
-        self.assertIn(
-            first_bytes,
-            jcuconst.ptx,
-            first_bytes_msg)
+            self.assertIn(
+                first_bytes,
+                jcuconst.ptx,
+                first_bytes_msg)
 
         self.assertIn(
             'ld.const.u32',
             jcuconst.ptx,
             'load the uint32 natively')
 
-        self.assertIn(
-            'ld.const.u8',
-            jcuconst.ptx,
-            'load the last byte by itself')
+        # On 10.2 and above, we already checked for loading the last byte by
+        # itself - no need to repeat the check.
+        if rtver < (10, 2):
+            self.assertIn(
+                'ld.const.u8',
+                jcuconst.ptx,
+                'load the last byte by itself')
 
 
 if __name__ == '__main__':
