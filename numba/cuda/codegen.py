@@ -16,6 +16,7 @@ class CUDACodeLibrary(CodeLibrary):
         pass
 
     def _optimize_final_module(self):
+        return
         # Run some lightweight optimization to simplify the module.
         # This seems to workaround a libnvvm compilation bug (see #1341)
         pmb = ll.PassManagerBuilder()

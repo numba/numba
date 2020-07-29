@@ -4,7 +4,7 @@ from numba.core.typing.npydecl import (parse_dtype, parse_shape,
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, CallableTemplate,
                                          signature, Registry)
-from numba.cuda.types import dim3
+from numba.cuda.types import dim3, grid_group
 from numba import cuda
 
 
@@ -134,7 +134,7 @@ class Cuda_syncwarp(ConcreteTemplate):
 @register
 class Cuda_this_grid(ConcreteTemplate):
     key = cuda.this_grid
-    cases = [signature(types.int64)]
+    cases = [signature(grid_group)]
 
 
 @register
