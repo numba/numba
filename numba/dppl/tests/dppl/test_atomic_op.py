@@ -43,6 +43,22 @@ def atomic_add3(ary):
 
 
 
+def call_fn_for_datatypes(fn, result, input, global_size):
+    dtypes = [np.int32, np.int64, np.float32, np.double]
+
+    for dtype in dtypes:
+        a = np.array(input, dtype=dtype)
+
+        with ocldrv.igpu_context(0) as device_env:
+            if dtype == np.double and not device_env.device_support_float64_atomics():
+                continue
+            if dtype == np.int64 and not device_env.device_support_int64_atomics():
+                continue
+            fn[global_size, dppl.DEFAULT_LOCAL_SIZE](a)
+
+        assert(a[0] == result)
+
+
 @unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
 class TestAtomicOp(DPPLTestCase):
     def test_atomic_add(self):
@@ -54,10 +70,7 @@ class TestAtomicOp(DPPLTestCase):
         N = 100
         B = np.array([0])
 
-        with ocldrv.igpu_context(0) as device_env:
-            atomic_add[N, dppl.DEFAULT_LOCAL_SIZE](B)
-
-        self.assertTrue(B[0] == N)
+        call_fn_for_datatypes(atomic_add, N, B, N)
 
 
     def test_atomic_sub(self):
@@ -69,14 +82,13 @@ class TestAtomicOp(DPPLTestCase):
         N = 100
         B = np.array([100])
 
-        with ocldrv.igpu_context(0) as device_env:
-            atomic_sub[N, dppl.DEFAULT_LOCAL_SIZE](B)
+        call_fn_for_datatypes(atomic_sub, 0, B, N)
 
-        self.assertTrue(B[0] == 0)
 
     def test_atomic_add1(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
         orig = ary.copy()
+
         dppl_atomic_add = dppl.kernel('void(uint32[:])')(atomic_add)
         with ocldrv.igpu_context(0) as device_env:
             dppl_atomic_add[32, dppl.DEFAULT_LOCAL_SIZE](ary)
