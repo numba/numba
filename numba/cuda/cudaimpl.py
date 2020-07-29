@@ -645,10 +645,11 @@ def _get_target_data(context):
 
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                    can_dynsized=False):
-    elemcount = reduce(operator.mul, shape)
+    elemcount = reduce(operator.mul, shape, 1)
 
-    # Check for valid shape for this type of allocation
-    dynamic_smem = elemcount <= 0 and can_dynsized
+    # Check for valid shape for this type of allocation.
+    # Only 1d arrays can be dynamic.
+    dynamic_smem = elemcount <= 0 and can_dynsized and len(shape) == 1
     if elemcount <= 0 and not dynamic_smem:
         raise ValueError("array length <= 0")
 
@@ -697,9 +698,11 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
     itemsize = lldtype.get_abi_size(targetdata)
 
     # Compute strides
-    rstrides = [itemsize]
-    for i, lastsize in enumerate(reversed(shape[1:])):
-        rstrides.append(lastsize * rstrides[-1])
+    laststride = itemsize
+    rstrides = []
+    for i, lastsize in enumerate(reversed(shape)):
+        rstrides.append(laststride)
+        laststride *= lastsize
     strides = [s for s in reversed(rstrides)]
     kstrides = [context.get_constant(types.intp, s) for s in strides]
 
@@ -728,8 +731,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 
     context.populate_array(ary,
                            data=builder.bitcast(dataptr, ary.data.type),
-                           shape=cgutils.pack_array(builder, kshape),
-                           strides=cgutils.pack_array(builder, kstrides),
+                           shape=kshape,
+                           strides=kstrides,
                            itemsize=context.get_constant(types.intp, itemsize),
                            meminfo=None)
     return ary._getvalue()

@@ -234,8 +234,8 @@ class CUDATargetContext(BaseContext):
         kshape = [self.get_constant(types.intp, s) for s in arr.shape]
         kstrides = [self.get_constant(types.intp, s) for s in arr.strides]
         self.populate_array(ary, data=builder.bitcast(genptr, ary.data.type),
-                            shape=cgutils.pack_array(builder, kshape),
-                            strides=cgutils.pack_array(builder, kstrides),
+                            shape=kshape,
+                            strides=kstrides,
                             itemsize=ary.itemsize, parent=ary.parent,
                             meminfo=None)
 
