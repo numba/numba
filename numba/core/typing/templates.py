@@ -251,7 +251,13 @@ class FunctionTemplate(ABC):
     # Set to true to disable unsafe cast.
     # subclass overide-able
     unsafe_casting = True
+    # Set to true to require exact match without casting
+    # subclass overide-able
     exact_match_required = False
+    # Set to true to prefer literal arguments.
+    # Useful for definitions that specialize on literal but also support
+    # non-literals.
+    # subclass overide-able
     prefer_literal = False
 
     def __init__(self, context):
