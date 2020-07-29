@@ -8,8 +8,9 @@ import llvmlite.llvmpy.core as lc
 
 import ctypes
 from numba import _helperlib
-from numba.core import types, utils, config, lowering, cgutils, imputils
-
+from numba.core import (
+    types, utils, config, lowering, cgutils, imputils, serialize,
+)
 
 PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
 PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
@@ -181,7 +182,8 @@ class PythonAPI(object):
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)
 
-    def emit_environment_sentry(self, envptr, return_pyobject=False):
+    def emit_environment_sentry(self, envptr, return_pyobject=False,
+                                debug_msg=''):
         """Emits LLVM code to ensure the `envptr` is not NULL
         """
         is_null = cgutils.is_null(self.builder, envptr)
@@ -189,13 +191,15 @@ class PythonAPI(object):
             if return_pyobject:
                 fnty = self.builder.function.type.pointee
                 assert fnty.return_type == self.pyobj
-                self.err_set_string("PyExc_RuntimeError",
-                                    "missing Environment")
+                self.err_set_string(
+                    "PyExc_RuntimeError", f"missing Environment: {debug_msg}",
+                )
                 self.builder.ret(self.get_null_object())
             else:
-                self.context.call_conv.return_user_exc(self.builder,
-                                                       RuntimeError,
-                                                       ("missing Environment",))
+                self.context.call_conv.return_user_exc(
+                    self.builder, RuntimeError,
+                    (f"missing Environment: {debug_msg}",),
+                )
 
     # ------ Python API -----
 
@@ -950,10 +954,10 @@ class PythonAPI(object):
             return self.builder.call(fn, (lhs, rhs, lopid))
         elif opstr == 'is':
             bitflag = self.builder.icmp(lc.ICMP_EQ, lhs, rhs)
-            return self.from_native_value(types.boolean, bitflag)
+            return self.bool_from_bool(bitflag)
         elif opstr == 'is not':
             bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
-            return self.from_native_value(types.boolean, bitflag)
+            return self.bool_from_bool(bitflag)
         elif opstr in ('in', 'not in'):
             fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
             fn = self._get_function(fnty, name="PySequence_Contains")
@@ -1306,7 +1310,7 @@ class PythonAPI(object):
         simply return a literal {i8* data, i32 length} structure.
         """
         # First make the array constant
-        data = pickle.dumps(obj, protocol=-1)
+        data = serialize.dumps(obj)
         assert len(data) < 2**31
         name = ".const.pickledata.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
         bdata = cgutils.make_bytearray(data)
@@ -1567,3 +1571,57 @@ class PythonAPI(object):
         res = builder.load(res_ptr)
         return is_error, res
 
+
+class ObjModeUtils:
+    """Internal utils for calling objmode dispatcher from within NPM code.
+    """
+    def __init__(self, pyapi):
+        self.pyapi = pyapi
+
+    def load_dispatcher(self, fnty, argtypes):
+        builder = self.pyapi.builder
+        tyctx = self.pyapi.context
+        m = builder.module
+
+        # Add a global variable to cache the objmode dispatcher
+        gv = ir.GlobalVariable(
+            m, self.pyapi.pyobj,
+            name=m.get_unique_name("cached_objmode_dispatcher"),
+        )
+        gv.initializer = gv.type.pointee(None)
+        gv.linkage = 'internal'
+
+        cached = builder.load(gv)
+        with builder.if_then(cgutils.is_null(builder, cached)):
+            if serialize.is_serialiable(fnty.dispatcher):
+                cls = type(self)
+                compiler = self.pyapi.unserialize(
+                    self.pyapi.serialize_object(cls._call_objmode_dispatcher)
+                )
+                serialized_dispatcher = self.pyapi.serialize_object(
+                    (fnty.dispatcher, tuple(argtypes)),
+                )
+                compile_args = self.pyapi.unserialize(serialized_dispatcher)
+                callee = self.pyapi.call_function_objargs(
+                    compiler, [compile_args],
+                )
+                # Clean up
+                self.pyapi.decref(compiler)
+                self.pyapi.decref(compile_args)
+            else:
+                entry_pt = fnty.dispatcher.compile(tuple(argtypes))
+                callee = tyctx.add_dynamic_addr(
+                    builder, id(entry_pt), info="with_objectmode",
+                )
+            # Incref the dispatcher and cache it
+            self.pyapi.incref(callee)
+            builder.store(callee, gv)
+
+        callee = builder.load(gv)
+        return callee
+
+    @staticmethod
+    def _call_objmode_dispatcher(compile_args):
+        dispatcher, argtypes = compile_args
+        entrypt = dispatcher.compile(argtypes)
+        return entrypt

@@ -56,6 +56,33 @@ def declare_atomic_min_float64(lmod):
         (lc.Type.pointer(lc.Type.double()), lc.Type.double()))
     return lmod.get_or_insert_function(fnty, fname)
 
+def declare_atomic_nanmax_float32(lmod):
+    fname = '___numba_atomic_float_nanmax'
+    fnty = lc.Type.function(lc.Type.float(),
+        (lc.Type.pointer(lc.Type.float()), lc.Type.float()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_nanmax_float64(lmod):
+    fname = '___numba_atomic_double_nanmax'
+    fnty = lc.Type.function(lc.Type.double(),
+        (lc.Type.pointer(lc.Type.double()), lc.Type.double()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_nanmin_float32(lmod):
+    fname = '___numba_atomic_float_nanmin'
+    fnty = lc.Type.function(lc.Type.float(),
+        (lc.Type.pointer(lc.Type.float()), lc.Type.float()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_nanmin_float64(lmod):
+    fname = '___numba_atomic_double_nanmin'
+    fnty = lc.Type.function(lc.Type.double(),
+        (lc.Type.pointer(lc.Type.double()), lc.Type.double()))
+    return lmod.get_or_insert_function(fnty, fname)
+
 
 def declare_cudaCGGetIntrinsicHandle(lmod):
     fname = 'cudaCGGetIntrinsicHandle'

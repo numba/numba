@@ -151,6 +151,7 @@ def exp_impl(x, y, x_is_finite, y_is_finite):
             s = math.sin(y)
             return complex(r * c, r * s)
         else:
+            r = 0
             return complex(r, r)
 
 @lower(cmath.log, types.Complex)

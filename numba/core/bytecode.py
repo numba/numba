@@ -9,7 +9,7 @@ import inspect
 import itertools
 from types import CodeType, ModuleType
 
-from numba.core import errors, utils
+from numba.core import errors, utils, serialize
 
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
@@ -288,7 +288,7 @@ class ByteCode(object):
                                           self.co_consts, self.co_names)
 
 
-class FunctionIdentity(object):
+class FunctionIdentity(serialize.ReduceMixin):
     """
     A function's identity and metadata.
 
@@ -343,3 +343,16 @@ class FunctionIdentity(object):
         """Copy the object and increment the unique counter.
         """
         return self.from_function(self.func)
+
+    def _reduce_states(self):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
+        return dict(pyfunc=self.func)
+
+    @classmethod
+    def _rebuild(cls, pyfunc):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
+        return cls.from_function(pyfunc)

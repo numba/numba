@@ -16,6 +16,7 @@ from numba.core.datamodel import models   # noqa: F401
 from numba.core.datamodel import register_default as register_model  # noqa: F401, E501
 from numba.core.pythonapi import box, unbox, reflect, NativeValue  # noqa: F401
 from numba._helperlib import _import_cython_function  # noqa: F401
+from numba.core.serialize import ReduceMixin
 
 
 def type_callable(func):
@@ -138,6 +139,7 @@ def register_jitable(*args, **kwargs):
     def wrap(fn):
         # It is just a wrapper for @overload
         inline = kwargs.pop('inline', 'never')
+
         @overload(fn, jit_options=kwargs, inline=inline, strict=False)
         def ov_wrap(*args, **kwargs):
             return fn
@@ -255,7 +257,7 @@ def make_attribute_wrapper(typeclass, struct_attr, python_attr):
         return impl_ret_borrowed(context, builder, attrty, attrval)
 
 
-class _Intrinsic(object):
+class _Intrinsic(ReduceMixin):
     """
     Dummy callable for intrinsic
     """
@@ -308,26 +310,25 @@ class _Intrinsic(object):
     def __repr__(self):
         return "<intrinsic {0}>".format(self._name)
 
-    def __reduce__(self):
-        from numba.core import serialize
+    def __deepcopy__(self, memo):
+        # NOTE: Intrinsic are immutable and we don't need to copy.
+        #       This is triggered from deepcopy of statements.
+        return self
 
-        def reduce_func(fn):
-            gs = serialize._get_function_globals_for_reduction(fn)
-            return serialize._reduce_function(fn, gs)
-
-        return (serialize._rebuild_reduction,
-                (self.__class__, str(self._uuid), self._name,
-                 reduce_func(self._defn)))
+    def _reduce_states(self):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
+        return dict(uuid=self._uuid, name=self._name, defn=self._defn)
 
     @classmethod
-    def _rebuild(cls, uuid, name, defn_reduced):
-        from numba.core import serialize
-
+    def _rebuild(cls, uuid, name, defn):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
         try:
             return cls._memo[uuid]
         except KeyError:
-            defn = serialize._rebuild_function(*defn_reduced)
-
             llc = cls(name=name, defn=defn)
             llc._register()
             llc._set_uuid(uuid)

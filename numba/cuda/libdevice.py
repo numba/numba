@@ -122,3 +122,22 @@ for name64, name32, key in binarys:
     lower(key, types.float64, types.float64)(impl64)
     impl32 = binary_implement(name32, types.float32)
     lower(key, types.float32, types.float32)(impl32)
+
+def modf_implement(nvname, ty):
+    def core(context, builder, sig, args):
+        arg, = args
+        argty, = sig.args
+        fty = context.get_value_type(argty)
+        lmod = builder.module
+        ptr = cgutils.alloca_once(builder, fty)
+        fnty = Type.function(fty, [fty, fty.as_pointer()])
+        fn = lmod.get_or_insert_function(fnty, name=nvname)
+        out = builder.call(fn, [arg, ptr])
+        ret = context.make_tuple(builder, types.UniTuple(argty, 2),
+                                 [out, builder.load(ptr)])
+        return ret
+    return core
+
+for (ty, intrin) in ((types.float64, '__nv_modf',),
+                     (types.float32, '__nv_modff',)):
+    lower(math.modf, ty)(modf_implement(intrin, ty))

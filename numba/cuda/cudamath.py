@@ -94,3 +94,10 @@ class Math_isnan(ConcreteTemplate):
         signature(types.boolean, types.float32),
         signature(types.boolean, types.float64),
     ]
+
+@infer_global(math.modf)
+class Math_modf(ConcreteTemplate):
+    cases = [
+        signature(types.UniTuple(types.float64, 2), types.float64),
+        signature(types.UniTuple(types.float32, 2), types.float32)
+    ]

@@ -13,11 +13,12 @@ from numba.cuda.cudadrv.driver import (BaseCUDAMemoryManager,
                                        MemoryPointer, MappedMemory,
                                        PinnedMemory, MemoryInfo,
                                        IpcHandle, set_memory_manager)
+from numba.cuda.cudadrv.runtime import runtime
 from .cudadrv import nvvm
 from numba.cuda import initialize
 from .errors import KernelRuntimeError
 
-from .decorators import jit, autojit, declare_device
+from .decorators import jit, declare_device
 from .api import *
 from .api import _auto_device
 
