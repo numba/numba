@@ -133,7 +133,7 @@ class TestCudaConstantMemory(CUDATestCase):
         self.assertTrue(np.all(A == CONST3D))
 
         if not ENABLE_CUDASIM:
-            if cuda.runtime.get_version() == (9, 0):
+            if cuda.runtime.get_version() in ((8, 0), (9, 0)):
                 complex_load = 'ld.const.v2.f32'
                 description = 'Load the complex as a vector of 2x f32'
             else:
