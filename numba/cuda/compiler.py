@@ -144,7 +144,8 @@ def disassemble_cubin(cubin):
 
         try:
             cp = subprocess.run(['nvdisasm', fname], check=True,
-                                capture_output=True)
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
         except FileNotFoundError as e:
             if e.filename == 'nvdisasm':
                 msg = ("nvdisasm is required for SASS inspection, and has not "
