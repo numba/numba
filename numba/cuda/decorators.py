@@ -1,8 +1,14 @@
 from warnings import warn
 from numba.core import types, config, sigutils
-from .compiler import (compile_kernel, compile_device, declare_device_function,
-                       AutoJitCUDAKernel, compile_device_template)
+from numba.core.errors import NumbaDeprecationWarning
+from .compiler import (compile_device, declare_device_function, Dispatcher,
+                       compile_device_template)
 from .simulator.kernel import FakeCUDAKernel
+
+
+_msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
+                                 "Signatures should be passed as the first "
+                                 "positional argument.")
 
 
 def jitdevice(func, link=[], debug=None, inline=False):
@@ -14,7 +20,7 @@ def jitdevice(func, link=[], debug=None, inline=False):
     return compile_device_template(func, debug=debug, inline=inline)
 
 
-def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
+def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
         link=[], debug=None, **kws):
     """
     JIT compile a python function conforming to the CUDA Python specification.
@@ -31,7 +37,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
        .. note:: A kernel cannot have any return value.
     :param device: Indicates whether this is a device function.
     :type device: bool
-    :param bind: Force binding to CUDA context immediately
+    :param bind: (Deprecated) Force binding to CUDA context immediately
     :type bind: bool
     :param link: A list of files containing PTX source to link with the function
     :type link: list
@@ -54,6 +60,16 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
     if kws.get('boundscheck') == True:
         raise NotImplementedError("bounds checking is not supported for CUDA")
 
+    if argtypes is not None:
+        msg = _msg_deprecated_signature_arg.format('argtypes')
+        warn(msg, category=NumbaDeprecationWarning)
+
+    if 'bind' in kws:
+        msg = _msg_deprecated_signature_arg.format('bind')
+        warn(msg, category=NumbaDeprecationWarning)
+    else:
+        bind=True
+
     fastmath = kws.get('fastmath', False)
     if argtypes is None and not sigutils.is_signature(func_or_sig):
         if func_or_sig is None:
@@ -63,8 +79,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
                                           debug=debug)
             else:
                 def autojitwrapper(func):
-                    return jit(func, device=device, bind=bind, debug=debug,
-                               **kws)
+                    return jit(func, device=device, debug=debug, **kws)
 
             return autojitwrapper
         # func_or_sig is a function
@@ -77,7 +92,10 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
             else:
                 targetoptions = kws.copy()
                 targetoptions['debug'] = debug
-                return AutoJitCUDAKernel(func_or_sig, bind=bind, targetoptions=targetoptions)
+                targetoptions['link'] = link
+                sigs = None
+                return Dispatcher(func_or_sig, sigs, bind=bind,
+                                  targetoptions=targetoptions)
 
     else:
         if config.ENABLE_CUDASIM:
@@ -86,23 +104,30 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False, bind=True,
                                       debug=debug)
             return jitwrapper
 
-        restype, argtypes = convert_types(func_or_sig, argtypes)
 
-        if restype and not device and restype != types.void:
-            raise TypeError("CUDA kernel must have void return type.")
+        if isinstance(func_or_sig, list):
+            msg = 'Lists of signatures are not yet supported in CUDA'
+            raise ValueError(msg)
+        elif sigutils.is_signature(func_or_sig):
+            sigs = [func_or_sig]
+        elif func_or_sig is None:
+            # Handle the deprecated argtypes / restype specification
+            restype = kws.get('restype', types.void)
+            sigs = [restype(*argtypes)]
+        else:
+            raise ValueError("Expecting signature or list of signatures")
 
-        max_registers = kws.get('max_registers', None)
+        for sig in sigs:
+            restype, argtypes = convert_types(sig, argtypes)
+
+            if restype and not device and restype != types.void:
+                raise TypeError("CUDA kernel must have void return type.")
 
         def kernel_jit(func):
-            kernel = compile_kernel(func, argtypes, link=link, debug=debug,
-                                    inline=inline, fastmath=fastmath,
-                                    max_registers=max_registers)
-
-            # Force compilation for the current context
-            if bind:
-                kernel.bind()
-
-            return kernel
+            targetoptions = kws.copy()
+            targetoptions['debug'] = debug
+            targetoptions['link'] = link
+            return Dispatcher(func, sigs, bind=bind, targetoptions=targetoptions)
 
         def device_jit(func):
             return compile_device(func, restype, argtypes, inline=inline,
@@ -122,7 +147,6 @@ def declare_device(name, restype=None, argtypes=None):
 def convert_types(restype, argtypes):
     # eval type string
     if sigutils.is_signature(restype):
-        assert argtypes is None
         argtypes, restype = sigutils.normalize_signature(restype)
 
     return restype, argtypes
