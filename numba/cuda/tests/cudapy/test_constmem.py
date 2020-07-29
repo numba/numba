@@ -133,10 +133,14 @@ class TestCudaConstantMemory(CUDATestCase):
         self.assertTrue(np.all(A == CONST3D))
 
         if not ENABLE_CUDASIM:
-            self.assertIn(
-                'ld.const.f32',
-                jcuconst3d.ptx,
-                "load each half of the complex as f32")
+            if cuda.runtime.get_version() == (9, 0):
+                complex_load = 'ld.const.v2.f32'
+                description = 'Load the complex as a vector of 2x f32'
+            else:
+                complex_load = 'ld.const.f32'
+                description =  'load each half of the complex as f32'
+
+            self.assertIn(complex_load, jcuconst3d.ptx, description)
 
     def test_const_record_empty(self):
         jcuconstRecEmpty = cuda.jit('void(float64[:])')(cuconstRecEmpty)
