@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 
 from numba import cuda
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
@@ -158,27 +159,35 @@ class TestCudaConstantMemory(CUDATestCase):
         np.testing.assert_allclose(B, CONST_RECORD['y'])
 
     @skip_on_cudasim('PTX inspection not supported on the simulator')
-    @unittest.expectedFailure
     def test_const_record_optimization(self):
         A = np.zeros(2, dtype=float)
         B = np.zeros(2, dtype=int)
         jcuconst = cuda.jit(cuconstRec).specialize(A, B)
 
-        if not any(c in jcuconst.ptx for c in [
-            # a vector load: the compiler fuses the load
-            # of the x and y fields into a single instruction!
-            'ld.const.v2.u64',
+        old_runtime = cuda.runtime.get_version() in ((8, 0), (9, 0), (9, 1))
 
-            # for some reason Win64 / Py3 / CUDA 9.1 decides
-            # to do two u32 loads, and shifts and ors the
-            # values to get the float `x` field, then uses
-            # another ld.const.u32 to load the int `y` as
-            # a 32-bit value!
-            'ld.const.u32',
-        ]):
-            raise AssertionError(
-                "the compiler should realise it doesn't " \
-                "need to interpret the bytes as float!")
+        if old_runtime:
+            if sys.platform.startswith('win'):
+                # for some reason Win64 / Py3 / CUDA 9.1 decides to do two u32
+                # loads, and shifts and ors the values to get the float `x`
+                # field, then uses another ld.const.u32 to load the int `y` as
+                # a 32-bit value!
+                self.assertIn('ld.const.u32', jcuconst.ptx,
+                              'load record fields as u32')
+            else:
+                # Load of the x and y fields fused into a single instruction
+                self.assertIn('ld.const.v2.f64', jcuconst.ptx,
+                              'load record fields as vector of 2x f64')
+        else:
+            # In newer toolkits, constant values are all loaded 8 bits at a
+            # time. Check that there are enough 8-bit loads for everything to
+            # have been loaded. This is possibly less than optimal, but is the
+            # observed behaviour with current toolkit versions when IR is not
+            # optimized before sending to NVVM.
+            u8_load_count = len([s for s in jcuconst.ptx.split()
+                                 if 'ld.const.u8' in s])
+            self.assertGreaterEqual(u8_load_count, 16,
+                                    'load record values as individual bytes')
 
     def test_const_record_align(self):
         A = np.zeros(2, dtype=np.float64)
