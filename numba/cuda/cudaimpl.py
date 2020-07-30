@@ -468,6 +468,12 @@ def ptx_round(context, builder, sig, args):
     ])
 
 
+@lower(math.isinf, types.Integer)
+@lower(math.isnan, types.Integer)
+def math_isinf_isnan_int(context, builder, sig, args):
+    return lc.Constant.int(lc.Type.int(1), 0)
+
+
 def gen_deg_rad(const):
     def impl(context, builder, sig, args):
         argty, = sig.args
