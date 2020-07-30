@@ -20,6 +20,7 @@ import copy
 import warnings
 import logging
 import threading
+import asyncio
 from itertools import product
 from abc import ABCMeta, abstractmethod
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
@@ -33,7 +34,7 @@ from numba import mviewbuf
 from numba.core import utils, errors, serialize, config
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
-from .drvapi import cu_occupancy_b2d_size
+from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj
 from numba.cuda.cudadrv import enums, drvapi, _extras
 from numba.core.utils import longint as long
 from numba.cuda.envvars import get_numba_envvar
@@ -44,7 +45,13 @@ MIN_REQUIRED_CC = (2, 0)
 SUPPORTS_IPC = sys.platform.startswith('linux')
 
 
-def _make_logger():
+_py_decref = ctypes.pythonapi.Py_DecRef
+_py_incref = ctypes.pythonapi.Py_IncRef
+_py_decref.argtypes = [ctypes.py_object]
+_py_incref.argtypes = [ctypes.py_object]
+
+
+def make_logger():
     logger = logging.getLogger(__name__)
     # is logging configured?
     if not logger.hasHandlers():
@@ -224,7 +231,7 @@ class Driver(object):
     def initialize(self):
         # lazily initialize logger
         global _logger
-        _logger = _make_logger()
+        _logger = make_logger()
 
         self.is_initialized = True
         try:
@@ -804,7 +811,28 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
             yield
 
 
-class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
+class GetIpcHandleMixin:
+    """A class that provides a default implementation of ``get_ipc_handle()``.
+    """
+
+    def get_ipc_handle(self, memory):
+        """Open an IPC memory handle by using ``cuMemGetAddressRange`` to
+        determine the base pointer of the allocation. An IPC handle of type
+        ``cu_ipc_mem_handle`` is constructed and initialized with
+        ``cuIpcGetMemHandle``. A :class:`numba.cuda.IpcHandle` is returned,
+        populated with the underlying ``ipc_mem_handle``.
+        """
+        base, end = device_extents(memory)
+        ipchandle = drvapi.cu_ipc_mem_handle()
+        driver.cuIpcGetMemHandle(byref(ipchandle), base)
+        source_info = self.context.device.get_device_identity()
+        offset = memory.handle.value - base
+
+        return IpcHandle(memory, ipchandle, memory.size, source_info,
+                         offset=offset)
+
+
+class NumbaCUDAMemoryManager(GetIpcHandleMixin, HostOnlyCUDAMemoryManager):
     """Internal on-device memory management for Numba. This is implemented using
     the EMM Plugin interface, but is not part of the public API."""
 
@@ -833,16 +861,6 @@ class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
         total = c_size_t()
         driver.cuMemGetInfo(byref(free), byref(total))
         return MemoryInfo(free=free.value, total=total.value)
-
-    def get_ipc_handle(self, memory):
-        base, end = device_extents(memory)
-        ipchandle = drvapi.cu_ipc_mem_handle()
-        driver.cuIpcGetMemHandle(byref(ipchandle), base)
-        source_info = self.context.device.get_device_identity()
-        offset = memory.handle.value - base
-
-        return IpcHandle(memory, ipchandle, memory.size, source_info,
-                         offset=offset)
 
     @property
     def interface_version(self):
@@ -1779,6 +1797,64 @@ class Stream(object):
         '''
         yield self
         self.synchronize()
+
+    def add_callback(self, callback, arg):
+        """
+        Add a callback to a compute stream.
+        The user provided function is called from a driver thread once all
+        preceding stream operations are complete.
+
+        Callback functions are called from a CUDA driver thread, not from
+        the thread that invoked `add_callback`. No CUDA API functions may
+        be called from within the callback function.
+
+        The duration of a callback function should be kept short, as the
+        callback will block later work in the stream and may block other
+        callbacks from being executed.
+
+        Note: This function is marked as deprecated and may be replaced in a
+        future CUDA release.
+
+        :param callback: Callback function with arguments (stream, status, arg).
+        :param arg: User data to be passed to the callback function.
+        """
+        data = (self, callback, arg)
+        _py_incref(data)
+        driver.cuStreamAddCallback(self.handle, self._stream_callback, data, 0)
+
+    @staticmethod
+    @cu_stream_callback_pyobj
+    def _stream_callback(handle, status, data):
+        try:
+            stream, callback, arg = data
+            callback(stream, status, arg)
+        except Exception as e:
+            warnings.warn(f"Exception in stream callback: {e}")
+        finally:
+            _py_decref(data)
+
+    def async_done(self) -> asyncio.futures.Future:
+        """
+        Return an awaitable that resolves once all preceding stream operations
+        are complete.
+        """
+        loop = asyncio.get_running_loop() if utils.PYVERSION >= (3, 7) \
+            else asyncio.get_event_loop()
+        future = loop.create_future()
+
+        def resolver(future, status):
+            if future.done():
+                return
+            elif status == 0:
+                future.set_result(None)
+            else:
+                future.set_exception(Exception(f"Stream error {status}"))
+
+        def callback(stream, status, future):
+            loop.call_soon_threadsafe(resolver, future, status)
+
+        self.add_callback(callback, future)
+        return future
 
 
 class Event(object):

@@ -50,6 +50,14 @@ class TestCudaDebugInfo(CUDATestCase):
 
             self._check(bar, sig=(types.int32[:],), expect=False)
 
+    def test_issue_5835(self):
+        # Invalid debug metadata would segfault NVVM when any function was
+        # compiled with debug turned on and optimization off. This eager
+        # compilation should not crash anything.
+        @cuda.jit((types.int32[::1],), debug=True, opt=False)
+        def f(x):
+            x[0] = 0
+
 
 if __name__ == '__main__':
     unittest.main()

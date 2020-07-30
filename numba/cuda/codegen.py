@@ -12,22 +12,14 @@ CUDA_TRIPLE = {32: 'nvptx-nvidia-cuda',
 
 
 class CUDACodeLibrary(CodeLibrary):
+    # We don't optimize the IR at the function or module level because it is
+    # optimized by NVVM after we've passed it on.
+
     def _optimize_functions(self, ll_module):
         pass
 
     def _optimize_final_module(self):
-        # Run some lightweight optimization to simplify the module.
-        # This seems to workaround a libnvvm compilation bug (see #1341)
-        pmb = ll.PassManagerBuilder()
-        pmb.opt_level = 1
-        pmb.disable_unit_at_a_time = False
-        pmb.disable_unroll_loops = True
-        pmb.loop_vectorize = False
-        pmb.slp_vectorize = False
-
-        pm = ll.ModulePassManager()
-        pmb.populate(pm)
-        pm.run(self._final_module)
+        pass
 
     def _finalize_specific(self):
         # Fix global naming
