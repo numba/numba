@@ -569,7 +569,7 @@ class TestParfors(TestParforsBase):
     def test_logistic_regression(self):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
-        self.assertTrue(countParfors(lr_impl, args) == 1)
+        self.assertTrue(countParfors(lr_impl, args) == 2)
         self.assertTrue(countArrayAllocs(lr_impl, args) == 1)
 
     @skip_parfors_unsupported
@@ -1628,6 +1628,18 @@ class TestParfors(TestParforsBase):
         x = np.arange(10)
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_inplace_binop(self):
+        def test_impl(a, b):
+            b += a
+            return b
+
+        X = np.arange(10) + 10
+        Y = np.arange(10) + 100
+        self.check(test_impl, X, Y)
+        self.assertTrue(countParfors(test_impl,
+                                    (types.Array(types.float64, 1, 'C'),
+                                     types.Array(types.float64, 1, 'C'))) == 1)
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
