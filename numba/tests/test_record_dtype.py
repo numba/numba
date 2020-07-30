@@ -1268,6 +1268,33 @@ class TestSubtyping(TestCase):
         with self.assertRaises(TypeError):
             jit_fc(other_a_rec)
 
+    def test_branch_pruning(self):
+        """
+        test subtyping behaviour in a case with a dead branch
+        """
+
+        @njit
+        def foo(rec, flag=None):
+            n = 0
+            n += rec['a']
+            if flag is not None:
+                # Dead branch pruning will hide this branch
+                n += rec['b']
+                rec['b'] += 20
+            return n
+
+        self.assertEqual(foo(self.a_rec1), self.a_rec1[0])
+
+        # storing value because it will be mutated
+        k = self.ab_rec1[1]
+        self.assertEqual(foo(self.ab_rec1, flag=1), self.ab_rec1[0] + k)
+        self.assertEqual(self.ab_rec1[1], k + 20)
+
+        foo.disable_compile()
+        self.assertEqual(len(foo.nopython_signatures), 2)
+        self.assertEqual(foo(self.a_rec1) + 1, foo(self.ab_rec1))
+        self.assertEqual(foo(self.ab_rec1, flag=1), self.ab_rec1[0] + k + 20)
+
 
 if __name__ == '__main__':
     unittest.main()
