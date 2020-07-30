@@ -826,6 +826,10 @@ error:
 }
 
 
+/*
+ * Add traceback information to *loc* to the active exception.
+ * loc can be NULL, which causes this function to become a no-op.
+ */
 static
 void traceback_add_loc(PyObject *loc) {
     const char *function_name_str = NULL, *filename_str = NULL;
@@ -849,6 +853,10 @@ void traceback_add_loc(PyObject *loc) {
     }
 }
 
+/**
+ * Reraise current active exception.
+ * Called internall by process_raise() when *exc* is None.
+ */
 static
 int reraise_exc_is_none() {
     /* Reraise */
@@ -876,8 +884,10 @@ int reraise_exc_is_none() {
 }
 
 /*
- * PyExceptionClass_Check(exc) must be True
- * value can be NULL
+ * Set exception set given the Exception type and the constructor argument.
+ * Equivalent to ``raise exc(value)``.
+ * PyExceptionClass_Check(exc) must be True.
+ * value can be NULL.
  */
 static
 int process_exception_class(PyObject *exc, PyObject *value) {
@@ -901,9 +911,9 @@ int process_exception_class(PyObject *exc, PyObject *value) {
 }
 
 /*
- * exc cannot be NULL
- * value can be NULL
- * loc can be NULL
+ * Internal routine to process exceptions.
+ * exc cannot be NULL. It can be a None, Exception type, or Exception instance
+ * value can be NULL for absent, or any PyObject valid for the exception.
  */
 static
 int process_raise(PyObject *exc, PyObject *value) {
