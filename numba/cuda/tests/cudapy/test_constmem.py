@@ -165,9 +165,10 @@ class TestCudaConstantMemory(CUDATestCase):
         jcuconst = cuda.jit(cuconstRec).specialize(A, B)
 
         old_runtime = cuda.runtime.get_version() in ((8, 0), (9, 0), (9, 1))
+        windows = sys.platform.startswith('win')
 
         if old_runtime:
-            if sys.platform.startswith('win'):
+            if windows:
                 # for some reason Win64 / Py3 / CUDA 9.1 decides to do two u32
                 # loads, and shifts and ors the values to get the float `x`
                 # field, then uses another ld.const.u32 to load the int `y` as
@@ -186,7 +187,15 @@ class TestCudaConstantMemory(CUDATestCase):
             # optimized before sending to NVVM.
             u8_load_count = len([s for s in jcuconst.ptx.split()
                                  if 'ld.const.u8' in s])
-            self.assertGreaterEqual(u8_load_count, 16,
+
+            if windows:
+                # NumPy ints are 32-bit on Windows by default, so only 4 bytes
+                # for loading the int (and 8 for the float)
+                expected_load_count = 12
+            else:
+                # int is 64-bit elsewhere
+                expected_load_count = 16
+            self.assertGreaterEqual(u8_load_count, expected_load_count,
                                     'load record values as individual bytes')
 
     def test_const_record_align(self):
