@@ -57,6 +57,22 @@ def generic_is(context, builder, sig, args):
         return cgutils.false_bit
 
 
+@lower_builtin(operator.is_, types.Opaque, types.Opaque)
+def opaque_is(context, builder, sig, args):
+    """
+    Implementation for `x is y` for Opaque types.
+    """
+    lhs_type, rhs_type = sig.args
+    # the lhs and rhs have the same type
+    if lhs_type == rhs_type:
+        lhs_ptr = builder.ptrtoint(args[0], cgutils.intp_t)
+        rhs_ptr = builder.ptrtoint(args[1], cgutils.intp_t)
+
+        return builder.icmp_unsigned('==', lhs_ptr, rhs_ptr)
+    else:
+        return cgutils.false_bit
+
+
 @lower_builtin(operator.eq, types.Literal, types.Literal)
 @lower_builtin(operator.eq, types.IntegerLiteral, types.IntegerLiteral)
 def const_eq_impl(context, builder, sig, args):
@@ -400,34 +416,29 @@ def bool_sequence(x):
         types.UnicodeType,
         types.Set,
     )
-    
+
     if isinstance(x, valid_types):
         def bool_impl(x):
             return len(x) > 0
         return bool_impl
 
+@overload(bool, inline='always')
+def bool_none(x):
+    if isinstance(x, types.NoneType) or x is None:
+        return lambda x: False
+
 # -----------------------------------------------------------------------------
 
 def get_type_max_value(typ):
     if isinstance(typ, types.Float):
-        bw = typ.bitwidth
-        if bw == 32:
-            return np.finfo(np.float32).max
-        if bw == 64:
-            return np.finfo(np.float64).max
-        raise NotImplementedError("Unsupported floating point type")
+        return np.inf
     if isinstance(typ, types.Integer):
         return typ.maxval
     raise NotImplementedError("Unsupported type")
 
 def get_type_min_value(typ):
     if isinstance(typ, types.Float):
-        bw = typ.bitwidth
-        if bw == 32:
-            return np.finfo(np.float32).min
-        if bw == 64:
-            return np.finfo(np.float64).min
-        raise NotImplementedError("Unsupported floating point type")
+        return -np.inf
     if isinstance(typ, types.Integer):
         return typ.minval
     raise NotImplementedError("Unsupported type")
@@ -450,7 +461,7 @@ def lower_get_type_min_value(context, builder, sig, args):
         else:
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
-        res = ir.Constant(lty, np.finfo(npty).min)
+        res = ir.Constant(lty, -np.inf)
     return impl_ret_untracked(context, builder, lty, res)
 
 @lower_builtin(get_type_max_value, types.NumberClass)
@@ -471,7 +482,7 @@ def lower_get_type_max_value(context, builder, sig, args):
         else:
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
-        res = ir.Constant(lty, np.finfo(npty).max)
+        res = ir.Constant(lty, np.inf)
     return impl_ret_untracked(context, builder, lty, res)
 
 # -----------------------------------------------------------------------------

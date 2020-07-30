@@ -84,13 +84,7 @@ class FakeCUDAArray(object):
     __cuda_ndarray__ = True  # There must be gpu_data attribute
 
     def __init__(self, ary, stream=0):
-        # ary/ary_access needed for TestCudaNDArray.test_device_array_interface
-        if ary.ndim == 0:
-            self._ary = ary.reshape(1)
-            self._ary_access = self._ary[0]
-        else:
-            self._ary = ary
-            self._ary_access = self._ary
+        self._ary = ary
         self.stream = stream
 
     @property
@@ -121,14 +115,14 @@ class FakeCUDAArray(object):
         return FakeCUDAArray(np.transpose(self._ary, axes=axes))
 
     def __getitem__(self, idx):
-        ret = self._ary_access.__getitem__(idx)
+        ret = self._ary.__getitem__(idx)
         if type(ret) not in [np.ndarray, np.void]:
             return ret
         else:
             return FakeCUDAArray(ret, stream=self.stream)
 
     def __setitem__(self, idx, val):
-        return self._ary_access.__setitem__(idx, val)
+        return self._ary.__setitem__(idx, val)
 
     def copy_to_host(self, ary=None, stream=0):
         if ary is None:

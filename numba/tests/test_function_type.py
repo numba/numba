@@ -1,5 +1,7 @@
 import types as pytypes
 from numba import jit, njit, cfunc, types, int64, float64, float32, errors
+from numba import literal_unroll
+from numba.core.config import IS_32BITS, IS_WIN32
 import ctypes
 import warnings
 
@@ -567,13 +569,12 @@ class TestFunctionTypeExtensions(TestCase):
         """Call cos and sinf from standard math library.
 
         """
-        import os
         import ctypes.util
 
         class LibM(types.WrapperAddressProtocol):
 
             def __init__(self, fname):
-                if os.name == 'nt':
+                if IS_WIN32:
                     lib = ctypes.cdll.msvcrt
                 else:
                     libpath = ctypes.util.find_library('m')
@@ -581,10 +582,27 @@ class TestFunctionTypeExtensions(TestCase):
                 self.lib = lib
                 self._name = fname
                 if fname == 'cos':
-                    addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
-                    signature = float64(float64)
+                    # test for double-precision math function
+                    if IS_WIN32 and IS_32BITS:
+                        # 32-bit Windows math library does not provide
+                        # a double-precision cos function, so
+                        # disabling the function
+                        addr = None
+                        signature = None
+                    else:
+                        addr = ctypes.cast(self.lib.cos, ctypes.c_voidp).value
+                        signature = float64(float64)
                 elif fname == 'sinf':
-                    addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
+                    # test for single-precision math function
+                    if IS_WIN32 and IS_32BITS:
+                        # 32-bit Windows math library provides sin
+                        # (instead of sinf) that is a single-precision
+                        # sin function
+                        addr = ctypes.cast(self.lib.sin, ctypes.c_voidp).value
+                    else:
+                        # Other 32/64 bit platforms define sinf as the
+                        # single-precision sin function
+                        addr = ctypes.cast(self.lib.sinf, ctypes.c_voidp).value
                     signature = float32(float32)
                 else:
                     raise NotImplementedError(
@@ -613,8 +631,10 @@ class TestFunctionTypeExtensions(TestCase):
         for jit_opts in [dict(nopython=True)]:
             jit_ = jit(**jit_opts)
             with self.subTest(jit=jit_opts):
-                self.assertEqual(jit_(myeval)(mycos, 0.0), 1.0)
-                self.assertEqual(jit_(myeval)(mysin, float32(0.0)), 0.0)
+                if mycos.signature() is not None:
+                    self.assertEqual(jit_(myeval)(mycos, 0.0), 1.0)
+                if mysin.signature() is not None:
+                    self.assertEqual(jit_(myeval)(mysin, float32(0.0)), 0.0)
 
     def test_compilation_results(self):
         """Turn the existing compilation results of a dispatcher instance to
@@ -1028,3 +1048,78 @@ class TestMiscIssues(TestCase):
             return bar_scalar(*formulae_foo)
 
         self.assertEqual(bar(), 30)
+
+    def test_issue_5540(self):
+
+        @njit(types.int64(types.int64))
+        def foo(x):
+            return x + 1
+
+        @njit
+        def bar_bad(foos):
+            f = foos[0]
+            return f(x=1)
+
+        @njit
+        def bar_good(foos):
+            f = foos[0]
+            return f(1)
+
+        self.assertEqual(bar_good((foo, )), 2)
+
+        with self.assertRaises(errors.TypingError) as cm:
+            bar_bad((foo, ))
+
+        self.assertRegex(
+            str(cm.exception),
+            r'.*first-class function call cannot use keyword arguments')
+
+    def test_issue_5615(self):
+
+        @njit
+        def foo1(x):
+            return x + 1
+
+        @njit
+        def foo2(x):
+            return x + 2
+
+        @njit
+        def bar(fcs):
+            x = 0
+            a = 10
+            i, j = fcs[0]
+            x += i(j(a))
+            for t in literal_unroll(fcs):
+                i, j = t
+                x += i(j(a))
+            return x
+
+        tup = ((foo1, foo2), (foo2, foo1))
+
+        self.assertEqual(bar(tup), 39)
+
+    def test_issue_5685(self):
+
+        @njit
+        def foo1():
+            return 1
+
+        @njit
+        def foo2(x):
+            return x + 1
+
+        @njit
+        def foo3(x):
+            return x + 2
+
+        @njit
+        def bar(fcs):
+            r = 0
+            for pair in literal_unroll(fcs):
+                f1, f2 = pair
+                r += f1() + f2(2)
+            return r
+
+        self.assertEqual(bar(((foo1, foo2),)), 4)
+        self.assertEqual(bar(((foo1, foo2), (foo1, foo3))), 9)  # reproducer

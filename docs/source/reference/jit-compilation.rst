@@ -386,7 +386,7 @@ Vectorized functions (ufuncs and DUFuncs)
    arrays as inputs (for example, if a cast is required).
 
    .. seealso::
-      Specification of the `layout string <http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_
+      Specification of the `layout string <https://numpy.org/doc/stable/reference/c-api/generalized-ufuncs.html#details-of-signature>`_
       as supported by Numpy.  Note that Numpy uses the term "signature",
       which we unfortunately use for something else.
 

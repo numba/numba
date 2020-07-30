@@ -91,8 +91,6 @@ def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
         return jitwrapper
     return FakeCUDAKernel(func_or_sig, device=device)
 
-autojit = jit
-
 
 @contextmanager
 def defer_cleanup():

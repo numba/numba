@@ -11,8 +11,8 @@ import versioneer
 min_python_version = "3.6"
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
-min_llvmlite_version = "0.31.0.dev0"
-max_llvmlite_version = "0.33.0.dev0"
+min_llvmlite_version = "0.33"
+max_llvmlite_version = "0.35"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -74,14 +74,6 @@ def is_building():
             return False
 
     return True
-
-
-def is_building_wheel():
-    if len(sys.argv) < 2:
-        # No command is given.
-        return False
-
-    return 'bdist_wheel' in sys.argv[1:]
 
 
 def get_ext_modules():
@@ -238,9 +230,8 @@ def get_ext_modules():
     else:
         print("TBB not found")
 
-    # Disable OpenMP if we are building a wheel or
-    # forced by user with NUMBA_NO_OPENMP=1
-    if is_building_wheel() or os.getenv('NUMBA_NO_OPENMP'):
+    # Disable OpenMP if forced by user with NUMBA_NO_OPENMP=1
+    if os.getenv('NUMBA_NO_OPENMP'):
         print("OpenMP disabled")
     elif have_openmp:
         print("Using OpenMP from:", have_openmp)
@@ -304,7 +295,7 @@ packages = find_packages(include=["numba", "numba.*"])
 
 build_requires = [f'numpy >={min_numpy_build_version}']
 install_requires = [
-    f'llvmlite >={min_llvmlite_version},<={max_llvmlite_version}',
+    f'llvmlite >={min_llvmlite_version},<{max_llvmlite_version}',
     f'numpy >={min_numpy_run_version}',
     'setuptools',
 ]

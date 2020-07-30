@@ -665,6 +665,7 @@ def unicode_rindex(s, sub, start=None, end=None):
 
     return rindex_impl
 
+
 # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/unicodeobject.c#L11692-L11718    # noqa: E501
 @overload_method(types.UnicodeType, 'index')
 def unicode_index(s, sub, start=None, end=None):
@@ -2339,6 +2340,29 @@ def ol_chr(i):
     if isinstance(i, types.Integer):
         def impl(i):
             return _PyUnicode_FromOrdinal(i)
+        return impl
+
+
+@overload(str)
+def integer_str(n):
+    if isinstance(n, types.Integer):
+        ten = n(10)
+
+        def impl(n):
+            flag = False
+            if n < 0:
+                n = -n
+                flag = True
+            if n == 0:
+                return '0'
+            l = []
+            while n > 0:
+                c = chr(ord('0') + (n % ten))
+                n = n // ten
+                l.append(c)
+            if flag:
+                l.append('-')
+            return ''.join(l[::-1])
         return impl
 
 # ------------------------------------------------------------------------------
