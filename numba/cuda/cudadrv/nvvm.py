@@ -202,7 +202,7 @@ class CompilationUnit(object):
             if options.pop('debug'):
                 opts.append('-g')
 
-        if options.get('opt'):
+        if 'opt' in options:
             opts.append('-opt=%d' % options.pop('opt'))
 
         if options.get('arch'):
