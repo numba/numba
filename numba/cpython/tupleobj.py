@@ -189,6 +189,11 @@ def iternext_unituple(context, builder, sig, args, result):
 
 @overload(operator.getitem)
 def getitem_literal_idx(tup, idx):
+    """
+    Adds overload for BaseTuple getitem to cover cases when
+    const inference and RewriteConstGetitems cannot replace it with
+    static_getitem.
+    """
     if not (isinstance(tup, types.BaseTuple)
             and isinstance(idx, types.IntegerLiteral)):
         return None
