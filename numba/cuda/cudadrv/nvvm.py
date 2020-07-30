@@ -666,7 +666,11 @@ def _replace_llvm_memset_usage(m):
     Used as functor for `re.sub.
     """
     params = list(m.group(1).split(','))
-    align = re.search(r'align (\d+)', params[0]).group(1)
+    align_attr = re.search(r'align (\d+)', params[0])
+    if not align_attr:
+        raise ValueError("No alignment attribute found on memset dest")
+    else:
+        align = align_attr.group(1)
     params.insert(-1, 'i32 {}'.format(align))
     out = ', '.join(params)
     return '({})'.format(out)
