@@ -42,7 +42,6 @@ def atomic_add3(ary):
     ary[tx, ty] = lm[tx, ty]
 
 
-
 def call_fn_for_datatypes(fn, result, input, global_size):
     dtypes = [np.int32, np.int64, np.float32, np.double]
 
@@ -99,6 +98,7 @@ class TestAtomicOp(DPPLTestCase):
 
         self.assertTrue(np.all(ary == gold))
 
+
     def test_atomic_add2(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
@@ -106,6 +106,7 @@ class TestAtomicOp(DPPLTestCase):
         with ocldrv.igpu_context(0) as device_env:
             dppl_atomic_add2[(4, 8), dppl.DEFAULT_LOCAL_SIZE](ary)
         self.assertTrue(np.all(ary == orig + 1))
+
 
     def test_atomic_add3(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)

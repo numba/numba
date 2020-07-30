@@ -258,6 +258,7 @@ def insert_and_call_atomic_fn(context, builder, sig, fn_type,
 @lower(stubs.atomic.add, types.Array, types.Tuple,
            types.Any)
 def atomic_add_tuple(context, builder, sig, args):
+    context.link_binaries[target.LINK_ATOMIC] = True
     aryty, indty, valty = sig.args
     ary, inds, val = args
     dtype = aryty.dtype
@@ -281,9 +282,11 @@ def atomic_add_tuple(context, builder, sig, args):
     ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
 
     if aryty.addrspace == target.SPIR_LOCAL_ADDRSPACE:
-        return insert_and_call_atomic_fn(context, builder, sig, "add", dtype, ptr, val, target.SPIR_LOCAL_ADDRSPACE)
+        return insert_and_call_atomic_fn(context, builder, sig, "add", dtype,
+                ptr, val, target.SPIR_LOCAL_ADDRSPACE)
     else:
-        return insert_and_call_atomic_fn(context, builder, sig, "add", dtype, ptr, val, target.SPIR_GLOBAL_ADDRSPACE)
+        return insert_and_call_atomic_fn(context, builder, sig, "add", dtype,
+                ptr, val, target.SPIR_GLOBAL_ADDRSPACE)
 
 
 @lower(stubs.atomic.sub, types.Array, types.intp, types.Any)
@@ -292,6 +295,7 @@ def atomic_add_tuple(context, builder, sig, args):
 @lower(stubs.atomic.sub, types.Array, types.Tuple,
            types.Any)
 def atomic_sub_tuple(context, builder, sig, args):
+    context.link_binaries[target.LINK_ATOMIC] = True
     aryty, indty, valty = sig.args
     ary, inds, val = args
     dtype = aryty.dtype
@@ -316,9 +320,11 @@ def atomic_sub_tuple(context, builder, sig, args):
 
 
     if aryty.addrspace == target.SPIR_LOCAL_ADDRSPACE:
-        return insert_and_call_atomic_fn(context, builder, sig, "sub", dtype, ptr, val, target.SPIR_LOCAL_ADDRSPACE)
+        return insert_and_call_atomic_fn(context, builder, sig, "sub", dtype,
+                ptr, val, target.SPIR_LOCAL_ADDRSPACE)
     else:
-        return insert_and_call_atomic_fn(context, builder, sig, "sub", dtype, ptr, val, target.SPIR_GLOBAL_ADDRSPACE)
+        return insert_and_call_atomic_fn(context, builder, sig, "sub", dtype,
+                ptr, val, target.SPIR_GLOBAL_ADDRSPACE)
 
 
 @lower('dppl.lmem.alloc', types.UniTuple, types.Any)

@@ -7,6 +7,7 @@ from subprocess import check_call, CalledProcessError, call
 import tempfile
 
 from numba import config
+from numba.dppl.target import LINK_ATOMIC
 
 def _raise_bad_env_path(msg, path, extra=None):
     error_message = msg.format(path)
@@ -69,7 +70,7 @@ class CmdLine(object):
         check_call(params)
 
 class Module(object):
-    def __init__(self):
+    def __init__(self, context):
         """
         Setup
         """
@@ -77,6 +78,7 @@ class Module(object):
         self._tempfiles = []
         self._cmd = CmdLine()
         self._finalized = False
+        self.context = context
 
     def __del__(self):
         # Remove all temporary files
@@ -121,9 +123,16 @@ class Module(object):
         spirv_path = self._track_temp_file("generated-spirv")
         self._cmd.generate(ipath=self._llvmfile, opath=spirv_path)
 
-        linked_spirv_path = self._track_temp_file("linked-spirv")
-        from .ocl.atomics import atomic_spirv_path
-        self._cmd.link(linked_spirv_path, [spirv_path, atomic_spirv_path])
+        binary_paths = [spirv_path]
+        for key in list(self.context.link_binaries.keys()):
+            del self.context.link_binaries[key]
+            if key == LINK_ATOMIC:
+                from .ocl.atomics import atomic_spirv_path
+                binary_paths.append(atomic_spirv_path)
+
+        if len(binary_paths) > 1:
+            spirv_path = self._track_temp_file("linked-spirv")
+            self._cmd.link(spirv_path, binary_paths)
 
         # Validate the SPIR-V code
         if config.SPIRV_VAL == 1:
@@ -147,8 +156,8 @@ class Module(object):
                         print("".center(80, "="))
 
         # Read and return final SPIR-V (not optimized!)
-        #with open(spirv_path, 'rb') as fin:
-        with open(linked_spirv_path, 'rb') as fin:
+        with open(spirv_path, 'rb') as fin:
+        #with open(linked_spirv_path, 'rb') as fin:
             spirv = fin.read()
 
         self._finalized = True
@@ -158,7 +167,7 @@ class Module(object):
 
 # Public llvm_to_spirv function ###############################################
 
-def llvm_to_spirv(bitcode):
-    mod = Module()
+def llvm_to_spirv(context, bitcode):
+    mod = Module(context)
     mod.load_llvm(bitcode)
     return mod.finalize()
