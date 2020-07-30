@@ -20,6 +20,7 @@ import copy
 import warnings
 import logging
 import threading
+import asyncio
 from itertools import product
 from abc import ABCMeta, abstractmethod
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
@@ -33,7 +34,7 @@ from numba import mviewbuf
 from numba.core import utils, errors, serialize, config
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
-from .drvapi import cu_occupancy_b2d_size
+from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj
 from numba.cuda.cudadrv import enums, drvapi, _extras
 from numba.core.utils import longint as long
 from numba.cuda.envvars import get_numba_envvar
@@ -42,6 +43,12 @@ from numba.cuda.envvars import get_numba_envvar
 VERBOSE_JIT_LOG = int(get_numba_envvar('VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
 SUPPORTS_IPC = sys.platform.startswith('linux')
+
+
+_py_decref = ctypes.pythonapi.Py_DecRef
+_py_incref = ctypes.pythonapi.Py_IncRef
+_py_decref.argtypes = [ctypes.py_object]
+_py_incref.argtypes = [ctypes.py_object]
 
 
 def make_logger():
@@ -1790,6 +1797,64 @@ class Stream(object):
         '''
         yield self
         self.synchronize()
+
+    def add_callback(self, callback, arg):
+        """
+        Add a callback to a compute stream.
+        The user provided function is called from a driver thread once all
+        preceding stream operations are complete.
+
+        Callback functions are called from a CUDA driver thread, not from
+        the thread that invoked `add_callback`. No CUDA API functions may
+        be called from within the callback function.
+
+        The duration of a callback function should be kept short, as the
+        callback will block later work in the stream and may block other
+        callbacks from being executed.
+
+        Note: This function is marked as deprecated and may be replaced in a
+        future CUDA release.
+
+        :param callback: Callback function with arguments (stream, status, arg).
+        :param arg: User data to be passed to the callback function.
+        """
+        data = (self, callback, arg)
+        _py_incref(data)
+        driver.cuStreamAddCallback(self.handle, self._stream_callback, data, 0)
+
+    @staticmethod
+    @cu_stream_callback_pyobj
+    def _stream_callback(handle, status, data):
+        try:
+            stream, callback, arg = data
+            callback(stream, status, arg)
+        except Exception as e:
+            warnings.warn(f"Exception in stream callback: {e}")
+        finally:
+            _py_decref(data)
+
+    def async_done(self) -> asyncio.futures.Future:
+        """
+        Return an awaitable that resolves once all preceding stream operations
+        are complete.
+        """
+        loop = asyncio.get_running_loop() if utils.PYVERSION >= (3, 7) \
+            else asyncio.get_event_loop()
+        future = loop.create_future()
+
+        def resolver(future, status):
+            if future.done():
+                return
+            elif status == 0:
+                future.set_result(None)
+            else:
+                future.set_exception(Exception(f"Stream error {status}"))
+
+        def callback(stream, status, future):
+            loop.call_soon_threadsafe(resolver, future, status)
+
+        self.add_callback(callback, future)
+        return future
 
 
 class Event(object):

@@ -178,7 +178,7 @@ Programming Guide Streams section
 Streams are instances of :class:`numba.cuda.cudadrv.driver.Stream`:
 
 .. autoclass:: numba.cuda.cudadrv.driver.Stream
-   :members: synchronize, auto_synchronize
+   :members: synchronize, auto_synchronize, add_callback, async_done
 
 To create a new stream:
 
