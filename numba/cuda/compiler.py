@@ -1,7 +1,9 @@
 import ctypes
 import inspect
 import os
+import subprocess
 import sys
+import tempfile
 
 import numpy as np
 
@@ -128,6 +130,35 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, device=False,
     cc = get_current_device().compute_capability
     return compile_ptx(pyfunc, args, debug=-debug, device=device,
                        fastmath=fastmath, cc=cc, opt=True)
+
+
+def disassemble_cubin(cubin):
+    # nvdisasm only accepts input from a file, so we need to write out to a
+    # temp file and clean up afterwards.
+    fd = None
+    fname = None
+    try:
+        fd, fname = tempfile.mkstemp()
+        with open(fname, 'wb') as f:
+            f.write(cubin)
+
+        try:
+            cp = subprocess.run(['nvdisasm', fname], check=True,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        except FileNotFoundError as e:
+            if e.filename == 'nvdisasm':
+                msg = ("nvdisasm is required for SASS inspection, and has not "
+                       "been found.\n\nYou may need to install the CUDA "
+                       "toolkit and ensure that it is available on your "
+                       "PATH.\n")
+                raise RuntimeError(msg)
+        return cp.stdout.decode('utf-8')
+    finally:
+        if fd is not None:
+            os.close(fd)
+        if fname is not None:
+            os.unlink(fname)
 
 
 class DeviceFunctionTemplate(serialize.ReduceMixin):
@@ -394,6 +425,7 @@ class CachedCUFunction(serialize.ReduceMixin):
         self.linking = linking
         self.cache = {}
         self.ccinfos = {}
+        self.cubins = {}
         self.max_registers = max_registers
 
     def get(self):
@@ -408,15 +440,26 @@ class CachedCUFunction(serialize.ReduceMixin):
             linker.add_ptx(ptx)
             for path in self.linking:
                 linker.add_file_guess_ext(path)
-            cubin, _size = linker.complete()
+            cubin, size = linker.complete()
             compile_info = linker.info_log
             module = cuctx.create_module_image(cubin)
 
             # Load
             cufunc = module.get_function(self.entry_name)
+
+            # Populate caches
             self.cache[device.id] = cufunc
             self.ccinfos[device.id] = compile_info
+            # We take a copy of the cubin because it's owned by the linker
+            cubin_ptr = ctypes.cast(cubin, ctypes.POINTER(ctypes.c_char))
+            cubin_data = np.ctypeslib.as_array(cubin_ptr, shape=(size,)).copy()
+            self.cubins[device.id] = cubin_data
         return cufunc
+
+    def get_sass(self):
+        self.get()  # trigger compilation
+        device = get_context().device
+        return disassemble_cubin(self.cubins[device.id])
 
     def get_info(self):
         self.get()   # trigger compilation
@@ -546,6 +589,14 @@ class _Kernel(serialize.ReduceMixin):
         Returns the PTX code for this kernel.
         '''
         return self._func.ptx.get().decode('ascii')
+
+    def inspect_sass(self):
+        '''
+        Returns the SASS code for this kernel.
+
+        Requires nvdisasm to be available on the PATH.
+        '''
+        return self._func.get_sass()
 
     def inspect_types(self, file=None):
         '''
@@ -881,10 +932,10 @@ class Dispatcher(serialize.ReduceMixin):
 
     def inspect_asm(self, signature=None, compute_capability=None):
         '''
-        Return the generated assembly code for all signatures encountered thus
-        far, or the LLVM IR for a specific signature and compute_capability
-        if given. If the dispatcher is specialized, the assembly code for the
-        single specialization is returned.
+        Return the generated PTX assembly code for all signatures encountered
+        thus far, or the PTX assembly code for a specific signature and
+        compute_capability if given. If the dispatcher is specialized, the
+        assembly code for the single specialization is returned.
         '''
         cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
@@ -893,6 +944,23 @@ class Dispatcher(serialize.ReduceMixin):
             return self.definition.inspect_asm()
         else:
             return dict((sig, defn.inspect_asm())
+                        for sig, defn in self.definitions.items())
+
+    def inspect_sass(self, signature=None, compute_capability=None):
+        '''
+        Return the generated SASS code for all signatures encountered thus
+        far, or the SASS code for a specific signature and compute_capability
+        if given.
+
+        Requires nvdisasm to be available on the PATH.
+        '''
+        cc = compute_capability or get_current_device().compute_capability
+        if signature is not None:
+            return self.definitions[(cc, signature)].inspect_sass()
+        elif self.specialized:
+            return self.definition.inspect_sass()
+        else:
+            return dict((sig, defn.inspect_sass())
                         for sig, defn in self.definitions.items())
 
     def inspect_types(self, file=None):
