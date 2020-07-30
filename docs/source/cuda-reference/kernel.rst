@@ -57,8 +57,8 @@ Dispatcher objects also provide several utility methods for inspection and
 creating a specialized instance:
 
 .. autoclass:: numba.cuda.compiler.Dispatcher
-   :members: inspect_asm, inspect_llvm, inspect_types, specialize, specialized,
-             extensions
+   :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
+             specialize, specialized, extensions
 
 
 Intrinsic Attributes and Functions
