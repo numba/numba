@@ -178,6 +178,8 @@ def insert_and_call_atomic_fn(context, builder, sig, fn_type,
         else:
             raise TypeError("Operation type is not supported %s" %
                              (fn_type))
+
+
     elif dtype.name == "int64" or dtype.name == "uint64":
         device_env = driver.runtime.get_current_device()
         if device_env.device_support_int64_atomics():
@@ -222,6 +224,11 @@ def insert_and_call_atomic_fn(context, builder, sig, fn_type,
         raise TypeError("Atomic operation is not supported for type %s" %
                         (dtype.name))
 
+    if addrspace == target.SPIR_LOCAL_ADDRSPACE:
+        name = name + "_local"
+    else:
+        name = name + "_global"
+
     assert(ll_p != None)
     assert(name != "")
     ll_p.addrspace = target.SPIR_GENERIC_ADDRSPACE
@@ -232,15 +239,7 @@ def insert_and_call_atomic_fn(context, builder, sig, fn_type,
     else:
         llretty = context.get_value_type(sig.return_type)
 
-    addr_qual = None
-    if addrspace == target.SPIR_LOCAL_ADDRSPACE:
-        addr_qual = 1
-    else:
-        addr_qual = 0
-    const = context.get_constant_generic(builder, types.int32, addr_qual)
-    cgutils.alloca_once_value(builder, const)
-
-    llargs = [ll_p, context.get_value_type(sig.args[2]), ir.IntType(32)]
+    llargs = [ll_p, context.get_value_type(sig.args[2])]
     fnty = ir.FunctionType(llretty, llargs)
 
     fn = mod.get_or_insert_function(fnty, name)
@@ -249,7 +248,7 @@ def insert_and_call_atomic_fn(context, builder, sig, fn_type,
     generic_ptr = context.addrspacecast(builder, ptr,
                                     target.SPIR_GENERIC_ADDRSPACE)
 
-    return builder.call(fn, [generic_ptr, val, const])
+    return builder.call(fn, [generic_ptr, val])
 
 
 @lower(stubs.atomic.add, types.Array, types.intp, types.Any)
