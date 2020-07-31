@@ -1310,7 +1310,7 @@ class PythonAPI(object):
     def serialize_uncached(self, obj):
         """
         Same as serialize_object(), but don't create a global variable,
-        simply return a literal {i8* data, i32 length} structure.
+        simply return a literal {i8* data, i32 length, i8* hashbuf} structure.
         """
         # First make the array constant
         data = serialize.dumps(obj)
