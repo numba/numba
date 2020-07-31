@@ -9,6 +9,7 @@ import tempfile
 from numba import config
 from numba.dppl.target import LINK_ATOMIC
 
+
 def _raise_bad_env_path(msg, path, extra=None):
     error_message = msg.format(path)
     if extra is not None:
@@ -127,7 +128,7 @@ class Module(object):
         for key in list(self.context.link_binaries.keys()):
             del self.context.link_binaries[key]
             if key == LINK_ATOMIC:
-                from .ocl.atomics import atomic_spirv_path
+                from dppl.ocldrv import atomic_spirv_path
                 binary_paths.append(atomic_spirv_path)
 
         if len(binary_paths) > 1:
