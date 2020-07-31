@@ -1813,6 +1813,57 @@ class TestOverloadPreferLiteral(TestCase):
         self.assertEqual(b, 200)
         self.assertEqual(c, 300)
 
+    def test_overload_method(self):
+        def ov(self, x):
+            if isinstance(x, types.IntegerLiteral):
+                # With prefer_literal=False, this branch will not be reached.
+                if x.literal_value == 1:
+                    def impl(self, x):
+                        return 0xcafe
+                    return impl
+                else:
+                    raise errors.TypingError('literal value')
+            else:
+                def impl(self, x):
+                    return x * 100
+                return impl
+
+        overload_method(
+            MyDummyType, "method_prefer_literal",
+            prefer_literal=True,
+        )(ov)
+
+        overload_method(
+            MyDummyType, "method_non_literal",
+            prefer_literal=False,
+        )(ov)
+
+        @njit
+        def check_prefer_lit(dummy, x):
+            return (
+                dummy.method_prefer_literal(1),
+                dummy.method_prefer_literal(2),
+                dummy.method_prefer_literal(x),
+            )
+
+        a, b, c = check_prefer_lit(MyDummy(), 3)
+        self.assertEqual(a, 0xcafe)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+        @njit
+        def check_non_lit(dummy, x):
+            return (
+                dummy.method_non_literal(1),
+                dummy.method_non_literal(2),
+                dummy.method_non_literal(x),
+            )
+
+        a, b, c = check_non_lit(MyDummy(), 3)
+        self.assertEqual(a, 100)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
 
 if __name__ == "__main__":
     unittest.main()

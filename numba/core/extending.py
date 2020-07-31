@@ -208,6 +208,7 @@ def overload_method(typ, attr, **kwargs):
         template = make_overload_method_template(
             typ, attr, overload_func,
             inline=kwargs.get('inline', 'never'),
+            prefer_literal=kwargs.get('prefer_literal', False)
         )
         infer_getattr(template)
         overload(overload_func, **kwargs)(overload_func)
