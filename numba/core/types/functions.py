@@ -405,7 +405,11 @@ class BoundFunction(Callable, Opaque):
                         out = template.apply(unliteral_args, unliteral_kws)
                     except Exception as exc:
                         if isinstance(exc, errors.ForceLiteralArg):
-                            raise exc
+                            if template.prefer_literal:
+                                # For template that prefers literal types,
+                                # reaching here means that the literal types
+                                # have failed typing as well.
+                                raise exc
                         nonliteral_e = exc
                     else:
                         break
