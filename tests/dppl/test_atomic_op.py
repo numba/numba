@@ -9,7 +9,7 @@ from numba.dppl.testing import DPPLTestCase
 import dppl.ocldrv as ocldrv
 
 
-def atomic_add(ary):
+def atomic_add_int32(ary):
     tid = dppl.get_local_id(0)
     lm = dppl.local.static_alloc(32, numba.uint32)
     lm[tid] = 0
@@ -18,6 +18,71 @@ def atomic_add(ary):
     dppl.atomic.add(lm, bin, 1)
     dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
     ary[tid] = lm[tid]
+
+
+def atomic_sub_int32(ary):
+    tid = dppl.get_local_id(0)
+    lm = dppl.local.static_alloc(32, numba.uint32)
+    lm[tid] = 0
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    bin = ary[tid] % 32
+    dppl.atomic.sub(lm, bin, 1)
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    ary[tid] = lm[tid]
+
+
+def atomic_add_float32(ary):
+    lm = dppl.local.static_alloc(1, numba.float32)
+    lm[0] = ary[0]
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    dppl.atomic.add(lm, 0, 1)
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    ary[0] = lm[0]
+
+
+def atomic_sub_float32(ary):
+    lm = dppl.local.static_alloc(1, numba.float32)
+    lm[0] = ary[0]
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    dppl.atomic.sub(lm, 0, 1)
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    ary[0] = lm[0]
+
+
+def atomic_add_int64(ary):
+    lm = dppl.local.static_alloc(1, numba.int64)
+    lm[0] = ary[0]
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    dppl.atomic.add(lm, 0, 1)
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    ary[0] = lm[0]
+
+
+def atomic_sub_int64(ary):
+    lm = dppl.local.static_alloc(1, numba.int64)
+    lm[0] = ary[0]
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    dppl.atomic.sub(lm, 0, 1)
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    ary[0] = lm[0]
+
+
+def atomic_add_float64(ary):
+    lm = dppl.local.static_alloc(1, numba.float64)
+    lm[0] = ary[0]
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    dppl.atomic.add(lm, 0, 1)
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    ary[0] = lm[0]
+
+
+def atomic_sub_float64(ary):
+    lm = dppl.local.static_alloc(1, numba.float64)
+    lm[0] = ary[0]
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    dppl.atomic.sub(lm, 0, 1)
+    dppl.barrier(dppl.CLK_GLOBAL_MEM_FENCE)
+    ary[0] = lm[0]
 
 
 def atomic_add2(ary):
@@ -60,10 +125,9 @@ def call_fn_for_datatypes(fn, result, input, global_size):
 
 @unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
 class TestAtomicOp(DPPLTestCase):
-    def test_atomic_add(self):
+    def test_atomic_add_global(self):
         @dppl.kernel
         def atomic_add(B):
-            i = dppl.get_global_id(0)
             dppl.atomic.add(B, 0, 1)
 
         N = 100
@@ -72,10 +136,9 @@ class TestAtomicOp(DPPLTestCase):
         call_fn_for_datatypes(atomic_add, N, B, N)
 
 
-    def test_atomic_sub(self):
+    def test_atomic_sub_global(self):
         @dppl.kernel
         def atomic_sub(B):
-            i = dppl.get_global_id(0)
             dppl.atomic.sub(B, 0, 1)
 
         N = 100
@@ -84,11 +147,11 @@ class TestAtomicOp(DPPLTestCase):
         call_fn_for_datatypes(atomic_sub, 0, B, N)
 
 
-    def test_atomic_add1(self):
+    def test_atomic_add_local_int32(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
         orig = ary.copy()
 
-        dppl_atomic_add = dppl.kernel('void(uint32[:])')(atomic_add)
+        dppl_atomic_add = dppl.kernel('void(uint32[:])')(atomic_add_int32)
         with ocldrv.igpu_context(0) as device_env:
             dppl_atomic_add[32, dppl.DEFAULT_LOCAL_SIZE](ary)
 
@@ -97,6 +160,90 @@ class TestAtomicOp(DPPLTestCase):
             gold[orig[i]] += 1
 
         self.assertTrue(np.all(ary == gold))
+
+
+    def test_atomic_sub_local_int32(self):
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32)
+        orig = ary.copy()
+
+        dppl_atomic_sub = dppl.kernel('void(uint32[:])')(atomic_sub_int32)
+        with ocldrv.igpu_context(0) as device_env:
+            dppl_atomic_sub[32, dppl.DEFAULT_LOCAL_SIZE](ary)
+
+        gold = np.zeros(32, dtype=np.uint32)
+        for i in range(orig.size):
+            gold[orig[i]] -= 1
+
+        self.assertTrue(np.all(ary == gold))
+
+
+    def test_atomic_add_local_float32(self):
+        ary = np.array([0], dtype=np.float32)
+
+        dppl_atomic_add = dppl.kernel('void(float32[:])')(atomic_add_float32)
+        with ocldrv.igpu_context(0) as device_env:
+            dppl_atomic_add[32, dppl.DEFAULT_LOCAL_SIZE](ary)
+
+        self.assertTrue(ary[0] == 32)
+
+
+    def test_atomic_sub_local_float32(self):
+        ary = np.array([32], dtype=np.float32)
+
+        dppl_atomic_sub = dppl.kernel('void(float32[:])')(atomic_sub_float32)
+        with ocldrv.igpu_context(0) as device_env:
+
+            dppl_atomic_sub[32, dppl.DEFAULT_LOCAL_SIZE](ary)
+
+        self.assertTrue(ary[0] == 0)
+
+
+    def test_atomic_add_local_int64(self):
+        ary = np.array([0], dtype=np.int64)
+
+        dppl_atomic_add = dppl.kernel('void(int64[:])')(atomic_add_int64)
+        with ocldrv.igpu_context(0) as device_env:
+            if device_env.device_support_int64_atomics():
+                dppl_atomic_add[32, dppl.DEFAULT_LOCAL_SIZE](ary)
+                self.assertTrue(ary[0] == 32)
+            else:
+                return
+
+
+    def test_atomic_sub_local_int64(self):
+        ary = np.array([32], dtype=np.int64)
+
+        fn = dppl.kernel('void(int64[:])')(atomic_sub_int64)
+        with ocldrv.igpu_context(0) as device_env:
+            if device_env.device_support_int64_atomics():
+                fn[32, dppl.DEFAULT_LOCAL_SIZE](ary)
+                self.assertTrue(ary[0] == 0)
+            else:
+                return
+
+
+    def test_atomic_add_local_float64(self):
+        ary = np.array([0], dtype=np.double)
+
+        fn = dppl.kernel('void(float64[:])')(atomic_add_float64)
+        with ocldrv.igpu_context(0) as device_env:
+            if device_env.device_support_float64_atomics():
+                fn[32, dppl.DEFAULT_LOCAL_SIZE](ary)
+                self.assertTrue(ary[0] == 32)
+            else:
+                return
+
+
+    def test_atomic_sub_local_float64(self):
+        ary = np.array([32], dtype=np.double)
+
+        fn = dppl.kernel('void(float64[:])')(atomic_sub_int64)
+        with ocldrv.igpu_context(0) as device_env:
+            if device_env.device_support_float64_atomics():
+                fn[32, dppl.DEFAULT_LOCAL_SIZE](ary)
+                self.assertTrue(ary[0] == 0)
+            else:
+                return
 
 
     def test_atomic_add2(self):
