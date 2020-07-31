@@ -1243,8 +1243,11 @@ class TestSubtyping(TestCase):
 
         foo(c_rec1)
         foo.disable_compile()
-        with self.assertRaises(TypeError):
+        foo(self.a_rec1)
+        with self.assertRaises(TypeError) as err:
             foo(self.a_rec1)
+            self.assertIn("No matching definition for argument type(s) Record",
+                          str(err.exception))
 
     def test_no_subtyping2(self):
         """
@@ -1253,8 +1256,11 @@ class TestSubtyping(TestCase):
         jit_fc = njit(self.func)
         jit_fc(self.ab_rec1)
         jit_fc.disable_compile()
-        with self.assertRaises(TypeError):
+        jit_fc(self.a_rec1)
+        with self.assertRaises(TypeError) as err:
             jit_fc(self.a_rec1)
+            self.assertIn("No matching definition for argument type(s) Record",
+                          str(err.exception))
 
     def test_no_subtyping3(self):
         """
@@ -1265,8 +1271,10 @@ class TestSubtyping(TestCase):
         jit_fc = njit(self.func)
         jit_fc(self.a_rec1)
         jit_fc.disable_compile()
-        with self.assertRaises(TypeError):
+        with self.assertRaises(TypeError) as err:
             jit_fc(other_a_rec)
+            self.assertIn("No matching definition for argument type(s) Record",
+                          str(err.exception))
 
     def test_branch_pruning(self):
         """
