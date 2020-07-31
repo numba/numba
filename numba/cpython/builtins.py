@@ -75,6 +75,11 @@ def opaque_is(context, builder, sig, args):
 
 @lower_builtin(operator.is_, types.Boolean, types.Boolean)
 def bool_is_impl(context, builder, sig, args):
+    """
+    Implementation for `x is y` for types derived from types.Boolean
+    (e.g. BooleanLiteral), and cross-checks between literal and non-literal
+    booleans, to satisfy Python's behavior preserving identity for bools.
+    """
     arg1, arg2 = args
     arg1_type, arg2_type = sig.args
     _arg1 = context.cast(builder, arg1, arg1_type, types.boolean)
