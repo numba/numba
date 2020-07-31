@@ -782,7 +782,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
 
 def make_overload_template(func, overload_func, jit_options, strict,
-                           inline):
+                           inline, prefer_literal):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -793,7 +793,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
                _strict=strict, _inline=staticmethod(InlineOptions(inline)),
-               _inline_overloads={})
+               _inline_overloads={}, prefer_literal=prefer_literal)
     return type(base)(name, (base,), dct)
 
 

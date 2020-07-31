@@ -1770,5 +1770,49 @@ class TestMisc(TestCase):
         )
 
 
+class TestOverloadPreferLiteral(TestCase):
+    def test_overload(self):
+        def prefer_lit(x):
+            pass
+
+        def non_lit(x):
+            pass
+
+        def ov(x):
+            if isinstance(x, types.IntegerLiteral):
+                # With prefer_literal=False, this branch will not be reached.
+                if x.literal_value == 1:
+                    def impl(x):
+                        return 0xcafe
+                    return impl
+                else:
+                    raise errors.TypingError('literal value')
+            else:
+                def impl(x):
+                    return x * 100
+                return impl
+
+        overload(prefer_lit, prefer_literal=True)(ov)
+        overload(non_lit)(ov)
+
+        @njit
+        def check_prefer_lit(x):
+            return prefer_lit(1), prefer_lit(2), prefer_lit(x)
+
+        a, b, c = check_prefer_lit(3)
+        self.assertEqual(a, 0xcafe)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+        @njit
+        def check_non_lit(x):
+            return non_lit(1), non_lit(2), non_lit(x)
+
+        a, b, c = check_non_lit(3)
+        self.assertEqual(a, 100)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+
 if __name__ == "__main__":
     unittest.main()
