@@ -864,8 +864,8 @@ class TestInitSafetyIssues(TestCase):
 
     def run_cmd(self, cmdline):
         popen = subprocess.Popen(cmdline,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,)
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE,)
         # finish in _TEST_TIMEOUT seconds or kill it
         timeout = threading.Timer(_TEST_TIMEOUT, popen.kill)
         try:
@@ -878,7 +878,6 @@ class TestInitSafetyIssues(TestCase):
         finally:
             timeout.cancel()
         return out.decode(), err.decode()
-
 
     @linux_only # only linux can leak semaphores
     def test_orphaned_semaphore(self):
