@@ -1260,7 +1260,7 @@ class pyStencilGenerator:
             ast.copy_location(returner, node)
 
             add_kwarg = [ast.arg('neighborhood', None)]
-            defaults = [ast.Name(id='Name', ctx=ast.Load())]
+            defaults = []
 
             newargs = ast.arguments(
                 args=node.args.args +
