@@ -1243,7 +1243,6 @@ class TestSubtyping(TestCase):
 
         foo(c_rec1)
         foo.disable_compile()
-        foo(self.a_rec1)
         with self.assertRaises(TypeError) as err:
             foo(self.a_rec1)
             self.assertIn("No matching definition for argument type(s) Record",
@@ -1256,7 +1255,6 @@ class TestSubtyping(TestCase):
         jit_fc = njit(self.func)
         jit_fc(self.ab_rec1)
         jit_fc.disable_compile()
-        jit_fc(self.a_rec1)
         with self.assertRaises(TypeError) as err:
             jit_fc(self.a_rec1)
             self.assertIn("No matching definition for argument type(s) Record",
