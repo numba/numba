@@ -4,7 +4,7 @@ Types associated with cffi support
 import re
 from types import BuiltinFunctionType
 
-from numba.typeconv import Conversion
+from numba.core.typeconv import Conversion
 from .abstract import Type
 from .containers import Sequence, BaseContainerIterator
 from .misc import Opaque, NoneType, CPointer, voidptr

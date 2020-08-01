@@ -10,10 +10,10 @@ import operator
 from llvmlite import ir
 
 from numba import types
-from numba import cgutils
-from numba.errors import TypingError
-from numba.datamodel import models, register_default, default_manager
-from numba.pythonapi import box, unbox, NativeValue
+from numba.core import cgutils
+from numba.core.errors import TypingError
+from numba.core.datamodel import models, register_default, default_manager
+from numba.core.pythonapi import box, unbox, NativeValue
 from numba.runtime import cffidynmod
 from . import templates
 from .cffi_utils import (

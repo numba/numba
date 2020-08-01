@@ -2,10 +2,10 @@ import array
 import numpy as np
 
 from .support import MemoryLeakMixin
-from numba import unittest_support as unittest
-from numba import jit, njit, cfunc, cffi_support, types, errors
+from numba import jit, njit, cfunc, types, errors
 from numba.core.compiler import compile_isolated, Flags
 from numba.tests.support import TestCase, tag
+from numba.core.typing import cffi_utils
 
 import numba.tests.cffi_usecases as mod
 import unittest
@@ -18,7 +18,7 @@ no_pyobj_flags = Flags()
 
 
 @unittest.skipUnless(
-    cffi_support.SUPPORTED, "CFFI not supported -- please install the cffi module"
+    cffi_utils.SUPPORTED, "CFFI not supported -- please install the cffi module"
 )
 class TestCFFI(MemoryLeakMixin, TestCase):
 
@@ -32,7 +32,7 @@ class TestCFFI(MemoryLeakMixin, TestCase):
         mod.init_ool()
 
     def test_type_map(self):
-        signature = cffi_support.map_type(mod.ffi.typeof(mod.cffi_sin))
+        signature = cffi_utils.map_type(mod.ffi.typeof(mod.cffi_sin))
         self.assertEqual(len(signature.args), 1)
         self.assertEqual(signature.args[0], types.double)
 
@@ -255,7 +255,7 @@ class TestCFFI(MemoryLeakMixin, TestCase):
 
 
 @unittest.skipUnless(
-    cffi_support.SUPPORTED, "CFFI not supported -- please install the cffi module"
+    cffi_utils.SUPPORTED, "CFFI not supported -- please install the cffi module"
 )
 class TestCFFILinkedList(MemoryLeakMixin, TestCase):
     def setUp(self):
@@ -318,7 +318,7 @@ class TestCFFILinkedList(MemoryLeakMixin, TestCase):
                 node_ref = ffi.new("Node*")
                 nodes.append(node_ref)
                 last.next = node_ref
-                last = last.next
+                last = node_ref
                 last.value = i
             return head, nodes
 
@@ -437,7 +437,7 @@ class TestCFFILinkedList(MemoryLeakMixin, TestCase):
         ffi = self.ffi
         lib = self.lib
         ll = self._create_linked_list(n)
-        node_t = cffi_support.map_type(ffi.typeof("Node*"))
+        node_t = cffi_utils.map_type(ffi.typeof("Node*"))
 
         @cfunc(types.void(node_t))
         def double_node_value(node):

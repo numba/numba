@@ -11,13 +11,14 @@ from .misc import *
 from .npytypes import *
 from .scalars import *
 from .function_type import *
+from .cffitypes import *
 
 # Short names
 
 pyobject = PyObject('pyobject')
 ffi_forced_object = Opaque('ffi_forced_object')
 ffi = Opaque('ffi')
-cffi_lib = Opaque('ffi_lib')
+ffi_lib = Opaque('ffi_lib')
 none = NoneType('none')
 ellipsis = EllipsisType('...')
 Any = Phantom('any')

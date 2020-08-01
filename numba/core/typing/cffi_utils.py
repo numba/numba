@@ -25,10 +25,10 @@ from types import BuiltinFunctionType
 import numpy as np
 import llvmlite.ir as ir
 
-from numba import numpy_support
+from numba.np import numpy_support
 from numba import types
 from numba.core.typing import templates
-from numba import cgutils
+from numba.core import cgutils
 
 
 class CFFITypeInfo(object):

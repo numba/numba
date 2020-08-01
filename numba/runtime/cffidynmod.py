@@ -22,7 +22,7 @@
 
 
 import llvmlite.ir as ir
-from numba import cgutils
+from numba.core import cgutils
 
 
 # typedef struct _ctypedescr {

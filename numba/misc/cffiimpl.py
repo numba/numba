@@ -7,17 +7,17 @@ import operator
 
 from llvmlite import ir
 
-from numba.core.imputils import Registry
+from numba.core.imputils import RefType, Registry
 from numba import types
 from numba.core import imputils
-from numba import cgutils
+from numba.core import cgutils
 from numba.core.typing.cffi_utils import (
     make_function_type,
     get_func_pointer,
     get_struct_pointer,
     get_free_ffi_func,
 )
-from numba.misc import arrayobj
+from numba.np import arrayobj
 
 
 registry = Registry()
@@ -118,7 +118,7 @@ def getiter_owning_cffiarray(context, builder, sig, args):
 
 
 @registry.lower("iternext", types.CFFIIteratorType)
-@imputils.iternext_impl
+@imputils.iternext_impl(RefType.BORROWED)
 def iternext_cffiarray(context, builder, sig, args, result):
     iterty = sig.args[0]
     iter_ = args[0]
@@ -138,7 +138,7 @@ def iternext_cffiarray(context, builder, sig, args, result):
 
 
 @registry.lower("iternext", types.CFFIOwningIteratorType)
-@imputils.iternext_impl
+@imputils.iternext_impl(RefType.BORROWED)
 def iternext_cffiarray(context, builder, sig, args, result):
     iterty = sig.args[0]
     iter_ = args[0]
@@ -188,11 +188,11 @@ def getitem_owned_cffipointer(context, builder, sig, args):
 @registry.lower(operator.setitem, types.CFFIPointer, types.Integer, types.Any)
 def setitem_cpointer(context, builder, sig, args):
     base_ptr, idx, val = args
-    elem_ptr = builder.get(base_ptr, [idx])
+    elem_ptr = builder.gep(base_ptr, [idx])
     builder.store(val, elem_ptr)
 
 
-@registry.lower("setitem", types.CFFIOwningType, types.Integer, types.Any)
+@registry.lower(operator.setitem, types.CFFIOwningType, types.Integer, types.Any)
 def setitem_owning_cpointer(context, builder, sig, args):
     obj_ptr, idx, val = args
     obj = context.make_helper(builder, sig.args[0], value=obj_ptr)
