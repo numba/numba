@@ -13,9 +13,12 @@ from .misc import Opaque, NoneType, CPointer, voidptr
 class CFFILibraryType(Opaque):
     def __init__(self, lib):
         self._func_names = set(
-            f for f in dir(lib) if isinstance(getattr(lib, f), BuiltinFunctionType)
+            f for f in dir(lib) if isinstance(
+                getattr(lib, f),
+                BuiltinFunctionType)
         )
-        self._lib_name = re.match(r"<Lib object for '([^']+)'>", str(lib)).group(1)
+        self._lib_name = re.match(
+            r"<Lib object for '([^']+)'>", str(lib)).group(1)
         name = "cffi_lib<{}>".format(self._lib_name)
         super(CFFILibraryType, self).__init__(name)
 

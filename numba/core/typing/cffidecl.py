@@ -50,9 +50,11 @@ class FFI_new(types.BoundFunction):
         elif cffi_type.kind == "array":
             length = cffi_type.length
             pointee = cffi_type.item
-            ret_type = types.CFFIOwningArrayType(cffi_type_map()[pointee], length)
+            ret_type = types.CFFIOwningArrayType(
+                cffi_type_map()[pointee], length)
         else:
-            raise ValueError("Can only allocate memory for pointer and array types")
+            raise ValueError(
+                "Can only allocate memory for pointer and array types")
         return templates.signature(ret_type, *args)
 
 
@@ -179,7 +181,8 @@ class CFFIPointerGetitem(templates.AbstractTemplate):
         ptr, idx = args
         if isinstance(ptr, types.CFFIPointer):
             if not isinstance(idx, types.Integer):
-                raise TypeError("Only integer indexing is supported on CFFI pointers")
+                raise TypeError(
+                    "Only integer indexing is supported on CFFI pointers")
 
             if isinstance(ptr.dtype, types.CFFIStructInstanceType):
                 if isinstance(ptr, types.CFFIOwningType):
@@ -187,7 +190,10 @@ class CFFIPointerGetitem(templates.AbstractTemplate):
                         types.CFFIOwningStructRefType(ptr), ptr, idx
                     )
                 else:
-                    return templates.signature(types.CFFIStructRefType(ptr), ptr, idx)
+                    return templates.signature(
+                        types.CFFIStructRefType(ptr),
+                        ptr,
+                        idx)
             else:
                 return templates.signature(ptr.dtype, ptr, idx)
 
@@ -238,14 +244,17 @@ class FFI_from_buffer(templates.AbstractTemplate):
             return
         [ary] = args
         if not isinstance(ary, types.Buffer):
-            raise TypingError("from_buffer() expected a buffer object, got %s" % (ary,))
+            raise TypingError(
+                "from_buffer() expected a buffer object, got %s" % (ary,))
         if ary.layout not in ("C", "F"):
             raise TypingError(
-                "from_buffer() unsupported on non-contiguous buffers (got %s)" % (ary,)
+                "from_buffer() unsupported on non-contiguous buffers (got %s)"
+                % (ary,)
             )
         if ary.layout != "C" and ary.ndim > 1:
             raise TypingError(
-                "from_buffer() only supports multidimensional arrays with C layout (got %s)"
+                "from_buffer() only supports multidimensional arrays "
+                "with C layout (got %s)"
                 % (ary,)
             )
         ptr = types.CPointer(ary.dtype)
@@ -279,7 +288,8 @@ class FFIAttribute(templates.AttributeTemplate):
 class PtrCMPTemplate(templates.AbstractTemplate):
     def generic(self, args, kws):
         (ptr1, ptr2) = args
-        if isinstance(ptr1, types.CPointer) and isinstance(ptr2, types.CPointer):
+        if isinstance(ptr1, types.CPointer) \
+                and isinstance(ptr2, types.CPointer):
             return templates.signature(types.bool_, ptr1, ptr2)
 
 
@@ -311,7 +321,7 @@ def struct_instance_box(typ, val, c):
 
 
 # this is the layout ob the CFFI's CDataObject
-# see https://bitbucket.org/cffi/cffi/src/86332166be5b05759060f81e0acacbdebdd3075b/c/_cffi_backend.c#_cffi_backend.c-216
+# see https://bitbucket.org/cffi/cffi/src/86332166be5b05759060f81e0acacbdebdd3075b/c/_cffi_backend.c#_cffi_backend.c-216 # noqa
 cffi_cdata_type = ir.LiteralStructType(
     [
         ir.ArrayType(cgutils.int8_t, 16),  # 16-byte PyObject_HEAD
