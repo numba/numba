@@ -998,7 +998,6 @@ def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
     builder.call(memcpy, [builder.bitcast(dst, voidptr_t),
                           builder.bitcast(src, voidptr_t),
                           builder.mul(count, itemsize),
-                          align,
                           is_volatile])
 
 

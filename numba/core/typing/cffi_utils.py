@@ -21,7 +21,7 @@ SUPPORTED = ffi is not None
 
 
 from functools import partial
-from types import BuiltinFunctionType
+from types import BuiltinFunctionType, ModuleType
 import numpy as np
 import llvmlite.ir as ir
 
@@ -121,7 +121,7 @@ def cffi_reverse_type_map():
 
 def is_ffi_lib(lib):
     # we register libs on register_module call
-    return lib in _ool_libraries
+    return isinstance(lib, ModuleType) and lib in _ool_libraries
 
 
 def is_ffi_instance(obj):
