@@ -138,6 +138,8 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.exp`
 * :func:`math.expm1`
 * :func:`math.fabs`
+* :func:`math.frexp`
+* :func:`math.ldexp`
 * :func:`math.gamma`
 * :func:`math.lgamma`
 * :func:`math.log`

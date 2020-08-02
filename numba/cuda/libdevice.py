@@ -65,6 +65,32 @@ lower(math.pow, types.float32, types.int32)(powi_implement('__nv_powif'))
 lower(math.pow, types.float64, types.int32)(powi_implement('__nv_powi'))
 
 
+def frexp_implement(nvname):
+    def core(context, builder, sig, args):
+        argty, expty = sig.return_type
+        R = context.get_value_type(argty)
+        I = context.get_value_type(expty)
+        fnty = Type.function(R, [R, Type.pointer(I)])
+
+        fn = builder.module.get_or_insert_function(fnty, name=nvname)
+        expptr = cgutils.alloca_once(builder, I, name='exp')
+
+        ret = builder.call(fn, (args[0], expptr))
+        ret = cgutils.make_anonymous_struct(builder,
+                                            (ret, builder.load(expptr)))
+
+        return ret
+
+    return core
+
+
+lower(math.frexp, types.float32)(frexp_implement('__nv_frexpf'))
+lower(math.frexp, types.float64)(frexp_implement('__nv_frexp'))
+
+lower(math.ldexp, types.float32, types.int32)(powi_implement('__nv_ldexpf'))
+lower(math.ldexp, types.float64, types.int32)(powi_implement('__nv_ldexp'))
+
+
 booleans = []
 booleans += [('__nv_isnand', '__nv_isnanf', math.isnan)]
 booleans += [('__nv_isinfd', '__nv_isinff', math.isinf)]

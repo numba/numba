@@ -85,6 +85,22 @@ class Math_pow(ConcreteTemplate):
     ]
 
 
+@infer_global(math.frexp)
+class Math_frexp(ConcreteTemplate):
+    cases = [
+        signature(types.Tuple([types.float32, types.int32]), types.float32),
+        signature(types.Tuple([types.float64, types.int32]), types.float64),
+    ]
+
+
+@infer_global(math.ldexp)
+class Math_ldexp(ConcreteTemplate):
+    cases = [
+        signature(types.float32, types.float32, types.int32),
+        signature(types.float64, types.float64, types.int32),
+    ]
+
+
 @infer_global(math.isinf)
 @infer_global(math.isnan)
 class Math_isnan(ConcreteTemplate):
