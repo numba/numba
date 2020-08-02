@@ -162,13 +162,21 @@ def math_isinf(A, B):
     i = cuda.grid(1)
     B[i] = math.isinf(A[i])
 
+
+def math_isfinite(A, B):
+    i = cuda.grid(1)
+    B[i] = math.isfinite(A[i])
+
+
 def math_degrees(A, B):
     i = cuda.grid(1)
     B[i] = math.degrees(A[i])
 
+
 def math_radians(A, B):
     i = cuda.grid(1)
     B[i] = math.radians(A[i])
+
 
 def math_pow_binop(A, B, C):
     i = cuda.grid(1)
@@ -575,8 +583,18 @@ class TestCudaMath(CUDATestCase):
     def test_math_isinf(self):
         self.unary_bool_template_float32(math_isinf, np.isinf)
         self.unary_bool_template_float64(math_isinf, np.isinf)
-        self.unary_bool_template_int32(math_isinf, np.isnan)
-        self.unary_bool_template_int64(math_isinf, np.isnan)
+        self.unary_bool_template_int32(math_isinf, np.isinf)
+        self.unary_bool_template_int64(math_isinf, np.isinf)
+
+    #------------------------------------------------------------------------------
+    # test_math_isfinite
+
+
+    def test_math_isfinite(self):
+        self.unary_bool_template_float32(math_isfinite, np.isfinite)
+        self.unary_bool_template_float64(math_isfinite, np.isfinite)
+        self.unary_bool_template_int32(math_isfinite, np.isfinite)
+        self.unary_bool_template_int64(math_isfinite, np.isfinite)
 
     #------------------------------------------------------------------------------
     # test_math_degrees
