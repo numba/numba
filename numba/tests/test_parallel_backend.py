@@ -912,10 +912,10 @@ class TestInitSafetyIssues(TestCase):
                    "print(multiprocessing.get_context().get_start_method())")
             cmdline = [sys.executable, "-c", cmd.format(meth)]
             out, err = self.run_cmd(cmdline)
-            self.assertIn(meth, out)
             if self._DEBUG:
                 print("OUT:", out)
                 print("ERR:", err)
+            self.assertIn(meth, out)
 
 
 @skip_parfors_unsupported
