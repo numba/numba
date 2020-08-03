@@ -455,6 +455,10 @@ class List(MutableSequence, InitialValue):
         """
         return self.dtype
 
+    def __unliteral__(self):
+        return List(self.dtype, reflected=self.reflected,
+                    initial_value=None)
+
 
 class LiteralList(Literal, _HeterogeneousTuple):
     """A heterogeneous immutable list (basically a tuple with list semantics).
@@ -702,6 +706,9 @@ class DictType(IterableType, InitialValue):
     @property
     def key(self):
         return self.key_type, self.value_type, str(self.initial_value)
+
+    def __unliteral__(self):
+        return DictType(self.key_type, self.value_type)
 
 
 class LiteralStrKeyDict(Literal, NamedTuple):
