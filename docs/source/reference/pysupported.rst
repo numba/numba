@@ -262,8 +262,10 @@ same character width as the original string, even if the slice could be
 represented with a narrower character width.  (These details are invisible to
 the user, of course.)
 
-The following functions, attributes and methods are currently supported:
+The following constructors, functions, attributes and methods are currently
+supported:
 
+* ``str(int)``
 * ``len()``
 * ``+`` (concatenation of strings)
 * ``*`` (repetition of strings)

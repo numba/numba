@@ -569,7 +569,7 @@ class TestParfors(TestParforsBase):
     def test_logistic_regression(self):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
-        self.assertTrue(countParfors(lr_impl, args) == 1)
+        self.assertTrue(countParfors(lr_impl, args) == 2)
         self.assertTrue(countArrayAllocs(lr_impl, args) == 1)
 
     @skip_parfors_unsupported
@@ -1628,6 +1628,18 @@ class TestParfors(TestParforsBase):
         x = np.arange(10)
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_inplace_binop(self):
+        def test_impl(a, b):
+            b += a
+            return b
+
+        X = np.arange(10) + 10
+        Y = np.arange(10) + 100
+        self.check(test_impl, X, Y)
+        self.assertTrue(countParfors(test_impl,
+                                    (types.Array(types.float64, 1, 'C'),
+                                     types.Array(types.float64, 1, 'C'))) == 1)
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -3049,6 +3061,46 @@ class TestParforsSlice(TestParforsBase):
             return 0
 
         self.check(test_impl, np.arange(3))
+
+    @skip_parfors_unsupported
+    def test_issue5942_1(self):
+        # issue5942: tests statement reordering of
+        # aliased arguments.
+        def test_impl(gg, gg_next):
+            gs = gg.shape
+            d = gs[0]
+            for i_gg in prange(d):
+                gg_next[i_gg, :]  = gg[i_gg, :]
+                gg_next[i_gg, 0] += 1
+
+            return gg_next
+
+        d = 4
+        k = 2
+
+        gg      = np.zeros((d, k), dtype = np.int32)
+        gg_next = np.zeros((d, k), dtype = np.int32)
+        self.check(test_impl, gg, gg_next)
+
+    @skip_parfors_unsupported
+    def test_issue5942_2(self):
+        # issue5942: tests statement reordering
+        def test_impl(d, k):
+            gg      = np.zeros((d, k), dtype = np.int32)
+            gg_next = np.zeros((d, k), dtype = np.int32)
+
+            for i_gg in prange(d):
+                for n in range(k):
+                    gg[i_gg, n] = i_gg
+                gg_next[i_gg, :]  = gg[i_gg, :]
+                gg_next[i_gg, 0] += 1
+
+            return gg_next
+
+        d = 4
+        k = 2
+
+        self.check(test_impl, d, k)
 
 
 class TestParforsOptions(TestParforsBase):

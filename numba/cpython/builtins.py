@@ -57,6 +57,22 @@ def generic_is(context, builder, sig, args):
         return cgutils.false_bit
 
 
+@lower_builtin(operator.is_, types.Opaque, types.Opaque)
+def opaque_is(context, builder, sig, args):
+    """
+    Implementation for `x is y` for Opaque types.
+    """
+    lhs_type, rhs_type = sig.args
+    # the lhs and rhs have the same type
+    if lhs_type == rhs_type:
+        lhs_ptr = builder.ptrtoint(args[0], cgutils.intp_t)
+        rhs_ptr = builder.ptrtoint(args[1], cgutils.intp_t)
+
+        return builder.icmp_unsigned('==', lhs_ptr, rhs_ptr)
+    else:
+        return cgutils.false_bit
+
+
 @lower_builtin(operator.eq, types.Literal, types.Literal)
 @lower_builtin(operator.eq, types.IntegerLiteral, types.IntegerLiteral)
 def const_eq_impl(context, builder, sig, args):

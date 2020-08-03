@@ -429,6 +429,13 @@ def _assign_kernel(ndim):
     """
     from numba import cuda  # circular!
 
+    if ndim == 0:
+        # the (2, ndim) allocation below is not yet supported, so avoid it
+        @cuda.jit
+        def kernel(lhs, rhs):
+            lhs[()] = rhs[()]
+        return kernel
+
     @cuda.jit
     def kernel(lhs, rhs):
         location = cuda.grid(1)
@@ -584,9 +591,9 @@ class DeviceNDArray(DeviceNDArrayBase):
         newdata = self.gpu_data.view(*arr.extent)
 
         if isinstance(arr, dummyarray.Element):
-            # convert to a 1d array
-            shape = (1,)
-            strides = (self.dtype.itemsize,)
+            # convert to a 0d array
+            shape = ()
+            strides = ()
         else:
             shape = arr.shape
             strides = arr.strides
@@ -606,7 +613,8 @@ class DeviceNDArray(DeviceNDArrayBase):
                 rhs.ndim,
                 lhs.ndim))
         rhs_shape = np.ones(lhs.ndim, dtype=np.int64)
-        rhs_shape[-rhs.ndim:] = rhs.shape
+        # negative indices would not work if rhs.ndim == 0
+        rhs_shape[lhs.ndim - rhs.ndim:] = rhs.shape
         rhs = rhs.reshape(*rhs_shape)
         for i, (l, r) in enumerate(zip(lhs.shape, rhs.shape)):
             if r != 1 and l != r:
@@ -676,8 +684,6 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
 
 def from_array_like(ary, stream=0, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
-    if ary.ndim == 0:
-        ary = ary.reshape(1)
     return DeviceNDArray(ary.shape, ary.strides, ary.dtype,
                          writeback=ary, stream=stream, gpu_data=gpu_data)
 

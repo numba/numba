@@ -60,10 +60,9 @@ class DUFuncLowerer(object):
 
     def __call__(self, context, builder, sig, args):
         from numba.np import npyimpl
-        explicit_output = len(args) > self.kernel.dufunc.ufunc.nin
         return npyimpl.numpy_ufunc_kernel(context, builder, sig, args,
-                                          self.kernel,
-                                          explicit_output=explicit_output)
+                                          self.kernel.dufunc.ufunc,
+                                          self.kernel)
 
 
 class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
@@ -79,7 +78,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         if isinstance(py_func, Dispatcher):
             py_func = py_func.py_func
-        dispatcher = jit(target='npyufunc',
+        dispatcher = jit(_target='npyufunc',
                          cache=cache,
                          **targetoptions)(py_func)
         self._initialize(dispatcher, identity)

@@ -1,7 +1,9 @@
 import ctypes
 import inspect
 import os
+import subprocess
 import sys
+import tempfile
 
 import numpy as np
 
@@ -12,7 +14,7 @@ from numba.core.compiler_lock import global_compiler_lock
 import numba
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, driver
-from .errors import normalize_kernel_dimensions
+from .errors import missing_launch_config_msg, normalize_kernel_dimensions
 from .api import get_current_device
 from .args import wrap_arg
 
@@ -51,24 +53,25 @@ def compile_cuda(pyfunc, return_type, args, debug=False, inline=False):
 
 @global_compiler_lock
 def compile_kernel(pyfunc, args, link, debug=False, inline=False,
-                   fastmath=False, extensions=[], max_registers=None):
+                   fastmath=False, extensions=[], max_registers=None, opt=True):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     fname = cres.fndesc.llvm_func_name
     lib, kernel = cres.target_context.prepare_cuda_kernel(cres.library, fname,
                                                           cres.signature.args,
                                                           debug=debug)
 
-    cukern = CUDAKernel(llvm_module=lib._final_module,
-                        name=kernel.name,
-                        pretty_name=cres.fndesc.qualname,
-                        argtypes=cres.signature.args,
-                        type_annotation=cres.type_annotation,
-                        link=link,
-                        debug=debug,
-                        call_helper=cres.call_helper,
-                        fastmath=fastmath,
-                        extensions=extensions,
-                        max_registers=max_registers)
+    cukern = _Kernel(llvm_module=lib._final_module,
+                     name=kernel.name,
+                     pretty_name=cres.fndesc.qualname,
+                     argtypes=cres.signature.args,
+                     type_annotation=cres.type_annotation,
+                     link=link,
+                     debug=debug,
+                     opt=opt,
+                     call_helper=cres.call_helper,
+                     fastmath=fastmath,
+                     extensions=extensions,
+                     max_registers=max_registers)
     return cukern
 
 
@@ -130,13 +133,43 @@ def compile_ptx_for_current_device(pyfunc, args, debug=False, device=False,
                        fastmath=fastmath, cc=cc, opt=True)
 
 
+def disassemble_cubin(cubin):
+    # nvdisasm only accepts input from a file, so we need to write out to a
+    # temp file and clean up afterwards.
+    fd = None
+    fname = None
+    try:
+        fd, fname = tempfile.mkstemp()
+        with open(fname, 'wb') as f:
+            f.write(cubin)
+
+        try:
+            cp = subprocess.run(['nvdisasm', fname], check=True,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE)
+        except FileNotFoundError as e:
+            if e.filename == 'nvdisasm':
+                msg = ("nvdisasm is required for SASS inspection, and has not "
+                       "been found.\n\nYou may need to install the CUDA "
+                       "toolkit and ensure that it is available on your "
+                       "PATH.\n")
+                raise RuntimeError(msg)
+        return cp.stdout.decode('utf-8')
+    finally:
+        if fd is not None:
+            os.close(fd)
+        if fname is not None:
+            os.unlink(fname)
+
+
 class DeviceFunctionTemplate(serialize.ReduceMixin):
     """Unmaterialized device function
     """
-    def __init__(self, pyfunc, debug, inline):
+    def __init__(self, pyfunc, debug, inline, opt):
         self.py_func = pyfunc
         self.debug = debug
         self.inline = inline
+        self.opt = opt
         self._compileinfos = {}
         name = getattr(pyfunc, '__name__', 'unknown')
         self.__name__ = f"{name} <CUDA device function>".format(name)
@@ -187,6 +220,10 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         -------
         llvmir : str
         """
+        # Force a compilation to occur if none has yet - this can be needed if
+        # the user attempts to inspect LLVM IR or PTX before the function has
+        # been called for the given arguments from a jitted kernel.
+        self.compile(args)
         cres = self._compileinfos[args]
         mod = cres.library._final_module
         return str(mod)
@@ -211,17 +248,18 @@ class DeviceFunctionTemplate(serialize.ReduceMixin):
         device = cuctx.device
         cc = device.compute_capability
         arch = nvvm.get_arch_option(*cc)
-        ptx = nvvm.llvm_to_ptx(llvmir, opt=3, arch=arch, **nvvm_options)
+        opt = 3 if self.opt else 0
+        ptx = nvvm.llvm_to_ptx(llvmir, opt=opt, arch=arch, **nvvm_options)
         return ptx
 
 
-def compile_device_template(pyfunc, debug=False, inline=False):
+def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
     """Create a DeviceFunctionTemplate object and register the object to
     the CUDA typing context.
     """
     from .descriptor import CUDATargetDesc
 
-    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline)
+    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline, opt=opt)
 
     class device_function_template(AbstractTemplate):
         key = dft
@@ -328,17 +366,11 @@ class ForAll(object):
         if self.ntasks == 0:
             return
 
-        if isinstance(self.kernel, AutoJitCUDAKernel):
-            kernel = self.kernel.specialize(*args)
-        else:
-            kernel = self.kernel
+        kernel = self.kernel.specialize(*args)
+        blockdim = self._compute_thread_per_block(kernel)
+        griddim = (self.ntasks + blockdim - 1) // blockdim
 
-        tpb = self._compute_thread_per_block(kernel)
-        tpbm1 = tpb - 1
-        blkct = (self.ntasks + tpbm1) // tpb
-
-        return kernel.configure(blkct, tpb, stream=self.stream,
-                                sharedmem=self.sharedmem)(*args)
+        return kernel[griddim, blockdim, self.stream, self.sharedmem](*args)
 
     def _compute_thread_per_block(self, kernel):
         tpb = self.thread_per_block
@@ -356,80 +388,6 @@ class ForAll(object):
             )
             _, tpb = ctx.get_max_potential_block_size(**kwargs)
             return tpb
-
-
-class CUDAKernelBase(serialize.ReduceMixin):
-    """Define interface for configurable kernels
-    """
-
-    def __init__(self):
-        self.griddim = None
-        self.blockdim = None
-        self.sharedmem = 0
-        self.stream = 0
-
-    def copy(self):
-        """
-        Shallow copy the instance
-        """
-        # Note: avoid using ``copy`` which calls __reduce__
-        cls = self.__class__
-        # new bare instance
-        new = cls.__new__(cls)
-        # update the internal states
-        new.__dict__.update(self.__dict__)
-        return new
-
-    def configure(self, griddim, blockdim, stream=0, sharedmem=0):
-        griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
-
-        clone = self.copy()
-        clone.griddim = tuple(griddim)
-        clone.blockdim = tuple(blockdim)
-        clone.stream = stream
-        clone.sharedmem = sharedmem
-        return clone
-
-    def __getitem__(self, args):
-        if len(args) not in [2, 3, 4]:
-            raise ValueError('must specify at least the griddim and blockdim')
-        return self.configure(*args)
-
-    def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
-        """Returns a 1D-configured kernel for a given number of tasks
-        ``ntasks``.
-
-        This assumes that:
-
-        - the kernel maps the Global Thread ID ``cuda.grid(1)`` to tasks on a
-          1-1 basis.
-        - the kernel checks that the Global Thread ID is upper-bounded by
-          ``ntasks``, and does nothing if it is not.
-
-        :param ntasks: The number of tasks.
-        :param tpb: The size of a block. An appropriate value is chosen if this
-                    parameter is not supplied.
-        :param stream: The stream on which the configured kernel will be
-                       launched.
-        :param sharedmem: The number of bytes of dynamic shared memory required
-                          by the kernel.
-        :return: A configured kernel, ready to launch on a set of arguments."""
-
-        return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
-
-    def _serialize_config(self):
-        """
-        Helper for serializing the grid, block and shared memory configuration.
-        CUDA stream config is not serialized.
-        """
-        return self.griddim, self.blockdim, self.sharedmem
-
-    def _deserialize_config(self, config):
-        """
-        Helper for deserializing the grid, block and shared memory
-        configuration.
-        """
-        self.griddim, self.blockdim, self.sharedmem = config
 
 
 class CachedPTX(object):
@@ -451,7 +409,7 @@ class CachedPTX(object):
         ptx = self.cache.get(cc)
         if ptx is None:
             arch = nvvm.get_arch_option(*cc)
-            ptx = nvvm.llvm_to_ptx(self.llvmir, opt=3, arch=arch,
+            ptx = nvvm.llvm_to_ptx(self.llvmir, arch=arch,
                                    **self._extra_options)
             self.cache[cc] = ptx
             if config.DUMP_ASSEMBLY:
@@ -474,6 +432,7 @@ class CachedCUFunction(serialize.ReduceMixin):
         self.linking = linking
         self.cache = {}
         self.ccinfos = {}
+        self.cubins = {}
         self.max_registers = max_registers
 
     def get(self):
@@ -488,15 +447,26 @@ class CachedCUFunction(serialize.ReduceMixin):
             linker.add_ptx(ptx)
             for path in self.linking:
                 linker.add_file_guess_ext(path)
-            cubin, _size = linker.complete()
+            cubin, size = linker.complete()
             compile_info = linker.info_log
             module = cuctx.create_module_image(cubin)
 
             # Load
             cufunc = module.get_function(self.entry_name)
+
+            # Populate caches
             self.cache[device.id] = cufunc
             self.ccinfos[device.id] = compile_info
+            # We take a copy of the cubin because it's owned by the linker
+            cubin_ptr = ctypes.cast(cubin, ctypes.POINTER(ctypes.c_char))
+            cubin_data = np.ctypeslib.as_array(cubin_ptr, shape=(size,)).copy()
+            self.cubins[device.id] = cubin_data
         return cufunc
+
+    def get_sass(self):
+        self.get()  # trigger compilation
+        device = get_context().device
+        return disassemble_cubin(self.cubins[device.id])
 
     def get_info(self):
         self.get()   # trigger compilation
@@ -526,20 +496,20 @@ class CachedCUFunction(serialize.ReduceMixin):
         return cls(entry_name, ptx, linking, max_registers)
 
 
-class CUDAKernel(CUDAKernelBase):
+class _Kernel(serialize.ReduceMixin):
     '''
     CUDA Kernel specialized for a given set of argument types. When called, this
-    object will validate that the argument types match those for which it is
-    specialized, and then launch the kernel on the device.
+    object launches the kernel on the device.
     '''
     def __init__(self, llvm_module, name, pretty_name, argtypes, call_helper,
                  link=(), debug=False, fastmath=False, type_annotation=None,
-                 extensions=[], max_registers=None):
-        super(CUDAKernel, self).__init__()
+                 extensions=[], max_registers=None, opt=True):
+        super().__init__()
         # initialize CUfunction
         options = {
             'debug': debug,
-            'fastmath': fastmath
+            'fastmath': fastmath,
+            'opt': 3 if opt else 0
         }
 
         ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
@@ -556,7 +526,7 @@ class CUDAKernel(CUDAKernelBase):
 
     @classmethod
     def _rebuild(cls, name, argtypes, cufunc, link, debug, call_helper,
-                 extensions, config):
+                 extensions):
         """
         Rebuild an instance.
         """
@@ -572,8 +542,6 @@ class CUDAKernel(CUDAKernelBase):
         instance.debug = debug
         instance.call_helper = call_helper
         instance.extensions = extensions
-        # update config
-        instance._deserialize_config(config)
         return instance
 
     def _reduce_states(self):
@@ -584,11 +552,9 @@ class CUDAKernel(CUDAKernelBase):
         Thread, block and shared memory configuration are serialized.
         Stream information is discarded.
         """
-        config = self._serialize_config()
         return dict(name=self.entry_name, argtypes=self.argument_types,
                     cufunc=self._func, link=self.linking, debug=self.debug,
-                    call_helper=self.call_helper, extensions=self.extensions,
-                    config=config)
+                    call_helper=self.call_helper, extensions=self.extensions)
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
@@ -632,6 +598,14 @@ class CUDAKernel(CUDAKernelBase):
         '''
         return self._func.ptx.get().decode('ascii')
 
+    def inspect_sass(self):
+        '''
+        Returns the SASS code for this kernel.
+
+        Requires nvdisasm to be available on the PATH.
+        '''
+        return self._func.get_sass()
+
     def inspect_types(self, file=None):
         '''
         Produce a dump of the Python source of this function annotated with the
@@ -649,7 +623,7 @@ class CUDAKernel(CUDAKernelBase):
         print(self._type_annotation, file=file)
         print('=' * 80, file=file)
 
-    def _kernel_call(self, args, griddim, blockdim, stream=0, sharedmem=0):
+    def launch(self, args, griddim, blockdim, stream=0, sharedmem=0):
         # Prepare kernel
         cufunc = self._func.get()
 
@@ -780,20 +754,36 @@ class CUDAKernel(CUDAKernelBase):
             raise NotImplementedError(ty, val)
 
 
-class AutoJitCUDAKernel(CUDAKernelBase):
-    '''
-    CUDA Kernel object. When called, the kernel object will specialize itself
-    for the given arguments (if no suitable specialized version already exists)
-    & compute capability, and launch on the device associated with the current
-    context.
+class _KernelConfiguration:
+    def __init__(self, dispatcher, griddim, blockdim, stream, sharedmem):
+        self.dispatcher = dispatcher
+        self.griddim = griddim
+        self.blockdim = blockdim
+        self.stream = stream
+        self.sharedmem = sharedmem
 
-    Kernel objects are not to be constructed by the user, but instead are
+    def __call__(self, *args):
+        return self.dispatcher.call(args, self.griddim, self.blockdim,
+                                    self.stream, self.sharedmem)
+
+
+class Dispatcher(serialize.ReduceMixin):
+    '''
+    CUDA Dispatcher object. When configured and called, the dispatcher will
+    specialize itself for the given arguments (if no suitable specialized
+    version already exists) & compute capability, and launch on the device
+    associated with the current context.
+
+    Dispatcher objects are not to be constructed by the user, but instead are
     created using the :func:`numba.cuda.jit` decorator.
     '''
-    def __init__(self, func, bind, targetoptions):
-        super(AutoJitCUDAKernel, self).__init__()
+    def __init__(self, func, sigs, bind, targetoptions):
+        super().__init__()
         self.py_func = func
-        self.bind = bind
+        self.sigs = []
+        self._bind = bind
+        self.link = targetoptions.pop('link', (),)
+        self._can_compile = True
 
         # keyed by a `(compute capability, args)` tuple
         self.definitions = {}
@@ -807,6 +797,31 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         from .descriptor import CUDATargetDesc
 
         self.typingctx = CUDATargetDesc.typingctx
+
+        if sigs:
+            if len(sigs) > 1:
+                raise TypeError("Only one signature supported at present")
+            self.compile(sigs[0])
+            self._can_compile = False
+
+    def configure(self, griddim, blockdim, stream=0, sharedmem=0):
+        griddim, blockdim = normalize_kernel_dimensions(griddim, blockdim)
+        return _KernelConfiguration(self, griddim, blockdim, stream, sharedmem)
+
+    def __getitem__(self, args):
+        if len(args) not in [2, 3, 4]:
+            raise ValueError('must specify at least the griddim and blockdim')
+        return self.configure(*args)
+
+    def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
+        """Returns a configured kernel for 1D kernel of given number of tasks
+        ``ntasks``.
+
+        This assumes that:
+        - the kernel 1-to-1 maps global thread id ``cuda.grid(1)`` to tasks.
+        - the kernel must check if the thread id is valid."""
+
+        return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
 
     @property
     def extensions(self):
@@ -829,23 +844,59 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         '''
         return self.targetoptions['extensions']
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
+        # An attempt to launch an unconfigured kernel
+        raise ValueError(missing_launch_config_msg)
+
+    def call(self, args, griddim, blockdim, stream, sharedmem):
         '''
         Specialize and invoke this kernel with *args*.
-        '''
-        kernel = self.specialize(*args)
-        cfg = kernel[self.griddim, self.blockdim, self.stream, self.sharedmem]
-        cfg(*args)
-
-    def specialize(self, *args):
-        '''
-        Compile and bind to the current context a version of this kernel
-        specialized for the given *args*.
         '''
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
         kernel = self.compile(argtypes)
-        return kernel
+        kernel.launch(args, griddim, blockdim, stream, sharedmem)
+
+    def specialize(self, *args):
+        '''
+        Create a new instance of this dispatcher specialized for the given
+        *args*.
+        '''
+        argtypes = tuple(
+            [self.typingctx.resolve_argument_type(a) for a in args])
+        targetoptions = self.targetoptions
+        targetoptions['link'] = self.link
+        return Dispatcher(self.py_func, [types.void(*argtypes)], self._bind,
+                          targetoptions)
+
+    def disable_compile(self, val=True):
+        self._can_compile = not val
+
+    @property
+    def specialized(self):
+        """
+        True if the Dispatcher has been specialized.
+        """
+        return len(self.sigs) == 1 and not self._can_compile
+
+    @property
+    def definition(self):
+        # There is a single definition only when the dispatcher has been
+        # specialized.
+        if not self.specialized:
+            raise ValueError("Dispatcher needs to be specialized to get the "
+                             "single definition")
+        return next(iter(self.definitions.values()))
+
+    @property
+    def _func(self, signature=None, compute_capability=None):
+        cc = compute_capability or get_current_device().compute_capability
+        if signature is not None:
+            return self.definitions[(cc, signature)]._func
+        elif self.specialized:
+            return self.definition._func
+        else:
+            return {sig: defn._func for sig, defn in self.definitions.items()}
 
     def compile(self, sig):
         '''
@@ -853,42 +904,71 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         specialized for the given signature.
         '''
         argtypes, return_type = sigutils.normalize_signature(sig)
-        assert return_type is None
+        assert return_type is None or return_type == types.none
         cc = get_current_device().compute_capability
-        kernel = self.definitions.get((cc, argtypes))
+        if self.specialized:
+            return self.definition
+        else:
+            kernel = self.definitions.get((cc, argtypes))
         if kernel is None:
-            if 'link' not in self.targetoptions:
-                self.targetoptions['link'] = ()
+            if not self._can_compile:
+                raise RuntimeError("Compilation disabled")
             kernel = compile_kernel(self.py_func, argtypes,
+                                    link=self.link,
                                     **self.targetoptions)
             self.definitions[(cc, argtypes)] = kernel
-            if self.bind:
+            if self._bind:
                 kernel.bind()
+            self.sigs.append(sig)
         return kernel
 
     def inspect_llvm(self, signature=None, compute_capability=None):
         '''
         Return the LLVM IR for all signatures encountered thus far, or the LLVM
-        IR for a specific signature and compute_capability if given.
+        IR for a specific signature and compute_capability if given. If the
+        dispatcher is specialized, the IR for the single specialization is
+        returned.
         '''
         cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
             return self.definitions[(cc, signature)].inspect_llvm()
+        elif self.specialized:
+            return self.definition.inspect_llvm()
         else:
             return dict((sig, defn.inspect_llvm())
                         for sig, defn in self.definitions.items())
 
     def inspect_asm(self, signature=None, compute_capability=None):
         '''
-        Return the generated assembly code for all signatures encountered thus
-        far, or the LLVM IR for a specific signature and compute_capability
-        if given.
+        Return the generated PTX assembly code for all signatures encountered
+        thus far, or the PTX assembly code for a specific signature and
+        compute_capability if given. If the dispatcher is specialized, the
+        assembly code for the single specialization is returned.
         '''
         cc = compute_capability or get_current_device().compute_capability
         if signature is not None:
             return self.definitions[(cc, signature)].inspect_asm()
+        elif self.specialized:
+            return self.definition.inspect_asm()
         else:
             return dict((sig, defn.inspect_asm())
+                        for sig, defn in self.definitions.items())
+
+    def inspect_sass(self, signature=None, compute_capability=None):
+        '''
+        Return the generated SASS code for all signatures encountered thus
+        far, or the SASS code for a specific signature and compute_capability
+        if given.
+
+        Requires nvdisasm to be available on the PATH.
+        '''
+        cc = compute_capability or get_current_device().compute_capability
+        if signature is not None:
+            return self.definitions[(cc, signature)].inspect_sass()
+        elif self.specialized:
+            return self.definition.inspect_sass()
+        else:
+            return dict((sig, defn.inspect_sass())
                         for sig, defn in self.definitions.items())
 
     def inspect_types(self, file=None):
@@ -900,16 +980,30 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         if file is None:
             file = sys.stdout
 
-        for _, defn in utils.iteritems(self.definitions):
-            defn.inspect_types(file=file)
+        if self.specialized:
+            self.definition.inspect_types(file=file)
+        else:
+            for _, defn in utils.iteritems(self.definitions):
+                defn.inspect_types(file=file)
+
+    @property
+    def ptx(self):
+        if self.specialized:
+            return self.definition.ptx
+        else:
+            return dict((sig, defn.ptx)
+                        for sig, defn in self.definitions.items())
+
+    def bind(self):
+        for defn in self.definitions.values():
+            defn.bind()
 
     @classmethod
-    def _rebuild(cls, py_func, bind, targetoptions, config):
+    def _rebuild(cls, py_func, sigs, bind, targetoptions):
         """
         Rebuild an instance.
         """
-        instance = cls(py_func, bind, targetoptions)
-        instance._deserialize_config(config)
+        instance = cls(py_func, sigs, bind, targetoptions)
         return instance
 
     def _reduce_states(self):
@@ -917,6 +1011,5 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         Reduce the instance for serialization.
         Compiled definitions are discarded.
         """
-        config = self._serialize_config()
-        return dict(py_func=self.py_func, bind=self.bind,
-                    targetoptions=self.targetoptions, config=config)
+        return dict(py_func=self.py_func, sigs=self.sigs, bind=self._bind,
+                    targetoptions=self.targetoptions)

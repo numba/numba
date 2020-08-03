@@ -143,6 +143,8 @@ def assert_equiv(typingctx, *val):
         or isinstance(a, types.Integer)
         for a in val[0][1:]
     )
+    if not isinstance(val[0][0], types.StringLiteral):
+        raise errors.TypingError('first argument must be a StringLiteral')
 
     def codegen(context, builder, sig, args):
         assert len(args) == 1  # it is a vararg tuple
