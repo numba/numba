@@ -187,6 +187,24 @@ def iternext_unituple(context, builder, sig, args, result):
         builder.store(nidx, iterval.index)
 
 
+@overload(operator.getitem)
+def getitem_literal_idx(tup, idx):
+    """
+    Overloads BaseTuple getitem to cover cases where constant
+    inference and RewriteConstGetitems cannot replace it
+    with a static_getitem.
+    """
+    if not (isinstance(tup, types.BaseTuple)
+            and isinstance(idx, types.IntegerLiteral)):
+        return None
+
+    idx_val = idx.literal_value
+    def getitem_literal_idx_impl(tup, idx):
+        return tup[idx_val]
+
+    return getitem_literal_idx_impl
+
+
 @lower_builtin('typed_getitem', types.BaseTuple, types.Any)
 def getitem_typed(context, builder, sig, args):
     tupty, _ = sig.args
