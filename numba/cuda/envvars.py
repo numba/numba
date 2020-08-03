@@ -8,7 +8,7 @@ def get_numbapro_envvar(envvar, default=None):
     # use vanilla get here so as to use `None` as a signal for not-set
     value = os.environ.get(envvar)
     if value is not None:
-        url = ("http://numba.pydata.org/numba-doc/latest/cuda/overview.html",
+        url = ("https://numba.pydata.org/numba-doc/latest/cuda/overview.html",
                "#cudatoolkit-lookup")
         msg = ("\nEnvironment variables with the 'NUMBAPRO' prefix are "
                "deprecated and consequently ignored, found use of %s=%s.\n\n"
