@@ -41,7 +41,7 @@ class UFuncTarget(TargetDescriptor):
 ufunc_target = UFuncTarget()
 
 
-class UFuncDispatcher(object):
+class UFuncDispatcher(serialize.ReduceMixin):
     """
     An object handling compilation of various signatures for a ufunc.
     """
@@ -54,21 +54,22 @@ class UFuncDispatcher(object):
         self.locals = locals
         self.cache = NullCache()
 
-    def __reduce__(self):
-        globs = serialize._get_function_globals_for_reduction(self.py_func)
-        return (
-            serialize._rebuild_reduction,
-            (
-                self.__class__,
-                serialize._reduce_function(self.py_func, globs),
-                self.locals, self.targetoptions,
-            ),
+    def _reduce_states(self):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
+        return dict(
+            pyfunc=self.py_func,
+            locals=self.locals,
+            targetoptions=self.targetoptions,
         )
 
     @classmethod
-    def _rebuild(cls, redfun, locals, targetoptions):
-        return cls(serialize._rebuild_function(*redfun),
-                   locals, targetoptions)
+    def _rebuild(cls, pyfunc, locals, targetoptions):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
+        return cls(py_func=pyfunc, locals=locals, targetoptions=targetoptions)
 
     def enable_caching(self):
         self.cache = FunctionCache(self.py_func)
@@ -227,7 +228,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(target='npyufunc',
+        self.nb_func = jit(_target='npyufunc',
                            cache=cache,
                            **targetoptions)(py_func)
         self._sigs = []
@@ -292,7 +293,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
                  targetoptions={}):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(target='npyufunc', cache=cache)(py_func)
+        self.nb_func = jit(_target='npyufunc', cache=cache)(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions

@@ -106,7 +106,9 @@ class CPUContext(BaseContext):
                                         self.get_env_name(self.fndesc))
         envarg = builder.load(envgv)
         pyapi = self.get_python_api(builder)
-        pyapi.emit_environment_sentry(envarg)
+        pyapi.emit_environment_sentry(
+            envarg, debug_msg=self.fndesc.env_name,
+        )
         env_body = self.get_env_body(builder, envarg)
         return pyapi.get_env_manager(self.environment, env_body, envarg)
 

@@ -10,16 +10,6 @@ questions, don't hesitate to ask them (see below).
 Communication
 -------------
 
-Mailing-list
-''''''''''''
-
-We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
-If you have any questions about contributing to Numba, it is ok to ask them
-on this mailing-list.  You can subscribe and read the archives on
-`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_,
-and there is also a `Gmane mirror <http://news.gmane.org/gmane.comp.python.numba.user>`_
-allowing NNTP access.
-
 Real-time Chat
 ''''''''''''''
 
@@ -37,6 +27,20 @@ developers to keep up with.
 
 Note that the Github issue tracker is the best place to report bugs.  Bug
 reports in chat are difficult to track and likely to be lost.
+
+Forum
+.....
+
+Numba uses Discourse as a forum for longer running threads such as design
+discussions and roadmap planning. There are various categories available and it
+can be reached at: `numba.discourse.group <https://numba.discourse.group/>`_.
+
+Mailing-list
+''''''''''''
+
+We have a public mailing-list that you can e-mail at numba-users@anaconda.com.
+You can subscribe and read the archives on
+`Google Groups <https://groups.google.com/a/continuum.io/forum/#!forum/numba-users>`_.
 
 Weekly Meetings
 '''''''''''''''
@@ -235,6 +239,24 @@ and then running::
 
 from the root of the Numba repository. Now ``flake8`` will be run each time
 you commit changes. You can skip this check with ``git commit --no-verify``.
+
+Numba has started the process of using `type hints <https://www.python.org/dev/peps/pep-0484/>`_ in its code base. This
+will be a gradual process of extending the number of files that use type hints, as well as going from voluntary to
+mandatory type hints for new features. `Mypy <http://mypy-lang.org/>`_ is used for automated static checking.
+
+At the moment, only certain files are checked by mypy. The list can be found in ``mypy.ini``. When making changes to
+those files, it is necessary to add the required type hints such that mypy tests will pass. Only in exceptional
+circumstances should ``type: ignore`` comments be used.
+
+If you are contributing a new feature, we encourage you to use type hints, even if the file is not currently in the
+checklist. If you want to contribute type hints to enable a new file to be in the checklist, please add the file to the
+``files`` variable in ``mypy.ini``, and decide what level of compliance you are targetting. Level 3 is basic static
+checks, while levels 2 and 1 represent stricter checking. The levels are described in details in ``mypy.ini``.
+
+There is potential for confusion between the Numba module ``typing`` and Python built-in module ``typing`` used for type
+hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``typing`` types of the same name.
+To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
+imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
 
 Stability
 '''''''''

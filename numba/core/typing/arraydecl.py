@@ -561,6 +561,7 @@ class StaticGetItemLiteralRecord(AbstractTemplate):
             assert ret
             return signature(ret, *args)
 
+
 @infer
 class StaticSetItemRecord(AbstractTemplate):
     key = "static_setitem"
@@ -572,6 +573,20 @@ class StaticSetItemRecord(AbstractTemplate):
             expectedty = record.typeof(idx)
             if self.context.can_convert(value, expectedty) is not None:
                 return signature(types.void, record, types.literal(idx), value)
+
+
+@infer_global(operator.setitem)
+class StaticSetItemLiteralRecord(AbstractTemplate):
+    def generic(self, args, kws):
+        # Resolution of members for records
+        target, idx, value = args
+        if isinstance(target, types.Record) and isinstance(idx, types.StringLiteral):
+            if idx.literal_value not in target.fields:
+                raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
+                               f"fields {tuple(target.fields.keys())}")
+            expectedty = target.typeof(idx.literal_value)
+            if self.context.can_convert(value, expectedty) is not None:
+                return signature(types.void, target, idx, value)
 
 
 @infer_getattr

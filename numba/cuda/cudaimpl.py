@@ -468,6 +468,12 @@ def ptx_round(context, builder, sig, args):
     ])
 
 
+@lower(math.isinf, types.Integer)
+@lower(math.isnan, types.Integer)
+def math_isinf_isnan_int(context, builder, sig, args):
+    return lc.Constant.int(lc.Type.int(1), 0)
+
+
 def gen_deg_rad(const):
     def impl(context, builder, sig, args):
         argty, = sig.args
@@ -578,6 +584,46 @@ def ptx_atomic_min(context, builder, dtype, ptr, val):
         raise TypeError('Unimplemented atomic min with %s array' % dtype)
 
 
+@lower(stubs.atomic.nanmax, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.nanmax, types.Array, types.Tuple, types.Any)
+@lower(stubs.atomic.nanmax, types.Array, types.UniTuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_nanmax(context, builder, dtype, ptr, val):
+    lmod = builder.module
+    if dtype == types.float64:
+        return builder.call(nvvmutils.declare_atomic_nanmax_float64(lmod),
+                            (ptr, val))
+    elif dtype == types.float32:
+        return builder.call(nvvmutils.declare_atomic_nanmax_float32(lmod),
+                            (ptr, val))
+    elif dtype in (types.int32, types.int64):
+        return builder.atomic_rmw('max', ptr, val, ordering='monotonic')
+    elif dtype in (types.uint32, types.uint64):
+        return builder.atomic_rmw('umax', ptr, val, ordering='monotonic')
+    else:
+        raise TypeError('Unimplemented atomic max with %s array' % dtype)
+
+
+@lower(stubs.atomic.nanmin, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.nanmin, types.Array, types.Tuple, types.Any)
+@lower(stubs.atomic.nanmin, types.Array, types.UniTuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_nanmin(context, builder, dtype, ptr, val):
+    lmod = builder.module
+    if dtype == types.float64:
+        return builder.call(nvvmutils.declare_atomic_nanmin_float64(lmod),
+                            (ptr, val))
+    elif dtype == types.float32:
+        return builder.call(nvvmutils.declare_atomic_nanmin_float32(lmod),
+                            (ptr, val))
+    elif dtype in (types.int32, types.int64):
+        return builder.atomic_rmw('min', ptr, val, ordering='monotonic')
+    elif dtype in (types.uint32, types.uint64):
+        return builder.atomic_rmw('umin', ptr, val, ordering='monotonic')
+    else:
+        raise TypeError('Unimplemented atomic min with %s array' % dtype)
+
+
 @lower(stubs.atomic.compare_and_swap, types.Array, types.Any, types.Any)
 def ptx_atomic_cas_tuple(context, builder, sig, args):
     aryty, oldty, valty = sig.args
@@ -605,10 +651,11 @@ def _get_target_data(context):
 
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
                    can_dynsized=False):
-    elemcount = reduce(operator.mul, shape)
+    elemcount = reduce(operator.mul, shape, 1)
 
-    # Check for valid shape for this type of allocation
-    dynamic_smem = elemcount <= 0 and can_dynsized
+    # Check for valid shape for this type of allocation.
+    # Only 1d arrays can be dynamic.
+    dynamic_smem = elemcount <= 0 and can_dynsized and len(shape) == 1
     if elemcount <= 0 and not dynamic_smem:
         raise ValueError("array length <= 0")
 
@@ -657,9 +704,11 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
     itemsize = lldtype.get_abi_size(targetdata)
 
     # Compute strides
-    rstrides = [itemsize]
-    for i, lastsize in enumerate(reversed(shape[1:])):
-        rstrides.append(lastsize * rstrides[-1])
+    laststride = itemsize
+    rstrides = []
+    for i, lastsize in enumerate(reversed(shape)):
+        rstrides.append(laststride)
+        laststride *= lastsize
     strides = [s for s in reversed(rstrides)]
     kstrides = [context.get_constant(types.intp, s) for s in strides]
 
@@ -688,8 +737,8 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
 
     context.populate_array(ary,
                            data=builder.bitcast(dataptr, ary.data.type),
-                           shape=cgutils.pack_array(builder, kshape),
-                           strides=cgutils.pack_array(builder, kstrides),
+                           shape=kshape,
+                           strides=kstrides,
                            itemsize=context.get_constant(types.intp, itemsize),
                            meminfo=None)
     return ary._getvalue()

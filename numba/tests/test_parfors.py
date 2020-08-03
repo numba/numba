@@ -597,7 +597,7 @@ class TestParfors(TestParforsBase):
     def test_logistic_regression(self):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
-        self.assertTrue(countParfors(lr_impl, args) == 1)
+        self.assertTrue(countParfors(lr_impl, args) == 2)
         self.assertTrue(countArrayAllocs(lr_impl, args) == 1)
 
     @skip_parfors_unsupported
@@ -1042,12 +1042,15 @@ class TestParfors(TestParforsBase):
         A = np.random.ranf(n)
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
+        D = np.array([np.inf, np.inf])
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
+        self.check(test_impl1, D)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+        self.check(test_impl2, D)
 
         # checks that 0d array input raises
         msg = ("zero-size array to reduction operation "
@@ -1070,12 +1073,15 @@ class TestParfors(TestParforsBase):
         A = np.random.ranf(n)
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
+        D = np.array([-np.inf, -np.inf])
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
+        self.check(test_impl1, D)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+        self.check(test_impl2, D)
 
         # checks that 0d array input raises
         msg = ("zero-size array to reduction operation "
@@ -1665,6 +1671,20 @@ class TestParfors(TestParforsBase):
         x = TestNamedTuple3(y=np.zeros(10))
         self.check(test_impl, x, check_arg_equality=[comparer])
 
+    @skip_parfors_unsupported
+    def test_inplace_binop(self):
+        def test_impl(a, b):
+            b += a
+            return b
+
+        X = np.arange(10) + 10
+        Y = np.arange(10) + 100
+        self.check(test_impl, X, Y)
+        self.assertTrue(countParfors(test_impl,
+                                    (types.Array(types.float64, 1, 'C'),
+                                     types.Array(types.float64, 1, 'C'))) == 1)
+
+        
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
         cfunc, cpfunc = self.compile_all(pyfunc, *args)

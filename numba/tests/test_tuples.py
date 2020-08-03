@@ -268,7 +268,7 @@ class TestOperations(TestCase):
         with self.assertTypingError() as raises:
             cr = compile_isolated(pyfunc, ())
         msg = ("Cannot infer the type of variable 'c', have imprecise type: "
-               "list(undefined).")
+               "list(undefined)<iv=None>.")
         self.assertIn(msg, str(raises.exception))
 
 

@@ -314,6 +314,16 @@ class Cuda_atomic_min(Cuda_atomic_maxmin):
 
 
 @register
+class Cuda_atomic_nanmax(Cuda_atomic_maxmin):
+    key = cuda.atomic.nanmax
+
+
+@register
+class Cuda_atomic_nanmin(Cuda_atomic_maxmin):
+    key = cuda.atomic.nanmin
+
+
+@register
 class Cuda_atomic_compare_and_swap(AbstractTemplate):
     key = cuda.atomic.compare_and_swap
 
@@ -376,6 +386,12 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_min(self, mod):
         return types.Function(Cuda_atomic_min)
+
+    def resolve_nanmin(self, mod):
+        return types.Function(Cuda_atomic_nanmin)
+
+    def resolve_nanmax(self, mod):
+        return types.Function(Cuda_atomic_nanmax)
 
     def resolve_compare_and_swap(self, mod):
         return types.Function(Cuda_atomic_compare_and_swap)

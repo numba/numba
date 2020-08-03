@@ -153,6 +153,23 @@ class _CacheLocator(object):
         """
         raise NotImplementedError
 
+    @classmethod
+    def get_suitable_cache_subpath(cls, py_file):
+        """Given the Python file path, compute a suitable path inside the
+        cache directory.
+
+        This will reduce a file path that is too long, which can be a problem
+        on some operating system (i.e. Windows 7).
+        """
+        path = os.path.abspath(py_file)
+        subpath = os.path.dirname(path)
+        parentdir = os.path.split(subpath)[-1]
+        # Use SHA1 to reduce path length.
+        # Note: windows doesn't like long path.
+        hashed = hashlib.sha1(subpath.encode()).hexdigest()
+        # Retain parent directory name for easier debugging
+        return '_'.join([parentdir, hashed])
+
 
 class _SourceFileBackedLocatorMixin(object):
     """
@@ -194,9 +211,8 @@ class _UserProvidedCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     def __init__(self, py_func, py_file):
         self._py_file = py_file
         self._lineno = py_func.__code__.co_firstlineno
-        drive, path = os.path.splitdrive(os.path.abspath(self._py_file))
-        subpath = os.path.dirname(path).lstrip(os.path.sep)
-        self._cache_path = os.path.join(config.CACHE_DIR, subpath)
+        cache_subpath = self.get_suitable_cache_subpath(py_file)
+        self._cache_path = os.path.join(config.CACHE_DIR, cache_subpath)
 
     def get_cache_path(self):
         return self._cache_path
@@ -235,15 +251,7 @@ class _UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         self._lineno = py_func.__code__.co_firstlineno
         appdirs = AppDirs(appname="numba", appauthor=False)
         cache_dir = appdirs.user_cache_dir
-        cache_subpath = os.path.dirname(py_file)
-        if not (os.name == "nt" or getattr(sys, 'frozen', False)):
-            # On non-Windows, further disambiguate by appending the entire
-            # absolute source path to the cache dir, e.g.
-            # "$HOME/.cache/numba/usr/lib/.../mypkg/mysubpkg"
-            # On Windows, this is undesirable because of path length limitations
-            # For frozen applications, there is no existing "full path"
-            # directory, and depends on a relocatable executable.
-            cache_subpath = os.path.abspath(cache_subpath).lstrip(os.path.sep)
+        cache_subpath = self.get_suitable_cache_subpath(py_file)
         self._cache_path = os.path.join(cache_dir, cache_subpath)
 
     def get_cache_path(self):
@@ -330,7 +338,6 @@ class _CacheImpl(object):
                         _IPythonCacheLocator]
 
     def __init__(self, py_func):
-        self._is_closure = bool(py_func.__closure__)
         self._lineno = py_func.__code__.co_firstlineno
         # Get qualname
         try:
@@ -409,10 +416,8 @@ class CompileResultCacheImpl(_CacheImpl):
         Check cachability of the given compile result.
         """
         cannot_cache = None
-        if self._is_closure:
-            cannot_cache = "as it uses outer variables in a closure"
-        elif cres.lifted:
-            cannot_cache = "as it uses lifted loops"
+        if any(not x.can_cache for x in cres.lifted):
+            cannot_cache = "as it uses lifted code"
         elif cres.library.has_dynamic_globals:
             cannot_cache = ("as it uses dynamic globals "
                             "(such as ctypes pointers and large global arrays)")
@@ -448,7 +453,7 @@ class CodeLibraryCacheImpl(_CacheImpl):
         """
         Check cachability of the given CodeLibrary.
         """
-        return not self._is_closure
+        return not codelib.has_dynamic_globals
 
     def get_filename_base(self, fullname, abiflags):
         parent = super(CodeLibraryCacheImpl, self)
@@ -727,5 +732,4 @@ def make_library_cache(prefix):
         _impl_class = CustomCodeLibraryCacheImpl
 
     return LibraryCache
-
 
