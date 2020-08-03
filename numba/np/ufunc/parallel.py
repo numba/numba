@@ -348,7 +348,7 @@ def _check_tbb_version_compatible():
         elif _IS_OSX:
             libtbb_name = 'libtbb.dylib'
         elif _IS_LINUX:
-            libtbb_name = 'libtbb.so.2'
+            libtbb_name = 'libtbb.so.12'
         else:
             raise ValueError("Unknown operating system")
         libtbb = CDLL(libtbb_name)
@@ -361,8 +361,8 @@ def _check_tbb_version_compatible():
                    "version 2019.5 or later i.e., "
                    "TBB_INTERFACE_VERSION >= 11005. Found "
                    "TBB_INTERFACE_VERSION = %s. The TBB "
-                   "threading layer is disabled.")
-            problem = errors.NumbaWarning(msg % tbb_iface_ver)
+                   "threading layer is disabled.") % tbb_iface_ver
+            problem = errors.NumbaWarning(msg)
             warnings.warn(problem)
             raise ImportError("Problem with TBB. Reason: %s" % msg)
     except (ValueError, OSError) as e:

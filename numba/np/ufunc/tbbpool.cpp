@@ -31,12 +31,22 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #error "TBB version is too old, 2019 update 5, i.e. TBB_INTERFACE_VERSION >= 11005 required"
 #endif
 
+#define HAS_TASK_SCHEDULER_INIT (TBB_INTERFACE_VERSION < 12002)
+
+#if HAS_TASK_SCHEDULER_INIT
+#define TSI_INIT(count) tbb::task_scheduler_init(count)
+#define TSI_TERMINATE(tsi) tsi->blocking_terminate(std::nothrow)
+#endif
+
 #define _DEBUG 0
 #define _TRACE_SPLIT 0
 
 static tbb::task_group *tg = NULL;
+
+#if HAS_TASK_SCHEDULER_INIT
 static tbb::task_scheduler_init *tsi = NULL;
 static int tsi_count = 0;
+#endif
 
 #ifdef _MSC_VER
 #define THREAD_LOCAL(ty) __declspec(thread) ty
@@ -75,7 +85,11 @@ get_num_threads(void)
 static int
 get_thread_id(void)
 {
+#if TBB_INTERFACE_VERSION < 12002
     return tbb::task_arena::current_thread_index();
+#else
+    return tbb::this_task_arena::current_thread_index();
+#endif
 }
 
 // watch the arena, if it decides to create more threads/add threads into the
@@ -213,12 +227,14 @@ static bool is_main_thread()
     return std::this_thread::get_id() == init_thread_id;
 }
 
+#if HAS_TASK_SCHEDULER_INIT
 static void ignore_blocking_terminate_assertion( const char*, int, const char*, const char * )
 {
     tbb::internal::runtime_warning("Unable to wait for threads to shut down before fork(). It can break multithreading in child process\n");
 }
 
 static void ignore_assertion( const char*, int, const char*, const char * ) {}
+#endif
 
 static void prepare_fork(void)
 {
@@ -226,6 +242,7 @@ static void prepare_fork(void)
     {
         puts("Suspending TBB: prepare fork");
     }
+#if HAS_TASK_SCHEDULER_INIT
     if(tsi)
     {
         if(is_main_thread())
@@ -243,6 +260,7 @@ static void prepare_fork(void)
                             "child process.\n");
         }
     }
+#endif
 }
 
 static void reset_after_fork(void)
@@ -251,18 +269,21 @@ static void reset_after_fork(void)
     {
         puts("Resuming TBB: after fork");
     }
+
+#if HAS_TASK_SCHEDULER_INIT
     if(tsi && need_reinit_after_fork)
     {
         tsi->initialize(tsi_count);
         set_main_thread();
         need_reinit_after_fork = false;
     }
+#endif
 }
 
 #if PY_MAJOR_VERSION >= 3
 static void unload_tbb(void)
 {
-    if(tsi)
+    if (tg)
     {
         if(_DEBUG)
         {
@@ -271,25 +292,34 @@ static void unload_tbb(void)
         tg->wait();
         delete tg;
         tg = NULL;
+    }
+#if HAS_TASK_SCHEDULER_INIT
+    if(tsi)
+    {
         assertion_handler_type orig = tbb::set_assertion_handler(ignore_assertion);
         tsi->terminate(); // no blocking terminate is needed here
         tbb::set_assertion_handler(orig);
         delete tsi;
         tsi = NULL;
     }
+#endif
 }
 #endif
 
 static void launch_threads(int count)
 {
+#if HAS_TASK_SCHEDULER_INIT
     if(tsi)
         return;
+#endif
     if(_DEBUG)
         puts("Using TBB");
     if(count < 1)
-        count = tbb::task_scheduler_init::automatic;
+        count = tbb::task_arena::automatic;
+#if HAS_TASK_SCHEDULER_INIT
     tsi_count = count;
     tsi = new tbb::task_scheduler_init(count);
+#endif
     tg = new tbb::task_group;
     tg->run([] {}); // start creating threads asynchronously
 
