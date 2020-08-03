@@ -181,7 +181,7 @@ otherwise build by default along with information on configuration options.
 .. envvar:: NUMBA_DISABLE_OPENMP (default: not set)
 
   To disable compilation of the OpenMP threading backend set this environment
-  variable to a Truthy value when building. If not set (default):
+  variable to a non-empty string when building. If not set (default):
 
   * For Linux and Windows it is necessary to provide OpenMP C headers and
     runtime  libraries compatible with the compiler tool chain mentioned above,
@@ -193,7 +193,7 @@ otherwise build by default along with information on configuration options.
 .. envvar:: NUMBA_DISABLE_TBB (default: not set)
 
   To disable the compilation of the TBB threading backend set this environment
-  variable to a Truthy value when building. If not set (default) the TBB C
+  variable to a non-empty string when building. If not set (default) the TBB C
   headers and libraries must be available at compile time. If building with
   ``conda build`` this requirement can be met by installing the ``tbb-devel``
   package. If not building with ``conda build`` the requirement can be met via a
