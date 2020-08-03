@@ -854,8 +854,8 @@ void traceback_add_loc(PyObject *loc) {
 }
 
 /**
- * Reraise current active exception.
- * Called internall by process_raise() when *exc* is None.
+ * Re-raise the current active exception.
+ * Called internal by process_raise() when *exc* is None.
  */
 static
 int reraise_exc_is_none() {
@@ -884,7 +884,7 @@ int reraise_exc_is_none() {
 }
 
 /*
- * Set exception set given the Exception type and the constructor argument.
+ * Set exception given the Exception type and the constructor argument.
  * Equivalent to ``raise exc(value)``.
  * PyExceptionClass_Check(exc) must be True.
  * value can be NULL.
@@ -912,7 +912,7 @@ int process_exception_class(PyObject *exc, PyObject *value) {
 
 /*
  * Internal routine to process exceptions.
- * exc cannot be NULL. It can be a None, Exception type, or Exception instance
+ * exc cannot be NULL. It can be a None, Exception type, or Exception instance.
  * value can be NULL for absent, or any PyObject valid for the exception.
  */
 static
