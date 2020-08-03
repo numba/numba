@@ -251,7 +251,14 @@ class FunctionTemplate(ABC):
     # Set to true to disable unsafe cast.
     # subclass overide-able
     unsafe_casting = True
+    # Set to true to require exact match without casting.
+    # subclass overide-able
     exact_match_required = False
+    # Set to true to prefer literal arguments.
+    # Useful for definitions that specialize on literal but also support
+    # non-literals.
+    # subclass overide-able
+    prefer_literal = False
 
     def __init__(self, context):
         self.context = context
@@ -295,6 +302,13 @@ class FunctionTemplate(ABC):
         }
         """
         pass
+
+    def __str__(self):
+        info = self.get_template_info()
+        srcinfo = f"{info['filename']}:{info['lines'][0]}"
+        return f"<{self.__class__.__name__} {srcinfo}>"
+
+    __repr__ = __str__
 
 
 class AbstractTemplate(FunctionTemplate):
@@ -682,6 +696,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # should be using.
             sig, pyfunc = ovf_result
             args = sig.args
+            kws = {}
             cache_key = None            # don't cache
         else:
             # Regular case
@@ -699,6 +714,9 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         # Make dispatcher
         jitdecor = jit(nopython=True, **self._jit_options)
         disp = jitdecor(pyfunc)
+        # Make sure that the implementation can be fully compiled
+        disp_type = types.Dispatcher(disp)
+        disp_type.get_call_type(self.context, args, kws)
         if cache_key is not None:
             self._impl_cache[cache_key] = disp, args
         return disp, args

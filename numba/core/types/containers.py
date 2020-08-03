@@ -200,7 +200,7 @@ class BaseAnonymousTuple(BaseTuple):
             return max(kinds)
 
     def __unliteral__(self):
-        return BaseTuple.from_types([unliteral(t) for t in self])
+        return type(self).from_types([unliteral(t) for t in self])
 
 
 class _HomogeneousTuple(Sequence, BaseTuple):
@@ -252,6 +252,9 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
             if dtype is not None:
                 return UniTuple(dtype=dtype, count=self.count)
+
+    def __unliteral__(self):
+        return type(self)(dtype=unliteral(self.dtype), count=self.count)
 
 
 class UniTupleIter(BaseContainerIterator):

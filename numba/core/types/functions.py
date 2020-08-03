@@ -224,6 +224,16 @@ class _ResolutionFailures(object):
         raise errors.TypingError(self.format())
 
 
+def _unlit_non_poison(ty):
+    """Apply unliteral(ty) and raise a TypingError if type is Poison.
+    """
+    out = unliteral(ty)
+    if isinstance(out, types.Poison):
+        m = f"Poison type used in arguments; got {out}"
+        raise TypingError(m)
+    return out
+
+
 class BaseFunction(Callable):
     """
     Base type class for some function types.
@@ -266,18 +276,23 @@ class BaseFunction(Callable):
         return self._impl_keys[sig.args]
 
     def get_call_type(self, context, args, kws):
+        prefer_lit = [True, False]    # old behavior preferring literal
+        prefer_not = [False, True]    # new behavior preferring non-literal
         failures = _ResolutionFailures(context, self, args, kws,
                                        depth=self._depth)
         self._depth += 1
         for temp_cls in self.templates:
             temp = temp_cls(context)
-            for uselit in [True, False]:
+            # The template can override the default and prefer literal args
+            choice = prefer_lit if temp.prefer_literal else prefer_not
+            for uselit in choice:
                 try:
                     if uselit:
                         sig = temp.apply(args, kws)
                     else:
-                        nolitargs = tuple([unliteral(a) for a in args])
-                        nolitkws = {k: unliteral(v) for k, v in kws.items()}
+                        nolitargs = tuple([_unlit_non_poison(a) for a in args])
+                        nolitkws = {k: _unlit_non_poison(v)
+                                    for k, v in kws.items()}
                         sig = temp.apply(nolitargs, nolitkws)
                 except Exception as e:
                     sig = None
