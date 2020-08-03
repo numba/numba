@@ -336,9 +336,9 @@ If the code is valid and the unsupported functionality is important to you
 please file a feature request at: https://github.com/numba/numba/issues/new
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-http://numba.pydata.org/numba-doc/latest/reference/pysupported.html
+https://numba.pydata.org/numba-doc/latest/reference/pysupported.html
 and
-http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
+https://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
 """
 
 constant_inference_info = """
@@ -347,7 +347,7 @@ a constant. This could well be a current limitation in Numba's internals,
 however please first check that your code is valid for compilation,
 particularly with respect to string interpolation (not supported!) and
 the requirement of compile time constants as arguments to exceptions:
-http://numba.pydata.org/numba-doc/latest/reference/pysupported.html?highlight=exceptions#constructs
+https://numba.pydata.org/numba-doc/latest/reference/pysupported.html?highlight=exceptions#constructs
 
 If the code is valid and the unsupported functionality is important to you
 please file a feature request at: https://github.com/numba/numba/issues/new
@@ -360,12 +360,12 @@ This is not usually a problem with Numba itself but instead often caused by
 the use of unsupported features or an issue in resolving types.
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-http://numba.pydata.org/numba-doc/latest/reference/pysupported.html
+https://numba.pydata.org/numba-doc/latest/reference/pysupported.html
 and
-http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
+https://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
 
 For more information about typing errors and how to debug them visit:
-http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-doesn-t-compile
+https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-doesn-t-compile
 
 If you think your code should work with Numba, please report the error message
 and traceback, along with a minimal reproducer at:

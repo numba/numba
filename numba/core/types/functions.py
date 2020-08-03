@@ -225,11 +225,11 @@ class _ResolutionFailures(object):
 
 
 def _unlit_non_poison(ty):
-    """Apply unliteral(ty) and raise TypingError if type is a Poison.
+    """Apply unliteral(ty) and raise a TypingError if type is Poison.
     """
     out = unliteral(ty)
     if isinstance(out, types.Poison):
-        m = "Poison type used in arguments"
+        m = f"Poison type used in arguments; got {out}"
         raise TypingError(m)
     return out
 
@@ -283,7 +283,7 @@ class BaseFunction(Callable):
         self._depth += 1
         for temp_cls in self.templates:
             temp = temp_cls(context)
-            # Template can override the
+            # The template can override the default and prefer literal args
             choice = prefer_lit if temp.prefer_literal else prefer_not
             for uselit in choice:
                 try:

@@ -341,7 +341,7 @@ class Numpy_method_redirection(AbstractTemplate):
     array method of the same name (e.g. ndarray.sum).
     """
 
-    # Argument like *axis* can specialize on literals but also support
+    # Arguments like *axis* can specialize on literals but also support
     # non-literals
     prefer_literal = True
 

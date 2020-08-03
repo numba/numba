@@ -5,6 +5,13 @@ from numba.core import types, utils
 import unittest
 
 
+original = "call void @llvm.memset.p0i8.i64(" \
+           "i8* align 4 %arg.x.41, i8 0, i64 %0, i1 false)"
+
+missing_align = "call void @llvm.memset.p0i8.i64(" \
+                "i8* %arg.x.41, i8 0, i64 %0, i1 false)"
+
+
 @skip_on_cudasim('libNVVM not supported in simulator')
 @unittest.skipIf(utils.MACHINE_BITS == 32, "CUDA not support for 32-bit")
 @unittest.skipIf(not nvvm.is_available(), "No libNVVM")
@@ -29,25 +36,9 @@ class TestNvvmWithoutCuda(SerialMixin, unittest.TestCase):
         In LLVM7 the alignment parameter can be implicitly provided as
         an attribute to pointer in the first argument.
         """
-        def foo(x):
-            # Triggers a generation of llvm.memset
-            for i in range(x.size):
-                x[i] = 0
-
-        cukern = compile_kernel(foo, args=(types.int32[::1],), link=())
-        original = cukern._func.ptx.llvmir
-        self.assertIn("call void @llvm.memset", original)
         fixed = nvvm.llvm39_to_34_ir(original)
         self.assertIn("call void @llvm.memset", fixed)
-        # Check original IR
-        for ln in original.splitlines():
-            if 'call void @llvm.memset' in ln:
-                # Missing i32 4 in the 2nd last argument
-                self.assertRegexpMatches(
-                    ln,
-                    r'i64 %\d+, i1 false\)'.replace(' ', r'\s+'),
-                )
-        # Check fixed IR
+
         for ln in fixed.splitlines():
             if 'call void @llvm.memset' in ln:
                 # The i32 4 is the alignment
@@ -55,6 +46,17 @@ class TestNvvmWithoutCuda(SerialMixin, unittest.TestCase):
                     ln,
                     r'i32 4, i1 false\)'.replace(' ', r'\s+'),
                 )
+
+    def test_nvvm_memset_fixup_missing_align(self):
+        """
+        We require alignment to be specified as a parameter attribute to the
+        dest argument of a memset.
+        """
+        with self.assertRaises(ValueError) as e:
+            nvvm.llvm39_to_34_ir(missing_align)
+
+        self.assertIn(str(e.exception),
+                      "No alignment attribute found on memset dest")
 
 
 if __name__ == '__main__':

@@ -939,6 +939,8 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         list_var_def = get_definition(func_ir, list_var_def.value)
     # Check if the definition is a build_list
     require(isinstance(list_var_def, ir.Expr) and list_var_def.op ==  'build_list')
+    # The build_list must be empty
+    require(len(list_var_def.items) == 0)
 
     # Look for list_append in "last" block in loop body, which should be a block that is
     # a post-dominator of the loop header.
