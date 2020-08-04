@@ -429,7 +429,7 @@ class List(MutableSequence, InitialValue):
             dtype = self.dtype
         if reflected is None:
             reflected = self.reflected
-        return List(dtype, reflected)
+        return List(dtype, reflected, self.initial_value)
 
     def unify(self, typingctx, other):
         if isinstance(other, List):
