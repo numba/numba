@@ -429,14 +429,22 @@ class List(MutableSequence, InitialValue):
             dtype = self.dtype
         if reflected is None:
             reflected = self.reflected
-        return List(dtype, reflected)
+        return List(dtype, reflected, self.initial_value)
 
     def unify(self, typingctx, other):
         if isinstance(other, List):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
             reflected = self.reflected or other.reflected
             if dtype is not None:
-                return List(dtype, reflected)
+                siv = self.initial_value
+                oiv = other.initial_value
+                if siv is not None and oiv is not None:
+                    use = siv
+                    if siv is None:
+                        use = oiv
+                    return List(dtype, reflected, use.initial_value)
+                else:
+                    return List(dtype, reflected)
 
     @property
     def key(self):
@@ -454,6 +462,10 @@ class List(MutableSequence, InitialValue):
         Overrides the default __getitem__ from Type.
         """
         return self.dtype
+
+    def __unliteral__(self):
+        return List(self.dtype, reflected=self.reflected,
+                    initial_value=None)
 
 
 class LiteralList(Literal, _HeterogeneousTuple):
@@ -698,10 +710,26 @@ class DictType(IterableType, InitialValue):
         if isinstance(other, DictType):
             if not other.is_precise():
                 return self
+            else:
+                ukey_type = self.key_type == other.key_type
+                uvalue_type = self.value_type == other.value_type
+                if ukey_type and uvalue_type:
+                    siv = self.initial_value
+                    oiv = other.initial_value
+                    siv_none = siv is None
+                    oiv_none = oiv is None
+                    if not siv_none and not oiv_none:
+                        if siv == oiv:
+                            return DictType(self.key_type, other.value_type,
+                                            siv)
+                    return DictType(self.key_type, other.value_type)
 
     @property
     def key(self):
         return self.key_type, self.value_type, str(self.initial_value)
+
+    def __unliteral__(self):
+        return DictType(self.key_type, self.value_type)
 
 
 class LiteralStrKeyDict(Literal, NamedTuple):
