@@ -974,18 +974,18 @@ numba_do_raise(PyObject *exc_packed)
 
 
 NUMBA_EXPORT_FUNC(PyObject *)
-numba_unpickle(const char *data, int n)
+numba_unpickle(const char *data, int n, const char *hashed)
 {
-    PyObject *buf, *obj;
-    static PyObject *loads;
+    PyObject *buf=NULL, *obj=NULL, *addr=NULL, *hashedbuf=NULL;
+    static PyObject *loads=NULL;
 
     /* Caching the pickle.loads function shaves a couple µs here. */
     if (loads == NULL) {
         PyObject *picklemod;
-        picklemod = PyImport_ImportModule("pickle");
+        picklemod = PyImport_ImportModule("numba.core.serialize");
         if (picklemod == NULL)
             return NULL;
-        loads = PyObject_GetAttrString(picklemod, "loads");
+        loads = PyObject_GetAttrString(picklemod, "_numba_unpickle");
         Py_DECREF(picklemod);
         if (loads == NULL)
             return NULL;
@@ -994,7 +994,17 @@ numba_unpickle(const char *data, int n)
     buf = PyBytes_FromStringAndSize(data, n);
     if (buf == NULL)
         return NULL;
-    obj = PyObject_CallFunctionObjArgs(loads, buf, NULL);
+    /* SHA1 produces 160 bit or 20 bytes */
+    hashedbuf = PyBytes_FromStringAndSize(hashed, 20);
+    if (hashedbuf == NULL)
+        goto error;
+    addr = PyLong_FromVoidPtr((void*)data);
+    if (addr == NULL)
+        goto error;
+    obj = PyObject_CallFunctionObjArgs(loads, addr, buf, hashedbuf, NULL);
+error:
+    Py_XDECREF(addr);
+    Py_XDECREF(hashedbuf);
     Py_DECREF(buf);
     return obj;
 }
