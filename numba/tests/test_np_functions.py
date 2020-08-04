@@ -317,6 +317,10 @@ def flip_ud(a):
     return np.flipud(a)
 
 
+def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    return np.isclose(a, b, rtol, atol, equal_nan)
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -3678,6 +3682,138 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             )
         self.assertIn(
             'Inputs must be array-like.',
+            str(raises.exception)
+        )
+
+    def test_isclose(self):
+        pyfunc = np_isclose
+        cfunc = jit(nopython=True)(pyfunc)
+        # Examples from the documentation
+        pairs = [
+            # Args as numpy arrays
+            (
+                np.array([1e10,1e-7]),
+                np.array([1.00001e10,1e-8])
+            ),
+            # One arg as a tuple
+            (
+                np.array([1e10,1e-8]),
+                (1.00001e10,1e-9)
+            ),
+            # Both args as tuples
+            (
+                (1e10,1e-8),
+                (1.0001e10,1e-9)
+            ),
+            # Both args as lists
+            (
+                [1.0, np.nan],
+                [1.0, np.nan]
+            ),
+            # Compare to 0.0
+            (
+                [1e-8, 1e-7],
+                [0.0, 0.0]
+            ),
+            # Small values
+            (
+                [1e-10, 1e-10],
+                [1e-20, 0.0]
+            )
+        ]
+
+        for a, b in pairs:
+            expected = pyfunc(a, b)
+            got = cfunc(a, b)
+            self.assertPreciseEqual(expected, got)
+
+    def test_isclose_broadcast(self):
+        pass
+
+    def test_isclose_tols(self):
+        pass
+
+    def test_iclose_equal_nan(self):
+        pass
+
+    def test_isclose_exceptions(self):
+        pyfunc = np_isclose
+        cfunc = jit(nopython=True)(pyfunc)
+        self.disable_leak_check()
+
+        # Test A not array like
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                set([1, 2]),
+                np.array([4, 5])
+            )
+        self.assertIn(
+            "Inputs a and b must be array-like.",
+            str(raises.exception)
+        )
+
+        # Test B not array like
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                np.array([1, 2]),
+                set([4, 5])
+            )
+        self.assertIn(
+            "Inputs a and b must be array-like.",
+            str(raises.exception)
+        )
+
+        # Test rtol not a float
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                np.array([1, 2]),
+                np.array([4, 5]),
+                False
+            )
+        self.assertIn(
+            "Relative and absolute tolerance must be represented as floats.",
+            str(raises.exception)
+        )
+
+        # Test atol not a float
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                np.array([1, 2]),
+                np.array([4, 5]),
+                0.0,
+                False
+            )
+        self.assertIn(
+            "Relative and absolute tolerance must be represented as floats.",
+            str(raises.exception)
+        )
+
+        # Test equal_nan not a bool
+        with self.assertRaises(TypingError) as raises:
+            cfunc(
+                np.array([1, 2]),
+                np.array([4, 5]),
+                0.0,
+                0.5,
+                None
+            )
+        self.assertIn(
+            "Equal_nan must be cast to a bool.",
+            str(raises.exception)
+        )
+
+        # Test A and B with different dims (not broadcastable)
+        a = np.array([1, 2], [3, 4])
+        b = np.array([5, 6, 7], [8, 9, 10])
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                a,
+                b
+            )
+        self.assertIn(
+            "Operands could not be broadcast together with shapes \
+                    {}, {}.".format(a.shape, b.shape),
             str(raises.exception)
         )
 

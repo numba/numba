@@ -4429,35 +4429,38 @@ def cross2d(a, b):
 
 #----------------------------------------------------------------------------
 # Equality tests implemented on Floats
-# Implemented based on this feature request - https://github.com/numba/numba/issues/5977
+# Implemented based on this feature request
+# - https://github.com/numba/numba/issues/5977
 @overload(np.isclose)
 def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     if not type_can_asarray(a) or not type_can_asarray(b):
         raise TypingError("Inputs a and b must be array-like.")
     if not isinstance(rtol, float) or not isinstance(atol, float):
-        raise TypingError("Relative and absolute tolerance must be represented as floats.")
+        raise TypingError("Relative and absolute tolerance must \
+                be represented as floats.")
     if not isinstance(equal_nan, bool):
         raise TypingError("Equal_nan must be cast to a bool.")
 
     def impl(a, b, rtol, atol, equal_nan):
         a_ = np.asarray(a)
         b_ = np.asarray(b)
-        # TODO: Handle support for broadcasting if its a matrix and a vector
         if a_.shape != b_.shape:
             raise ValueError(
-                "Operands could not be broadcast together with shapes {}, {}.".format(a_.shape, b_.shape)
+                "Operands could not be broadcast together with shapes {}, \
+                        {}.".format(a_.shape, b_.shape)
             )
-        # Python default behavior is to have NaN comparison be False, so handle equal_nan separately
         return _isclose(a_, b_, rtol, atol, equal_nan)
 
     return impl
+
 
 @register_jitable
 def _isclose(a, b, rtol, atol, equal_nan):
     lhs = np.absolute(a - b)
     rhs = (rtol * np.absolute(b) + atol)
     y = lhs <= rhs
-    # Python default behavior is to have NaN comparison be False, so handle equal_nan separately
+    # Python default behavior is to have NaN comparison be False,
+    # so handle equal_nan separately
     if equal_nan:
         # Logically and together NaN between A and B and Or it with y
         nans = np.logical_and(np.isnan(a), np.isnan(b))
