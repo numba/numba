@@ -51,6 +51,14 @@ _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
 
+def null_comparer(a, b):
+    """
+    Used with check_arq_equality to indicate that we do not care
+    whether the value of the parameter at the end of the function
+    has a particular value.
+    """
+    pass
+
 class TestParforsBase(TestCase):
     """
     Base class for testing parfors.
@@ -124,15 +132,11 @@ class TestParforsBase(TestCase):
                                  i'th parameter of the njit and parallel=True
                                  functions against the i'th parameter of the
                                  standard Python function, asserting if they
-                                 differ.  The length of this list may be less
-                                 than the number of parameters if only that
-                                 lesser number of parameters are modified by
-                                 the function.  We recommend putting parameters
-                                 that are modified and need to be checked at
-                                 the beginning of the parameter list but
-                                 this is not required as null comparators may
-                                 be provided that never assert for unmodified
-                                 paramters.
+                                 differ.  The length of this list must be equal
+                                 to the number of parameters to the function.
+                                 The null comparator is available for use
+                                 when you do not desire to test if some
+                                 particular parameter is changed.
             Remaining kwargs are passed to np.testing.assert_almost_equal
         """
         scheduler_type = kwargs.pop('scheduler_type', None)
@@ -177,6 +181,7 @@ class TestParforsBase(TestCase):
             np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
             self.assertEqual(type(njit_output), type(parfor_output))
         else:
+            assert(len(pyarg) == len(check_args_for_equality))
             for pyarg, njitarg, parforarg, argcomp in zip(
                 py_args, njit_args, parfor_args, check_args_for_equality):
                 argcomp(njitarg, pyarg, **kwargs)
