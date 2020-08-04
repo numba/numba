@@ -393,8 +393,9 @@ class BoundFunction(Callable, Opaque):
             else:
                 # if the unliteral_args and unliteral_kws are the same as the literal
                 # ones, set up to not bother retrying
-                unliteral_args = tuple([unliteral(a) for a in args])
-                unliteral_kws = {k: unliteral(v) for k, v in kws.items()}
+                unliteral_args = tuple([_unlit_non_poison(a) for a in args])
+                unliteral_kws = {k: _unlit_non_poison(v)
+                                 for k, v in kws.items()}
                 skip = unliteral_args == args and kws == unliteral_kws
 
                 # If the above template application failed and the non-literal args are
