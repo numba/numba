@@ -858,7 +858,7 @@ void traceback_add_loc(PyObject *loc) {
  * Called internal by process_raise() when *exc* is None.
  */
 static
-int reraise_exc_is_none() {
+int reraise_exc_is_none(void) {
     /* Reraise */
     PyThreadState *tstate = PyThreadState_GET();
     PyObject *tb, *type, *value;
