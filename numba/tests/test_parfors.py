@@ -181,7 +181,7 @@ class TestParforsBase(TestCase):
             np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
             self.assertEqual(type(njit_output), type(parfor_output))
         else:
-            assert(len(pyarg) == len(check_args_for_equality))
+            assert(len(py_args) == len(check_args_for_equality))
             for pyarg, njitarg, parforarg, argcomp in zip(
                 py_args, njit_args, parfor_args, check_args_for_equality):
                 argcomp(njitarg, pyarg, **kwargs)
