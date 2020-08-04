@@ -3731,10 +3731,93 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         pass
 
     def test_isclose_tols(self):
-        pass
+        pyfunc = np_isclose
+        cfunc = jit(nopython=True)(pyfunc)
+        # Examples from the documentation and adjusting so rtol and atol
+        # change the output
+        args = [
+            # Examples where rtol directly changes the result
+            (
+                [1e10,1e-7],
+                [1.00001e10,1e-8],
+                9.0,
+                0.0
+            ),
+            (
+                [1e10,1e-7],
+                [1.00001e10,1e-8],
+                8.9,
+                0.0
+            ),
+            (
+                [1e10,1e-8],
+                [1.00001e10,1e-9],
+                9.0,
+                0.0
+            ),
+            (
+                [1e10,1e-8],
+                [1.00001e10,1e-9],
+                8.9,
+                0.0
+            ),
+            # Examples where atol directly changes the results
+            (
+                [1e-100, 1e-7],
+                [0.0, 0.0],
+                1e-05,
+                0.0
+            ),
+            (
+                [1e-8, 1e-7],
+                [0.0, 0.0],
+                1e-05,
+                1e-7
+            ),
+            (
+                [1e-10, 1e-10],
+                [1e-20, 0.999999e-10],
+                1e-05,
+                0.0
+            ),
+            # Example that reduces to normal comparison
+            (
+                [1e-8, 1e-7],
+                [0.0, 0.0],
+                1.0,
+                0.0
+            )
+        ]
+
+        for a, b, rtol, atol in args:
+            expected = pyfunc(a, b, rtol, atol)
+            got = cfunc(a, b, rtol, atol)
+            self.assertPreciseEqual(expected, got)
 
     def test_iclose_equal_nan(self):
-        pass
+        pyfunc = np_isclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Compare Both NaN with 1 NaN each
+        pairs = [
+            (
+                [1.0, np.nan],
+                [1.0, np.nan]
+            ),
+            (
+                [1.0, 1.0],
+                [1.0, np.nan]
+            ),
+            (
+                [1.0, np.nan],
+                [1.0, 1.0]
+            ),
+        ]
+
+        for a, b in pairs:
+            expected = pyfunc(a, b, equal_nan=True)
+            got = cfunc(a, b, equal_nan=True)
+            self.assertPreciseEqual(expected, got)
 
     def test_isclose_exceptions(self):
         pyfunc = np_isclose
