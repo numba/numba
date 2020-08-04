@@ -291,9 +291,9 @@ class FunctionTemplate(ABC):
         Gets the source information about function impl.
         Returns:
 
-        code - # str: source code as a string
-        firstlineno - # int: the first line number of the function impl
-        path - #str: the path to file containing impl
+        code - str: source code as a string
+        firstlineno - int: the first line number of the function impl
+        path - str: the path to file containing impl
 
         if any of the above are not available something generic is returned
         """
