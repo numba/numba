@@ -375,33 +375,45 @@ class BoundFunction(Callable, Opaque):
         template = self.template(context)
         literal_e = None
         nonliteral_e = None
+        out = None
 
+        choice = [True, False] if template.prefer_literal else [False, True]
+        for uselit in choice:
+            if uselit:
+                # Try with Literal
+                try:
+                    out = template.apply(args, kws)
+                except Exception as exc:
+                    if isinstance(exc, errors.ForceLiteralArg):
+                        raise exc
+                    literal_e = exc
+                    out = None
+                else:
+                    break
+            else:
+                # if the unliteral_args and unliteral_kws are the same as the literal
+                # ones, set up to not bother retrying
+                unliteral_args = tuple([_unlit_non_poison(a) for a in args])
+                unliteral_kws = {k: _unlit_non_poison(v)
+                                 for k, v in kws.items()}
+                skip = unliteral_args == args and kws == unliteral_kws
 
-        # Try with Literal
-        try:
-            out = template.apply(args, kws)
-        except Exception as exc:
-            if isinstance(exc, errors.ForceLiteralArg):
-                raise exc
-            literal_e = exc
-            out = None
-
-        # if the unliteral_args and unliteral_kws are the same as the literal
-        # ones, set up to not bother retrying
-        unliteral_args = tuple([unliteral(a) for a in args])
-        unliteral_kws = {k: unliteral(v) for k, v in kws.items()}
-        skip = unliteral_args == args and kws == unliteral_kws
-
-        # If the above template application failed and the non-literal args are
-        # different to the literal ones, try again with literals rewritten as
-        # non-literals
-        if not skip and out is None:
-            try:
-                out = template.apply(unliteral_args, unliteral_kws)
-            except Exception as exc:
-                if isinstance(exc, errors.ForceLiteralArg):
-                    raise exc
-                nonliteral_e = exc
+                # If the above template application failed and the non-literal args are
+                # different to the literal ones, try again with literals rewritten as
+                # non-literals
+                if not skip and out is None:
+                    try:
+                        out = template.apply(unliteral_args, unliteral_kws)
+                    except Exception as exc:
+                        if isinstance(exc, errors.ForceLiteralArg):
+                            if template.prefer_literal:
+                                # For template that prefers literal types,
+                                # reaching here means that the literal types
+                                # have failed typing as well.
+                                raise exc
+                        nonliteral_e = exc
+                    else:
+                        break
 
         if out is None and (nonliteral_e is not None or literal_e is not None):
             header = "- Resolution failure for {} arguments:\n{}\n"

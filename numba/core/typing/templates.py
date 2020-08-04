@@ -782,7 +782,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
 
 def make_overload_template(func, overload_func, jit_options, strict,
-                           inline):
+                           inline, prefer_literal=False):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -793,7 +793,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
                _strict=strict, _inline=staticmethod(InlineOptions(inline)),
-               _inline_overloads={})
+               _inline_overloads={}, prefer_literal=prefer_literal)
     return type(base)(name, (base,), dct)
 
 
@@ -985,6 +985,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             _inline = self._inline
             _overload_func = staticmethod(self._overload_func)
             _inline_overloads = self._inline_overloads
+            prefer_literal = self.prefer_literal
 
             def generic(_, args, kws):
                 args = (typ,) + tuple(args)
@@ -1000,6 +1001,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
 
 def make_overload_attribute_template(typ, attr, overload_func, inline,
+                                     prefer_literal=False,
                                      base=_OverloadAttributeTemplate):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
@@ -1012,18 +1014,21 @@ def make_overload_attribute_template(typ, attr, overload_func, inline,
                _inline=staticmethod(InlineOptions(inline)),
                _inline_overloads={},
                _overload_func=staticmethod(overload_func),
+               prefer_literal=prefer_literal,
                )
-    return type(base)(name, (base,), dct)
+    obj = type(base)(name, (base,), dct)
+    return obj
 
 
-def make_overload_method_template(typ, attr, overload_func, inline):
+def make_overload_method_template(typ, attr, overload_func, inline,
+                                  prefer_literal=False):
     """
     Make a template class for method *attr* of *typ* overloaded by
     *overload_func*.
     """
     return make_overload_attribute_template(
         typ, attr, overload_func, inline=inline,
-        base=_OverloadMethodTemplate,
+        base=_OverloadMethodTemplate, prefer_literal=prefer_literal,
     )
 
 

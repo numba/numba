@@ -55,7 +55,8 @@ def type_callable(func):
 _overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
-def overload(func, jit_options={}, strict=True, inline='never'):
+def overload(func, jit_options={}, strict=True, inline='never',
+             prefer_literal=False):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -101,6 +102,12 @@ def overload(func, jit_options={}, strict=True, inline='never'):
       holds the information from the callee. The function should return Truthy
       to determine whether to inline, this essentially permitting custom
       inlining rules (typical use might be cost models).
+
+    The *prefer_literal* option allows users to control if literal types should
+    be tried first or last. The default (`False`) is to use non-literal types.
+    Implementations that can specialize based on literal values should set the
+    option to `True`. Note, this option maybe expanded in the near future to
+    allow for more control (e.g. disabling non-literal types).
     """
     from numba.core.typing.templates import make_overload_template, infer_global
 
@@ -110,7 +117,7 @@ def overload(func, jit_options={}, strict=True, inline='never'):
 
     def decorate(overload_func):
         template = make_overload_template(func, overload_func, opts, strict,
-                                          inline)
+                                          inline, prefer_literal)
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))
@@ -207,6 +214,7 @@ def overload_method(typ, attr, **kwargs):
         template = make_overload_method_template(
             typ, attr, overload_func,
             inline=kwargs.get('inline', 'never'),
+            prefer_literal=kwargs.get('prefer_literal', False)
         )
         infer_getattr(template)
         overload(overload_func, **kwargs)(overload_func)
