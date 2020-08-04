@@ -1021,7 +1021,7 @@ def make_overload_attribute_template(typ, attr, overload_func, inline,
 
 
 def make_overload_method_template(typ, attr, overload_func, inline,
-                                  prefer_literal):
+                                  prefer_literal=False):
     """
     Make a template class for method *attr* of *typ* overloaded by
     *overload_func*.
