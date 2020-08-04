@@ -4435,20 +4435,15 @@ def cross2d(a, b):
 def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     if not type_can_asarray(a) or not type_can_asarray(b):
         raise TypingError("Inputs a and b must be array-like.")
-    if not isinstance(rtol, float) or not isinstance(atol, float):
-        raise TypingError("Relative and absolute tolerance must \
-                be represented as floats.")
-    if not isinstance(equal_nan, bool):
+    if not isinstance(rtol, types.Float) or not isinstance(atol, types.Float):
+        raise TypingError("Relative and absolute tolerance must " +
+                          "be represented as floats.")
+    if not isinstance(equal_nan, types.Boolean):
         raise TypingError("Equal_nan must be cast to a bool.")
 
-    def impl(a, b, rtol, atol, equal_nan):
+    def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         a_ = np.asarray(a)
         b_ = np.asarray(b)
-        if a_.shape != b_.shape:
-            raise ValueError(
-                "Operands could not be broadcast together with shapes {}, \
-                        {}.".format(a_.shape, b_.shape)
-            )
         return _isclose(a_, b_, rtol, atol, equal_nan)
 
     return impl
