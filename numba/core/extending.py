@@ -102,6 +102,12 @@ def overload(func, jit_options={}, strict=True, inline='never',
       holds the information from the callee. The function should return Truthy
       to determine whether to inline, this essentially permitting custom
       inlining rules (typical use might be cost models).
+
+    The *prefer_literal* option allows users to control if literal types should
+    be tried first or last. The default (`False`) is to use non-literal types.
+    Implementation that can specialize base on literal values should set the
+    option to `True`. Note, this option maybe expanded in the near future to
+    allow for more control (e.g. disabling non-literal types).
     """
     from numba.core.typing.templates import make_overload_template, infer_global
 
