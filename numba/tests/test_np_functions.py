@@ -3719,6 +3719,26 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             (
                 [1e-10, 1e-10],
                 [1e-20, 0.0]
+            ),
+            # 2x2 (n-dims)
+            (
+                np.array([[1, 2], [4, 5]]),
+                np.array([[4, 5], [1, 2]])
+            ),
+            # 2x2 array-like (n-dims)
+            (
+                np.array([[1, 2], [4, 5]]),
+                ((4, 5), (1, 2))
+            ),
+            # 2x2 (1-dim) with type promotion
+            (
+                np.array([1, 2], dtype=np.int64),
+                np.array([4, 5], dtype=np.float64)
+            ),
+            # 2x2 array-like (1-dim)
+            (
+                (1, 2),
+                (4, 5)
             )
         ]
 
@@ -3728,7 +3748,30 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(expected, got)
 
     def test_isclose_broadcast(self):
-        pass
+        pyfunc = np_isclose
+        cfunc = jit(nopython=True)(pyfunc)
+        pairs = [
+            # 2x2 (with broadcasting 1d x 2d)
+            (
+                np.array([1, 2]),
+                np.array([[4, 5], [1, 2]])
+            ),
+            # 2x2 (with broadcasting 2d x 1d)
+            (
+                np.array([[1, 2], [4, 5]]),
+                np.array([1, 2])
+            ),
+            # 2x2 (with higher order broadcasting)
+            (
+                np.arange(36).reshape(6, 3, 2),
+                np.arange(6).reshape(3, 2)
+            )
+        ]
+
+        for a, b in pairs:
+            expected = pyfunc(a, b)
+            got = cfunc(a, b)
+            self.assertPreciseEqual(expected, got)
 
     def test_isclose_tols(self):
         pyfunc = np_isclose
