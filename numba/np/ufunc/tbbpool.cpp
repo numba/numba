@@ -308,12 +308,12 @@ static void unload_tbb(void)
 
 static void launch_threads(int count)
 {
-#if HAS_TASK_SCHEDULER_INIT
-    if(tsi)
+    if(tg)
         return;
-#endif
+
     if(_DEBUG)
         puts("Using TBB");
+
     if(count < 1)
         count = tbb::task_arena::automatic;
 #if HAS_TASK_SCHEDULER_INIT
