@@ -1762,6 +1762,30 @@ class TestTypedDictInitialValues(MemoryLeakMixin, TestCase):
             larg = baz.signatures[0][0]
             self.assertEqual(larg.initial_value, iv)
 
+    def test_unify_across_function_call(self):
+
+        @njit
+        def bar(x):
+            o = {1: 2}
+            if x:
+                o = {2: 3}
+            return o
+
+        @njit
+        def foo(x):
+            if x:
+                d = {3: 4}
+            else:
+                d = bar(x)
+            return d
+
+        e1 = Dict()
+        e1[3] = 4
+        e2 = Dict()
+        e2[1] = 2
+        self.assertEqual(foo(True), e1)
+        self.assertEqual(foo(False), e2)
+
 
 class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
     """ Tests for dictionaries with string keys that can map to anything!"""

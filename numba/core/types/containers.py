@@ -718,11 +718,11 @@ class DictType(IterableType, InitialValue):
                     oiv = other.initial_value
                     siv_none = siv is None
                     oiv_none = oiv is None
-                    if siv_none and oiv_none:
-                        return DictType(ukey_type, uvalue_type)
-                    if siv_none ^ oiv_none:
-                        use = siv if not siv_none else oiv
-                        return DictType(self.key_type, self.value_type, use)
+                    if not siv_none and not oiv_none:
+                        if siv == oiv:
+                            return DictType(self.key_type, other.value_type,
+                                            siv)
+                    return DictType(self.key_type, other.value_type)
 
     @property
     def key(self):
