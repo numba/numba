@@ -6,6 +6,10 @@ Numba
    :target: https://gitter.im/numba/numba?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge
    :alt: Gitter
 
+.. image:: https://img.shields.io/badge/discuss-on%20discourse-blue
+   :target: https://numba.discourse.group/
+   :alt: Discourse
+
 A Just-In-Time Compiler for Numerical Functions in Python
 #########################################################
 
