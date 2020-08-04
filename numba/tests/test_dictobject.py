@@ -1727,6 +1727,41 @@ class TestTypedDictInitialValues(MemoryLeakMixin, TestCase):
 
         foo()
 
+    def test_mutation_not_carried_single_function(self):
+        # this is another pattern for using literally
+
+        @njit
+        def nop(*args):
+            pass
+
+        for fn, iv in (nop, None), (literally, {'a': 1, 'b': 2, 'c': 3}):
+            @njit
+            def baz(x):
+                pass
+
+            def bar(z):
+                pass
+
+            @overload(bar)
+            def ol_bar(z):
+                def impl(z):
+                    fn(z)
+                    baz(z)
+                return impl
+
+            @njit
+            def foo():
+                x = {'a': 1, 'b': 2, 'c': 3}
+                bar(x)
+                x['d'] = 4
+                return x
+
+            foo()
+            # baz should be specialised based on literally being invoked and
+            # the literal/unliteral arriving at the call site
+            larg = baz.signatures[0][0]
+            self.assertEqual(larg.initial_value, iv)
+
 
 class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
     """ Tests for dictionaries with string keys that can map to anything!"""
