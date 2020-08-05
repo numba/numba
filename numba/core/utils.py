@@ -110,10 +110,12 @@ def safe_relpath(path, start=os.curdir):
     drives as technically they don't share the same root.
     See: https://bugs.python.org/issue7195 for details.
     """
-    # use commonpath to catch cross drive relative path, commonpath requires
-    # either all relative paths or all absolute paths, make them all absolute as
-    # this function itself is attempting to mitigate issues with relpath.
-    if not os.path.commonpath(map(os.path.abspath, (path, start))):
+    # find the drive letters for path and start and if they are not the same
+    # then don't use relpath!
+    drive_letter = lambda x: os.path.splitdrive(os.path.abspath(x))[0]
+    drive_path = drive_letter(path)
+    drive_start = drive_letter(path)
+    if drive_path != drive_start:
         return os.path.abspath(path)
     else:
         return os.path.relpath(path, start=start)
