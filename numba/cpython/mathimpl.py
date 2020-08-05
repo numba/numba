@@ -14,8 +14,11 @@ from numba.core.imputils import Registry, impl_ret_untracked
 from numba import typeof
 from numba.core import types, utils, config, cgutils
 from numba.core.extending import overload
+from numba.core import types
 from numba.core.typing import signature
 from numba.cpython.unsafe.numbers import trailing_zeros
+from numba.core.extending import overload
+from numba.core.errors import TypingError
 
 
 registry = Registry()
@@ -455,3 +458,26 @@ def gcd_impl(context, builder, sig, args):
 
 
 lower(math.gcd, types.Integer, types.Integer)(gcd_impl)
+
+
+# -----------------------------------------------------------------------------
+# Equality tests implemented on Floats
+# Implemented based on this feature request
+# - https://github.com/numba/numba/issues/5977
+# This does not implement the * in
+# https://docs.python.org/3/library/math.html#math.isclose,
+# which limits the number of provided positional arguments to 2.
+@overload(math.isclose)
+def math_isclose(a, b, rel_tol=1e-09, abs_tol=0.0):
+    if not isinstance(a, types.Number) or not isinstance(b, types.Number):
+        raise TypingError("All arguments must be scalars.")
+    if not isinstance(rel_tol, types.Number) or not isinstance(abs_tol, types.Number):
+        raise TypingError("All arguments must be scalars.")
+
+    def impl(a, b, rel_tol=1e-09, abs_tol=0.0):
+        if a == b:
+            return True
+        abs_diff = np.abs(a - b)
+        min_tolerance = np.maximum(rel_tol * np.maximum(a, b), abs_tol)
+        return abs_diff <= min_tolerance
+    return impl

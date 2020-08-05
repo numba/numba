@@ -182,10 +182,6 @@ def gen_sum_axis_impl(is_axis_const, const_axis_val, op, zero):
     def inner(arr, axis):
         """
         function that performs sums over one specific axis
-        # Create output array y
-        # Create output array y
-        y)
-        y)
 
         The third parameter to gen_index_tuple that generates the indexing
         tuples has to be a const so we can't just pass "axis" through since
@@ -4427,6 +4423,7 @@ def cross2d(a, b):
 
     return impl
 
+
 #----------------------------------------------------------------------------
 # Equality tests implemented on Floats
 # Implemented based on this feature request
@@ -4451,9 +4448,9 @@ def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
 @register_jitable
 def _isclose(a, b, rtol, atol, equal_nan):
-    lhs = np.absolute(a - b)
-    rhs = (rtol * np.absolute(b) + atol)
-    y = lhs <= rhs
+    abs_diff = np.absolute(a - b)
+    min_tolerance = (rtol * np.absolute(b) + atol)
+    y = abs_diff <= min_tolerance
     # Python default behavior is to have NaN comparison be False,
     # so handle equal_nan separately
     if equal_nan:
