@@ -3739,6 +3739,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             (
                 (1, 2),
                 (4, 5)
+            ),
+            # Test Inf
+            (
+                np.array([np.inf, np.inf]),
+                np.array([np.inf, -np.inf])
+            ),
+            (
+                np.array([-np.inf, -np.inf]),
+                np.array([-np.inf, np.inf])
             )
         ]
 
@@ -3755,17 +3764,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             (
                 np.array([1, 2]),
                 np.array([[4, 5], [1, 2]])
-            )
+            ),
             # 2x2 (with broadcasting 2d x 1d)
-            #(
-            #    np.array([[1, 2], [4, 5]]),
-            #    np.array([1, 2])
-            #),
+            (
+                np.array([[1, 2], [4, 5]]),
+                np.array([1, 2])
+            ),
             # 2x2 (with higher order broadcasting)
-            #(
-            #    np.arange(36).reshape(6, 3, 2),
-            #    np.arange(6).reshape(3, 2)
-            #)
+            (
+                np.arange(36).reshape(6, 3, 2),
+                np.arange(6).reshape(3, 2)
+            )
         ]
 
         for a, b in pairs:

@@ -4451,10 +4451,16 @@ def _isclose(a, b, rtol, atol, equal_nan):
     abs_diff = np.absolute(a - b)
     min_tolerance = (rtol * np.absolute(b) + atol)
     y = abs_diff <= min_tolerance
+    # Opposite values of infinity will produce an equality in the
+    # prev line, so check for no infinities. We only need to check one side
+    # because the LHS will always be either inf or NaN if there is an inf
+    y = np.logical_and(y, np.logical_not(np.isinf(abs_diff)))
     # Python default behavior is to have NaN comparison be False,
     # so handle equal_nan separately
     if equal_nan:
         # Logically and together NaN between A and B and Or it with y
         nans = np.logical_and(np.isnan(a), np.isnan(b))
         y = np.logical_or(y, nans)
-    return y
+    # Add an extra equality check in case there is an inf
+    equality = a == b
+    return np.logical_or(y, equality)
