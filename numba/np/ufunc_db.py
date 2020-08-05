@@ -309,6 +309,13 @@ def _fill_ufunc_db(ufunc_db):
         'DD->D': npyfuncs.np_complex_power_impl,
     }
 
+    ufunc_db[np.float_power] = {
+        'ff->f': npyfuncs.real_float_power_impl,
+        'dd->d': npyfuncs.real_float_power_impl,
+        'FF->F': npyfuncs.np_complex_float_power_impl,
+        'DD->D': npyfuncs.np_complex_float_power_impl,
+    }
+
     ufunc_db[np.gcd] = {
         'bb->b': npyfuncs.np_gcd_impl,
         'BB->B': npyfuncs.np_gcd_impl,
@@ -430,6 +437,11 @@ def _fill_ufunc_db(ufunc_db):
         'd->d': npyfuncs.np_real_square_impl,
         'F->F': npyfuncs.np_complex_square_impl,
         'D->D': npyfuncs.np_complex_square_impl,
+    }
+
+    ufunc_db[np.cbrt] = {
+        'f->f': npyfuncs.np_real_cbrt_impl,
+        'd->d': npyfuncs.np_real_cbrt_impl,
     }
 
     ufunc_db[np.reciprocal] = {

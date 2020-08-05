@@ -481,6 +481,21 @@ def np_complex_power_impl(context, builder, sig, args):
 
 
 ########################################################################
+# numpy float power funcs
+
+def real_float_power_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    return numbers.real_power_impl(context, builder, sig, args)
+
+
+def np_complex_float_power_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    return numbers.complex_power_impl(context, builder, sig, args)
+
+
+########################################################################
 # numpy greatest common denominator
 
 def np_gcd_impl(context, builder, sig, args):
@@ -751,6 +766,25 @@ def np_complex_square_impl(context, builder, sig, args):
     binary_sig = typing.signature(*[sig.return_type]*3)
     return numbers.complex_mul_impl(context, builder, binary_sig,
                                      [args[0], args[0]])
+
+
+########################################################################
+# NumPy cbrt
+
+def np_real_cbrt_impl(context, builder, sig, args):
+    import numpy as np
+
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    def float_cbrt(x):
+        if np.isnan(x):
+            return x
+        if x < 0:
+            return -np.power(-x, 1.0 / 3.0)
+        else:
+            return np.power(x, 1.0 / 3.0)
+    res = context.compile_internal(builder, float_cbrt, sig, args)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
 ########################################################################
