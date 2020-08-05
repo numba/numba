@@ -31,6 +31,8 @@
  *
  * This macro definition is copied from:
  * https://github.com/numpy/numpy/commit/6108b5d1e138d07e3c9f2a4e3b1933749ad0e698#diff-ad2213da23136c5fc5883d9eb2d88666R26
+ *
+ * NOTE: This is the NumPy 1.18 and above version of the macro.
  */
 #define NUMBA_PyArray_DescrCheck(op) PyObject_TypeCheck(op, &PyArrayDescr_Type)
 
