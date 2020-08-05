@@ -114,7 +114,7 @@ def safe_relpath(path, start=os.curdir):
     # then don't use relpath!
     drive_letter = lambda x: os.path.splitdrive(os.path.abspath(x))[0]
     drive_path = drive_letter(path)
-    drive_start = drive_letter(path)
+    drive_start = drive_letter(start)
     if drive_path != drive_start:
         return os.path.abspath(path)
     else:
