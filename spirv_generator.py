@@ -158,7 +158,6 @@ class Module(object):
 
         # Read and return final SPIR-V (not optimized!)
         with open(spirv_path, 'rb') as fin:
-        #with open(linked_spirv_path, 'rb') as fin:
             spirv = fin.read()
 
         self._finalized = True
