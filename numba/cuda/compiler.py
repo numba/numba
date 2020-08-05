@@ -277,7 +277,7 @@ def compile_device_template(pyfunc, debug=False, inline=False, opt=True):
                 'kind': "overload",
                 'name': getattr(cls.key, '__name__', "unknown"),
                 'sig': sig,
-                'filename': os.path.relpath(path, start=basepath),
+                'filename': utils.safe_relpath(path, start=basepath),
                 'lines': (firstlineno, firstlineno + len(code) - 1),
                 'docstring': pyfunc.__doc__
             }

@@ -104,6 +104,21 @@ def erase_traceback(exc_value):
     return exc_value.with_traceback(None)
 
 
+def safe_relpath(path, start=os.curdir):
+    """
+    Produces a "safe" relative path, on windows relpath doesn't work across
+    drives as technically they don't share the same root.
+    See: https://bugs.python.org/issue7195 for details.
+    """
+    # use commonpath to catch cross drive relative path, commonpath requires
+    # either all relative paths or all absolute paths, make them all absolute as
+    # this function itself is attempting to mitigate issues with relpath.
+    if not os.path.commonpath(map(os.path.abspath, (path, start))):
+        return os.path.abspath(path)
+    else:
+        return os.path.relpath(path, start=start)
+
+
 # Mapping between operator module functions and the corresponding built-in
 # operators.
 
