@@ -310,6 +310,9 @@ class TestUFuncs(BaseUFuncTest, TestCase):
         self.basic_ufunc_test(np.power, flags=flags,
                                positive_only=True)
 
+    def test_float_power_ufunc(self, flags=no_pyobj_flags):
+        self.basic_ufunc_test(np.float_power, flags=flags, kinds="fc")
+
     def test_gcd_ufunc(self, flags=no_pyobj_flags):
         self.basic_ufunc_test(np.gcd, flags=flags, kinds="iu")
 
@@ -378,6 +381,9 @@ class TestUFuncs(BaseUFuncTest, TestCase):
 
     def test_square_ufunc(self, flags=no_pyobj_flags):
         self.basic_ufunc_test(np.square, flags=flags)
+
+    def test_cbrt_ufunc(self, flags=no_pyobj_flags):
+        self.basic_ufunc_test(np.cbrt, flags=flags, kinds='f')
 
     def test_reciprocal_ufunc(self, flags=no_pyobj_flags):
         # reciprocal for integers doesn't make much sense and is problematic

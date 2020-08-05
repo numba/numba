@@ -244,10 +244,10 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
 _math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
                      "floor_divide", "negative", "positive", "power",
-                     "remainder", "fmod", "absolute",
+                     "float_power", "remainder", "fmod", "absolute",
                      "rint", "sign", "conjugate", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
-                     "sqrt", "square", "reciprocal",
+                     "sqrt", "square", "cbrt", "reciprocal",
                      "divide", "mod", "divmod", "abs", "fabs" , "gcd", "lcm"]
 
 _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
