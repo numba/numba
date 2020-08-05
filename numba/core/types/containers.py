@@ -442,7 +442,7 @@ class List(MutableSequence, InitialValue):
                     use = siv
                     if siv is None:
                         use = oiv
-                    return List(dtype, reflected, use.initial_value)
+                    return List(dtype, reflected, use)
                 else:
                     return List(dtype, reflected)
 
