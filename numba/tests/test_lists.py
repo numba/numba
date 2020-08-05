@@ -1481,6 +1481,41 @@ class TestListInitialValues(MemoryLeakMixin, TestCase):
 
         foo()
 
+    def test_mutation_not_carried_single_function(self):
+        # this is another pattern for using literally
+
+        @njit
+        def nop(*args):
+            pass
+
+        for fn, iv in (nop, None), (literally, [1, 2, 3]):
+            @njit
+            def baz(x):
+                pass
+
+            def bar(z):
+                pass
+
+            @overload(bar)
+            def ol_bar(z):
+                def impl(z):
+                    fn(z)
+                    baz(z)
+                return impl
+
+            @njit
+            def foo():
+                x = [1, 2, 3]
+                bar(x)
+                x.append(2)
+                return x
+
+            foo()
+            # baz should be specialised based on literally being invoked and
+            # the literal/unliteral arriving at the call site
+            larg = baz.signatures[0][0]
+            self.assertEqual(larg.initial_value, iv)
+
 
 class TestLiteralLists(MemoryLeakMixin, TestCase):
 
