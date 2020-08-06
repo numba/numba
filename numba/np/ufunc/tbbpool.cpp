@@ -32,6 +32,7 @@ Implement parallel vectorize workqueue on top of Intel TBB.
 #endif
 
 #define HAS_TASK_SCHEDULER_INIT (TBB_INTERFACE_VERSION < 12002)
+#define HAS_TASK_SCHEDULER_HANDLE (TBB_INTERFACE_VERSION >= 12003)
 
 #if HAS_TASK_SCHEDULER_INIT
 #define TSI_INIT(count) tbb::task_scheduler_init(count)
@@ -46,6 +47,10 @@ static tbb::task_group *tg = NULL;
 #if HAS_TASK_SCHEDULER_INIT
 static tbb::task_scheduler_init *tsi = NULL;
 static int tsi_count = 0;
+#endif
+
+#if HAS_TASK_SCHEDULER_HANDLE
+static tbb::task_scheduler_handle tsh;
 #endif
 
 #ifdef _MSC_VER
@@ -261,6 +266,12 @@ static void prepare_fork(void)
         }
     }
 #endif
+#if HAS_TASK_SCHEDULER_HANDLE
+    if (!tbb::finalize(tsh, std::nothrow))
+    {
+        puts("Unable to join threads to shut down before fork(). It can break multithreading in child process\n");
+    }
+#endif
 }
 
 static void reset_after_fork(void)
@@ -303,6 +314,10 @@ static void unload_tbb(void)
         tsi = NULL;
     }
 #endif
+#if HAS_TASK_SCHEDULER_HANDLE
+    // bloking terminate is not strictly required here, ignore return value
+    (void)tbb::finalize(tsh, std::nothrow);
+#endif
 }
 #endif
 
@@ -319,6 +334,10 @@ static void launch_threads(int count)
 #if HAS_TASK_SCHEDULER_INIT
     tsi_count = count;
     tsi = new tbb::task_scheduler_init(count);
+#endif
+
+#if HAS_TASK_SCHEDULER_HANDLE
+    tsh = tbb::task_scheduler_handle::get();
 #endif
     tg = new tbb::task_group;
     tg->run([] {}); // start creating threads asynchronously
@@ -340,7 +359,6 @@ static void synchronize(void)
 static void ready(void)
 {
 }
-
 
 MOD_INIT(tbbpool)
 {
