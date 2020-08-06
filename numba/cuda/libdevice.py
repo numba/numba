@@ -67,13 +67,13 @@ lower(math.pow, types.float64, types.int32)(powi_implement('__nv_powi'))
 
 def frexp_implement(nvname):
     def core(context, builder, sig, args):
-        argty, expty = sig.return_type
-        R = context.get_value_type(argty)
-        I = context.get_value_type(expty)
-        fnty = Type.function(R, [R, Type.pointer(I)])
+        fracty, expty = sig.return_type
+        float_type = context.get_value_type(fracty)
+        int_type = context.get_value_type(expty)
+        fnty = Type.function(float_type, [float_type, Type.pointer(int_type)])
 
         fn = builder.module.get_or_insert_function(fnty, name=nvname)
-        expptr = cgutils.alloca_once(builder, I, name='exp')
+        expptr = cgutils.alloca_once(builder, int_type, name='exp')
 
         ret = builder.call(fn, (args[0], expptr))
         ret = cgutils.make_anonymous_struct(builder,
