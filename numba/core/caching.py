@@ -615,6 +615,7 @@ class Cache(_Cache):
 
     def __init__(self, py_func):
         self._name = repr(py_func)
+        self._py_func = py_func
         self._impl = self._impl_class(py_func)
         self._cache_path = self._impl.locator.get_cache_path()
         # This may be a bit strict but avoids us maintaining a magic number
@@ -697,7 +698,10 @@ class Cache(_Cache):
         Compute index key for the given signature and codegen.
         It includes a description of the OS and target architecture.
         """
-        return (sig, codegen.magic_tuple())
+        codebytes = self._py_func.__code__.co_code
+        cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+        cvarbytes = pickle.dumps(cvars)
+        return (sig, codegen.magic_tuple(), (codebytes, cvarbytes,))
 
 
 class FunctionCache(Cache):
