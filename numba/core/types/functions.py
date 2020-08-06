@@ -230,7 +230,7 @@ def _unlit_non_poison(ty):
     out = unliteral(ty)
     if isinstance(out, types.Poison):
         m = f"Poison type used in arguments; got {out}"
-        raise TypingError(m)
+        raise errors.TypingError(m)
     return out
 
 
