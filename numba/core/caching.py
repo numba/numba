@@ -24,6 +24,7 @@ from numba.core.base import BaseContext
 from numba.core.codegen import CodeLibrary
 from numba.core.compiler import CompileResult
 from numba.core import config, compiler
+from numba.core.serialize import dumps
 
 
 def _get_codegen(obj):
@@ -703,8 +704,10 @@ class Cache(_Cache):
             cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
         else:
             cvars = b''
-        cvarbytes = pickle.dumps(cvars)
-        return (sig, codegen.magic_tuple(), (codebytes, cvarbytes,))
+        cvarbytes = dumps(cvars)
+        hasher = lambda x: hashlib.sha256(x).hexdigest()
+        return (sig, codegen.magic_tuple(), (hasher(codebytes),
+                                             hasher(cvarbytes),))
 
 
 class FunctionCache(Cache):
