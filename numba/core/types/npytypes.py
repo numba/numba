@@ -1,4 +1,5 @@
 import collections
+import warnings
 
 from llvmlite import ir
 
@@ -209,6 +210,8 @@ class Record(Type):
 
         This method only implements width subtyping for records.
         """
+        from numba.core.errors import NumbaExperimentalFeatureWarning
+
         if isinstance(other, Record):
             if len(other.fields) > len(self.fields):
                 return
@@ -216,6 +219,9 @@ class Record(Type):
                                          self.fields.items()):
                 if not other_fd == self_fd:
                     return
+            warnings.warn(f"{self} has been considered a subtype of {other} "
+                          f" This is an experimental feature.",
+                          category=NumbaExperimentalFeatureWarning)
             return Conversion.safe
 
 
