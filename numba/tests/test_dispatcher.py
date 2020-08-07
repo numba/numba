@@ -1253,10 +1253,14 @@ class TestCache(BaseCacheUsecasesTest):
             warnings.simplefilter('error', NumbaWarning)
 
             f = mod.closure1
-            self.assertPreciseEqual(f(3), 6)
+            self.assertPreciseEqual(f(3), 6) # 3 + 3 = 6
             f = mod.closure2
-            self.assertPreciseEqual(f(3), 6)
-            self.check_pycache(2)
+            self.assertPreciseEqual(f(3), 8) # 3 + 5 = 8
+            f = mod.closure3
+            self.assertPreciseEqual(f(3), 10) # 3 + 7 = 8
+            f = mod.closure4
+            self.assertPreciseEqual(f(3), 12) # 3 + 9 = 12
+            self.check_pycache(5) # 1 nbi, 4 nbc
 
     def test_cache_reuse(self):
         mod = self.import_module()

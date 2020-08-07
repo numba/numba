@@ -699,7 +699,10 @@ class Cache(_Cache):
         It includes a description of the OS and target architecture.
         """
         codebytes = self._py_func.__code__.co_code
-        cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+        if self._py_func.__closure__ is not None:
+            cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+        else:
+            cvars = b''
         cvarbytes = pickle.dumps(cvars)
         return (sig, codegen.magic_tuple(), (codebytes, cvarbytes,))
 
