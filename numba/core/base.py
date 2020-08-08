@@ -556,9 +556,9 @@ class BaseContext(object):
         except NotImplementedError:
             pass
         if isinstance(fn, types.Type):
-            # It's a type instance => try to find a definition for the type class
+            # It's a type instance => try to find a call overload
             try:
-                return self.get_function(type(fn), sig)
+                return self.get_function((type(fn), '__call__'), sig)
             except NotImplementedError:
                 # Raise exception for the type instance, for a better error message
                 pass
