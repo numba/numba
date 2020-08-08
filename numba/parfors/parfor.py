@@ -3739,6 +3739,8 @@ def maximize_fusion_inner(func_ir, block, call_table, alias_map,
                                           call_table, alias_map, arg_aliases)
                         if up_direction else _can_reorder_stmts(next_stmt, stmt,
                         func_ir, call_table, alias_map, arg_aliases))
+        if config.DEBUG_ARRAY_OPT >= 3:
+            print("reorder:", stmt, next_stmt, can_reorder)
         if can_reorder:
             block.body[i] = next_stmt
             block.body[i+1] = stmt
@@ -3780,8 +3782,17 @@ def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table,
                                        alias_map, arg_aliases)
         next_writes = expand_aliases(get_stmt_writes(next_stmt),
                                      alias_map, arg_aliases)
-        if len((stmt_writes & next_accesses)
-                | (next_writes & stmt_accesses)) == 0:
+
+        swna = stmt_writes & next_accesses
+        nwsa = next_writes & stmt_accesses
+
+        if config.DEBUG_ARRAY_OPT >= 3:
+            print("sa:", stmt_accesses, "sw:", stmt_writes, "na:", next_accesses, "nw:", next_writes)
+            print("slv:", {v.name for v in stmt.list_vars()})
+            print("gsw:", get_stmt_writes(next_stmt))
+            print("swna:", swna, "nwsa:", nwsa, "|:", swna | nwsa)
+        # If len of both sets is 0 then there are no reordering conflicts.
+        if len(swna) == 0 and len(nwsa) == 0:
             return True
     return False
 
