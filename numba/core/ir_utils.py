@@ -738,7 +738,7 @@ alias_analysis_extensions = {}
 alias_func_extensions = {}
 
 def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
-                                                            arg_aliases=None):
+                                                           arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
     if alias_map is None:
         alias_map = {}
@@ -762,19 +762,23 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                 if is_immutable_type(lhs, typemap):
                     continue
                 if isinstance(expr, ir.Var) and lhs!=expr.name:
-                    _add_alias(lhs, expr.name, alias_map, arg_aliases)
+                    _add_alias(lhs, expr.name, alias_map, arg_aliases,
+                               typemap)
                 # subarrays like A = B[0] for 2D B
                 if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
                     expr.op in ['getitem', 'static_getitem'])):
-                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases,
+                               typemap)
                 # array attributes like A.T
                 if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
                         and expr.attr in ['T', 'ctypes', 'flat']):
-                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases,
+                               typemap)
                 # a = b.c.  a should alias b
                 if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
                         and expr.value.name in arg_aliases):
-                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                    _add_alias(lhs, expr.value.name, alias_map, arg_aliases,
+                               typemap)
                 # calls that can create aliases such as B = A.ravel()
                 if isinstance(expr, ir.Expr) and expr.op == 'call':
                     fdef = guard(find_callname, func_ir, expr, typemap)
@@ -789,9 +793,11 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                         alias_func = alias_func_extensions[fdef]
                         alias_func(lhs, expr.args, alias_map, arg_aliases)
                     if fmod == 'numpy' and fname in np_alias_funcs:
-                        _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
+                        _add_alias(lhs, expr.args[0].name, alias_map,
+                                   arg_aliases, typemap)
                     if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
-                        _add_alias(lhs, fmod.name, alias_map, arg_aliases)
+                        _add_alias(lhs, fmod.name, alias_map, arg_aliases,
+                                   typemap)
 
     # copy to avoid changing size during iteration
     old_alias_map = copy.deepcopy(alias_map)
@@ -804,7 +810,12 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
 
     return alias_map, arg_aliases
 
-def _add_alias(lhs, rhs, alias_map, arg_aliases):
+def _add_alias(lhs, rhs, alias_map, arg_aliases, typemap):
+    if hasattr(typemap, "__getitem__"):
+        lhs_typ = typemap[lhs]
+        # Only record aliasing information for arrays.
+        if not isinstance(lhs_typ, types.npytypes.Array):
+            return
     if rhs in arg_aliases:
         arg_aliases.add(lhs)
     else:
@@ -814,7 +825,6 @@ def _add_alias(lhs, rhs, alias_map, arg_aliases):
             alias_map[lhs] = set()
         alias_map[rhs].add(lhs)
         alias_map[lhs].add(rhs)
-    return
 
 def is_immutable_type(var, typemap):
     # Conservatively, assume mutable if type not available
