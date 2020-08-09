@@ -832,6 +832,12 @@ def _fill_ufunc_db(ufunc_db):
         '?->?': npyfuncs.np_int_isnan_impl,
     }
 
+    if numpy_version >= (1, 18):
+        ufunc_db[np.isnan].update({
+            'm->?': npyfuncs.np_datetime_isnat_impl,
+            'M->?': npyfuncs.np_datetime_isnat_impl,
+        })
+
     ufunc_db[np.isinf] = {
         'f->?': npyfuncs.np_real_isinf_impl,
         'd->?': npyfuncs.np_real_isinf_impl,
@@ -855,6 +861,12 @@ def _fill_ufunc_db(ufunc_db):
         # boolean
         '?->?': npyfuncs.np_int_isinf_impl,
     }
+
+    if numpy_version >= (1, 18):
+        ufunc_db[np.isinf].update({
+            'm->?': npyfuncs.np_int_isinf_impl,
+            'M->?': npyfuncs.np_int_isinf_impl,
+        })
 
     ufunc_db[np.isfinite] = {
         'f->?': npyfuncs.np_real_isfinite_impl,
@@ -1066,22 +1078,22 @@ def _fill_ufunc_db(ufunc_db):
         'mm->?': npdatetime.timedelta_ge_timedelta_impl,
     })
     ufunc_db[np.maximum].update({
-        'MM->M': npdatetime.datetime_max_impl,
-        'mm->m': npdatetime.timedelta_max_impl,
+        'MM->M': npdatetime.datetime_maximum_impl,
+        'mm->m': npdatetime.timedelta_maximum_impl,
     })
     ufunc_db[np.minimum].update({
-        'MM->M': npdatetime.datetime_min_impl,
-        'mm->m': npdatetime.timedelta_min_impl,
+        'MM->M': npdatetime.datetime_minimum_impl,
+        'mm->m': npdatetime.timedelta_minimum_impl,
     })
     # there is no difference for datetime/timedelta in maximum/fmax
     # and minimum/fmin
     ufunc_db[np.fmax].update({
-        'MM->M': npdatetime.datetime_max_impl,
-        'mm->m': npdatetime.timedelta_max_impl,
+        'MM->M': npdatetime.datetime_fmax_impl,
+        'mm->m': npdatetime.timedelta_fmax_impl,
     })
     ufunc_db[np.fmin].update({
-        'MM->M': npdatetime.datetime_min_impl,
-        'mm->m': npdatetime.timedelta_min_impl,
+        'MM->M': npdatetime.datetime_fmin_impl,
+        'mm->m': npdatetime.timedelta_fmin_impl,
     })
 
     if numpy_version >= (1, 16):
