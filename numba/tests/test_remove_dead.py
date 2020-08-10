@@ -46,7 +46,7 @@ def dummy_aliased_func(A):
     return A
 
 def alias_ext_dummy_func(lhs_name, args, alias_map, arg_aliases):
-    ir_utils._add_alias(lhs_name, args[0].name, alias_map, arg_aliases)
+    ir_utils._add_alias(lhs_name, args[0].name, alias_map, arg_aliases, None)
 
 def findLhsAssign(func_ir, var):
     for label, block in func_ir.blocks.items():
