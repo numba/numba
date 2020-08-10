@@ -814,7 +814,7 @@ def _add_alias(lhs, rhs, alias_map, arg_aliases, typemap):
     if hasattr(typemap, "__getitem__"):
         lhs_typ = typemap[lhs]
         # Only record aliasing information for arrays.
-        if not isinstance(lhs_typ, types.npytypes.Array):
+        if not isinstance(lhs_typ, (types.npytypes.Array, types.ArrayCTypes)):
             return
     if rhs in arg_aliases:
         arg_aliases.add(lhs)
