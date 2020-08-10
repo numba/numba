@@ -3568,6 +3568,22 @@ class TestParforsMisc(TestParforsBase):
             foo.py_func(src, method, out)
         )
 
+    @skip_parfors_unsupported
+    def test_issue6095_numpy_max(self):
+        @njit(parallel=True)
+        def find_maxima_3D_jit(args):
+            package = args
+            for index in range(0, 10):
+                z_stack = package[index, :, :]
+            return np.max(z_stack)
+
+        np.random.seed(0)
+        args = np.random.random((10, 10, 10))
+        self.assertPreciseEqual(
+            find_maxima_3D_jit(args),
+            find_maxima_3D_jit.py_func(args),
+        )
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):

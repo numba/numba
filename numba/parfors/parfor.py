@@ -2679,8 +2679,6 @@ def _find_mask(typemap, func_ir, arr_def):
                 mask_indices.append(None)
             # Handle integer index
             elif isinstance(index_typ, types.Integer):
-                # The follow is never tested
-                raise AssertionError('unreachable')
                 count_consts += 1
                 mask_indices.append(ind)
 
