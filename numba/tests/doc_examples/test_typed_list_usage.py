@@ -65,6 +65,12 @@ class DocsTypedListUsageTest(unittest.TestCase):
             l = foo(l)
             print(len(l)) # 10
 
+            # You can also directly construct a typed-list from an existing
+            # Python list
+            py_list = [2, 3, 5]
+            numba_list = List(py_list)
+            print(len(numba_list)) # 3
+
             # magictoken.ex_inferred_list.end
 
     def test_ex_nested_list(self):
