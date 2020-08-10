@@ -1335,6 +1335,7 @@ class _LoopTypesTester(TestCase):
              ('arcsin', 'F'): 4,
              ('log10', 'D'): 5,
              ('tanh', 'F'): 2,
+             ('cbrt', 'd'): 2,
              }
 
     def _arg_for_type(self, a_letter_type, index=0):
