@@ -3900,7 +3900,7 @@ def np_asarray(a, dtype=None):
 
 
 @overload(np.asfarray)
-def np_asfarray(a, dtype=types.float64):
+def np_asfarray(a, dtype=np.float64):
     dtype = as_dtype(dtype)
     if not np.issubdtype(dtype, np.inexact):
         dx = types.float64
