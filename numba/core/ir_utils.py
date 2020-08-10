@@ -811,11 +811,8 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
     return alias_map, arg_aliases
 
 def _add_alias(lhs, rhs, alias_map, arg_aliases, typemap):
-    if hasattr(typemap, "__getitem__"):
-        lhs_typ = typemap[lhs]
-        # Only record aliasing information for arrays.
-        if not isinstance(lhs_typ, (types.npytypes.Array, types.ArrayCTypes)):
-            return
+    if is_immutable_type(lhs, typemap):
+        return
     if rhs in arg_aliases:
         arg_aliases.add(lhs)
     else:
@@ -833,7 +830,7 @@ def is_immutable_type(var, typemap):
     typ = typemap[var]
     # TODO: add more immutable types
     if isinstance(typ, (types.Number, types.scalars._NPDatetimeBase,
-                        types.iterators.RangeType)):
+                        types.iterators.RangeType, types.BaseTuple)):
         return True
     if typ==types.string:
         return True
