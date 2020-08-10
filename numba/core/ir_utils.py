@@ -835,7 +835,6 @@ def is_immutable_type_internal(typ, typemap):
 
     # These types are always immutable.
     if isinstance(typ, (types.Number, types.scalars._NPDatetimeBase,
-                        types.containers.BaseTuple,
                         types.iterators.RangeType)):
         return True
     # We treat a tuple as immutable if all of its internal fields
