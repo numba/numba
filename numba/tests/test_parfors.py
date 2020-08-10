@@ -173,7 +173,6 @@ class TestParforsBase(TestCase):
         njit_output = cfunc.entry_point(*njit_args)
 
         # parfor result
-<<<<<<< HEAD
         parfor_args = copy_args(*args)
         parfor_output = cpfunc.entry_point(*parfor_args)
 
@@ -187,28 +186,6 @@ class TestParforsBase(TestCase):
                 py_args, njit_args, parfor_args, check_args_for_equality):
                 argcomp(njitarg, pyarg, **kwargs)
                 argcomp(parforarg, pyarg, **kwargs)
-||||||| 4aceb2727
-        parfor_output = cpfunc.entry_point(*copy_args(*args))
-
-        np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
-        np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
-
-        self.assertEqual(type(njit_output), type(parfor_output))
-=======
-        parfor_args = copy_args(*args)
-        parfor_output = cpfunc.entry_point(*parfor_args)
-
-        if check_args_for_equality is None:
-            np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
-            np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
-            self.assertEqual(type(njit_output), type(parfor_output))
-        else:
-            assert(len(py_args) == len(check_args_for_equality))
-            for pyarg, njitarg, parforarg, argcomp in zip(
-                py_args, njit_args, parfor_args, check_args_for_equality):
-                argcomp(njitarg, pyarg, **kwargs)
-                argcomp(parforarg, pyarg, **kwargs)
->>>>>>> 2d6994be5d2803104c16fb8cc9c269d3be9684c8
 
         if check_scheduling:
             self.check_scheduling(cpfunc, scheduler_type)
