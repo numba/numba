@@ -828,13 +828,25 @@ def is_immutable_type(var, typemap):
     if typemap is None or var not in typemap:
         return False
     typ = typemap[var]
+    return is_immutable_type_internal(typ, typemap)
+
+def is_immutable_type_internal(typ, typemap):
     # TODO: add more immutable types
+
+    # These types are always immutable.
     if isinstance(typ, (types.Number, types.scalars._NPDatetimeBase,
                         types.iterators.RangeType)):
         return True
-    if typ==types.string:
+    # We treat a tuple as immutable if all of its internal fields
+    # are immutable as well.
+    if isinstance(typ, types.containers.BaseTuple):
+        for i in range(len(typ)):
+            if not is_immutable_type_internal(typ[i], typemap):
+                return False
         return True
-    # conservatively, assume mutable
+    if typ == types.string:
+        return True
+    # Conservatively, assume mutable.
     return False
 
 def copy_propagate(blocks, typemap):
