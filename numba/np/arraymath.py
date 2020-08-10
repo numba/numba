@@ -4078,7 +4078,7 @@ def np_asfarray(a, dtype=np.float64):
     else:
         dx = dtype
 
-    def impl(a, dtype=types.float64):
+    def impl(a, dtype=np.float64):
         return np.asarray(a, dx)
     return impl
 
