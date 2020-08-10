@@ -1,4 +1,4 @@
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba import cuda
 from numba.core import config
 
@@ -12,7 +12,7 @@ regex_pattern = (
 )
 
 
-class TestUserExc(SerialMixin, unittest.TestCase):
+class TestUserExc(CUDATestCase):
 
     def test_user_exception(self):
         @cuda.jit("void(int32)", debug=True)

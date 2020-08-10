@@ -13,6 +13,9 @@ from numba.tests.support import (TestCase, CompilationCache, MemoryLeak,
                                  MemoryLeakMixin, tag, needs_blas)
 import unittest
 
+TIMEDELTA_M = 'timedelta64[M]'
+TIMEDELTA_Y = 'timedelta64[Y]'
+
 
 def np_around_array(arr, decimals, out):
     np.around(arr, decimals, out)
@@ -747,11 +750,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         all_pyfuncs = (
             np_arange_1,
             lambda x: np.arange(x, 10),
-            lambda x: np.arange(7, step=abs(x))
+            lambda x: np.arange(7, step=max(1, abs(x)))
         )
 
         for pyfunc in all_pyfuncs:
-            pyfunc = np_arange_1
             cfunc = jit(nopython=True)(pyfunc)
 
             def check_ok(arg0):
@@ -980,15 +982,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
         all_dtypes = [np.float64, np.float32, np.int64, np.uint64, np.complex64,
-                      np.complex128]
-        # timedelta test cannot be enabled until issue #4540 is fixed
-        # all_dtypes += [np.timedelta64]
+                      np.complex128, TIMEDELTA_M]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
              np.ones((7, 3), arr_dtype) * -5]
             for arr_dtype in all_dtypes]
-
         for arr_list in all_test_arrays:
             for arr in arr_list:
                 for axis in (0, 1, 2):
@@ -1010,12 +1009,11 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.int32, np.uint32]
+        all_dtypes = [np.int32, np.uint32, ]
         # expected return dtypes in Numba
         out_dtypes = {np.dtype('int32'): np.int64, np.dtype('uint32'): np.uint64,
-                      np.dtype('int64'): np.int64}
-        # timedelta test cannot be enabled until issue #4540 is fixed
-        # all_dtypes += [np.timedelta64]
+                      np.dtype('int64'): np.int64,
+                      np.dtype(TIMEDELTA_M): np.dtype(TIMEDELTA_M)}
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
@@ -1044,9 +1042,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
         all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
-                      np.uint64, np.complex64, np.complex128]
-        # timedelta test cannot be enabled until issue #4540 is fixed
-        # all_dtypes += [np.timedelta64]
+                      np.uint64, np.complex64, np.complex128, TIMEDELTA_M]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
@@ -1061,7 +1057,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('uint64'): [np.float64, np.int64],
                       np.dtype('complex64'): [np.complex64, np.complex128],
                       np.dtype('complex128'): [np.complex128],
-                      np.dtype('timedelta64'): [np.timedelta64]}
+                      np.dtype(TIMEDELTA_M): [np.dtype(TIMEDELTA_M)]}
 
         for arr_list in all_test_arrays:
             for arr in arr_list:
@@ -1077,7 +1073,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum_axis_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
         all_dtypes = [np.float64, np.float32, np.int64, np.int32, np.uint32,
-                      np.uint64, np.complex64, np.complex128]
+                      np.uint64, np.complex64, np.complex128, TIMEDELTA_M]
         all_test_arrays = [
             [np.ones((7, 6, 5, 4, 3), arr_dtype),
              np.ones(1, arr_dtype),
@@ -1092,7 +1088,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('uint64'): [np.float64, np.uint64],
                       np.dtype('complex64'): [np.complex64, np.complex128],
                       np.dtype('complex128'): [np.complex128],
-                      np.dtype('timedelta64'): [np.timedelta64]}
+                      np.dtype(TIMEDELTA_M): [np.dtype(TIMEDELTA_M)],
+                      np.dtype(TIMEDELTA_Y): [np.dtype(TIMEDELTA_Y)]}
 
         for arr_list in all_test_arrays:
             for arr in arr_list:

@@ -3,11 +3,11 @@ from ctypes import byref
 import weakref
 
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba.cuda.cudadrv import driver
 
 
-class TestContextStack(SerialMixin, unittest.TestCase):
+class TestContextStack(CUDATestCase):
     def setUp(self):
         # Reset before testing
         cuda.close()
@@ -25,13 +25,16 @@ class TestContextStack(SerialMixin, unittest.TestCase):
         self.assertGreater(len(gpulist), 0)
 
 
-class TestContextAPI(SerialMixin, unittest.TestCase):
+class TestContextAPI(CUDATestCase):
 
     def tearDown(self):
         cuda.close()
 
     def test_context_memory(self):
-        mem = cuda.current_context().get_memory_info()
+        try:
+            mem = cuda.current_context().get_memory_info()
+        except NotImplementedError:
+            self.skipTest('EMM Plugin does not implement get_memory_info()')
 
         self.assertIsInstance(mem.free, numbers.Number)
         self.assertEquals(mem.free, mem[0])
@@ -68,7 +71,7 @@ class TestContextAPI(SerialMixin, unittest.TestCase):
 
 
 @skip_on_cudasim('CUDA HW required')
-class Test3rdPartyContext(SerialMixin, unittest.TestCase):
+class Test3rdPartyContext(CUDATestCase):
     def tearDown(self):
         cuda.close()
 

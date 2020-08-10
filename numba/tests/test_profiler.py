@@ -74,6 +74,25 @@ class TestProfiler(unittest.TestCase):
             """
         subprocess.check_call([sys.executable, "-c", code])
 
+    def test_issue_3229(self):
+        # Issue #3229: Seemingly random segfaults when profiling due to
+        # frame injection.
+        # numba.tests.npyufunc.test_dufunc.TestDUFunc.test_npm_call is the
+        # first test case crashing when profiling. Fingers crossed fixing
+        # this is sufficient proof for the general case.
+
+        code = """if 1:
+            import cProfile as profiler
+            p = profiler.Profile()
+            p.enable()
+
+            from numba.tests.npyufunc.test_dufunc import TestDUFunc
+            t = TestDUFunc('test_npm_call')
+            t.test_npm_call()
+
+            p.disable()
+            """
+        subprocess.check_call([sys.executable, "-c", code])
 
 if __name__ == '__main__':
     unittest.main()

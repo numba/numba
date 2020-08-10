@@ -1,10 +1,10 @@
 import numpy as np
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 from numba import cuda
 import operator
 
 
-class TestOperatorModule(SerialMixin, unittest.TestCase):
+class TestOperatorModule(CUDATestCase):
     """
     Test if operator module is supported by the CUDA target.
     """

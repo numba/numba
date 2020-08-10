@@ -606,13 +606,20 @@ class StaticGetItemTuple(AbstractTemplate):
 
     def generic(self, args, kws):
         tup, idx = args
+        ret = None
         if not isinstance(tup, types.BaseTuple):
             return
         if isinstance(idx, int):
             ret = tup.types[idx]
         elif isinstance(idx, slice):
             ret = types.BaseTuple.from_types(tup.types[idx])
-        return signature(ret, *args)
+        elif isinstance(tup, types.LiteralStrKeyDict):
+            if isinstance(idx, str):
+                lookup = tup.fields.index(idx)
+                ret = tup.types[lookup]
+        if ret is not None:
+            sig = signature(ret, *args)
+            return sig
 
 
 # Generic implementation for "not in"
@@ -705,6 +712,22 @@ class NumberAttribute(AttributeTemplate):
 
 
 @infer_getattr
+class NPTimedeltaAttribute(AttributeTemplate):
+    key = types.NPTimedelta
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
+
+
+@infer_getattr
+class NPDatetimeAttribute(AttributeTemplate):
+    key = types.NPDatetime
+
+    def resolve___class__(self, ty):
+        return types.NumberClass(ty)
+
+
+@infer_getattr
 class SliceAttribute(AttributeTemplate):
     key = types.SliceType
 
@@ -782,9 +805,19 @@ class TypeRefAttribute(AttributeTemplate):
             # For example, see numba/typed/typeddict.py
             #   @type_callable(DictType)
             #   def typeddict_call(context):
-            def redirect(*args, **kwargs):
-                return self.context.resolve_function_type(ty, args, kwargs)
-            return types.Function(make_callable_template(key=ty, typer=redirect))
+            class Redirect(object):
+
+                def __init__(self, context):
+                    self.context =  context
+
+                def __call__(self, *args, **kwargs):
+                    result = self.context.resolve_function_type(ty, args, kwargs)
+                    if hasattr(result, "pysig"):
+                        self.pysig = result.pysig
+                    return result
+
+            return types.Function(make_callable_template(key=ty,
+                                                         typer=Redirect(self.context)))
 
 
 #------------------------------------------------------------------------------
@@ -982,7 +1015,9 @@ class TypeBuiltin(AbstractTemplate):
         assert not kws
         if len(args) == 1:
             # One-argument type() -> return the __class__
-            classty = self.context.resolve_getattr(args[0], "__class__")
+            # Avoid literal types
+            arg = types.unliteral(args[0])
+            classty = self.context.resolve_getattr(arg, "__class__")
             if classty is not None:
                 return signature(classty, *args)
 

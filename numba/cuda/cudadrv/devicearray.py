@@ -73,7 +73,7 @@ class DeviceNDArrayBase(object):
         strides
             array strides.
         dtype
-            data type as np.dtype.
+            data type as np.dtype coercible object.
         stream
             cuda stream.
         writeback
@@ -85,6 +85,7 @@ class DeviceNDArrayBase(object):
             shape = (shape,)
         if isinstance(strides, int):
             strides = (strides,)
+        dtype = np.dtype(dtype)
         self.ndim = len(shape)
         if len(strides) != self.ndim:
             raise ValueError('strides not match ndim')
@@ -92,7 +93,7 @@ class DeviceNDArrayBase(object):
                                                  dtype.itemsize)
         self.shape = tuple(shape)
         self.strides = tuple(strides)
-        self.dtype = np.dtype(dtype)
+        self.dtype = dtype
         self.size = int(functools.reduce(operator.mul, self.shape, 1))
         # prepare gpu memory
         if self.size > 0:
@@ -121,14 +122,9 @@ class DeviceNDArrayBase(object):
         else:
             ptr = 0
 
-        if array_core(self).flags['C_CONTIGUOUS']:
-            strides = None
-        else:
-            strides = tuple(self.strides)
-
         return {
             'shape': tuple(self.shape),
-            'strides': strides,
+            'strides': None if is_contiguous(self) else tuple(self.strides),
             'data': (ptr, False),
             'typestr': self.dtype.str,
             'version': 2,
@@ -433,6 +429,13 @@ def _assign_kernel(ndim):
     """
     from numba import cuda  # circular!
 
+    if ndim == 0:
+        # the (2, ndim) allocation below is not yet supported, so avoid it
+        @cuda.jit
+        def kernel(lhs, rhs):
+            lhs[()] = rhs[()]
+        return kernel
+
     @cuda.jit
     def kernel(lhs, rhs):
         location = cuda.grid(1)
@@ -588,9 +591,9 @@ class DeviceNDArray(DeviceNDArrayBase):
         newdata = self.gpu_data.view(*arr.extent)
 
         if isinstance(arr, dummyarray.Element):
-            # convert to a 1d array
-            shape = (1,)
-            strides = (self.dtype.itemsize,)
+            # convert to a 0d array
+            shape = ()
+            strides = ()
         else:
             shape = arr.shape
             strides = arr.strides
@@ -610,7 +613,8 @@ class DeviceNDArray(DeviceNDArrayBase):
                 rhs.ndim,
                 lhs.ndim))
         rhs_shape = np.ones(lhs.ndim, dtype=np.int64)
-        rhs_shape[-rhs.ndim:] = rhs.shape
+        # negative indices would not work if rhs.ndim == 0
+        rhs_shape[lhs.ndim - rhs.ndim:] = rhs.shape
         rhs = rhs.reshape(*rhs_shape)
         for i, (l, r) in enumerate(zip(lhs.shape, rhs.shape)):
             if r != 1 and l != r:
@@ -680,8 +684,6 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
 
 def from_array_like(ary, stream=0, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
-    if ary.ndim == 0:
-        ary = ary.reshape(1)
     return DeviceNDArray(ary.shape, ary.strides, ary.dtype,
                          writeback=ary, stream=stream, gpu_data=gpu_data)
 
@@ -707,6 +709,22 @@ def array_core(ary):
     for stride in ary.strides:
         core_index.append(0 if stride == 0 else slice(None))
     return ary[tuple(core_index)]
+
+
+def is_contiguous(ary):
+    """
+    Returns True iff `ary` is C-style contiguous while ignoring
+    broadcasted and 1-sized dimensions.
+    As opposed to array_core(), it does not call require_context(),
+    which can be quite expensive.
+    """
+    size = ary.dtype.itemsize
+    for shape, stride in zip(reversed(ary.shape), reversed(ary.strides)):
+        if shape > 1 and stride != 0:
+            if size != stride:
+                return False
+            size *= shape
+    return True
 
 
 errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "

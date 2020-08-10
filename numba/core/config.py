@@ -35,7 +35,7 @@ def _parse_cc(text):
     else:
         m = re.match(r'(\d+)\.(\d+)', text)
         if not m:
-            raise ValueError("NUMBA_FORCE_CUDA_CC must be specified as a "
+            raise ValueError("Compute capability must be specified as a "
                              "string of \"major.minor\" where major "
                              "and minor are decimals")
         grp = m.groups()
@@ -147,6 +147,13 @@ class _EnvReloader(object):
         # globally.
         BOUNDSCHECK = _readenv("NUMBA_BOUNDSCHECK", int, None)
 
+        # Whether to always warn about potential uninitialized variables
+        # because static controlflow analysis cannot find a definition
+        # in one or more of the incoming paths.
+        ALWAYS_WARN_UNINIT_VAR = _readenv(
+            "NUMBA_ALWAYS_WARN_UNINIT_VAR", int, 0,
+        )
+
         # Debug flag to control compiler debug print
         DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 
@@ -172,6 +179,11 @@ class _EnvReloader(object):
         # How many recently deserialized functions to retain regardless
         # of external references
         FUNCTION_CACHE_SIZE = _readenv("NUMBA_FUNCTION_CACHE_SIZE", int, 128)
+
+        # Maximum tuple size that parfors will unpack and pass to
+        # internal gufunc.
+        PARFOR_MAX_TUPLE_SIZE = _readenv("NUMBA_PARFOR_MAX_TUPLE_SIZE",
+                                         int, 100)
 
         # Enable logging of cache operation
         DEBUG_CACHE = _readenv("NUMBA_DEBUG_CACHE", int, DEBUG)
@@ -204,7 +216,11 @@ class _EnvReloader(object):
 
         # Force dump of Numba IR
         DUMP_IR = _readenv("NUMBA_DUMP_IR", int,
-                           DEBUG_FRONTEND or DEBUG_TYPEINFER)
+                           DEBUG_FRONTEND)
+
+        # Force dump of Numba IR in SSA form
+        DUMP_SSA = _readenv("NUMBA_DUMP_SSA", int,
+                            DEBUG_FRONTEND or DEBUG_TYPEINFER)
 
         # print debug info of analysis and optimization on array operations
         DEBUG_ARRAY_OPT = _readenv("NUMBA_DEBUG_ARRAY_OPT", int, 0)
@@ -291,6 +307,10 @@ class _EnvReloader(object):
         # Force CUDA compute capability to a specific version
         FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _parse_cc, None)
 
+        # The default compute capability to target when compiling to PTX.
+        CUDA_DEFAULT_PTX_CC = _readenv("NUMBA_CUDA_DEFAULT_PTX_CC", _parse_cc,
+                                       (5, 2))
+
         # Disable CUDA support
         DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA",
                                 int, int(MACHINE_BITS == 32))
@@ -356,6 +376,10 @@ class _EnvReloader(object):
 
         # gdb binary location
         GDB_BINARY = _readenv("NUMBA_GDB_BINARY", str, '/usr/bin/gdb')
+
+        # CUDA Memory management
+        CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,
+                                       'default')
 
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():

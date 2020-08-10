@@ -11,4 +11,5 @@ python setup.py build_ext -q --inplace
 #  during distutils-dependent tests -- e.g. test_pycc)
 
 # Install numba locally for use in `numba -s` sys info tool at test time
-python -m pip install -e .
+# `-iNOWHERE` make a fake index to avoid auto downloading dependency
+python -m pip install -iNOWHERE -e .

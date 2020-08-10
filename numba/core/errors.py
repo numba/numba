@@ -70,6 +70,12 @@ class NumbaTypeSafetyWarning(NumbaWarning):
     Warning category for unsafe casting operations.
     """
 
+
+class NumbaExperimentalFeatureWarning(NumbaWarning):
+    """
+    Warning category for using an experimental feature.
+    """
+
 # These are needed in the color formatting of errors setup
 
 
@@ -96,6 +102,10 @@ class _ColorScheme(object):
     def highlight(self, msg):
         pass
 
+    @abstractmethod
+    def reset(self, msg):
+        pass
+
 
 class _DummyColorScheme(_ColorScheme):
 
@@ -115,6 +125,9 @@ class _DummyColorScheme(_ColorScheme):
         pass
 
     def highlight(self, msg):
+        pass
+
+    def reset(self, msg):
         pass
 
 
@@ -166,6 +179,9 @@ except ImportError:
         def highlight(self, msg):
             return msg
 
+        def reset(self, msg):
+            return msg
+
     def termcolor():
         global _termcolor_inst
         if _termcolor_inst is None:
@@ -209,35 +225,40 @@ else:
                           'errmsg': None,
                           'filename': None,
                           'indicate': None,
-                          'highlight': None, }
+                          'highlight': None,
+                          'reset': None, }
 
     # suitable for terminals with a dark background
     themes['dark_bg'] = {'code': Fore.BLUE,
                          'errmsg': Fore.YELLOW,
                          'filename': Fore.WHITE,
                          'indicate': Fore.GREEN,
-                         'highlight': Fore.RED, }
+                         'highlight': Fore.RED,
+                         'reset': Style.RESET_ALL, }
 
     # suitable for terminals with a light background
     themes['light_bg'] = {'code': Fore.BLUE,
                           'errmsg': Fore.BLACK,
                           'filename': Fore.MAGENTA,
                           'indicate': Fore.BLACK,
-                          'highlight': Fore.RED, }
+                          'highlight': Fore.RED,
+                          'reset': Style.RESET_ALL, }
 
     # suitable for terminals with a blue background
     themes['blue_bg'] = {'code': Fore.WHITE,
                          'errmsg': Fore.YELLOW,
                          'filename': Fore.MAGENTA,
                          'indicate': Fore.CYAN,
-                         'highlight': Fore.RED, }
+                         'highlight': Fore.RED,
+                         'reset': Style.RESET_ALL, }
 
     # suitable for use in jupyter notebooks
     themes['jupyter_nb'] = {'code': Fore.BLACK,
                             'errmsg': Fore.BLACK,
                             'filename': Fore.GREEN,
                             'indicate': Fore.CYAN,
-                            'highlight': Fore.RED, }
+                            'highlight': Fore.RED,
+                            'reset': Style.RESET_ALL, }
 
     default_theme = themes['no_color']
 
@@ -248,6 +269,7 @@ else:
             self._filename = theme['filename']
             self._indicate = theme['indicate']
             self._highlight = theme['highlight']
+            self._reset = theme['reset']
             _DummyColorScheme.__init__(self, theme=theme)
 
         def _markup(self, msg, color=None, style=Style.BRIGHT):
@@ -276,6 +298,9 @@ else:
 
         def highlight(self, msg):
             return self._markup(msg, self._highlight)
+
+        def reset(self, msg):
+            return self._markup(msg, self._reset)
 
     def termcolor():
         global _termcolor_inst
@@ -311,9 +336,9 @@ If the code is valid and the unsupported functionality is important to you
 please file a feature request at: https://github.com/numba/numba/issues/new
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-http://numba.pydata.org/numba-doc/latest/reference/pysupported.html
+https://numba.pydata.org/numba-doc/latest/reference/pysupported.html
 and
-http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
+https://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
 """
 
 constant_inference_info = """
@@ -322,7 +347,7 @@ a constant. This could well be a current limitation in Numba's internals,
 however please first check that your code is valid for compilation,
 particularly with respect to string interpolation (not supported!) and
 the requirement of compile time constants as arguments to exceptions:
-http://numba.pydata.org/numba-doc/latest/reference/pysupported.html?highlight=exceptions#constructs
+https://numba.pydata.org/numba-doc/latest/reference/pysupported.html?highlight=exceptions#constructs
 
 If the code is valid and the unsupported functionality is important to you
 please file a feature request at: https://github.com/numba/numba/issues/new
@@ -335,12 +360,12 @@ This is not usually a problem with Numba itself but instead often caused by
 the use of unsupported features or an issue in resolving types.
 
 To see Python/NumPy features supported by the latest release of Numba visit:
-http://numba.pydata.org/numba-doc/latest/reference/pysupported.html
+https://numba.pydata.org/numba-doc/latest/reference/pysupported.html
 and
-http://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
+https://numba.pydata.org/numba-doc/latest/reference/numpysupported.html
 
 For more information about typing errors and how to debug them visit:
-http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-doesn-t-compile
+https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-doesn-t-compile
 
 If you think your code should work with Numba, please report the error message
 and traceback, along with a minimal reproducer at:
@@ -453,11 +478,12 @@ class NumbaError(Exception):
         else:
             def highlight(x):
                 return x
+
         if loc:
-            super(NumbaError, self).__init__(
-                highlight("%s\n%s\n" % (msg, loc.strformat())))
+            new_msg = "%s\n%s\n" % (msg, loc.strformat())
         else:
-            super(NumbaError, self).__init__(highlight("%s" % (msg,)))
+            new_msg = "%s" % (msg,)
+        super(NumbaError, self).__init__(highlight(new_msg))
 
     @property
     def contexts(self):
@@ -473,9 +499,8 @@ class NumbaError(Exception):
         contextual information.
         """
         self.contexts.append(msg)
-        f = termcolor().errmsg('{0}\n') + termcolor().filename(
-            '[{1}] During: {2}')
-        newmsg = f.format(self, len(self.contexts), msg)
+        f = termcolor().errmsg('{0}\n') + termcolor().filename('During: {1}')
+        newmsg = f.format(self, msg)
         self.args = (newmsg,)
         return self
 
@@ -489,6 +514,12 @@ class NumbaError(Exception):
 class UnsupportedError(NumbaError):
     """
     Numba does not have an implementation for this functionality.
+    """
+    pass
+
+
+class UnsupportedRewriteError(UnsupportedError):
+    """UnsupportedError from rewrite passes
     """
     pass
 

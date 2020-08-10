@@ -20,6 +20,7 @@ from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
 from numba.core.utils import reraise
 from numba.core.caching import NullCache, FunctionCache
+from numba.core import entrypoints
 
 
 class OmittedArg(object):
@@ -226,6 +227,16 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         self._compiling_counter = _CompilingCounter()
         weakref.finalize(self, self._make_finalizer())
 
+    def _compilation_chain_init_hook(self):
+        """
+        This will be called ahead of any part of compilation taking place (this
+        even includes being ahead of working out the types of the arguments).
+        This permits activities such as initialising extension entry points so
+        that the compiler knows about additional externally defined types etc
+        before it does anything.
+        """
+        entrypoints.init_all()
+
     def _reset_overloads(self):
         self._clear()
         self.overloads.clear()
@@ -329,6 +340,9 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         for the given *args* and *kws*, and return the resulting callable.
         """
         assert not kws
+        # call any initialisation required for the compilation chain (e.g.
+        # extension point registration).
+        self._compilation_chain_init_hook()
 
         def error_rewrite(e, issue_type):
             """
@@ -516,7 +530,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         """
         For inspecting the CFG of the function.
 
-        By default the CFG of the user function is showed.  The *show_wrapper*
+        By default the CFG of the user function is shown.  The *show_wrapper*
         option can be set to "python" or "cfunc" to show the python wrapper
         function or the *cfunc* wrapper function, respectively.
         """
@@ -532,6 +546,26 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             return lib.get_function_cfg(fname)
 
         return dict((sig, self.inspect_cfg(sig, show_wrapper=show_wrapper))
+                    for sig in self.signatures)
+
+    def inspect_disasm_cfg(self, signature=None):
+        """
+        For inspecting the CFG of the disassembly of the function.
+
+        Requires python package: r2pipe
+        Requires radare2 binary on $PATH.
+        Notebook rendering requires python package: graphviz
+
+        signature : tuple of Numba types, optional
+            Print/return the disassembly CFG for only the given signatures.
+            If None, the IR is printed for all available signatures.
+        """
+        if signature is not None:
+            cres = self.overloads[signature]
+            lib = cres.library
+            return lib.get_disasm_cfg()
+
+        return dict((sig, self.inspect_disasm_cfg(sig))
                     for sig in self.signatures)
 
     def get_annotation_info(self, signature=None):
@@ -610,7 +644,36 @@ class _DispatcherBase(_dispatcher.Dispatcher):
         return tp
 
 
-class Dispatcher(_DispatcherBase):
+class _MemoMixin:
+    __uuid = None
+    # A {uuid -> instance} mapping, for deserialization
+    _memo = weakref.WeakValueDictionary()
+    # hold refs to last N functions deserialized, retaining them in _memo
+    # regardless of whether there is another reference
+    _recent = collections.deque(maxlen=config.FUNCTION_CACHE_SIZE)
+
+    @property
+    def _uuid(self):
+        """
+        An instance-specific UUID, to avoid multiple deserializations of
+        a given instance.
+
+        Note: this is lazily-generated, for performance reasons.
+        """
+        u = self.__uuid
+        if u is None:
+            u = str(uuid.uuid1())
+            self._set_uuid(u)
+        return u
+
+    def _set_uuid(self, u):
+        assert self.__uuid is None
+        self.__uuid = u
+        self._memo[u] = self
+        self._recent.append(self)
+
+
+class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     """
     Implementation of user-facing dispatcher objects (i.e. created using
     the @jit decorator).
@@ -622,12 +685,7 @@ class Dispatcher(_DispatcherBase):
         'direct': _FunctionCompiler,
         'generated': _GeneratedFunctionCompiler,
         }
-    # A {uuid -> instance} mapping, for deserialization
-    _memo = weakref.WeakValueDictionary()
-    # hold refs to last N functions deserialized, retaining them in _memo
-    # regardless of whether there is another reference
-    _recent = collections.deque(maxlen=config.FUNCTION_CACHE_SIZE)
-    __uuid = None
+
     __numba__ = 'py_func'
 
     def __init__(self, py_func, locals={}, targetoptions={},
@@ -671,6 +729,12 @@ class Dispatcher(_DispatcherBase):
         self._type = types.Dispatcher(self)
         self.typingctx.insert_global(self, self._type)
 
+    def dump(self, tab=''):
+        print(f'{tab}DUMP {type(self).__name__}[{self.py_func.__name__}, type code={self._type._code}]')
+        for cres in self.overloads.values():
+            cres.dump(tab = tab + '  ')
+        print(f'{tab}END DUMP {type(self).__name__}[{self.py_func.__name__}]')
+
     @property
     def _numba_type_(self):
         return types.Dispatcher(self)
@@ -685,34 +749,41 @@ class Dispatcher(_DispatcherBase):
         else:  # Bound method
             return pytypes.MethodType(self, obj)
 
-    def __reduce__(self):
+    def _reduce_states(self):
         """
         Reduce the instance for pickling.  This will serialize
         the original function as well the compilation options and
         compiled signatures, but not the compiled code itself.
+
+        NOTE: part of ReduceMixin protocol
         """
         if self._can_compile:
             sigs = []
         else:
             sigs = [cr.signature for cr in self.overloads.values()]
-        globs = self._compiler.get_globals_for_reduction()
-        return (serialize._rebuild_reduction,
-                (self.__class__, str(self._uuid),
-                 serialize._reduce_function(self.py_func, globs),
-                 self.locals, self.targetoptions, self._impl_kind,
-                 self._can_compile, sigs))
+
+        return dict(
+            uuid=str(self._uuid),
+            py_func=self.py_func,
+            locals=self.locals,
+            targetoptions=self.targetoptions,
+            impl_kind=self._impl_kind,
+            can_compile=self._can_compile,
+            sigs=sigs,
+        )
 
     @classmethod
-    def _rebuild(cls, uuid, func_reduced, locals, targetoptions, impl_kind,
+    def _rebuild(cls, uuid, py_func, locals, targetoptions, impl_kind,
                  can_compile, sigs):
         """
         Rebuild an Dispatcher instance after it was __reduce__'d.
+
+        NOTE: part of ReduceMixin protocol
         """
         try:
             return cls._memo[uuid]
         except KeyError:
             pass
-        py_func = serialize._rebuild_function(*func_reduced)
         self = cls(py_func, locals, targetoptions, impl_kind)
         # Make sure this deserialization will be merged with subsequent ones
         self._set_uuid(uuid)
@@ -720,26 +791,6 @@ class Dispatcher(_DispatcherBase):
             self.compile(sig)
         self._can_compile = can_compile
         return self
-
-    @property
-    def _uuid(self):
-        """
-        An instance-specific UUID, to avoid multiple deserializations of
-        a given instance.
-
-        Note this is lazily-generated, for performance reasons.
-        """
-        u = self.__uuid
-        if u is None:
-            u = str(uuid.uuid1())
-            self._set_uuid(u)
-        return u
-
-    def _set_uuid(self, u):
-        assert self.__uuid is None
-        self.__uuid = u
-        self._memo[u] = self
-        self._recent.append(self)
 
     @global_compiler_lock
     def compile(self, sig):
@@ -759,7 +810,7 @@ class Dispatcher(_DispatcherBase):
                 # XXX fold this in add_overload()? (also see compiler.py)
                 if not cres.objectmode and not cres.interpmode:
                     self.targetctx.insert_user_function(cres.entry_point,
-                                                cres.fndesc, [cres.library])
+                                                        cres.fndesc, [cres.library])
                 self.add_overload(cres)
                 return cres.entry_point
 
@@ -773,6 +824,15 @@ class Dispatcher(_DispatcherBase):
             self.add_overload(cres)
             self._cache.save_overload(sig, cres)
             return cres.entry_point
+
+    def get_compile_result(self, sig):
+        """Compile (if needed) and return the compilation result with the
+        given signature.
+        """
+        atypes = tuple(sig.args)
+        if atypes not in self.overloads:
+            self.compile(atypes)
+        return self.overloads[atypes]
 
     def recompile(self):
         """
@@ -827,13 +887,26 @@ class Dispatcher(_DispatcherBase):
         else:
             return dict((sig, self.overloads[sig].metadata) for sig in self.signatures)
 
+    def get_function_type(self):
+        """Return unique function type of dispatcher when possible, otherwise
+        return None.
 
-class LiftedCode(_DispatcherBase):
+        A Dispatcher instance has unique function type when it
+        contains exactly one compilation result and its compilation
+        has been disabled (via its disable_compile method).
+        """
+        if not self._can_compile and len(self.overloads) == 1:
+            cres = tuple(self.overloads.values())[0]
+            return types.FunctionType(cres.signature)
+
+
+class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     """
     Implementation of the hidden dispatcher objects used for lifted code
     (a lifted loop is really compiled as a separate function).
     """
     _fold_args = False
+    can_cache = False
 
     def __init__(self, func_ir, typingctx, targetctx, flags, locals):
         self.func_ir = func_ir
@@ -849,6 +922,49 @@ class LiftedCode(_DispatcherBase):
                                  self.func_ir.func_id.pysig,
                                  can_fallback=True,
                                  exact_match_required=False)
+
+    def _reduce_states(self):
+        """
+        Reduce the instance for pickling.  This will serialize
+        the original function as well the compilation options and
+        compiled signatures, but not the compiled code itself.
+
+        NOTE: part of ReduceMixin protocol
+        """
+        return dict(
+            uuid=self._uuid, func_ir=self.func_ir, flags=self.flags,
+            locals=self.locals, extras=self._reduce_extras(),
+        )
+
+    def _reduce_extras(self):
+        """
+        NOTE: sub-class can override to add extra states
+        """
+        return {}
+
+    @classmethod
+    def _rebuild(cls, uuid, func_ir, flags, locals, extras):
+        """
+        Rebuild an Dispatcher instance after it was __reduce__'d.
+
+        NOTE: part of ReduceMixin protocol
+        """
+        try:
+            return cls._memo[uuid]
+        except KeyError:
+            pass
+
+        # NOTE: We are assuming that this is must be cpu_target, which is true
+        #       for now.
+        # TODO: refactor this to not assume on `cpu_target`
+
+        from numba.core import registry
+        typingctx = registry.cpu_target.typing_context
+        targetctx = registry.cpu_target.target_context
+
+        self = cls(func_ir, typingctx, targetctx, flags, locals, **extras)
+        self._set_uuid(uuid)
+        return self
 
     def get_source_location(self):
         """Return the starting line number of the loop.
@@ -890,7 +1006,6 @@ class LiftedCode(_DispatcherBase):
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:
                 raise cres.typing_error
-
             self.add_overload(cres)
             return cres.entry_point
 
@@ -901,6 +1016,13 @@ class LiftedLoop(LiftedCode):
 
 
 class LiftedWith(LiftedCode):
+
+    can_cache = True
+
+
+    def _reduce_extras(self):
+        return dict(output_types=self.output_types)
+
     @property
     def _numba_type_(self):
         return types.Dispatcher(self)

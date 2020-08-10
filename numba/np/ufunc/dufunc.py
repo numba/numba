@@ -60,13 +60,12 @@ class DUFuncLowerer(object):
 
     def __call__(self, context, builder, sig, args):
         from numba.np import npyimpl
-        explicit_output = len(args) > self.kernel.dufunc.ufunc.nin
         return npyimpl.numpy_ufunc_kernel(context, builder, sig, args,
-                                          self.kernel,
-                                          explicit_output=explicit_output)
+                                          self.kernel.dufunc.ufunc,
+                                          self.kernel)
 
 
-class DUFunc(_internal._DUFunc):
+class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
     """
     Dynamic universal function (DUFunc) intended to act like a normal
     Numpy ufunc, but capable of call-time (just-in-time) compilation
@@ -79,7 +78,7 @@ class DUFunc(_internal._DUFunc):
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         if isinstance(py_func, Dispatcher):
             py_func = py_func.py_func
-        dispatcher = jit(target='npyufunc',
+        dispatcher = jit(_target='npyufunc',
                          cache=cache,
                          **targetoptions)(py_func)
         self._initialize(dispatcher, identity)
@@ -95,14 +94,23 @@ class DUFunc(_internal._DUFunc):
         self.__name__ = dispatcher.py_func.__name__
         self.__doc__ = dispatcher.py_func.__doc__
 
-    def __reduce__(self):
+    def _reduce_states(self):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
         siglist = list(self._dispatcher.overloads.keys())
-        return (serialize._rebuild_reduction,
-                (self.__class__, self._dispatcher, self.identity,
-                 self._frozen, siglist))
+        return dict(
+            dispatcher=self._dispatcher,
+            identity=self.identity,
+            frozen=self._frozen,
+            siglist=siglist,
+        )
 
     @classmethod
     def _rebuild(cls, dispatcher, identity, frozen, siglist):
+        """
+        NOTE: part of ReduceMixin protocol
+        """
         self = _internal._DUFunc.__new__(cls)
         self._initialize(dispatcher, identity)
         # Re-add signatures
@@ -175,18 +183,21 @@ class DUFunc(_internal._DUFunc):
         assert (args_len == nin) or (args_len == nin + self.ufunc.nout)
         assert not kws
         argtys = []
-        # To avoid a mismatch in how Numba types values as opposed to
-        # Numpy, we need to first check for scalars.  For example, on
-        # 64-bit systems, numba.typeof(3) => int32, but
-        # np.array(3).dtype => int64.
         for arg in args[:nin]:
-            if numpy_support.is_arrayscalar(arg):
-                argtys.append(numpy_support.map_arrayscalar_type(arg))
+            argty = typeof(arg)
+            if isinstance(argty, types.Array):
+                argty = argty.dtype
             else:
-                argty = typeof(arg)
-                if isinstance(argty, types.Array):
-                    argty = argty.dtype
-                argtys.append(argty)
+                # To avoid a mismatch in how Numba types scalar values as
+                # opposed to Numpy, we need special logic for scalars.
+                # For example, on 64-bit systems, numba.typeof(3) => int32, but
+                # np.array(3).dtype => int64.
+
+                # Note: this will not handle numpy "duckarrays" correctly,
+                # including but not limited to those implementing `__array__`
+                # and `__array_ufunc__`.
+                argty = numpy_support.map_arrayscalar_type(arg)
+            argtys.append(argty)
         return self._compile_for_argtys(tuple(argtys))
 
     def _compile_for_argtys(self, argtys, return_type=None):

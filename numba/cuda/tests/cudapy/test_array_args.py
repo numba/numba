@@ -1,10 +1,10 @@
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.cuda.testing import unittest, CUDATestCase
 
 
-class TestCudaArrayArg(SerialMixin, unittest.TestCase):
+class TestCudaArrayArg(CUDATestCase):
     def test_array_ary(self):
 
         @cuda.jit('double(double[:],int64)', device=True, inline=True)

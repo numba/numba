@@ -1,4 +1,6 @@
 from contextlib import contextmanager
+from collections import defaultdict
+from copy import copy
 import warnings
 
 from numba.core import (errors, types, typing, ir, funcdesc, rewrites,
@@ -14,7 +16,8 @@ from numba.core.annotations import type_annotations
 from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
-                                 get_definition, remove_dels)
+                                 get_definition, remove_dels,
+                                 build_definitions, compute_cfg_from_blocks)
 from numba.core import postproc
 
 
@@ -48,7 +51,6 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={},
                          raise_errors=True):
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
-
     warnings = errors.WarningsFixer(errors.NumbaWarning)
     infer = typeinfer.TypeInferer(typingctx, interp, warnings)
     with typingctx.callstack.register(infer, interp.func_id, args):
@@ -156,18 +158,22 @@ class PartialTypeInference(BaseTypeInference):
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
-class AnnotateTypes(FunctionPass):
+class AnnotateTypes(AnalysisPass):
     _name = "annotate_types"
 
     def __init__(self):
-        FunctionPass.__init__(self)
+        AnalysisPass.__init__(self)
 
     def run_pass(self, state):
         """
         Create type annotation after type inference
         """
+        # add back in dels.
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run(emit_dels=True)
+
         state.type_annotation = type_annotations.TypeAnnotation(
-            func_ir=state.func_ir,
+            func_ir=state.func_ir.copy(),
             typemap=state.typemap,
             calltypes=state.calltypes,
             lifted=state.lifted,
@@ -183,6 +189,9 @@ class AnnotateTypes(FunctionPass):
         if config.HTML:
             with open(config.HTML, 'w') as fout:
                 state.type_annotation.html_annotate(fout)
+
+        # now remove dels
+        post_proc.remove_dels()
         return False
 
 
@@ -295,7 +304,7 @@ class ParforPass(FunctionPass):
             # parfor calls the compiler chain again with a string
             if not (config.DISABLE_PERFORMANCE_WARNINGS or
                     state.func_ir.loc.filename == '<string>'):
-                url = ("http://numba.pydata.org/numba-doc/latest/user/"
+                url = ("https://numba.pydata.org/numba-doc/latest/user/"
                        "parallel.html#diagnostics")
                 msg = ("\nThe keyword argument 'parallel=True' was specified "
                        "but no transformation for parallel execution was "
@@ -361,6 +370,20 @@ class NativeLowering(LoweringPass):
                 lower.lower()
                 if not flags.no_cpython_wrapper:
                     lower.create_cpython_wrapper(flags.release_gil)
+
+                if not flags.no_cfunc_wrapper:
+                    # skip cfunc wrapper generation if unsupported
+                    # argument or return types are used
+                    for t in state.args:
+                        if isinstance(t, (types.Omitted, types.Generator)):
+                            break
+                    else:
+                        if isinstance(restype,
+                                      (types.Optional, types.Generator)):
+                            pass
+                        else:
+                            lower.create_cfunc_wrapper()
+
                 env = lower.env
                 call_helper = lower.call_helper
                 del lower
@@ -464,8 +487,20 @@ class InlineOverloads(FunctionPass):
         """
         if self._DEBUG:
             print('before overload inline'.center(80, '-'))
+            print(state.func_id.unique_name)
             print(state.func_ir.dump())
             print(''.center(80, '-'))
+        from numba.core.inline_closurecall import (InlineWorker,
+                                                   callee_ir_validator)
+        inline_worker = InlineWorker(state.typingctx,
+                                     state.targetctx,
+                                     state.locals,
+                                     state.pipeline,
+                                     state.flags,
+                                     callee_ir_validator,
+                                     state.typemap,
+                                     state.calltypes,
+                                     )
         modified = False
         work_list = list(state.func_ir.blocks.items())
         # use a work list, look for call sites via `ir.Expr.op == call` and
@@ -483,16 +518,22 @@ class InlineOverloads(FunctionPass):
                         else:
                             continue
 
-                        if guard(workfn, state, work_list, block, i, expr):
+                        if guard(workfn, state, work_list, block, i, expr,
+                                 inline_worker):
                             modified = True
                             break  # because block structure changed
 
         if self._DEBUG:
             print('after overload inline'.center(80, '-'))
+            print(state.func_id.unique_name)
             print(state.func_ir.dump())
             print(''.center(80, '-'))
 
         if modified:
+            # Remove dead blocks, this is safe as it relies on the CFG only.
+            cfg = compute_cfg_from_blocks(state.func_ir.blocks)
+            for dead in cfg.dead_nodes():
+                del state.func_ir.blocks[dead]
             # clean up blocks
             dead_code_elimination(state.func_ir,
                                   typemap=state.type_annotation.typemap)
@@ -502,12 +543,12 @@ class InlineOverloads(FunctionPass):
 
         if self._DEBUG:
             print('after overload inline DCE'.center(80, '-'))
+            print(state.func_id.unique_name)
             print(state.func_ir.dump())
             print(''.center(80, '-'))
-
         return True
 
-    def _do_work_getattr(self, state, work_list, block, i, expr):
+    def _do_work_getattr(self, state, work_list, block, i, expr, inline_worker):
         recv_type = state.type_annotation.typemap[expr.value.name]
         recv_type = types.unliteral(recv_type)
         matched = state.typingctx.find_matching_getattr_template(
@@ -541,10 +582,10 @@ class InlineOverloads(FunctionPass):
         is_method = False
         return self._run_inliner(
             state, inline_type, sig, template, arg_typs, expr, i, impl, block,
-            work_list, is_method,
+            work_list, is_method, inline_worker,
         )
 
-    def _do_work_call(self, state, work_list, block, i, expr):
+    def _do_work_call(self, state, work_list, block, i, expr, inline_worker):
         # try and get a definition for the call, this isn't always possible as
         # it might be a eval(str)/part generated awaiting update etc. (parfors)
         to_inline = None
@@ -604,15 +645,13 @@ class InlineOverloads(FunctionPass):
         # definitely something that could be inlined.
         return self._run_inliner(
             state, inline_type, sig, template, arg_typs, expr, i, impl, block,
-            work_list, is_method,
+            work_list, is_method, inline_worker,
         )
 
     def _run_inliner(
         self, state, inline_type, sig, template, arg_typs, expr, i, impl, block,
-        work_list, is_method,
+        work_list, is_method, inline_worker,
     ):
-        from numba.core.inline_closurecall import (inline_closure_call,
-                                                   callee_ir_validator)
 
         do_inline = True
         if not inline_type.is_always_inline:
@@ -634,15 +673,17 @@ class InlineOverloads(FunctionPass):
                 if not self._add_method_self_arg(state, expr):
                     return False
             arg_typs = template._inline_overloads[arg_typs]['folded_args']
-            # pass is typed so use the callee globals
-            inline_closure_call(state.func_ir, impl.__globals__,
-                                block, i, impl, typingctx=state.typingctx,
-                                arg_typs=arg_typs,
-                                typemap=state.type_annotation.typemap,
-                                calltypes=state.type_annotation.calltypes,
-                                work_list=work_list,
-                                replace_freevars=False,
-                                callee_validator=callee_ir_validator)
+            iinfo = template._inline_overloads[arg_typs]['iinfo']
+            freevars = iinfo.func_ir.func_id.func.__code__.co_freevars
+            _, _, _, new_blocks = inline_worker.inline_ir(state.func_ir,
+                                                          block,
+                                                          i,
+                                                          iinfo.func_ir,
+                                                          freevars,
+                                                          arg_typs=arg_typs)
+            if work_list is not None:
+                for blk in new_blocks:
+                    work_list.append(blk)
             return True
         else:
             return False
@@ -669,3 +710,96 @@ class DeadCodeElimination(FunctionPass):
     def run_pass(self, state):
         dead_code_elimination(state.func_ir, state.typemap)
         return True
+
+
+@register_pass(mutates_CFG=False, analysis_only=False)
+class PreLowerStripPhis(FunctionPass):
+    """Remove phi nodes (ir.Expr.phi) introduced by SSA.
+
+    This is needed before Lowering because the phi nodes in Numba IR do not
+    match the semantics of phi nodes in LLVM IR. In Numba IR, phi nodes may
+    expand into multiple LLVM instructions.
+    """
+
+    _name = "strip_phis"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        state.func_ir = self._strip_phi_nodes(state.func_ir)
+        state.func_ir._definitions = build_definitions(state.func_ir.blocks)
+        # Rerun postprocessor to update metadata
+        post_proc = postproc.PostProcessor(state.func_ir)
+        post_proc.run(emit_dels=False)
+
+        # Ensure we are not in objectmode generator
+        if (state.func_ir.generator_info is not None
+                and state.typemap is not None):
+            # Rebuild generator type
+            # TODO: move this into PostProcessor
+            gentype = state.return_type
+            state_vars = state.func_ir.generator_info.state_vars
+            state_types = [state.typemap[k] for k in state_vars]
+            state.return_type = types.Generator(
+                gen_func=gentype.gen_func,
+                yield_type=gentype.yield_type,
+                arg_types=gentype.arg_types,
+                state_types=state_types,
+                has_finalizer=gentype.has_finalizer,
+            )
+        return True
+
+    def _strip_phi_nodes(self, func_ir):
+        """Strip Phi nodes from ``func_ir``
+
+        For each phi node, put incoming value to their respective incoming
+        basic-block at possibly the latest position (i.e. after the latest
+        assignment to the corresponding variable).
+        """
+        exporters = defaultdict(list)
+        phis = set()
+        # Find all variables that needs to be exported
+        for label, block in func_ir.blocks.items():
+            for assign in block.find_insts(ir.Assign):
+                if isinstance(assign.value, ir.Expr):
+                    if assign.value.op == 'phi':
+                        phis.add(assign)
+                        phi = assign.value
+                        for ib, iv in zip(phi.incoming_blocks,
+                                          phi.incoming_values):
+                            exporters[ib].append((assign.target, iv))
+
+        # Rewrite the blocks with the new exporting assignments
+        newblocks = {}
+        for label, block in func_ir.blocks.items():
+            newblk = copy(block)
+            newblocks[label] = newblk
+
+            # strip phis
+            newblk.body = [stmt for stmt in block.body if stmt not in phis]
+
+            # insert exporters
+            for target, rhs in exporters[label]:
+                # If RHS is undefined
+                if rhs is ir.UNDEFINED:
+                    # Put in a NULL initializer
+                    rhs = ir.Expr.null(loc=target.loc)
+
+                assign = ir.Assign(
+                    target=target,
+                    value=rhs,
+                    loc=target.loc
+                )
+                # Insert at the earliest possible location; i.e. after the
+                # last assignment to rhs
+                assignments = [stmt for stmt in newblk.find_insts(ir.Assign)
+                               if stmt.target == rhs]
+                if assignments:
+                    last_assignment = assignments[-1]
+                    newblk.insert_after(assign, last_assignment)
+                else:
+                    newblk.prepend(assign)
+
+        func_ir.blocks = newblocks
+        return func_ir

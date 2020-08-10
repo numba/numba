@@ -257,7 +257,10 @@ class StencilFunc(object):
                                                        const_index_vars[dim], loc)
                             new_body.append(ir.Assign(getitemcall, getitemvar, loc))
                             # Get the type of this particular part of the index tuple.
-                            one_index_typ = stmt_index_var_typ[dim]
+                            if isinstance(stmt_index_var_typ, types.ConstSized):
+                                one_index_typ = stmt_index_var_typ[dim]
+                            else:
+                                one_index_typ = stmt_index_var_typ[:]
                             # If the array is indexed with a slice then we
                             # have to add the index value with a call to
                             # slice_addition.
@@ -397,7 +400,7 @@ class StencilFunc(object):
                         ",".join(self.kernel_ir.arg_names), sig_extra))
         exec(dummy_text) in globals(), locals()
         dummy_func = eval("__numba_dummy_stencil")
-        sig.pysig = utils.pysignature(dummy_func)
+        sig = sig.replace(pysig=utils.pysignature(dummy_func))
         self._targetctx.insert_func_defn([(self._lower_me, self, argtys_extra)])
         self._type_cache[argtys_extra] = (sig, result, typemap, calltypes)
         return sig

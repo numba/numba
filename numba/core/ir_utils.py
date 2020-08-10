@@ -2003,7 +2003,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "in a function is unsupported (strange things happen!), use "
                "numba.gdb_breakpoint() to create additional breakpoints "
                "instead.\n\nRelevant documentation is available here:\n"
-               "http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
+               "https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
                "/troubleshoot.html#using-numba-s-direct-gdb-bindings-in-"
                "nopython-mode\n\nConflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
@@ -2021,7 +2021,7 @@ def warn_deprecated(func_ir, typemap):
                 arg = name.split('.')[1]
                 fname = func_ir.func_id.func_qualname
                 tyname = 'list' if isinstance(ty, types.List) else 'set'
-                url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+                url = ("https://numba.pydata.org/numba-doc/latest/reference/"
                        "deprecation.html#deprecation-of-reflection-for-list-and"
                        "-set-types")
                 msg = ("\nEncountered the use of a type that is scheduled for "
@@ -2077,11 +2077,22 @@ def enforce_no_dels(func_ir):
             msg = "Illegal IR, del found at: %s" % dels[0]
             raise CompilerError(msg, loc=dels[0].loc)
 
+def enforce_no_phis(func_ir):
+    """
+    Enforce there being no ir.Expr.phi nodes in the IR.
+    """
+    for blk in func_ir.blocks.values():
+        phis = [x for x in blk.find_exprs(op='phi')]
+        if phis:
+            msg = "Illegal IR, phi found at: %s" % phis[0]
+            raise CompilerError(msg, loc=phis[0].loc)
+
 
 def check_and_legalize_ir(func_ir):
     """
     This checks that the IR presented is legal
     """
+    enforce_no_phis(func_ir)
     enforce_no_dels(func_ir)
     # postprocess and emit ir.Dels
     post_proc = postproc.PostProcessor(func_ir)

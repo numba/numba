@@ -1,18 +1,19 @@
-from setuptools import setup, Extension, find_packages
-from distutils.command import build
-from distutils.spawn import spawn
-from distutils import sysconfig
-import sys
 import os
 import platform
+import sys
+from distutils import sysconfig
+from distutils.command import build
+from distutils.spawn import spawn
+
+from setuptools import Extension, find_packages, setup
 
 import versioneer
 
 min_python_version = "3.6"
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
-min_llvmlite_version = "0.31.0dev0"
-max_llvmlite_version = "0.32.0"
+min_llvmlite_version = "0.33"
+max_llvmlite_version = "0.35"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -74,14 +75,6 @@ def is_building():
             return False
 
     return True
-
-
-def is_building_wheel():
-    if len(sys.argv) < 2:
-        # No command is given.
-        return False
-
-    return 'bdist_wheel' in sys.argv[1:]
 
 
 def get_ext_modules():
@@ -182,11 +175,6 @@ def get_ext_modules():
                     found = p  # the latest is used
         return found
 
-    # Search for Intel TBB, first check env var TBBROOT then conda locations
-    tbb_root = os.getenv('TBBROOT')
-    if not tbb_root:
-        tbb_root = check_file_at_path(['include', 'tbb', 'tbb.h'])
-
     # Set various flags for use in TBB and openmp. On OSX, also find OpenMP!
     have_openmp = True
     if sys.platform.startswith('win'):
@@ -213,34 +201,42 @@ def get_ext_modules():
         else:
             omplinkflags = ['-fopenmp']
 
-    if tbb_root:
-        print("Using Intel TBB from:", tbb_root)
-        ext_np_ufunc_tbb_backend = Extension(
-            name='numba.np.ufunc.tbbpool',
-            sources=[
-                'numba/np/ufunc/tbbpool.cpp',
-                'numba/np/ufunc/gufunc_scheduler.cpp',
-            ],
-            depends=['numba/np/ufunc/workqueue.h'],
-            include_dirs=[os.path.join(tbb_root, 'include')],
-            extra_compile_args=cpp11flags,
-            libraries=['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
-            library_dirs=[
-                # for Linux
-                os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),
-                # for MacOS
-                os.path.join(tbb_root, 'lib'),
-                # for Windows
-                os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),
-            ],
-        )
-        ext_np_ufunc_backends.append(ext_np_ufunc_tbb_backend)
+    # Disable tbb if forced by user with NUMBA_DISABLE_TBB=1
+    if os.getenv("NUMBA_DISABLE_TBB"):
+        print("TBB disabled")
     else:
-        print("TBB not found")
+        # Search for Intel TBB, first check env var TBBROOT then conda locations
+        tbb_root = os.getenv('TBBROOT')
+        if not tbb_root:
+            tbb_root = check_file_at_path(['include', 'tbb', 'tbb.h'])
 
-    # Disable OpenMP if we are building a wheel or
-    # forced by user with NUMBA_NO_OPENMP=1
-    if is_building_wheel() or os.getenv('NUMBA_NO_OPENMP'):
+        if tbb_root:
+            print("Using Intel TBB from:", tbb_root)
+            ext_np_ufunc_tbb_backend = Extension(
+                name='numba.np.ufunc.tbbpool',
+                sources=[
+                    'numba/np/ufunc/tbbpool.cpp',
+                    'numba/np/ufunc/gufunc_scheduler.cpp',
+                ],
+                depends=['numba/np/ufunc/workqueue.h'],
+                include_dirs=[os.path.join(tbb_root, 'include')],
+                extra_compile_args=cpp11flags,
+                libraries=['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
+                library_dirs=[
+                    # for Linux
+                    os.path.join(tbb_root, 'lib', 'intel64', 'gcc4.4'),
+                    # for MacOS
+                    os.path.join(tbb_root, 'lib'),
+                    # for Windows
+                    os.path.join(tbb_root, 'lib', 'intel64', 'vc_mt'),
+                ],
+            )
+            ext_np_ufunc_backends.append(ext_np_ufunc_tbb_backend)
+        else:
+            print("TBB not found")
+
+    # Disable OpenMP if forced by user with NUMBA_DISABLE_OPENMP=1
+    if os.getenv('NUMBA_DISABLE_OPENMP'):
         print("OpenMP disabled")
     elif have_openmp:
         print("Using OpenMP from:", have_openmp)
@@ -302,10 +298,10 @@ def get_ext_modules():
 
 packages = find_packages(include=["numba", "numba.*"])
 
-build_requires = [f'numpy >={min_numpy_build_version}']
+build_requires = ['numpy >={}'.format(min_numpy_build_version)]
 install_requires = [
-    f'llvmlite >={min_llvmlite_version},<{max_llvmlite_version}',
-    f'numpy >={min_numpy_run_version}',
+    'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
+    'numpy >={}'.format(min_numpy_run_version),
     'setuptools',
 ]
 
@@ -342,11 +338,11 @@ metadata = dict(
     scripts=["numba/pycc/pycc", "bin/numba"],
     author="Anaconda, Inc.",
     author_email="numba-users@continuum.io",
-    url="http://numba.github.com",
+    url="https://numba.github.com",
     packages=packages,
     setup_requires=build_requires,
     install_requires=install_requires,
-    python_requires=f">={min_python_version}",
+    python_requires=">={}".format(min_python_version),
     license="BSD",
     cmdclass=cmdclass,
 )

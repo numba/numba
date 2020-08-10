@@ -1,14 +1,15 @@
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, SerialMixin
+from numba.core.errors import TypingError
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
 def noop(x):
     pass
 
 
-class TestJitErrors(SerialMixin, unittest.TestCase):
+class TestJitErrors(CUDATestCase):
     """
     Test compile-time errors with @jit.
     """
@@ -45,13 +46,33 @@ class TestJitErrors(SerialMixin, unittest.TestCase):
         self.assertIn("launch configuration was not specified",
                       str(raises.exception))
 
-    def test_unconfigured_cudakernel(self):
+    def test_unconfigured_typed_cudakernel(self):
         kernfunc = cuda.jit("void(int32)")(noop)
         self._test_unconfigured(kernfunc)
 
-    def test_unconfigured_autojitcudakernel(self):
+    def test_unconfigured_untyped_cudakernel(self):
         kernfunc = cuda.jit(noop)
         self._test_unconfigured(kernfunc)
+
+    @skip_on_cudasim('TypingError does not occur on simulator')
+    def test_typing_error(self):
+        # see #5860, this is present to catch changes to error reporting
+        # accidentally breaking the CUDA target
+
+        @cuda.jit(device=True)
+        def dev_func(x):
+            return floor(x) # oops, forgot to import `floor`.
+
+        @cuda.jit
+        def kernel_func():
+            dev_func(1.5)
+
+        with self.assertRaises(TypingError) as raises:
+            kernel_func[1, 1]()
+        excstr = str(raises.exception)
+        self.assertIn("Overload in function 'dev_func <CUDA device function>'",
+                      excstr)
+        self.assertIn("NameError: name 'floor' is not defined", excstr)
 
 
 if __name__ == '__main__':

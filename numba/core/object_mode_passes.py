@@ -46,6 +46,7 @@ class ObjectModeFrontEnd(FunctionPass):
         loop_flags.unset('enable_looplift')
         if not state.flags.enable_pyobject_looplift:
             loop_flags.unset('enable_pyobject')
+        loop_flags.unset('enable_ssa')
 
         main, loops = transforms.loop_lifting(state.func_ir,
                                               typingctx=state.typingctx,
@@ -176,7 +177,7 @@ class ObjectModeBackEnd(LoweringPass):
             warnings.warn(errors.NumbaWarning(warn_msg,
                                               state.func_ir.loc))
 
-            url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+            url = ("https://numba.pydata.org/numba-doc/latest/reference/"
                    "deprecation.html#deprecation-of-object-mode-fall-"
                    "back-behaviour-when-using-jit")
             msg = ("\nFall-back from the nopython compilation path to the "

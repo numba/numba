@@ -1,7 +1,7 @@
 import numpy as np
 import re
 from numba import cuda, int32, float32
-from numba.cuda.testing import unittest, SerialMixin, skip_on_cudasim
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
 def simple_threadidx(ary):
@@ -110,7 +110,7 @@ def simple_warpsize(ary):
     ary[0] = cuda.warpsize
 
 
-class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
+class TestCudaIntrinsic(CUDATestCase):
     def test_simple_threadidx(self):
         compiled = cuda.jit("void(int32[:])")(simple_threadidx)
         ary = np.ones(1, dtype=np.int32)
@@ -380,7 +380,7 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
 
     def test_round_f4(self):
         compiled = cuda.jit("void(int64[:], float32)")(simple_round)
-        ary = np.zeros(1, dtype=np.int32)
+        ary = np.zeros(1, dtype=np.int64)
 
         for i in [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]:
             compiled[1, 1](ary, i)
@@ -388,7 +388,7 @@ class TestCudaIntrinsic(SerialMixin, unittest.TestCase):
 
     def test_round_f8(self):
         compiled = cuda.jit("void(int64[:], float64)")(simple_round)
-        ary = np.zeros(1, dtype=np.int32)
+        ary = np.zeros(1, dtype=np.int64)
 
         for i in [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]:
             compiled[1, 1](ary, i)

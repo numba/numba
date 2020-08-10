@@ -76,6 +76,7 @@ tup_int = (1, 2)
 tup_str = ('a', 'b')
 tup_mixed = (1, 'a')
 tup_float = (1.2, 3.5)
+tup_npy_ints = (np.uint64(12), np.int8(3))
 
 def global_int_tuple():
     return tup_int[0] + tup_int[1]
@@ -93,6 +94,10 @@ def global_mixed_tuple():
 
 def global_float_tuple():
     return tup_float[0] + tup_float[1]
+
+
+def global_npy_int_tuple():
+    return tup_npy_ints[0] + tup_npy_ints[1]
 
 
 class TestGlobals(unittest.TestCase):
@@ -206,6 +211,11 @@ class TestGlobals(unittest.TestCase):
 
     def test_global_float_tuple(self):
         pyfunc = global_float_tuple
+        jitfunc = njit(pyfunc)
+        self.assertEqual(pyfunc(), jitfunc())
+
+    def test_global_npy_int_tuple(self):
+        pyfunc = global_npy_int_tuple
         jitfunc = njit(pyfunc)
         self.assertEqual(pyfunc(), jitfunc())
 

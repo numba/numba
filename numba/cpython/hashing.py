@@ -6,6 +6,7 @@ import math
 import numpy as np
 import sys
 import ctypes
+import warnings
 from collections import namedtuple
 
 import llvmlite.binding as ll
@@ -130,8 +131,7 @@ def _fpext(tyctx, val):
                           'p4': _Py_uhash_t,
                           '_PyHASH_MODULUS': _Py_uhash_t,
                           '_PyHASH_BITS': types.int32,
-                          '_PyLong_SHIFT': types.int32,
-                          'x.1': _Py_uhash_t})
+                          '_PyLong_SHIFT': types.int32,})
 def _long_impl(val):
     # This function assumes val came from a long int repr with val being a
     # uint64_t this means having to split the input into PyLong_SHIFT size
@@ -166,11 +166,16 @@ def _long_impl(val):
 def int_hash(val):
 
     _HASH_I64_MIN = -2 if sys.maxsize <= 2 ** 32 else -4
+    _SIGNED_MIN = types.int64(-0x8000000000000000)
+
+    # Find a suitable type to hold a "big" value, i.e. iinfo(ty).min/max
+    # this is to ensure e.g. int32.min is handled ok as it's abs() is its value
+    _BIG = types.int64 if getattr(val, 'signed', False) else types.uint64
 
     # this is a bit involved due to the CPython repr of ints
     def impl(val):
-        # If the magnitude is under PyHASH_MODULUS, if so just return the
-        # value itval as the has, couple of special cases if val == val:
+        # If the magnitude is under PyHASH_MODULUS, just return the
+        # value val as the hash, couple of special cases if val == val:
         # 1. it's 0, in which case return 0
         # 2. it's signed int minimum value, return the value CPython computes
         # but Numba cannot as there's no type wide enough to hold the shifts.
@@ -178,13 +183,13 @@ def int_hash(val):
         # If the magnitude is greater than PyHASH_MODULUS then... if the value
         # is negative then negate it switch the sign on the hash once computed
         # and use the standard wide unsigned hash implementation
+        val = _BIG(val)
         mag = abs(val)
         if mag < _PyHASH_MODULUS:
-            if val == -val:
-                if val == 0:
-                    ret = 0
-                else:  # int64 min, -0x8000000000000000
-                    ret = _Py_hash_t(_HASH_I64_MIN)
+            if val == 0:
+                ret = 0
+            elif val == _SIGNED_MIN:  # e.g. int64 min, -0x8000000000000000
+                ret = _Py_hash_t(_HASH_I64_MIN)
             else:
                 ret = _Py_hash_t(val)
         else:
@@ -246,6 +251,7 @@ if _py38_or_later:
         _PyHASH_XXPRIME_1 = _Py_uhash_t(11400714785074694791)
         _PyHASH_XXPRIME_2 = _Py_uhash_t(14029467366897019727)
         _PyHASH_XXPRIME_5 = _Py_uhash_t(2870177450012600261)
+
         @register_jitable(locals={'x': types.uint64})
         def _PyHASH_XXROTATE(x):
             # Rotate left 31 bits
@@ -254,6 +260,7 @@ if _py38_or_later:
         _PyHASH_XXPRIME_1 = _Py_uhash_t(2654435761)
         _PyHASH_XXPRIME_2 = _Py_uhash_t(2246822519)
         _PyHASH_XXPRIME_5 = _Py_uhash_t(374761393)
+
         @register_jitable(locals={'x': types.uint64})
         def _PyHASH_XXROTATE(x):
             # Rotate left 13 bits
@@ -460,7 +467,22 @@ _hashsecret = _build_hashsecret()
 # ------------------------------------------------------------------------------
 
 
-if _Py_hashfunc_name == 'siphash24':
+if _Py_hashfunc_name in ('siphash24', 'fnv'):
+
+    # Check for use of the FNV hashing alg, warn users that it's not implemented
+    # and functionality relying of properties derived from hashing will be fine
+    # but hash values themselves are likely to be different.
+    if _Py_hashfunc_name == 'fnv':
+        msg = ("FNV hashing is not implemented in Numba. See PEP 456 "
+               "https://www.python.org/dev/peps/pep-0456/ "
+               "for rationale over not using FNV. Numba will continue to work, "
+               "but hashes for built in types will be computed using "
+               "siphash24. This will permit e.g. dictionaries to continue to "
+               "behave as expected, however anything relying on the value of "
+               "the hash opposed to hash as a derived property is likely to "
+               "not work as expected.")
+        warnings.warn(msg)
+
     # This is a translation of CPython's siphash24 function:
     # https://github.com/python/cpython/blob/d1dd6be613381b996b9071443ef081de8e5f3aff/Python/pyhash.c#L287-L413    # noqa: E501
 
@@ -608,10 +630,6 @@ if _Py_hashfunc_name == 'siphash24':
         v0, v1, v2, v3 = _DOUBLE_ROUND(v0, v1, v2, v3)
         t = (v0 ^ v1) ^ (v2 ^ v3)
         return t
-
-elif _Py_hashfunc_name == 'fnv':
-    # TODO: Should this instead warn and switch to siphash24?
-    raise NotImplementedError("FNV hashing is not implemented")
 else:
     msg = "Unsupported hashing algorithm in use %s" % _Py_hashfunc_name
     raise ValueError(msg)

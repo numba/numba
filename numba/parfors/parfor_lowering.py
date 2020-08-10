@@ -21,7 +21,8 @@ from numba.core.ir_utils import add_offset_to_labels, replace_var_names, remove_
 from numba.core.analysis import compute_use_defs, compute_live_map, compute_dead_maps, compute_cfg_from_blocks
 from numba.core.typing import signature
 from numba.parfors.parfor import print_wrapped, ensure_parallel_support
-from numba.core.errors import NumbaParallelSafetyWarning
+from numba.core.errors import NumbaParallelSafetyWarning, NotDefinedError, CompilerError
+from numba.parfors.parfor_lowering_utils import ParforLoweringBuilder
 
 
 def _lower_parfor_parallel(lowerer, parfor):
@@ -47,6 +48,8 @@ def _lower_parfor_parallel(lowerer, parfor):
     orig_typemap = lowerer.fndesc.typemap
     # replace original typemap with copy and restore the original at the end.
     lowerer.fndesc.typemap = copy.copy(orig_typemap)
+    if config.DEBUG_ARRAY_OPT:
+        print("lowerer.fndesc", lowerer.fndesc, type(lowerer.fndesc))
     typemap = lowerer.fndesc.typemap
     varmap = lowerer.varmap
 
@@ -81,12 +84,15 @@ def _lower_parfor_parallel(lowerer, parfor):
 
     # run get_parfor_outputs() and get_parfor_reductions() before gufunc creation
     # since Jumps are modified so CFG of loop_body dict will become invalid
-    assert parfor.params != None
+    assert parfor.params is not None
 
     parfor_output_arrays = numba.parfors.parfor.get_parfor_outputs(
         parfor, parfor.params)
     parfor_redvars, parfor_reddict = numba.parfors.parfor.get_parfor_reductions(
         lowerer.func_ir, parfor, parfor.params, lowerer.fndesc.calltypes)
+    if config.DEBUG_ARRAY_OPT:
+        print("parfor_redvars:", parfor_redvars)
+        print("parfor_reddict:", parfor_reddict)
 
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
@@ -96,6 +102,7 @@ def _lower_parfor_parallel(lowerer, parfor):
         thread_count = get_thread_count()
         scope = parfor.init_block.scope
         loc = parfor.init_block.loc
+        pfbdr = ParforLoweringBuilder(lowerer=lowerer, scope=scope, loc=loc)
 
         # For each reduction variable...
         for i in range(nredvars):
@@ -116,106 +123,123 @@ def _lower_parfor_parallel(lowerer, parfor):
             # Reduction array is created and initialized to the initial reduction value.
 
             # First create a var for the numpy empty ufunc.
-            empty_func = ir.Var(scope, mk_unique_var("empty_func"), loc)
-            ff_fnty = get_np_ufunc_typ(np.empty)
-            ff_sig = typingctx.resolve_function_type(ff_fnty,
-                                            (types.UniTuple(types.intp, redarrdim),
-                                             types.DType(reddtype)), {})
-            typemap[empty_func.name] = ff_fnty
-            empty_assign = ir.Assign(ir.Global("empty", np.empty, loc=loc), empty_func, loc)
-            lowerer.lower_inst(empty_assign)
+            glbl_np_empty = pfbdr.bind_global_function(
+                fobj=np.empty,
+                ftype=get_np_ufunc_typ(np.empty),
+                args=(
+                    types.UniTuple(types.intp, redarrdim),
+                    types.DType(reddtype),
+                ),
+            )
 
             # Create var for outer dimension size of reduction array equal to number of threads.
-            num_threads_var = ir.Var(scope, mk_unique_var("num_threads"), loc)
-            num_threads_assign = ir.Assign(ir.Const(thread_count, loc), num_threads_var, loc)
-            typemap[num_threads_var.name] = types.intp
-            lowerer.lower_inst(num_threads_assign)
+            num_threads_var = pfbdr.make_const_variable(
+                cval=thread_count,
+                typ=types.intp,
+                name='num_threads',
+            )
 
-            # Empty call takes tuple of sizes.  Create here and fill in outer dimension (num threads).
-            size_var = ir.Var(scope, mk_unique_var("tuple_size_var"), loc)
-            typemap[size_var.name] = types.UniTuple(types.intp, redarrdim)
             size_var_list = [num_threads_var]
 
             # If this is a reduction over an array...
             if isinstance(redvar_typ, types.npytypes.Array):
                 # Add code to get the shape of the array being reduced over.
-                redshape_var = ir.Var(scope, mk_unique_var("redarr_shape"), loc)
-                typemap[redshape_var.name] = types.UniTuple(types.intp, redvar_typ.ndim)
-                redshape_getattr = ir.Expr.getattr(redvar, "shape", loc)
-                redshape_assign = ir.Assign(redshape_getattr, redshape_var, loc)
-                lowerer.lower_inst(redshape_assign)
+                redshape_var = pfbdr.assign(
+                    rhs=ir.Expr.getattr(redvar, "shape", loc),
+                    typ=types.UniTuple(types.intp, redvar_typ.ndim),
+                    name="redarr_shape",
+                )
 
                 # Add the dimension sizes of the array being reduced over to the tuple of sizes pass to empty.
                 for j in range(redvar_typ.ndim):
-                    onedimvar = ir.Var(scope, mk_unique_var("redshapeonedim"), loc)
-                    onedimgetitem = ir.Expr.static_getitem(redshape_var, j, None, loc)
-                    typemap[onedimvar.name] = types.intp
-                    onedimassign = ir.Assign(onedimgetitem, onedimvar, loc)
-                    lowerer.lower_inst(onedimassign)
-                    size_var_list += [onedimvar]
+                    onedimvar = pfbdr.assign(
+                        rhs=ir.Expr.static_getitem(redshape_var, j, None, loc),
+                        typ=types.intp,
+                        name="redshapeonedim",
+                    )
+                    size_var_list.append(onedimvar)
 
-            size_call = ir.Expr.build_tuple(size_var_list, loc)
-            size_assign = ir.Assign(size_call, size_var, loc)
-            lowerer.lower_inst(size_assign)
+            # Empty call takes tuple of sizes.  Create here and fill in outer dimension (num threads).
+            size_var = pfbdr.make_tuple_variable(
+                size_var_list, name='tuple_size_var',
+            )
 
             # Add call to empty passing the size var tuple.
-            empty_call = ir.Expr.call(empty_func, [size_var], {}, loc=loc)
-            redarr_var = ir.Var(scope, mk_unique_var("redarr"), loc)
-            typemap[redarr_var.name] = redarrvar_typ
-            empty_call_assign = ir.Assign(empty_call, redarr_var, loc)
-            lowerer.fndesc.calltypes[empty_call] = ff_sig
-            lowerer.lower_inst(empty_call_assign)
+            empty_call = pfbdr.call(glbl_np_empty, args=[size_var])
+
+            redarr_var = pfbdr.assign(
+                rhs=empty_call, typ=redarrvar_typ, name="redarr",
+            )
 
             # Remember mapping of original reduction array to the newly created per-worker reduction array.
             redarrs[redvar.name] = redarr_var
 
             init_val = parfor_reddict[parfor_redvars[i]][0]
-            if init_val != None:
+            if init_val is not None:
                 if isinstance(redvar_typ, types.npytypes.Array):
                     # Create an array of identity values for the reduction.
                     # First, create a variable for np.full.
-                    full_func = ir.Var(scope, mk_unique_var("full_func"), loc)
-                    full_fnty = get_np_ufunc_typ(np.full)
-                    full_sig = typingctx.resolve_function_type(full_fnty,
-                               (types.UniTuple(types.intp, redvar_typ.ndim),
-                                reddtype,
-                                types.DType(reddtype)), {})
-                    typemap[full_func.name] = full_fnty
-                    full_assign = ir.Assign(ir.Global("full", np.full, loc=loc), full_func, loc)
-                    lowerer.lower_inst(full_assign)
+                    full_func_node = pfbdr.bind_global_function(
+                        fobj=np.full,
+                        ftype=get_np_ufunc_typ(np.full),
+                        args=(
+                            types.UniTuple(types.intp, redvar_typ.ndim),
+                            reddtype,
+                            types.DType(reddtype),
+                        ),
+                    )
 
                     # Then create a var with the identify value.
-                    init_val_var = ir.Var(scope, mk_unique_var("init_val"), loc)
-                    init_val_assign = ir.Assign(ir.Const(init_val, loc), init_val_var, loc)
-                    typemap[init_val_var.name] = reddtype
-                    lowerer.lower_inst(init_val_assign)
+                    init_val_var = pfbdr.make_const_variable(
+                        cval=init_val,
+                        typ=reddtype,
+                        name="init_val",
+                    )
 
                     # Then, call np.full with the shape of the reduction array and the identity value.
-                    full_call = ir.Expr.call(full_func, [redshape_var, init_val_var], {}, loc=loc)
-                    lowerer.fndesc.calltypes[full_call] = full_sig
-                    redtoset = ir.Var(scope, mk_unique_var("redtoset"), loc)
-                    redtoset_assign = ir.Assign(full_call, redtoset, loc)
-                    typemap[redtoset.name] = redvar_typ
-                    lowerer.lower_inst(redtoset_assign)
+                    full_call = pfbdr.call(
+                        full_func_node, args=[redshape_var, init_val_var],
+                    )
+
+                    redtoset = pfbdr.assign(
+                        rhs=full_call,
+                        typ=redvar_typ,
+                        name="redtoset",
+                    )
                 else:
-                    redtoset = ir.Var(scope, mk_unique_var("redtoset"), loc)
-                    redtoset_assign = ir.Assign(ir.Const(init_val, loc), redtoset, loc)
-                    typemap[redtoset.name] = reddtype
-                    lowerer.lower_inst(redtoset_assign)
+                    redtoset = pfbdr.make_const_variable(
+                        cval=init_val,
+                        typ=reddtype,
+                        name="redtoset",
+                    )
             else:
                 redtoset = redvar
 
-            # For each thread, initialize the per-worker reduction array to the current reduction array value.
-            for j in range(get_thread_count()):
-                index_var = ir.Var(scope, mk_unique_var("index_var"), loc)
-                index_var_assign = ir.Assign(ir.Const(j, loc), index_var, loc)
-                typemap[index_var.name] = types.uintp
-                lowerer.lower_inst(index_var_assign)
+                if config.DEBUG_ARRAY_OPT_RUNTIME:
+                    res_print_str = "res_print1 for redvar " + str(redvar) + ":"
+                    strconsttyp = types.StringLiteral(res_print_str)
 
-                redsetitem = ir.SetItem(redarr_var, index_var, redtoset, loc)
-                lowerer.fndesc.calltypes[redsetitem] = signature(types.none,
-                        typemap[redarr_var.name], typemap[index_var.name], redvar_typ)
-                lowerer.lower_inst(redsetitem)
+                    lhs = pfbdr.make_const_variable(
+                        cval=res_print_str,
+                        typ=strconsttyp,
+                        name="str_const",
+                    )
+
+                    res_print = ir.Print(args=[lhs, redvar],
+                                         vararg=None, loc=loc)
+                    lowerer.fndesc.calltypes[res_print] = signature(types.none,
+                                                             typemap[lhs.name],
+                                                             typemap[redvar.name])
+                    print("res_print_redvar", res_print)
+                    lowerer.lower_inst(res_print)
+
+
+            # For each thread, initialize the per-worker reduction array to the current reduction array value.
+            for j in range(thread_count):
+                index_var = pfbdr.make_const_variable(
+                    cval=j, typ=types.uintp, name="index_var",
+                )
+                pfbdr.setitem(obj=redarr_var, index=index_var, val=redtoset)
 
     # compile parfor body as a separate function to be used with GUFuncWrapper
     flags = copy.copy(parfor.flags)
@@ -227,7 +251,12 @@ def _lower_parfor_parallel(lowerer, parfor):
         assert typemap[l.index_variable.name] == index_var_typ
     numba.parfors.parfor.sequential_parfor_lowering = True
     try:
-        func, func_args, func_sig, redargstartdim, func_arg_types = _create_gufunc_for_parfor_body(
+        (func,
+         func_args,
+         func_sig,
+         redargstartdim,
+         func_arg_types,
+         exp_name_to_tuple_var) = _create_gufunc_for_parfor_body(
             lowerer, parfor, typemap, typingctx, targetctx, flags, {},
             bool(alias_map), index_var_typ, parfor.races)
     finally:
@@ -273,7 +302,8 @@ def _lower_parfor_parallel(lowerer, parfor):
         redarrs,
         parfor.init_block,
         index_var_typ,
-        parfor.races)
+        parfor.races,
+        exp_name_to_tuple_var)
     if config.DEBUG_ARRAY_OPT:
         sys.stdout.flush()
 
@@ -294,12 +324,12 @@ def _lower_parfor_parallel(lowerer, parfor):
             if config.DEBUG_ARRAY_OPT_RUNTIME:
                 res_print_str = "res_print"
                 strconsttyp = types.StringLiteral(res_print_str)
-                lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
-                assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
-                                               target=lhs, loc=loc)
-                typemap[lhs.name] = strconsttyp
-                lowerer.lower_inst(assign_lhs)
 
+                lhs = pfbdr.make_const_variable(
+                    cval=res_print_str,
+                    typ=strconsttyp,
+                    name="str_const",
+                )
                 res_print = ir.Print(args=[lhs, redarr], vararg=None, loc=loc)
                 lowerer.fndesc.calltypes[res_print] = signature(types.none,
                                                          typemap[lhs.name],
@@ -308,36 +338,35 @@ def _lower_parfor_parallel(lowerer, parfor):
                 lowerer.lower_inst(res_print)
 
             # For each element in the reduction array created above.
-            for j in range(get_thread_count()):
+            for j in range(thread_count):
                 # Create index var to access that element.
-                index_var = ir.Var(scope, mk_unique_var("index_var"), loc)
-                index_var_assign = ir.Assign(ir.Const(j, loc), index_var, loc)
-                typemap[index_var.name] = types.uintp
-                lowerer.lower_inst(index_var_assign)
+                index_var = pfbdr.make_const_variable(
+                    cval=j, typ=types.uintp, name="index_var",
+                )
 
                 # Read that element from the array into oneelem.
-                oneelem = ir.Var(scope, mk_unique_var("redelem"), loc)
-                oneelemgetitem = ir.Expr.getitem(redarr, index_var, loc)
-                typemap[oneelem.name] = redvar_typ
-                lowerer.fndesc.calltypes[oneelemgetitem] = signature(redvar_typ,
-                        typemap[redarr.name], typemap[index_var.name])
-                oneelemassign = ir.Assign(oneelemgetitem, oneelem, loc)
-                lowerer.lower_inst(oneelemassign)
+                oneelemgetitem = pfbdr.getitem(
+                    obj=redarr, index=index_var, typ=redvar_typ,
+                )
+                oneelem = pfbdr.assign(
+                    rhs=oneelemgetitem,
+                    typ=redvar_typ,
+                    name="redelem",
+                )
 
-                init_var = ir.Var(scope, name+"#init", loc)
-                init_assign = ir.Assign(oneelem, init_var, loc)
-                if name+"#init" not in typemap:
-                    typemap[init_var.name] = redvar_typ
-                lowerer.lower_inst(init_assign)
+                init_var = pfbdr.assign_inplace(
+                    rhs=oneelem, typ=redvar_typ, name=name + "#init",
+                )
 
                 if config.DEBUG_ARRAY_OPT_RUNTIME:
                     res_print_str = "res_print1 for thread " + str(j) + ":"
                     strconsttyp = types.StringLiteral(res_print_str)
-                    lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
-                    assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
-                                               target=lhs, loc=loc)
-                    typemap[lhs.name] = strconsttyp
-                    lowerer.lower_inst(assign_lhs)
+
+                    lhs = pfbdr.make_const_variable(
+                        cval=res_print_str,
+                        typ=strconsttyp,
+                        name="str_const",
+                    )
 
                     res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
                                          vararg=None, loc=loc)
@@ -387,17 +416,46 @@ def _lower_parfor_parallel(lowerer, parfor):
                             # Add calltype back in for the expr with updated signature.
                             lowerer.fndesc.calltypes[rhs] = ct
                     lowerer.lower_inst(inst)
-                    if isinstance(inst, ir.Assign) and name == inst.target.name:
-                        break
+                    # Only process reduction statements post-gufunc execution
+                    # until we see an assignment with a left-hand side to the
+                    # reduction variable's name.  This fixes problems with
+                    # cases where there are multiple assignments to the
+                    # reduction variable in the parfor.
+                    if isinstance(inst, ir.Assign):
+                        try:
+                            reduction_var = scope.get_exact(name)
+                        except NotDefinedError:
+                            # Ideally, this shouldn't happen. The redvar name
+                            # missing from scope indicates an error from
+                            # other rewrite passes.
+                            is_same_source_var = name == inst.target.name
+                        else:
+                            # Because of SSA, the redvar and target var of
+                            # the current assignment would be different even
+                            # though they refer to the same source-level var.
+                            redvar_unver_name = reduction_var.unversioned_name
+                            target_unver_name = inst.target.unversioned_name
+                            is_same_source_var = redvar_unver_name == target_unver_name
+
+                        if is_same_source_var:
+                            # If redvar is different from target var, add an
+                            # assignment to put target var into redvar.
+                            if name != inst.target.name:
+                                pfbdr.assign_inplace(
+                                    rhs=inst.target, typ=redvar_typ,
+                                    name=name,
+                                )
+                            break
 
                     if config.DEBUG_ARRAY_OPT_RUNTIME:
                         res_print_str = "res_print2 for thread " + str(j) + ":"
                         strconsttyp = types.StringLiteral(res_print_str)
-                        lhs = ir.Var(scope, mk_unique_var("str_const"), loc)
-                        assign_lhs = ir.Assign(value=ir.Const(value=res_print_str, loc=loc),
-                                               target=lhs, loc=loc)
-                        typemap[lhs.name] = strconsttyp
-                        lowerer.lower_inst(assign_lhs)
+
+                        lhs = pfbdr.make_const_variable(
+                            cval=res_print_str,
+                            typ=strconsttyp,
+                            name="str_const",
+                        )
 
                         res_print = ir.Print(args=[lhs, index_var, oneelem, init_var, ir.Var(scope, name, loc)],
                                              vararg=None, loc=loc)
@@ -828,6 +886,66 @@ def _create_gufunc_for_parfor_body(
         print("parfor_inputs = ", parfor_inputs, " ", type(parfor_inputs))
         print("parfor_redvars = ", parfor_redvars, " ", type(parfor_redvars))
 
+    # -------------------------------------------------------------------------
+    # Convert tuples to individual parameters.
+    tuple_expanded_parfor_inputs = []
+    tuple_var_to_expanded_names = {}
+    expanded_name_to_tuple_var = {}
+    next_expanded_tuple_var = 0
+    parfor_tuple_params = []
+    # For each input to the parfor.
+    for pi in parfor_inputs:
+        # Get the type of the input.
+        pi_type = typemap[pi]
+        # If it is a UniTuple or Tuple we will do the conversion.
+        if isinstance(pi_type, types.UniTuple) or isinstance(pi_type, types.NamedUniTuple):
+            # Get the size and dtype of the tuple.
+            tuple_count = pi_type.count
+            tuple_dtype = pi_type.dtype
+            # Only do tuples up to config.PARFOR_MAX_TUPLE_SIZE length.
+            assert(tuple_count <= config.PARFOR_MAX_TUPLE_SIZE)
+            this_var_expansion = []
+            for i in range(tuple_count):
+                # Generate a new name for the individual part of the tuple var.
+                expanded_name = "expanded_tuple_var_" + str(next_expanded_tuple_var)
+                # Add that name to the new list of inputs to the gufunc.
+                tuple_expanded_parfor_inputs.append(expanded_name)
+                this_var_expansion.append(expanded_name)
+                # Remember a mapping from new param name to original tuple
+                # var and the index within the tuple.
+                expanded_name_to_tuple_var[expanded_name] = (pi, i)
+                next_expanded_tuple_var += 1
+                # Set the type of the new parameter.
+                typemap[expanded_name] = tuple_dtype
+            # Remember a mapping from the original tuple var to the
+            # individual parts.
+            tuple_var_to_expanded_names[pi] = this_var_expansion
+            parfor_tuple_params.append(pi)
+        elif isinstance(pi_type, types.Tuple) or isinstance(pi_type, types.NamedTuple):
+            # This is the same as above for UniTuple except that each part of
+            # the tuple can have a different type and we fetch that type with
+            # pi_type.types[offset].
+            tuple_count = pi_type.count
+            tuple_types = pi_type.types
+            # Only do tuples up to config.PARFOR_MAX_TUPLE_SIZE length.
+            assert(tuple_count <= config.PARFOR_MAX_TUPLE_SIZE)
+            this_var_expansion = []
+            for i in range(tuple_count):
+                expanded_name = "expanded_tuple_var_" + str(next_expanded_tuple_var)
+                tuple_expanded_parfor_inputs.append(expanded_name)
+                this_var_expansion.append(expanded_name)
+                expanded_name_to_tuple_var[expanded_name] = (pi, i)
+                next_expanded_tuple_var += 1
+                typemap[expanded_name] = tuple_types[i]
+            tuple_var_to_expanded_names[pi] = this_var_expansion
+            parfor_tuple_params.append(pi)
+        else:
+            tuple_expanded_parfor_inputs.append(pi)
+    parfor_inputs = tuple_expanded_parfor_inputs
+    if config.DEBUG_ARRAY_OPT >= 1:
+        print("parfor_inputs post tuple handling = ", parfor_inputs, " ", type(parfor_inputs))
+    # -------------------------------------------------------------------------
+
     races = races.difference(set(parfor_redvars))
     for race in races:
         msg = ("Variable %s used in parallel loop may be written "
@@ -862,7 +980,7 @@ def _create_gufunc_for_parfor_body(
 
     # Some Var are not legal parameter names so create a dict of potentially illegal
     # param name to guaranteed legal name.
-    param_dict = legalize_names_with_typemap(parfor_params + parfor_redvars, typemap)
+    param_dict = legalize_names_with_typemap(parfor_params + parfor_redvars + parfor_tuple_params, typemap)
     if config.DEBUG_ARRAY_OPT >= 1:
         print(
             "param_dict = ",
@@ -936,6 +1054,71 @@ def _create_gufunc_for_parfor_body(
     gufunc_txt += "def " + gufunc_name + \
         "(sched, " + (", ".join(parfor_params)) + "):\n"
 
+    globls = {"np": np}
+
+    # First thing in the gufunc, we reconstruct tuples from their
+    # individual parts, e.g., orig_tup_name = (part1, part2,).
+    # The rest of the code of the function will use the original tuple name.
+    for tup_var, exp_names in tuple_var_to_expanded_names.items():
+        tup_type = typemap[tup_var]
+        gufunc_txt += "    " + param_dict[tup_var]
+        # Determine if the tuple is a named tuple.
+        if (isinstance(tup_type, types.NamedTuple) or
+            isinstance(tup_type, types.NamedUniTuple)):
+            named_tup = True
+        else:
+            named_tup = False
+
+        if named_tup:
+            # It is a named tuple so try to find the global that defines the
+            # named tuple.
+            func_def = guard(get_definition, lowerer.func_ir, tup_var)
+            named_tuple_def = None
+            if config.DEBUG_ARRAY_OPT:
+                print("func_def:", func_def, type(func_def))
+            if func_def is not None:
+                if (isinstance(func_def, ir.Expr) and
+                    func_def.op == 'call'):
+                    named_tuple_def = guard(get_definition, lowerer.func_ir, func_def.func)
+                    if config.DEBUG_ARRAY_OPT:
+                        print("named_tuple_def:", named_tuple_def, type(named_tuple_def))
+                elif isinstance(func_def, ir.Arg):
+                    named_tuple_def = typemap[func_def.name]
+                    if config.DEBUG_ARRAY_OPT:
+                        print("named_tuple_def:", named_tuple_def,
+                              type(named_tuple_def), named_tuple_def.name)
+            if named_tuple_def is not None:
+                if (isinstance(named_tuple_def, ir.Global) or
+                    isinstance(named_tuple_def, ir.FreeVar)):
+                    gval = named_tuple_def.value
+                    if config.DEBUG_ARRAY_OPT:
+                        print("gval:", gval, type(gval))
+                    globls[named_tuple_def.name] = gval
+                elif isinstance(named_tuple_def, types.containers.BaseNamedTuple):
+                    named_tuple_name = named_tuple_def.name.split('(')[0]
+                    if config.DEBUG_ARRAY_OPT:
+                        print("name:", named_tuple_name,
+                              named_tuple_def.instance_class,
+                              type(named_tuple_def.instance_class))
+                    globls[named_tuple_name] = named_tuple_def.instance_class
+            else:
+                if config.DEBUG_ARRAY_OPT:
+                    print("Didn't find definition of namedtuple for globls.")
+                raise CompilerError("Could not find definition of " + str(tup_var),
+                                     tup_var.loc)
+            gufunc_txt += " = " + tup_type.instance_class.__name__ + "("
+            for name, field_name in zip(exp_names, tup_type.fields):
+                gufunc_txt += field_name + "=" + param_dict[name] + ","
+        else:
+            # Just a regular tuple so use (part0, part1, ...)
+            gufunc_txt += " = (" + ", ".join([param_dict[x] for x in exp_names])
+            if len(exp_names) == 1:
+                # Add comma for tuples with singular values.  We can't unilaterally
+                # add a comma alway because (,) isn't valid.
+                gufunc_txt += ","
+
+        gufunc_txt += ")\n"
+
     for pindex in range(len(parfor_inputs)):
         if ascontig and isinstance(param_types[pindex], types.npytypes.Array):
             gufunc_txt += ("    " + parfor_params_orig[pindex]
@@ -1001,7 +1184,6 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("gufunc_txt = ", type(gufunc_txt), "\n", gufunc_txt)
     # Force gufunc outline into existence.
-    globls = {"np": np}
     locls = {}
     exec(gufunc_txt, globls, locls)
     gufunc_func = locls[gufunc_name]
@@ -1075,7 +1257,7 @@ def _create_gufunc_for_parfor_body(
                     # Make print node
                     print_node = ir.Print(args=[lhs, inst.target], vararg=None, loc=loc)
                     new_block.append(print_node)
-                    sig = numba.typing.signature(types.none,
+                    sig = numba.core.typing.signature(types.none,
                                            typemap[lhs.name],
                                            typemap[inst.target.name])
                     lowerer.fndesc.calltypes[print_node] = sig
@@ -1171,7 +1353,7 @@ def _create_gufunc_for_parfor_body(
     if config.DEBUG_ARRAY_OPT:
         print("finished create_gufunc_for_parfor_body. kernel_sig = ", kernel_sig)
 
-    return kernel_func, parfor_args, kernel_sig, redargstartdim, func_arg_types
+    return kernel_func, parfor_args, kernel_sig, redargstartdim, func_arg_types, expanded_name_to_tuple_var
 
 def replace_var_with_array_in_block(vars, block, typemap, calltypes):
     new_block = []
@@ -1207,7 +1389,8 @@ def replace_var_with_array(vars, loop_body, typemap, calltypes):
         typemap[v] = types.npytypes.Array(el_typ, 1, "C")
 
 def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr_arg_types,
-                         loop_ranges, redvars, reddict, redarrdict, init_block, index_var_typ, races):
+                         loop_ranges, redvars, reddict, redarrdict, init_block, index_var_typ, races,
+                         exp_name_to_tuple_var):
     '''
     Adds the call to the gufunc function from the main function.
     '''
@@ -1220,7 +1403,6 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
 
     if config.DEBUG_ARRAY_OPT:
         print("make_parallel_loop")
-        print("args = ", expr_args)
         print("outer_sig = ", outer_sig.args, outer_sig.return_type,
               outer_sig.recvr, outer_sig.pysig)
         print("loop_ranges = ", loop_ranges)
@@ -1370,9 +1552,27 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                     types.intp, i * num_dim * 2 + j)])))
             cgutils.printf(builder, "\n")
 
+    def load_potential_tuple_var(x):
+        """Given a variable name, if that variable is not a new name
+           introduced as the extracted part of a tuple then just return
+           the variable loaded from its name.  However, if the variable
+           does represent part of a tuple, as recognized by the name of
+           the variable being present in the exp_name_to_tuple_var dict,
+           then we load the original tuple var instead that we get from
+           the dict and then extract the corresponding element of the
+           tuple, also stored and returned to use in the dict (i.e., offset).
+        """
+        if x in exp_name_to_tuple_var:
+            orig_tup, offset = exp_name_to_tuple_var[x]
+            tup_var = lowerer.loadvar(orig_tup)
+            res = builder.extract_value(tup_var, offset)
+            return res
+        else:
+            return lowerer.loadvar(x)
+
     # ----------------------------------------------------------------------------
     # Prepare arguments: args, shapes, steps, data
-    all_args = [lowerer.loadvar(x) for x in expr_args[:ninouts]] + redarrs
+    all_args = [load_potential_tuple_var(x) for x in expr_args[:ninouts]] + redarrs
     num_args = len(all_args)
     num_inps = len(sin) + 1
     args = cgutils.alloca_once(
