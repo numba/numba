@@ -173,6 +173,7 @@ class TestParforsBase(TestCase):
         njit_output = cfunc.entry_point(*njit_args)
 
         # parfor result
+<<<<<<< HEAD
         parfor_args = copy_args(*args)
         parfor_output = cpfunc.entry_point(*parfor_args)
 
@@ -186,6 +187,28 @@ class TestParforsBase(TestCase):
                 py_args, njit_args, parfor_args, check_args_for_equality):
                 argcomp(njitarg, pyarg, **kwargs)
                 argcomp(parforarg, pyarg, **kwargs)
+||||||| 4aceb2727
+        parfor_output = cpfunc.entry_point(*copy_args(*args))
+
+        np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
+        np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
+
+        self.assertEqual(type(njit_output), type(parfor_output))
+=======
+        parfor_args = copy_args(*args)
+        parfor_output = cpfunc.entry_point(*parfor_args)
+
+        if check_args_for_equality is None:
+            np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
+            np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
+            self.assertEqual(type(njit_output), type(parfor_output))
+        else:
+            assert(len(py_args) == len(check_args_for_equality))
+            for pyarg, njitarg, parforarg, argcomp in zip(
+                py_args, njit_args, parfor_args, check_args_for_equality):
+                argcomp(njitarg, pyarg, **kwargs)
+                argcomp(parforarg, pyarg, **kwargs)
+>>>>>>> 2d6994be5d2803104c16fb8cc9c269d3be9684c8
 
         if check_scheduling:
             self.check_scheduling(cpfunc, scheduler_type)
@@ -1660,6 +1683,21 @@ class TestParfors(TestParforsBase):
 
         x = np.arange(10)
         self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_namedtuple3(self):
+        # issue5872: test that a.y[:] = 5 is not removed as
+        # deadcode.
+        TestNamedTuple3 = namedtuple(f'TestNamedTuple3',['y'])
+
+        def test_impl(a):
+            a.y[:] = 5
+
+        def comparer(a, b):
+            np.testing.assert_almost_equal(a.y, b.y)
+
+        x = TestNamedTuple3(y=np.zeros(10))
+        self.check(test_impl, x, check_arg_equality=[comparer])
 
     @skip_parfors_unsupported
     def test_inplace_binop(self):
