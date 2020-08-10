@@ -748,6 +748,7 @@ def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
 def is_np_inf_impl(x, out, fn):
 
+    # if/else branch should be unified after PR #5606 is merged
     if is_nonelike(out):
         def impl(x, out=None):
             return np.logical_and(np.isinf(x), fn(np.signbit(x)))
