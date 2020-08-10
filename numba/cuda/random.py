@@ -89,9 +89,6 @@ def xoroshiro128p_next(states, index):
     return result
 
 
-XOROSHIRO128P_JUMP = (uint64(0xbeac0467eba5facb), uint64(0xd86b048b86aa9922))
-
-
 @jit
 def xoroshiro128p_jump(states, index):
     '''Advance the RNG in ``states[index]`` by 2**64 steps.
@@ -103,12 +100,14 @@ def xoroshiro128p_jump(states, index):
     '''
     index = int64(index)
 
+    jump = (uint64(0xbeac0467eba5facb), uint64(0xd86b048b86aa9922))
+
     s0 = uint64(0)
     s1 = uint64(0)
 
     for i in range(2):
         for b in range(64):
-            if XOROSHIRO128P_JUMP[i] & (uint64(1) << uint32(b)):
+            if jump[i] & (uint64(1) << uint32(b)):
                 s0 ^= states[index]['s0']
                 s1 ^= states[index]['s1']
             xoroshiro128p_next(states, index)

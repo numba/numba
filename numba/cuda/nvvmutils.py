@@ -12,8 +12,13 @@ def declare_atomic_cas_int32(lmod):
     return lmod.get_or_insert_function(fnty, fname)
 
 
+# For atomic intrinsics, "numba_nvvm" prevents LLVM 9 onwards auto-upgrading
+# them into atomicrmw instructions that are not recognized by NVVM. It is
+# replaced with "nvvm" in llvm_to_ptx later, after the module has been parsed
+# and dumped by LLVM.
+
 def declare_atomic_add_float32(lmod):
-    fname = 'llvm.nvvm.atomic.load.add.f32.p0f32'
+    fname = 'llvm.numba_nvvm.atomic.load.add.f32.p0f32'
     fnty = lc.Type.function(lc.Type.float(),
         (lc.Type.pointer(lc.Type.float(), 0), lc.Type.float()))
     return lmod.get_or_insert_function(fnty, name=fname)
@@ -21,7 +26,7 @@ def declare_atomic_add_float32(lmod):
 
 def declare_atomic_add_float64(lmod):
     if current_context().device.compute_capability >= (6, 0):
-        fname = 'llvm.nvvm.atomic.load.add.f64.p0f64'
+        fname = 'llvm.numba_nvvm.atomic.load.add.f64.p0f64'
     else:
         fname = '___numba_atomic_double_add'
     fnty = lc.Type.function(lc.Type.double(),
@@ -52,6 +57,33 @@ def declare_atomic_min_float32(lmod):
 
 def declare_atomic_min_float64(lmod):
     fname = '___numba_atomic_double_min'
+    fnty = lc.Type.function(lc.Type.double(),
+        (lc.Type.pointer(lc.Type.double()), lc.Type.double()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+def declare_atomic_nanmax_float32(lmod):
+    fname = '___numba_atomic_float_nanmax'
+    fnty = lc.Type.function(lc.Type.float(),
+        (lc.Type.pointer(lc.Type.float()), lc.Type.float()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_nanmax_float64(lmod):
+    fname = '___numba_atomic_double_nanmax'
+    fnty = lc.Type.function(lc.Type.double(),
+        (lc.Type.pointer(lc.Type.double()), lc.Type.double()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_nanmin_float32(lmod):
+    fname = '___numba_atomic_float_nanmin'
+    fnty = lc.Type.function(lc.Type.float(),
+        (lc.Type.pointer(lc.Type.float()), lc.Type.float()))
+    return lmod.get_or_insert_function(fnty, fname)
+
+
+def declare_atomic_nanmin_float64(lmod):
+    fname = '___numba_atomic_double_nanmin'
     fnty = lc.Type.function(lc.Type.double(),
         (lc.Type.pointer(lc.Type.double()), lc.Type.double()))
     return lmod.get_or_insert_function(fnty, fname)

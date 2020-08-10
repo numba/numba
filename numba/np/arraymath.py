@@ -450,6 +450,19 @@ def zero_dim_msg(fn_name):
     return msg
 
 
+def _is_nat(x):
+    pass
+
+
+@overload(_is_nat)
+def ol_is_nat(x):
+    if numpy_version >= (1, 18):
+        return lambda x: np.isnat(x)
+    else:
+        nat = x('NaT')
+        return lambda x: x == nat
+
+
 @lower_builtin(np.min, types.Array)
 @lower_builtin("array.min", types.Array)
 def array_min(context, builder, sig, args):
@@ -457,25 +470,26 @@ def array_min(context, builder, sig, args):
     MSG = zero_dim_msg('minimum')
 
     if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
-        # NaT is smaller than every other value, but it is
+        # NP < 1.18: NaT is smaller than every other value, but it is
         # ignored as far as min() is concerned.
-        nat = ty('NaT')
-
+        # NP >= 1.18: NaT dominates like NaN
         def array_min_impl(arry):
             if arry.size == 0:
                 raise ValueError(MSG)
 
-            min_value = nat
             it = np.nditer(arry)
-            for view in it:
-                v = view.item()
-                if v != nat:
-                    min_value = v
-                    break
+            min_value = next(it).take(0)
+            if _is_nat(min_value):
+                return min_value
 
             for view in it:
                 v = view.item()
-                if v != nat and v < min_value:
+                if _is_nat(v):
+                    if numpy_version >= (1, 18):
+                        return v
+                    else:
+                        continue
+                if v < min_value:
                     min_value = v
             return min_value
 
@@ -494,6 +508,24 @@ def array_min(context, builder, sig, args):
                 elif v.real == min_value.real:
                     if v.imag < min_value.imag:
                         min_value = v
+            return min_value
+
+    elif isinstance(ty, types.Float):
+        def array_min_impl(arry):
+            if arry.size == 0:
+                raise ValueError(MSG)
+
+            it = np.nditer(arry)
+            min_value = next(it).take(0)
+            if np.isnan(min_value):
+                return min_value
+
+            for view in it:
+                v = view.item()
+                if np.isnan(v):
+                    return v
+                if v < min_value:
+                    min_value = v
             return min_value
 
     else:
@@ -520,7 +552,31 @@ def array_max(context, builder, sig, args):
     ty = sig.args[0].dtype
     MSG = zero_dim_msg('maximum')
 
-    if isinstance(ty, types.Complex):
+    if isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
+        # NP < 1.18: NaT is smaller than every other value, but it is
+        # ignored as far as min() is concerned.
+        # NP >= 1.18: NaT dominates like NaN
+        def array_max_impl(arry):
+            if arry.size == 0:
+                raise ValueError(MSG)
+
+            it = np.nditer(arry)
+            max_value = next(it).take(0)
+            if _is_nat(max_value):
+                return max_value
+
+            for view in it:
+                v = view.item()
+                if _is_nat(v):
+                    if numpy_version >= (1, 18):
+                        return v
+                    else:
+                        continue
+                if v > max_value:
+                    max_value = v
+            return max_value
+
+    elif isinstance(ty, types.Complex):
         def array_max_impl(arry):
             if arry.size == 0:
                 raise ValueError(MSG)
@@ -536,6 +592,25 @@ def array_max(context, builder, sig, args):
                     if v.imag > max_value.imag:
                         max_value = v
             return max_value
+
+    elif isinstance(ty, types.Float):
+        def array_max_impl(arry):
+            if arry.size == 0:
+                raise ValueError(MSG)
+
+            it = np.nditer(arry)
+            max_value = next(it).take(0)
+            if np.isnan(max_value):
+                return max_value
+
+            for view in it:
+                v = view.item()
+                if np.isnan(v):
+                    return v
+                if v > max_value:
+                    max_value = v
+            return max_value
+
     else:
         def array_max_impl(arry):
             if arry.size == 0:
@@ -560,27 +635,46 @@ def array_argmin(context, builder, sig, args):
     ty = sig.args[0].dtype
 
     if (isinstance(ty, (types.NPDatetime, types.NPTimedelta))):
-        # NaT is smaller than every other value, but it is
-        # ignored as far as argmin() is concerned.
-        nat = ty('NaT')
-
         def array_argmin_impl(arry):
             if arry.size == 0:
                 raise ValueError("attempt to get argmin of an empty sequence")
-            min_value = nat
+            it = np.nditer(arry)
+            min_value = next(it).take(0)
             min_idx = 0
-            it = arry.flat
-            idx = 0
-            for v in it:
-                if v != nat:
+            if _is_nat(min_value):
+                return min_idx
+
+            idx = 1
+            for view in it:
+                v = view.item()
+                if _is_nat(v):
+                    if numpy_version >= (1, 18):
+                        return idx
+                    else:
+                        idx += 1
+                        continue
+                if v < min_value:
                     min_value = v
                     min_idx = idx
-                    idx += 1
-                    break
                 idx += 1
+            return min_idx
 
-            for v in it:
-                if v != nat and v < min_value:
+    elif isinstance(ty, types.Float):
+        def array_argmin_impl(arry):
+            if arry.size == 0:
+                raise ValueError("attempt to get argmin of an empty sequence")
+            for v in arry.flat:
+                min_value = v
+                min_idx = 0
+                break
+            if np.isnan(min_value):
+                return min_idx
+
+            idx = 0
+            for v in arry.flat:
+                if np.isnan(v):
+                    return idx
+                if v < min_value:
                     min_value = v
                     min_idx = idx
                 idx += 1
@@ -611,23 +705,70 @@ def array_argmin(context, builder, sig, args):
 @lower_builtin(np.argmax, types.Array)
 @lower_builtin("array.argmax", types.Array)
 def array_argmax(context, builder, sig, args):
-    def array_argmax_impl(arry):
-        if arry.size == 0:
-            raise ValueError("attempt to get argmax of an empty sequence")
-        for v in arry.flat:
-            max_value = v
-            max_idx = 0
-            break
-        else:
-            raise RuntimeError('unreachable')
+    ty = sig.args[0].dtype
 
-        idx = 0
-        for v in arry.flat:
-            if v > max_value:
+    if (isinstance(ty, (types.NPDatetime, types.NPTimedelta))):
+        def array_argmax_impl(arry):
+            if arry.size == 0:
+                raise ValueError("attempt to get argmax of an empty sequence")
+            it = np.nditer(arry)
+            max_value = next(it).take(0)
+            max_idx = 0
+            if _is_nat(max_value):
+                return max_idx
+
+            idx = 1
+            for view in it:
+                v = view.item()
+                if _is_nat(v):
+                    if numpy_version >= (1, 18):
+                        return idx
+                    else:
+                        idx += 1
+                        continue
+                if v > max_value:
+                    max_value = v
+                    max_idx = idx
+                idx += 1
+            return max_idx
+
+    elif isinstance(ty, types.Float):
+        def array_argmax_impl(arry):
+            if arry.size == 0:
+                raise ValueError("attempt to get argmax of an empty sequence")
+            for v in arry.flat:
                 max_value = v
-                max_idx = idx
-            idx += 1
-        return max_idx
+                max_idx = 0
+                break
+            if np.isnan(max_value):
+                return max_idx
+
+            idx = 0
+            for v in arry.flat:
+                if np.isnan(v):
+                    return idx
+                if v > max_value:
+                    max_value = v
+                    max_idx = idx
+                idx += 1
+            return max_idx
+
+    else:
+        def array_argmax_impl(arry):
+            if arry.size == 0:
+                raise ValueError("attempt to get argmax of an empty sequence")
+            for v in arry.flat:
+                max_value = v
+                max_idx = 0
+                break
+
+            idx = 0
+            for v in arry.flat:
+                if v > max_value:
+                    max_value = v
+                    max_idx = idx
+                idx += 1
+            return max_idx
     res = context.compile_internal(builder, array_argmax_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
@@ -2644,19 +2785,38 @@ def np_corrcoef(x, y=None, rowvar=True):
 #----------------------------------------------------------------------------
 # Element-wise computations
 
+
 @overload(np.argwhere)
 def np_argwhere(a):
+    # needs to be much more array-like for the array impl to work, Numba bug
+    # in one of the underlying function calls?
 
-    if type_can_asarray(a):
+    use_scalar = (numpy_version >= (1, 18) and
+                  isinstance(a, (types.Number, types.Boolean)))
+    if type_can_asarray(a) and not use_scalar:
+        if numpy_version < (1, 18):
+            check = register_jitable(lambda x: not np.any(x))
+        else:
+            check = register_jitable(lambda x: True)
+
         def impl(a):
             arr = np.asarray(a)
+            if arr.shape == () and check(arr):
+                return np.zeros((0, 1), dtype=types.intp)
             return np.transpose(np.vstack(np.nonzero(arr)))
     else:
+        if numpy_version < (1, 18):
+            falseish = (0, 1)
+            trueish = (1, 1)
+        else:
+            falseish = (0, 0)
+            trueish = (1, 0)
+
         def impl(a):
             if a is not None and bool(a):
-                return np.zeros((1, 1), dtype=types.intp)
+                return np.zeros(trueish, dtype=types.intp)
             else:
-                return np.zeros((0, 1), dtype=types.intp)
+                return np.zeros(falseish, dtype=types.intp)
 
     return impl
 
@@ -3283,10 +3443,13 @@ def validate_1d_array_like(func_name, seq):
 
 
 @overload(np.bincount)
-def np_bincount(a, weights=None):
+def np_bincount(a, weights=None, minlength=0):
     validate_1d_array_like("bincount", a)
+
     if not isinstance(a.dtype, types.Integer):
         return
+
+    _check_is_integer(minlength, 'minlength')
 
     if weights not in (None, types.none):
         validate_1d_array_like("bincount", weights)
@@ -3295,7 +3458,7 @@ def np_bincount(a, weights=None):
         out_dtype = np.float64
 
         @register_jitable
-        def validate_inputs(a, weights):
+        def validate_inputs(a, weights, minlength):
             if len(a) != len(weights):
                 raise ValueError("bincount(): weights and list don't have "
                                  "the same length")
@@ -3308,17 +3471,19 @@ def np_bincount(a, weights=None):
         out_dtype = types.intp
 
         @register_jitable
-        def validate_inputs(a, weights):
+        def validate_inputs(a, weights, minlength):
             pass
 
         @register_jitable
         def count_item(out, idx, val, weights):
             out[val] += 1
 
-    def bincount_impl(a, weights=None):
-        validate_inputs(a, weights)
-        n = len(a)
+    def bincount_impl(a, weights=None, minlength=0):
+        validate_inputs(a, weights, minlength)
+        if minlength < 0:
+            raise ValueError("'minlength' must not be negative")
 
+        n = len(a)
         a_max = a[0] if n > 0 else -1
         for i in range(1, n):
             if a[i] < 0:
@@ -3326,7 +3491,8 @@ def np_bincount(a, weights=None):
                                  "non-negative")
             a_max = max(a_max, a[i])
 
-        out = np.zeros(a_max + 1, out_dtype)
+        out_length = max(a_max + 1, minlength)
+        out = np.zeros(out_length, out_dtype)
         for i in range(n):
             count_item(out, i, a[i], weights)
         return out
@@ -3895,6 +4061,11 @@ def np_asarray(a, dtype=None):
             for i, v in enumerate(a):
                 ret[i] = v
             return ret
+    elif isinstance(a, types.StringLiteral):
+        arr = np.asarray(a.literal_value)
+
+        def impl(a, dtype=None):
+            return arr.copy()
 
     return impl
 

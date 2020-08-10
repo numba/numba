@@ -16,7 +16,9 @@ import operator
 from numba.np import arrayobj, ufunc_db, numpy_support
 from numba.core.imputils import Registry, impl_ret_new_ref, force_error_model
 from numba.core import typing, types, utils, cgutils, callconv
-from numba.np.numpy_support import ufunc_find_matching_loop, select_array_wrapper, from_dtype
+from numba.np.numpy_support import (
+    ufunc_find_matching_loop, select_array_wrapper, from_dtype, _ufunc_loop_sig
+)
 from numba.core.typing import npydecl
 from numba.core.extending import overload, intrinsic
 
@@ -175,10 +177,12 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
         return _ArrayHelper(ctxt, bld, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
-    elif types.unliteral(tyinp) in types.number_domain | set([types.boolean]):
+    elif (types.unliteral(tyinp) in types.number_domain | {types.boolean}
+          or isinstance(tyinp, types.scalars._NPDatetimeBase)):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
-        raise NotImplementedError('unsupported type for {0}: {1}'.format(where, str(tyinp)))
+        raise NotImplementedError('unsupported type for {0}: {1}'.format(where,
+                                  str(tyinp)))
 
 
 _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
@@ -302,9 +306,30 @@ def _build_array(context, builder, array_ty, input_types, inputs):
                         array_ty.layout, array_ty.dtype, ndim,
                         out_val)
 
+# ufuncs either return a single result when nout == 1, else a tuple of results
 
-def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
-                       explicit_output=True):
+def _unpack_output_types(ufunc, sig):
+    if ufunc.nout == 1:
+        return [sig.return_type]
+    else:
+        return list(sig.return_type)
+
+
+def _unpack_output_values(ufunc, builder, values):
+    if ufunc.nout == 1:
+        return [values]
+    else:
+        return cgutils.unpack_tuple(builder, values)
+
+
+def _pack_output_values(ufunc, context, builder, typ, values):
+    if ufunc.nout == 1:
+        return values[0]
+    else:
+        return context.make_tuple(builder, typ, values)
+
+
+def numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel_class):
     # This is the code generator that builds all the looping needed
     # to execute a numpy functions over several dimensions (including
     # scalar cases).
@@ -313,47 +338,58 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
     # builder - the code emitter
     # sig - signature of the ufunc
     # args - the args to the ufunc
+    # ufunc - the ufunc itself
     # kernel_class -  a code generating subclass of _Kernel that provides
-    # explicit_output - if the output was explicit in the call
-    #                   (ie: np.add(x,y,r))
 
     arguments = [_prepare_argument(context, builder, arg, tyarg)
                  for arg, tyarg in zip(args, sig.args)]
-    if not explicit_output:
-        ret_ty = sig.return_type
-        if isinstance(ret_ty, types.ArrayCompatible):
-            output = _build_array(context, builder, ret_ty, sig.args, arguments)
-        else:
-            output = _prepare_argument(
-                context, builder,
-                lc.Constant.null(context.get_value_type(ret_ty)), ret_ty)
-        arguments.append(output)
-    elif context.enable_nrt:
-        # Incref the output
-        context.nrt.incref(builder, sig.return_type, args[-1])
 
-    inputs = arguments[0:-1]
-    output = arguments[-1]
+    if len(arguments) < ufunc.nin:
+        raise RuntimeError(
+            "Not enough inputs to {}, expected {} got {}"
+            .format(ufunc.__name__, ufunc.nin, len(arguments)))
 
-    outer_sig = [a.base_type for a in arguments]
-    #signature expects return type first, while we have it last:
-    outer_sig = outer_sig[-1:] + outer_sig[:-1]
-    outer_sig = typing.signature(*outer_sig)
+    for out_i, ret_ty in enumerate(_unpack_output_types(ufunc, sig)):
+        if ufunc.nin + out_i >= len(arguments):
+            # this out argument is not provided
+            if isinstance(ret_ty, types.ArrayCompatible):
+                output = _build_array(context, builder, ret_ty, sig.args, arguments)
+            else:
+                output = _prepare_argument(
+                    context, builder,
+                    lc.Constant.null(context.get_value_type(ret_ty)), ret_ty)
+            arguments.append(output)
+        elif context.enable_nrt:
+            # Incref the output
+            context.nrt.incref(builder, ret_ty, args[ufunc.nin + out_i])
+
+    inputs = arguments[:ufunc.nin]
+    outputs = arguments[ufunc.nin:]
+    assert len(outputs) == ufunc.nout
+
+    outer_sig = _ufunc_loop_sig(
+        [a.base_type for a in outputs],
+        [a.base_type for a in inputs]
+    )
     kernel = kernel_class(context, builder, outer_sig)
     intpty = context.get_value_type(types.intp)
 
     indices = [inp.create_iter_indices() for inp in inputs]
 
-    loopshape = output.shape
+    # assume outputs are all the same size, which numpy requires
+
+    loopshape = outputs[0].shape
     with cgutils.loop_nest(builder, loopshape, intp=intpty) as loop_indices:
         vals_in = []
         for i, (index, arg) in enumerate(zip(indices, inputs)):
             index.update_indices(loop_indices, i)
             vals_in.append(arg.load_data(index.as_values()))
 
-        val_out = kernel.generate(*vals_in)
-        output.store_data(loop_indices, val_out)
-    out = arguments[-1].return_val
+        vals_out = _unpack_output_values(ufunc, builder, kernel.generate(*vals_in))
+        for val_out, output in zip(vals_out, outputs):
+            output.store_data(loop_indices, val_out)
+
+    out = _pack_output_values(ufunc, context, builder, sig.return_type, [o.return_val for o in outputs])
     return impl_ret_new_ref(context, builder, sig.return_type, out)
 
 
@@ -411,10 +447,9 @@ def _ufunc_db_function(ufunc):
         def __init__(self, context, builder, outer_sig):
             super(_KernelImpl, self).__init__(context, builder, outer_sig)
             loop = ufunc_find_matching_loop(
-                ufunc, outer_sig.args + (outer_sig.return_type,))
+                ufunc, outer_sig.args + tuple(_unpack_output_types(ufunc, outer_sig)))
             self.fn = ufunc_db.get_ufunc_info(ufunc).get(loop.ufunc_sig)
-            self.inner_sig = typing.signature(
-                *(loop.outputs + loop.inputs))
+            self.inner_sig = _ufunc_loop_sig(loop.outputs, loop.inputs)
 
             if self.fn is None:
                 msg = "Don't know how to lower ufunc '{0}' for loop '{1}'"
@@ -439,57 +474,32 @@ def _ufunc_db_function(ufunc):
 ################################################################################
 # Helper functions that register the ufuncs
 
-_kernels = {} # Temporary map from ufunc's to their kernel implementation class
-
-def register_unary_ufunc_kernel(ufunc, kernel):
-    def unary_ufunc(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, kernel)
-
-    def unary_ufunc_no_explicit_output(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
-                                  explicit_output=False)
+def register_ufunc_kernel(ufunc, kernel):
+    def do_ufunc(context, builder, sig, args):
+        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
 
     _any = types.Any
+    in_args = (_any,) * ufunc.nin
 
-    # (array or scalar, out=array)
-    lower(ufunc, _any, types.Array)(unary_ufunc)
-    # (array or scalar)
-    lower(ufunc, _any)(unary_ufunc_no_explicit_output)
+    # Add a lowering for each out argument that is missing.
+    for n_explicit_out in range(ufunc.nout + 1):
+        out_args = (types.Array,) * n_explicit_out
+        lower(ufunc, *in_args, *out_args)(do_ufunc)
 
-    _kernels[ufunc] = kernel
-
-
-def register_binary_ufunc_kernel(ufunc, kernel):
-    def binary_ufunc(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, kernel)
-
-    def binary_ufunc_no_explicit_output(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
-                                  explicit_output=False)
-
-    _any = types.Any
-
-    # (array or scalar, array o scalar, out=array)
-    lower(ufunc, _any, _any, types.Array)(binary_ufunc)
-    # (scalar, scalar)
-    lower(ufunc, _any, _any)(binary_ufunc_no_explicit_output)
-
-    _kernels[ufunc] = kernel
+    return kernel
 
 
-def register_unary_operator_kernel(operator, kernel, inplace=False):
+def register_unary_operator_kernel(operator, ufunc, kernel, inplace=False):
     assert not inplace  # are there any inplace unary operators?
     def lower_unary_operator(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
-                                  explicit_output=False)
+        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
     _arr_kind = types.Array
     lower(operator, _arr_kind)(lower_unary_operator)
 
 
-def register_binary_operator_kernel(op, kernel, inplace=False):
+def register_binary_operator_kernel(op, ufunc, kernel, inplace=False):
     def lower_binary_operator(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
-                                  explicit_output=False)
+        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
 
     def lower_inplace_operator(context, builder, sig, args):
         # The visible signature is (A, B) -> A
@@ -497,8 +507,7 @@ def register_binary_operator_kernel(op, kernel, inplace=False):
         # is (A, B, A) -> A
         args = tuple(args) + (args[0],)
         sig = typing.signature(sig.return_type, *sig.args + (sig.args[0],))
-        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
-                                  explicit_output=True)
+        return numpy_ufunc_kernel(context, builder, sig, args, ufunc, kernel)
 
     _any = types.Any
     _arr_kind = types.Array
@@ -510,18 +519,8 @@ def register_binary_operator_kernel(op, kernel, inplace=False):
             lower(op, *sig)(lower_inplace_operator)
 
 
-
 ################################################################################
 # Use the contents of ufunc_db to initialize the supported ufuncs
-
-for ufunc in ufunc_db.get_ufuncs():
-    if ufunc.nin == 1:
-        register_unary_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
-    elif ufunc.nin == 2:
-        register_binary_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
-    else:
-        raise RuntimeError("Don't know how to register ufuncs from ufunc_db with arity > 2")
-
 
 @lower(operator.pos, types.Array)
 def array_positive_impl(context, builder, sig, args):
@@ -534,38 +533,44 @@ def array_positive_impl(context, builder, sig, args):
             [val] = args
             return val
 
-    return numpy_ufunc_kernel(context, builder, sig, args,
-                              _UnaryPositiveKernel, explicit_output=False)
+    return numpy_ufunc_kernel(context, builder, sig, args, np.positive,
+                              _UnaryPositiveKernel)
 
 
-for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
-                npydecl.NumpyRulesArrayOperator._op_map,
-                ):
-    for operator, ufunc_name in _op_map.items():
-        ufunc = getattr(np, ufunc_name)
-        kernel = _kernels[ufunc]
-        if ufunc.nin == 1:
-            register_unary_operator_kernel(operator, kernel)
-        elif ufunc.nin == 2:
-            register_binary_operator_kernel(operator, kernel)
-        else:
-            raise RuntimeError("There shouldn't be any non-unary or binary operators")
+def _register_ufuncs():
+    kernels = {}
 
-for _op_map in (npydecl.NumpyRulesInplaceArrayOperator._op_map,
-                ):
-    for operator, ufunc_name in _op_map.items():
-        ufunc = getattr(np, ufunc_name)
-        kernel = _kernels[ufunc]
-        if ufunc.nin == 1:
-            register_unary_operator_kernel(operator, kernel, inplace=True)
-        elif ufunc.nin == 2:
-            register_binary_operator_kernel(operator, kernel, inplace=True)
-        else:
-            raise RuntimeError("There shouldn't be any non-unary or binary operators")
+    for ufunc in ufunc_db.get_ufuncs():
+        kernels[ufunc] = register_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
+
+    for _op_map in (npydecl.NumpyRulesUnaryArrayOperator._op_map,
+                    npydecl.NumpyRulesArrayOperator._op_map,
+                    ):
+        for operator, ufunc_name in _op_map.items():
+            ufunc = getattr(np, ufunc_name)
+            kernel = kernels[ufunc]
+            if ufunc.nin == 1:
+                register_unary_operator_kernel(operator, ufunc, kernel)
+            elif ufunc.nin == 2:
+                register_binary_operator_kernel(operator, ufunc, kernel)
+            else:
+                raise RuntimeError("There shouldn't be any non-unary or binary operators")
+
+    for _op_map in (npydecl.NumpyRulesInplaceArrayOperator._op_map,
+                    ):
+        for operator, ufunc_name in _op_map.items():
+            ufunc = getattr(np, ufunc_name)
+            kernel = kernels[ufunc]
+            if ufunc.nin == 1:
+                register_unary_operator_kernel(operator, ufunc, kernel, inplace=True)
+            elif ufunc.nin == 2:
+                register_binary_operator_kernel(operator, ufunc, kernel, inplace=True)
+            else:
+                raise RuntimeError("There shouldn't be any non-unary or binary operators")
 
 
+_register_ufuncs()
 
-del _kernels
 
 @intrinsic
 def _make_dtype_object(typingctx, desc):

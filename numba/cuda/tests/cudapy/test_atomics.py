@@ -1,5 +1,6 @@
 import random
 import numpy as np
+from textwrap import dedent
 
 from numba import cuda, uint32, uint64, float32, float64
 from numba.cuda.testing import unittest, CUDATestCase
@@ -136,43 +137,52 @@ def atomic_add_double_3(ary):
     cuda.syncthreads()
     ary[tx, ty] = sm[tx, ty]
 
+def gen_atomic_extreme_funcs(func):
 
-def atomic_max(res, ary):
-    tx = cuda.threadIdx.x
-    bx = cuda.blockIdx.x
-    cuda.atomic.max(res, 0, ary[tx, bx])
+    fns = dedent(
+    """
+    def atomic(res, ary):
+        tx = cuda.threadIdx.x
+        bx = cuda.blockIdx.x
+        {func}(res, 0, ary[tx, bx])
 
+    def atomic_double_normalizedindex(res, ary):
+        tx = cuda.threadIdx.x
+        bx = cuda.blockIdx.x
+        {func}(res, 0, ary[tx, uint64(bx)])
 
-def atomic_min(res, ary):
-    tx = cuda.threadIdx.x
-    bx = cuda.blockIdx.x
-    cuda.atomic.min(res, 0, ary[tx, bx])
+    def atomic_double_oneindex(res, ary):
+        tx = cuda.threadIdx.x
+        {func}(res, 0, ary[tx])
 
+    def atomic_double_shared(res, ary):
+        tid = cuda.threadIdx.x
+        smary = cuda.shared.array(32, float64)
+        smary[tid] = ary[tid]
+        smres = cuda.shared.array(1, float64)
+        if tid == 0:
+            smres[0] = res[0]
+        cuda.syncthreads()
+        {func}(smres, 0, smary[tid])
+        cuda.syncthreads()
+        if tid == 0:
+            res[0] = smres[0]
+    """).format(func=func)
+    ld = {}
+    exec(fns, {'cuda': cuda, 'float64': float64, 'uint64': uint64}, ld)
+    return (ld['atomic'], ld['atomic_double_normalizedindex'],
+            ld['atomic_double_oneindex'], ld['atomic_double_shared'])
 
-def atomic_max_double_normalizedindex(res, ary):
-    tx = cuda.threadIdx.x
-    bx = cuda.blockIdx.x
-    cuda.atomic.max(res, 0, ary[tx, uint64(bx)])
-
-
-def atomic_max_double_oneindex(res, ary):
-    tx = cuda.threadIdx.x
-    cuda.atomic.max(res, 0, ary[tx])
-
-
-def atomic_max_double_shared(res, ary):
-    tid = cuda.threadIdx.x
-    smary = cuda.shared.array(32, float64)
-    smary[tid] = ary[tid]
-    smres = cuda.shared.array(1, float64)
-    if tid == 0:
-        smres[0] = res[0]
-    cuda.syncthreads()
-    cuda.atomic.max(smres, 0, smary[tid])
-    cuda.syncthreads()
-    if tid == 0:
-        res[0] = smres[0]
-
+(atomic_max, atomic_max_double_normalizedindex, atomic_max_double_oneindex,
+ atomic_max_double_shared) = gen_atomic_extreme_funcs('cuda.atomic.max')
+(atomic_min, atomic_min_double_normalizedindex, atomic_min_double_oneindex,
+ atomic_min_double_shared) = gen_atomic_extreme_funcs('cuda.atomic.min')
+(atomic_nanmax, atomic_nanmax_double_normalizedindex,
+ atomic_nanmax_double_oneindex, atomic_nanmax_double_shared) = \
+     gen_atomic_extreme_funcs('cuda.atomic.nanmax')
+(atomic_nanmin, atomic_nanmin_double_normalizedindex,
+ atomic_nanmin_double_oneindex, atomic_nanmin_double_shared) = \
+     gen_atomic_extreme_funcs('cuda.atomic.nanmin')
 
 def atomic_compare_and_swap(res, old, ary):
     gid = cuda.grid(1)
@@ -254,7 +264,7 @@ class TestCudaAtomics(CUDATestCase):
 
     @skip_unless_cc_50
     def test_atomic_add_double(self):
-        idx = np.random.randint(0, 32, size=32)
+        idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
         cuda_func = cuda.jit('void(int64[:], float64[:])')(atomic_add_double)
         cuda_func[1, 32](idx, ary)
@@ -285,7 +295,7 @@ class TestCudaAtomics(CUDATestCase):
 
     @skip_unless_cc_50
     def test_atomic_add_double_global(self):
-        idx = np.random.randint(0, 32, size=32)
+        idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
         cuda_func = cuda.jit('void(int64[:], float64[:])')(atomic_add_double_global)
         cuda_func[1, 32](idx, ary)
@@ -342,6 +352,26 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_max_double(self):
         self.check_atomic_max(dtype=np.float64, lo=-65535, hi=65535)
 
+    def test_atomic_max_double_normalizedindex(self):
+        vals = np.random.randint(0, 65535, size=(32, 32)).astype(np.float64)
+        res = np.zeros(1, np.float64)
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(
+            atomic_max_double_normalizedindex)
+        cuda_func[32, 32](res, vals)
+
+        gold = np.max(vals)
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_max_double_oneindex(self):
+        vals = np.random.randint(0, 128, size=32).astype(np.float64)
+        res = np.zeros(1, np.float64)
+        cuda_func = cuda.jit('void(float64[:], float64[:])')(
+            atomic_max_double_oneindex)
+        cuda_func[1, 32](res, vals)
+
+        gold = np.max(vals)
+        np.testing.assert_equal(res, gold)
+
     def check_atomic_min(self, dtype, lo, hi):
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
         res = np.array([65535], dtype=vals.dtype)
@@ -371,43 +401,67 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_min_double(self):
         self.check_atomic_min(dtype=np.float64, lo=-65535, hi=65535)
 
-    def test_atomic_max_double_normalizedindex(self):
+    def test_atomic_min_double_normalizedindex(self):
         vals = np.random.randint(0, 65535, size=(32, 32)).astype(np.float64)
-        res = np.zeros(1, np.float64)
+        res = np.ones(1, np.float64) * 65535
         cuda_func = cuda.jit('void(float64[:], float64[:,:])')(
-            atomic_max_double_normalizedindex)
+            atomic_min_double_normalizedindex)
         cuda_func[32, 32](res, vals)
 
-        gold = np.max(vals)
+        gold = np.min(vals)
         np.testing.assert_equal(res, gold)
 
-    def test_atomic_max_double_oneindex(self):
+    def test_atomic_min_double_oneindex(self):
         vals = np.random.randint(0, 128, size=32).astype(np.float64)
-        res = np.zeros(1, np.float64)
+        res = np.ones(1, np.float64) * 128
         cuda_func = cuda.jit('void(float64[:], float64[:])')(
-            atomic_max_double_oneindex)
+            atomic_min_double_oneindex)
         cuda_func[1, 32](res, vals)
 
-        gold = np.max(vals)
+        gold = np.min(vals)
         np.testing.assert_equal(res, gold)
 
-    def test_atomic_max_nan_location(self):
+    # Taken together, _test_atomic_minmax_nan_location and
+    # _test_atomic_minmax_nan_val check that NaNs are treated similarly to the
+    # way they are in Python / NumPy - that is, {min,max}(a, b) == a if either
+    # a or b is a NaN. For the atomics, this means that the max is taken as the
+    # value stored in the memory location rather than the value supplied - i.e.
+    # for:
+    #
+    #    cuda.atomic.{min,max}(ary, idx, val)
+    #
+    # the result will be ary[idx] for either of ary[idx] or val being NaN.
+
+    def _test_atomic_minmax_nan_location(self, func):
+
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(func)
+
         vals = np.random.randint(0, 128, size=(1,1)).astype(np.float64)
-        gold = vals.copy().reshape(1)
         res = np.zeros(1, np.float64) + np.nan
-        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max)
         cuda_func[1, 1](res, vals)
+        np.testing.assert_equal(res, [np.nan])
 
-        np.testing.assert_equal(res, gold)
+    def _test_atomic_minmax_nan_val(self, func):
+        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(func)
 
-    def test_atomic_max_nan_val(self):
         res = np.random.randint(0, 128, size=1).astype(np.float64)
         gold = res.copy()
         vals = np.zeros((1, 1), np.float64) + np.nan
-        cuda_func = cuda.jit('void(float64[:], float64[:,:])')(atomic_max)
         cuda_func[1, 1](res, vals)
 
         np.testing.assert_equal(res, gold)
+
+    def test_atomic_min_nan_location(self):
+        self._test_atomic_minmax_nan_location(atomic_min)
+
+    def test_atomic_max_nan_location(self):
+        self._test_atomic_minmax_nan_location(atomic_max)
+
+    def test_atomic_min_nan_val(self):
+        self._test_atomic_minmax_nan_val(atomic_min)
+
+    def test_atomic_max_nan_val(self):
+        self._test_atomic_minmax_nan_val(atomic_max)
 
     def test_atomic_max_double_shared(self):
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
@@ -416,6 +470,15 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func[1, 32](res, vals)
 
         gold = np.max(vals)
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_min_double_shared(self):
+        vals = np.random.randint(0, 32, size=32).astype(np.float64)
+        res = np.ones(1, np.float64) * 32
+        cuda_func = cuda.jit('void(float64[:], float64[:])')(atomic_min_double_shared)
+        cuda_func[1, 32](res, vals)
+
+        gold = np.min(vals)
         np.testing.assert_equal(res, gold)
 
     def test_atomic_compare_and_swap(self):
@@ -442,6 +505,258 @@ class TestCudaAtomics(CUDATestCase):
 
         np.testing.assert_array_equal(expect_res, res)
         np.testing.assert_array_equal(expect_out, out)
+
+    # Tests that the atomic add, min, and max operations return the old value -
+    # in the simulator, they did not (see Issue #5458). The max and min have
+    # special handling for NaN values, so we explicitly test with a NaN in the
+    # array being modified and the value provided.
+
+    def _test_atomic_returns_old(self, kernel, initial):
+        x = np.zeros(2, dtype=np.float32)
+        x[0] = initial
+        kernel[1, 1](x)
+        if np.isnan(initial):
+            self.assertTrue(np.isnan(x[1]))
+        else:
+            self.assertEqual(x[1], initial)
+
+    def test_atomic_add_returns_old(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.add(x, 0, 1)
+
+        self._test_atomic_returns_old(kernel, 10)
+
+    def test_atomic_max_returns_no_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.max(x, 0, 1)
+
+        self._test_atomic_returns_old(kernel, 10)
+
+    def test_atomic_max_returns_old_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.max(x, 0, 10)
+
+        self._test_atomic_returns_old(kernel, 1)
+
+    def test_atomic_max_returns_old_nan_in_array(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.max(x, 0, 1)
+
+        self._test_atomic_returns_old(kernel, np.nan)
+
+    def test_atomic_max_returns_old_nan_val(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.max(x, 0, np.nan)
+
+        self._test_atomic_returns_old(kernel, 10)
+
+    def test_atomic_min_returns_old_no_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.min(x, 0, 11)
+
+        self._test_atomic_returns_old(kernel, 10)
+
+    def test_atomic_min_returns_old_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.min(x, 0, 10)
+
+        self._test_atomic_returns_old(kernel, 11)
+
+    def test_atomic_min_returns_old_nan_in_array(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.min(x, 0, 11)
+
+        self._test_atomic_returns_old(kernel, np.nan)
+
+    def test_atomic_min_returns_old_nan_val(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.min(x, 0, np.nan)
+
+        self._test_atomic_returns_old(kernel, 11)
+
+    # Tests for atomic nanmin/nanmax
+
+    # nanmax tests
+    def check_atomic_nanmax(self, dtype, lo, hi):
+        vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
+        vals[1::2] = np.nan
+        res = np.zeros(1, dtype=vals.dtype)
+        cuda_func = cuda.jit(atomic_nanmax)
+        cuda_func[32, 32](res, vals)
+        gold = np.nanmax(vals)
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_nanmax_int32(self):
+        self.check_atomic_nanmax(dtype=np.int32, lo=-65535, hi=65535)
+
+    def test_atomic_nanmax_uint32(self):
+        self.check_atomic_nanmax(dtype=np.uint32, lo=0, hi=65535)
+
+    @skip_unless_cc_32
+    def test_atomic_nanmax_int64(self):
+        self.check_atomic_nanmax(dtype=np.int64, lo=-65535, hi=65535)
+
+    @skip_unless_cc_32
+    def test_atomic_nanmax_uint64(self):
+        self.check_atomic_nanmax(dtype=np.uint64, lo=0, hi=65535)
+
+    def test_atomic_nanmax_float32(self):
+        self.check_atomic_nanmax(dtype=np.float32, lo=-65535, hi=65535)
+
+    def test_atomic_nanmax_double(self):
+        self.check_atomic_nanmax(dtype=np.float64, lo=-65535, hi=65535)
+
+    def test_atomic_nanmax_double_shared(self):
+        vals = np.random.randint(0, 32, size=32).astype(np.float64)
+        vals[1::2] = np.nan
+        res = np.array([0], dtype=vals.dtype)
+        cuda_func = cuda.jit('void(float64[:], float64[:])')(atomic_nanmax_double_shared)
+        cuda_func[1, 32](res, vals)
+
+        gold = np.nanmax(vals)
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_nanmax_double_oneindex(self):
+        vals = np.random.randint(0, 128, size=32).astype(np.float64)
+        vals[1::2] = np.nan
+        res = np.zeros(1, np.float64)
+        cuda_func = cuda.jit('void(float64[:], float64[:])')(
+            atomic_max_double_oneindex)
+        cuda_func[1, 32](res, vals)
+
+        gold = np.nanmax(vals)
+        np.testing.assert_equal(res, gold)
+
+    # nanmin tests
+    def check_atomic_nanmin(self, dtype, lo, hi):
+        vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
+        vals[1::2] = np.nan
+        res = np.array([65535], dtype=vals.dtype)
+        cuda_func = cuda.jit(atomic_nanmin)
+        cuda_func[32, 32](res, vals)
+
+        gold = np.nanmin(vals)
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_nanmin_int32(self):
+        self.check_atomic_nanmin(dtype=np.int32, lo=-65535, hi=65535)
+
+    def test_atomic_nanmin_uint32(self):
+        self.check_atomic_nanmin(dtype=np.uint32, lo=0, hi=65535)
+
+    @skip_unless_cc_32
+    def test_atomic_nanmin_int64(self):
+        self.check_atomic_nanmin(dtype=np.int64, lo=-65535, hi=65535)
+
+    @skip_unless_cc_32
+    def test_atomic_nanmin_uint64(self):
+        self.check_atomic_nanmin(dtype=np.uint64, lo=0, hi=65535)
+
+    def test_atomic_nanmin_float(self):
+        self.check_atomic_nanmin(dtype=np.float32, lo=-65535, hi=65535)
+
+    def test_atomic_nanmin_double(self):
+        self.check_atomic_nanmin(dtype=np.float64, lo=-65535, hi=65535)
+
+    def test_atomic_nanmin_double_shared(self):
+        vals = np.random.randint(0, 32, size=32).astype(np.float64)
+        vals[1::2] = np.nan
+        res = np.array([32], dtype=vals.dtype)
+        cuda_func = cuda.jit('void(float64[:], float64[:])')(atomic_nanmin_double_shared)
+        cuda_func[1, 32](res, vals)
+
+        gold = np.nanmin(vals)
+        np.testing.assert_equal(res, gold)
+
+    def test_atomic_nanmin_double_oneindex(self):
+        vals = np.random.randint(0, 128, size=32).astype(np.float64)
+        vals[1::2] = np.nan
+        res = np.array([128], np.float64)
+        cuda_func = cuda.jit('void(float64[:], float64[:])')(
+            atomic_min_double_oneindex)
+        cuda_func[1, 32](res, vals)
+
+        gold = np.nanmin(vals)
+        np.testing.assert_equal(res, gold)
+
+
+    # Returning old value tests
+
+    def _test_atomic_nan_returns_old(self, kernel, initial):
+        x = np.zeros(2, dtype=np.float32)
+        x[0] = initial
+        x[1] = np.nan
+        kernel[1, 1](x)
+        if np.isnan(initial):
+            self.assertFalse(np.isnan(x[0]))
+            self.assertTrue(np.isnan(x[1]))
+        else:
+            self.assertEqual(x[1], initial)
+
+    def test_atomic_nanmax_returns_old_no_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.nanmax(x, 0, 1)
+
+        self._test_atomic_nan_returns_old(kernel, 10)
+
+    def test_atomic_nanmax_returns_old_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.nanmax(x, 0, 10)
+
+        self._test_atomic_nan_returns_old(kernel, 1)
+
+    def test_atomic_nanmax_returns_old_nan_in_array(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.nanmax(x, 0, 1)
+
+        self._test_atomic_nan_returns_old(kernel, np.nan)
+
+    def test_atomic_nanmax_returns_old_nan_val(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.nanmax(x, 0, np.nan)
+
+        self._test_atomic_nan_returns_old(kernel, 10)
+
+    def test_atomic_nanmin_returns_old_no_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.nanmin(x, 0, 11)
+
+        self._test_atomic_nan_returns_old(kernel, 10)
+
+    def test_atomic_nanmin_returns_old_replace(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.nanmin(x, 0, 10)
+
+        self._test_atomic_nan_returns_old(kernel, 11)
+
+    def test_atomic_nanmin_returns_old_nan_in_array(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.nanmin(x, 0, 11)
+
+        self._test_atomic_nan_returns_old(kernel, np.nan)
+
+    def test_atomic_nanmin_returns_old_nan_val(self):
+        @cuda.jit
+        def kernel(x):
+            x[1] = cuda.atomic.nanmin(x, 0, np.nan)
+
+        self._test_atomic_nan_returns_old(kernel, 11)
 
 
 if __name__ == '__main__':

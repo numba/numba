@@ -22,7 +22,6 @@ exclude =
     __init__.py
     # Grandfather in existing failing files.  This list should shrink over time
     numba/core/dispatcher.py
-    numba/core/serialize.py
     numba/core/funcdesc.py
     numba/core/postproc.py
     numba/stencils/stencil.py
@@ -41,14 +40,12 @@ exclude =
     numba/core/itanium_mangler.py
     numba/core/generators.py
     numba/misc/appdirs.py
-    numba/cffi_support.py
     numba/core/interpreter.py
     numba/core/caching.py
     numba/core/debuginfo.py
     numba/core/annotations/pretty_annotate.py
     numba/misc/dummyarray.py
     numba/core/dataflow.py
-    numba/runtests.py
     numba/core/pythonapi.py
     numba/core/decorators.py
     numba/core/typeconv/typeconv.py
@@ -61,7 +58,6 @@ exclude =
     numba/core/types/abstract.py
     numba/core/types/functions.py
     numba/core/types/misc.py
-    numba/core/types/containers.py
     numba/core/types/npytypes.py
     numba/core/types/common.py
     numba/core/types/iterators.py
@@ -100,7 +96,6 @@ exclude =
     numba/cuda/printimpl.py
     numba/cuda/libdevice.py
     numba/cuda/device_init.py
-    numba/cuda/compiler.py
     numba/cuda/initialize.py
     numba/cuda/simulator_init.py
     numba/cuda/random.py
@@ -225,7 +220,6 @@ exclude =
     numba/tests/test_wrapper.py
     numba/tests/test_obj_lifetime.py
     numba/tests/test_intwidth.py
-    numba/tests/test_extending.py
     numba/tests/test_remove_dead.py
     numba/tests/serialize_usecases.py
     numba/tests/test_del.py
@@ -265,7 +259,6 @@ exclude =
     numba/tests/test_extended_arg.py
     numba/tests/test_alignment.py
     numba/tests/test_multi3.py
-    numba/tests/test_extending_types.py
     numba/tests/test_import.py
     numba/tests/test_overlap.py
     numba/tests/test_array_attr.py
@@ -308,7 +301,6 @@ exclude =
     numba/tests/test_nested_calls.py
     numba/tests/test_chained_assign.py
     numba/tests/test_withlifting.py
-    numba/tests/test_errorhandling.py
     numba/tests/test_parfors.py
     numba/tests/test_sets.py
     numba/tests/test_dyn_array.py
