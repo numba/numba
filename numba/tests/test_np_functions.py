@@ -2193,7 +2193,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield a, 2
             yield a, 2, 0
             yield a, [1, 4, 72]
+            yield list(a), [1, 4, 72]
+            yield tuple(a), [1, 4, 72]
             yield a, [1, 4, 72], 0
+            yield list(a), [1, 4, 72], 0
+            yield tuple(a), [1, 4, 72], 0
 
             a = np.arange(64).reshape(4, 4, 4)
             yield a, 2
@@ -2228,6 +2232,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         def args_variations():
             yield np.arange(8), 3
+            yield list(np.arange(8)), 3
+            yield tuple(np.arange(8)), 3
             yield np.arange(24).reshape(12, 2), 5
 
         for args in args_variations():

@@ -4966,6 +4966,16 @@ def np_flip(a):
 
 @overload(np.array_split)
 def np_array_split(ary, indices_or_sections, axis=0):
+    if isinstance(ary, (types.UniTuple, types.ListType, types.List)):
+        def impl(ary, indices_or_sections, axis=0):
+            return np.array_split(
+                np.asarray(ary),
+                indices_or_sections,
+                axis=axis
+            )
+
+        return impl
+
     if isinstance(indices_or_sections, types.Integer):
         def impl(ary, indices_or_sections, axis=0):
             l, rem = divmod(ary.shape[axis], indices_or_sections)
@@ -5019,6 +5029,12 @@ def np_array_split(ary, indices_or_sections, axis=0):
 def np_split(ary, indices_or_sections, axis=0):
     # This is just a wrapper of array_split, but with an extra error if
     # indices is an int.
+    if isinstance(ary, (types.UniTuple, types.ListType, types.List)):
+        def impl(ary, indices_or_sections, axis=0):
+            return np.split(np.asarray(ary), indices_or_sections, axis=axis)
+
+        return impl
+
     if isinstance(indices_or_sections, types.Integer):
         def impl(ary, indices_or_sections, axis=0):
             l, rem = divmod(ary.shape[axis], indices_or_sections)
