@@ -1169,7 +1169,7 @@ class ArrayAnalysis(object):
         # calculate beginning equiv_set of current block as an intersection
         # of incoming ones.
         if config.DEBUG_ARRAY_OPT >= 2:
-            print("preds:", preds)
+            print("preds:", list(preds))
         for (p, q) in preds:
             if config.DEBUG_ARRAY_OPT >= 2:
                 print("p, q:", p, q)
