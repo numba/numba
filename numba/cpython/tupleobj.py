@@ -346,6 +346,8 @@ def getitem_unituple(context, builder, sig, args):
 
 
 @lower_builtin('static_getitem', types.LiteralStrKeyDict, types.StringLiteral)
+@lower_builtin('static_getitem', types.LiteralList, types.IntegerLiteral)
+@lower_builtin('static_getitem', types.LiteralList, types.SliceLiteral)
 @lower_builtin('static_getitem', types.BaseTuple, types.IntegerLiteral)
 @lower_builtin('static_getitem', types.BaseTuple, types.SliceLiteral)
 def static_getitem_tuple(context, builder, sig, args):

@@ -617,7 +617,7 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
     """
     _name = "transform_literal_unroll_const_list_to_tuple"
 
-    _accepted_types = (types.BaseTuple,)
+    _accepted_types = (types.BaseTuple, types.LiteralList)
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -740,7 +740,7 @@ class MixedContainerUnroller(FunctionPass):
 
     _DEBUG = False
 
-    _accepted_types = (types.BaseTuple,)
+    _accepted_types = (types.BaseTuple, types.LiteralList)
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -1264,7 +1264,7 @@ class IterLoopCanonicalization(FunctionPass):
     _DEBUG = False
 
     # if partial typing info is available it will only look at these types
-    _accepted_types = (types.BaseTuple,)
+    _accepted_types = (types.BaseTuple, types.LiteralList)
     _accepted_calls = (literal_unroll,)
 
     def __init__(self):
