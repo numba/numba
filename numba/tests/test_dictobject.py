@@ -2149,6 +2149,15 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
 
         np.testing.assert_allclose(foo(), np.ones(3) * 10)
 
+    def test_dict_with_single_literallist_value(self):
+        #see issue #6094
+        @njit
+        def foo():
+            z = {"A": [lambda a: 2 * a, "B"]}
+            return z["A"][0](5)
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+
 
 if __name__ == '__main__':
     unittest.main()
