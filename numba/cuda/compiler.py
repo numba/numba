@@ -787,6 +787,7 @@ class Dispatcher(serialize.ReduceMixin):
 
         # keyed by a `(compute capability, args)` tuple
         self.definitions = {}
+        self.specializations = {}
 
         self.targetoptions = targetoptions
 
@@ -862,12 +863,19 @@ class Dispatcher(serialize.ReduceMixin):
         Create a new instance of this dispatcher specialized for the given
         *args*.
         '''
+        cc = get_current_device().compute_capability
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
+        specialization = self.specializations.get((cc, argtypes))
+        if specialization:
+            return specialization
+
         targetoptions = self.targetoptions
         targetoptions['link'] = self.link
-        return Dispatcher(self.py_func, [types.void(*argtypes)], self._bind,
-                          targetoptions)
+        specialization = Dispatcher(self.py_func, [types.void(*argtypes)],
+                                    self._bind, targetoptions)
+        self.specializations[cc, argtypes] = specialization
+        return specialization
 
     def disable_compile(self, val=True):
         self._can_compile = not val
