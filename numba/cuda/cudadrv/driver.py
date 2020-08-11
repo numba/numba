@@ -193,7 +193,7 @@ def _getpid():
 ERROR_MAP = _build_reverse_error_map()
 
 MISSING_FUNCTION_ERRMSG = """driver missing function: %s.
-Requires CUDA 8.0 or above.
+Requires CUDA 9.0 or above.
 """
 
 
