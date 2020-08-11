@@ -72,10 +72,10 @@ def dim3_z(context, builder, sig, args):
     return builder.extract_value(args, 2)
 
 
-@lower(cuda.grid, types.int32)
+@lower(cuda.grid, types.uint32)
 def cuda_grid(context, builder, sig, args):
     restype = sig.return_type
-    if restype == types.int32:
+    if restype == types.uint32:
         return nvvmutils.get_global_id(builder, dim=1)
     elif isinstance(restype, types.UniTuple):
         ids = nvvmutils.get_global_id(builder, dim=restype.count)
@@ -90,12 +90,12 @@ def _nthreads_for_dim(builder, dim):
     return builder.mul(ntid, nctaid)
 
 
-@lower(cuda.gridsize, types.int32)
+@lower(cuda.gridsize, types.uint32)
 def cuda_gridsize(context, builder, sig, args):
     restype = sig.return_type
     nx = _nthreads_for_dim(builder, 'x')
 
-    if restype == types.int32:
+    if restype == types.uint32:
         return nx
     elif isinstance(restype, types.UniTuple):
         ny = _nthreads_for_dim(builder, 'y')
