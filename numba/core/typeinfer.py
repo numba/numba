@@ -347,10 +347,12 @@ class BuildMapConstraint(object):
                 # Single key:value in ctor, key is str, value is an otherwise
                 # illegal container type, e.g. LiteralStrKeyDict or
                 # List, there's no way to put this into a typed.Dict, so make it
-                # a LiteralStrKeyDict.
+                # a LiteralStrKeyDict, same goes for LiteralList.
                 if len(vtys) == 1:
                     valty = vtys[0]
-                    if isinstance(valty, (types.LiteralStrKeyDict, types.List)):
+                    if isinstance(valty, (types.LiteralStrKeyDict,
+                                          types.List,
+                                          types.LiteralList)):
                         homogeneous = False
 
                 if strkey and not homogeneous:
