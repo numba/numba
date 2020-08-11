@@ -86,3 +86,10 @@ Continuous Integration
 .. image:: https://dev.azure.com/numba/numba/_apis/build/status/numba.numba?branchName=master
     :target: https://dev.azure.com/numba/numba/_build/latest?definitionId=1?branchName=master
     :alt: Azure Pipelines
+
+
+Additional License Information for Wheel Packages
+=================================================
+
+The Numba wheel package links to and redistributes `libtbb` which is under
+Apache v2.0.
