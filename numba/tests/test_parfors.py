@@ -38,7 +38,7 @@ from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack, disabled_test)
+                      needs_lapack, disabled_test, skip_unless_scipy)
 import cmath
 import unittest
 
@@ -3103,7 +3103,10 @@ class TestParforsSlice(TestParforsBase):
         self.check(test_impl, d, k)
 
     @skip_parfors_unsupported
+    @skip_unless_scipy
     def test_issue6102(self):
+        # The problem is originally observed on Python3.8 because of the
+        # changes in how loops are represented in 3.8 bytecode.
         @njit(parallel=True)
         def f(r):
             for ir in prange(r.shape[0]):
