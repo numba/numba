@@ -3102,6 +3102,24 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, d, k)
 
+    @skip_parfors_unsupported
+    def test_issue6102(self):
+        @njit(parallel=True)
+        def f(r):
+            for ir in prange(r.shape[0]):
+                dist = np.inf
+                tr = np.array([0, 0, 0], dtype=np.float32)
+                for i in [1, 0, -1]:
+                    dist_t = np.linalg.norm(r[ir, :] + i)
+                    if dist_t < dist:
+                        dist = dist_t
+                        tr = np.array([i, i, i], dtype=np.float32)
+                r[ir, :] += tr
+            return r
+
+        r = np.array([[0., 0., 0.], [0., 0., 1.]])
+        self.assertPreciseEqual(f(r), f.py_func(r))
+
 
 class TestParforsOptions(TestParforsBase):
 
