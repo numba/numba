@@ -1,17 +1,15 @@
 import traceback
 from collections import namedtuple, defaultdict
-import inspect
 import itertools
 import logging
 import textwrap
-from os import path
 from shutil import get_terminal_size
 
 from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
 from .common import Opaque
 from .misc import unliteral
 from numba.core import errors, utils, types, config
-import numba
+
 
 _logger = logging.getLogger(__name__)
 
@@ -33,16 +31,19 @@ _reason_template = """
 " - Of which {nmatches} did not match due to:\n
 """
 
+
 def _wrapper(tmp, indent=0):
-    return textwrap.indent(tmp, ' ' * indent,  lambda line: True)
+    return textwrap.indent(tmp, ' ' * indent, lambda line: True)
+
 
 _overload_template = ("- Of which {nduplicates} did not match due to:\n"
                       "{kind} {inof} function '{function}': File: {file}: "
                       "Line {line}.\n  With argument(s): '({args})':")
 
-_err_reasons = {}
-_err_reasons['specific_error'] = ("Rejected as the implementation raised a "
-                                  "specific error:\n{}")
+
+_err_reasons = {'specific_error': "Rejected as the implementation raised a "
+                                  "specific error:\n{}"}
+
 
 def _bt_as_lines(bt):
     """
@@ -50,10 +51,12 @@ def _bt_as_lines(bt):
     """
     return [y for y in itertools.chain(*[x.split('\n') for x in bt]) if y]
 
+
 def argsnkwargs_to_str(args, kwargs):
     buf = [str(a) for a in tuple(args)]
     buf.extend(["{}={}".format(k, v) for k, v in kwargs.items()])
     return ', '.join(buf)
+
 
 class _ResolutionFailures(object):
     """Collect and format function resolution failures.
@@ -92,7 +95,6 @@ class _ResolutionFailures(object):
         indent = ' ' * self._scale
         argstr = argsnkwargs_to_str(self._args, self._kwargs)
         ncandidates = sum([len(x) for x in self._failures.values()])
-
 
         # sort out a display name for the function
         tykey = self._function_type.typing_key
@@ -152,13 +154,13 @@ class _ResolutionFailures(object):
 
                 msgbuf.append(_termcolor.errmsg(
                     _wrapper(_overload_template.format(nduplicates=nduplicates,
-                                                    kind = source_kind.title(),
-                                                    function=fname,
-                                                    inof='of',
-                                                    file=source_file,
-                                                    line=source_lines,
-                                                    args=largstr),
-                    ldepth + 1)))
+                                                       kind=source_kind.title(),
+                                                       function=fname,
+                                                       inof='of',
+                                                       file=source_file,
+                                                       line=source_lines,
+                                                       args=largstr),
+                             ldepth + 1)))
                 msgbuf.append(_termcolor.highlight(_wrapper(err.error,
                                                             ldepth + 2)))
             else:
@@ -166,13 +168,13 @@ class _ResolutionFailures(object):
                 # failed for a specific reason try and report this.
                 msgbuf.append(_termcolor.errmsg(
                     _wrapper(_overload_template.format(nduplicates=nduplicates,
-                                                    kind = source_kind.title(),
-                                                    function=source_name,
-                                                    inof='in',
-                                                    file=source_file,
-                                                    line=source_lines[0],
-                                                    args=largstr),
-                    ldepth + 1)))
+                                                       kind=source_kind.title(),
+                                                       function=source_name,
+                                                       inof='in',
+                                                       file=source_file,
+                                                       line=source_lines[0],
+                                                       args=largstr),
+                             ldepth + 1)))
 
                 if isinstance(error, BaseException):
                     reason = indent + self.format_error(error)
@@ -190,7 +192,7 @@ class _ResolutionFailures(object):
                     bt_as_lines = _bt_as_lines(bt)
                     nd2indent = '\n{}'.format(2 * indent)
                     errstr += _termcolor.reset(nd2indent +
-                                                nd2indent.join(bt_as_lines))
+                                               nd2indent.join(bt_as_lines))
                 msgbuf.append(_termcolor.highlight(_wrapper(errstr,
                                                             ldepth + 2)))
                 loc = self.get_loc(template, error)
@@ -351,7 +353,7 @@ class BoundFunction(Callable, Opaque):
 
     def unify(self, typingctx, other):
         if (isinstance(other, BoundFunction) and
-            self.typing_key == other.typing_key):
+                self.typing_key == other.typing_key):
             this = typingctx.unify_pairs(self.this, other.this)
             if this is not None:
                 # XXX is it right that both template instances are distinct?
@@ -391,16 +393,16 @@ class BoundFunction(Callable, Opaque):
                 else:
                     break
             else:
-                # if the unliteral_args and unliteral_kws are the same as the literal
-                # ones, set up to not bother retrying
+                # if the unliteral_args and unliteral_kws are the same as the
+                # literal ones, set up to not bother retrying
                 unliteral_args = tuple([_unlit_non_poison(a) for a in args])
                 unliteral_kws = {k: _unlit_non_poison(v)
                                  for k, v in kws.items()}
                 skip = unliteral_args == args and kws == unliteral_kws
 
-                # If the above template application failed and the non-literal args are
-                # different to the literal ones, try again with literals rewritten as
-                # non-literals
+                # If the above template application failed and the non-literal
+                # args are different to the literal ones, try again with
+                # literals rewritten as non-literals
                 if not skip and out is None:
                     try:
                         out = template.apply(unliteral_args, unliteral_kws)
@@ -420,6 +422,7 @@ class BoundFunction(Callable, Opaque):
             tmplt = _termcolor.highlight(header)
             if config.DEVELOPER_MODE:
                 indent = ' ' * 4
+
                 def add_bt(error):
                     if isinstance(error, BaseException):
                         # if the error is an actual exception instance, trace it
@@ -429,7 +432,7 @@ class BoundFunction(Callable, Opaque):
                         bt = [""]
                     nd2indent = '\n{}'.format(2 * indent)
                     errstr = _termcolor.reset(nd2indent +
-                                               nd2indent.join(_bt_as_lines(bt)))
+                                              nd2indent.join(_bt_as_lines(bt)))
                     return _termcolor.reset(errstr)
             else:
                 add_bt = lambda X: ''
@@ -444,11 +447,11 @@ class BoundFunction(Callable, Opaque):
                                      nested_msg('non-literal', nonliteral_e))
         return out
 
-
     def get_call_signatures(self):
         sigs = getattr(self.template, 'cases', [])
         is_param = hasattr(self.template, 'generic')
         return sigs, is_param
+
 
 class MakeFunctionLiteral(Literal, Opaque):
     pass
@@ -493,7 +496,8 @@ class Dispatcher(WeakType, Callable, Dummy):
         super(Dispatcher, self).__init__("type(%s)" % dispatcher)
 
     def dump(self, tab=''):
-        print(f'{tab}DUMP {type(self).__name__}[code={self._code}, name={self.name}]')
+        print((f'{tab}DUMP {type(self).__name__}[code={self._code}, '
+               f'name={self.name}]'))
         self.dispatcher.dump(tab=tab + '  ')
         print(f'{tab}END DUMP')
 
@@ -503,7 +507,8 @@ class Dispatcher(WeakType, Callable, Dummy):
         A signature returned and it is ensured that a compiled specialization
         is available for it.
         """
-        template, pysig, args, kws = self.dispatcher.get_call_template(args, kws)
+        template, pysig, args, kws = \
+            self.dispatcher.get_call_template(args, kws)
         sig = template(context).apply(args, kws)
         if sig:
             sig = sig.replace(pysig=pysig)
@@ -516,7 +521,8 @@ class Dispatcher(WeakType, Callable, Dummy):
     @property
     def dispatcher(self):
         """
-        A strong reference to the underlying numba.dispatcher.Dispatcher instance.
+        A strong reference to the underlying numba.dispatcher.Dispatcher
+        instance.
         """
         return self._get_object()
 
@@ -566,8 +572,8 @@ class ExternalFunctionPointer(BaseFunction):
                 def generic(self, args, kws):
                     if kws:
                         raise TypeError("does not support keyword arguments")
-                    # Make ffi_forced_object a bottom type to allow any type to be
-                    # casted to it. This is the only place that support
+                    # Make ffi_forced_object a bottom type to allow any type to
+                    # be casted to it. This is the only place that support
                     # ffi_forced_object.
                     coerced = [actual if formal == ffi_forced_object else formal
                                for actual, formal
@@ -585,8 +591,8 @@ class ExternalFunctionPointer(BaseFunction):
 
 class ExternalFunction(Function):
     """
-    A named native function (resolvable by LLVM) accepting an explicit signature.
-    For internal use only.
+    A named native function (resolvable by LLVM) accepting an explicit
+    signature. For internal use only.
     """
 
     def __init__(self, symbol, sig):
@@ -612,7 +618,8 @@ class NamedTupleClass(Callable, Opaque):
         super(NamedTupleClass, self).__init__(name)
 
     def get_call_type(self, context, args, kws):
-        # Overridden by the __call__ constructor resolution in typing.collections
+        # Overridden by the __call__ constructor resolution in
+        # typing.collections
         return None
 
     def get_call_signatures(self):
