@@ -697,14 +697,17 @@ class Cache(_Cache):
     def _index_key(self, sig, codegen):
         """
         Compute index key for the given signature and codegen.
-        It includes a description of the OS and target architecture.
+        It includes a description of the OS, target architecture and hashes of
+        the bytecode for the function and, if the function has a __closure__,
+        a hash of the cell_contents.
         """
         codebytes = self._py_func.__code__.co_code
         if self._py_func.__closure__ is not None:
             cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+            cvarbytes = dumps(cvars)
         else:
-            cvars = b''
-        cvarbytes = dumps(cvars)
+            cvarbytes = b''
+
         hasher = lambda x: hashlib.sha256(x).hexdigest()
         return (sig, codegen.magic_tuple(), (hasher(codebytes),
                                              hasher(cvarbytes),))
