@@ -87,7 +87,12 @@ class DeviceNDArrayBase(object):
             strides = (strides,)
         dtype = np.dtype(dtype)
         self.ndim = len(shape)
-        if len(strides) != self.ndim:
+        if strides is None:
+            strides = [dtype.itemsize]
+            for s in shape[:0:-1]:
+                strides.insert(0, s * strides[0])
+            strides = tuple(strides)
+        elif len(strides) != self.ndim:
             raise ValueError('strides not match ndim')
         self._dummy = dummyarray.Array.from_desc(0, shape, strides,
                                                  dtype.itemsize)
