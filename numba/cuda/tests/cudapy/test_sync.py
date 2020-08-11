@@ -1,6 +1,6 @@
 import numpy as np
 from numba import cuda, int32, float32
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 from numba.core.config import ENABLE_CUDASIM
 
 
@@ -109,6 +109,13 @@ def use_syncthreads_or(ary_in, ary_out):
     ary_out[i] = cuda.syncthreads_or(ary_in[i])
 
 
+def _safe_cc_check(cc):
+    if ENABLE_CUDASIM:
+        return True
+    else:
+        return cuda.get_current_device().compute_capability >= cc
+
+
 class TestCudaSync(CUDATestCase):
     def _test_useless(self, kernel):
         compiled = cuda.jit("void(int32[::1])")(kernel)
@@ -121,12 +128,19 @@ class TestCudaSync(CUDATestCase):
     def test_useless_syncthreads(self):
         self._test_useless(useless_syncthreads)
 
+    @skip_on_cudasim("syncwarp not implemented on cudasim")
     def test_useless_syncwarp(self):
         self._test_useless(useless_syncwarp)
 
+    @skip_on_cudasim("syncwarp not implemented on cudasim")
+    @unittest.skipUnless(_safe_cc_check((7, 0)),
+                         "Partial masks require CC 7.0 or greater")
     def test_useless_syncwarp_with_mask(self):
         self._test_useless(useless_syncwarp_with_mask)
 
+    @skip_on_cudasim("syncwarp not implemented on cudasim")
+    @unittest.skipUnless(_safe_cc_check((7, 0)),
+                         "Partial masks require CC 7.0 or greater")
     def test_coop_syncwarp(self):
         # coop_syncwarp computes the sum of all integers from 0 to 31 (496)
         # using a single warp
