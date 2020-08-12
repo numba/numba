@@ -133,7 +133,7 @@ CUDA Enhancements/Fixes:
 * PR #6030: CUDA: Don't optimize IR before sending it to NVVM
 * PR #6052: Fix dtype for atomic_add_double testsuite
 * PR #6080: CUDA: Prevent auto-upgrade of atomic intrinsics
-* PR #6123: [WIP] Fix #6121
+* PR #6123: Fix #6121
 
 Documentation Updates:
 
