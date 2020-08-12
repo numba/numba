@@ -76,10 +76,7 @@ def frexp_implement(nvname):
         expptr = cgutils.alloca_once(builder, int_type, name='exp')
 
         ret = builder.call(fn, (args[0], expptr))
-        ret = cgutils.make_anonymous_struct(builder,
-                                            (ret, builder.load(expptr)))
-
-        return ret
+        return cgutils.pack_struct(builder, (ret, builder.load(expptr)))
 
     return core
 
