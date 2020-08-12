@@ -5,7 +5,6 @@ from numba.cuda.testing import unittest, ContextResettingTestCase
 from numba.cuda.testing import skip_on_cudasim
 
 
-@skip_on_cudasim('CUDA Driver API unsupported in the simulator')
 class TestHostAlloc(ContextResettingTestCase):
     def test_host_alloc_driver(self):
         n = 32
@@ -35,16 +34,16 @@ class TestHostAlloc(ContextResettingTestCase):
         self.assertTrue(all(ary == 123))
         devary = cuda.to_device(ary)
         driver.device_memset(devary, 0, driver.device_memory_size(devary))
-        self.assertTrue(all(ary == 123))
+        self.assertTrue(all([x == 123 for x in ary]))
         devary.copy_to_host(ary)
-        self.assertTrue(all(ary == 0))
+        self.assertTrue(all([x == 0 for x in ary]))
 
     def test_host_alloc_mapped(self):
         ary = cuda.mapped_array(10, dtype=np.uint32)
         ary.fill(123)
-        self.assertTrue(all(ary == 123))
+        self.assertTrue(all([x == 123 for x in ary]))
         driver.device_memset(ary, 0, driver.device_memory_size(ary))
-        self.assertTrue(all(ary == 0))
+        self.assertTrue(all([x == 0 for x in ary]))
 
 
 if __name__ == '__main__':

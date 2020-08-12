@@ -268,6 +268,13 @@ def pinned(arg):
     yield
 
 
+def mapped_array(*args, **kwargs):
+    for unused_arg in ('portable', 'wc'):
+        if unused_arg in kwargs:
+            kwargs.pop(unused_arg)
+    return device_array(*args, **kwargs)
+
+
 def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
 
