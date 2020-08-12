@@ -4,29 +4,48 @@ from numba.cuda.testing import skip_on_cudasim, unittest, CUDATestCase
 
 @skip_on_cudasim('Dispatcher objects not used in the simulator')
 class TestDispatcher(CUDATestCase):
-    def _test_no_double_specialize(self, dispatcher):
+    def _test_no_double_specialize(self, dispatcher, ty):
 
         with self.assertRaises(RuntimeError) as e:
-            dispatcher.specialize((float32[::1],))
+            dispatcher.specialize((ty,))
 
         self.assertIn('Dispatcher already specialized', str(e.exception))
 
-    def test_no_double_specialize_sig(self):
-        # Attempting to specialize a kernel jitted with a signature is illegal.
+    def test_no_double_specialize_sig_same_types(self):
+        # Attempting to specialize a kernel jitted with a signature is illegal,
+        # even for the same types the kernel is already specialized for.
         @cuda.jit('void(float32[::1])')
         def f(x):
             pass
 
-        self._test_no_double_specialize(f)
+        self._test_no_double_specialize(f, float32[::1])
 
-    def test_no_double_specialize_no_sig(self):
-        # Attempting to specialize an already-specialized kernel is illegal.
+    def test_no_double_specialize_no_sig_same_types(self):
+        # Attempting to specialize an already-specialized kernel is illegal,
+        # even for the same types the kernel is already specialized for.
         @cuda.jit
         def f(x):
             pass
 
         f_specialized = f.specialize((float32[::1],))
-        self._test_no_double_specialize(f_specialized)
+        self._test_no_double_specialize(f_specialized, float32[::1])
+
+    def test_no_double_specialize_sig_diff_types(self):
+        # Attempting to specialize a kernel jitted with a signature is illegal.
+        @cuda.jit('void(int32[::1])')
+        def f(x):
+            pass
+
+        self._test_no_double_specialize(f, float32[::1])
+
+    def test_no_double_specialize_no_sig_diff_types(self):
+        # Attempting to specialize an already-specialized kernel is illegal.
+        @cuda.jit
+        def f(x):
+            pass
+
+        f_specialized = f.specialize((int32[::1],))
+        self._test_no_double_specialize(f_specialized, float32[::1])
 
     def test_specialize_cache_same(self):
         # Ensure that the same dispatcher is returned for the same argument
