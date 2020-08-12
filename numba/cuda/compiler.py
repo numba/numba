@@ -366,7 +366,10 @@ class ForAll(object):
         if self.ntasks == 0:
             return
 
-        kernel = self.kernel.specialize(*args)
+        if self.kernel.specialized:
+            kernel = self.kernel
+        else:
+            kernel = self.kernel.specialize(*args)
         blockdim = self._compute_thread_per_block(kernel)
         griddim = (self.ntasks + blockdim - 1) // blockdim
 
@@ -851,7 +854,7 @@ class Dispatcher(serialize.ReduceMixin):
 
     def call(self, args, griddim, blockdim, stream, sharedmem):
         '''
-        Specialize and invoke this kernel with *args*.
+        Compile if necessary and invoke this kernel with *args*.
         '''
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
@@ -866,6 +869,9 @@ class Dispatcher(serialize.ReduceMixin):
         cc = get_current_device().compute_capability
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
+        if self.specialized:
+            raise RuntimeError('Dispatcher already specialized')
+
         specialization = self.specializations.get((cc, argtypes))
         if specialization:
             return specialization
