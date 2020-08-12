@@ -22,9 +22,9 @@ def _gen_v_info():
             return int(x)
         except ValueError:
             return None
-    major = try_int(parts[0])
-    minor = try_int(parts[1])
-    patch = try_int(parts[2])
+    major = try_int(parts[0]) if len(parts) >= 1 else None
+    minor = try_int(parts[1]) if len(parts) >= 2 else None
+    patch = try_int(parts[2]) if len(parts) >= 3 else None
     short = (major, minor)
     full = (major, minor, patch)
     string = __version__
