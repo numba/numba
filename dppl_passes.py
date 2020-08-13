@@ -25,7 +25,7 @@ from numba.core.compiler_machinery import FunctionPass, LoweringPass, register_p
 
 from .dppl_lowerer import DPPLLower
 
-from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass
+from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass, replace_functions_map
 from numba.parfors.parfor import ParforPass as _parfor_ParforPass
 from numba.parfors.parfor import Parfor
 
@@ -119,13 +119,16 @@ class DPPLPreParforPass(FunctionPass):
         """
         # Ensure we have an IR and type information.
         assert state.func_ir
+        functions_map = replace_functions_map.copy()
+        functions_map.pop(('dot', 'numpy'), None)
 
         preparfor_pass = _parfor_PreParforPass(
             state.func_ir,
             state.type_annotation.typemap,
             state.type_annotation.calltypes, state.typingctx,
             state.flags.auto_parallel,
-            state.parfor_diagnostics.replaced_fns
+            state.parfor_diagnostics.replaced_fns,
+            replace_functions_map=functions_map
         )
 
         preparfor_pass.run()
@@ -216,7 +219,19 @@ class SpirvFriendlyLowering(LoweringPass):
             # be later serialized.
             state.library.enable_object_caching()
 
+
         targetctx = state.targetctx
+
+        # This should not happen here, after we have the notion of context in Numba
+        # we should have specialized dispatcher for dppl context and that dispatcher
+        # should be a cpu dispatcher that will overload the lowering functions for
+        # linalg for dppl.cpu_dispatcher and the dppl.gpu_dipatcher should be the
+        # current target context we have to launch kernels.
+        # This is broken as this essentially adds the new lowering in a list which
+        # means it does not get replaced with the new lowering_buitins
+        from . import experimental_linalg_lowering_overload
+        targetctx.refresh()
+
         library   = state.library
         interp    = state.func_ir  # why is it called this?!
         typemap   = state.typemap
@@ -273,6 +288,7 @@ class DPPLNoPythonBackend(FunctionPass):
         """
         Back-end: Generate LLVM IR from Numba IR, compile to machine code
         """
+
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 
