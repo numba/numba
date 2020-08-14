@@ -35,12 +35,13 @@ from numba.core.ir_utils import (add_offset_to_labels,
 from numba.core.typing import signature
 
 import warnings
-from numba.core.errors import NumbaParallelSafetyWarning
+from numba.core.errors import NumbaParallelSafetyWarning, NumbaPerformanceWarning
 
 from .target import SPIR_GENERIC_ADDRSPACE
 from .dufunc_inliner import dufunc_inliner
 from . import dppl_host_fn_call_gen as dppl_call_gen
 import dppl.ocldrv as driver
+from numba.dppl.target import DPPLTargetContext
 
 
 def _print_block(block):
@@ -956,10 +957,72 @@ def generate_dppl_host_wrapper(lowerer,
 
 from numba.core.lowering import Lower
 
+
 class DPPLLower(Lower):
     def __init__(self, context, library, fndesc, func_ir, metadata=None):
         Lower.__init__(self, context, library, fndesc, func_ir, metadata)
-        lowering.lower_extensions[parfor.Parfor] = _lower_parfor_gufunc
+
+        fndesc_cpu = copy.copy(fndesc)
+        fndesc_cpu.calltypes = fndesc.calltypes.copy()
+        fndesc_cpu.typemap = fndesc.typemap.copy()
+
+        cpu_context = context.cpu_context if isinstance(context, DPPLTargetContext) else context
+        self.gpu_lower = Lower(context, library, fndesc, func_ir.copy(), metadata)
+        self.cpu_lower = Lower(cpu_context, library, fndesc_cpu, func_ir.copy(), metadata)
+
+    def lower(self):
+        # Basically we are trying to lower on GPU first and if failed - try to lower on CPU.
+        # This happens in next order:
+        # 1. Start lowering of parent function
+        # 2. Try to lower parfor on GPU
+        #     2.a. enter lower_parfor_rollback and prepare function to lower on GPU - insert get_global_id.
+        #         2.a.a. starting lower parfor body - enter this point (DPPLLower.lower()) second time.
+        #         2.a.b. If lowering on GPU failed - try on CPU.
+        #         2.a.d. Since get_global_id is NOT supported with CPU context - fail and throw exception
+        #     2.b. in lower_parfor_rollback catch exception and restore parfor body and other to its initial state
+        #     2.c. in lower_parfor_rollback throw expeption to catch it here (DPPLLower.lower())
+        # 3. Catch exception and start parfor lowering with CPU context.
+
+        # WARNING: this approach only works in case no device specific modifications were added to
+        # parent function (function with parfor). In case parent function was patched with device specific
+        # different solution should be used.
+        try:
+            lowering.lower_extensions[parfor.Parfor] = lower_parfor_rollback
+            self.gpu_lower.lower()
+            self.base_lower = self.gpu_lower
+            lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
+        except:
+            lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
+            self.cpu_lower.lower()
+            self.base_lower = self.cpu_lower
+
+        self.env = self.base_lower.env
+        self.call_helper = self.base_lower.call_helper
+
+    def create_cpython_wrapper(self, release_gil=False):
+        return self.base_lower.create_cpython_wrapper(release_gil)
+
+
+def lower_parfor_rollback(lowerer, parfor):
+    cache_parfor_races = copy.copy(parfor.races)
+    cache_parfor_params = copy.copy(parfor.params)
+    cache_parfor_loop_body = copy.deepcopy(parfor.loop_body)
+    cache_parfor_init_block = parfor.init_block.copy()
+    cache_parfor_loop_nests = parfor.loop_nests.copy()
+
+    try:
+        _lower_parfor_gufunc(lowerer, parfor)
+    except Exception as e:
+        msg = ("Failed to lower parfor on GPU")
+        warnings.warn(NumbaPerformanceWarning(msg, parfor.loc))
+        raise e
+    finally:
+        parfor.params = cache_parfor_params
+        parfor.loop_body = cache_parfor_loop_body
+        parfor.init_block = cache_parfor_init_block
+        parfor.loop_nests = cache_parfor_loop_nests
+        parfor.races = cache_parfor_races
+
 
 def dppl_lower_array_expr(lowerer, expr):
     raise NotImplementedError(expr)
