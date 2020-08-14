@@ -74,9 +74,9 @@ test suite:
 
 To run the test suite execute the following:
 
-    ```bash
+.. code-block:: bash
+
     python -m numba.runtests numba.dppl.tests
-    ```
 
 ===========================
 5. How Tos and Known Issues
