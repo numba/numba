@@ -103,6 +103,7 @@ def const_eq_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+# keep types.IntegerLiteral, as otherwise there's ambiguity between this and int_ne_impl
 @lower_builtin(operator.ne, types.Literal, types.Literal)
 @lower_builtin(operator.ne, types.IntegerLiteral, types.IntegerLiteral)
 def const_ne_impl(context, builder, sig, args):
