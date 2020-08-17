@@ -18,7 +18,6 @@ from numba.core.typeconv.rules import default_type_manager
 from numba.core.typing.templates import fold_arguments
 from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
-from numba.core.utils import reraise
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
 
@@ -355,7 +354,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             if config.FULL_TRACEBACKS:
                 raise e
             else:
-                reraise(type(e), e, None)
+                raise e.with_traceback(None)
 
         argtypes = []
         for a in args:
