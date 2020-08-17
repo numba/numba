@@ -295,6 +295,11 @@ NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
     npy_intp *shape, *strides;
     int flags = 0;
 
+    if (descr == NULL) {
+        PyErr_Format(PyExc_TypeError, "descr == NULL");
+        return NULL;
+    }
+
     if (!NUMBA_PyArray_DescrCheck(descr)) {
         PyErr_Format(PyExc_TypeError,
                      "expected dtype object, got '%.200s'",

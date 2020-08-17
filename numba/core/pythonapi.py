@@ -134,7 +134,13 @@ class EnvironmentManager(object):
         """
         assert index < len(self.env.consts)
 
-        return self.pyapi.list_getitem(self.env_body.consts, index)
+        builder = self.pyapi.builder
+        consts = self.env_body.consts
+        ret = cgutils.alloca_once(builder, self.pyapi.pyobj, zfill=True)
+        with builder.if_then(cgutils.is_not_null(builder, consts)):
+            getitem = self.pyapi.list_getitem(consts, index)
+            builder.store(getitem, ret)
+        return builder.load(ret)
 
 
 _IteratorLoop = namedtuple('_IteratorLoop', ('value', 'do_break'))
