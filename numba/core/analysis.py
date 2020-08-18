@@ -308,9 +308,15 @@ def dead_branch_prune(func_ir, called_args):
             branch_or_jump = blk.body[-1]
             if isinstance(branch_or_jump, ir.Branch):
                 branch = branch_or_jump
-                condition = guard(get_definition, func_ir, branch.cond.name)
-                if condition is not None:
-                    branches.append((branch, condition, blk))
+                pred = guard(get_definition, func_ir, branch.cond.name)
+                if pred is not None and pred.op == "call":
+                    function = guard(get_definition, func_ir, pred.func)
+                    if (function is not None and
+                        isinstance(function, ir.Global) and
+                            function.value is bool):
+                        condition = guard(get_definition, func_ir, pred.args[0])
+                        if condition is not None:
+                            branches.append((branch, condition, blk))
         return branches
 
     def do_prune(take_truebr, blk):
@@ -401,7 +407,8 @@ def dead_branch_prune(func_ir, called_args):
     # at least one an arg of the condition is a const
     # if the condition is met it will replace the branch with a jump
     branch_info = find_branches(func_ir)
-    nullified_conditions = [] # stores conditions that have no impact post prune
+    # stores conditions that have no impact post prune
+    nullified_conditions = []
 
     for branch, condition, blk in branch_info:
         const_conds = []
@@ -439,7 +446,8 @@ def dead_branch_prune(func_ir, called_args):
             # see if this is a branch on a constant value predicate
             resolved_const = Unknown()
             try:
-                resolved_const = find_const(func_ir, branch.cond)
+                pred_call = get_definition(func_ir, branch.cond)
+                resolved_const = find_const(func_ir, pred_call.args[0])
                 if resolved_const is None:
                     resolved_const = types.NoneType('none')
             except GuardException:
@@ -511,7 +519,7 @@ def rewrite_semantic_constants(func_ir, called_args):
 
     if DEBUG > 1:
         print(("rewrite_semantic_constants: " +
-              func_ir.func_id.func_name).center(80, '-'))
+               func_ir.func_id.func_name).center(80, '-'))
         print("before".center(80, '*'))
         func_ir.dump()
 
@@ -600,6 +608,13 @@ def find_literally_calls(func_ir, argtypes):
                     first_loc.setdefault(argindex, assign.loc)
     # Signal the dispatcher to force literal typing
     for pos in marked_args:
-        if not isinstance(argtypes[pos], types.Literal):
+        query_arg = argtypes[pos]
+        do_raise = (isinstance(query_arg, types.InitialValue) and
+                    query_arg.initial_value is None)
+        if do_raise:
+            loc = first_loc[pos]
+            raise errors.ForceLiteralArg(marked_args, loc=loc)
+
+        if not isinstance(query_arg, (types.Literal, types.InitialValue)):
             loc = first_loc[pos]
             raise errors.ForceLiteralArg(marked_args, loc=loc)

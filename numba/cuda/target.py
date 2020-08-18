@@ -38,7 +38,9 @@ class CUDATypingContext(typing.BaseContext):
                 if not val._can_compile:
                     raise ValueError('using cpu function on device '
                                      'but its compilation is disabled')
-                jd = jitdevice(val, debug=val.targetoptions.get('debug'))
+                opt = val.targetoptions.get('opt', True)
+                jd = jitdevice(val, debug=val.targetoptions.get('debug'),
+                               opt=opt)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
                 val.__cudajitdevice = jd
@@ -84,6 +86,20 @@ class CUDATargetContext(BaseContext):
     @property
     def target_data(self):
         return self._target_data
+
+    @cached_property
+    def nonconst_module_attrs(self):
+        """
+        Some CUDA intrinsics are at the module level, but cannot be treated as
+        constants, because they are loaded from a special register in the PTX.
+        These include threadIdx, blockDim, etc.
+        """
+        from numba import cuda
+        nonconsts = ('threadIdx', 'blockDim', 'blockIdx', 'gridDim', 'laneid',
+                     'warpsize')
+        nonconsts_with_mod = tuple([ (types.Module(cuda), nc)
+                                    for nc in nonconsts ])
+        return nonconsts_with_mod
 
     @cached_property
     def call_conv(self):
@@ -184,15 +200,48 @@ class CUDATargetContext(BaseContext):
         wrapfn = library.get_function(wrapfn.name)
         return wrapfn
 
-    def make_constant_array(self, builder, typ, ary):
+    def make_constant_array(self, builder, aryty, arr):
         """
-        Return dummy value.
-
-        XXX: We should be able to move cuda.const.array_like into here.
+        Unlike the parent version.  This returns a a pointer in the constant
+        addrspace.
         """
 
-        a = self.make_array(typ)(self, builder)
-        return a._getvalue()
+        lmod = builder.module
+
+        constvals = [
+            self.get_constant(types.byte, i)
+            for i in iter(arr.tobytes(order='A'))
+        ]
+        constary = lc.Constant.array(Type.int(8), constvals)
+
+        addrspace = nvvm.ADDRSPACE_CONSTANT
+        gv = lmod.add_global_variable(constary.type, name="_cudapy_cmem",
+                                      addrspace=addrspace)
+        gv.linkage = lc.LINKAGE_INTERNAL
+        gv.global_constant = True
+        gv.initializer = constary
+
+        # Preserve the underlying alignment
+        lldtype = self.get_data_type(aryty.dtype)
+        align = self.get_abi_sizeof(lldtype)
+        gv.align = 2 ** (align - 1).bit_length()
+
+        # Convert to generic address-space
+        conv = nvvmutils.insert_addrspace_conv(lmod, Type.int(8), addrspace)
+        addrspaceptr = gv.bitcast(Type.pointer(Type.int(8), addrspace))
+        genptr = builder.call(conv, [addrspaceptr])
+
+        # Create array object
+        ary = self.make_array(aryty)(self, builder)
+        kshape = [self.get_constant(types.intp, s) for s in arr.shape]
+        kstrides = [self.get_constant(types.intp, s) for s in arr.strides]
+        self.populate_array(ary, data=builder.bitcast(genptr, ary.data.type),
+                            shape=kshape,
+                            strides=kstrides,
+                            itemsize=ary.itemsize, parent=ary.parent,
+                            meminfo=None)
+
+        return ary._getvalue()
 
     def insert_const_string(self, mod, string):
         """

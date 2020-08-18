@@ -66,6 +66,15 @@ are executed asynchronously.
 .. autofunction:: numba.cuda.default_stream
    :noindex:
 
+.. autofunction:: numba.cuda.legacy_default_stream
+   :noindex:
+
+.. autofunction:: numba.cuda.per_thread_default_stream
+   :noindex:
+
+.. autofunction:: numba.cuda.external_stream
+   :noindex:
+
 CUDA streams have the following methods:
 
 .. autoclass:: numba.cuda.cudadrv.driver.Stream

@@ -1,4 +1,6 @@
 import contextlib
+import os
+import shutil
 import sys
 
 from numba.tests.support import (
@@ -52,6 +54,20 @@ def skip_unless_conda_cudatoolkit(reason):
 def skip_if_external_memmgr(reason):
     """Skip test if an EMM Plugin is in use"""
     return unittest.skipIf(config.CUDA_MEMORY_MANAGER != 'default', reason)
+
+
+def skip_under_cuda_memcheck(reason):
+    return unittest.skipIf(os.environ.get('CUDA_MEMCHECK') is not None, reason)
+
+
+def skip_without_nvdisasm(reason):
+    nvdisasm_path = shutil.which('nvdisasm')
+    return unittest.skipIf(nvdisasm_path is None, reason)
+
+
+def skip_with_nvdisasm(reason):
+    nvdisasm_path = shutil.which('nvdisasm')
+    return unittest.skipIf(nvdisasm_path is not None, reason)
 
 
 class CUDATextCapture(object):

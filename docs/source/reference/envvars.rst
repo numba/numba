@@ -3,6 +3,10 @@
 Environment variables
 =====================
 
+.. note:: This section relates to environment variables that impact Numba's
+          runtime, for compile time environment variables see
+          :ref:`numba-source-install-env_vars`.
+
 Numba allows its behaviour to be changed through the use of environment
 variables. Unless otherwise mentioned, those variables have integer values and
 default to zero.
@@ -157,6 +161,12 @@ These variables influence what is printed out during compilation of
 
    If set to non-zero, print out the Numba Intermediate Representation
    of compiled functions.
+
+
+.. envvar:: NUMBA_DUMP_SSA
+
+   If set to non-zero, print out the Numba Intermediate Representation of
+   compiled functions after conversion to Static Single Assignment (SSA) form.
 
 .. envvar:: NUMBA_DEBUG_PRINT_AFTER
 
@@ -335,6 +345,7 @@ Options for the compilation cache.
     :ref:`docs on cache clearing <cache-clearing>`
 
 
+.. _numba-envvars-gpu-support:
 
 GPU support
 -----------
@@ -347,6 +358,13 @@ GPU support
 
    If set, force the CUDA compute capability to the given version (a
    string of the type ``major.minor``), regardless of attached devices.
+
+.. envvar:: NUMBA_CUDA_DEFAULT_PTX_CC
+
+   The default compute capability (a string of the type ``major.minor``) to
+   target when compiling to PTX using ``cuda.compile_ptx``. The default is
+   5.2, which is the lowest non-deprecated compute capability in the most
+   recent version of the CUDA toolkit supported (10.2 at present).
 
 .. envvar:: NUMBA_ENABLE_CUDASIM
 

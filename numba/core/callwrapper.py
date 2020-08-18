@@ -190,7 +190,8 @@ class PyCallWrapper(object):
 
         env_body = self.context.get_env_body(builder, envptr)
 
-        api.emit_environment_sentry(envptr, return_pyobject=True)
+        api.emit_environment_sentry(envptr, return_pyobject=True,
+                                    debug_msg=self.fndesc.env_name)
         env_manager = api.get_env_manager(self.env, env_body, envptr)
         return env_manager
 

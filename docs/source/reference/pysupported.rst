@@ -262,8 +262,10 @@ same character width as the original string, even if the slice could be
 represented with a narrower character width.  (These details are invisible to
 the user, of course.)
 
-The following functions, attributes and methods are currently supported:
+The following constructors, functions, attributes and methods are currently
+supported:
 
+* ``str(int)``
 * ``len()``
 * ``+`` (concatenation of strings)
 * ``*`` (repetition of strings)
@@ -509,6 +511,32 @@ of this limitation.
    List sorting currently uses a quicksort algorithm, which has different
    performance characterics than the algorithm used by Python.
 
+.. _feature-list-initial-value:
+
+Initial Values
+''''''''''''''
+.. warning::
+  This is an experimental feature!
+
+Lists that:
+
+* Are constructed using the square braces syntax
+* Have values of a literal type
+
+will have their initial value stored in the ``.initial_value`` property on the
+type so as to permit inspection of these values at compile time. If required,
+to force value based dispatch the :ref:`literally <developer-literally>`
+function will accept such a list.
+
+Example:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_literal_container_usage.py
+   :language: python
+   :caption: from ``test_ex_initial_value_list_compile_time_consts`` of ``numba/tests/doc_examples/test_literal_container_usage.py``
+   :start-after: magictoken.test_ex_initial_value_list_compile_time_consts.begin
+   :end-before: magictoken.test_ex_initial_value_list_compile_time_consts.end
+   :dedent: 12
+   :linenos:
 
 .. _feature-typed-list:
 
@@ -554,35 +582,72 @@ explicitly from the `numba.typed` module::
 Here's an example using ``List()`` to create ``numba.typed.List`` inside a
 jit-compiled function and letting the compiler infer the item type:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_inferred_list_jit`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_inferred_list_jit`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_inferred_list_jit.begin
    :end-before: magictoken.ex_inferred_list_jit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of using ``List()`` to create a ``numba.typed.List`` outside of
 a jit-compiled function and then using it as an argument to a jit-compiled
 function:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_inferred_list`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_inferred_list`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_inferred_list.begin
    :end-before: magictoken.ex_inferred_list.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Finally, here's an example of using a nested `List()`:
 
-.. literalinclude:: ../../../examples/typed_list_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_list_usage.py
    :language: python
-   :caption: from ``ex_nested_list`` of ``examples/typed_list_usage.py``
+   :caption: from ``ex_nested_list`` of ``numba/tests/doc_examples/test_typed_list_usage.py``
    :start-after: magictoken.ex_nested_list.begin
    :end-before: magictoken.ex_nested_list.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
+
+.. _feature-literal-list:
+
+Literal List
+''''''''''''
+
+.. warning::
+  This is an experimental feature!
+
+Numba supports the use of literal lists containing any values, for example::
+
+  l = ['a', 1, 2j, np.zeros(5,)]
+
+the predominant use of these lists is for use as a configuration object.
+The lists appear as a ``LiteralList`` type which inherits from ``Literal``, as a
+result the literal values of the list items are available at compile time.
+For example:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_literal_container_usage.py
+   :language: python
+   :caption: from ``test_ex_literal_list`` of ``numba/tests/doc_examples/test_literal_container_usage.py``
+   :start-after: magictoken.test_ex_literal_list.begin
+   :end-before: magictoken.test_ex_literal_list.end
+   :dedent: 12
+   :linenos:
+
+Important things to note about these kinds of lists:
+
+#. They are immutable, use of mutating methods e.g. ``.pop()`` will result in
+   compilation failure. Read-only static access and read only methods are
+   supported e.g. ``len()``.
+#. Dynamic access of items is not possible, e.g. ``some_list[x]``, for a
+   value ``x`` which is not a compile time constant. This is because it's
+   impossible statically determine the type of the item being accessed.
+#. Inside the compiler, these lists are actually just tuples with some extra
+   things added to make them look like they are lists.
+#. They cannot be returned to the interpreter from a compiled function.
 
 .. _pysupported-comprehension:
 
@@ -644,7 +709,7 @@ objects of different types, even if the types are compatible (for example,
 .. _feature-typed-dict:
 
 Typed Dict
-''''''''''
+----------
 
 .. warning::
   ``numba.typed.Dict`` is an experimental feature.  The API may change
@@ -693,34 +758,34 @@ limitations will be relaxed as Numba continues to improve.
 Here's an example of using ``dict()`` and ``{}`` to create ``numba.typed.Dict``
 instances and letting the compiler infer the key-value types:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_inferred_dict_njit`` of ``examples/dict_usage.py``
+   :caption: from ``test_ex_inferred_dict_njit`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_inferred_dict_njit.begin
    :end-before: magictoken.ex_inferred_dict_njit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from interpreted
 code and using the dictionary in jit code:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_typed_dict_from_cpython`` of ``examples/dict_usage.py``
+   :caption: from ``test_ex_typed_dict_from_cpython`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_typed_dict_from_cpython.begin
    :end-before: magictoken.ex_typed_dict_from_cpython.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 Here's an example of creating a ``numba.typed.Dict`` instance from jit code and
 using the dictionary in interpreted code:
 
-.. literalinclude:: ../../../examples/dict_usage.py
+.. literalinclude:: ../../../numba/tests/doc_examples/test_typed_dict_usage.py
    :language: python
-   :caption: from ``ex_typed_dict_njit`` of ``examples/dict_usage.py``
+   :caption: from ``test_ex_typed_dict_njit`` of ``numba/tests/doc_examples/test_typed_dict_usage.py``
    :start-after: magictoken.ex_typed_dict_njit.begin
    :end-before: magictoken.ex_typed_dict_njit.end
-   :dedent: 4
+   :dedent: 12
    :linenos:
 
 It should be noted that ``numba.typed.Dict`` is not thread-safe.
@@ -729,6 +794,75 @@ threads will potentially corrupt memory, causing a
 range of possible failures. However, the dictionary can be safely read from
 multiple threads as long as the contents of the dictionary do not
 change during the parallel access.
+
+.. _feature-dict-initial-value:
+
+Initial Values
+''''''''''''''
+.. warning::
+  This is an experimental feature!
+
+Typed dictionaries that:
+
+* Are constructed using the curly braces syntax
+* Have literal string keys
+* Have values of a literal type
+
+will have their initial value stored in the ``.initial_value`` property on the
+type so as to permit inspection of these values at compile time. If required,
+to force value based dispatch the :ref:`literally <developer-literally>`
+function will accept a typed dictionary.
+
+Example:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_literal_container_usage.py
+   :language: python
+   :caption: from ``test_ex_initial_value_dict_compile_time_consts`` of ``numba/tests/doc_examples/test_literal_container_usage.py``
+   :start-after: magictoken.test_ex_initial_value_dict_compile_time_consts.begin
+   :end-before: magictoken.test_ex_initial_value_dict_compile_time_consts.end
+   :dedent: 12
+   :linenos:
+
+.. _feature-literal-str-key-dict:
+
+Heterogeneous Literal String Key Dictionary
+-------------------------------------------
+
+.. warning::
+  This is an experimental feature!
+
+Numba supports the use of statically declared string key to any value
+dictionaries, for example::
+
+  d = {'a': 1, 'b': 'data', 'c': 2j}
+
+the predominant use of these dictionaries is to orchestrate advanced compilation
+dispatch or as a container for use as a configuration object. The dictionaries
+appear as a ``LiteralStrKeyDict`` type which inherits from ``Literal``, as a
+result the literal values of the keys and the types of the items are available
+at compile time. For example:
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_literal_container_usage.py
+   :language: python
+   :caption: from ``test_ex_literal_dict_compile_time_consts`` of ``numba/tests/doc_examples/test_literal_container_usage.py``
+   :start-after: magictoken.test_ex_literal_dict_compile_time_consts.begin
+   :end-before: magictoken.test_ex_literal_dict_compile_time_consts.end
+   :dedent: 12
+   :linenos:
+
+Important things to note about these kinds of dictionaries:
+
+#. They are immutable, use of mutating methods e.g. ``.pop()`` will result in
+   compilation failure. Read-only static access and read only methods are
+   supported e.g. ``len()``.
+#. Dynamic access of items is not possible, e.g. ``some_dictionary[x]``, for a
+   value ``x`` which is not a compile time constant. This is because it's
+   impossible statically determine the type of the item being accessed.
+#. Inside the compiler, these dictionaries are actually just named tuples with
+   some extra things added to make them look like they are dictionaries.
+#. They cannot be returned to the interpreter from a compiled function.
+#. The ``.keys()``, ``.values()`` and ``.items()`` methods all functionally
+   operate but return tuples opposed to iterables.
 
 None
 ----

@@ -99,40 +99,22 @@ Structured scalars support attribute getting and setting, as well as
 member lookup using constant strings. Strings stored in a local or global tuple
 are considered constant strings and can be used for member lookup.
 
-.. code:: pycon
 
 
-
-    >>> import numpy as np
-    >>> from numba import njit
-    >>> arr = np.array([1, 2], dtype=[('a1', 'f8'), ('a2', 'f8')])
-    >>> fields_gl = ('a1', 'a2')
-    >>> @njit
-    ... def get_field_sum(rec):
-    ...     fields_lc = ('a1', 'a2')
-    ...     field_name1 = fields_lc[0]
-    ...     field_name2 = fields_gl[1]
-    ...     return rec[field_name1] + rec[field_name2]
-    ...
-    >>> get_field_sum(arr[0])
-    3
+.. literalinclude:: ../../../numba/tests/doc_examples/test_rec_array.py
+   :language: python
+   :start-after: magictoken.ex_rec_arr_const_index.begin
+   :end-before: magictoken.ex_rec_arr_const_index.end
+   :dedent: 8
 
 It is also possible to use local or global tuples together with ``literal_unroll``:
 
+.. literalinclude:: ../../../numba/tests/doc_examples/test_rec_array.py
+   :language: python
+   :start-after: magictoken.ex_rec_arr_lit_unroll_index.begin
+   :end-before: magictoken.ex_rec_arr_lit_unroll_index.end
+   :dedent: 8
 
-    >>> import numpy as np
-    >>> from numba import njit
-    >>> arr = np.array([1, 2], dtype=[('a1', 'f8'), ('a2', 'f8')])
-    >>> fields_gl = ('a1', 'a2')
-    >>> @njit
-    ... def get_field_sum(rec):
-    ...     out = 0
-    ...     for f in literal_unroll(fields_gl):
-    ...        out += rec[f]
-    ...     return out
-    ...
-    >>> get_field_sum(arr[0])
-    3
 
 .. seealso::
    `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
@@ -361,7 +343,7 @@ The following top-level functions are supported:
 * :func:`numpy.atleast_2d`
 * :func:`numpy.atleast_3d`
 * :func:`numpy.bartlett`
-* :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.bincount`
 * :func:`numpy.blackman`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
@@ -626,6 +608,7 @@ Math operations
  remainder           Yes          Yes
  mod                 Yes          Yes
  fmod                Yes          Yes
+ divmod (*)          Yes          Yes
  abs                 Yes          Yes
  absolute            Yes          Yes
  fabs                Yes          Yes
@@ -647,6 +630,7 @@ Math operations
  lcm                 Yes          Yes
 ==============  =============  ===============
 
+(\*) not supported on timedelta types
 
 Trigonometric functions
 -----------------------

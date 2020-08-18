@@ -188,7 +188,7 @@ class TestZeroCounts(TestCase):
         unsupported_types = filter(
             lambda x: not isinstance(x, types.Integer), types.number_domain
         )
-        for typ in unsupported_types:
+        for typ in sorted(unsupported_types, key=str):
             with self.assertRaises(TypingError) as e:
                 cfunc(typ(2))
             self.assertIn(
@@ -197,15 +197,17 @@ class TestZeroCounts(TestCase):
                 str(e.exception),
             )
 
-        # Testing w/ too many arguments
-        arg_cases = [(1, 2), ()]
-        for args in arg_cases:
+        # Testing w/ too many/few arguments
+        def check(args, string):
             with self.assertRaises(TypingError) as e:
                 cfunc(*args)
             self.assertIn(
-                "Invalid use of Function({})".format(str(func)),
+                "{}() ".format(func_name),
                 str(e.exception)
             )
+
+        check((1, 2), "takes 2 positional arguments but 3 were given")
+        check((), "missing 1 required positional argument")
 
     def test_trailing_zeros_error(self):
         self.check_error_msg(trailing_zeros)

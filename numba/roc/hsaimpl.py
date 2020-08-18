@@ -243,7 +243,7 @@ def hsail_smem_alloc_array(context, builder, sig, args):
 
 
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
-    elemcount = reduce(operator.mul, shape)
+    elemcount = reduce(operator.mul, shape, 1)
     lldtype = context.get_data_type(dtype)
     laryty = Type.array(lldtype, elemcount)
 
@@ -291,8 +291,8 @@ def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
 
     context.populate_array(ary,
                            data=builder.bitcast(dataptr, ary.data.type),
-                           shape=cgutils.pack_array(builder, kshape),
-                           strides=cgutils.pack_array(builder, kstrides),
+                           shape=kshape,
+                           strides=kstrides,
                            itemsize=context.get_constant(types.intp, itemsize),
                            meminfo=None)
 

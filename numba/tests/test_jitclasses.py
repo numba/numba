@@ -11,11 +11,12 @@ from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
 from numba import njit, typeof
 from numba.core import types, errors
-from numba.tests.support import TestCase, MemoryLeakMixin
-from numba.experimental.jitclass import _box
-from numba.core.runtime.nrt import MemInfo
+from numba.core.dispatcher import Dispatcher
 from numba.core.errors import LoweringError
+from numba.core.runtime.nrt import MemInfo
 from numba.experimental import jitclass
+from numba.experimental.jitclass import _box
+from numba.tests.support import TestCase, MemoryLeakMixin
 import unittest
 
 
@@ -45,20 +46,28 @@ def _get_meminfo(box):
 
 class TestJitClass(TestCase, MemoryLeakMixin):
 
-    def _check_spec(self, spec):
-        @jitclass(spec)
-        class Test(object):
+    def _check_spec(self, spec, test_cls=None):
+        if test_cls is None:
+            @jitclass(spec)
+            class Test(object):
 
-            def __init__(self):
-                pass
+                def __init__(self):
+                    pass
+            test_cls = Test
 
-        clsty = Test.class_type.instance_type
+        clsty = test_cls.class_type.instance_type
         names = list(clsty.struct.keys())
         values = list(clsty.struct.values())
-        self.assertEqual(names[0], 'x')
-        self.assertEqual(names[1], 'y')
-        self.assertEqual(values[0], int32)
-        self.assertEqual(values[1], float32)
+
+        if isinstance(spec, OrderedDict):
+            all_expected = spec.items()
+        else:
+            all_expected = spec
+
+        self.assertEqual(len(names), len(spec))
+        for got, expected in zip(zip(names, values), all_expected):
+            self.assertEqual(got[0], expected[0])
+            self.assertEqual(got[1], expected[1])
 
     def test_ordereddict_spec(self):
         spec = OrderedDict()
@@ -70,6 +79,18 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         spec = [('x', int32),
                 ('y', float32)]
         self._check_spec(spec)
+
+    def test_type_annotations(self):
+        spec = [('x', int32)]
+
+        @jitclass(spec)
+        class Test(object):
+            y: int
+
+            def __init__(self):
+                pass
+
+        self._check_spec(spec, Test)
 
     def test_spec_errors(self):
         spec1 = [('x', int), ('y', float32[:])]
@@ -609,6 +630,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         @jitclass([])
         class Apple(object):
             "Class docstring"
+
             def __init__(self):
                 "init docstring"
 
@@ -921,6 +943,89 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertIsInstance(ty, types.ClassInstanceType)
         pickled = pickle.dumps(ty)
         self.assertIs(pickle.loads(pickled), ty)
+
+    def test_static_methods(self):
+        @jitclass([("x", int32)])
+        class Test1:
+            def __init__(self, x):
+                self.x = x
+
+            def increase(self, y):
+                self.x = self.add(self.x, y)
+                return self.x
+
+            @staticmethod
+            def add(a, b):
+                return a + b
+
+            @staticmethod
+            def sub(a, b):
+                return a - b
+
+        @jitclass([("x", int32)])
+        class Test2:
+            def __init__(self, x):
+                self.x = x
+
+            def increase(self, y):
+                self.x = self.add(self.x, y)
+                return self.x
+
+            @staticmethod
+            def add(a, b):
+                return a - b
+
+        self.assertIsInstance(Test1.add, Dispatcher)
+        self.assertIsInstance(Test1.sub, Dispatcher)
+        self.assertIsInstance(Test2.add, Dispatcher)
+        self.assertNotEqual(Test1.add, Test2.add)
+
+        self.assertEqual(3, Test1.add(1, 2))
+        self.assertEqual(-1, Test2.add(1, 2))
+        self.assertEqual(4, Test1.sub(6, 2))
+
+        t1 = Test1(0)
+        t2 = Test2(0)
+        self.assertEqual(1, t1.increase(1))
+        self.assertEqual(-1, t2.increase(1))
+        self.assertEqual(2, t1.add(1, 1))
+        self.assertEqual(0, t1.sub(1, 1))
+        self.assertEqual(0, t2.add(1, 1))
+        self.assertEqual(2j, t1.add(1j, 1j))
+        self.assertEqual(1j, t1.sub(2j, 1j))
+        self.assertEqual("foobar", t1.add("foo", "bar"))
+
+        with self.assertRaises(AttributeError) as raises:
+            Test2.sub(3, 1)
+        self.assertIn("has no attribute 'sub'",
+                      str(raises.exception))
+
+        with self.assertRaises(TypeError) as raises:
+            Test1.add(3)
+        self.assertIn("not enough arguments: expected 2, got 1",
+                      str(raises.exception))
+
+        # Check error message for calling a static method as a class attr from
+        # another method (currently unsupported).
+
+        @jitclass([])
+        class Test3:
+            def __init__(self):
+                pass
+
+            @staticmethod
+            def a_static_method(a, b):
+                pass
+
+            def call_static(self):
+                return Test3.a_static_method(1, 2)
+
+        invalid = Test3()
+        with self.assertRaises(errors.TypingError) as raises:
+            invalid.call_static()
+
+        self.assertIn("Unknown attribute 'a_static_method'",
+                      str(raises.exception))
 
     def test_import_warnings(self):
         class Test:

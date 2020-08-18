@@ -10,7 +10,7 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
 from numba.np.numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
                              from_dtype, as_dtype, resolve_output_type,
-                             carray, farray)
+                             carray, farray, _ufunc_loop_sig)
 from numba.core.errors import TypingError, NumbaPerformanceWarning
 from numba import pndindex
 
@@ -38,10 +38,6 @@ class Numpy_rules_ufunc(AbstractTemplate):
 
         # preconditions
         assert nargs == nin + nout
-
-        if nout > 1:
-            msg = "ufunc '{0}': not supported in this mode (more than 1 output)"
-            raise TypingError(msg=msg.format(ufunc.__name__))
 
         if len(args) < nin:
             msg = "ufunc '{0}': not enough arguments ({1} found, {2} required)"
@@ -125,8 +121,8 @@ class Numpy_rules_ufunc(AbstractTemplate):
         out = list(explicit_outputs)
         implicit_output_count = ufunc.nout - len(explicit_outputs)
         if implicit_output_count > 0:
-            # XXX this is currently wrong for datetime64 and timedelta64,
-            # as ufunc_find_matching_loop() doesn't do any type inference.
+            # XXX this is sometimes wrong for datetime64 and timedelta64,
+            # as ufunc_find_matching_loop() doesn't do any type inference
             ret_tys = ufunc_loop.outputs[-implicit_output_count:]
             if ndims > 0:
                 assert layout is not None
@@ -136,27 +132,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
                            for ret_ty in ret_tys]
             out.extend(ret_tys)
 
-        # note: although the previous code should support multiple return values, only one
-        #       is supported as of now (signature may not support more than one).
-        #       there is an check enforcing only one output
-        out.extend(args)
-        return signature(*out)
-
-
-@infer_global(operator.pos)
-class UnaryPositiveArray(AbstractTemplate):
-    '''Typing template class for +(array) expressions.  This operator is
-    special because there is no Numpy ufunc associated with it; we
-    include typing for it here (numba.typing.npydecl) because this is
-    where the remaining array operators are defined.
-    '''
-    key = operator.pos
-
-    def generic(self, args, kws):
-        assert not kws
-        if len(args) == 1 and isinstance(args[0], types.ArrayCompatible):
-            arg_ty = args[0]
-            return arg_ty.copy()(arg_ty)
+        return _ufunc_loop_sig(out, args)
 
 
 class NumpyRulesArrayOperator(Numpy_rules_ufunc):
@@ -252,9 +228,7 @@ class NumpyRulesInplaceArrayOperator(NumpyRulesArrayOperator):
 
 class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
     _op_map = {
-        # Positive is a special case since there is no Numpy ufunc
-        # corresponding to it (it's essentially an identity operator).
-        # See UnaryPositiveArray, above.
+        operator.pos: "positive",
         operator.neg: "negative",
         operator.invert: "invert",
     }
@@ -269,12 +243,12 @@ class NumpyRulesUnaryArrayOperator(NumpyRulesArrayOperator):
 
 _math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
-                     "floor_divide", "negative", "power",
+                     "floor_divide", "negative", "positive", "power",
                      "remainder", "fmod", "absolute",
                      "rint", "sign", "conjugate", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
                      "sqrt", "square", "reciprocal",
-                     "divide", "mod", "abs", "fabs" , "gcd", "lcm"]
+                     "divide", "mod", "divmod", "abs", "fabs" , "gcd", "lcm"]
 
 _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
                              "arccos", "arctan", "arctan2",
@@ -307,8 +281,8 @@ _logic_functions = [ "isnat" ]
 # implemented.
 #
 # It also works as a nice TODO list for ufunc support :)
-_unsupported = set([ 'frexp', # this one is tricky, as it has 2 returns
-                     'modf',  # this one also has 2 returns
+_unsupported = set([ 'frexp',
+                     'modf',
                  ])
 
 # A list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
@@ -366,6 +340,10 @@ class Numpy_method_redirection(AbstractTemplate):
     A template redirecting a Numpy global function (e.g. np.sum) to an
     array method of the same name (e.g. ndarray.sum).
     """
+
+    # Arguments like *axis* can specialize on literals but also support
+    # non-literals
+    prefer_literal = True
 
     def generic(self, args, kws):
         pysig = None
@@ -439,7 +417,10 @@ register_number_classes(infer_global)
 # -----------------------------------------------------------------------------
 # Numpy array constructors
 
-def _parse_shape(shape):
+def parse_shape(shape):
+    """
+    Given a shape, return the number of dimensions.
+    """
     ndim = None
     if isinstance(shape, types.Integer):
         ndim = 1
@@ -448,9 +429,15 @@ def _parse_shape(shape):
             ndim = len(shape)
     return ndim
 
-def _parse_dtype(dtype):
+def parse_dtype(dtype):
+    """
+    Return the dtype of a type, if it is either a DtypeSpec (used for most
+    dtypes) or a TypeRef (used for record types).
+    """
     if isinstance(dtype, types.DTypeSpec):
         return dtype.dtype
+    elif isinstance(dtype, types.TypeRef):
+        return dtype.instance_type
 
 def _parse_nested_sequence(context, typ):
     """
@@ -498,7 +485,7 @@ class NpArray(CallableTemplate):
             if dtype is None:
                 dtype = seq_dtype
             else:
-                dtype = _parse_dtype(dtype)
+                dtype = parse_dtype(dtype)
                 if dtype is None:
                     return
             return types.Array(dtype, ndim, 'C')
@@ -519,9 +506,9 @@ class NdConstructor(CallableTemplate):
             if dtype is None:
                 nb_dtype = types.double
             else:
-                nb_dtype = _parse_dtype(dtype)
+                nb_dtype = parse_dtype(dtype)
 
-            ndim = _parse_shape(shape)
+            ndim = parse_shape(shape)
             if nb_dtype is not None and ndim is not None:
                 return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
@@ -542,7 +529,7 @@ class NdConstructorLike(CallableTemplate):
         """
         def typer(arg, dtype=None):
             if dtype is not None:
-                nb_dtype = _parse_dtype(dtype)
+                nb_dtype = parse_dtype(dtype)
             elif isinstance(arg, types.Array):
                 nb_dtype = arg.dtype
             else:
@@ -568,9 +555,9 @@ class NdFull(CallableTemplate):
             if dtype is None:
                 nb_dtype = fill_value
             else:
-                nb_dtype = _parse_dtype(dtype)
+                nb_dtype = parse_dtype(dtype)
 
-            ndim = _parse_shape(shape)
+            ndim = parse_shape(shape)
             if nb_dtype is not None and ndim is not None:
                 return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
 
@@ -586,7 +573,7 @@ class NdFullLike(CallableTemplate):
         """
         def typer(arg, fill_value, dtype=None):
             if dtype is not None:
-                nb_dtype = _parse_dtype(dtype)
+                nb_dtype = parse_dtype(dtype)
             elif isinstance(arg, types.Array):
                 nb_dtype = arg.dtype
             else:
@@ -609,7 +596,7 @@ class NdIdentity(AbstractTemplate):
         if not isinstance(n, types.Integer):
             return
         if len(args) >= 2:
-            nb_dtype = _parse_dtype(args[1])
+            nb_dtype = parse_dtype(args[1])
         else:
             nb_dtype = types.float64
 
@@ -656,7 +643,7 @@ class NdFromBuffer(CallableTemplate):
             if dtype is None:
                 nb_dtype = types.float64
             else:
-                nb_dtype = _parse_dtype(dtype)
+                nb_dtype = parse_dtype(dtype)
 
             if nb_dtype is not None:
                 return types.Array(dtype=nb_dtype, ndim=1, layout='C',
@@ -1252,7 +1239,7 @@ class NumbaCArray(CallableTemplate):
                 raise TypeError("%s(): invalid dtype spec '%s'"
                                 % (func_name, dtype))
 
-            ndim = _parse_shape(shape)
+            ndim = parse_shape(shape)
             if ndim is None:
                 raise TypeError("%s(): invalid shape '%s'"
                                 % (func_name, shape))
