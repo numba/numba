@@ -32,7 +32,7 @@ from numba.core.extending import (register_jitable, overload, overload_method,
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem
-+from numba.core.pythonapi import _allocators
+from numba.core.pythonapi import _allocators
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
