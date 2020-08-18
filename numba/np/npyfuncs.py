@@ -779,7 +779,7 @@ def np_real_cbrt_impl(context, builder, sig, args):
     def float_cbrt(x):
         if np.isnan(x):
             return x
-        if x < 0:
+        if np.signbit(x): 
             return -np.power(-x, 1.0 / 3.0)
         else:
             return np.power(x, 1.0 / 3.0)
