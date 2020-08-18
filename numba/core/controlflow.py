@@ -76,7 +76,7 @@ class _DictOfContainers(collections.defaultdict):
             return not ret
 
     def _non_empty_items(self):
-        return [(k, vs) for k, vs in self.items() if vs]
+        return [(k, vs) for k, vs in sorted(self.items()) if vs]
 
 
 class CFGraph(object):
