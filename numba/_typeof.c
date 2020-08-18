@@ -257,14 +257,79 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         return string_writer_put_char(w, OP_FLOAT);
     if (PyComplex_CheckExact(val))
         return string_writer_put_char(w, OP_COMPLEX);
-    if (PyTuple_CheckExact(val)) {
-        Py_ssize_t i, n;
-        n = PyTuple_GET_SIZE(val);
-        TRY(string_writer_put_char, w, OP_START_TUPLE);
-        for (i = 0; i < n; i++)
-            TRY(compute_fingerprint, w, PyTuple_GET_ITEM(val, i));
-        TRY(string_writer_put_char, w, OP_END_TUPLE);
-        return 0;
+    if (PyTuple_Check(val)) {
+        if(PyTuple_CheckExact(val)) {
+            Py_ssize_t i, n;
+            n = PyTuple_GET_SIZE(val);
+            TRY(string_writer_put_char, w, OP_START_TUPLE);
+            for (i = 0; i < n; i++)
+                TRY(compute_fingerprint, w, PyTuple_GET_ITEM(val, i));
+            TRY(string_writer_put_char, w, OP_END_TUPLE);
+            return 0;
+        }
+        /* as per typeof.py, check "_asdict" for namedtuple. */
+        else if(PyObject_HasAttrString(val, "_asdict"))
+        {
+            /*
+             * This encodes the class name and field names of a namedtuple into
+             * the fingerprint on the condition that the number of fields is
+             * small (<10) and that the class name and field names are encodable
+             * as ASCII.
+             */
+            PyObject * clazz = NULL;
+            PyObject * name = NULL;
+            PyObject * _fields =  PyObject_GetAttrString(val, "_fields");
+            PyObject * field = NULL;
+            PyObject * ascii_str = NULL;
+            Py_ssize_t i, n, j, flen;
+            char * buf = NULL;
+            int ret;
+
+            clazz = PyObject_GetAttrString(val, "__class__");
+            if (clazz == NULL)
+                return -1;
+
+            name = PyObject_GetAttrString(clazz, "__name__");
+            if (name == NULL)
+                return -1;
+
+            ascii_str = PyUnicode_AsEncodedString(name, "ascii", "ignore");
+            if (ascii_str == NULL)
+                return -1;
+            ret = PyBytes_AsStringAndSize(ascii_str, &buf, &flen);
+            if (ret == -1)
+                return -1;
+            for(j = 0; j < flen; j++) {
+                TRY(string_writer_put_char, w, buf[j]);
+            }
+
+            if (_fields == NULL)
+                return -1;
+
+            n = PyTuple_GET_SIZE(val);
+            if (n > 10)
+                return -1;
+
+            TRY(string_writer_put_char, w, OP_START_TUPLE);
+            for (i = 0; i < n; i++) {
+                field = PyTuple_GET_ITEM(_fields, i);
+                if (field == NULL)
+                    return -1;
+                ascii_str = PyUnicode_AsEncodedString(field, "ascii", "ignore");
+                if (ascii_str == NULL)
+                    return -1;
+                ret = PyBytes_AsStringAndSize(ascii_str, &buf, &flen);
+                if (ret == -1)
+                    return -1;
+                for(j = 0; j < flen; j++) {
+                    TRY(string_writer_put_char, w, buf[j]);
+                }
+                TRY(compute_fingerprint, w, PyTuple_GET_ITEM(val, i));
+            }
+            TRY(string_writer_put_char, w, OP_END_TUPLE);
+            Py_DECREF(_fields);
+            return 0;
+        }
     }
     if (PyBytes_Check(val))
         return string_writer_put_char(w, OP_BYTES);
