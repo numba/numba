@@ -45,10 +45,13 @@ class _Registry(object):
 _boxers = _Registry()
 _unboxers = _Registry()
 _reflectors = _Registry()
+# Registry of special allocators for types.
+_allocators = _Registry()
 
 box = _boxers.register
 unbox = _unboxers.register
 reflect = _reflectors.register
+allocator = _allocators.register
 
 class _BoxContext(namedtuple("_BoxContext",
                   ("context", "builder", "pyapi", "env_manager"))):
@@ -1168,8 +1171,11 @@ class PythonAPI(object):
         assert self.context.enable_nrt, "NRT required"
 
         intty = ir.IntType(32)
+        # Embed the Python type of the array (maybe subclass) in the LLVM.
+        serial_aryty_pytype = self.unserialize(self.serialize_object(aryty.PyType))
+
         fnty = Type.function(self.pyobj,
-                             [self.voidptr, intty, intty, self.pyobj])
+                             [self.voidptr, self.pyobj, intty, intty, self.pyobj])
         fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
 
@@ -1179,6 +1185,7 @@ class PythonAPI(object):
         aryptr = cgutils.alloca_once_value(self.builder, ary)
         return self.builder.call(fn, [self.builder.bitcast(aryptr,
                                                            self.voidptr),
+                                      serial_aryty_pytype,
                                       ndim, writable, dtypeptr])
 
     def nrt_meminfo_new_from_pyobject(self, data, pyobj):

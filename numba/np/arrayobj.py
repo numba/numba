@@ -32,6 +32,7 @@ from numba.core.extending import (register_jitable, overload, overload_method,
 from numba.misc import quicksort, mergesort
 from numba.cpython import slicing
 from numba.cpython.unsafe.tuple import tuple_setitem
++from numba.core.pythonapi import _allocators
 
 
 def set_range_metadata(builder, load, lower_bound, upper_bound):
@@ -3399,8 +3400,13 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
         )
 
     align = context.get_preferred_array_alignment(arrtype.dtype)
-    meminfo = context.nrt.meminfo_alloc_aligned(builder, size=allocsize,
-                                                align=align)
+    def alloc_unsupported(context, builder, size, align):
+        return context.nrt.meminfo_alloc_aligned(builder, size, align)
+
+    # See if the type has a special allocator, if not use the default
+    # alloc_unsuppported allocator above.
+    allocator_impl = _allocators.lookup(arrtype.__class__, alloc_unsupported)
+    meminfo = allocator_impl(context, builder, size=allocsize, align=align)
 
     data = context.nrt.meminfo_data(builder, meminfo)
 

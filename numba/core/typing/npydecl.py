@@ -126,7 +126,21 @@ class Numpy_rules_ufunc(AbstractTemplate):
             ret_tys = ufunc_loop.outputs[-implicit_output_count:]
             if ndims > 0:
                 assert layout is not None
-                ret_tys = [types.Array(dtype=ret_ty, ndim=ndims, layout=layout)
+                # If either of the types involved in the ufunc operation have a
+                # __array_ufunc__ method then invoke the first such one to
+                # determine the output type of the ufunc.
+                array_ufunc_type = None
+                for a in args:
+                    if hasattr(a, "__array_ufunc__"):
+                        array_ufunc_type = a
+                        break
+                output_type = types.Array
+                if array_ufunc_type is not None:
+                    output_type = array_ufunc_type.__array_ufunc__(ufunc, "__call__", *args, **kws)
+                    # Eventually better error handling!  FIX ME!
+                    assert(output_type is not None)
+
+                ret_tys = [output_type(dtype=ret_ty, ndim=ndims, layout=layout)
                            for ret_ty in ret_tys]
                 ret_tys = [resolve_output_type(self.context, args, ret_ty)
                            for ret_ty in ret_tys]
