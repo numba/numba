@@ -59,18 +59,25 @@ ll_intp_p = intp_t.as_pointer()
 def call_experimental_dot(context, builder, conjugate, dtype,
                           n, a_data, b_data, out_data):
 
+    import ctypes
+    inumpy_lib = ctypes.cdll.LoadLibrary("libinumpy.so")
+    C_get_function = inumpy_lib.get_function
+    C_get_function.restype = ctypes.c_long
+    f_ptr = inumpy_lib.get_function()
+    print(f_ptr)
+
     fnty = ir.FunctionType(ir.IntType(32),
                            [ll_void_p, ll_void_p, ll_void_p, ir.IntType(64)])
 
-    #fn = builder.module.get_or_insert_function(fnty, name="inumpy_dot")
-    #name = itanium_mangler.mangle("inumpy_dot", [int64, dtype])
-    #print(name)
-    fn = builder.module.get_or_insert_function(fnty, name="_Z10inumpy_dotIfEiPvS0_S0_m")
 
-    res = builder.call(fn, (builder.bitcast(a_data, ll_void_p),
+    addr_constant = context.get_constant(int64, f_ptr)
+    fn_ptr = builder.inttoptr(addr_constant, fnty.as_pointer())
+
+    res = builder.call(fn_ptr, (builder.bitcast(a_data, ll_void_p),
                             builder.bitcast(b_data, ll_void_p),
                             builder.bitcast(out_data, ll_void_p),
                             n))
+
 
 def dot_2_vv(context, builder, sig, args, conjugate=False):
     """
