@@ -572,13 +572,41 @@ class CFGraph(object):
         Find back edges.  An edge (src, dest) is a back edge if and
         only if *dest* dominates *src*.
         """
+
+        # Uses a simple DFS to find back-edges.
+        # The new algorithm is faster than the the previous dominator based
+        # algorithm.
         back_edges = set()
-        for src, succs in self._succs.items():
-            back = self._doms[src] & succs
-            # In CPython bytecode, at most one back edge can flow from a
-            # given block.
-            assert len(back) <= 1
-            back_edges.update((src, dest) for dest in back)
+        # stack: keeps track of the traversal path
+        stack = []
+        # succs_state: keep track of unvisited successors of a node
+        succs_state = {}
+        entry_point = self.entry_point()
+
+        def push_state(node):
+            stack.append(node)
+            succs_state[node] = [dest for dest, _ in self.successors(node)]
+
+        push_state(entry_point)
+
+        while stack:
+            tos = stack[-1]
+            tos_succs = succs_state[tos]
+            # Are there successors not checked?
+            if tos_succs:
+                # Check the next successor
+                cur_node = tos_succs.pop()
+                # Is it in our traversal path?
+                if cur_node in stack:
+                    # Yes, it's a backedge
+                    back_edges.add((tos, cur_node))
+                else:
+                    # Push
+                    push_state(cur_node)
+            else:
+                # Checked all successors. Pop
+                stack.pop()
+
         return back_edges
 
     def _find_topo_order(self):
