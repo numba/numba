@@ -12,7 +12,7 @@ def set_visible_devices_and_check(q):
 
         os.environ['CUDA_VISIBLE_DEVICES'] = '0'
         q.put(len(cuda.gpus.lst))
-    except:
+    except: # noqa: E722
         # Sentinel value for error executing test code
         q.put(-1)
 
