@@ -262,6 +262,7 @@ class FunctionTemplate(ABC):
 
     def __init__(self, context):
         self.context = context
+        self._failures = dict()
 
     def _select(self, cases, args, kws):
         options = {
@@ -342,7 +343,22 @@ class AbstractTemplate(FunctionTemplate):
 
     def apply(self, args, kws):
         generic = getattr(self, "generic")
-        sig = generic(args, kws)
+
+        failkey = None
+        try:
+            failkey = (*args, *kws)
+            failed = self._failures.get(failkey)
+            if failed:
+                raise failed
+        except TypeError as e:
+            pass
+
+        try:
+            sig = generic(args, kws)
+        except Exception as e:
+            if failkey is not None:
+                self._failures[failkey] = e
+            raise e
         # Enforce that *generic()* must return None or Signature
         if sig is not None:
             if not isinstance(sig, Signature):
