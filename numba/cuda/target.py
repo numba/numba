@@ -22,11 +22,12 @@ from numba.cpython import cmathimpl
 
 class CUDATypingContext(typing.BaseContext):
     def load_additional_registries(self):
-        from . import cudadecl, cudamath
+        from . import cudadecl, cudamath, libdevicedecl
 
         self.install_registry(cudadecl.registry)
         self.install_registry(cudamath.registry)
         self.install_registry(cmathdecl.registry)
+        self.install_registry(libdevicedecl.registry)
 
     def resolve_value_type(self, val):
         # treat dispatcher object as another device function
@@ -74,11 +75,12 @@ class CUDATargetContext(BaseContext):
         self._target_data = ll.create_target_data(nvvm.default_data_layout)
 
     def load_additional_registries(self):
-        from . import cudaimpl, printimpl, libdevice
+        from . import cudaimpl, printimpl, libdeviceimpl, mathimpl
         self.install_registry(cudaimpl.registry)
         self.install_registry(printimpl.registry)
-        self.install_registry(libdevice.registry)
+        self.install_registry(libdeviceimpl.registry)
         self.install_registry(cmathimpl.registry)
+        self.install_registry(mathimpl.registry)
 
     def codegen(self):
         return self._internal_codegen
