@@ -456,6 +456,9 @@ def unicode_eq(a, b):
     b_unicode = isinstance(b, accept)
     if a_unicode and b_unicode:
         def eq_impl(a, b):
+            # the str() is for UnicodeCharSeq, it's a nop else
+            a = str(a)
+            b = str(b)
             if len(a) != len(b):
                 return False
             return _cmp_region(a, 0, b, 0, len(a)) == 0
@@ -703,6 +706,7 @@ def unicode_partition(data, sep):
 
     def impl(data, sep):
         # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/partition.h#L7-L60    # noqa: E501
+        sep = str(sep)
         empty_str = _empty_string(data._kind, 0, data._is_ascii)
         sep_length = len(sep)
         if data._kind < sep._kind or len(data) < sep_length:
@@ -775,6 +779,7 @@ def unicode_rpartition(data, sep):
 
     def impl(data, sep):
         # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/partition.h#L62-L115    # noqa: E501
+        sep = str(sep)
         empty_str = _empty_string(data._kind, 0, data._is_ascii)
         sep_length = len(sep)
         if data._kind < sep._kind or len(data) < sep_length:
@@ -1105,6 +1110,7 @@ def unicode_rsplit(data, sep=None, maxsplit=-1):
         return rsplit_whitespace_impl
 
     def rsplit_impl(data, sep=None, maxsplit=-1):
+        sep = str(sep)
         # https://github.com/python/cpython/blob/1d4b6ba19466aba0eb91c4ba01ba509acf18c723/Objects/stringlib/split.h#L286-L333    # noqa: E501
         if data._kind < sep._kind or len(data) < len(sep):
             return [data]
