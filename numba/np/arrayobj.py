@@ -3400,6 +3400,7 @@ def _empty_nd_impl(context, builder, arrtype, shapes):
         )
 
     align = context.get_preferred_array_alignment(arrtype.dtype)
+
     def alloc_unsupported(context, builder, size, align):
         return context.nrt.meminfo_alloc_aligned(builder, size, align)
 
