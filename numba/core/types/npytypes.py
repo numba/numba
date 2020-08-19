@@ -395,9 +395,9 @@ class Array(Buffer):
     Type class for Numpy arrays.
     """
 
-    def __init__(self, dtype, ndim, layout, PyType=np.ndarray, readonly=False,
+    def __init__(self, dtype, ndim, layout, py_type=np.ndarray, readonly=False,
                  name=None, aligned=True):
-        self.PyType = PyType
+        self.py_type = py_type
         if readonly:
             self.mutable = False
         if (not aligned or

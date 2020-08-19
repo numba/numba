@@ -1172,7 +1172,7 @@ class PythonAPI(object):
 
         intty = ir.IntType(32)
         # Embed the Python type of the array (maybe subclass) in the LLVM.
-        serial_aryty_pytype = self.unserialize(self.serialize_object(aryty.PyType))
+        serial_aryty_pytype = self.unserialize(self.serialize_object(aryty.py_type))
 
         fnty = Type.function(self.pyobj,
                              [self.voidptr, self.pyobj, intty, intty, self.pyobj])
