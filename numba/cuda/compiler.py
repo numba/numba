@@ -818,12 +818,23 @@ class Dispatcher(serialize.ReduceMixin):
         return self.configure(*args)
 
     def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
-        """Returns a configured kernel for 1D kernel of given number of tasks
-        ``ntasks``.
+        """Returns a 1D-configured kernel for a given number of tasks.
 
         This assumes that:
-        - the kernel 1-to-1 maps global thread id ``cuda.grid(1)`` to tasks.
-        - the kernel must check if the thread id is valid."""
+
+        - the kernel maps the Global Thread ID ``cuda.grid(1)`` to tasks on a
+          1-1 basis.
+        - the kernel checks that the Global Thread ID is upper-bounded by
+          ``ntasks``, and does nothing if it is not.
+
+        :param ntasks: The number of tasks.
+        :param tpb: The size of a block. An appropriate value is chosen if this
+                    parameter is not supplied.
+        :param stream: The stream on which the configured kernel will be
+                       launched.
+        :param sharedmem: The number of bytes of dynamic shared memory required
+                          by the kernel.
+        :return: A configured kernel, ready to launch on a set of arguments."""
 
         return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
 
