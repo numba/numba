@@ -2,7 +2,6 @@ import collections
 import functools
 import sys
 
-from numba.core import utils
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
 
@@ -709,7 +708,7 @@ class ControlFlowAnalysis(object):
         self.graph = graph
 
         # Fill incoming
-        for b in utils.itervalues(self.blocks):
+        for b in self.blocks.values():
             for out, pops in b.outgoing_jumps.items():
                 self.blocks[out].incoming_jumps[b.offset] = pops
 

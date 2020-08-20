@@ -993,7 +993,7 @@ class TypeInferer(object):
 
     def _get_return_vars(self):
         rets = []
-        for blk in utils.itervalues(self.blocks):
+        for blk in self.blocks.values():
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 rets.append(inst.value)
@@ -1019,7 +1019,7 @@ class TypeInferer(object):
             self.lock_type(var.name, typ, loc=None)
 
     def build_constraint(self):
-        for blk in utils.itervalues(self.blocks):
+        for blk in self.blocks.values():
             for inst in blk.body:
                 self.constrain_statement(inst)
 

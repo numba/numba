@@ -1008,7 +1008,7 @@ class Dispatcher(serialize.ReduceMixin):
         if self.specialized:
             self.definition.inspect_types(file=file)
         else:
-            for _, defn in utils.iteritems(self.definitions):
+            for _, defn in self.definitions.items():
                 defn.inspect_types(file=file)
 
     @property
