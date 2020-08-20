@@ -788,7 +788,7 @@ def run_in_new_process_caching(func, cache_dir_prefix=__name__, verbose=True):
         stderr: str
     """
     cache_dir = temp_directory(cache_dir_prefix)
-    return run_in_new_process_in_cache_dir(func, cache_dir, verbose=True)
+    return run_in_new_process_in_cache_dir(func, cache_dir, verbose=verbose)
 
 
 def run_in_new_process_in_cache_dir(func, cache_dir, verbose=True):
