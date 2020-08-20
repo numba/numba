@@ -2,7 +2,7 @@ import multiprocessing
 import os
 from numba.core import config
 from numba.cuda.cudadrv.runtime import runtime
-from numba.cuda.testing import unittest
+from numba.cuda.testing import unittest, SerialMixin
 
 
 def set_visible_devices_and_check(q):
@@ -26,6 +26,8 @@ class TestRuntime(unittest.TestCase):
                                   (10, 1), (10, 2), (11, 0))
         self.assertIn(runtime.get_version(), supported_versions)
 
+
+class TestVisibleDevices(unittest.TestCase, SerialMixin):
     def test_visible_devices_set_after_import(self):
         # See Issue #6149. This test checks that we can set
         # CUDA_VISIBLE_DEVICES after importing Numba and have the value
