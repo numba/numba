@@ -131,6 +131,9 @@ class EnvironmentManager(object):
         """
         Look up constant number *index* inside the environment body.
         A borrowed reference is returned.
+
+        The returned LLVM value may have NULL value at runtime which indicates
+        an error at runtime.
         """
         assert index < len(self.env.consts)
 
