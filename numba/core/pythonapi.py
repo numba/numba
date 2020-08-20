@@ -140,9 +140,16 @@ class EnvironmentManager(object):
         builder = self.pyapi.builder
         consts = self.env_body.consts
         ret = cgutils.alloca_once(builder, self.pyapi.pyobj, zfill=True)
-        with builder.if_then(cgutils.is_not_null(builder, consts)):
-            getitem = self.pyapi.list_getitem(consts, index)
-            builder.store(getitem, ret)
+        with builder.if_else(cgutils.is_not_null(builder, consts)) as \
+                (br_not_null, br_null):
+            with br_not_null:
+                getitem = self.pyapi.list_getitem(consts, index)
+                builder.store(getitem, ret)
+            with br_null:
+                self.pyapi.err_set_string(
+                    "PyExc_RuntimeError",
+                    "`env.consts` is NULL in `read_const`",
+                )
         return builder.load(ret)
 
 
