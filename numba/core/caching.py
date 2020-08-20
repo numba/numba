@@ -16,7 +16,7 @@ import tempfile
 import warnings
 
 from numba.misc.appdirs import AppDirs
-from numba.core.utils import add_metaclass, file_replace
+from numba.core.utils import file_replace
 
 import numba
 from numba.core.errors import NumbaWarning
@@ -47,8 +47,7 @@ def _cache_log(msg, *args):
         print(msg)
 
 
-@add_metaclass(ABCMeta)
-class _Cache(object):
+class _Cache(metaclass=ABCMeta):
 
     @abstractproperty
     def cache_path(self):
@@ -110,8 +109,7 @@ class NullCache(_Cache):
         pass
 
 
-@add_metaclass(ABCMeta)
-class _CacheLocator(object):
+class _CacheLocator(metaclass=ABCMeta):
     """
     A filesystem locator for caching a given function.
     """
@@ -325,8 +323,7 @@ class _IPythonCacheLocator(_CacheLocator):
         return self
 
 
-@add_metaclass(ABCMeta)
-class _CacheImpl(object):
+class _CacheImpl(metaclass=ABCMeta):
     """
     Provides the core machinery for caching.
     - implement how to serialize and deserialize the data in the cache.
