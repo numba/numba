@@ -130,11 +130,11 @@ API_PROTOTYPES = {
 'cuMemcpyHtoDAsync':    (c_int, cu_device_ptr, c_void_p, c_size_t,
                         cu_stream),
 
-# CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost,
+# CUresult cuMemcpyDtoD(CUdeviceptr dstDevice, const void *srcDevice,
 #                       size_t ByteCount);
 'cuMemcpyDtoD':         (c_int, cu_device_ptr, cu_device_ptr, c_size_t),
 
-# CUresult cuMemcpyHtoDAsync(CUdeviceptr dstDevice, const void *srcHost,
+# CUresult cuMemcpyDtoDAsync(CUdeviceptr dstDevice, const void *srcDevice,
 #                            size_t ByteCount, CUstream hStream);
 'cuMemcpyDtoDAsync':    (c_int, cu_device_ptr, cu_device_ptr, c_size_t,
                         cu_stream),
