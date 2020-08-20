@@ -60,10 +60,11 @@ def call_experimental_dot(context, builder, conjugate, dtype,
                           n, a_data, b_data, out_data):
 
     import ctypes
-    inumpy_lib = ctypes.cdll.LoadLibrary("libinumpy.so")
-    C_get_function = inumpy_lib.get_function
+    inumpy_lib = ctypes.cdll.LoadLibrary("libinumpy_backend_c.so")
+    C_get_function = inumpy_lib._Z25get_backend_function_namePKcS0_
     C_get_function.restype = ctypes.c_long
-    f_ptr = inumpy_lib.get_function()
+    C_get_function.argtype = [ctypes.c_char_p, ctypes.c_char_p]
+    f_ptr = inumpy_lib.get_function("inumpy_dot", "float")
     print(f_ptr)
 
     fnty = ir.FunctionType(ir.IntType(32),
