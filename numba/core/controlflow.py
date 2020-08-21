@@ -2,6 +2,7 @@ import collections
 import functools
 import sys
 
+from numba.core import utils
 from numba.core.ir import Loc
 from numba.core.errors import UnsupportedError
 
