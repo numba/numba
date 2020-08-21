@@ -296,7 +296,8 @@ NRT_adapt_ndarray_to_python(arystruct_t* arystruct, int ndim,
     int flags = 0;
 
     if (descr == NULL) {
-        PyErr_Format(PyExc_ValueError, "In 'NRT_adapt_ndarray_to_python', 'descr' is NULL");
+        PyErr_Format(PyExc_RuntimeError,
+                     "In 'NRT_adapt_ndarray_to_python', 'descr' is NULL");
         return NULL;
     }
 

@@ -146,6 +146,7 @@ class EnvironmentManager(object):
                 getitem = self.pyapi.list_getitem(consts, index)
                 builder.store(getitem, ret)
             with br_null:
+                # This can happen when the Environment is accidentally released
                 self.pyapi.err_set_string(
                     "PyExc_RuntimeError",
                     "`env.consts` is NULL in `read_const`",
