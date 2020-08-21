@@ -585,7 +585,7 @@ class CFGraph(object):
 
         def push_state(node):
             stack.append(node)
-            succs_state[node] = [dest for dest, _ in self.successors(node)]
+            succs_state[node] = [dest for dest in self._succs[node]]
 
         push_state(entry_point)
 
