@@ -272,29 +272,39 @@ data_layout = {
 
 default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
+_supported_cc = None
 
-try:
-    from numba.cuda.cudadrv.runtime import runtime
-    cudart_version_major = runtime.get_version()[0]
-except:
-    # The CUDA Runtime may not be present
-    cudart_version_major = 0
 
-# List of supported compute capability in sorted order
-if cudart_version_major == 0:
-    SUPPORTED_CC = (),
-elif cudart_version_major < 9:
-    # CUDA 8.x
-    SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2)
-elif cudart_version_major < 10:
-    # CUDA 9.x
-    SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0)
-elif cudart_version_major < 11:
-    # CUDA 10.x
-    SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5)
-else:
-    # CUDA 11.0 and later
-    SUPPORTED_CC = (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0)
+def get_supported_ccs():
+    global _supported_cc
+
+    if _supported_cc:
+        return _supported_cc
+
+    try:
+        from numba.cuda.cudadrv.runtime import runtime
+        cudart_version_major = runtime.get_version()[0]
+    except:
+        # The CUDA Runtime may not be present
+        cudart_version_major = 0
+
+    # List of supported compute capability in sorted order
+    if cudart_version_major == 0:
+        _supported_cc = (),
+    elif cudart_version_major < 9:
+        # CUDA 8.x
+        _supported_cc = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2)
+    elif cudart_version_major < 10:
+        # CUDA 9.x
+        _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0)
+    elif cudart_version_major < 11:
+        # CUDA 10.x
+        _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5)
+    else:
+        # CUDA 11.0 and later
+        _supported_cc = (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0)
+
+    return _supported_cc
 
 
 def find_closest_arch(mycc):
@@ -305,7 +315,9 @@ def find_closest_arch(mycc):
     :param mycc: Compute capability as a tuple ``(MAJOR, MINOR)``
     :return: Closest supported CC as a tuple ``(MAJOR, MINOR)``
     """
-    for i, cc in enumerate(SUPPORTED_CC):
+    supported_cc = get_supported_ccs()
+
+    for i, cc in enumerate(supported_cc):
         if cc == mycc:
             # Matches
             return cc
@@ -317,10 +329,10 @@ def find_closest_arch(mycc):
                                        "not supported (requires >=%d.%d)" % (mycc + cc))
             else:
                 # return the previous CC
-                return SUPPORTED_CC[i - 1]
+                return supported_cc[i - 1]
 
     # CC higher than supported
-    return SUPPORTED_CC[-1]  # Choose the highest
+    return supported_cc[-1]  # Choose the highest
 
 
 def get_arch_option(major, minor):
