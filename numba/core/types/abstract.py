@@ -97,11 +97,12 @@ class Type(metaclass=_TypeMetaclass):
     for both comparison and hashing, to ensure sane behaviour.
     """
     _is_internal: bool
+    name: str
     mutable = False
     # Rather the type is reflected at the python<->nopython boundary
     reflected = False
 
-    def __init__(self, name):
+    def __init__(self, name: str):
         self.name = name
 
     @property
@@ -240,7 +241,6 @@ class Type(metaclass=_TypeMetaclass):
 
     def cast_python_value(self, args: pt.Any) -> pt.Any:
         raise NotImplementedError
-
 
     @property
     def is_internal(self) -> bool:
@@ -483,7 +483,6 @@ class Literal(Type):
             self._literal_type_cache = res
 
         return self._literal_type_cache
-
 
 
 class TypeRef(Dummy):
