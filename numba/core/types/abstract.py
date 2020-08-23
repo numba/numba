@@ -226,7 +226,7 @@ class Type(metaclass=_TypeMetaclass):
 
         return ndim, layout
 
-    def cast_python_value(self, args):
+    def cast_python_value(self, args: pt.Any) -> pt.Any:
         raise NotImplementedError
 
 
