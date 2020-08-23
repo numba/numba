@@ -6,7 +6,8 @@ import weakref
 
 import numpy as np
 from numba.core.typeconv import Conversion
-
+if pt.TYPE_CHECKING:
+    from numba.core.typing.templates import Signature
 from numba.core.utils import cached_property
 
 # Python typing
@@ -177,7 +178,13 @@ class Type(metaclass=_TypeMetaclass):
     # (returns True) or `types.int32(types.int32[:])` (returns something
     # usable as a function signature).
 
-    def __call__(self, *args):
+    @pt.overload
+    def __call__(self, *args: NumbaType) -> "Signature": ...
+
+    @pt.overload
+    def __call__(self, *args: pt.Any) -> pt.Any: ...
+
+    def __call__(self, *args: pt.Any) -> pt.Any:
         from numba.core.typing import signature
         if len(args) == 1 and not isinstance(args[0], Type):
             return self.cast_python_value(args[0])
