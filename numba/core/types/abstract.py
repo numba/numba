@@ -299,7 +299,8 @@ class DTypeSpec(Type):
     (e.g. np.empty()).
     """
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def dtype(self):
         """
         The actual dtype denoted by this dtype spec (a Type instance).
@@ -311,7 +312,8 @@ class IterableType(Type):
     Base class for iterable types.
     """
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def iterator_type(self):
         """
         The iterator type obtained when calling iter() (explicitly or implicitly).
@@ -342,7 +344,8 @@ class IteratorType(IterableType):
     def __init__(self, name, **kwargs):
         super(IteratorType, self).__init__(name, **kwargs)
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def yield_type(self):
         """
         The type of values yielded by the iterator.
@@ -385,7 +388,8 @@ class ArrayCompatible(Type):
     # for '__array_wrap__' with arguments (input, formal result).
     array_priority = 0.0
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def as_array(self):
         """
         The equivalent array type, for operations supporting array-compatible
