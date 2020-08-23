@@ -105,10 +105,12 @@ class Type(metaclass=_TypeMetaclass):
         self.name = name
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         """
         A property used for __eq__, __ne__ and __hash__.  Can be overridden
         in subclasses.
+
+        There is no defined contract for `key`, it can be of any python type.
         """
         return self.name
 
