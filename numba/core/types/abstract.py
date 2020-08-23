@@ -92,7 +92,7 @@ class Type(metaclass=_TypeMetaclass):
     default implementation uses the "key" property (overridable in subclasses)
     for both comparison and hashing, to ensure sane behaviour.
     """
-
+    _is_internal: bool
     mutable = False
     # Rather the type is reflected at the python<->nopython boundary
     reflected = False
@@ -230,7 +230,7 @@ class Type(metaclass=_TypeMetaclass):
 
 
     @property
-    def is_internal(self):
+    def is_internal(self) -> bool:
         """ Returns True if this class is an internally defined Numba type by
         virtue of the module in which it is instantiated, False else."""
         return self._is_internal
