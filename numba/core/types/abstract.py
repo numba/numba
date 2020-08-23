@@ -4,8 +4,12 @@ import itertools
 import weakref
 
 import numpy as np
+from numba.core.typeconv import Conversion
 
 from numba.core.utils import cached_property
+
+# Python typing
+NumbaType = pt.Type["Type"]
 
 # Types are added to a global registry (_typecache) in order to assign
 # them unique integer codes for fast matching in _dispatcher.c.
@@ -136,7 +140,7 @@ class Type(metaclass=_TypeMetaclass):
         """
         return None
 
-    def can_convert_to(self, typingctx, other):
+    def can_convert_to(self, typingctx, other: NumbaType) -> pt.Optional[Conversion]:
         """
         Check whether this type can be converted to the *other*.
         If successful, must return a string describing the conversion, e.g.
@@ -144,7 +148,7 @@ class Type(metaclass=_TypeMetaclass):
         """
         return None
 
-    def can_convert_from(self, typingctx, other):
+    def can_convert_from(self, typingctx, other: NumbaType) -> pt.Optional[Conversion]:
         """
         Similar to *can_convert_to*, but in reverse.  Only needed if
         the type provides conversion from other types.
