@@ -115,7 +115,7 @@ class Type(metaclass=_TypeMetaclass):
         return self.name
 
     @property
-    def mangling_args(self):
+    def mangling_args(self) -> pt.Tuple[pt.Any, pt.Sequence[pt.Any]]:
         """
         Returns `(basename, args)` where `basename` is the name of the type
         and `args` is a sequence of parameters of the type.
