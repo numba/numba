@@ -7,7 +7,10 @@ import weakref
 import numpy as np
 from numba.core.typeconv import Conversion
 if pt.TYPE_CHECKING:
+    # these imports are only needed for python typing and would otherwise
+    # cause circular imports
     from numba.core.typing.templates import Signature
+    from numba.core.types import Array
 from numba.core.utils import cached_property
 
 # Python typing
@@ -192,7 +195,10 @@ class Type(metaclass=_TypeMetaclass):
         return signature(self, # return_type
                          *args)
 
-    def __getitem__(self, args):
+    def __getitem__(self, args: pt.Union[slice,
+                                         pt.Tuple[slice, ...],
+                                         pt.List[slice]]
+                    ) -> "Array":
         """
         Return an array of this type.
         """
@@ -200,7 +206,10 @@ class Type(metaclass=_TypeMetaclass):
         ndim, layout = self._determine_array_spec(args)
         return Array(dtype=self, ndim=ndim, layout=layout)
 
-    def _determine_array_spec(self, args):
+    def _determine_array_spec(self, args: pt.Union[slice,
+                                         pt.Tuple[slice, ...],
+                                         pt.List[slice]]
+                              ) -> pt.Tuple[int, str]:
         # XXX non-contiguous by default, even for 1d arrays,
         # doesn't sound very intuitive
         def validate_slice(s):
@@ -215,6 +224,7 @@ class Type(metaclass=_TypeMetaclass):
             else:
                 layout = 'A'
         elif validate_slice(args):
+            args = pt.cast(slice, args) # only option remaining in elif
             ndim = 1
             if args.step == 1:
                 layout = 'C'
