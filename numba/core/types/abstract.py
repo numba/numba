@@ -22,7 +22,8 @@ NumbaType = pt.Type["Type"]
 # in _dispatcher.c's internal caches).
 _typecodes = itertools.count()
 
-def _autoincr():
+
+def _autoincr() -> int:
     n = next(_typecodes)
     # 4 billion types should be enough, right?
     assert n < 2 ** 32, "Limited to 4 billion types"
