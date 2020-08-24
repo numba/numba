@@ -416,21 +416,26 @@ def _list_length(typingctx, l):
 
     Returns the length of the list.
     """
-    resty = types.intp
-    sig = resty(l)
+    sig = types.intp(l)
+    ll_list_type = cgutils.voidptr_t
+    ll_intp_type = cgutils.intp_t
 
     def codegen(context, builder, sig, args):
+        [tl] = sig.args
+        [l] = args
         fnty = ir.FunctionType(
-            ll_ssize_t,
+            ll_intp_type,
             [ll_list_type],
         )
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_list_length')
-        [l] = args
-        [tl] = sig.args
+        fname = 'numba_list_size_address'
+        fn = builder.module.get_or_insert_function(fnty, name=fname)
+        fn.attributes.add('alwaysinline')
+        fn.attributes.add('readonly')
+        fn.attributes.add('nounwind')
         lp = _container_get_data(context, builder, tl, l)
-        n = builder.call(fn, [lp])
-        return n
+        len_addr = builder.call(fn, [lp,],)
+        ptr = builder.inttoptr(len_addr, cgutils.intp_t.as_pointer())
+        return builder.load(ptr)
 
     return sig, codegen
 
@@ -618,6 +623,24 @@ def impl_append(l, item):
         return sig, impl
 
 
+@intrinsic
+def fix_index(tyctx, list_ty, index_ty):
+    sig = types.intp(list_ty, index_ty)
+
+    def codegen(context, builder, sig, args):
+        [list_ty, index_ty] = sig.args
+        [ll_list, ll_idx] = args
+        is_negative = builder.icmp_signed('<', ll_idx,
+                                          ir.Constant(ll_idx.type, 0))
+        fast_len_sig, length_fn = _list_length._defn(context.typing_context,
+                                                     list_ty)
+        length = length_fn(context, builder, fast_len_sig, (ll_list,))
+        zextd_idx = builder.zext(ll_idx, length.type)
+        wrapped_index = builder.add(zextd_idx, length)
+        return builder.select(is_negative, wrapped_index, zextd_idx)
+    return sig, codegen
+
+
 @register_jitable
 def handle_index(l, index):
     """Handle index.
@@ -626,12 +649,9 @@ def handle_index(l, index):
     an IndexError.
     """
     # convert negative indices to positive ones
-    if index < 0:
-        # len(l) has always type 'int64'
-        # while index can be an signed/unsigned integer
-        index = type(index)(len(l) + index)
+    index = fix_index(l, index)
     # check that the index is in range
-    if not (0 <= index < len(l)):
+    if index < 0 or index >= len(l):
         raise IndexError("list index out of range")
     return index
 
@@ -660,61 +680,47 @@ def handle_slice(l, s):
 
 
 @intrinsic
-def _list_getitem(typingctx, l, index):
-    """Wrap numba_list_getitem
-
-    Returns 2-tuple of (int32, ?item_type)
-
-    """
-    IS_NOT_NONE = not isinstance(l.item_type, types.NoneType)
-    resty = types.Tuple([types.int32,
-                         types.Optional(l.item_type
-                                        if IS_NOT_NONE
-                                        else types.int64)])
-    sig = resty(l, index)
+def _list_getitem(typingctx, l_ty, index_ty):
+    resty = types.Tuple([types.int32, types.Optional(l_ty.item_type)])
+    sig = resty(l_ty, index_ty)
 
     def codegen(context, builder, sig, args):
-        fnty = ir.FunctionType(
-            ll_status,
-            [ll_list_type, ll_ssize_t, ll_bytes],
-        )
         [tl, tindex] = sig.args
         [l, index] = args
-        fn = builder.module.get_or_insert_function(
-            fnty, name='numba_list_getitem')
-
-        dm_item = context.data_model_manager[tl.item_type]
-        ll_item = context.get_data_type(tl.item_type)
-        ptr_item = cgutils.alloca_once(builder, ll_item)
+        fnty = ir.FunctionType(
+            ll_voidptr_type,
+            [ll_list_type],
+        )
+        fn = builder.module.get_or_insert_function(fnty,
+                                                   name='numba_list_base_ptr')
+        fn.attributes.add('alwaysinline')
+        fn.attributes.add('nounwind')
+        fn.attributes.add('readonly')
 
         lp = _container_get_data(context, builder, tl, l)
-        status = builder.call(
+
+        base_ptr = builder.call(
             fn,
-            [
-                lp,
-                index,
-                _as_bytes(builder, ptr_item),
-            ],
+            [lp,],
         )
-        # Load item if output is available
-        found = builder.icmp_signed('>=', status,
-                                    status.type(int(ListStatus.LIST_OK)))
-        out = context.make_optional_none(builder,
-                                         tl.item_type
-                                         if IS_NOT_NONE
-                                         else types.int64)
+
+        llty = context.get_data_type(tl.item_type)
+        casted_base_ptr = builder.bitcast(base_ptr, llty.as_pointer())
+
+        item_ptr = cgutils.gep(builder, casted_base_ptr, index)
+
+        out = context.make_optional_none(builder, tl.item_type)
         pout = cgutils.alloca_once_value(builder, out)
 
-        with builder.if_then(found):
-            if IS_NOT_NONE:
-                item = dm_item.load_from_data_pointer(builder, ptr_item)
-                context.nrt.incref(builder, tl.item_type, item)
-                loaded = context.make_optional_value(
-                    builder, tl.item_type, item)
-                builder.store(loaded, pout)
+        dm_item = context.data_model_manager[tl.item_type]
+        item = dm_item.load_from_data_pointer(builder, item_ptr)
+        context.nrt.incref(builder, tl.item_type, item)
+        # probably need to actually do something about Optional
+        loaded = context.make_optional_value(builder, tl.item_type, item)
+        builder.store(loaded, pout)
 
         out = builder.load(pout)
-        return context.make_tuple(builder, resty, [status, out])
+        return context.make_tuple(builder, resty, [ll_status(0), out])
 
     return sig, codegen
 
@@ -1260,6 +1266,19 @@ def ol_list_sort(lst, key=None, reverse=False):
             for i in tmp:
                 ordered.append(lst[i])
             lst[:] = ordered
+    return impl
+
+
+@overload_method(types.ListType, "getitem_unchecked")
+def ol_getitem_unchecked(lst, index):
+    if not isinstance(index, types.Integer):
+        return
+
+    def impl(lst, index):
+        index = fix_index(lst, index)
+        castedindex = _cast(index, types.intp)
+        _, item = _list_getitem(lst, castedindex)
+        return _nonoptional(item)
     return impl
 
 
