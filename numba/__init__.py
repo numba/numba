@@ -6,34 +6,15 @@ import platform
 import re
 import sys
 import warnings
-from collections import namedtuple
 
 from ._version import get_versions
-__version__ = get_versions()['version']
-del get_versions
+from .misc.init_utils import generate_version_info
 
-_version_info = namedtuple('version_info',
-                           ('major minor patch short full '
-                            'string tuple git_revision'))
-def _gen_v_info():
-    parts = __version__.split('.')
-    def try_int(x):
-        try:
-            return int(x)
-        except ValueError:
-            return None
-    major = try_int(parts[0]) if len(parts) >= 1 else None
-    minor = try_int(parts[1]) if len(parts) >= 2 else None
-    patch = try_int(parts[2]) if len(parts) >= 3 else None
-    short = (major, minor)
-    full = (major, minor, patch)
-    string = __version__
-    tup = tuple(string.split('.'))
-    git_revision = tup[3] if len(tup) >= 4 else None
-    return _version_info(major, minor, patch, short, full, string, tup,
-                         git_revision)
-version_info = _gen_v_info()
-del _gen_v_info
+__version__ = get_versions()['version']
+version_info = generate_version_info(__version__)
+del get_versions
+del generate_version_info
+
 
 from numba.core import config
 from numba.testing import _runtests as runtests
