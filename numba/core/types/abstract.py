@@ -132,10 +132,12 @@ class Type(metaclass=_TypeMetaclass):
     def __hash__(self):
         return hash(self.key)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Type):
+            return NotImplemented
         return self.__class__ is other.__class__ and self.key == other.key
 
-    def __ne__(self, other):
+    def __ne__(self, other: object) -> bool:
         return not (self == other)
 
     def __reduce__(self):
