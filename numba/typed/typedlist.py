@@ -30,142 +30,6 @@ from numba.core.typing.templates import Signature
 DEFAULT_ALLOCATED = listobject.DEFAULT_ALLOCATED
 
 
-@njit
-def _make_list(itemty, allocated=DEFAULT_ALLOCATED):
-    return listobject._as_meminfo(listobject.new_list(itemty,
-                                                      allocated=allocated))
-
-
-@njit
-def _length(l):
-    return len(l)
-
-
-@njit
-def _allocated(l):
-    return l._allocated()
-
-
-@njit
-def _is_mutable(l):
-    return l._is_mutable()
-
-
-@njit
-def _make_mutable(l):
-    return l._make_mutable()
-
-
-@njit
-def _make_immutable(l):
-    return l._make_immutable()
-
-
-@njit
-def _append(l, item):
-    l.append(item)
-
-
-@njit
-def _setitem(l, i, item):
-    l[i] = item
-
-
-@njit
-def _getitem(l, i):
-    return l[i]
-
-
-@njit
-def _contains(l, item):
-    return item in l
-
-
-@njit
-def _count(l, item):
-    return l.count(item)
-
-
-@njit
-def _pop(l, i):
-    return l.pop(i)
-
-
-@njit
-def _delitem(l, i):
-    del l[i]
-
-
-@njit
-def _extend(l, iterable):
-    return l.extend(iterable)
-
-
-@njit
-def _insert(l, i, item):
-    l.insert(i, item)
-
-
-@njit
-def _remove(l, item):
-    l.remove(item)
-
-
-@njit
-def _clear(l):
-    l.clear()
-
-
-@njit
-def _reverse(l):
-    l.reverse()
-
-
-@njit
-def _copy(l):
-    return l.copy()
-
-
-@njit
-def _eq(t, o):
-    return t == o
-
-
-@njit
-def _ne(t, o):
-    return t != o
-
-
-@njit
-def _lt(t, o):
-    return t < o
-
-
-@njit
-def _le(t, o):
-    return t <= o
-
-
-@njit
-def _gt(t, o):
-    return t > o
-
-
-@njit
-def _ge(t, o):
-    return t >= o
-
-
-@njit
-def _index(l, item, start, end):
-    return l.index(item, start, end)
-
-
-@njit
-def _sort(l, key, reverse):
-    return l.sort(key, reverse)
-
-
 def _from_meminfo_ptr(ptr, listtype):
     return List(meminfo=ptr, lsttype=listtype)
 
@@ -223,6 +87,49 @@ class List(MutableSequence):
         illegal_kwargs = any((kw not in self._legal_kwargs for kw in kwargs))
         if illegal_kwargs or args and kwargs:
             raise TypeError("List() takes no keyword arguments")
+
+        from numba.typed.containermethods import (length, setitem, getitem,
+                                                  delitem, contains, copy,
+                                                  _make_list, list_allocated,
+                                                  list_is_mutable,
+                                                  list_make_mutable,
+                                                  list_make_immutable,
+                                                  list_append, list_count,
+                                                  list_pop, list_extend,
+                                                  list_insert, list_remove,
+                                                  list_clear, list_reverse,
+                                                  list_eq, list_ne, list_lt,
+                                                  list_le, list_gt, list_ge,
+                                                  list_index, list_sort)
+        self._method_table = {'length': length,
+                              'setitem': setitem,
+                              'getitem': getitem,
+                              'delitem': delitem,
+                              'contains': contains,
+                              'copy': copy,
+                              'make_list': _make_list,
+                              'list_allocated':list_allocated,
+                              'list_is_mutable':list_is_mutable,
+                              'list_make_mutable':list_make_mutable,
+                              'list_make_immutable':list_make_immutable,
+                              'list_append':list_append,
+                              'list_count':list_count,
+                              'list_pop':list_pop,
+                              'list_extend':list_extend,
+                              'list_insert':list_insert,
+                              'list_remove':list_remove,
+                              'list_clear':list_clear,
+                              'list_reverse':list_reverse,
+                              'list_eq':list_eq,
+                              'list_ne':list_ne,
+                              'list_lt':list_lt,
+                              'list_le':list_le,
+                              'list_gt':list_gt,
+                              'list_ge':list_ge,
+                              'list_index':list_index,
+                              'list_sort':list_sort,
+                              }
+
         if kwargs:
             self._list_type, self._opaque = self._parse_arg(**kwargs)
         else:
@@ -253,7 +160,8 @@ class List(MutableSequence):
         if meminfo is not None:
             opaque = meminfo
         else:
-            opaque = _make_list(lsttype.item_type, allocated=allocated)
+            opaque = self._method_table['make_list'](lsttype.item_type,
+                                                     allocated=allocated)
         return lsttype, opaque
 
     @property
@@ -282,77 +190,77 @@ class List(MutableSequence):
         if not self._typed:
             return 0
         else:
-            return _length(self)
+            return self._method_table['length'](self)
 
     def _allocated(self):
         if not self._typed:
             return DEFAULT_ALLOCATED
         else:
-            return _allocated(self)
+            return self._method_table['list_allocated'](self)
 
     def _is_mutable(self):
-        return _is_mutable(self)
+        return self._method_table['list_is_mutable'](self)
 
     def _make_mutable(self):
-        return _make_mutable(self)
+        return self._method_table['list_make_mutable'](self)
 
     def _make_immutable(self):
-        return _make_immutable(self)
+        return self._method_table['list_make_immutable'](self)
 
     def __eq__(self, other):
-        return _eq(self, other)
+        return self._method_table['list_eq'](self, other)
 
     def __ne__(self, other):
-        return _ne(self, other)
+        return self._method_table['list_ne'](self, other)
 
     def __lt__(self, other):
-        return _lt(self, other)
+        return self._method_table['list_lt'](self, other)
 
     def __le__(self, other):
-        return _le(self, other)
+        return self._method_table['list_le'](self, other)
 
     def __gt__(self, other):
-        return _gt(self, other)
+        return self._method_table['list_gt'](self, other)
 
     def __ge__(self, other):
-        return _ge(self, other)
+        return self._method_table['list_ge'](self, other)
 
     def append(self, item):
         if not self._typed:
             self._initialise_list(item)
-        _append(self, item)
+        self._method_table['list_append'](self, item)
 
     def __setitem__(self, i, item):
         if not self._typed:
             self._initialise_list(item)
-        _setitem(self, i, item)
+        self._method_table['setitem'](self, i, item)
 
     def __getitem__(self, i):
         if not self._typed:
             raise IndexError
         else:
-            return _getitem(self, i)
+            return self._method_table['getitem'](self, i)
 
     def __iter__(self):
         for i in range(len(self)):
             yield self[i]
 
     def __contains__(self, item):
-        return _contains(self, item)
+        return self._method_table['contains'](self, item)
 
     def __delitem__(self, i):
-        _delitem(self, i)
+        self._method_table['delitem'](self, i)
 
     def insert(self, i, item):
         if not self._typed:
             self._initialise_list(item)
-        _insert(self, i, item)
+        self._method_table['list_insert'](self, i, item)
 
     def count(self, item):
-        return _count(self, item)
+        return self._method_table['list_count'](self, item)
 
     def pop(self, i=-1):
-        return _pop(self, i)
+        return self._method_table['list_pop'](self, i)
 
     def extend(self, iterable):
         # Empty iterable, do nothing
@@ -363,22 +271,22 @@ class List(MutableSequence):
             # type of the list. FIXME: this may be a problem if the iterable
             # can not be sliced.
             self._initialise_list(iterable[0])
-        return _extend(self, iterable)
+        return self._method_table['list_extend'](self, iterable)
 
     def remove(self, item):
-        return _remove(self, item)
+        return self._method_table['list_remove'](self, item)
 
     def clear(self):
-        return _clear(self)
+        return self._method_table['list_clear'](self)
 
     def reverse(self):
-        return _reverse(self)
+        return self._method_table['list_reverse'](self)
 
     def copy(self):
-        return _copy(self)
+        return self._method_table['copy'](self)
 
     def index(self, item, start=None, stop=None):
-        return _index(self, item, start, stop)
+        return self._method_table['list_index'](self, item, start, stop)
 
     def sort(self, key=None, reverse=False):
         """Sort the list inplace.
@@ -387,8 +295,10 @@ class List(MutableSequence):
         """
         # If key is not already a dispatcher object, make it so
         if callable(key) and not isinstance(key, Dispatcher):
+            # Import here so it doesn't trigger JIT initialisation on import
+            # of this module.
             key = njit(key)
-        return _sort(self, key, reverse)
+        return self._method_table['list_sort'](self, key, reverse)
 
     def __str__(self):
         buf = []

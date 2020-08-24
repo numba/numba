@@ -5,7 +5,7 @@ from collections.abc import MutableMapping
 
 from numba.core.types import DictType, TypeRef
 from numba.core.imputils import numba_typeref_ctor
-from numba import njit, typeof
+from numba import typeof
 from numba.core import types, errors, config, cgutils
 from numba.core.extending import (
     overload_method,
@@ -19,61 +19,6 @@ from numba.typed import dictobject
 from numba.core.typing import signature
 
 
-@njit
-def _make_dict(keyty, valty):
-    return dictobject._as_meminfo(dictobject.new_dict(keyty, valty))
-
-
-@njit
-def _length(d):
-    return len(d)
-
-
-@njit
-def _setitem(d, key, value):
-    d[key] = value
-
-
-@njit
-def _getitem(d, key):
-    return d[key]
-
-
-@njit
-def _delitem(d, key):
-    del d[key]
-
-
-@njit
-def _contains(d, key):
-    return key in d
-
-
-@njit
-def _get(d, key, default):
-    return d.get(key, default)
-
-
-@njit
-def _setdefault(d, key, default):
-    return d.setdefault(key, default)
-
-
-@njit
-def _iter(d):
-    return list(d.keys())
-
-
-@njit
-def _popitem(d):
-    return d.popitem()
-
-
-@njit
-def _copy(d):
-    return d.copy()
-
-
 def _from_meminfo_ptr(ptr, dicttype):
     d = Dict(meminfo=ptr, dcttype=dicttype)
     return d
@@ -84,7 +29,6 @@ class Dict(MutableMapping):
 
     Implements the MutableMapping interface.
     """
-
     def __new__(cls, dcttype=None, meminfo=None):
         if config.DISABLE_JIT:
             return dict.__new__(dict)
@@ -113,6 +57,24 @@ class Dict(MutableMapping):
         meminfo : MemInfo; keyword-only
             Used internally to pass the MemInfo object when boxing.
         """
+        # set the method table, these map to njit functions in typeddictmethods
+        from numba.typed.containermethods import (length, setitem, getitem,
+                                                  delitem, contains, _make_dict,
+                                                  copy, dict_get,
+                                                  dict_setdefault, dict_iter,
+                                                  dict_popitem,)
+        self._method_table = {'length': length,
+                              'setitem': setitem,
+                              'getitem': getitem,
+                              'delitem': delitem,
+                              'contains': contains,
+                              'copy': copy,
+                              'make_dict': _make_dict,
+                              'get': dict_get,
+                              'setdefault': dict_setdefault,
+                              'iter': dict_iter,
+                              'popitem': dict_popitem,
+                              }
         if kwargs:
             self._dict_type, self._opaque = self._parse_arg(**kwargs)
         else:
@@ -125,7 +87,8 @@ class Dict(MutableMapping):
         if meminfo is not None:
             opaque = meminfo
         else:
-            opaque = _make_dict(dcttype.key_type, dcttype.value_type)
+            opaque = self._method_table['make_dict'](dcttype.key_type,
+                                                     dcttype.value_type)
         return dcttype, opaque
 
     @property
@@ -148,35 +111,35 @@ class Dict(MutableMapping):
         if not self._typed:
             raise KeyError(key)
         else:
-            return _getitem(self, key)
+            return self._method_table['getitem'](self, key)
 
     def __setitem__(self, key, value):
         if not self._typed:
             self._initialise_dict(key, value)
-        return _setitem(self, key, value)
+        return self._method_table['setitem'](self, key, value)
 
     def __delitem__(self, key):
         if not self._typed:
             raise KeyError(key)
-        _delitem(self, key)
+        self._method_table['delitem'](self, key)
 
     def __iter__(self):
         if not self._typed:
             return iter(())
         else:
-            return iter(_iter(self))
+            return iter(self._method_table['iter'](self))
 
     def __len__(self):
         if not self._typed:
             return 0
         else:
-            return _length(self)
+            return self._method_table['length'](self)
 
     def __contains__(self, key):
         if len(self) == 0:
             return False
         else:
-            return _contains(self, key)
+            return self._method_table['contains'](self, key)
 
     def __str__(self):
         buf = []
@@ -192,21 +155,21 @@ class Dict(MutableMapping):
     def get(self, key, default=None):
         if not self._typed:
             return default
-        return _get(self, key, default)
+        return self._method_table['get'](self, key, default)
 
     def setdefault(self, key, default=None):
         if not self._typed:
             if default is not None:
                 self._initialise_dict(key, default)
-        return _setdefault(self, key, default)
+        return self._method_table['setdefault'](self, key, default)
 
     def popitem(self):
         if len(self) == 0:
             raise KeyError('dictionary is empty')
-        return _popitem(self)
+        return self._method_table['popitem'](self)
 
     def copy(self):
-        return _copy(self)
+        return self._method_table['copy'](self)
 
 
 # XXX: should we have a better way to classmethod

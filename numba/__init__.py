@@ -56,6 +56,9 @@ from numba.experimental.jitclass.decorators import _warning_jitclass as jitclass
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 
+# Initialize typed containers
+import numba.typed
+
 # Keep this for backward compatibility.
 test = runtests.main
 
@@ -204,12 +207,9 @@ config.USING_SVML = _try_enable_svml()
 
 
 # ---------------------- WARNING WARNING WARNING ----------------------------
-# The following imports occur below here (SVML init) because somewhere in their
-# import sequence they have a `@njit` wrapped function. This triggers too early
+# Imports that have global `@njit` wrapped functions in any module in their
+# import sequence must occur below here (SVML init). @njit triggers too early
 # a bind to the underlying LLVM libraries which then irretrievably sets the LLVM
 # SVML state to "no SVML". See https://github.com/numba/numba/issues/4689 for
-# context.
+# context. If you need to add a module below here... reconsider!
 # ---------------------- WARNING WARNING WARNING ----------------------------
-
-# Initialize typed containers
-import numba.typed
