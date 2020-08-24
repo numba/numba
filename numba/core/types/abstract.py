@@ -14,7 +14,8 @@ if pt.TYPE_CHECKING:
 from numba.core.utils import cached_property
 
 # Python typing
-NumbaType = pt.Type["Type"]
+NumbaTypeClass = pt.Type["Type"]
+NumbaTypeInst = pt.Union["Type"]
 
 # Types are added to a global registry (_typecache) in order to assign
 # them unique integer codes for fast matching in _dispatcher.c.
@@ -153,7 +154,7 @@ class Type(metaclass=_TypeMetaclass):
         """
         return None
 
-    def can_convert_to(self, typingctx, other: NumbaType) -> pt.Optional[Conversion]:
+    def can_convert_to(self, typingctx, other: NumbaTypeInst) -> pt.Optional[Conversion]:
         """
         Check whether this type can be converted to the *other*.
         If successful, must return a string describing the conversion, e.g.
@@ -161,7 +162,7 @@ class Type(metaclass=_TypeMetaclass):
         """
         return None
 
-    def can_convert_from(self, typingctx, other: NumbaType) -> pt.Optional[Conversion]:
+    def can_convert_from(self, typingctx, other: NumbaTypeInst) -> pt.Optional[Conversion]:
         """
         Similar to *can_convert_to*, but in reverse.  Only needed if
         the type provides conversion from other types.
@@ -188,7 +189,7 @@ class Type(metaclass=_TypeMetaclass):
     # usable as a function signature).
 
     @pt.overload
-    def __call__(self, *args: NumbaType) -> "Signature": ...
+    def __call__(self, *args: NumbaTypeInst) -> "Signature": ...
 
     @pt.overload
     def __call__(self, *args: pt.Any) -> pt.Any: ...
