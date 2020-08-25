@@ -226,10 +226,12 @@ class _ObjModeContextType(WithContext):
         not_annotated = set(stripped_outs) - set(typeanns)
         if not_annotated:
             msg = (
-                'missing type annotation on outgoing variables: {0}'
-                'Example code: with objmode({0}=<add_type_as_str_here>):'
+                'Missing type annotation on outgoing variable(s): {0}\n\n'
+                'Example code: with objmode({1}=\'<'
+                'add_type_as_string_here>\')\n'
             )
-            raise errors.TypingError(msg.format(not_annotated))
+            stable_ann = sorted(not_annotated)
+            raise errors.TypingError(msg.format(stable_ann, stable_ann[0]))
 
         # Get output types
         outtup = types.Tuple([typeanns[v] for v in stripped_outs])
