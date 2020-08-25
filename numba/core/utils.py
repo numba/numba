@@ -26,7 +26,6 @@ from numba.core import types
 
 get_ident = threading.get_ident
 intern = sys.intern
-file_replace = os.replace
 asbyteint = int
 
 # ------------------------------------------------------------------------------
