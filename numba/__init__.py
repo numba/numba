@@ -8,7 +8,7 @@ import sys
 import warnings
 
 from ._version import get_versions
-from .misc.init_utils import generate_version_info
+from numba.misc.init_utils import generate_version_info
 
 __version__ = get_versions()['version']
 version_info = generate_version_info(__version__)
