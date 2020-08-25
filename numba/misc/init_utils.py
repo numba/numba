@@ -8,6 +8,23 @@ version_info = namedtuple('version_info',
 
 
 def generate_version_info(version):
+    """Process a version string into a structured version_info object.
+
+    Parameters
+    ----------
+    version: str
+        a string describing
+
+    Returns
+    -------
+    version_info: tuple
+        structured version information
+
+    See also
+    --------
+    Look at the definition of 'version_info' in this file for details.
+
+    """
     parts = version.split('.')
 
     def try_int(x):
