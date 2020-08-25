@@ -25,7 +25,6 @@ from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
 from numba.core import types
 
 get_ident = threading.get_ident
-intern = sys.intern
 asbyteint = int
 
 # ------------------------------------------------------------------------------
