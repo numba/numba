@@ -81,8 +81,6 @@ def itervalues(d, **kw):
     return iter(d.values(**kw))
 
 
-get_function_globals = operator.attrgetter("__globals__")
-
 # End: Originally from `numba.six` under the following license
 # ------------------------------------------------------------------------------
 
