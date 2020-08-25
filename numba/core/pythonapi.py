@@ -147,6 +147,7 @@ class EnvironmentManager(object):
                 builder.store(getitem, ret)
             with br_null:
                 # This can happen when the Environment is accidentally released
+                # and has subsequently been garbage collected.
                 self.pyapi.err_set_string(
                     "PyExc_RuntimeError",
                     "`env.consts` is NULL in `read_const`",

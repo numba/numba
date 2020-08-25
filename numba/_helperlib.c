@@ -276,8 +276,8 @@ numba_recreate_record(void *pdata, int size, PyObject *dtype) {
     PyArray_Descr *descr = NULL;
 
     if (dtype == NULL) {
-        PyErr_Format(PyExc_ValueError,
-            "In 'numba_recreate_record', 'descr' is NULL");
+        PyErr_Format(PyExc_Runtime,
+            "In 'numba_recreate_record', 'dtype' is NULL");
         return NULL;
     }
 
