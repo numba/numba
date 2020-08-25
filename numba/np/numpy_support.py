@@ -4,7 +4,7 @@ import re
 
 import numpy as np
 
-from numba.core import errors, types, utils
+from numba.core import errors, types
 from numba.core.typing.templates import signature
 
 
@@ -587,7 +587,7 @@ def farray(ptr, shape, dtype=None):
     given *shape*, in Fortran order.  If *dtype* is given, it is used as the
     array's dtype, otherwise the array's dtype is inferred from *ptr*'s type.
     """
-    if not isinstance(shape, utils.INT_TYPES):
+    if not isinstance(shape, int):
         shape = shape[::-1]
     return carray(ptr, shape, dtype).T
 

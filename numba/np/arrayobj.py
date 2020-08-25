@@ -198,7 +198,7 @@ def populate_array(array, data, shape, strides, itemsize, meminfo,
         shape = cgutils.pack_array(builder, shape, intp_t)
     if isinstance(strides, (tuple, list)):
         strides = cgutils.pack_array(builder, strides, intp_t)
-    if isinstance(itemsize, utils.INT_TYPES):
+    if isinstance(itemsize, int):
         itemsize = intp_t(itemsize)
 
     attrs = dict(shape=shape,

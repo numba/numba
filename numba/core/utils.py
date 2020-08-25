@@ -24,7 +24,6 @@ from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
 from numba.core import types
 
-INT_TYPES = (int,)
 longint = int
 get_ident = threading.get_ident
 intern = sys.intern
@@ -367,7 +366,7 @@ def bit_length(intval):
     """
     Return the number of bits necessary to represent integer `intval`.
     """
-    assert isinstance(intval, INT_TYPES)
+    assert isinstance(intval, int)
     if intval >= 0:
         return len(bin(intval)) - 2
     else:
