@@ -23,8 +23,6 @@ from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
 from numba.core import types
 
-asbyteint = int
-
 # ------------------------------------------------------------------------------
 # Start: Originally from `numba.six` under the following license
 
