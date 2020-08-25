@@ -1,3 +1,5 @@
+"""Collection of miscellaneous initialization utilities."""
+
 from collections import namedtuple
 
 version_info = namedtuple('version_info',
