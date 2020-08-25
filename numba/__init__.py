@@ -75,9 +75,6 @@ from numba.experimental.jitclass.decorators import _warning_jitclass as jitclass
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 
-# Bytes/unicode array support
-import numba.cpython.charseq
-
 # Keep this for backward compatibility.
 test = runtests.main
 
