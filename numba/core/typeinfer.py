@@ -1481,8 +1481,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         """
         Ensure that builtins are not modified.
         """
-        if (gvar.name in ('range', 'xrange') and
-                gvar.value not in utils.RANGE_ITER_OBJECTS):
+        if gvar.name == 'range' and gvar.value is not range:
             bad = True
         elif gvar.name == 'slice' and gvar.value is not slice:
             bad = True

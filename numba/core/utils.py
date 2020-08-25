@@ -367,9 +367,6 @@ def benchmark(func, maxsec=1):
     return BenchmarkResult(func, records, number)
 
 
-RANGE_ITER_OBJECTS = (builtins.range,)
-
-
 # A dummy module for dynamically-generated functions
 _dynamic_modname = '<dynamic>'
 _dynamic_module = ModuleType(_dynamic_modname)
