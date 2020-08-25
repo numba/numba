@@ -20,6 +20,7 @@ from numba.tests.support import (
     captured_stdout,
     temp_directory,
     override_config,
+    run_in_new_process_in_cache_dir,
 )
 from numba.core.errors import LoweringError
 import unittest
@@ -1748,12 +1749,56 @@ class TestCachingOverloadObjmode(TestCase):
             got = testcase_cached(123)
             self.assertEqual(got, expect)
 
-            self.assertEqual(
-                testcase_cached._cache_hits[testcase.signatures[0]], 1,
+    @classmethod
+    def check_objmode_cache_ndarray(cls):
+        def do_this(a, b):
+            return np.sum(a + b)
+
+        def do_something(a, b):
+            return np.sum(a + b)
+
+        @overload(do_something)
+        def overload_do_something(a, b):
+            def _do_something_impl(a, b):
+                with objmode(y='float64'):
+                    y = do_this(a, b)
+                return y
+            return _do_something_impl
+
+        @njit(cache=True)
+        def test_caching():
+            a = np.arange(20)
+            b = np.arange(20)
+            return do_something(a, b)
+
+        got = test_caching()
+        expect = test_caching.py_func()
+
+        # Check result
+        if got != expect:
+            raise AssertionError("incorrect result")
+        return test_caching
+
+    @classmethod
+    def check_objmode_cache_ndarray_check_cache(cls):
+        disp = cls.check_objmode_cache_ndarray()
+        if len(disp.stats.cache_misses) != 0:
+            raise AssertionError('unexpected cache miss')
+        if len(disp.stats.cache_hits) <= 0:
+            raise AssertionError("unexpected missing cache hit")
+
+    def test_check_objmode_cache_ndarray(self):
+        # See issue #6130.
+        # Env is missing after cache load.
+        cache_dir = temp_directory(self.__class__.__name__)
+        with override_config("CACHE_DIR", cache_dir):
+            # Test in local process to populate the cache.
+            self.check_objmode_cache_ndarray()
+            # Run in new process to use the cache in a fresh process.
+            res = run_in_new_process_in_cache_dir(
+                self.check_objmode_cache_ndarray_check_cache, cache_dir
             )
-            self.assertEqual(
-                testcase_cached._cache_misses[testcase.signatures[0]], 0,
-            )
+        self.assertEqual(res['exitcode'], 0)
 
 
 class TestMisc(TestCase):
