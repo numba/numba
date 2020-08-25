@@ -75,7 +75,8 @@ BINOPS_TO_OPERATORS = {
     'is': operator.is_,
     'is not': operator.is_not,
     # This one has its args reversed!
-    'in': operator.contains
+    'in': operator.contains,
+    '@': operator.matmul,
 }
 
 INPLACE_BINOPS_TO_OPERATORS = {
@@ -91,6 +92,7 @@ INPLACE_BINOPS_TO_OPERATORS = {
     '^=': operator.ixor,
     '<<=': operator.ilshift,
     '>>=': operator.irshift,
+    '@=': operator.imatmul,
 }
 
 UNARY_BUITINS_TO_OPERATORS = {
@@ -143,9 +145,6 @@ OPERATORS_TO_BUILTINS = {
     operator.not_: 'not',
     operator.truth: 'is_true',
 }
-
-BINOPS_TO_OPERATORS['@'] = operator.matmul
-INPLACE_BINOPS_TO_OPERATORS['@='] = operator.imatmul
 
 
 _shutting_down = False
