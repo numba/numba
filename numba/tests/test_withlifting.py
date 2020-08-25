@@ -531,12 +531,12 @@ class TestLiftObj(MemoryLeak, TestCase):
             cfoo(x)
 
         exstr = str(raises.exception)
-        self.assertIn(
-            "Missing type annotation on outgoing variable(s): ['t', 'u']",
-            exstr)
+        self.assertIn("Missing type annotation on outgoing variable(s): "
+                      "['t', 'u']",
+                      exstr)
         self.assertIn("Example code: with objmode"
                       "(t='<add_type_as_string_here>')",
-            exstr)
+                      exstr)
 
     def test_case08_raise_from_external(self):
         # this segfaults, expect its because the dict needs to raise as '2' is
