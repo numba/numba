@@ -13,7 +13,7 @@ def generate_version_info(version):
     Parameters
     ----------
     version: str
-        a string describing
+        a string describing the current version
 
     Returns
     -------
@@ -22,7 +22,7 @@ def generate_version_info(version):
 
     See also
     --------
-    Look at the definition of 'version_info' in this file for details.
+    Look at the definition of 'version_info' in this module for details.
 
     """
     parts = version.split('.')
