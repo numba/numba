@@ -4,7 +4,6 @@ import functools
 import inspect
 import os
 import operator
-import threading
 import timeit
 import math
 import sys
@@ -24,7 +23,6 @@ from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
                                DEVELOPER_MODE) # noqa: F401
 from numba.core import types
 
-get_ident = threading.get_ident
 asbyteint = int
 
 # ------------------------------------------------------------------------------
