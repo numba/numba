@@ -514,7 +514,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             if file is None:
                 file = sys.stdout
 
-            for ver, res in utils.iteritems(overloads):
+            for ver, res in overloads.items():
                 print("%s %s" % (self.py_func.__name__, ver), file=file)
                 print('-' * 80, file=file)
                 print(res.type_annotation, file=file)

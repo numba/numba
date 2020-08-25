@@ -254,7 +254,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
                 cres = self._cres[sig]
                 dtypenums, ptr, env = self.build(cres, sig)
                 dtypelist.append(dtypenums)
-                ptrlist.append(utils.longint(ptr))
+                ptrlist.append(int(ptr))
                 keepalive.append((cres.library, env))
 
             datlist = [None] * len(ptrlist)
@@ -323,7 +323,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
             cres = self._cres[sig]
             dtypenums, ptr, env = self.build(cres)
             dtypelist.append(dtypenums)
-            ptrlist.append(utils.longint(ptr))
+            ptrlist.append(int(ptr))
             keepalive.append((cres.library, env))
 
         datlist = [None] * len(ptrlist)
