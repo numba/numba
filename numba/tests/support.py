@@ -19,6 +19,7 @@ import io
 import ctypes
 import multiprocessing as mp
 import warnings
+import traceback
 from contextlib import contextmanager
 
 import numpy as np
@@ -786,9 +787,28 @@ def run_in_new_process_caching(func, cache_dir_prefix=__name__, verbose=True):
         stdout: str
         stderr: str
     """
+    cache_dir = temp_directory(cache_dir_prefix)
+    return run_in_new_process_in_cache_dir(func, cache_dir, verbose=verbose)
+
+
+def run_in_new_process_in_cache_dir(func, cache_dir, verbose=True):
+    """Spawn a new process to run `func` with a temporary cache directory.
+
+    The childprocess's stdout and stderr will be captured and redirected to
+    the current process's stdout and stderr.
+
+    Similar to ``run_in_new_process_caching()`` but the ``cache_dir`` is a
+    directory path instead of a name prefix for the directory path.
+
+    Returns
+    -------
+    ret : dict
+        exitcode: 0 for success. 1 for exception-raised.
+        stdout: str
+        stderr: str
+    """
     ctx = mp.get_context('spawn')
     qout = ctx.Queue()
-    cache_dir = temp_directory(cache_dir_prefix)
     with override_env_config('NUMBA_CACHE_DIR', cache_dir):
         proc = ctx.Process(target=_remote_runner, args=[func, qout])
         proc.start()
