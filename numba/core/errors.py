@@ -11,7 +11,7 @@ import warnings
 import numba.core.config
 import numpy as np
 from collections import defaultdict
-from numba.core.utils import reraise, chain_exception
+from numba.core.utils import chain_exception
 from functools import wraps
 from abc import abstractmethod
 
@@ -748,7 +748,7 @@ def new_error_context(fmt_, *args, **kwargs):
     except Exception as e:
         newerr = errcls(e).add_context(_format_msg(fmt_, args, kwargs))
         tb = sys.exc_info()[2] if numba.core.config.FULL_TRACEBACKS else None
-        reraise(type(newerr), newerr, tb)
+        raise newerr.with_traceback(tb)
 
 
 __all__ += [name for (name, value) in globals().items()
