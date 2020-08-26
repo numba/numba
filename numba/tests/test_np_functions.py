@@ -245,7 +245,7 @@ def asarray_kws(a, dtype):
     return np.asarray(a, dtype=dtype)
 
 
-def asfarray(a, dtype=np.float_):
+def asfarray(a, dtype=np.float64):
     return np.asfarray(a, dtype=dtype)
 
 
