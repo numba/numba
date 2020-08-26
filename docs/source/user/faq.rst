@@ -306,8 +306,15 @@ A minimal working reproducer for Numba should include:
    from the `issue tracker <https://github.com/numba/numba/issues>`_ and run by
    someone else such that they can see the same problem as you are having.
 
-Doing the points above really helps out the Numba issue triage process and will
-enable a faster response to your problem!
+Having made a reproducer, now remove every part of the code that does not
+contribute directly to reproducing the problem to create a "minimal" reproducer.
+This means removing imports that aren't used, removing variables that aren't
+used or have no effect, removing lines of code which have no effect, reducing
+the complexity of expressions, and shrinking input data to the minimal amount
+required to trigger the problem.
+
+Doing the above really helps out the Numba issue triage process and will enable
+a faster response to your problem!
 
 `Suggested further reading
 <http://matthewrocklin.com/blog/work/2018/02/28/minimal-bug-reports>`_ on
