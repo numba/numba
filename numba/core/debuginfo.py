@@ -8,11 +8,8 @@ import os.path
 
 from llvmlite import ir
 
-from numba.core.utils import add_metaclass
 
-
-@add_metaclass(abc.ABCMeta)
-class AbstractDIBuilder(object):
+class AbstractDIBuilder(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
         """Emit debug info for the variable.
@@ -30,6 +27,12 @@ class AbstractDIBuilder(object):
         """Emit source location information for the given function.
         """
         pass
+
+    @abc.abstractmethod
+    def initialize(self):
+        """Initialize the debug info. An opportunity for the debuginfo to
+        prepare any necessary data structures.
+        """
 
     @abc.abstractmethod
     def finalize(self):
@@ -52,6 +55,9 @@ class DummyDIBuilder(AbstractDIBuilder):
     def mark_subprogram(self, function, name, loc):
         pass
 
+    def initialize(self):
+        pass
+
     def finalize(self):
         pass
 
@@ -66,6 +72,11 @@ class DIBuilder(AbstractDIBuilder):
         self.filepath = os.path.abspath(filepath)
         self.difile = self._di_file()
         self.subprograms = []
+        self.initialize()
+
+    def initialize(self):
+        # Create the compile unit now because it is referenced when
+        # constructing subprograms
         self.dicompileunit = self._di_compile_unit()
 
     def _var_type(self, lltype, size):
@@ -302,6 +313,7 @@ class NvvmDIBuilder(DIBuilder):
     def _di_compile_unit(self):
         filepair = self._filepair()
         empty = self.module.add_metadata([self._const_int(0)])
+        sp_metadata = self.module.add_metadata(self.subprograms)
         return self.module.add_metadata([
             self._const_int(self.DI_Compile_unit),         # tag
             filepair,                   # source directory and file pair
@@ -374,3 +386,11 @@ class NvvmDIBuilder(DIBuilder):
             None,                    # original scope
         ])
 
+    def initialize(self):
+        pass
+
+    def finalize(self):
+        # We create the compile unit at this point because subprograms is
+        # populated and can be referred to by the compile unit.
+        self.dicompileunit = self._di_compile_unit()
+        super().finalize()

@@ -95,7 +95,7 @@ def _safe_skip():
     if config.ENABLE_CUDASIM:
         return False
     else:
-        return cuda.cudadrv.nvvm.NVVM_VERSION >= (1, 4)
+        return cuda.runtime.get_version() >= (9, 0)
 
 
 def _safe_cc_check(cc):

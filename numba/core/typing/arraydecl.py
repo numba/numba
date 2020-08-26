@@ -416,6 +416,8 @@ class ArrayAttribute(AttributeTemplate):
         assert not args
         kwargs = dict(kws)
         kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
+        if not isinstance(kind, types.StringLiteral):
+            raise errors.TypingError('"kind" must be a string literal')
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))
@@ -428,10 +430,10 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.view")
     def resolve_view(self, ary, args, kws):
-        from .npydecl import _parse_dtype
+        from .npydecl import parse_dtype
         assert not kws
         dtype, = args
-        dtype = _parse_dtype(dtype)
+        dtype = parse_dtype(dtype)
         if dtype is None:
             return
         retty = ary.copy(dtype=dtype)
@@ -439,10 +441,10 @@ class ArrayAttribute(AttributeTemplate):
 
     @bound_function("array.astype")
     def resolve_astype(self, ary, args, kws):
-        from .npydecl import _parse_dtype
+        from .npydecl import parse_dtype
         assert not kws
         dtype, = args
-        dtype = _parse_dtype(dtype)
+        dtype = parse_dtype(dtype)
         if dtype is None:
             return
         if not self.context.can_convert(ary.dtype, dtype):
@@ -561,6 +563,7 @@ class StaticGetItemLiteralRecord(AbstractTemplate):
             assert ret
             return signature(ret, *args)
 
+
 @infer
 class StaticSetItemRecord(AbstractTemplate):
     key = "static_setitem"
@@ -572,6 +575,20 @@ class StaticSetItemRecord(AbstractTemplate):
             expectedty = record.typeof(idx)
             if self.context.can_convert(value, expectedty) is not None:
                 return signature(types.void, record, types.literal(idx), value)
+
+
+@infer_global(operator.setitem)
+class StaticSetItemLiteralRecord(AbstractTemplate):
+    def generic(self, args, kws):
+        # Resolution of members for records
+        target, idx, value = args
+        if isinstance(target, types.Record) and isinstance(idx, types.StringLiteral):
+            if idx.literal_value not in target.fields:
+                raise KeyError(f"Field '{idx.literal_value}' was not found in record with "
+                               f"fields {tuple(target.fields.keys())}")
+            expectedty = target.typeof(idx.literal_value)
+            if self.context.can_convert(value, expectedty) is not None:
+                return signature(types.void, target, idx, value)
 
 
 @infer_getattr
@@ -675,15 +692,15 @@ def sum_expand(self, args, kws):
     elif args_len == 1 and 'dtype' in kws:
         # No axis parameter so the return type of the summation is a scalar
         # of the dtype parameter.
-        from .npydecl import _parse_dtype
+        from .npydecl import parse_dtype
         dtype, = args
-        dtype = _parse_dtype(dtype)
+        dtype = parse_dtype(dtype)
         out = signature(dtype, *args, recvr=self.this)
 
     elif args_len == 2:
         # There is an axis and dtype parameter, either arg or kwarg
-        from .npydecl import _parse_dtype
-        dtype = _parse_dtype(args[1])
+        from .npydecl import parse_dtype
+        dtype = parse_dtype(args[1])
         return_type = dtype
         if self.this.ndim != 1:
             # 1d reduces to a scalar, 2d and above reduce dim by 1
@@ -727,8 +744,9 @@ def generic_index(self, args, kws):
     assert not kws
     return signature(types.intp, recvr=self.this)
 
-def install_array_method(name, generic):
-    my_attr = {"key": "array." + name, "generic": generic}
+def install_array_method(name, generic, prefer_literal=True):
+    my_attr = {"key": "array." + name, "generic": generic,
+               "prefer_literal": prefer_literal}
     temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
     def array_attribute_attachment(self, ary):
         return types.BoundFunction(temp_class, ary)
@@ -741,7 +759,7 @@ for fname in ["min", "max"]:
 
 # Functions that return a machine-width type, to avoid overflows
 install_array_method("prod", generic_expand)
-install_array_method("sum", sum_expand)
+install_array_method("sum", sum_expand, prefer_literal=True)
 
 # Functions that return a machine-width type, to avoid overflows
 for fname in ["cumsum", "cumprod"]:

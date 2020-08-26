@@ -78,7 +78,7 @@ fi
 $CONDA_INSTALL -c numba llvmlite
 
 # Install dependencies for building the documentation
-if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx sphinx_rtd_theme pygments numpydoc; fi
+if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx=2.4.4 sphinx_rtd_theme pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
 # Install dependencies for code coverage (codecov.io)
 if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
@@ -86,6 +86,8 @@ if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL codecov; fi
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
 if [ "$TEST_THREADING" == "tbb" ]; then $CONDA_INSTALL tbb tbb-devel; fi
+# Install pickle5
+if [ "$TEST_PICKLE5" == "yes" ]; then $PIP_INSTALL pickle5; fi
 
 # environment dump for debug
 echo "DEBUG ENV:"

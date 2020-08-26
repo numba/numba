@@ -11,11 +11,6 @@ from .cudadrv import devicearray, devices, driver
 from .args import In, Out, InOut
 
 
-try:
-    long
-except NameError:
-    long = int
-
 # NDarray device helper
 
 require_context = devices.require_context
@@ -200,9 +195,9 @@ def synchronize():
 
 def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     dtype = np.dtype(dtype)
-    if isinstance(shape, (int, long)):
+    if isinstance(shape, int):
         shape = (shape,)
-    if isinstance(strides, (int, long)):
+    if isinstance(strides, int):
         strides = (strides,)
     else:
         if shape == ():
@@ -263,19 +258,44 @@ def device_array_like(ary, stream=0):
 # Stream helper
 @require_context
 def stream():
-    """stream()
-
+    """
     Create a CUDA stream that represents a command queue for the device.
     """
     return current_context().create_stream()
 
 @require_context
 def default_stream():
-    """default_stream()
-
-    Get the default CUDA stream.
+    """
+    Get the default CUDA stream. CUDA semantics in general are that the default
+    stream is either the legacy default stream or the per-thread default stream
+    depending on which CUDA APIs are in use. In Numba, the APIs for the legacy
+    default stream are always the ones in use, but an option to use APIs for
+    the per-thread default stream may be provided in future.
     """
     return current_context().get_default_stream()
+
+@require_context
+def legacy_default_stream():
+    """
+    Get the legacy default CUDA stream.
+    """
+    return current_context().get_legacy_default_stream()
+
+@require_context
+def per_thread_default_stream():
+    """
+    Get the per-thread default CUDA stream.
+    """
+    return current_context().get_per_thread_default_stream()
+
+@require_context
+def external_stream(ptr):
+    """Create a Numba stream object for a stream allocated outside Numba.
+
+    :param ptr: Pointer to the external stream to wrap in a Numba Stream
+    :type ptr: int
+    """
+    return current_context().create_external_stream(ptr)
 
 # Page lock
 @require_context

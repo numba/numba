@@ -5,7 +5,6 @@ import threading
 
 import numpy as np
 
-from numba.core.utils import reraise
 from .cudadrv.devicearray import to_device, auto_device, \
     FakeCUDAArray, FakeWithinKernelCUDAArray
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
@@ -176,7 +175,9 @@ class BlockThread(threading.Thread):
             else:
                 msg = '%s %s: %s' % (tid, ctaid, e)
             tb = sys.exc_info()[2]
-            self.exception = (type(e), type(e)(msg), tb)
+            # Using `with_traceback` here would cause it to be mutated by
+            # future raise statements, which may or may not matter.
+            self.exception = (type(e)(msg), tb)
 
     def syncthreads(self):
 
@@ -268,7 +269,7 @@ class BlockManager(object):
                         t_other.syncthreads_blocked = False
                         t_other.syncthreads_event.set()
 
-                    reraise(*(t.exception))
+                    raise t.exception[0].with_traceback(t.exception[1])
             if livethreads == blockedthreads:
                 for t in blockedthreads:
                     t.syncthreads_blocked = False
@@ -279,4 +280,4 @@ class BlockManager(object):
         # finishing, before we could check it
         for t in threads:
             if t.exception:
-                reraise(*(t.exception))
+                raise t.exception[0].with_traceback(t.exception[1])

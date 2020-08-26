@@ -91,6 +91,34 @@ the functionality of the selected device:
       Delete the context for the device. This will destroy all memory
       allocations, events, and streams created within the context.
 
+
+Compilation
+-----------
+
+Numba provides an entry point for compiling a Python function to PTX without
+invoking any of the driver API. This can be useful for:
+
+- Generating PTX that is to be inlined into other PTX code (e.g. from outside
+  the Numba / Python ecosystem).
+- Generating code when there is no device present.
+- Generating code prior to a fork without initializing CUDA.
+
+.. note:: It is the user's responsibility to manage any ABI issues arising from
+   the use of compilation to PTX.
+
+.. autofunction:: numba.cuda.compile_ptx
+
+
+The environment variable ``NUMBA_CUDA_DEFAULT_PTX_CC`` can be set to control
+the default compute capability targeted by ``compile_ptx`` - see
+:ref:`numba-envvars-gpu-support`. If PTX for the compute capability of the
+current device is required, the ``compile_ptx_for_current_device`` function can
+be used:
+
+.. autofunction:: numba.cuda.compile_ptx_for_current_device
+
+
+
 Measurement
 -----------
 
@@ -147,6 +175,11 @@ transfers and kernel execution. For further details on streams, see the `CUDA C
 Programming Guide Streams section
 <http://docs.nvidia.com/cuda/cuda-c-programming-guide/#streams>`_.
 
+Streams are instances of :class:`numba.cuda.cudadrv.driver.Stream`:
+
+.. autoclass:: numba.cuda.cudadrv.driver.Stream
+   :members: synchronize, auto_synchronize, add_callback, async_done
+
 To create a new stream:
 
 .. autofunction:: numba.cuda.stream
@@ -155,8 +188,29 @@ To get the default stream:
 
 .. autofunction:: numba.cuda.default_stream
 
-Streams are instances of :class:`numba.cuda.cudadrv.driver.Stream`:
+To get the default stream with an explicit choice of whether it is the legacy
+or per-thread default stream:
 
-.. autoclass:: numba.cuda.cudadrv.driver.Stream
-   :members: synchronize, auto_synchronize
+.. autofunction:: numba.cuda.legacy_default_stream
 
+.. autofunction:: numba.cuda.per_thread_default_stream
+
+To construct a Numba ``Stream`` object using a stream allocated elsewhere, the
+``external_stream`` function is provided. Note that the lifetime of external
+streams must be managed by the user - Numba will not deallocate an external
+stream, and the stream must remain valid whilst the Numba ``Stream`` object is
+in use.
+
+.. autofunction:: numba.cuda.external_stream
+
+
+Runtime
+-------
+
+Numba generally uses the Driver API, but it provides a simple wrapper to the
+Runtime API so that the version of the runtime in use can be queried. This is
+accessed through ``cuda.runtime``, which is an instance of the
+:class:`numba.cuda.cudadrv.runtime.Runtime` class:
+
+.. autoclass:: numba.cuda.cudadrv.runtime.Runtime
+   :members: get_version

@@ -38,7 +38,7 @@ from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack, disabled_test)
+                      needs_lapack, disabled_test, skip_unless_scipy)
 import cmath
 import unittest
 
@@ -569,7 +569,7 @@ class TestParfors(TestParforsBase):
     def test_logistic_regression(self):
         args = (numba.float64[:], numba.float64[:,:], numba.float64[:],
                 numba.int64)
-        self.assertTrue(countParfors(lr_impl, args) == 1)
+        self.assertTrue(countParfors(lr_impl, args) == 2)
         self.assertTrue(countArrayAllocs(lr_impl, args) == 1)
 
     @skip_parfors_unsupported
@@ -1014,12 +1014,15 @@ class TestParfors(TestParforsBase):
         A = np.random.ranf(n)
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
+        D = np.array([np.inf, np.inf])
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
+        self.check(test_impl1, D)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+        self.check(test_impl2, D)
 
         # checks that 0d array input raises
         msg = ("zero-size array to reduction operation "
@@ -1042,12 +1045,15 @@ class TestParfors(TestParforsBase):
         A = np.random.ranf(n)
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
+        D = np.array([-np.inf, -np.inf])
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
+        self.check(test_impl1, D)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
+        self.check(test_impl2, D)
 
         # checks that 0d array input raises
         msg = ("zero-size array to reduction operation "
@@ -1622,6 +1628,18 @@ class TestParfors(TestParforsBase):
         x = np.arange(10)
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_inplace_binop(self):
+        def test_impl(a, b):
+            b += a
+            return b
+
+        X = np.arange(10) + 10
+        Y = np.arange(10) + 100
+        self.check(test_impl, X, Y)
+        self.assertTrue(countParfors(test_impl,
+                                    (types.Array(types.float64, 1, 'C'),
+                                     types.Array(types.float64, 1, 'C'))) == 1)
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -2188,6 +2206,24 @@ class TestPrange(TestPrangeBase):
                            check_fastmath=True, check_fastmath_result=True)
 
     @skip_parfors_unsupported
+    def test_prange27(self):
+        # issue5597: usedef error in parfor
+        def test_impl(a, b, c):
+            for j in range(b[0]-1):
+                for k in range(2):
+                    z = np.abs(a[c-1:c+1])
+            return 0
+
+        # patch inner loop to 'prange'
+        self.prange_tester(test_impl,
+                           np.arange(20),
+                           np.asarray([4,4,4,4,4,4,4,4,4,4]),
+                           0,
+                           patch_instance=[1],
+                           scheduler_type='unsigned',
+                           check_fastmath=True)
+
+    @skip_parfors_unsupported
     def test_prange_two_instances_same_reduction_var(self):
         # issue4922 - multiple uses of same reduction variable
         def test_impl(n):
@@ -2495,6 +2531,28 @@ class TestPrange(TestPrangeBase):
         x = [np.array([1,2,3], dtype=int),np.array([1,2], dtype=int)]
         self.prange_tester(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_ssa_false_reduction(self):
+        # issue5698
+        # SSA for h creates assignments to h that make it look like a
+        # reduction variable except that it lacks an associated
+        # reduction operator.  Test here that h is excluded as a
+        # reduction variable.
+        def test_impl(image, a, b):
+            empty = np.zeros(image.shape)
+            for i in range(image.shape[0]):
+                r = image[i][0] / 255.0
+                if a == 0:
+                    h = 0
+                if b == 0:
+                    h = 0
+                empty[i] = [h, h, h]
+            return empty
+
+        image = np.zeros((3, 3), dtype=np.int32)
+        self.prange_tester(test_impl, image, 0, 0)
+
+
 @skip_parfors_unsupported
 @x86_only
 class TestParforsVectorizer(TestPrangeBase):
@@ -2507,9 +2565,12 @@ class TestParforsVectorizer(TestPrangeBase):
         fastmath = kwargs.pop('fastmath', False)
         cpu_name = kwargs.pop('cpu_name', 'skylake-avx512')
         assertions = kwargs.pop('assertions', True)
+        # force LLVM to use zmm registers for vectorization
+        # https://reviews.llvm.org/D67259
+        cpu_features = kwargs.pop('cpu_features', '-prefer-256-bit')
 
         env_opts = {'NUMBA_CPU_NAME': cpu_name,
-                    'NUMBA_CPU_FEATURES': '',
+                    'NUMBA_CPU_FEATURES': cpu_features,
                     }
 
         overrides = []
@@ -2983,6 +3044,86 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, np.arange(4))
 
+    @skip_parfors_unsupported
+    def test_parfor_slice27(self):
+        # issue5601: tests array analysis of the slice with
+        # n_valid_vals of unknown size.
+        def test_impl(a):
+            n_valid_vals = 0
+
+            for i in prange(a.shape[0]):
+                if a[i] != 0:
+                    n_valid_vals += 1
+
+                if n_valid_vals:
+                    unused = a[:n_valid_vals]
+
+            return 0
+
+        self.check(test_impl, np.arange(3))
+
+    @skip_parfors_unsupported
+    def test_issue5942_1(self):
+        # issue5942: tests statement reordering of
+        # aliased arguments.
+        def test_impl(gg, gg_next):
+            gs = gg.shape
+            d = gs[0]
+            for i_gg in prange(d):
+                gg_next[i_gg, :]  = gg[i_gg, :]
+                gg_next[i_gg, 0] += 1
+
+            return gg_next
+
+        d = 4
+        k = 2
+
+        gg      = np.zeros((d, k), dtype = np.int32)
+        gg_next = np.zeros((d, k), dtype = np.int32)
+        self.check(test_impl, gg, gg_next)
+
+    @skip_parfors_unsupported
+    def test_issue5942_2(self):
+        # issue5942: tests statement reordering
+        def test_impl(d, k):
+            gg      = np.zeros((d, k), dtype = np.int32)
+            gg_next = np.zeros((d, k), dtype = np.int32)
+
+            for i_gg in prange(d):
+                for n in range(k):
+                    gg[i_gg, n] = i_gg
+                gg_next[i_gg, :]  = gg[i_gg, :]
+                gg_next[i_gg, 0] += 1
+
+            return gg_next
+
+        d = 4
+        k = 2
+
+        self.check(test_impl, d, k)
+
+    @skip_parfors_unsupported
+    @skip_unless_scipy
+    def test_issue6102(self):
+        # The problem is originally observed on Python3.8 because of the
+        # changes in how loops are represented in 3.8 bytecode.
+        @njit(parallel=True)
+        def f(r):
+            for ir in prange(r.shape[0]):
+                dist = np.inf
+                tr = np.array([0, 0, 0], dtype=np.float32)
+                for i in [1, 0, -1]:
+                    dist_t = np.linalg.norm(r[ir, :] + i)
+                    if dist_t < dist:
+                        dist = dist_t
+                        tr = np.array([i, i, i], dtype=np.float32)
+                r[ir, :] += tr
+            return r
+
+        r = np.array([[0., 0., 0.], [0., 0., 1.]])
+        self.assertPreciseEqual(f(r), f.py_func(r))
+
+
 class TestParforsOptions(TestParforsBase):
 
     def check(self, pyfunc, *args, **kwargs):
@@ -3427,6 +3568,42 @@ class TestParforsMisc(TestParforsBase):
         arr = np.zeros(size, dtype=int)
 
         self.check(parallel_test, size, arr)
+
+    @skip_parfors_unsupported
+    def test_issue5570_ssa_races(self):
+        @njit(parallel=True)
+        def foo(src, method, out):
+            for i in prange(1):
+                for j in range(1):
+                    out[i, j] = 1
+            if method:
+                out += 1
+            return out
+
+        src = np.zeros((5,5))
+        method = 57
+        out = np.zeros((2, 2))
+
+        self.assertPreciseEqual(
+            foo(src, method, out),
+            foo.py_func(src, method, out)
+        )
+
+    @skip_parfors_unsupported
+    def test_issue6095_numpy_max(self):
+        @njit(parallel=True)
+        def find_maxima_3D_jit(args):
+            package = args
+            for index in range(0, 10):
+                z_stack = package[index, :, :]
+            return np.max(z_stack)
+
+        np.random.seed(0)
+        args = np.random.random((10, 10, 10))
+        self.assertPreciseEqual(
+            find_maxima_3D_jit(args),
+            find_maxima_3D_jit.py_func(args),
+        )
 
 
 @skip_parfors_unsupported

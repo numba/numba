@@ -1,5 +1,6 @@
 import types as pytypes
 from numba import jit, njit, cfunc, types, int64, float64, float32, errors
+from numba import literal_unroll
 from numba.core.config import IS_32BITS, IS_WIN32
 import ctypes
 import warnings
@@ -1072,3 +1073,53 @@ class TestMiscIssues(TestCase):
         self.assertRegex(
             str(cm.exception),
             r'.*first-class function call cannot use keyword arguments')
+
+    def test_issue_5615(self):
+
+        @njit
+        def foo1(x):
+            return x + 1
+
+        @njit
+        def foo2(x):
+            return x + 2
+
+        @njit
+        def bar(fcs):
+            x = 0
+            a = 10
+            i, j = fcs[0]
+            x += i(j(a))
+            for t in literal_unroll(fcs):
+                i, j = t
+                x += i(j(a))
+            return x
+
+        tup = ((foo1, foo2), (foo2, foo1))
+
+        self.assertEqual(bar(tup), 39)
+
+    def test_issue_5685(self):
+
+        @njit
+        def foo1():
+            return 1
+
+        @njit
+        def foo2(x):
+            return x + 1
+
+        @njit
+        def foo3(x):
+            return x + 2
+
+        @njit
+        def bar(fcs):
+            r = 0
+            for pair in literal_unroll(fcs):
+                f1, f2 = pair
+                r += f1() + f2(2)
+            return r
+
+        self.assertEqual(bar(((foo1, foo2),)), 4)
+        self.assertEqual(bar(((foo1, foo2), (foo1, foo3))), 9)  # reproducer

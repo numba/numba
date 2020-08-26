@@ -143,6 +143,8 @@ def assert_equiv(typingctx, *val):
         or isinstance(a, types.Integer)
         for a in val[0][1:]
     )
+    if not isinstance(val[0][0], types.StringLiteral):
+        raise errors.TypingError('first argument must be a StringLiteral')
 
     def codegen(context, builder, sig, args):
         assert len(args) == 1  # it is a vararg tuple
@@ -855,6 +857,11 @@ class SymbolicEquivSet(ShapeEquivSet):
                         index = tuple(
                             self.obj_to_ind.get(x.name, -1) for x in expr.args
                         )
+                        # If wrap_index for a slice works on a variable
+                        # that is not analyzable (e.g., multiple definitions)
+                        # then we have to return None here since we can't know
+                        # how that size will compare to others if we can't
+                        # analyze some part of the slice.
                         if -1 in index:
                             return None
                         names = self.ext_shapes.get(index, [])
@@ -865,7 +872,11 @@ class SymbolicEquivSet(ShapeEquivSet):
                 elif expr.op == "binop":
                     lhs = self._get_or_set_rel(expr.lhs, func_ir)
                     rhs = self._get_or_set_rel(expr.rhs, func_ir)
-                    if expr.fn == operator.add:
+                    # If either the lhs or rhs is not analyzable
+                    # then don't try to record information this var.
+                    if lhs is None or rhs is None:
+                        return None
+                    elif expr.fn == operator.add:
                         value = plus(lhs, rhs)
                     elif expr.fn == operator.sub:
                         value = minus(lhs, rhs)
@@ -931,6 +942,7 @@ class SymbolicEquivSet(ShapeEquivSet):
                     self.ind_to_var[ind].append(var)
                 else:
                     self.ind_to_var[ind] = [var]
+            return True
 
     def _insert(self, objs):
         """Overload _insert method to handle ind changes between relative
@@ -1225,7 +1237,8 @@ class ArrayAnalysis(object):
         self.typemap[var.name] = typ
         self.func_ir._definitions[var.name] = [value]
         redefineds = set()
-        equiv_set.define(var, redefineds, self.func_ir, typ)
+        # Propagate the success or failure of define.
+        return equiv_set.define(var, redefineds, self.func_ir, typ)
 
     def _analyze_inst(self, label, scope, equiv_set, inst, redefined):
         pre = []
@@ -1361,32 +1374,8 @@ class ArrayAnalysis(object):
             else:
                 return pre, []
         elif isinstance(inst, ir.Branch):
-            cond_var = inst.cond
-            cond_def = guard(get_definition, self.func_ir, cond_var)
-            if not cond_def:  # phi variable has no single definition
-                # We'll use equiv_set to try to find a cond_def instead
-                equivs = equiv_set.get_equiv_set(cond_var)
-                defs = []
-                for name in equivs:
-                    if isinstance(name, str) and name in self.typemap:
-                        var_def = guard(
-                            get_definition, self.func_ir, name, lhs_only=True
-                        )
-                        if isinstance(var_def, ir.Var):
-                            var_def = var_def.name
-                        if var_def:
-                            defs.append(var_def)
-                    else:
-                        defs.append(name)
-                defvars = set(filter(lambda x: isinstance(x, str), defs))
-                defconsts = set(defs).difference(defvars)
-                if len(defconsts) == 1:
-                    cond_def = list(defconsts)[0]
-                elif len(defvars) == 1:
-                    cond_def = guard(
-                        get_definition, self.func_ir, list(defvars)[0]
-                    )
-            if isinstance(cond_def, ir.Expr) and cond_def.op == "binop":
+
+            def handle_call_binop(cond_def):
                 br = None
                 if cond_def.fn == operator.eq:
                     br = inst.truebr
@@ -1420,6 +1409,45 @@ class ArrayAnalysis(object):
                     self.prepends[(label, otherbr)] = [
                         ir.Assign(ir.Const(1 - cond_val, loc), cond_var, loc)
                     ]
+
+            cond_var = inst.cond
+            cond_def = guard(get_definition, self.func_ir, cond_var)
+            if not cond_def:  # phi variable has no single definition
+                # We'll use equiv_set to try to find a cond_def instead
+                equivs = equiv_set.get_equiv_set(cond_var)
+                defs = []
+                for name in equivs:
+                    if isinstance(name, str) and name in self.typemap:
+                        var_def = guard(
+                            get_definition, self.func_ir, name, lhs_only=True
+                        )
+                        if isinstance(var_def, ir.Var):
+                            var_def = var_def.name
+                        if var_def:
+                            defs.append(var_def)
+                    else:
+                        defs.append(name)
+                defvars = set(filter(lambda x: isinstance(x, str), defs))
+                defconsts = set(defs).difference(defvars)
+                if len(defconsts) == 1:
+                    cond_def = list(defconsts)[0]
+                elif len(defvars) == 1:
+                    cond_def = guard(
+                        get_definition, self.func_ir, list(defvars)[0]
+                    )
+            if isinstance(cond_def, ir.Expr) and cond_def.op == 'binop':
+                handle_call_binop(cond_def)
+            elif isinstance(cond_def, ir.Expr) and cond_def.op == 'call':
+                # this handles bool(predicate)
+                glbl_bool = guard(get_definition, self.func_ir, cond_def.func)
+                if glbl_bool is not None and glbl_bool.value is bool:
+                    if len(cond_def.args) == 1:
+                        condition = guard(get_definition, self.func_ir,
+                                          cond_def.args[0])
+                        if (condition is not None and
+                            isinstance(condition, ir.Expr) and
+                                condition.op == 'binop'):
+                            handle_call_binop(condition)
             else:
                 if isinstance(cond_def, ir.Const):
                     cond_def = cond_def.value
@@ -1833,6 +1861,8 @@ class ArrayAnalysis(object):
                 var = ir.Var(scope, mk_unique_var("var"), loc)
                 var_typ = types.intp
                 new_value = ir.Expr.call(wrap_var, [val, dsize], {}, loc)
+                # def_res will be False if there is something unanalyzable
+                # that prevents a size association from being created.
                 self._define(equiv_set, var, var_typ, new_value)
                 self.calltypes[new_value] = sig
                 return (var, var_typ, new_value)
@@ -1842,10 +1872,20 @@ class ArrayAnalysis(object):
         var1, var1_typ, value1 = gen_wrap_if_not_known(lhs, lhs_typ, lhs_known)
         var2, var2_typ, value2 = gen_wrap_if_not_known(rhs, rhs_typ, rhs_known)
 
+        stmts.append(ir.Assign(value=size_val, target=size_var, loc=loc))
+        stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
+        if value1 is not None:
+            stmts.append(ir.Assign(value=value1, target=var1, loc=loc))
+        if value2 is not None:
+            stmts.append(ir.Assign(value=value2, target=var2, loc=loc))
+
         post_wrap_size_var = ir.Var(
             scope, mk_unique_var("post_wrap_slice_size"), loc
         )
-        post_wrap_size_val = ir.Expr.binop(operator.sub, var2, var1, loc=loc)
+        post_wrap_size_val = ir.Expr.binop(operator.sub,
+                                           var2,
+                                           var1,
+                                           loc=loc)
         self.calltypes[post_wrap_size_val] = signature(
             slice_typ, var2_typ, var1_typ
         )
@@ -1853,12 +1893,6 @@ class ArrayAnalysis(object):
             equiv_set, post_wrap_size_var, slice_typ, post_wrap_size_val
         )
 
-        stmts.append(ir.Assign(value=size_val, target=size_var, loc=loc))
-        stmts.append(ir.Assign(value=wrap_def, target=wrap_var, loc=loc))
-        if value1 is not None:
-            stmts.append(ir.Assign(value=value1, target=var1, loc=loc))
-        if value2 is not None:
-            stmts.append(ir.Assign(value=value2, target=var2, loc=loc))
         stmts.append(
             ir.Assign(
                 value=post_wrap_size_val, target=post_wrap_size_var, loc=loc

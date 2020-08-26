@@ -182,9 +182,6 @@ class BaseContext(object):
             for sig in defns:
                 desc.append(' * {0}'.format(sig))
 
-        if param:
-            desc.append(' * parameterized')
-
         return '\n'.join(desc)
 
     def resolve_function_type(self, func, args, kws):
@@ -384,6 +381,15 @@ class BaseContext(object):
             return ty
 
         raise typeof_exc
+
+    def resolve_value_type_prefer_literal(self, value):
+        """Resolve value type and prefer Literal types whenever possible.
+        """
+        lit = types.maybe_literal(value)
+        if lit is None:
+            return self.resolve_value_type(value)
+        else:
+            return lit
 
     def _get_global_type(self, gv):
         ty = self._lookup_global(gv)

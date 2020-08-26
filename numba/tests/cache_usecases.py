@@ -108,6 +108,8 @@ def make_closure(x):
 
 closure1 = make_closure(3)
 closure2 = make_closure(5)
+closure3 = make_closure(7)
+closure4 = make_closure(9)
 
 
 biggie = np.arange(10**6)

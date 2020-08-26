@@ -1531,6 +1531,124 @@ class ParforPassStates:
         self.flags = flags
 
 
+class ConvertInplaceBinop:
+    """Parfor subpass to convert setitem on Arrays
+    """
+    def __init__(self, pass_states):
+        """
+        Parameters
+        ----------
+        pass_states : ParforPassStates
+        """
+        self.pass_states = pass_states
+        self.rewritten = []
+
+    def run(self, blocks):
+        pass_states = self.pass_states
+        # convert expressions like A += ... where A is an array.
+        topo_order = find_topo_order(blocks)
+        # variables available in the program so far (used for finding map
+        # functions in array_expr lowering)
+        for label in topo_order:
+            block = blocks[label]
+            new_body = []
+            equiv_set = pass_states.array_analysis.get_equiv_set(label)
+            for instr in block.body:
+                if isinstance(instr, ir.Assign):
+                    lhs = instr.target
+                    expr = instr.value
+                    if isinstance(expr, ir.Expr) and expr.op == 'inplace_binop':
+                        loc = expr.loc
+                        target = expr.lhs
+                        value = expr.rhs
+                        target_typ = pass_states.typemap[target.name]
+                        value_typ = pass_states.typemap[value.name]
+                        # Handle A op= ...
+                        if isinstance(target_typ, types.npytypes.Array):
+                            # RHS is an array
+                            if isinstance(value_typ, types.npytypes.Array):
+                                new_instr = self._inplace_binop_to_parfor(equiv_set,
+                                        loc, expr.immutable_fn, target, value)
+                                self.rewritten.append(
+                                    dict(old=instr, new=new_instr,
+                                         reason='inplace_binop'),
+                                )
+                                instr = [new_instr, ir.Assign(target, lhs, loc)]
+                if isinstance(instr, list):
+                    new_body.extend(instr)
+                else:
+                    new_body.append(instr)
+            block.body = new_body
+
+    def _inplace_binop_to_parfor(self, equiv_set, loc, op, target, value):
+        """generate parfor from setitem node with a boolean or slice array indices.
+        The value can be either a scalar or an array variable, and if a boolean index
+        is used for the latter case, the same index must be used for the value too.
+        """
+        pass_states = self.pass_states
+        scope = target.scope
+        arr_typ = pass_states.typemap[target.name]
+        el_typ = arr_typ.dtype
+        init_block = ir.Block(scope, loc)
+        value_typ = pass_states.typemap[value.name]
+
+        size_vars = equiv_set.get_shape(target)
+
+        # generate loopnests and size variables from target correlations
+        index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
+
+        # generate body
+        body_label = next_label()
+        body_block = ir.Block(scope, loc)
+        index_var, index_var_typ = _make_index_var(
+                pass_states.typemap, scope, index_vars, body_block)
+
+        # Read value.
+        value_var = ir.Var(scope, mk_unique_var("$value_var"), loc)
+        pass_states.typemap[value_var.name] = value_typ.dtype
+        getitem_call = ir.Expr.getitem(value, index_var, loc)
+        pass_states.calltypes[getitem_call] = signature(
+            value_typ.dtype, value_typ, index_var_typ)
+        body_block.body.append(ir.Assign(getitem_call, value_var, loc))
+
+        # Read target
+        target_var = ir.Var(scope, mk_unique_var("$target_var"), loc)
+        pass_states.typemap[target_var.name] = el_typ
+        getitem_call = ir.Expr.getitem(target, index_var, loc)
+        pass_states.calltypes[getitem_call] = signature(
+            el_typ, arr_typ, index_var_typ)
+        body_block.body.append(ir.Assign(getitem_call, target_var, loc))
+
+        # Create temp to hold result.
+        expr_out_var = ir.Var(scope, mk_unique_var("$expr_out_var"), loc)
+        pass_states.typemap[expr_out_var.name] = el_typ
+
+        # Create binop and assign result to temporary.
+        binop_expr = ir.Expr.binop(op, target_var, value_var, loc)
+        body_block.body.append(ir.Assign(binop_expr, expr_out_var, loc))
+        unified_type = self.pass_states.typingctx.unify_pairs(el_typ, value_typ.dtype)
+        pass_states.calltypes[binop_expr] = signature(
+            unified_type, unified_type, unified_type)
+
+        # Write to target
+        setitem_node = ir.SetItem(target, index_var, expr_out_var, loc)
+        pass_states.calltypes[setitem_node] = signature(
+            types.none, arr_typ, index_var_typ, el_typ)
+        body_block.body.append(setitem_node)
+
+        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
+                        ('inplace_binop', ''), pass_states.flags)
+        parfor.loop_body = {body_label: body_block}
+        if config.DEBUG_ARRAY_OPT >= 1:
+            print("parfor from inplace_binop")
+            parfor.dump()
+        return parfor
+
+    def _type_getitem(self, args):
+        fnty = operator.getitem
+        return self.pass_states.typingctx.resolve_function_type(fnty, tuple(args), {})
+
+
 class ConvertSetItemPass:
     """Parfor subpass to convert setitem on Arrays
     """
@@ -1550,7 +1668,6 @@ class ConvertSetItemPass:
         topo_order = find_topo_order(blocks)
         # variables available in the program so far (used for finding map
         # functions in array_expr lowering)
-        avail_vars = []
         for label in topo_order:
             block = blocks[label]
             new_body = []
@@ -1916,14 +2033,14 @@ class ConvertNumpyPass:
         value_assign = ir.Assign(value, expr_out_var, loc)
         body_block.body.append(value_assign)
 
-        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
-                        ('{} function'.format(call_name,), 'NumPy mapping'),
-                        pass_states.flags)
-
         setitem_node = ir.SetItem(lhs, index_var, expr_out_var, loc)
         pass_states.calltypes[setitem_node] = signature(
             types.none, pass_states.typemap[lhs.name], index_var_typ, el_typ)
         body_block.body.append(setitem_node)
+
+        parfor = Parfor(loopnests, init_block, {}, loc, index_var, equiv_set,
+                        ('{} function'.format(call_name,), 'NumPy mapping'),
+                        pass_states.flags)
         parfor.loop_body = {body_label: body_block}
         if config.DEBUG_ARRAY_OPT >= 1:
             print("generated parfor for numpy map:")
@@ -2562,8 +2679,6 @@ def _find_mask(typemap, func_ir, arr_def):
                 mask_indices.append(None)
             # Handle integer index
             elif isinstance(index_typ, types.Integer):
-                # The follow is never tested
-                raise AssertionError('unreachable')
                 count_consts += 1
                 mask_indices.append(ind)
 
@@ -2583,6 +2698,9 @@ class ParforPass(ParforPassStates):
     def _pre_run(self):
         # run array analysis, a pre-requisite for parfor translation
         self.array_analysis.run(self.func_ir.blocks)
+        # NOTE: Prepare _max_label. See #6102
+        ir_utils._max_label = max(ir_utils._max_label,
+                                  ir_utils.find_max_label(self.func_ir.blocks))
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls
@@ -2601,6 +2719,8 @@ class ParforPass(ParforPassStates):
             ConvertReducePass(self).run(self.func_ir.blocks)
         if self.options.prange:
             ConvertLoopPass(self).run(self.func_ir.blocks)
+        if self.options.inplace_binop:
+            ConvertInplaceBinop(self).run(self.func_ir.blocks)
 
         # setup diagnostics now parfors are found
         self.diagnostics.setup(self.func_ir, self.options.fusion)
@@ -2627,6 +2747,7 @@ class ParforPass(ParforPassStates):
                                                             up_direction=False)
             dprint_func_ir(self.func_ir, "after maximize fusion down")
             self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            dprint_func_ir(self.func_ir, "after first fuse")
             # push non-parfors up
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
             dprint_func_ir(self.func_ir, "after maximize fusion up")
@@ -2763,6 +2884,7 @@ class ParforPass(ParforPassStates):
     def fuse_recursive_parfor(self, parfor, equiv_set):
         blocks = wrap_parfor_blocks(parfor)
         maximize_fusion(self.func_ir, blocks, self.typemap)
+        dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
         arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.typemap, self.calltypes)
         arr_analysis.run(blocks, equiv_set)
@@ -2864,7 +2986,8 @@ def _arrayexpr_tree_to_ir(
             el_typ1 = typemap[arg_vars[0].name]
             if len(arg_vars) == 2:
                 el_typ2 = typemap[arg_vars[1].name]
-                func_typ = typingctx.resolve_function_type(op, (el_typ1, el_typ), {})
+                func_typ = typingctx.resolve_function_type(op, (el_typ1,
+                                                                el_typ2), {})
                 ir_expr = ir.Expr.binop(op, arg_vars[0], arg_vars[1], loc)
                 if op == operator.truediv:
                     func_typ, ir_expr = _gen_np_divide(
@@ -3169,12 +3292,41 @@ def get_parfor_params(blocks, options_fusion, fusion_info):
             dummy_block.body = block.body[:i]
             before_defs = compute_use_defs({0: dummy_block}).defmap[0]
             pre_defs |= before_defs
-            parfor.params = get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info) | parfor.races
+            params = get_parfor_params_inner(
+                parfor, pre_defs, options_fusion, fusion_info,
+            )
+            parfor.params, parfor.races = _combine_params_races_for_ssa_names(
+                block.scope, params, parfor.races,
+            )
             parfor_ids.add(parfor.id)
             parfors.append(parfor)
 
         pre_defs |= all_defs[label]
     return parfor_ids, parfors
+
+
+def _combine_params_races_for_ssa_names(scope, params, races):
+    """Returns `(params|races1, races1)`, where `races1` contains all variables
+    in `races` are NOT referring to the same unversioned (SSA) variables in
+    `params`.
+    """
+    def unversion(k):
+        try:
+            return scope.get_exact(k).unversioned_name
+        except ir.NotDefinedError:
+            # XXX: it's a bug that something references an undefined name
+            return k
+
+    races1 = set(races)
+    unver_params = list(map(unversion, params))
+
+    for rv in races:
+        if any(unversion(rv) == pv for pv in unver_params):
+            races1.discard(rv)
+        else:
+            break
+
+    return params | races1, races1
 
 
 def get_parfor_params_inner(parfor, pre_defs, options_fusion, fusion_info):
@@ -3283,17 +3435,24 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
         # param already
         param_name = param.name
         if param_name in used_vars and param_name not in reduce_varnames:
-            reduce_varnames.append(param_name)
             param_nodes[param].reverse()
             reduce_nodes = get_reduce_nodes(param, param_nodes[param], func_ir)
-            check_conflicting_reduction_operators(param, reduce_nodes)
-            gri_out = guard(get_reduction_init, reduce_nodes)
-            if gri_out is not None:
-                init_val, redop = gri_out
-            else:
-                init_val = None
-                redop = None
-            reductions[param_name] = (init_val, reduce_nodes, redop)
+            # Certain kinds of ill-formed Python (like potentially undefined
+            # variables) in combination with SSA can make things look like
+            # reductions except that they don't have reduction operators.
+            # If we get to this point but don't find a reduction operator
+            # then assume it is this situation and just don't treat this
+            # variable as a reduction.
+            if reduce_nodes is not None:
+                reduce_varnames.append(param_name)
+                check_conflicting_reduction_operators(param, reduce_nodes)
+                gri_out = guard(get_reduction_init, reduce_nodes)
+                if gri_out is not None:
+                    init_val, redop = gri_out
+                else:
+                    init_val = None
+                    redop = None
+                reductions[param_name] = (init_val, reduce_nodes, redop)
 
     return reduce_varnames, reductions
 
@@ -3391,7 +3550,6 @@ def get_reduce_nodes(reduction_node, nodes, func_ir):
                 replace_vars_inner(rhs, replace_dict)
                 reduce_nodes = nodes[i:]
                 break;
-    assert reduce_nodes, "Invalid reduction format"
     return reduce_nodes
 
 def get_expr_args(expr):
@@ -3487,7 +3645,7 @@ def parfor_defs(parfor, use_set=None, def_set=None):
     loop_vars |= {
         l.step.name for l in parfor.loop_nests if isinstance(
             l.step, ir.Var)}
-    use_set.update(loop_vars)
+    use_set.update(loop_vars - def_set)
     use_set |= get_parfor_pattern_vars(parfor)
 
     return analysis._use_defs_result(usemap=use_set, defmap=def_set)
@@ -3551,14 +3709,26 @@ def maximize_fusion(func_ir, blocks, typemap, up_direction=True):
     so they are adjacent.
     """
     call_table, _ = get_call_table(blocks)
-    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir)
+    alias_map, arg_aliases = find_potential_aliases(
+                                 blocks,
+                                 func_ir.arg_names,
+                                 typemap,
+                                 func_ir
+                             )
     for block in blocks.values():
         order_changed = True
         while order_changed:
-            order_changed = maximize_fusion_inner(func_ir, block, call_table,
-                                                  alias_map, up_direction)
+            order_changed = maximize_fusion_inner(
+                                func_ir,
+                                block,
+                                call_table,
+                                alias_map,
+                                arg_aliases,
+                                up_direction
+                            )
 
-def maximize_fusion_inner(func_ir, block, call_table, alias_map, up_direction=True):
+def maximize_fusion_inner(func_ir, block, call_table, alias_map,
+                          arg_aliases, up_direction=True):
     order_changed = False
     i = 0
     # i goes to body[-3] (i+1 to body[-2]) since body[-1] is terminator and
@@ -3566,9 +3736,10 @@ def maximize_fusion_inner(func_ir, block, call_table, alias_map, up_direction=Tr
     while i < len(block.body) - 2:
         stmt = block.body[i]
         next_stmt = block.body[i+1]
-        can_reorder = (_can_reorder_stmts(stmt, next_stmt, func_ir, call_table, alias_map)
+        can_reorder = (_can_reorder_stmts(stmt, next_stmt, func_ir,
+                                          call_table, alias_map, arg_aliases)
                         if up_direction else _can_reorder_stmts(next_stmt, stmt,
-                        func_ir, call_table, alias_map))
+                        func_ir, call_table, alias_map, arg_aliases))
         if can_reorder:
             block.body[i] = next_stmt
             block.body[i+1] = stmt
@@ -3576,16 +3747,18 @@ def maximize_fusion_inner(func_ir, block, call_table, alias_map, up_direction=Tr
         i += 1
     return order_changed
 
-def expand_aliases(the_set, alias_map):
+def expand_aliases(the_set, alias_map, arg_aliases):
     ret = set()
     for i in the_set:
         if i in alias_map:
             ret = ret.union(alias_map[i])
-        else:
-            ret.add(i)
+        if i in arg_aliases:
+            ret = ret.union(arg_aliases)
+        ret.add(i)
     return ret
 
-def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table, alias_map):
+def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table,
+                       alias_map, arg_aliases):
     """
     Check dependencies to determine if a parfor can be reordered in the IR block
     with a non-parfor statement.
@@ -3594,18 +3767,20 @@ def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table, alias_map):
     # don't reorder calls with side effects (e.g. file close)
     # only read-read dependencies are OK
     # make sure there is no write-write, write-read dependencies
-    if (isinstance(
-            stmt, Parfor) and not isinstance(
-            next_stmt, Parfor) and not isinstance(
-            next_stmt, ir.Print)
-            and (not isinstance(next_stmt, ir.Assign)
-                 or has_no_side_effect(
-                next_stmt.value, set(), call_table)
+    if (isinstance(stmt, Parfor)
+        and not isinstance(next_stmt, Parfor)
+        and not isinstance(next_stmt, ir.Print)
+        and (not isinstance(next_stmt, ir.Assign)
+            or has_no_side_effect(next_stmt.value, set(), call_table)
             or guard(is_assert_equiv, func_ir, next_stmt.value))):
-        stmt_accesses = expand_aliases({v.name for v in stmt.list_vars()}, alias_map)
-        stmt_writes = expand_aliases(get_parfor_writes(stmt), alias_map)
-        next_accesses = expand_aliases({v.name for v in next_stmt.list_vars()}, alias_map)
-        next_writes = expand_aliases(get_stmt_writes(next_stmt), alias_map)
+        stmt_accesses = expand_aliases({v.name for v in stmt.list_vars()},
+                                       alias_map, arg_aliases)
+        stmt_writes = expand_aliases(get_parfor_writes(stmt),
+                                     alias_map, arg_aliases)
+        next_accesses = expand_aliases({v.name for v in next_stmt.list_vars()},
+                                       alias_map, arg_aliases)
+        next_writes = expand_aliases(get_stmt_writes(next_stmt),
+                                     alias_map, arg_aliases)
         if len((stmt_writes & next_accesses)
                 | (next_writes & stmt_accesses)) == 0:
             return True

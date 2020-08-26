@@ -8,6 +8,7 @@ import unittest
 from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.core.errors import TypingError
 from numba.cpython.unicode import _MAX_UNICODE
+from numba.core.types.functions import _header_lead
 
 
 _py37_or_later = utils.PYVERSION >= (3, 7)
@@ -1297,7 +1298,7 @@ class TestUnicode(BaseTest):
         cfunc = njit(repeat_usecase)
         with self.assertRaises(TypingError) as raises:
             cfunc('hi', 2.5)
-        self.assertIn('Invalid use of Function(<built-in function mul>)',
+        self.assertIn(_header_lead + ' Function(<built-in function mul>)',
                       str(raises.exception))
 
     def test_split_exception_empty_sep(self):
@@ -2434,7 +2435,7 @@ class TestUnicodeAuxillary(BaseTest):
         # wrong type
         with self.assertRaises(TypingError) as raises:
             cfunc(1.23)
-        self.assertIn('Invalid use of Function', str(raises.exception))
+        self.assertIn(_header_lead, str(raises.exception))
 
     def test_chr(self):
         pyfunc = chr_usecase
@@ -2461,7 +2462,7 @@ class TestUnicodeAuxillary(BaseTest):
         # wrong type
         with self.assertRaises(TypingError) as raises:
             cfunc('abc')
-        self.assertIn('Invalid use of Function', str(raises.exception))
+        self.assertIn(_header_lead, str(raises.exception))
 
 
 if __name__ == '__main__':
