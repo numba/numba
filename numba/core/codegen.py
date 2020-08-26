@@ -695,6 +695,8 @@ class BaseCPUCodegen(object):
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
+        if config.EXPERIMENTAL_REFPRUNE_PASS:
+            pm.add_refprune_pass()
         return pm
 
     def _function_pass_manager(self, llvm_module):
@@ -702,6 +704,8 @@ class BaseCPUCodegen(object):
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
+        if config.EXPERIMENTAL_REFPRUNE_PASS:
+            pm.add_refprune_pass()
         return pm
 
     def _pass_manager_builder(self):
