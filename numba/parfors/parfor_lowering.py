@@ -1621,18 +1621,16 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                     array_strides.append(strides[j])
                 builder.store(builder.bitcast(ary.data, byte_ptr_t), dst)
         else:
-            # do not allow any other subclasses
-            aty_is_bool = type(aty) in (types.Boolean, types.BooleanLiteral)
             if i < num_inps:
                 # Scalar input, need to store the value in an array of size 1
                 typ = context.get_data_type(
-                    aty) if not aty_is_bool else lc.Type.int(1)
+                    aty) if not isinstance(aty, types.Boolean) else lc.Type.int(1)
                 ptr = cgutils.alloca_once(builder, typ)
                 builder.store(arg, ptr)
             else:
                 # Scalar output, must allocate
                 typ = context.get_data_type(
-                    aty) if not aty_is_bool else lc.Type.int(1)
+                    aty) if not isinstance(aty, types.Boolean) else lc.Type.int(1)
                 ptr = cgutils.alloca_once(builder, typ)
             builder.store(builder.bitcast(ptr, byte_ptr_t), dst)
 
