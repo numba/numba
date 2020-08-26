@@ -772,19 +772,15 @@ def np_complex_square_impl(context, builder, sig, args):
 # NumPy cbrt
 
 def np_real_cbrt_impl(context, builder, sig, args):
-    import numpy as np
-
     _check_arity_and_homogeneity(sig, args, 1)
 
-    def float_cbrt(x):
-        if np.isnan(x):
-            return x
-        if np.signbit(x): 
-            return -np.power(-x, 1.0 / 3.0)
-        else:
-            return np.power(x, 1.0 / 3.0)
-    res = context.compile_internal(builder, float_cbrt, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    dispatch_table = {
+        types.float32: 'cbrtf',
+        types.float64: 'cbrt',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'cbrt')
 
 
 ########################################################################
