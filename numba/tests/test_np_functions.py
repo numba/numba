@@ -3215,8 +3215,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_asfarray(self):
         def inputs():
             yield np.array([1, 2, 3]), None
-            yield np.array([1, 2, 3]), int  # dtype will be ignored
-            yield np.array([1, 2, 3]), str  # dtype will be ignored
             yield np.array([2, 3], dtype=np.float32), np.float32
             yield np.array([2, 3], dtype=np.int8), np.int8
             yield np.array([2, 3], dtype=np.int8), np.complex64
