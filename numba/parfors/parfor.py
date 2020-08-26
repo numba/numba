@@ -2679,8 +2679,6 @@ def _find_mask(typemap, func_ir, arr_def):
                 mask_indices.append(None)
             # Handle integer index
             elif isinstance(index_typ, types.Integer):
-                # The follow is never tested
-                raise AssertionError('unreachable')
                 count_consts += 1
                 mask_indices.append(ind)
 
@@ -2700,6 +2698,9 @@ class ParforPass(ParforPassStates):
     def _pre_run(self):
         # run array analysis, a pre-requisite for parfor translation
         self.array_analysis.run(self.func_ir.blocks)
+        # NOTE: Prepare _max_label. See #6102
+        ir_utils._max_label = max(ir_utils._max_label,
+                                  ir_utils.find_max_label(self.func_ir.blocks))
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls
@@ -2746,6 +2747,7 @@ class ParforPass(ParforPassStates):
                                                             up_direction=False)
             dprint_func_ir(self.func_ir, "after maximize fusion down")
             self.fuse_parfors(self.array_analysis, self.func_ir.blocks)
+            dprint_func_ir(self.func_ir, "after first fuse")
             # push non-parfors up
             maximize_fusion(self.func_ir, self.func_ir.blocks, self.typemap)
             dprint_func_ir(self.func_ir, "after maximize fusion up")
@@ -2882,6 +2884,7 @@ class ParforPass(ParforPassStates):
     def fuse_recursive_parfor(self, parfor, equiv_set):
         blocks = wrap_parfor_blocks(parfor)
         maximize_fusion(self.func_ir, blocks, self.typemap)
+        dprint_func_ir(self.func_ir, "after recursive maximize fusion down", blocks)
         arr_analysis = array_analysis.ArrayAnalysis(self.typingctx, self.func_ir,
                                                 self.typemap, self.calltypes)
         arr_analysis.run(blocks, equiv_set)
@@ -3706,14 +3709,26 @@ def maximize_fusion(func_ir, blocks, typemap, up_direction=True):
     so they are adjacent.
     """
     call_table, _ = get_call_table(blocks)
-    alias_map, arg_aliases = find_potential_aliases(blocks, func_ir.arg_names, typemap, func_ir)
+    alias_map, arg_aliases = find_potential_aliases(
+                                 blocks,
+                                 func_ir.arg_names,
+                                 typemap,
+                                 func_ir
+                             )
     for block in blocks.values():
         order_changed = True
         while order_changed:
-            order_changed = maximize_fusion_inner(func_ir, block, call_table,
-                                                  alias_map, up_direction)
+            order_changed = maximize_fusion_inner(
+                                func_ir,
+                                block,
+                                call_table,
+                                alias_map,
+                                arg_aliases,
+                                up_direction
+                            )
 
-def maximize_fusion_inner(func_ir, block, call_table, alias_map, up_direction=True):
+def maximize_fusion_inner(func_ir, block, call_table, alias_map,
+                          arg_aliases, up_direction=True):
     order_changed = False
     i = 0
     # i goes to body[-3] (i+1 to body[-2]) since body[-1] is terminator and
@@ -3721,9 +3736,10 @@ def maximize_fusion_inner(func_ir, block, call_table, alias_map, up_direction=Tr
     while i < len(block.body) - 2:
         stmt = block.body[i]
         next_stmt = block.body[i+1]
-        can_reorder = (_can_reorder_stmts(stmt, next_stmt, func_ir, call_table, alias_map)
+        can_reorder = (_can_reorder_stmts(stmt, next_stmt, func_ir,
+                                          call_table, alias_map, arg_aliases)
                         if up_direction else _can_reorder_stmts(next_stmt, stmt,
-                        func_ir, call_table, alias_map))
+                        func_ir, call_table, alias_map, arg_aliases))
         if can_reorder:
             block.body[i] = next_stmt
             block.body[i+1] = stmt
@@ -3731,16 +3747,18 @@ def maximize_fusion_inner(func_ir, block, call_table, alias_map, up_direction=Tr
         i += 1
     return order_changed
 
-def expand_aliases(the_set, alias_map):
+def expand_aliases(the_set, alias_map, arg_aliases):
     ret = set()
     for i in the_set:
         if i in alias_map:
             ret = ret.union(alias_map[i])
-        else:
-            ret.add(i)
+        if i in arg_aliases:
+            ret = ret.union(arg_aliases)
+        ret.add(i)
     return ret
 
-def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table, alias_map):
+def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table,
+                       alias_map, arg_aliases):
     """
     Check dependencies to determine if a parfor can be reordered in the IR block
     with a non-parfor statement.
@@ -3749,18 +3767,20 @@ def _can_reorder_stmts(stmt, next_stmt, func_ir, call_table, alias_map):
     # don't reorder calls with side effects (e.g. file close)
     # only read-read dependencies are OK
     # make sure there is no write-write, write-read dependencies
-    if (isinstance(
-            stmt, Parfor) and not isinstance(
-            next_stmt, Parfor) and not isinstance(
-            next_stmt, ir.Print)
-            and (not isinstance(next_stmt, ir.Assign)
-                 or has_no_side_effect(
-                next_stmt.value, set(), call_table)
+    if (isinstance(stmt, Parfor)
+        and not isinstance(next_stmt, Parfor)
+        and not isinstance(next_stmt, ir.Print)
+        and (not isinstance(next_stmt, ir.Assign)
+            or has_no_side_effect(next_stmt.value, set(), call_table)
             or guard(is_assert_equiv, func_ir, next_stmt.value))):
-        stmt_accesses = expand_aliases({v.name for v in stmt.list_vars()}, alias_map)
-        stmt_writes = expand_aliases(get_parfor_writes(stmt), alias_map)
-        next_accesses = expand_aliases({v.name for v in next_stmt.list_vars()}, alias_map)
-        next_writes = expand_aliases(get_stmt_writes(next_stmt), alias_map)
+        stmt_accesses = expand_aliases({v.name for v in stmt.list_vars()},
+                                       alias_map, arg_aliases)
+        stmt_writes = expand_aliases(get_parfor_writes(stmt),
+                                     alias_map, arg_aliases)
+        next_accesses = expand_aliases({v.name for v in next_stmt.list_vars()},
+                                       alias_map, arg_aliases)
+        next_writes = expand_aliases(get_stmt_writes(next_stmt),
+                                     alias_map, arg_aliases)
         if len((stmt_writes & next_accesses)
                 | (next_writes & stmt_accesses)) == 0:
             return True

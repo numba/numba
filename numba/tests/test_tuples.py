@@ -4,7 +4,7 @@ import itertools
 import numpy as np
 
 from numba.core.compiler import compile_isolated
-from numba import njit, jit, typeof
+from numba import njit, jit, typeof, literally
 from numba.core import types, errors, utils
 from numba.tests.support import TestCase, MemoryLeakMixin, tag
 import unittest
@@ -217,6 +217,17 @@ class TestOperations(TestCase):
         cr = compile_isolated(pyfunc,
                               [types.UniTuple(types.int64, 3)])
         self.assertPreciseEqual(cr.entry_point((4, 5, 6)), 3)
+
+    def test_index_literal(self):
+        # issue #6023, test non-static getitem with IntegerLiteral index
+        def pyfunc(tup, idx):
+            idx = literally(idx)
+            return tup[idx]
+        cfunc = njit(pyfunc)
+
+        tup = (4, 3.1, 'sss')
+        for i in range(len(tup)):
+            self.assertPreciseEqual(cfunc(tup, i), tup[i])
 
     def test_index(self):
         pyfunc = tuple_index

@@ -15,9 +15,11 @@ llvm_to_ptx = None
 set_cuda_kernel = None
 fix_data_layout = None
 get_arch_option = None
-SUPPORTED_CC = None
 LibDevice = None
 NvvmError = None
 
 def is_available():
     return False
+
+def get_supported_ccs():
+    return ()

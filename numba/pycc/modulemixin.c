@@ -59,6 +59,7 @@ extern void *nrt_atomic_add, *nrt_atomic_sub;
 typedef struct {
     const char *data;
     int len;
+    const char *hashbuf;
 } env_def_t;
 
 /* Environment GlobalVariable address type */
@@ -73,7 +74,7 @@ recreate_environment(PyObject *module, env_def_t env)
     EnvironmentObject *envobj;
     PyObject *env_consts;
 
-    env_consts = numba_unpickle(env.data, env.len);
+    env_consts = numba_unpickle(env.data, env.len, env.hashbuf);
     if (env_consts == NULL)
         return NULL;
     if (!PyList_Check(env_consts)) {
