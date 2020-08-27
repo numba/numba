@@ -253,7 +253,7 @@ class TestCudaIntrinsic(CUDATestCase):
             out[x, y, z] = grid_is_right and gridsize_is_right
 
         x, y, z = (4 * 3, 3 * 2, 2 * 4)
-        arr = np.zeros((x * y * z), dtype=np.bool).reshape(x, y, z)
+        arr = np.zeros((x * y * z), dtype=np.bool_).reshape(x, y, z)
         foo[(4, 3, 2), (3, 2, 4)](arr)
 
         self.assertTrue(np.all(arr))

@@ -457,7 +457,7 @@ class TestObjmodeFallback(TestCase):
                 [set(np.argwhere(coxv == x).flatten()) for x in groups]
 
         x = np.random.random((10, 10))
-        y = np.abs((np.random.randn(10, 10) * 1.732)).astype(np.int)
+        y = np.abs((np.random.randn(10, 10) * 1.732)).astype(int)
         for d in self.decorators:
             d(numbaFailure)(x, y)
 

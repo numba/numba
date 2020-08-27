@@ -25,7 +25,7 @@ from numba.np import numpy_support
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int32),
                        ('c', np.complex64),
-                       ('d', (np.str, 5))])
+                       ('d', (np.str_, 5))])
 
 recordtype2 = np.dtype([('e', np.int8),
                         ('f', np.float64)])

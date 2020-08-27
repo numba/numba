@@ -766,7 +766,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(4)
             check_ok(5.5)
             check_ok(-3)
-            check_ok(np.complex(4, 4))
+            check_ok(complex(4, 4))
             check_ok(np.int8(0))
 
     def test_arange_2_arg(self):
@@ -791,8 +791,8 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(-8, -1, pyfunc, cfunc)
             check_ok(4, 0.5, pyfunc, cfunc)
             check_ok(0.5, 4, pyfunc, cfunc)
-            check_ok(np.complex(1, 1), np.complex(4, 4), pyfunc, cfunc)
-            check_ok(np.complex(4, 4), np.complex(1, 1), pyfunc, cfunc)
+            check_ok(complex(1, 1), complex(4, 4), pyfunc, cfunc)
+            check_ok(complex(4, 4), complex(1, 1), pyfunc, cfunc)
             check_ok(3, None, pyfunc, cfunc)
 
         pyfunc = np_arange_1_dtype
@@ -826,7 +826,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(0, -10, -2, pyfunc, cfunc)
             check_ok(0.5, 4, 2, pyfunc, cfunc)
             check_ok(0, 1, 0.1, pyfunc, cfunc)
-            check_ok(0, np.complex(4, 4), np.complex(1, 1), pyfunc, cfunc)
+            check_ok(0, complex(4, 4), complex(1, 1), pyfunc, cfunc)
             check_ok(3, 6, None, pyfunc, cfunc)
             check_ok(3, None, None, pyfunc, cfunc)
             check_ok(np.int8(0), np.int8(5), np.int8(1), pyfunc, cfunc)
@@ -860,7 +860,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             check_ok(0, -10, -2, np.float32)
             check_ok(0.5, 4, 2, None)
             check_ok(0, 1, 0.1, np.complex128)
-            check_ok(0, np.complex(4, 4), np.complex(1, 1), np.complex128)
+            check_ok(0, complex(4, 4), complex(1, 1), np.complex128)
             check_ok(3, 6, None, None)
             check_ok(3, None, None, None)
 

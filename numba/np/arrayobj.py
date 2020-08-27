@@ -3760,7 +3760,7 @@ def numpy_take_1(context, builder, sig, args):
     def take_impl(a, indices):
         if indices > (a.size - 1) or indices < -a.size:
             raise IndexError("Index out of bounds")
-        return a.ravel()[np.int(indices)]
+        return a.ravel()[indices]
 
     res = context.compile_internal(builder, take_impl, sig, args)
     return impl_ret_new_ref(context, builder, sig.return_type, res)
@@ -3825,7 +3825,7 @@ def _arange_dtype(*args):
     else:
         # numerous attempts were made at guessing this type from the NumPy
         # source but it turns out on running `np.arange(10).dtype` on pretty
-        # much all platform and python combinations that it matched np.int?!
+        # much all platform and python combinations that it matched np.int_?!
         # Windows 64 is broken by default here because Numba (as of 0.47) does
         # not differentiate between Python and NumPy integers, so a `typeof(1)`
         # on w64 is `int64`, i.e. `intp`. This means an arange(<some int>) will
@@ -3833,7 +3833,7 @@ def _arange_dtype(*args):
         # to int32. Example: without a load of analysis to work out of the args
         # were wrapped in NumPy int*() calls it's not possible to detect the
         # difference between `np.arange(10)` and `np.arange(np.int64(10)`.
-        NPY_TY = getattr(types, "int%s" % (8 * np.dtype(np.int).itemsize))
+        NPY_TY = getattr(types, "int%s" % (8 * np.dtype(int).itemsize))
         dtype = max(bounds + [NPY_TY,])
 
     return dtype
