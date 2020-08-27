@@ -1500,11 +1500,20 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
         builder.store(stop, builder.gep(dim_stops,
                                         [context.get_constant(types.uintp, i)]))
 
+    get_chunksize = builder.module.get_or_insert_function(
+        lc.Type.function(uintp_t, []),
+        name="get_parallel_chunksize")
+
+    set_chunksize = builder.module.get_or_insert_function(
+        lc.Type.function(lc.Type.void(), [uintp_t]),
+        name="set_parallel_chunksize")
+
     get_num_threads = builder.module.get_or_insert_function(
         lc.Type.function(lc.Type.int(types.intp.bitwidth), []),
         name="get_num_threads")
 
     num_threads = builder.call(get_num_threads, [])
+    current_chunksize = builder.call(get_chunksize, [])
 
     with cgutils.if_unlikely(builder, builder.icmp_signed('<=', num_threads,
                                                   num_threads.type(0))):
@@ -1519,6 +1528,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
                                                   context.get_constant(types.uintp, num_dim),
                                                   dim_starts,
                                                   dim_stops])
+    builder.call(set_chunksize, [zero])
 
     multiplier = context.get_constant(types.uintp, num_dim * 2)
     sched_size = builder.mul(num_divisions, multiplier)
@@ -1683,7 +1693,7 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     nshapes = len(sig_dim_dict) + 1
     shapes = cgutils.alloca_once(builder, intp_t, size=nshapes, name="pshape")
     # For now, outer loop size is the same as number of threads
-    builder.store(num_threads, shapes)
+    builder.store(num_divisions, shapes)
     # Individual shape variables go next
     i = 1
     for dim_sym in occurances:
@@ -1750,6 +1760,8 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
     builder.call(fn, [args, shapes, steps, data])
     if config.DEBUG_ARRAY_OPT:
         cgutils.printf(builder, "after calling kernel %p\n", fn)
+
+    builder.call(set_chunksize, [current_chunksize])
 
     for k, v in rv_to_arg_dict.items():
         arg, rv_arg = v
