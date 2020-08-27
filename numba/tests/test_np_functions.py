@@ -726,39 +726,78 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             self.assertIn("order must be non-negative", str(raises.exception))
 
     def test_isclose(self):
+        rtol = 1e-5
+        atol = 1e-8
+        arr = np.array([100, 1000])
+        aran = np.arange(8).reshape((2, 2, 2))
+        kw = {'rtol': rtol, 'atol': atol}
+
         def values():
             yield 1e10, 1.00001e10, {}
             yield 1e10, np.nan, {}
-            yield np.asarray([1e-8, 1e-7]), np.asarray([0.0, 0.0]), {}
-            yield np.asarray([1e10, 1e-7]), np.asarray([1.00001e10, 1e-8]), {}
-            yield np.asarray([1e10, 1e-8]), np.asarray([1.00001e10, 1e-9]), {}
-            yield np.asarray([1e10, 1e-8]), np.asarray([1.0001e10, 1e-9]), {}
-            yield np.asarray([1.0, np.nan]), np.asarray([1.0, np.nan]), {}
-            yield np.asarray([1.0, np.nan]),np.asarray([1.0, np.nan]),\
-                {'equal_nan':True}
-            yield np.asarray([np.nan, np.nan]), np.asarray([1.0, np.nan]),\
-                {'equal_nan':True}
-            yield np.asarray([1e-100, 1e-7]), np.asarray([0.0, 0.0]),\
-                {'atol':0.0}
-            yield np.asarray([1e-10, 1e-10]), np.asarray([1e-20, 0.0]), {}
-            yield np.asarray([1e-10, 1e-10]),\
-                np.asarray([1e-20, 0.999999e-10]),{'atol':0.0}
+            yield [1e-8, 1e-7], [0.0, 0.0], {}
+            yield [1e10, 1e-7], [1.00001e10, 1e-8], {}
+            yield [1e10, 1e-8], [1.00001e10, 1e-9], {}
+            yield [1e10, 1e-8], [1.0001e10, 1e-9], {}
+            yield [1.0, np.nan], [1.0, np.nan], {}
+            yield [1.0, np.nan],[1.0, np.nan], {'equal_nan': True}
+            yield [np.nan, np.nan], [1.0, np.nan], {'equal_nan': True}
+            yield [1e-100, 1e-7], [0.0, 0.0], {'atol': 0.0}
+            yield [1e-10, 1e-10], [1e-20, 0.0], {}
+            yield [1e-10, 1e-10], [1e-20, 0.999999e-10], {'atol': 0.0}
+            yield [1, np.inf, 2], [3, np.inf, 4], kw
+
+            # tests taken from
+            # https://github.com/numpy/numpy/blob/aac965af6032b69d5cb515ad785cc9a331e816f4/numpy/core/tests/test_numeric.py#L2298-L2335  # noqa: E501
+
+            # all close tests
+            yield [0, 1], [1, 0], kw
+            yield arr, arr, kw
+            yield [1], [1 + rtol + atol], kw
+            yield arr, arr + arr * rtol, kw
+            yield arr, arr + arr * rtol + atol, kw
+            yield aran, aran + aran * rtol, kw
+            yield np.inf, np.inf, kw
+            yield -np.inf, np.inf, kw
+            yield np.inf, [np.inf], kw
+            yield [np.inf, -np.inf], [np.inf, -np.inf], kw
+
+            # none close tests
+            yield [np.inf, 0], [1, np.inf], kw
+            yield [np.inf, -np.inf], [1, 0], kw
+            yield [np.inf, np.inf], [1, -np.inf], kw
+            yield [np.inf, np.inf], [1, 0], kw
+            yield [np.nan, 0], [np.nan, -np.inf], kw
+            yield [atol * 2], [0], kw
+            yield [1], [1 + rtol + atol * 2], kw
+            yield aran, aran + rtol * 1.1 * aran + atol * 1.1, kw
+            yield np.array([np.inf, 1]), np.array([0, np.inf]), kw
+
+            # some close tests
+            yield [np.inf, 0], [np.inf, atol * 2], kw
+            yield [atol, 1, 1e6 * (1 + 2 * rtol) + atol], [0, np.nan, 1e6], kw
+            yield np.arange(3), [0, 1, 2.1], kw
+            yield np.nan, [np.nan, np.nan, np.nan], kw
+            yield [0], [atol, np.inf, -np.inf, np.nan], kw
+            yield 0, [atol, np.inf, -np.inf, np.nan], kw
 
         pyfunc = isclose
         cfunc = jit(nopython=True)(pyfunc)
         for a, b, kwargs in values():
+            a = np.asarray(a)
+            b = np.asarray(b)
             expected = pyfunc(a, b, **kwargs)
             got = cfunc(a, b, **kwargs)
             if isinstance(expected, np.bool_):
                 self.assertEqual(expected, got)
             else:
-                self.assertCountEqual(expected, got)
+                self.assertTrue(np.array_equal(expected, got))
 
         inputs = [('hello', 'world'), (2.0, None), ('a', 3.0)]
         for (a, b) in inputs:
             with self.assertRaises(TypingError) as raises:
                 cfunc(a, b)
-            self.assertIn("`np.isclose` is not supported for the input types.",
+            self.assertIn("Inputs for `np.isclose` must be array-like.",
                           str(raises.exception))
 
     def test_isscalar(self):

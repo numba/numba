@@ -871,17 +871,32 @@ def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/core/numeric.py#L2180-L2292
 
     if not(type_can_asarray(a) and type_can_asarray(b)):
-        raise TypingError("`np.isclose` is not supported for the input types.")
+        raise TypingError("Inputs for `np.isclose` must be array-like.")
 
     def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
         xfin = np.asarray(np.isfinite(a))
         yfin = np.asarray(np.isfinite(b))
+        x, y = np.asarray(a), np.asarray(b)
         if np.all(xfin) and np.all(yfin):
-            return _within_tol(a, b, rtol, atol)
+            return _within_tol(x, y, rtol, atol)
         else:
-            r = _within_tol(a, b, rtol, atol)
+            finite = xfin & yfin
+            r = np.zeros_like(finite)
+            x = x * np.ones_like(r)
+            y = y * np.ones_like(r)
+
+            r = _within_tol(x, y, rtol, atol)
+            # Negate every element that is not finite
+            r &= (xfin & yfin)
+
+            # Check for equality of infinite values
+            r |= (x == np.asarray(np.inf)) & (y == np.asarray(np.inf))
+            r |= (x == np.asarray(-np.inf)) & (y == np.asarray(-np.inf))
+
             if equal_nan:
-                return r | (~xfin & ~yfin)
+                xnan = np.asarray(np.isnan(a))
+                ynan = np.asarray(np.isnan(b))
+                return r | (xnan & ynan)
             else:
                 return r
     return impl
