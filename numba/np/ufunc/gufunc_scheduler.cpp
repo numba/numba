@@ -19,7 +19,7 @@
 #endif
 
 // Default 0 value means one evenly-sized chunk of work per worker thread.
-THREAD_LOCAL(uintp) parallel_chunksize = 0;
+static THREAD_LOCAL(uintp) parallel_chunksize = 0;
 
 // round not available on VS2010.
 double guround (double number) {
