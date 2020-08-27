@@ -200,7 +200,7 @@ class BaseAnonymousTuple(BaseTuple):
             return max(kinds)
 
     def __unliteral__(self):
-        return BaseTuple.from_types([unliteral(t) for t in self])
+        return type(self).from_types([unliteral(t) for t in self])
 
 
 class _HomogeneousTuple(Sequence, BaseTuple):
@@ -252,6 +252,9 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
             if dtype is not None:
                 return UniTuple(dtype=dtype, count=self.count)
+
+    def __unliteral__(self):
+        return type(self)(dtype=unliteral(self.dtype), count=self.count)
 
 
 class UniTupleIter(BaseContainerIterator):
@@ -426,14 +429,22 @@ class List(MutableSequence, InitialValue):
             dtype = self.dtype
         if reflected is None:
             reflected = self.reflected
-        return List(dtype, reflected)
+        return List(dtype, reflected, self.initial_value)
 
     def unify(self, typingctx, other):
         if isinstance(other, List):
             dtype = typingctx.unify_pairs(self.dtype, other.dtype)
             reflected = self.reflected or other.reflected
             if dtype is not None:
-                return List(dtype, reflected)
+                siv = self.initial_value
+                oiv = other.initial_value
+                if siv is not None and oiv is not None:
+                    use = siv
+                    if siv is None:
+                        use = oiv
+                    return List(dtype, reflected, use)
+                else:
+                    return List(dtype, reflected)
 
     @property
     def key(self):
@@ -452,19 +463,48 @@ class List(MutableSequence, InitialValue):
         """
         return self.dtype
 
+    def __unliteral__(self):
+        return List(self.dtype, reflected=self.reflected,
+                    initial_value=None)
 
-class LiteralList(Literal, _HeterogeneousTuple):
+
+class LiteralList(Literal, ConstSized, Hashable):
     """A heterogeneous immutable list (basically a tuple with list semantics).
     """
 
     mutable = False
 
     def __init__(self, literal_value):
-        _HeterogeneousTuple.is_types_iterable(literal_value)
+        self.is_types_iterable(literal_value)
         self._literal_init(list(literal_value))
         self.types = tuple(literal_value)
         self.count = len(self.types)
         self.name = "LiteralList({})".format(literal_value)
+
+    def __getitem__(self, i):
+        """
+        Return element at position i
+        """
+        return self.types[i]
+
+    def __len__(self):
+        return len(self.types)
+
+    def __iter__(self):
+        return iter(self.types)
+
+    @classmethod
+    def from_types(cls, tys):
+        return LiteralList(tys)
+
+    @staticmethod
+    def is_types_iterable(types):
+        if not isinstance(types, Iterable):
+            raise TypingError("Argument 'types' is not iterable")
+
+    @property
+    def iterator_type(self):
+        return ListIter(self)
 
     def __unliteral__(self):
         return Poison(self)
@@ -695,13 +735,29 @@ class DictType(IterableType, InitialValue):
         if isinstance(other, DictType):
             if not other.is_precise():
                 return self
+            else:
+                ukey_type = self.key_type == other.key_type
+                uvalue_type = self.value_type == other.value_type
+                if ukey_type and uvalue_type:
+                    siv = self.initial_value
+                    oiv = other.initial_value
+                    siv_none = siv is None
+                    oiv_none = oiv is None
+                    if not siv_none and not oiv_none:
+                        if siv == oiv:
+                            return DictType(self.key_type, other.value_type,
+                                            siv)
+                    return DictType(self.key_type, other.value_type)
 
     @property
     def key(self):
         return self.key_type, self.value_type, str(self.initial_value)
 
+    def __unliteral__(self):
+        return DictType(self.key_type, self.value_type)
 
-class LiteralStrKeyDict(Literal, NamedTuple):
+
+class LiteralStrKeyDict(Literal, ConstSized, Hashable):
     """A Dictionary of string keys to heterogeneous values (basically a
     namedtuple with dict semantics).
     """
@@ -714,7 +770,10 @@ class LiteralStrKeyDict(Literal, NamedTuple):
         strkeys = [x.literal_value for x in literal_value.keys()]
         self.tuple_ty = namedtuple("_ntclazz", " ".join(strkeys))
         tys = [x for x in literal_value.values()]
-        NamedTuple.__init__(self, tys, self.tuple_ty)
+        self.types = tuple(tys)
+        self.count = len(self.types)
+        self.fields = tuple(self.tuple_ty._fields)
+        self.instance_class = self.tuple_ty
         self.name = "LiteralStrKey[Dict]({})".format(literal_value)
 
     def __unliteral__(self):
@@ -736,6 +795,12 @@ class LiteralStrKeyDict(Literal, NamedTuple):
                 if all(tys):
                     d = {k: v for k, v in zip(self.literal_value.keys(), tys)}
                     return LiteralStrKeyDict(d)
+
+    def __len__(self):
+        return len(self.types)
+
+    def __iter__(self):
+        return iter(self.types)
 
     @property
     def key(self):

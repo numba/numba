@@ -3,6 +3,10 @@
 Environment variables
 =====================
 
+.. note:: This section relates to environment variables that impact Numba's
+          runtime, for compile time environment variables see
+          :ref:`numba-source-install-env_vars`.
+
 Numba allows its behaviour to be changed through the use of environment
 variables. Unless otherwise mentioned, those variables have integer values and
 default to zero.

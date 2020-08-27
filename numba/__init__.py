@@ -8,8 +8,13 @@ import sys
 import warnings
 
 from ._version import get_versions
+from numba.misc.init_utils import generate_version_info
+
 __version__ = get_versions()['version']
+version_info = generate_version_info(__version__)
 del get_versions
+del generate_version_info
+
 
 from numba.core import config
 from numba.testing import _runtests as runtests
@@ -51,9 +56,6 @@ from numba.experimental.jitclass.decorators import _warning_jitclass as jitclass
 import numba.core.withcontexts
 from numba.core.withcontexts import objmode_context as objmode
 from numba.core.withcontexts import parallel_chunksize
-
-# Bytes/unicode array support
-import numba.cpython.charseq
 
 # Re-export ParallelAccelerator runtime controls
 from numba.np.ufunc.parallel import (set_parallel_chunksize,

@@ -58,6 +58,7 @@ class CPUContext(BaseContext):
 
         # Initialize additional implementations
         import numba.cpython.unicode
+        import numba.cpython.charseq
         import numba.typed.dictimpl
         import numba.experimental.function_type
 

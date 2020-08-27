@@ -46,6 +46,7 @@ jobs:
         CONDA_ENV: travisci
         RUN_COVERAGE: yes
         RUN_FLAKE8: yes
+        RUN_MYPY: yes
         TEST_START_INDEX: 4
       py36_np117_doc:
         PYTHON: '3.6'

@@ -20,6 +20,7 @@ from numba.tests.support import (
     captured_stdout,
     temp_directory,
     override_config,
+    run_in_new_process_in_cache_dir,
 )
 from numba.core.errors import LoweringError
 import unittest
@@ -1748,12 +1749,56 @@ class TestCachingOverloadObjmode(TestCase):
             got = testcase_cached(123)
             self.assertEqual(got, expect)
 
-            self.assertEqual(
-                testcase_cached._cache_hits[testcase.signatures[0]], 1,
+    @classmethod
+    def check_objmode_cache_ndarray(cls):
+        def do_this(a, b):
+            return np.sum(a + b)
+
+        def do_something(a, b):
+            return np.sum(a + b)
+
+        @overload(do_something)
+        def overload_do_something(a, b):
+            def _do_something_impl(a, b):
+                with objmode(y='float64'):
+                    y = do_this(a, b)
+                return y
+            return _do_something_impl
+
+        @njit(cache=True)
+        def test_caching():
+            a = np.arange(20)
+            b = np.arange(20)
+            return do_something(a, b)
+
+        got = test_caching()
+        expect = test_caching.py_func()
+
+        # Check result
+        if got != expect:
+            raise AssertionError("incorrect result")
+        return test_caching
+
+    @classmethod
+    def check_objmode_cache_ndarray_check_cache(cls):
+        disp = cls.check_objmode_cache_ndarray()
+        if len(disp.stats.cache_misses) != 0:
+            raise AssertionError('unexpected cache miss')
+        if len(disp.stats.cache_hits) <= 0:
+            raise AssertionError("unexpected missing cache hit")
+
+    def test_check_objmode_cache_ndarray(self):
+        # See issue #6130.
+        # Env is missing after cache load.
+        cache_dir = temp_directory(self.__class__.__name__)
+        with override_config("CACHE_DIR", cache_dir):
+            # Test in local process to populate the cache.
+            self.check_objmode_cache_ndarray()
+            # Run in new process to use the cache in a fresh process.
+            res = run_in_new_process_in_cache_dir(
+                self.check_objmode_cache_ndarray_check_cache, cache_dir
             )
-            self.assertEqual(
-                testcase_cached._cache_misses[testcase.signatures[0]], 0,
-            )
+        self.assertEqual(res['exitcode'], 0)
 
 
 class TestMisc(TestCase):
@@ -1768,6 +1813,101 @@ class TestMisc(TestCase):
         self.assertFalse(
             is_jitted(guvectorize("void(float64[:])", "(m)")(foo))
         )
+
+
+class TestOverloadPreferLiteral(TestCase):
+    def test_overload(self):
+        def prefer_lit(x):
+            pass
+
+        def non_lit(x):
+            pass
+
+        def ov(x):
+            if isinstance(x, types.IntegerLiteral):
+                # With prefer_literal=False, this branch will not be reached.
+                if x.literal_value == 1:
+                    def impl(x):
+                        return 0xcafe
+                    return impl
+                else:
+                    raise errors.TypingError('literal value')
+            else:
+                def impl(x):
+                    return x * 100
+                return impl
+
+        overload(prefer_lit, prefer_literal=True)(ov)
+        overload(non_lit)(ov)
+
+        @njit
+        def check_prefer_lit(x):
+            return prefer_lit(1), prefer_lit(2), prefer_lit(x)
+
+        a, b, c = check_prefer_lit(3)
+        self.assertEqual(a, 0xcafe)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+        @njit
+        def check_non_lit(x):
+            return non_lit(1), non_lit(2), non_lit(x)
+
+        a, b, c = check_non_lit(3)
+        self.assertEqual(a, 100)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+    def test_overload_method(self):
+        def ov(self, x):
+            if isinstance(x, types.IntegerLiteral):
+                # With prefer_literal=False, this branch will not be reached.
+                if x.literal_value == 1:
+                    def impl(self, x):
+                        return 0xcafe
+                    return impl
+                else:
+                    raise errors.TypingError('literal value')
+            else:
+                def impl(self, x):
+                    return x * 100
+                return impl
+
+        overload_method(
+            MyDummyType, "method_prefer_literal",
+            prefer_literal=True,
+        )(ov)
+
+        overload_method(
+            MyDummyType, "method_non_literal",
+            prefer_literal=False,
+        )(ov)
+
+        @njit
+        def check_prefer_lit(dummy, x):
+            return (
+                dummy.method_prefer_literal(1),
+                dummy.method_prefer_literal(2),
+                dummy.method_prefer_literal(x),
+            )
+
+        a, b, c = check_prefer_lit(MyDummy(), 3)
+        self.assertEqual(a, 0xcafe)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
+
+        @njit
+        def check_non_lit(dummy, x):
+            return (
+                dummy.method_non_literal(1),
+                dummy.method_non_literal(2),
+                dummy.method_non_literal(x),
+            )
+
+        a, b, c = check_non_lit(MyDummy(), 3)
+        self.assertEqual(a, 100)
+        self.assertEqual(b, 200)
+        self.assertEqual(c, 300)
 
 
 if __name__ == "__main__":

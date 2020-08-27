@@ -77,7 +77,8 @@ class TestSharedMemoryCreation(CUDATestCase):
                       "Function(<function shared.array",
                       str(raises.exception))
         self.assertIn("found for signature:\n \n "
-                      ">>> array(shape=list(int64), dtype=class(float32)",
+                      ">>> array(shape=list(int64)<iv=[5, 6]>, "
+                      "dtype=class(float32)",
                       str(raises.exception))
 
     def test_global_constant_tuple(self):

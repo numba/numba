@@ -416,6 +416,8 @@ class ArrayAttribute(AttributeTemplate):
         assert not args
         kwargs = dict(kws)
         kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
+        if not isinstance(kind, types.StringLiteral):
+            raise errors.TypingError('"kind" must be a string literal')
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))
@@ -742,8 +744,9 @@ def generic_index(self, args, kws):
     assert not kws
     return signature(types.intp, recvr=self.this)
 
-def install_array_method(name, generic):
-    my_attr = {"key": "array." + name, "generic": generic}
+def install_array_method(name, generic, prefer_literal=True):
+    my_attr = {"key": "array." + name, "generic": generic,
+               "prefer_literal": prefer_literal}
     temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
     def array_attribute_attachment(self, ary):
         return types.BoundFunction(temp_class, ary)
@@ -756,7 +759,7 @@ for fname in ["min", "max"]:
 
 # Functions that return a machine-width type, to avoid overflows
 install_array_method("prod", generic_expand)
-install_array_method("sum", sum_expand)
+install_array_method("sum", sum_expand, prefer_literal=True)
 
 # Functions that return a machine-width type, to avoid overflows
 for fname in ["cumsum", "cumprod"]:
