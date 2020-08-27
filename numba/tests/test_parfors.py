@@ -19,7 +19,8 @@ import operator
 from collections import defaultdict, namedtuple
 
 import numba.parfors.parfor
-from numba import njit, prange, set_num_threads, get_num_threads
+from numba import (njit, prange, parallel_chunksize,
+                   get_parallel_chunksize, set_parallel_chunksize)
 from numba.core import (types, utils, typing, errors, ir, rewrites,
                         typed_passes, inline_closurecall, config, compiler, cpu)
 from numba.extending import (overload_method, register_model,
@@ -3604,6 +3605,78 @@ class TestParforsMisc(TestParforsBase):
             find_maxima_3D_jit(args),
             find_maxima_3D_jit.py_func(args),
         )
+
+    @skip_parfors_unsupported
+    def test_python_parallel_chunksize_basic(self):
+        # Test basic chunksize operations outside njit.
+        self.assertEqual(get_parallel_chunksize(), 0)
+        set_parallel_chunksize(8)
+        self.assertEqual(get_parallel_chunksize(), 8)
+        set_parallel_chunksize(0)
+        self.assertEqual(get_parallel_chunksize(), 0)
+
+    @skip_parfors_unsupported
+    def test_python_with_chunksize(self):
+        # Test "with parallel_chunksize" outside njit.
+        self.assertEqual(get_parallel_chunksize(), 0)
+        with parallel_chunksize(8):
+            self.assertEqual(get_parallel_chunksize(), 8)
+        self.assertEqual(get_parallel_chunksize(), 0)
+
+    @skip_parfors_unsupported
+    def test_njit_parallel_chunksize_basic(self):
+        # Test basic chunksize operations inside njit.
+        @njit
+        def get_cs():
+            return get_parallel_chunksize()
+
+        @njit
+        def set_cs(x):
+            return set_parallel_chunksize(x)
+
+        self.assertEqual(get_cs(), 0)
+        set_cs(8)
+        self.assertEqual(get_cs(), 8)
+        set_cs(0)
+        self.assertEqual(get_cs(), 0)
+
+    @skip_parfors_unsupported
+    def test_njit_with_chunksize(self):
+        # Test "with parallel_chunksize" inside njit.
+        @njit
+        def test_impl(x):
+            cs1 = get_parallel_chunksize()
+            with parallel_chunksize(8):
+                cs2 = get_parallel_chunksize()
+            cs3 = get_parallel_chunksize()
+            return cs1, cs2, cs3
+
+        cs1, cs2, cs3 = test_impl(8)
+
+        self.assertEqual(cs1, 0)
+        self.assertEqual(cs2, 8)
+        self.assertEqual(cs3, 0)
+
+    @skip_parfors_unsupported
+    def test_all_iterations_reset_chunksize(self):
+        """ Test that all the iterations get run if you set the
+            chunksize.  Also check that the chunksize that each
+            worker thread sees has been reset to 0. """
+
+        @njit(parallel=True)
+        def test_impl(cs):
+            n = 1000
+            res = np.zeros(n)
+            inner_cs = np.full(n, -13)
+            with numba.parallel_chunksize(cs):
+                for i in numba.prange(n):
+                    inner_cs[i] = numba.get_parallel_chunksize()
+                    res[i] = 13
+            return res, inner_cs
+
+        res, inner_cs = test_impl(8)
+        self.assertTrue(np.all(res == 13))
+        self.assertTrue(np.all(inner_cs == 0))
 
 
 @skip_parfors_unsupported
