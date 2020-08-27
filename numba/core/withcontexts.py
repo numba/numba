@@ -375,7 +375,9 @@ class _ParallelChunksize(WithContext):
         set_state.append(ir.Assign(gpc_call, orig_pc_var, loc))
         # call set_parallel_chunksize
         unused_var = ir.Var(scope, ir_utils.mk_unique_var("$unused"), loc)
-        spc_call = ir.Expr.call(spcvar, [arg], (), loc)
+        cs_var = ir.Var(scope, ir_utils.mk_unique_var("$cs_var"), loc)
+        set_state.append(ir.Assign(arg, cs_var, loc))
+        spc_call = ir.Expr.call(spcvar, [cs_var], (), loc)
         set_state.append(ir.Assign(spc_call, unused_var, loc))
 
         restore_spc_call = ir.Expr.call(spcvar, [orig_pc_var], (), loc)
