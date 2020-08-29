@@ -583,12 +583,17 @@ class CFGraph(object):
         succs_state = {}
         entry_point = self.entry_point()
 
+        checked = []
+
         def push_state(node):
             stack.append(node)
-            succs_state[node] = [dest for dest in self._succs[node]]
+            succs_state[node] = [dest for dest in self._succs[node]
+                                 if node not in checked]
 
         push_state(entry_point)
 
+        #if len(self._nodes) > 50:
+        #    from pudb import set_trace; set_trace()
         while stack:
             tos = stack[-1]
             tos_succs = succs_state[tos]
@@ -606,6 +611,7 @@ class CFGraph(object):
             else:
                 # Checked all successors. Pop
                 stack.pop()
+                checked.append(tos)
 
         return back_edges
 
