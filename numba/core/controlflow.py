@@ -592,8 +592,6 @@ class CFGraph(object):
 
         push_state(entry_point)
 
-        #if len(self._nodes) > 50:
-        #    from pudb import set_trace; set_trace()
         while stack:
             tos = stack[-1]
             tos_succs = succs_state[tos]
