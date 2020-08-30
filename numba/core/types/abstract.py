@@ -11,6 +11,7 @@ if pt.TYPE_CHECKING:
     # cause circular imports
     from numba.core.typing.templates import Signature
     from numba.core.types import Array
+    from numba.core.base import BaseContext
 from numba.core.utils import cached_property
 
 # Python typing
@@ -154,7 +155,8 @@ class Type(metaclass=_TypeMetaclass):
         """
         return None
 
-    def can_convert_to(self, typingctx, other: NumbaTypeInst) -> pt.Optional[Conversion]:
+    def can_convert_to(self, typingctx: BaseContext, other: NumbaTypeInst
+                       ) -> pt.Optional[Conversion]:
         """
         Check whether this type can be converted to the *other*.
         If successful, must return a string describing the conversion, e.g.
@@ -162,7 +164,8 @@ class Type(metaclass=_TypeMetaclass):
         """
         return None
 
-    def can_convert_from(self, typingctx, other: NumbaTypeInst) -> pt.Optional[Conversion]:
+    def can_convert_from(self, typingctx: BaseContext, other: NumbaTypeInst
+                         ) -> pt.Optional[Conversion]:
         """
         Similar to *can_convert_to*, but in reverse.  Only needed if
         the type provides conversion from other types.
