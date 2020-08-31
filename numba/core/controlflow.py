@@ -588,12 +588,11 @@ class CFGraph(object):
         succs_state = {}
         entry_point = self.entry_point()
 
-        checked = []
+        checked = set()
 
         def push_state(node):
             stack.append(node)
-            succs_state[node] = [dest for dest in self._succs[node]
-                                 if node not in checked]
+            succs_state[node] = [dest for dest in self._succs[node]]
 
         push_state(entry_point)
 
@@ -610,13 +609,13 @@ class CFGraph(object):
                 if cur_node in stack:
                     # Yes, it's a backedge
                     back_edges.add((tos, cur_node))
-                else:
+                elif cur_node not in checked:
                     # Push
                     push_state(cur_node)
             else:
                 # Checked all successors. Pop
                 stack.pop()
-                checked.append(tos)
+                checked.add(tos)
 
         return back_edges
 
