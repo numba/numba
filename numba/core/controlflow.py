@@ -567,11 +567,16 @@ class CFGraph(object):
     # Finding loops and back edges: see
     # http://pages.cs.wisc.edu/~fischer/cs701.f08/finding.loops.html
 
-    def _find_back_edges(self):
+    def _find_back_edges(self, stats=None):
         """
         Find back edges.  An edge (src, dest) is a back edge if and
         only if *dest* dominates *src*.
         """
+        # Prepare stats to capture execution information
+        if stats is not None:
+            if not isinstance(stats, dict):
+                raise TypeError(f"*stats* must be a dict; got {type(stats)}")
+            stats.setdefault('iteration_count', 0)
 
         # Uses a simple DFS to find back-edges.
         # The new algorithm is faster than the the previous dominator based
@@ -593,6 +598,8 @@ class CFGraph(object):
         push_state(entry_point)
 
         while stack:
+            if stats is not None:
+                stats['iteration_count'] += 1
             tos = stack[-1]
             tos_succs = succs_state[tos]
             # Are there successors not checked?
