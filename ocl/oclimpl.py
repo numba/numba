@@ -178,8 +178,6 @@ def insert_and_call_atomic_fn(context, builder, sig, fn_type,
         else:
             raise TypeError("Operation type is not supported %s" %
                              (fn_type))
-
-
     elif dtype.name == "int64" or dtype.name == "uint64":
         device_env = driver.runtime.get_current_device()
         if device_env.device_support_int64_atomics():
@@ -335,6 +333,10 @@ def dppl_lmem_alloc_array(context, builder, sig, args):
 
 
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
+    """
+    This function allows us to create generic arrays in different
+    address spaces.
+    """
     elemcount = reduce(operator.mul, shape)
     lldtype = context.get_data_type(dtype)
     laryty = Type.array(lldtype, elemcount)
@@ -356,6 +358,12 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace):
     else:
         raise NotImplementedError("addrspace {addrspace}".format(**locals()))
 
+    # We need to add the addrspace to _make_array() function call as we want
+    # the variable containing the reference of the memory to retain the
+    # original address space of that memory. Before, we were casting the
+    # memories allocated in local address space to global address space. This
+    # approach does not let us identify the original address space of a memory
+    # down the line.
     return _make_array(context, builder, gvmem, dtype, shape, addrspace=addrspace)
 
 
