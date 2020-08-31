@@ -119,6 +119,11 @@ def compile_kernel(device, pyfunc, args, access_types, debug=False):
     cres = compile_with_dppl(pyfunc, None, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
+    # The kernel objet should have a reference to the target context it is compiled for.
+    # This is needed as we intend to shape the behavior of the kernel down the line
+    # depending on the target context. For example, we want to link our kernel object
+    # with implementation containing atomic operations only when atomic operations
+    # are being used in the kernel.
     oclkern = DPPLKernel(context=cres.target_context,
                          device_env=device,
                          llvm_module=kernel.module,
