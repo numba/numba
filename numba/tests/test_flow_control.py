@@ -1020,7 +1020,8 @@ class TestCFGraph(TestCase):
         g.process()
         stats = {}
         # Compute backedges and store the iteration count for testing
-        g._find_back_edges(stats=stats)
+        back_edges = g._find_back_edges(stats=stats)
+        self.assertEqual(back_edges, {(666, 610), (778, 722)})
         self.assertEqual(stats['iteration_count'], 155)
 
     def test_equals(self):
