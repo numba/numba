@@ -2005,6 +2005,11 @@ class TestMultiprocessingDefaultParameters(SerialMixin, unittest.TestCase):
         except AttributeError:
             ctx = multiprocessing
 
+        # RE: issue #5973, this doesn't use multiprocessing.Pool.map as doing so
+        # causes the TBB library to segfault under certain conditions. It's not
+        # clear whether the cause is something in the complexity of the Pool
+        # itself, e.g. watcher threads etc, or if it's a problem synonymous with
+        # a "timing attack".
         for a in [1, 2, 3]:
             p = ctx.Process(target=_checker, args=(fc, a,))
             p.start()
