@@ -1274,10 +1274,14 @@ class DeferredStructModel(CompositeModel):
         self.actual_fe_type = fe_type.get()
 
     def get_value_type(self):
-        return ir.global_context.get_identified_type(self.typename + '.value')
+        res = ir.global_context.get_identified_type(self.typename + '.value')
+        self._define_value_type(res)
+        return res
 
     def get_data_type(self):
-        return ir.global_context.get_identified_type(self.typename + '.data')
+        res = ir.global_context.get_identified_type(self.typename + '.data')
+        self._define_value_type(res)
+        return res
 
     def get_argument_type(self):
         return self._actual_model.get_argument_type()
