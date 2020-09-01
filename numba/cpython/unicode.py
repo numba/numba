@@ -2352,6 +2352,7 @@ def ol_chr(i):
 @overload(str)
 def integer_str(n):
     if isinstance(n, types.Integer):
+
         ten = n(10)
 
         def impl(n):
@@ -2361,15 +2362,22 @@ def integer_str(n):
                 flag = True
             if n == 0:
                 return '0'
-            l = []
-            while n > 0:
-                c = chr(ord('0') + (n % ten))
-                n = n // ten
-                l.append(c)
+            length = flag + 1 + int(np.floor(np.log10(n)))
+            kind = PY_UNICODE_1BYTE_KIND
+            char_width = _kind_to_byte_width(kind)
+            s = _malloc_string(kind, char_width, length, True)
+            const = ord('0')
             if flag:
-                l.append('-')
-            return ''.join(l[::-1])
+                _set_code_point(s, 0, ord('-'))
+            idx = length - 1
+            while n > 0:
+                c = const + (n % ten)
+                n = n // ten
+                _set_code_point(s, idx, c)
+                idx -= 1
+            return s
         return impl
+
 
 # ------------------------------------------------------------------------------
 # iteration
