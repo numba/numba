@@ -1516,6 +1516,22 @@ class TestListInitialValues(MemoryLeakMixin, TestCase):
             larg = baz.signatures[0][0]
             self.assertEqual(larg.initial_value, iv)
 
+    def test_list_of_list_ctor(self):
+        # see issue 6082
+        @njit
+        def bar(x):
+            pass
+
+        @njit
+        def foo():
+            x = [[1, 2, 3, 4, 5], [1, 2, 3, 4, 6]]
+            bar(x)
+
+        foo()
+        larg = bar.signatures[0][0]
+        self.assertEqual(larg.initial_value, None)
+        self.assertEqual(larg.dtype.initial_value, None)
+
 
 class TestLiteralLists(MemoryLeakMixin, TestCase):
 
@@ -1719,6 +1735,19 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
 
         self.assertEqual(foo.py_func(), foo())
 
+    def test_staticgetitem_slice(self):
+        # this is forbidden by typing as there's no way to serialize a list of
+        # any kind as required by returning a (static) slice of a LiteralList
+        @njit
+        def foo():
+            l = ['a', 'b', 1]
+            return l[:2]
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        expect = "Cannot __getitem__ on a literal list"
+        self.assertIn(expect, str(raises.exception))
+
     def test_setitem(self):
 
         @njit
@@ -1777,6 +1806,25 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
             return l[0], l[1]
 
         self.assertEqual(foo(), foo.py_func())
+
+    def test_tuple_not_in_mro(self):
+        # Related to #6094, make sure that LiteralList does not inherit from
+        # types.BaseTuple as this breaks isinstance checks.
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            self.assertFalse(isinstance(x, types.BaseTuple))
+            self.assertTrue(isinstance(x, types.LiteralList))
+            return lambda x: ...
+
+        @njit
+        def foo():
+            l = ['a', 1]
+            bar(l)
+
+        foo()
 
 
 if __name__ == '__main__':

@@ -28,10 +28,14 @@ from numba.core.caching import _UserWideCacheLocator
 from numba.core.dispatcher import Dispatcher
 from numba.tests.support import (skip_parfors_unsupported, needs_lapack,
                                  SerialMixin)
-
+from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 import llvmlite.binding as ll
 import unittest
 from numba.parfors import parfor
+
+
+_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
+
 
 try:
     import jinja2
@@ -1253,10 +1257,14 @@ class TestCache(BaseCacheUsecasesTest):
             warnings.simplefilter('error', NumbaWarning)
 
             f = mod.closure1
-            self.assertPreciseEqual(f(3), 6)
+            self.assertPreciseEqual(f(3), 6) # 3 + 3 = 6
             f = mod.closure2
-            self.assertPreciseEqual(f(3), 6)
-            self.check_pycache(2)
+            self.assertPreciseEqual(f(3), 8) # 3 + 5 = 8
+            f = mod.closure3
+            self.assertPreciseEqual(f(3), 10) # 3 + 7 = 8
+            f = mod.closure4
+            self.assertPreciseEqual(f(3), 12) # 3 + 9 = 12
+            self.check_pycache(5) # 1 nbi, 4 nbc
 
     def test_cache_reuse(self):
         mod = self.import_module()
@@ -1966,45 +1974,62 @@ class TestNoRetryFailedSignature(unittest.TestCase):
         self.assertEqual(ct_bad, 1)
 
 
+@njit
+def add_y1(x, y=1):
+    return x + y
+
+
+@njit
+def add_ynone(x, y=None):
+    return x + (1 if y else 2)
+
+
+@njit
+def mult(x, y):
+    return x * y
+
+
+@njit
+def add_func(x, func=mult):
+    return x + func(x, x)
+
+
+def _checker(f1, arg):
+    assert f1(arg) == f1.py_func(arg)
+
+
 class TestMultiprocessingDefaultParameters(SerialMixin, unittest.TestCase):
     def run_fc_multiproc(self, fc):
         try:
             ctx = multiprocessing.get_context('spawn')
         except AttributeError:
             ctx = multiprocessing
-        with ctx.Pool(1) as p:
-            self.assertEqual(p.map(fc, [1, 2, 3]), list(map(fc, [1, 2, 3])))
+
+        # RE: issue #5973, this doesn't use multiprocessing.Pool.map as doing so
+        # causes the TBB library to segfault under certain conditions. It's not
+        # clear whether the cause is something in the complexity of the Pool
+        # itself, e.g. watcher threads etc, or if it's a problem synonymous with
+        # a "timing attack".
+        for a in [1, 2, 3]:
+            p = ctx.Process(target=_checker, args=(fc, a,))
+            p.start()
+            p.join(_TEST_TIMEOUT)
+            self.assertEqual(p.exitcode, 0)
 
     def test_int_def_param(self):
         """ Tests issue #4888"""
 
-        @njit
-        def add(x, y=1):
-            return x + y
-
-        self.run_fc_multiproc(add)
+        self.run_fc_multiproc(add_y1)
 
     def test_none_def_param(self):
         """ Tests None as a default parameter"""
 
-        @njit
-        def add(x, y=None):
-            return x + (1 if y else 2)
-
-        self.run_fc_multiproc(add)
+        self.run_fc_multiproc(add_func)
 
     def test_function_def_param(self):
         """ Tests a function as a default parameter"""
 
-        @njit
-        def mult(x, y):
-            return x * y
-
-        @njit
-        def add(x, func=mult):
-            return x + func(x, x)
-
-        self.run_fc_multiproc(add)
+        self.run_fc_multiproc(add_func)
 
 
 if __name__ == '__main__':

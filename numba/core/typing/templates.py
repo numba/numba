@@ -375,7 +375,7 @@ class AbstractTemplate(FunctionTemplate):
             'kind': "overload",
             'name': getattr(impl, '__qualname__', impl.__name__),
             'sig': sig,
-            'filename': os.path.relpath(path, start=basepath),
+            'filename': utils.safe_relpath(path, start=basepath),
             'lines': (firstlineno, firstlineno + len(code) - 1),
             'docstring': impl.__doc__
         }
@@ -450,7 +450,7 @@ class CallableTemplate(FunctionTemplate):
             'name': getattr(self.key, '__name__',
                             getattr(impl, '__qualname__', impl.__name__),),
             'sig': sig,
-            'filename': os.path.relpath(path, start=basepath),
+            'filename': utils.safe_relpath(path, start=basepath),
             'lines': (firstlineno, firstlineno + len(code) - 1),
             'docstring': impl.__doc__
         }
@@ -778,7 +778,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             'kind': "overload",
             'name': getattr(impl, '__qualname__', impl.__name__),
             'sig': sig,
-            'filename': os.path.relpath(path, start=basepath),
+            'filename': utils.safe_relpath(path, start=basepath),
             'lines': (firstlineno, firstlineno + len(code) - 1),
             'docstring': impl.__doc__
         }
@@ -793,7 +793,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             'kind': "overload",
             'name': getattr(impl, '__qualname__', impl.__name__),
             'sig': sig,
-            'filename': os.path.relpath(path, start=basepath),
+            'filename': utils.safe_relpath(path, start=basepath),
             'lines': (firstlineno, firstlineno + len(code) - 1),
             'docstring': impl.__doc__
         }
@@ -861,7 +861,7 @@ class _IntrinsicTemplate(AbstractTemplate):
             'kind': "intrinsic",
             'name': getattr(impl, '__qualname__', impl.__name__),
             'sig': sig,
-            'filename': os.path.relpath(path, start=basepath),
+            'filename': utils.safe_relpath(path, start=basepath),
             'lines': (firstlineno, firstlineno + len(code) - 1),
             'docstring': impl.__doc__
         }

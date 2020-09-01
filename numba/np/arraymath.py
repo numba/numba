@@ -4070,6 +4070,19 @@ def np_asarray(a, dtype=None):
     return impl
 
 
+@overload(np.asfarray)
+def np_asfarray(a, dtype=np.float64):
+    dtype = as_dtype(dtype)
+    if not np.issubdtype(dtype, np.inexact):
+        dx = types.float64
+    else:
+        dx = dtype
+
+    def impl(a, dtype=np.float64):
+        return np.asarray(a, dx)
+    return impl
+
+
 @overload(np.extract)
 def np_extract(condition, arr):
 

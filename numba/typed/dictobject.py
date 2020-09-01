@@ -1247,6 +1247,14 @@ def literalstrkeydict_impl_contains(d, k):
     return impl
 
 
+@overload(len)
+def literalstrkeydict_impl_len(d):
+    if not isinstance(d, types.LiteralStrKeyDict):
+        return
+    l = d.count
+    return lambda d: l
+
+
 @overload(operator.setitem)
 def literalstrkeydict_banned_impl_setitem(d, key, value):
     if not isinstance(d, types.LiteralStrKeyDict):

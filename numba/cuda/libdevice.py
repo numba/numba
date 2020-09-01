@@ -68,6 +68,7 @@ lower(math.pow, types.float64, types.int32)(powi_implement('__nv_powi'))
 booleans = []
 booleans += [('__nv_isnand', '__nv_isnanf', math.isnan)]
 booleans += [('__nv_isinfd', '__nv_isinff', math.isinf)]
+booleans += [('__nv_isfinited', '__nv_finitef', math.isfinite)]
 
 unarys = []
 unarys += [('__nv_ceil', '__nv_ceilf', math.ceil)]

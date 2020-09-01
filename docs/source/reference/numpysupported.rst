@@ -338,6 +338,7 @@ The following top-level functions are supported:
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.array_equal`
 * :func:`numpy.asarray` (only the 2 first arguments)
+* :func:`numpy.asfarray` 
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`

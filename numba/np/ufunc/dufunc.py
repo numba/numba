@@ -1,5 +1,5 @@
 from numba import jit, typeof
-from numba.core import types, utils, serialize, sigutils
+from numba.core import types, serialize, sigutils
 from numba.core.typing import npydecl
 from numba.core.typing.templates import AbstractTemplate, signature
 from numba.np.ufunc import _internal
@@ -221,7 +221,7 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc):
             cres, argtys, return_type)
         dtypenums, ptr, env = ufuncbuilder._build_element_wise_ufunc_wrapper(
             cres, actual_sig)
-        self._add_loop(utils.longint(ptr), dtypenums)
+        self._add_loop(int(ptr), dtypenums)
         self._keepalive.append((ptr, cres.library, env))
         self._lower_me.libs.append(cres.library)
         return cres
