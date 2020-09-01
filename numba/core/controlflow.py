@@ -596,9 +596,10 @@ class CFGraph(object):
 
         push_state(entry_point)
 
+        # Keep track for iteration count for debugging
+        iter_ct = 0
         while stack:
-            if stats is not None:
-                stats['iteration_count'] += 1
+            iter_ct += 1
             tos = stack[-1]
             tos_succs = succs_state[tos]
             # Are there successors not checked?
@@ -617,6 +618,8 @@ class CFGraph(object):
                 stack.pop()
                 checked.add(tos)
 
+        if stats is not None:
+            stats['iteration_count'] += iter_ct
         return back_edges
 
     def _find_topo_order(self):
