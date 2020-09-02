@@ -25,8 +25,8 @@ typedef struct {
 
 
 static PyMemberDef env_members[] = {
-    {"globals", T_OBJECT, offsetof(EnvironmentObject, globals), READONLY},
-    {"consts", T_OBJECT, offsetof(EnvironmentObject, consts), READONLY},
+    {"globals", T_OBJECT, offsetof(EnvironmentObject, globals), READONLY, NULL},
+    {"consts", T_OBJECT, offsetof(EnvironmentObject, consts), READONLY, NULL},
     {NULL}  /* Sentinel */
 };
 
@@ -125,6 +125,18 @@ static PyTypeObject EnvironmentType = {
     0,                         /* tp_init */
     0,                         /* tp_alloc */
     env_new,                   /* tp_new */
+    0,                         /* tp_free */
+    0,                         /* tp_is_gc */
+    0,                         /* tp_bases */
+    0,                         /* tp_mro */
+    0,                         /* tp_cache */
+    0,                         /* tp_subclasses */
+    0,                         /* tp_weaklist */
+    0,                         /* tp_del */
+    0,                         /* tp_version_tag */
+    0,                         /* tp_finalize */
+    0,                         /* tp_vectorcall */
+    0,                         /* tp_print */
 };
 
 /* A closure object is created for each call to make_function(), and stored
@@ -216,6 +228,18 @@ static PyTypeObject ClosureType = {
     0,                         /* tp_init */
     0,                         /* tp_alloc */
     0,                         /* tp_new */
+    0,                         /* tp_free */
+    0,                         /* tp_is_gc */
+    0,                         /* tp_bases */
+    0,                         /* tp_mro */
+    0,                         /* tp_cache */
+    0,                         /* tp_subclasses */
+    0,                         /* tp_weaklist */
+    0,                         /* tp_del */
+    0,                         /* tp_version_tag */
+    0,                         /* tp_finalize */
+    0,                         /* tp_vectorcall */
+    0,                         /* tp_print */
 };
 
 
@@ -242,8 +266,8 @@ dup_string(PyObject *strobj)
 
 /* Create and initialize a new Closure object */
 static ClosureObject *
-closure_new(PyObject *module, PyObject *name, PyObject *doc,
-            PyCFunction fnaddr, EnvironmentObject *env, PyObject *keepalive)
+closure_new(PyObject *name, PyObject *doc, PyCFunction fnaddr,
+            EnvironmentObject *env, PyObject *keepalive)
 {
     ClosureObject *clo = (ClosureObject *) PyType_GenericAlloc(&ClosureType, 0);
     if (clo == NULL)
@@ -278,7 +302,7 @@ pycfunction_new(PyObject *module, PyObject *name, PyObject *doc,
     PyObject *modname = NULL;
     ClosureObject *closure = NULL;
 
-    closure = closure_new(module, name, doc, fnaddr, env, keepalive);
+    closure = closure_new(name, doc, fnaddr, env, keepalive);
     if (closure == NULL) goto FAIL;
 
     modname = PyObject_GetAttrString(module, "__name__");
@@ -414,6 +438,18 @@ static PyTypeObject GeneratorType = {
     0,                                        /* tp_init */
     0,                                        /* tp_alloc */
     0,                                        /* tp_new */
+    0,                                        /* tp_free */
+    0,                                        /* tp_is_gc */
+    0,                                        /* tp_bases */
+    0,                                        /* tp_mro */
+    0,                                        /* tp_cache */
+    0,                                        /* tp_subclasses */
+    0,                                        /* tp_weaklist */
+    0,                                        /* tp_del */
+    0,                                        /* tp_version_tag */
+    0,                                        /* tp_finalize */
+    0,                                        /* tp_vectorcall */
+    0,                                        /* tp_print */
 };
 
 /* Dynamically create a new generator object */
@@ -438,7 +474,7 @@ Numba_make_generator(Py_ssize_t gen_state_size,
 
 /* Initialization subroutine for use by modules including this */
 static int
-init_dynfunc_module(PyObject *module)
+init_dynfunc_module(PyObject __attribute__((unused)) *module)
 {
     if (PyType_Ready(&ClosureType))
         return -1;

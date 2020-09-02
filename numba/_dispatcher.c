@@ -136,7 +136,7 @@ Dispatcher_dealloc(DispatcherObject *self)
 
 
 static int
-Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
+Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject __attribute__((unused)) *kwds)
 {
     PyObject *tmaddrobj;
     void *tmaddr;
@@ -170,7 +170,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
 }
 
 static PyObject *
-Dispatcher_clear(DispatcherObject *self, PyObject *args)
+Dispatcher_clear(DispatcherObject *self, PyObject __attribute__((unused)) *args)
 {
     dispatcher_clear(self->dispatcher);
     Py_RETURN_NONE;
@@ -611,7 +611,7 @@ static PyMethodDef Dispatcher_methods[] = {
 };
 
 static PyMemberDef Dispatcher_members[] = {
-    {"_can_compile", T_BOOL, offsetof(DispatcherObject, can_compile), 0},
+    {"_can_compile", T_BOOL, offsetof(DispatcherObject, can_compile), 0, NULL },
     {NULL}  /* Sentinel */
 };
 
@@ -655,10 +655,23 @@ static PyTypeObject DispatcherType = {
     (initproc)Dispatcher_init,                   /* tp_init */
     0,                                           /* tp_alloc */
     0,                                           /* tp_new */
+    0,                                           /* tp_free */
+    0,                                           /* tp_is_gc */
+    0,                                           /* tp_bases */
+    0,                                           /* tp_mro */
+    0,                                           /* tp_cache */
+    0,                                           /* tp_subclasses */
+    0,                                           /* tp_weaklist */
+    0,                                           /* tp_del */
+    0,                                           /* tp_version_tag */
+    0,                                           /* tp_finalize */
+    0,                                           /* tp_vectorcall */
+    0,                                           /* tp_print */
+
 };
 
 
-static PyObject *compute_fingerprint(PyObject *self, PyObject *args)
+static PyObject *compute_fingerprint(PyObject __attribute__((unused)) *self, PyObject *args)
 {
     PyObject *val;
     if (!PyArg_ParseTuple(args, "O:compute_fingerprint", &val))

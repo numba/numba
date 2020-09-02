@@ -196,7 +196,7 @@ enum opcode {
 
 
 static int
-fingerprint_unrecognized(PyObject *val)
+fingerprint_unrecognized(void)
 {
     PyErr_SetString(PyExc_NotImplementedError,
                     "cannot compute type fingerprint for value");
@@ -236,7 +236,7 @@ compute_dtype_fingerprint(string_writer_t *w, PyArray_Descr *descr)
     }
 #endif
 
-    return fingerprint_unrecognized((PyObject *) descr);
+    return fingerprint_unrecognized();
 }
 
 static int
@@ -380,7 +380,7 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
 
 _unrecognized:
     /* Type not recognized */
-    return fingerprint_unrecognized(val);
+    return fingerprint_unrecognized();
 }
 
 PyObject *
@@ -820,7 +820,7 @@ int init_numpy(void) {
  * (called from dispatcher.py to fill in missing information)
  */
 PyObject *
-typeof_init(PyObject *self, PyObject *args)
+typeof_init(PyObject __attribute__((unused)) *self, PyObject *args)
 {
     PyObject *tmpobj;
     PyObject *dict;
