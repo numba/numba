@@ -1,4 +1,5 @@
 from functools import partial
+from collections import deque
 
 from llvmlite import ir
 
@@ -104,10 +105,9 @@ class DataModel(object):
         Recursively list all frontend types involved in this model.
         """
         types = [self._fe_type]
-        queue = [self]
+        queue = deque([self])
         while len(queue) > 0:
-            dm = queue[0]
-            queue.pop(0)
+            dm = queue.popleft()
             
             for i_dm in dm.inner_models():
                 if i_dm._fe_type not in types:
