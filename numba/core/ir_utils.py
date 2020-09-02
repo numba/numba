@@ -1527,7 +1527,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
                 # other common names. This prevents deprecation warnings on
                 # e.g. getattr(numpy, 'bool') were a bool the the target.
                 # For context see #6175, impacts NumPy>=1.20.
-                numpy_toplevel = mod_name == 'numpy'
+                numpy_toplevel = mod_name.startswith('numpy')
                 # it might be a numpy function imported directly
                 if (numpy_toplevel and hasattr(numpy, value)
                         and def_val == getattr(numpy, value)):
