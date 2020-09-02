@@ -1525,7 +1525,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
                 # top level name space by module is that some functions are
                 # deprecated in NumPy but the functions' names are aliased with
                 # other common names. This prevents deprecation warnings on
-                # e.g. getattr(numpy, 'bool') were a bool the the target.
+                # e.g. getattr(numpy, 'bool') were a bool the target.
                 # For context see #6175, impacts NumPy>=1.20.
                 mod_not_none = mod_name is not None
                 numpy_toplevel = mod_not_none and mod_name.startswith('numpy')
