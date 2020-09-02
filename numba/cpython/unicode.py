@@ -2366,13 +2366,12 @@ def integer_str(n):
             kind = PY_UNICODE_1BYTE_KIND
             char_width = _kind_to_byte_width(kind)
             s = _malloc_string(kind, char_width, length, True)
-            const = ord('0')
             if flag:
                 _set_code_point(s, 0, ord('-'))
             idx = length - 1
             while n > 0:
-                c = const + (n % ten)
-                n = n // ten
+                n, digit = divmod(n, ten)
+                c = ord('0') + digit
                 _set_code_point(s, idx, c)
                 idx -= 1
             return s
