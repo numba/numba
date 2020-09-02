@@ -133,11 +133,11 @@ API_PROTOTYPES = {
     'cuMemcpyHtoDAsync': (c_int, cu_device_ptr, c_void_p, c_size_t,
                           cu_stream),
 
-    # CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost,
+    # CUresult cuMemcpyDtoD(CUdeviceptr dstDevice, const void *srcDevice,
     #                       size_t ByteCount);
     'cuMemcpyDtoD': (c_int, cu_device_ptr, cu_device_ptr, c_size_t),
 
-    # CUresult cuMemcpyHtoDAsync(CUdeviceptr dstDevice, const void *srcHost,
+    # CUresult cuMemcpyDtoDAsync(CUdeviceptr dstDevice, const void *srcDevice,
     #                            size_t ByteCount, CUstream hStream);
     'cuMemcpyDtoDAsync': (c_int, cu_device_ptr, cu_device_ptr, c_size_t,
                           cu_stream),
@@ -297,11 +297,6 @@ API_PROTOTYPES = {
     #    CUresult CUDAAPI
     #    cuLinkDestroy(CUlinkState state)
     'cuLinkDestroy': (c_int, cu_link_state),
-
-
-    # cuProfilerInitialize ( const char* configFile, const char*
-    # outputFile, CUoutput_mode outputMode )
-    # 'cuProfilerInitialize': (c_int, c_char_p, c_char_p, cu_output_mode),
 
     # cuProfilerStart ( void )
     'cuProfilerStart': (c_int,),
