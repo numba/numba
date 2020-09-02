@@ -4,6 +4,41 @@ Version 0.52.0
 In development
 
 
+Version 0.51.2 (September 2, 2020)
+----------------------------------
+
+This is a bugfix release for 0.51.1. It fixes a critical performance bug in the
+CFG back edge computation algorithm that leads to exponential time complexity
+arising in compilation for use cases with certain pathological properties.
+
+* PR #6195: PR 6187 Continue. Don't visit already checked successors
+
+Authors:
+
+* Graham Markall
+* Siu Kwan Lam (core dev)
+
+
+Version 0.51.1 (August 26, 2020)
+--------------------------------
+
+This is a bugfix release for 0.51.0, it fixes a critical bug in caching, another
+critical bug in the CUDA target initialisation sequence and also fixes some
+compile time performance regressions:
+
+* PR #6141: Fix #6130 objmode cache segfault
+* PR #6146: Fix compilation slowdown due to controlflow analysis
+* PR #6147: CUDA: Don't make a runtime call on import
+* PR #6153: Fix for #6151. Make UnicodeCharSeq into str for comparison.
+* PR #6168: Fix Issue #6167: Failure in test_cuda_submodules
+
+Authors:
+
+* Graham Markall
+* Siu Kwan Lam (core dev)
+* Stuart Archibald (core dev)
+
+
 Version 0.51.0 (August 12, 2020)
 --------------------------------
 

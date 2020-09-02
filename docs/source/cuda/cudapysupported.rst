@@ -152,6 +152,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.modf`
 * :func:`math.isnan`
 * :func:`math.isinf`
+* :func:`math.isfinite`
 
 
 ``operator``

@@ -162,13 +162,21 @@ def math_isinf(A, B):
     i = cuda.grid(1)
     B[i] = math.isinf(A[i])
 
+
+def math_isfinite(A, B):
+    i = cuda.grid(1)
+    B[i] = math.isfinite(A[i])
+
+
 def math_degrees(A, B):
     i = cuda.grid(1)
     B[i] = math.degrees(A[i])
 
+
 def math_radians(A, B):
     i = cuda.grid(1)
     B[i] = math.radians(A[i])
+
 
 def math_pow_binop(A, B, C):
     i = cuda.grid(1)
@@ -197,6 +205,29 @@ class TestCudaMath(CUDATestCase):
         cfunc = cuda.jit((arytype, arytype))(func)
         cfunc[1, nelem](A, B)
         self.assertTrue(np.allclose(npfunc(A), B))
+
+
+    def unary_bool_special_values(self, func, npfunc, npdtype, npmtype):
+        fi = np.finfo(npdtype)
+        denorm = fi.tiny / 4
+        A = np.array([0., denorm, fi.tiny, 0.5, 1., fi.max, np.inf, np.nan],
+                     dtype=npdtype)
+        B = np.empty_like(A, dtype=np.int32)
+        cfunc = cuda.jit((npmtype[::1], int32[::1]))(func)
+
+        cfunc[1, A.size](A, B)
+        np.testing.assert_array_equal(B, npfunc(A))
+
+        cfunc[1, A.size](-A, B)
+        np.testing.assert_array_equal(B, npfunc(-A))
+
+
+    def unary_bool_special_values_float32(self, func, npfunc):
+        self.unary_bool_special_values(func, npfunc, np.float32, float32)
+
+
+    def unary_bool_special_values_float64(self, func, npfunc):
+        self.unary_bool_special_values(func, npfunc, np.float64, float64)
 
 
     def unary_bool_template_float32(self, func, npfunc, start=0, stop=1):
@@ -567,6 +598,8 @@ class TestCudaMath(CUDATestCase):
         self.unary_bool_template_float64(math_isnan, np.isnan)
         self.unary_bool_template_int32(math_isnan, np.isnan)
         self.unary_bool_template_int64(math_isnan, np.isnan)
+        self.unary_bool_special_values_float32(math_isnan, np.isnan)
+        self.unary_bool_special_values_float64(math_isnan, np.isnan)
 
     #------------------------------------------------------------------------------
     # test_math_isinf
@@ -575,8 +608,22 @@ class TestCudaMath(CUDATestCase):
     def test_math_isinf(self):
         self.unary_bool_template_float32(math_isinf, np.isinf)
         self.unary_bool_template_float64(math_isinf, np.isinf)
-        self.unary_bool_template_int32(math_isinf, np.isnan)
-        self.unary_bool_template_int64(math_isinf, np.isnan)
+        self.unary_bool_template_int32(math_isinf, np.isinf)
+        self.unary_bool_template_int64(math_isinf, np.isinf)
+        self.unary_bool_special_values_float32(math_isinf, np.isinf)
+        self.unary_bool_special_values_float64(math_isinf, np.isinf)
+
+    #------------------------------------------------------------------------------
+    # test_math_isfinite
+
+
+    def test_math_isfinite(self):
+        self.unary_bool_template_float32(math_isfinite, np.isfinite)
+        self.unary_bool_template_float64(math_isfinite, np.isfinite)
+        self.unary_bool_template_int32(math_isfinite, np.isfinite)
+        self.unary_bool_template_int64(math_isfinite, np.isfinite)
+        self.unary_bool_special_values_float32(math_isfinite, np.isfinite)
+        self.unary_bool_special_values_float64(math_isfinite, np.isfinite)
 
     #------------------------------------------------------------------------------
     # test_math_degrees

@@ -36,7 +36,6 @@ from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from .drvapi import cu_occupancy_b2d_size, cu_stream_callback_pyobj
 from numba.cuda.cudadrv import enums, drvapi, _extras
-from numba.core.utils import longint as long
 from numba.cuda.envvars import get_numba_envvar
 
 
@@ -760,7 +759,7 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
         It is recommended that this method is not overridden by EMM Plugin
         implementations - instead, use the :class:`BaseCUDAMemoryManager`.
         """
-        if isinstance(pointer, (int, long)):
+        if isinstance(pointer, int):
             pointer = c_void_p(pointer)
 
         # possible flags are "portable" (between context)
@@ -2253,7 +2252,7 @@ def host_pointer(obj, readonly=False):
     it should not be changed until the operation which can be asynchronous
     completes.
     """
-    if isinstance(obj, (int, long)):
+    if isinstance(obj, int):
         return obj
 
     forcewritable = False
@@ -2305,7 +2304,7 @@ def is_device_memory(obj):
     "__cuda_memory__" defined and its value evaluated to True.
 
     All CUDA memory object should also define an attribute named
-    "device_pointer" which value is an int(or long) object carrying the pointer
+    "device_pointer" which value is an int object carrying the pointer
     value of the device memory address.  This is not tested in this method.
     """
     return getattr(obj, '__cuda_memory__', False)
