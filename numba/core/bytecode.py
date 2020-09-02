@@ -232,7 +232,7 @@ class ByteCode(object):
         return table
 
     def __iter__(self):
-        return utils.itervalues(self.table)
+        return iter(self.table.values())
 
     def __getitem__(self, offset):
         return self.table[offset]
@@ -248,7 +248,7 @@ class ByteCode(object):
                 return ' '
 
         return '\n'.join('%s %10s\t%s' % ((label_marker(i),) + i)
-                         for i in utils.iteritems(self.table))
+                         for i in self.table.items())
 
     @classmethod
     def _compute_used_globals(cls, func, table, co_consts, co_names):

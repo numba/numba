@@ -347,10 +347,12 @@ class BuildMapConstraint(object):
                 # Single key:value in ctor, key is str, value is an otherwise
                 # illegal container type, e.g. LiteralStrKeyDict or
                 # List, there's no way to put this into a typed.Dict, so make it
-                # a LiteralStrKeyDict.
+                # a LiteralStrKeyDict, same goes for LiteralList.
                 if len(vtys) == 1:
                     valty = vtys[0]
-                    if isinstance(valty, (types.LiteralStrKeyDict, types.List)):
+                    if isinstance(valty, (types.LiteralStrKeyDict,
+                                          types.List,
+                                          types.LiteralList)):
                         homogeneous = False
 
                 if strkey and not homogeneous:
@@ -991,7 +993,7 @@ class TypeInferer(object):
 
     def _get_return_vars(self):
         rets = []
-        for blk in utils.itervalues(self.blocks):
+        for blk in self.blocks.values():
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 rets.append(inst.value)
@@ -1017,7 +1019,7 @@ class TypeInferer(object):
             self.lock_type(var.name, typ, loc=None)
 
     def build_constraint(self):
-        for blk in utils.itervalues(self.blocks):
+        for blk in self.blocks.values():
             for inst in blk.body:
                 self.constrain_statement(inst)
 

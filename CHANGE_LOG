@@ -4,6 +4,41 @@ Version 0.52.0
 In development
 
 
+Version 0.51.2 (September 2, 2020)
+----------------------------------
+
+This is a bugfix release for 0.51.1. It fixes a critical performance bug in the
+CFG back edge computation algorithm that leads to exponential time complexity
+arising in compilation for use cases with certain pathological properties.
+
+* PR #6195: PR 6187 Continue. Don't visit already checked successors
+
+Authors:
+
+* Graham Markall
+* Siu Kwan Lam (core dev)
+
+
+Version 0.51.1 (August 26, 2020)
+--------------------------------
+
+This is a bugfix release for 0.51.0, it fixes a critical bug in caching, another
+critical bug in the CUDA target initialisation sequence and also fixes some
+compile time performance regressions:
+
+* PR #6141: Fix #6130 objmode cache segfault
+* PR #6146: Fix compilation slowdown due to controlflow analysis
+* PR #6147: CUDA: Don't make a runtime call on import
+* PR #6153: Fix for #6151. Make UnicodeCharSeq into str for comparison.
+* PR #6168: Fix Issue #6167: Failure in test_cuda_submodules
+
+Authors:
+
+* Graham Markall
+* Siu Kwan Lam (core dev)
+* Stuart Archibald (core dev)
+
+
 Version 0.51.0 (August 12, 2020)
 --------------------------------
 
@@ -103,6 +138,15 @@ Fixes:
 * PR #6078: Duplicate NumPy's PyArray_DescrCheck macro
 * PR #6081: Fix issue with cross drive use and relpath.
 * PR #6083: Fix bug in initial value unify.
+* PR #6087: remove invalid sanity check from randrange tests
+* PR #6089: Fix invalid reference to TypingError
+* PR #6097: Add function code and closure bytes into cache key
+* PR #6099: Restrict upper limit of TBB version due to ABI changes.
+* PR #6101: Restrict lower limit of icc_rt version due to assumed SVML bug.
+* PR #6107: Fix and test #6095
+* PR #6109: Fixes an issue reported in #6094
+* PR #6111: Decouple LiteralList and LiteralStrKeyDict from tuple
+* PR #6116: Fix #6102. Problem with non-unique label.
 
 CUDA Enhancements/Fixes:
 
@@ -124,6 +168,7 @@ CUDA Enhancements/Fixes:
 * PR #6030: CUDA: Don't optimize IR before sending it to NVVM
 * PR #6052: Fix dtype for atomic_add_double testsuite
 * PR #6080: CUDA: Prevent auto-upgrade of atomic intrinsics
+* PR #6123: Fix #6121
 
 Documentation Updates:
 

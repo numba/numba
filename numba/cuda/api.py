@@ -11,11 +11,6 @@ from .cudadrv import devicearray, devices, driver
 from .args import In, Out, InOut
 
 
-try:
-    long
-except NameError:
-    long = int
-
 # NDarray device helper
 
 require_context = devices.require_context
@@ -200,9 +195,9 @@ def synchronize():
 
 def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     dtype = np.dtype(dtype)
-    if isinstance(shape, (int, long)):
+    if isinstance(shape, int):
         shape = (shape,)
-    if isinstance(strides, (int, long)):
+    if isinstance(strides, int):
         strides = (strides,)
     else:
         if shape == ():

@@ -366,7 +366,10 @@ class ForAll(object):
         if self.ntasks == 0:
             return
 
-        kernel = self.kernel.specialize(*args)
+        if self.kernel.specialized:
+            kernel = self.kernel
+        else:
+            kernel = self.kernel.specialize(*args)
         blockdim = self._compute_thread_per_block(kernel)
         griddim = (self.ntasks + blockdim - 1) // blockdim
 
@@ -787,6 +790,7 @@ class Dispatcher(serialize.ReduceMixin):
 
         # keyed by a `(compute capability, args)` tuple
         self.definitions = {}
+        self.specializations = {}
 
         self.targetoptions = targetoptions
 
@@ -814,12 +818,23 @@ class Dispatcher(serialize.ReduceMixin):
         return self.configure(*args)
 
     def forall(self, ntasks, tpb=0, stream=0, sharedmem=0):
-        """Returns a configured kernel for 1D kernel of given number of tasks
-        ``ntasks``.
+        """Returns a 1D-configured kernel for a given number of tasks.
 
         This assumes that:
-        - the kernel 1-to-1 maps global thread id ``cuda.grid(1)`` to tasks.
-        - the kernel must check if the thread id is valid."""
+
+        - the kernel maps the Global Thread ID ``cuda.grid(1)`` to tasks on a
+          1-1 basis.
+        - the kernel checks that the Global Thread ID is upper-bounded by
+          ``ntasks``, and does nothing if it is not.
+
+        :param ntasks: The number of tasks.
+        :param tpb: The size of a block. An appropriate value is chosen if this
+                    parameter is not supplied.
+        :param stream: The stream on which the configured kernel will be
+                       launched.
+        :param sharedmem: The number of bytes of dynamic shared memory required
+                          by the kernel.
+        :return: A configured kernel, ready to launch on a set of arguments."""
 
         return ForAll(self, ntasks, tpb=tpb, stream=stream, sharedmem=sharedmem)
 
@@ -850,7 +865,7 @@ class Dispatcher(serialize.ReduceMixin):
 
     def call(self, args, griddim, blockdim, stream, sharedmem):
         '''
-        Specialize and invoke this kernel with *args*.
+        Compile if necessary and invoke this kernel with *args*.
         '''
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
@@ -862,12 +877,22 @@ class Dispatcher(serialize.ReduceMixin):
         Create a new instance of this dispatcher specialized for the given
         *args*.
         '''
+        cc = get_current_device().compute_capability
         argtypes = tuple(
             [self.typingctx.resolve_argument_type(a) for a in args])
+        if self.specialized:
+            raise RuntimeError('Dispatcher already specialized')
+
+        specialization = self.specializations.get((cc, argtypes))
+        if specialization:
+            return specialization
+
         targetoptions = self.targetoptions
         targetoptions['link'] = self.link
-        return Dispatcher(self.py_func, [types.void(*argtypes)], self._bind,
-                          targetoptions)
+        specialization = Dispatcher(self.py_func, [types.void(*argtypes)],
+                                    self._bind, targetoptions)
+        self.specializations[cc, argtypes] = specialization
+        return specialization
 
     def disable_compile(self, val=True):
         self._can_compile = not val
@@ -983,7 +1008,7 @@ class Dispatcher(serialize.ReduceMixin):
         if self.specialized:
             self.definition.inspect_types(file=file)
         else:
-            for _, defn in utils.iteritems(self.definitions):
+            for _, defn in self.definitions.items():
                 defn.inspect_types(file=file)
 
     @property

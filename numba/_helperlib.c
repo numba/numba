@@ -275,6 +275,12 @@ numba_recreate_record(void *pdata, int size, PyObject *dtype) {
     PyObject *record = NULL;
     PyArray_Descr *descr = NULL;
 
+    if (dtype == NULL) {
+        PyErr_Format(PyExc_RuntimeError,
+            "In 'numba_recreate_record', 'dtype' is NULL");
+        return NULL;
+    }
+
     numpy = PyImport_ImportModuleNoBlock("numpy");
     if (!numpy) goto CLEANUP;
 

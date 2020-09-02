@@ -1215,6 +1215,13 @@ def literal_list_getitem(lst, *args):
            "statically determined.")
     raise errors.TypingError(msg)
 
+@overload(len)
+def literal_list_len(lst):
+    if not isinstance(lst, types.LiteralList):
+        return
+    l = lst.count
+    return lambda lst: l
+
 @overload(operator.contains)
 def literal_list_contains(lst, item):
     if isinstance(lst, types.LiteralList):
@@ -1224,3 +1231,14 @@ def literal_list_contains(lst, item):
                     return True
             return False
         return impl
+
+@lower_cast(types.LiteralList, types.LiteralList)
+def literallist_to_literallist(context, builder, fromty, toty, val):
+    if len(fromty) != len(toty):
+        # Disallowed by typing layer
+        raise NotImplementedError
+
+    olditems = cgutils.unpack_tuple(builder, val, len(fromty))
+    items = [context.cast(builder, v, f, t)
+             for v, f, t in zip(olditems, fromty, toty)]
+    return context.make_tuple(builder, toty, items)

@@ -58,7 +58,7 @@ creating a specialized instance:
 
 .. autoclass:: numba.cuda.compiler.Dispatcher
    :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
-             specialize, specialized, extensions
+             specialize, specialized, extensions, forall
 
 
 Intrinsic Attributes and Functions
