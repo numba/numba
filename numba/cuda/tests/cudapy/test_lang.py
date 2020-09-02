@@ -41,7 +41,7 @@ class TestLang(CUDATestCase):
     def test_issue_872(self):
         '''
         Ensure that typing and lowering of CUDA kernel API primitives works in
-        more than one block. Was originally to nsure that macro expansion works
+        more than one block. Was originally to ensure that macro expansion works
         for more than one block (issue #872), but macro expansion has been
         replaced by a "proper" implementation of all kernel API functions.
         '''
@@ -62,4 +62,3 @@ class TestLang(CUDATestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
