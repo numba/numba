@@ -567,11 +567,16 @@ class CFGraph(object):
     # Finding loops and back edges: see
     # http://pages.cs.wisc.edu/~fischer/cs701.f08/finding.loops.html
 
-    def _find_back_edges(self):
+    def _find_back_edges(self, stats=None):
         """
         Find back edges.  An edge (src, dest) is a back edge if and
         only if *dest* dominates *src*.
         """
+        # Prepare stats to capture execution information
+        if stats is not None:
+            if not isinstance(stats, dict):
+                raise TypeError(f"*stats* must be a dict; got {type(stats)}")
+            stats.setdefault('iteration_count', 0)
 
         # Uses a simple DFS to find back-edges.
         # The new algorithm is faster than the the previous dominator based
@@ -583,13 +588,18 @@ class CFGraph(object):
         succs_state = {}
         entry_point = self.entry_point()
 
+        checked = set()
+
         def push_state(node):
             stack.append(node)
             succs_state[node] = [dest for dest in self._succs[node]]
 
         push_state(entry_point)
 
+        # Keep track for iteration count for debugging
+        iter_ct = 0
         while stack:
+            iter_ct += 1
             tos = stack[-1]
             tos_succs = succs_state[tos]
             # Are there successors not checked?
@@ -600,13 +610,16 @@ class CFGraph(object):
                 if cur_node in stack:
                     # Yes, it's a backedge
                     back_edges.add((tos, cur_node))
-                else:
+                elif cur_node not in checked:
                     # Push
                     push_state(cur_node)
             else:
                 # Checked all successors. Pop
                 stack.pop()
+                checked.add(tos)
 
+        if stats is not None:
+            stats['iteration_count'] += iter_ct
         return back_edges
 
     def _find_topo_order(self):
