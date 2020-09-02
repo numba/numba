@@ -1528,7 +1528,9 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
                 # e.g. getattr(numpy, 'bool') were a bool the target.
                 # For context see #6175, impacts NumPy>=1.20.
                 mod_not_none = mod_name is not None
-                numpy_toplevel = mod_not_none and mod_name.startswith('numpy')
+                numpy_toplevel = (mod_not_none and
+                                  (mod_name == 'numpy'
+                                   or mod_name.startswith('numpy.')))
                 # it might be a numpy function imported directly
                 if (numpy_toplevel and hasattr(numpy, value)
                         and def_val == getattr(numpy, value)):
