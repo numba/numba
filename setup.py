@@ -36,8 +36,10 @@ versioneer.parentdir_prefix = 'numba-'
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
 
+extra_compile_args = ['-g']
 
-debug_warn_flags = ['-g', '-Werror', '-Wall']
+if sys.platform == 'linux' and platform.machine() in ('i386', 'x86_64'):
+    extra_compile_args += ['-Werror', '-Wall']
 
 install_name_tool_fixer = []
 if sys.platform == 'darwin':
@@ -87,7 +89,7 @@ def get_ext_modules():
 
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],
-                            extra_compile_args=debug_warn_flags,
+                            extra_compile_args=extra_compile_args,
                             depends=['numba/_pymodule.h',
                                      'numba/_dynfunc.c'])
 
@@ -97,7 +99,7 @@ def get_ext_modules():
                                         'numba/_hashtable.c',
                                         'numba/_dispatcherimpl.cpp',
                                         'numba/core/typeconv/typeconv.cpp'],
-                               extra_compile_args=debug_warn_flags,
+                               extra_compile_args=extra_compile_args,
                                depends=["numba/_pymodule.h",
                                         "numba/_dispatcher.h",
                                         "numba/_typeof.h",
@@ -110,7 +112,7 @@ def get_ext_modules():
                                        "numba/cext/dictobject.c",
                                        "numba/cext/listobject.c",
                                        ],
-                              extra_compile_args=debug_warn_flags,
+                              extra_compile_args=extra_compile_args,
                               extra_link_args=install_name_tool_fixer,
                               depends=["numba/_pymodule.h",
                                        "numba/_helperlib.c",
@@ -124,13 +126,13 @@ def get_ext_modules():
     ext_typeconv = Extension(name="numba.core.typeconv._typeconv",
                              sources=["numba/core/typeconv/typeconv.cpp",
                                       "numba/core/typeconv/_typeconv.cpp"],
-                             extra_compile_args=debug_warn_flags,
+                             extra_compile_args=extra_compile_args,
                              depends=["numba/_pymodule.h"],
                              )
 
     ext_np_ufunc = Extension(name="numba.np.ufunc._internal",
                              sources=["numba/np/ufunc/_internal.c"],
-                             extra_compile_args=debug_warn_flags,
+                             extra_compile_args=extra_compile_args,
                              depends=["numba/np/ufunc/_ufunc.c",
                                       "numba/np/ufunc/_internal.h",
                                       "numba/_pymodule.h"],
@@ -139,7 +141,7 @@ def get_ext_modules():
     ext_npyufunc_num_threads = Extension(name="numba.np.ufunc._num_threads",
                                          sources=[
                                              "numba/np/ufunc/_num_threads.c"],
-                                         extra_compile_args=debug_warn_flags,
+                                         extra_compile_args=extra_compile_args,
                                          depends=["numba/_pymodule.h"],
                                          )
 
@@ -219,7 +221,7 @@ def get_ext_modules():
                 ],
                 depends=['numba/np/ufunc/workqueue.h'],
                 include_dirs=[os.path.join(tbb_root, 'include')],
-                extra_compile_args=cpp11flags + debug_warn_flags,
+                extra_compile_args=cpp11flags + extra_compile_args,
                 libraries=['tbb'],  # TODO: if --debug or -g, use 'tbb_debug'
                 library_dirs=[
                     # for Linux
@@ -247,7 +249,7 @@ def get_ext_modules():
                 'numba/np/ufunc/gufunc_scheduler.cpp',
             ],
             depends=['numba/np/ufunc/workqueue.h'],
-            extra_compile_args=ompcompileflags + cpp11flags + debug_warn_flags,
+            extra_compile_args=ompcompileflags + cpp11flags + extra_compile_args,
             extra_link_args=omplinkflags,
         )
 
@@ -266,13 +268,13 @@ def get_ext_modules():
 
     ext_mviewbuf = Extension(name='numba.mviewbuf',
                              extra_link_args=install_name_tool_fixer,
-                             extra_compile_args=debug_warn_flags,
+                             extra_compile_args=extra_compile_args,
                              sources=['numba/mviewbuf.c'])
 
     ext_nrt_python = Extension(name='numba.core.runtime._nrt_python',
                                sources=['numba/core/runtime/_nrt_pythonmod.c',
                                         'numba/core/runtime/nrt.c'],
-                               extra_compile_args=debug_warn_flags,
+                               extra_compile_args=extra_compile_args,
                                depends=['numba/core/runtime/nrt.h',
                                         'numba/_pymodule.h',
                                         'numba/core/runtime/_nrt_python.c'],
@@ -280,13 +282,13 @@ def get_ext_modules():
 
     ext_jitclass_box = Extension(name='numba.experimental.jitclass._box',
                                  sources=['numba/experimental/jitclass/_box.c'],
-                                 extra_compile_args=debug_warn_flags,
+                                 extra_compile_args=extra_compile_args,
                                  depends=['numba/experimental/_pymodule.h'],
                                  )
 
     ext_cuda_extras = Extension(name='numba.cuda.cudadrv._extras',
                                 sources=['numba/cuda/cudadrv/_extras.c'],
-                                extra_compile_args=debug_warn_flags,
+                                extra_compile_args=extra_compile_args,
                                 depends=['numba/_pymodule.h'],
                                 include_dirs=["numba"])
 
