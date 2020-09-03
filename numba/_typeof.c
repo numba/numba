@@ -819,7 +819,7 @@ int init_numpy(void) {
  * (called from dispatcher.py to fill in missing information)
  */
 PyObject *
-typeof_init(PyObject __attribute__((unused)) *self, PyObject *args)
+typeof_init(PyObject *self, PyObject *args)
 {
     PyObject *tmpobj;
     PyObject *dict;

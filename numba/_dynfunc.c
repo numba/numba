@@ -480,7 +480,7 @@ Numba_make_generator(Py_ssize_t gen_state_size,
 
 /* Initialization subroutine for use by modules including this */
 static int
-init_dynfunc_module(PyObject __attribute__((unused)) *module)
+init_dynfunc_module(PyObject *module)
 {
     if (PyType_Ready(&ClosureType))
         return -1;

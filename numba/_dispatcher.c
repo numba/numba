@@ -136,7 +136,7 @@ Dispatcher_dealloc(DispatcherObject *self)
 
 
 static int
-Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject __attribute__((unused)) *kwds)
+Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
 {
     PyObject *tmaddrobj;
     void *tmaddr;
@@ -170,7 +170,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject __attribute__((
 }
 
 static PyObject *
-Dispatcher_clear(DispatcherObject *self, PyObject __attribute__((unused)) *args)
+Dispatcher_clear(DispatcherObject *self, PyObject *args)
 {
     dispatcher_clear(self->dispatcher);
     Py_RETURN_NONE;
@@ -672,7 +672,7 @@ static PyTypeObject DispatcherType = {
 };
 
 
-static PyObject *compute_fingerprint(PyObject __attribute__((unused)) *self, PyObject *args)
+static PyObject *compute_fingerprint(PyObject *self, PyObject *args)
 {
     PyObject *val;
     if (!PyArg_ParseTuple(args, "O:compute_fingerprint", &val))

@@ -2,7 +2,7 @@
 
 /* Python-facing function to dynamically create a new C function object */
 static PyObject*
-make_function(PyObject __attribute__((unused)) *self, PyObject *args)
+make_function(PyObject *self, PyObject *args)
 {
     PyObject *module, *fname, *fdoc, *fnaddrobj;
     void *fnaddr;
