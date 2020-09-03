@@ -135,20 +135,19 @@ string_writer_put_int32(string_writer_t *w, unsigned int v)
 static int
 string_writer_put_intp(string_writer_t *w, npy_intp v)
 {
-    const int N = sizeof(npy_intp);
-    if (string_writer_ensure(w, N))
+    if (string_writer_ensure(w, NPY_SIZEOF_PY_INTPTR_T))
         return -1;
     w->buf[w->n] = v & 0xff;
     w->buf[w->n + 1] = (v >> 8) & 0xff;
     w->buf[w->n + 2] = (v >> 16) & 0xff;
     w->buf[w->n + 3] = (v >> 24) & 0xff;
-    if (N > 4) {
-        w->buf[w->n + 4] = (v >> 32) & 0xff;
-        w->buf[w->n + 5] = (v >> 40) & 0xff;
-        w->buf[w->n + 6] = (v >> 48) & 0xff;
-        w->buf[w->n + 7] = (v >> 56) & 0xff;
-    }
-    w->n += N;
+#if NPY_SIZEOF_PY_INTPTR_T == 8
+    w->buf[w->n + 4] = (v >> 32) & 0xff;
+    w->buf[w->n + 5] = (v >> 40) & 0xff;
+    w->buf[w->n + 6] = (v >> 48) & 0xff;
+    w->buf[w->n + 7] = (v >> 56) & 0xff;
+#endif
+    w->n += NPY_SIZEOF_PY_INTPTR_T;
     return 0;
 }
 
