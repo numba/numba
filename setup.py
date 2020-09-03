@@ -57,13 +57,17 @@ class NumbaBuildExt(build_ext):
 
     def initialize_options(self):
         super().initialize_options()
-        default_werror_wall = (sys.platform == 'linux' and platform.machine()
-                               in ('i386', 'x86_64'))
-        self.werror = default_werror_wall
-        self.wall = default_werror_wall
+        # We build with -Werror and -Wall by default on Linux x86, to provide
+        # some level of checking without the burden of maintaining it for all
+        # platforms. Linux is also always built with debug symbols.
+        is_linux_x86 = (sys.platform == 'linux' and platform.machine()
+                        in ('i386', 'x86_64'))
+        self.werror = is_linux_x86
+        self.wall = is_linux_x86
+        self.debug = is_linux_x86
+        # Optional build without optimization, to make debugging extensions
+        # easier.
         self.noopt = 0
-        # Always build with debug info
-        self.debug = 1
 
     def run(self):
         extra_compile_args = []
