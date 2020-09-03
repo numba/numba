@@ -25,8 +25,4 @@
 #define PyInt_Check PyLong_Check
 #define PyInt_CheckExact PyLong_CheckExact
 
-#define PyMem_RawMalloc malloc
-#define PyMem_RawRealloc realloc
-#define PyMem_RawFree free
-
 #endif /* NUMBA_PY_MODULE_H_ */
