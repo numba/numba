@@ -983,6 +983,12 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             flags = self.flags
             args, return_type = sigutils.normalize_signature(sig)
 
+            # for objmode we should have ffi_forced_objects as args
+            # also there is probably no benefit in rewrites passes, so turn them off
+            if isinstance(self, ObjModeLiftedWith):
+                args = [types.ffi_forced_object] * len(args)
+                flags.no_rewrites = True
+
             # Don't recompile if signature already exists
             # (e.g. if another thread compiled it before we got the lock)
             existing = self.overloads.get(tuple(args))
