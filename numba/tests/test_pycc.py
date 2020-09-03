@@ -185,6 +185,12 @@ class TestCC(BasePYCCTest):
             import types
             # to disable numba package
             sys.modules['numba'] = types.ModuleType('numba')
+            try:
+                from numba import njit
+            except ImportError:
+                pass
+            else:
+                raise RuntimeError('cannot disable numba package')
 
             sys.path.insert(0, %(path)r)
             import %(name)s as lib
