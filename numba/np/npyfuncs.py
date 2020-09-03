@@ -775,8 +775,8 @@ def np_real_cbrt_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
-        types.float32: 'npy_cbrtf',
-        types.float64: 'npy_cbrt',
+        types.float32: 'numba_cbrtf',
+        types.float64: 'numba_cbrt',
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
