@@ -135,8 +135,10 @@ static PyTypeObject EnvironmentType = {
     0,                         /* tp_del */
     0,                         /* tp_version_tag */
     0,                         /* tp_finalize */
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
     0,                         /* tp_vectorcall */
     0,                         /* tp_print */
+#endif
 };
 
 /* A closure object is created for each call to make_function(), and stored
@@ -238,8 +240,10 @@ static PyTypeObject ClosureType = {
     0,                         /* tp_del */
     0,                         /* tp_version_tag */
     0,                         /* tp_finalize */
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
     0,                         /* tp_vectorcall */
     0,                         /* tp_print */
+#endif
 };
 
 
@@ -448,8 +452,10 @@ static PyTypeObject GeneratorType = {
     0,                                        /* tp_del */
     0,                                        /* tp_version_tag */
     0,                                        /* tp_finalize */
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
     0,                                        /* tp_vectorcall */
     0,                                        /* tp_print */
+#endif
 };
 
 /* Dynamically create a new generator object */
