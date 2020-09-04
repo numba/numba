@@ -411,7 +411,7 @@ class Expr(Inst):
         return self._loc
 
     def __getattr__(self, name):
-        if not name.startswith('_'):
+        if name not in {'_op', '_loc', '_kws'}:
             try:
                 return self._kws[name]
             except KeyError:
@@ -419,7 +419,7 @@ class Expr(Inst):
         raise AttributeError(name)
 
     def __setattr__(self, name, value):
-        if name in ('_op', '_loc', '_kws'):
+        if name in {'op', '_op', 'loc', '_loc', '_kws'}:
             Inst.__setattr__(self, name, value)
         else:
             self._kws[name] = value
@@ -960,6 +960,11 @@ class Assign(Stmt):
     @property
     def loc(self):
         return self._loc
+
+    def replace(self, **kwargs):
+        d = dict(value=self.value, target=self.target, loc=self.loc)
+        d.update(kwargs)
+        return type(self)(**d)
 
     def __str__(self):
         return '%s = %s' % (self.target, self.value)
@@ -1652,6 +1657,16 @@ class FunctionIR(object):
         if isinstance(name, Var):
             name = name.name
         return self._consts.infer_constant(name)
+
+    def replace_definition(self, var, old_value, new_value):
+        """Replace assignment to *var* with *new_value*
+        """
+        for blk in self.blocks.values():
+            for idx, stmt in enumerate(blk.body):
+                if (isinstance(stmt, Assign) and
+                        stmt.target == var and
+                        stmt.value == old_value):
+                    blk.body[idx] = stmt.replace(value=new_value)
 
     def get_definition(self, value, lhs_only=False):
         """
