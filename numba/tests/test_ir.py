@@ -48,9 +48,9 @@ class CheckEquality(unittest.TestCase):
 
     def check(self, base, same=[], different=[]):
         for s in same:
-            self.assertTrue(base == s)
+            self.assertEqual(base, s)
         for d in different:
-            self.assertTrue(base != d)
+            self.assertNotEqual(base, d)
 
 
 class TestIRMeta(CheckEquality):

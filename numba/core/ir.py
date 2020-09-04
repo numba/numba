@@ -214,6 +214,8 @@ class SlotEqualityCheckMixin(object):
     def __eq__(self, other):
         if type(self) is type(other):
             for name in self.__slots__:
+                if name in {'_loc', '_scope'}:
+                    continue
                 if getattr(self, name) != getattr(other, name):
                     return False
             else:
