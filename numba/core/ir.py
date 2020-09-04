@@ -320,10 +320,11 @@ class AbstractRHS(object):
     __slots__ = ()
 
 
-class Inst(EqualityCheckMixin, AbstractRHS):
+class Inst(SlotEqualityCheckMixin, AbstractRHS):
     """
     Base class for all IR instructions.
     """
+    __slots__ = ()
 
     def list_vars(self):
         """
@@ -358,6 +359,7 @@ class Stmt(Inst):
     Base class for IR statements (instructions which can appear on their
     own in a Block).
     """
+    __slots__ = ()
     # Whether this statement ends its basic block (i.e. it will either jump
     # to another block or exit the function).
     is_terminator = False
@@ -365,7 +367,8 @@ class Stmt(Inst):
     is_exit = False
 
     def list_vars(self):
-        return self._rec_list_vars(self.__dict__)
+        d = {k: getattr(self, k) for k in self.__slots__}
+        return self._rec_list_vars(d)
 
 
 class Terminator(Stmt):
@@ -378,6 +381,7 @@ class Terminator(Stmt):
     All subclass of Terminator must override `.get_targets()` to return a list
     of jump targets.
     """
+    __slots__ = ()
     is_terminator = True
 
     def get_targets(self):
@@ -389,22 +393,30 @@ class Expr(Inst):
     An IR expression (an instruction which can only be part of a larger
     statement).
     """
+    __slots__ = 'op', '_loc', '_kws'
 
     def __init__(self, op, loc, **kws):
         assert isinstance(op, str)
         assert isinstance(loc, Loc)
         self.op = op
-        self.loc = loc
+        self._loc = loc
         self._kws = kws
 
+    @property
+    def loc(self):
+        return self._loc
+
     def __getattr__(self, name):
-        if name.startswith('_'):
-            return Inst.__getattr__(self, name)
-        return self._kws[name]
+        if not name.startswith('_'):
+            try:
+                return self._kws[name]
+            except KeyError:
+                pass
+        raise AttributeError(name)
 
     def __setattr__(self, name, value):
-        if name in ('op', 'loc', '_kws'):
-            self.__dict__[name] = value
+        if name in ('op', '_loc', '_kws'):
+            Inst.__setattr__(self, name, value)
         else:
             self._kws[name] = value
 
@@ -606,6 +618,7 @@ class SetItem(Stmt):
     """
     target[index] = value
     """
+    __slots__ = 'target', 'index', 'value', '_loc'
 
     def __init__(self, target, index, value, loc):
         assert isinstance(target, Var)
@@ -615,7 +628,11 @@ class SetItem(Stmt):
         self.target = target
         self.index = index
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
@@ -625,6 +642,7 @@ class StaticSetItem(Stmt):
     """
     target[constant index] = value
     """
+    __slots__ = 'target', 'index', 'index_var', 'value', '_loc'
 
     def __init__(self, target, index, index_var, value, loc):
         assert isinstance(target, Var)
@@ -636,7 +654,11 @@ class StaticSetItem(Stmt):
         self.index = index
         self.index_var = index_var
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return '%s[%r] = %s' % (self.target, self.index, self.value)
@@ -646,6 +668,7 @@ class DelItem(Stmt):
     """
     del target[index]
     """
+    __slots__ = 'target', 'index', '_loc'
 
     def __init__(self, target, index, loc):
         assert isinstance(target, Var)
@@ -653,13 +676,19 @@ class DelItem(Stmt):
         assert isinstance(loc, Loc)
         self.target = target
         self.index = index
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return 'del %s[%s]' % (self.target, self.index)
 
 
 class SetAttr(Stmt):
+    __slots__ = 'target', 'attr', 'value', '_loc'
+
     def __init__(self, target, attr, value, loc):
         assert isinstance(target, Var)
         assert isinstance(attr, str)
@@ -668,26 +697,38 @@ class SetAttr(Stmt):
         self.target = target
         self.attr = attr
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return '(%s).%s = %s' % (self.target, self.attr, self.value)
 
 
 class DelAttr(Stmt):
+    __slots__ = 'target', 'attr', '_loc'
+
     def __init__(self, target, attr, loc):
         assert isinstance(target, Var)
         assert isinstance(attr, str)
         assert isinstance(loc, Loc)
         self.target = target
         self.attr = attr
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return 'del (%s).%s' % (self.target, self.attr)
 
 
 class StoreMap(Stmt):
+    __slots__ = 'dct', 'key', 'value', '_loc'
+
     def __init__(self, dct, key, value, loc):
         assert isinstance(dct, Var)
         assert isinstance(key, Var)
@@ -696,31 +737,46 @@ class StoreMap(Stmt):
         self.dct = dct
         self.key = key
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return '%s[%s] = %s' % (self.dct, self.key, self.value)
 
 
 class Del(Stmt):
+    __slots__ = 'value', '_loc'
+
     def __init__(self, value, loc):
         assert isinstance(value, str)
         assert isinstance(loc, Loc)
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return "del %s" % self.value
 
 
 class Raise(Terminator):
+    __slots__ = 'exception', '_loc'
     is_exit = True
 
     def __init__(self, exception, loc):
         assert exception is None or isinstance(exception, Var)
         assert isinstance(loc, Loc)
         self.exception = exception
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return "raise %s" % self.exception
@@ -735,6 +791,7 @@ class StaticRaise(Terminator):
     Note that if *exc_class* is None, a bare "raise" statement is implied
     (i.e. re-raise the current exception).
     """
+    __slots__ = 'exc_class', 'exc_args', '_loc'
     is_exit = True
 
     def __init__(self, exc_class, exc_args, loc):
@@ -743,7 +800,11 @@ class StaticRaise(Terminator):
         assert exc_args is None or isinstance(exc_args, tuple)
         self.exc_class = exc_class
         self.exc_args = exc_args
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         if self.exc_class is None:
@@ -762,11 +823,17 @@ class TryRaise(Stmt):
     """A raise statement inside a try-block
     Similar to ``Raise`` but does not terminate.
     """
+    __slots__ = 'exception', '_loc'
+
     def __init__(self, exception, loc):
         assert exception is None or isinstance(exception, Var)
         assert isinstance(loc, Loc)
         self.exception = exception
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return "try_raise %s" % self.exception
@@ -776,6 +843,7 @@ class StaticTryRaise(Stmt):
     """A raise statement inside a try-block.
     Similar to ``StaticRaise`` but does not terminate.
     """
+    __slots__ = 'exc_class', 'exc_args', '_loc'
 
     def __init__(self, exc_class, exc_args, loc):
         assert exc_class is None or isinstance(exc_class, type)
@@ -783,7 +851,11 @@ class StaticTryRaise(Stmt):
         assert exc_args is None or isinstance(exc_args, tuple)
         self.exc_class = exc_class
         self.exc_args = exc_args
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         if self.exc_class is None:
@@ -799,13 +871,19 @@ class Return(Terminator):
     """
     Return to caller.
     """
+    __slots__ = 'value', '_loc'
+
     is_exit = True
 
     def __init__(self, value, loc):
         assert isinstance(value, Var), type(value)
         assert isinstance(loc, Loc)
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'return %s' % self.value
@@ -818,11 +896,16 @@ class Jump(Terminator):
     """
     Unconditional branch.
     """
+    __slots__ = 'target', '_loc'
 
     def __init__(self, target, loc):
         assert isinstance(loc, Loc)
         self.target = target
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'jump %s' % self.target
@@ -835,6 +918,7 @@ class Branch(Terminator):
     """
     Conditional branch.
     """
+    __slots__ = 'cond', 'truebr', 'falsebr', '_loc'
 
     def __init__(self, cond, truebr, falsebr, loc):
         assert isinstance(cond, Var)
@@ -842,7 +926,11 @@ class Branch(Terminator):
         self.cond = cond
         self.truebr = truebr
         self.falsebr = falsebr
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'branch %s, %s, %s' % (self.cond, self.truebr, self.falsebr)
@@ -855,13 +943,19 @@ class Assign(Stmt):
     """
     Assign to a variable.
     """
+    __slots__ = 'value', 'target', '_loc'
+
     def __init__(self, value, target, loc):
         assert isinstance(value, AbstractRHS)
         assert isinstance(target, Var)
         assert isinstance(loc, Loc)
         self.value = value
         self.target = target
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return '%s = %s' % (self.target, self.value)
@@ -871,6 +965,8 @@ class Print(Stmt):
     """
     Print some values.
     """
+    __slots__ = 'args', 'vararg', 'consts', '_loc'
+
     def __init__(self, args, vararg, loc):
         assert all(isinstance(x, Var) for x in args)
         assert vararg is None or isinstance(vararg, Var)
@@ -879,19 +975,29 @@ class Print(Stmt):
         self.vararg = vararg
         # Constant-inferred arguments
         self.consts = {}
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'print(%s)' % ', '.join(str(v) for v in self.args)
 
 
 class Yield(Inst):
+    __slots__ = 'value', '_loc', 'index'
+
     def __init__(self, value, loc, index):
         assert isinstance(value, Var)
         assert isinstance(loc, Loc)
         self.value = value
-        self.loc = loc
+        self._loc = loc
         self.index = index
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'yield %s' % (self.value,)
@@ -903,6 +1009,8 @@ class Yield(Inst):
 class EnterWith(Stmt):
     """Enter a "with" context
     """
+    __slots__ = 'contextmanager', 'begin', 'end', '_loc'
+
     def __init__(self, contextmanager, begin, end, loc):
         """
         Parameters
@@ -918,7 +1026,11 @@ class EnterWith(Stmt):
         self.contextmanager = contextmanager
         self.begin = begin
         self.end = end
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'enter_with {}'.format(self.contextmanager)
@@ -927,14 +1039,20 @@ class EnterWith(Stmt):
         return [self.contextmanager]
 
 
-class Arg(EqualityCheckMixin, AbstractRHS):
+class Arg(SlotEqualityCheckMixin, AbstractRHS):
+    __slots__ = 'name', 'index', '_loc'
+
     def __init__(self, name, index, loc):
         assert isinstance(name, str)
         assert isinstance(index, int)
         assert isinstance(loc, Loc)
         self.name = name
         self.index = index
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return 'arg(%d, name=%s)' % (self.index, self.name)
@@ -943,13 +1061,19 @@ class Arg(EqualityCheckMixin, AbstractRHS):
         raise ConstantInferenceError('%s' % self, loc=self.loc)
 
 
-class Const(EqualityCheckMixin, AbstractRHS):
+class Const(SlotEqualityCheckMixin, AbstractRHS):
+    __slots__ = 'value', '_loc', 'use_literal_type'
+
     def __init__(self, value, loc, use_literal_type=True):
         assert isinstance(loc, Loc)
         self.value = value
-        self.loc = loc
+        self._loc = loc
         # Note: need better way to tell if this is a literal or not.
         self.use_literal_type = use_literal_type
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return 'const(%s, %s)' % (type(self.value).__name__, self.value)
@@ -965,12 +1089,18 @@ class Const(EqualityCheckMixin, AbstractRHS):
         )
 
 
-class Global(EqualityCheckMixin, AbstractRHS):
+class Global(SlotEqualityCheckMixin, AbstractRHS):
+    __slots__ = 'name', 'value', '_loc'
+
     def __init__(self, name, value, loc):
         assert isinstance(loc, Loc)
         self.name = name
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'global(%s: %s)' % (self.name, self.value)
@@ -984,11 +1114,12 @@ class Global(EqualityCheckMixin, AbstractRHS):
         return Global(self.name, self.value, copy.deepcopy(self.loc))
 
 
-class FreeVar(EqualityCheckMixin, AbstractRHS):
+class FreeVar(SlotEqualityCheckMixin, AbstractRHS):
     """
     A freevar, as loaded by LOAD_DECREF.
     (i.e. a variable defined in an enclosing non-global scope)
     """
+    __slots__ = 'index', 'name', 'value', '_loc'
 
     def __init__(self, index, name, value, loc):
         assert isinstance(index, int)
@@ -1000,7 +1131,11 @@ class FreeVar(EqualityCheckMixin, AbstractRHS):
         self.name = name
         # frozen value
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'freevar(%s: %s)' % (self.name, self.value)
@@ -1083,7 +1218,7 @@ class Var(SlotEqualityCheckMixin, AbstractRHS):
         return self.versioned_names | {self.unversioned_name,}
 
 
-class Intrinsic(EqualityCheckMixin):
+class Intrinsic(SlotEqualityCheckMixin):
     """
     A low-level "intrinsic" function.  Suitable as the callable of a "call"
     expression.
@@ -1092,12 +1227,17 @@ class Intrinsic(EqualityCheckMixin):
     in the generated low-level IR.
     The *type* is the equivalent Numba signature of calling the intrinsic.
     """
+    __slots__ = 'name', 'type', 'args', '_loc'
 
     def __init__(self, name, type, args, loc=None):
         self.name = name
         self.type = type
-        self.loc = loc
         self.args = args
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return 'Intrinsic(%s, %s, %s)' % (self.name, self.type, self.loc)
