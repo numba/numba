@@ -240,8 +240,8 @@ class EqualityCheckMixin(object):
                 for x in bad:
                     d.pop(x, None)
                 return d
-            d1 = fixup(self._get_dict())
-            d2 = fixup(other._get_dict())
+            d1 = fixup(self.__dict__)
+            d2 = fixup(other.__dict__)
             if d1 == d2:
                 return True
         return False
@@ -251,9 +251,6 @@ class EqualityCheckMixin(object):
 
     def __hash__(self):
         return id(self)
-
-    def _get_dict(self):
-        return self.__dict__
 
 
 class VarMap(object):
@@ -999,7 +996,7 @@ class FreeVar(EqualityCheckMixin, AbstractRHS):
 
 
 
-class Var(EqualityCheckMixin, AbstractRHS):
+class Var(SlotEqualityCheckMixin, AbstractRHS):
     """
     Attributes
     -----------
@@ -1021,13 +1018,6 @@ class Var(EqualityCheckMixin, AbstractRHS):
         self._scope = scope
         self._name = name
         self._loc = loc
-
-    def _get_dict(self):
-        return dict(
-            scope=self.scope,
-            name=self.name,
-            loc=self.loc,
-        )
 
     @property
     def scope(self):
