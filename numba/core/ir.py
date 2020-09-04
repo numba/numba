@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import copy
 import itertools
 import os
@@ -230,6 +230,7 @@ class SlotEqualityCheckMixin(object):
 @total_ordering
 class EqualityCheckMixin(object):
     """ Mixin for basic equality checking """
+    __slots__ = ()
 
     def __eq__(self, other):
         if type(self) is type(other):
@@ -239,8 +240,8 @@ class EqualityCheckMixin(object):
                 for x in bad:
                     d.pop(x, None)
                 return d
-            d1 = fixup(self.__dict__)
-            d2 = fixup(other.__dict__)
+            d1 = fixup(self._get_dict())
+            d2 = fixup(other._get_dict())
             if d1 == d2:
                 return True
         return False
@@ -250,6 +251,9 @@ class EqualityCheckMixin(object):
 
     def __hash__(self):
         return id(self)
+
+    def _get_dict(self):
+        return self.__dict__
 
 
 class VarMap(object):
@@ -297,6 +301,7 @@ class AbstractRHS(object):
     """Abstract base class for anything that can be the RHS of an assignment.
     This class **does not** define any methods.
     """
+    __slots__ = ()
 
 
 class Inst(EqualityCheckMixin, AbstractRHS):
@@ -1006,14 +1011,35 @@ class Var(EqualityCheckMixin, AbstractRHS):
         Definition location
     """
 
+    __slots__ = '_scope', '_name', '_loc'
+
     def __init__(self, scope, name, loc):
         # NOTE: Use of scope=None should be removed.
         assert scope is None or isinstance(scope, Scope)
         assert isinstance(name, str)
         assert isinstance(loc, Loc)
-        self.scope = scope
-        self.name = name
-        self.loc = loc
+        self._scope = scope
+        self._name = name
+        self._loc = loc
+
+    def _get_dict(self):
+        return dict(
+            scope=self.scope,
+            name=self.name,
+            loc=self.loc,
+        )
+
+    @property
+    def scope(self):
+        return self._scope
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return 'Var(%s, %s)' % (self.name, self.loc.short())
@@ -1046,6 +1072,7 @@ class Var(EqualityCheckMixin, AbstractRHS):
         """All known versioned and unversioned names for this variable
         """
         return self.versioned_names | {self.unversioned_name,}
+
 
 class Intrinsic(EqualityCheckMixin):
     """
