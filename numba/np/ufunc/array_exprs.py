@@ -300,7 +300,6 @@ def _arr_expr_to_ast(expr):
         "Don't know how to translate array expression '%r'" % (expr,))
 
 
-@contextlib.contextmanager
 def _legalize_parameter_names(var_list):
     """
     Legalize names in the variable list for use as a Python function's
@@ -314,16 +313,9 @@ def _legalize_parameter_names(var_list):
         # Caller should ensure the names are unique
         if new_name in var_map:
             raise AssertionError(f"{new_name!r} not unique")
-        var_map[new_name] = var, old_name
-        var.name = new_name
-    param_names = list(var_map)
-    try:
-        yield param_names
-    finally:
-        # Make sure the old names are restored, to avoid confusing
-        # other parts of Numba (see issue #1466)
-        for var, old_name in var_map.values():
-            var.name = old_name
+        var_map[new_name] = var
+
+    return var_map
 
 
 def _lower_array_expr(lowerer, expr):
@@ -340,18 +332,30 @@ def _lower_array_expr(lowerer, expr):
     expr_args = [var.name for var in expr_var_unique]
 
     # 1. Create an AST tree from the array expression.
-    with _legalize_parameter_names(expr_var_unique) as expr_params:
-        ast_args = [ast.arg(param_name, None)
-                    for param_name in expr_params]
-        # Parse a stub function to ensure the AST is populated with
-        # reasonable defaults for the Python version.
-        ast_module = ast.parse('def {0}(): return'.format(expr_name),
-                               expr_filename, 'exec')
-        assert hasattr(ast_module, 'body') and len(ast_module.body) == 1
-        ast_fn = ast_module.body[0]
-        ast_fn.args.args = ast_args
-        ast_fn.body[0].value, namespace = _arr_expr_to_ast(expr.expr)
-        ast.fix_missing_locations(ast_module)
+    params_map = _legalize_parameter_names(expr_var_unique)
+    ast_args = [ast.arg(param_name, None)
+                for param_name in params_map]
+    # Parse a stub function to ensure the AST is populated with
+    # reasonable defaults for the Python version.
+    ast_module = ast.parse('def {0}(): return'.format(expr_name),
+                            expr_filename, 'exec')
+    assert hasattr(ast_module, 'body') and len(ast_module.body) == 1
+    ast_fn = ast_module.body[0]
+    ast_fn.args.args = ast_args
+
+    # Add mapping from argument name to the variable name
+    new_body = []
+    for new_name, var in params_map.items():
+        new_body.append(ast.Assign(targets=[ast.Name(var.name, ast.Store())],
+                                   value=ast.Name(new_name, ast.Load())))
+
+    # Modify the return node
+    return_node = ast_fn.body[-1]
+    return_node.value, namespace = _arr_expr_to_ast(expr.expr)
+
+    # Replace the function body
+    ast_fn.body = new_body + [return_node]
+    ast.fix_missing_locations(ast_module)
 
     # 2. Compile the AST module and extract the Python function.
     code_obj = compile(ast_module, expr_filename, 'exec')
