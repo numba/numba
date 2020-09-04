@@ -393,14 +393,18 @@ class Expr(Inst):
     An IR expression (an instruction which can only be part of a larger
     statement).
     """
-    __slots__ = 'op', '_loc', '_kws'
+    __slots__ = '_op', '_loc', '_kws'
 
     def __init__(self, op, loc, **kws):
         assert isinstance(op, str)
         assert isinstance(loc, Loc)
-        self.op = op
+        self._op = op
         self._loc = loc
         self._kws = kws
+
+    @property
+    def op(self):
+        return self._op
 
     @property
     def loc(self):
@@ -415,7 +419,7 @@ class Expr(Inst):
         raise AttributeError(name)
 
     def __setattr__(self, name, value):
-        if name in ('op', '_loc', '_kws'):
+        if name in ('_op', '_loc', '_kws'):
             Inst.__setattr__(self, name, value)
         else:
             self._kws[name] = value
