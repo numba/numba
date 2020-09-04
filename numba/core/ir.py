@@ -26,6 +26,8 @@ class Loc(object):
     """Source location
 
     """
+    __slots__ = '_filename', '_line', '_col', '_lines_cache', '_maybe_decorator'
+
     _defmatcher = re.compile('def\s+(\w+)\(.*')
 
     def __init__(self, filename, line, col=None, maybe_decorator=False):
@@ -35,11 +37,27 @@ class Loc(object):
         col - column
         maybe_decorator - Set to True if location is likely a jit decorator
         """
-        self.filename = filename
-        self.line = line
-        self.col = col
-        self.lines = None # the source lines from the linecache
-        self.maybe_decorator = maybe_decorator
+        self._filename = filename
+        self._line = line
+        self._col = col
+        self._maybe_decorator = maybe_decorator
+        self._lines_cache = None # the source lines from the linecache
+
+    @property
+    def filename(self):
+        return self._filename
+
+    @property
+    def line(self):
+        return self._line
+
+    @property
+    def col(self):
+        return self._col
+
+    @property
+    def maybe_decorator(self):
+        return self._maybe_decorator
 
     def __eq__(self, other):
         # equivalence is solely based on filename, line and col
@@ -88,11 +106,10 @@ class Loc(object):
             return None
 
     def get_lines(self):
-        if self.lines is None:
+        if self._lines_cache is None:
+            self._lines_cache = linecache.getlines(self._get_path())
 
-            self.lines = linecache.getlines(self._get_path())
-
-        return self.lines
+        return self._lines_cache
 
     def _get_path(self):
         path = None
