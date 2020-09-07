@@ -355,24 +355,17 @@ def hypot_float_impl(context, builder, sig, args):
     assert xty == yty == sig.return_type
     x, y = args
 
-    # Windows has alternate names for hypot/hypotf, see
-    # https://msdn.microsoft.com/fr-fr/library/a9yb3dbt%28v=vs.80%29.aspx
     fname = {
-        types.float32: "_hypotf" if sys.platform == 'win32' else "hypotf",
-        types.float64: "_hypot" if sys.platform == 'win32' else "hypot",
+        types.float32: "hypotf",
+        types.float64: "hypot",
     }[xty]
     plat_hypot = types.ExternalFunction(fname, sig)
 
     if sys.platform == 'win32' and config.MACHINE_BITS == 32:
         inf = xty(float('inf'))
 
-        def hypot_impl(x, y):
-            if math.isinf(x) or math.isinf(y):
-                return inf
-            return plat_hypot(x, y)
-    else:
-        def hypot_impl(x, y):
-            return plat_hypot(x, y)
+    def hypot_impl(x, y):
+        return plat_hypot(x, y)
 
     res = context.compile_internal(builder, hypot_impl, sig, args)
     return impl_ret_untracked(context, builder, sig.return_type, res)
