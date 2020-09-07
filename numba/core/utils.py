@@ -9,6 +9,7 @@ import timeit
 import math
 import sys
 import traceback
+import typing as pt
 import weakref
 import warnings
 from types import ModuleType
@@ -16,12 +17,13 @@ from importlib import import_module
 from collections.abc import Mapping, Sequence
 import numpy as np
 
-from inspect import signature as pysignature # noqa: F401
-from inspect import Signature as pySignature # noqa: F401
-from inspect import Parameter as pyParameter # noqa: F401
+from inspect import signature as pysignature  # noqa: F401
+from inspect import Signature as pySignature  # noqa: F401
+from inspect import Parameter as pyParameter  # noqa: F401
 
-from numba.core.config import (PYVERSION, MACHINE_BITS, # noqa: F401
-                               DEVELOPER_MODE) # noqa: F401
+from numba.core.config import (  # type: ignore[attr-defined] # noqa: F401
+    PYVERSION, MACHINE_BITS, DEVELOPER_MODE
+)
 from numba.core import types
 
 INT_TYPES = (int,)
@@ -112,7 +114,10 @@ def safe_relpath(path, start=os.curdir):
     """
     # find the drive letters for path and start and if they are not the same
     # then don't use relpath!
-    drive_letter = lambda x: os.path.splitdrive(os.path.abspath(x))[0]
+
+    def drive_letter(x):
+        return os.path.splitdrive(os.path.abspath(x))[0]
+
     drive_path = drive_letter(path)
     drive_start = drive_letter(start)
     if drive_path != drive_start:
@@ -245,57 +250,57 @@ def shutting_down(globals=globals):
 # we need to make sure that _at_shutdown is called before the finalizer exit
 # function. Since atexit operates as a LIFO stack, we first contruct a dummy
 # finalizer then register atexit to ensure this ordering.
-weakref.finalize(lambda: None, lambda: None)
+weakref.finalize(lambda: None, lambda: None)  # type: ignore[misc]
 atexit.register(_at_shutdown)
 
 
-class ConfigOptions(object):
-    OPTIONS = {}
+class ConfigOptions:
+    OPTIONS: pt.Dict[str, pt.Any] = {}
 
     def __init__(self):
         self._values = self.OPTIONS.copy()
 
-    def set(self, name, value=True):
+    def set(self, name: str, value: pt.Any = True) -> None:
         if name not in self.OPTIONS:
             raise NameError("Invalid flag: %s" % name)
         self._values[name] = value
 
-    def unset(self, name):
+    def unset(self, name: str) -> None:
         self.set(name, False)
 
-    def _check_attr(self, name):
+    def _check_attr(self, name: str) -> None:
         if name not in self.OPTIONS:
             raise AttributeError("Invalid flag: %s" % name)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> pt.Any:
         self._check_attr(name)
         return self._values[name]
 
-    def __setattr__(self, name, value):
+    def __setattr__(self, name: str, value: pt.Any) -> None:
         if name.startswith('_'):
             super(ConfigOptions, self).__setattr__(name, value)
         else:
             self._check_attr(name)
             self._values[name] = value
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "Flags(%s)" % ', '.join('%s=%s' % (k, v)
                                        for k, v in self._values.items()
                                        if v is not False)
 
-    def copy(self):
+    def copy(self) -> "ConfigOptions":
         copy = type(self)()
         copy._values = self._values.copy()
         return copy
 
-    def __eq__(self, other):
+    def __eq__(self, other: pt.Any) -> bool:
         return (isinstance(other, ConfigOptions) and
                 other._values == self._values)
 
-    def __ne__(self, other):
+    def __ne__(self, other: pt.Any) -> bool:
         return not self == other
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(tuple(sorted(self._values.items())))
 
 
@@ -331,7 +336,11 @@ class UniqueDict(dict):
 # Django's cached_property
 # see https://docs.djangoproject.com/en/dev/ref/utils/#django.utils.functional.cached_property    # noqa: E501
 
-class cached_property(object):
+_T = pt.TypeVar("_T")
+_S = pt.TypeVar("_S")
+
+
+class cached_property(pt.Generic[_T]):
     """
     Decorator that converts a method with a single self argument into a
     property cached on the instance.
@@ -339,11 +348,28 @@ class cached_property(object):
     Optional ``name`` argument allows you to make cached properties of other
     methods. (e.g.  url = cached_property(get_absolute_url, name='url') )
     """
-    def __init__(self, func, name=None):
+
+    def __init__(
+        self, func: pt.Callable[[pt.Any], _T], name: pt.Optional[str] = None
+    ):
         self.func = func
         self.name = name or func.__name__
 
-    def __get__(self, instance, type=None):
+    # Type annotations taken from typeshed.
+    # https://github.com/python/typeshed/blob/master/stdlib/3/functools.pyi
+    @pt.overload
+    def __get__(
+        self, instance: None, owner: pt.Optional[pt.Type[pt.Any]] = ...,
+    ) -> "cached_property[_T]":
+        ...
+
+    @pt.overload  # noqa: F811
+    def __get__(
+        self, instance: _S, owner: pt.Optional[pt.Type[pt.Any]] = ...,
+    ) -> _T:
+        ...
+
+    def __get__(self, instance, type=None):  # noqa: F811
         if instance is None:
             return self
         res = instance.__dict__[self.name] = self.func(instance)
@@ -444,7 +470,7 @@ RANGE_ITER_OBJECTS = (builtins.range,)
 # A dummy module for dynamically-generated functions
 _dynamic_modname = '<dynamic>'
 _dynamic_module = ModuleType(_dynamic_modname)
-_dynamic_module.__builtins__ = builtins
+_dynamic_module.__builtins__ = builtins  # type: ignore[attr-defined]
 
 
 def chain_exception(new_exc, old_exc):
@@ -589,6 +615,7 @@ class _RedirectSubpackage(ModuleType):
 
     >>> from numba.old_subpackage.module import item
     """
+
     def __init__(self, old_module_locals, new_module):
         old_module = old_module_locals['__name__']
         super().__init__(old_module)

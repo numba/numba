@@ -5,6 +5,7 @@ import weakref
 import threading
 import contextlib
 import operator
+import typing as pt
 
 import numba
 from numba.core import types, errors
@@ -23,13 +24,13 @@ class Rating(object):
         self.safe_convert = 0
         self.unsafe_convert = 0
 
-    def astuple(self):
+    def astuple(self) -> pt.Tuple[int, int, int]:
         """Returns a tuple suitable for comparing with the worse situation
         start first.
         """
         return (self.unsafe_convert, self.safe_convert, self.promote)
 
-    def __add__(self, other):
+    def __add__(self, other: "Rating") -> "Rating":
         if type(self) is not type(other):
             return NotImplemented
         rsum = Rating()
@@ -143,12 +144,12 @@ class BaseContext(object):
         # Initialize
         self.init()
 
-    def init(self):
+    def init(self) -> None:
         """
         Initialize the typing context.  Can be overridden by subclasses.
         """
 
-    def refresh(self):
+    def refresh(self) -> None:
         """
         Refresh context with new declarations from known registries.
         Useful for third-party extensions.
@@ -683,7 +684,7 @@ class BaseContext(object):
 
 class Context(BaseContext):
 
-    def load_additional_registries(self):
+    def load_additional_registries(self) -> None:
         from . import (
             cffi_utils,
             cmathdecl,

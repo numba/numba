@@ -2,7 +2,10 @@
 Helper classes / mixins for defining types.
 """
 
-from .abstract import ArrayCompatible, Dummy, IterableType, IteratorType
+import typing as pt
+import typing_extensions as pt_ext
+
+from .abstract import ArrayCompatible, Dummy, IterableType, IteratorType, Type
 
 
 class Opaque(Dummy):
@@ -13,24 +16,27 @@ class Opaque(Dummy):
 
 class SimpleIterableType(IterableType):
 
-    def __init__(self, name, iterator_type):
+    def __init__(self, name: str, iterator_type: IteratorType):
         self._iterator_type = iterator_type
         super(SimpleIterableType, self).__init__(name)
 
     @property
-    def iterator_type(self):
+    def iterator_type(self) -> IteratorType:
         return self._iterator_type
 
 
 class SimpleIteratorType(IteratorType):
 
-    def __init__(self, name, yield_type):
+    def __init__(self, name: str, yield_type):
         self._yield_type = yield_type
         super(SimpleIteratorType, self).__init__(name)
 
     @property
     def yield_type(self):
         return self._yield_type
+
+
+BufferLayoutType = pt_ext.Literal["C", "F", "CS", "FS", "A"]
 
 
 class Buffer(IterableType, ArrayCompatible):
@@ -45,11 +51,20 @@ class Buffer(IterableType, ArrayCompatible):
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
-    def __init__(self, dtype, ndim, layout, readonly=False, name=None):
+    def __init__(
+        self,
+        dtype: Type,
+        ndim: int,
+        layout: BufferLayoutType,
+        readonly: bool = False,
+        name: pt.Optional[str] = None,
+    ):
         from .misc import unliteral
 
         if isinstance(dtype, Buffer):
-            raise TypeError("Buffer dtype cannot be buffer, have dtype: {}".format(dtype))
+            raise TypeError(
+                "Buffer dtype cannot be buffer, have dtype: {}".format(dtype)
+            )
         if layout not in self.LAYOUTS:
             raise ValueError("Invalid layout '%s'" % layout)
         self.dtype = unliteral(dtype)
@@ -65,36 +80,42 @@ class Buffer(IterableType, ArrayCompatible):
         super(Buffer, self).__init__(name)
 
     @property
-    def iterator_type(self):
+    def iterator_type(self) -> IteratorType:
         from .iterators import ArrayIterator
         return ArrayIterator(self)
 
     @property
-    def as_array(self):
+    def as_array(self) -> "Buffer":
         return self
 
-    def copy(self, dtype=None, ndim=None, layout=None):
+    def copy(
+        self,
+        dtype: pt.Optional[Type] = None,
+        ndim: pt.Optional[int] = None,
+        layout: pt.Optional[BufferLayoutType] = None,
+    ) -> "Buffer":
         if dtype is None:
             dtype = self.dtype
         if ndim is None:
             ndim = self.ndim
         if layout is None:
             layout = self.layout
+        assert dtype is not None and ndim is not None and layout is not None
         return self.__class__(dtype=dtype, ndim=ndim, layout=layout,
                               readonly=not self.mutable)
 
     @property
-    def key(self):
+    def key(self) -> pt.Tuple[Type, int, BufferLayoutType, bool]:
         return self.dtype, self.ndim, self.layout, self.mutable
 
     @property
-    def is_c_contig(self):
+    def is_c_contig(self) -> bool:
         return self.layout == 'C' or (self.ndim <= 1 and self.layout in 'CF')
 
     @property
-    def is_f_contig(self):
+    def is_f_contig(self) -> bool:
         return self.layout == 'F' or (self.ndim <= 1 and self.layout in 'CF')
 
     @property
-    def is_contig(self):
+    def is_contig(self) -> bool:
         return self.layout in 'CF'
