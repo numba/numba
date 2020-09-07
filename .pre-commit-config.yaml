@@ -7,3 +7,4 @@ repos:
   rev: 'v0.770'
   hooks:
   - id: mypy
+    args: ["--config-file=mypy.ini"]
