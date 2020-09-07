@@ -26,10 +26,7 @@ static int get_readonly_buffer(PyObject* obj, Py_buffer *buf)
 {
     int flags = PyBUF_ND|PyBUF_STRIDES|PyBUF_FORMAT;
 
-    if (!PyObject_GetBuffer(obj, buf, flags))
-        return 0;
-
-    return -1;
+    return PyObject_GetBuffer(obj, buf, flags);
 }
 
 
