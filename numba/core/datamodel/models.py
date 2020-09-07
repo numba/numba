@@ -302,7 +302,6 @@ class EnumModel(ProxyModel):
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
 @register_default(types.ExternalFunction)
-@register_default(types.Macro)
 @register_default(types.EnumClass)
 @register_default(types.IntEnumClass)
 @register_default(types.NumberClass)
