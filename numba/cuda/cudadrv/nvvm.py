@@ -293,7 +293,7 @@ def get_supported_ccs():
 
     # List of supported compute capability in sorted order
     if cudart_version_major == 0:
-        _supported_cc = (),
+        _supported_cc = ()
     elif cudart_version_major < 9:
         # CUDA 8.x
         _supported_cc = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2) # noqa: E501
