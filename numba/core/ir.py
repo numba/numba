@@ -1,4 +1,3 @@
-from collections import defaultdict, namedtuple
 import copy
 import itertools
 import os
@@ -7,13 +6,13 @@ import pprint
 import re
 import sys
 import operator
+from collections import defaultdict
 from types import FunctionType, BuiltinFunctionType
 from functools import total_ordering
 from io import StringIO
 
 from numba.core import errors, config
-from numba.core.utils import (BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS,
-                              UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS)
+from numba.core.utils import UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS
 from numba.core.errors import (NotDefinedError, RedefinedError,
                                VerificationError, ConstantInferenceError)
 from numba.core import consts
@@ -28,7 +27,7 @@ class Loc(object):
     """
     __slots__ = '_filename', '_line', '_col', '_lines_cache', '_maybe_decorator'
 
-    _defmatcher = re.compile('def\s+(\w+)\(.*')
+    _defmatcher = re.compile(r'def\s+(\w+)\(.*')
 
     def __init__(self, filename, line, col=None, maybe_decorator=False):
         """ Arguments:
@@ -41,7 +40,7 @@ class Loc(object):
         self._line = line
         self._col = col
         self._maybe_decorator = maybe_decorator
-        self._lines_cache = None # the source lines from the linecache
+        self._lines_cache = None  # the source lines from the linecache
 
     @property
     def filename(self):
@@ -61,10 +60,14 @@ class Loc(object):
 
     def __eq__(self, other):
         # equivalence is solely based on filename, line and col
-        if type(self) is not type(other): return False
-        if self.filename != other.filename: return False
-        if self.line != other.line: return False
-        if self.col != other.col: return False
+        if type(self) is not type(other):
+            return False
+        if self.filename != other.filename:
+            return False
+        if self.line != other.line:
+            return False
+        if self.col != other.col:
+            return False
         return True
 
     def __ne__(self, other):
@@ -124,7 +127,6 @@ class Loc(object):
             path = os.path.abspath(self.filename)
         return path
 
-
     def strformat(self, nlines_up=2):
 
         lines = self.get_lines()
@@ -152,7 +154,6 @@ class Loc(object):
                         index = idx
                         break
                 use_line = use_line + index
-
 
         ret = [] # accumulates output
         if lines and use_line:
@@ -186,7 +187,7 @@ class Loc(object):
                 if fn_name:
                     ret.append(fn_name)
                     spaces = count_spaces(x)
-                    ret.append(' '*(4 + spaces) + '<source elided>\n')
+                    ret.append(' ' * (4 + spaces) + '<source elided>\n')
 
             if selected:
                 ret.extend(selected[:-1])
@@ -194,13 +195,13 @@ class Loc(object):
 
                 # point at the problem with a caret
                 spaces = count_spaces(selected[-1])
-                ret.append(' '*(spaces) + _termcolor.indicate("^"))
+                ret.append(' ' * (spaces) + _termcolor.indicate("^"))
 
         # if in the REPL source may not be available
         if not ret:
             ret = "<source missing, REPL/exec in use?>"
 
-        err = _termcolor.filename('\nFile "%s", line %d:')+'\n%s'
+        err = _termcolor.filename('\nFile "%s", line %d:') + '\n%s'
         tmp = err % (self._get_path(), use_line, _termcolor.code(''.join(ret)))
         return tmp
 
@@ -579,7 +580,8 @@ class Expr(Inst):
         """
         assert isinstance(loc, Loc)
         op = 'make_function'
-        return cls(op=op, name=name, code=code, closure=closure, defaults=defaults, loc=loc)
+        return cls(op=op, name=name, code=code, closure=closure,
+                   defaults=defaults, loc=loc)
 
     @classmethod
     def null(cls, loc):
@@ -595,7 +597,9 @@ class Expr(Inst):
     def __repr__(self):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)
-            pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
+            pres_order = (self._kws.items()
+                          if config.DIFF_IR == 0
+                          else sorted(self._kws.items()))
             kws = ', '.join('%s=%s' % (k, v) for k, v in pres_order)
             vararg = '*%s' % (self.vararg,) if self.vararg is not None else ''
             arglist = ', '.join(filter(None, [args, vararg, kws]))
@@ -607,7 +611,9 @@ class Expr(Inst):
             fn = OPERATORS_TO_BUILTINS.get(self.fn, self.fn)
             return '%s %s %s' % (lhs, fn, rhs)
         else:
-            pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
+            pres_order = (self._kws.items()
+                          if config.DIFF_IR == 0
+                          else sorted(self._kws.items()))
             args = ('%s=%s' % (k, v) for k, v in pres_order)
             return '%s(%s)' % (self.op, ', '.join(args))
 
@@ -816,8 +822,10 @@ class StaticRaise(Terminator):
         elif self.exc_args is None:
             return "<static> raise %s" % (self.exc_class,)
         else:
-            return "<static> raise %s(%s)" % (self.exc_class,
-                                     ", ".join(map(repr, self.exc_args)))
+            return "<static> raise %s(%s)" % (
+                self.exc_class,
+                ", ".join(map(repr, self.exc_args)),
+            )
 
     def get_targets(self):
         return []
@@ -867,8 +875,10 @@ class StaticTryRaise(Stmt):
         elif self.exc_args is None:
             return "static_try_raise %s" % (self.exc_class,)
         else:
-            return "static_try_raise %s(%s)" % (self.exc_class,
-                                     ", ".join(map(repr, self.exc_args)))
+            return "static_try_raise %s(%s)" % (
+                self.exc_class,
+                ", ".join(map(repr, self.exc_args)),
+            )
 
 
 class Return(Terminator):
@@ -1158,7 +1168,6 @@ class FreeVar(SlotEqualityCheckMixin, AbstractRHS):
                        loc=self.loc)
 
 
-
 class Var(SlotEqualityCheckMixin, AbstractRHS):
     """
     Attributes
@@ -1345,6 +1354,7 @@ class Scope(EqualityCheckMixin):
         Gets all known versions of a given name
         """
         vers = set()
+
         def walk(thename):
             redefs = self.var_redefinitions.get(thename, None)
             if redefs:
@@ -1714,7 +1724,6 @@ class FunctionIR(object):
 
         raise ValueError("Could not find an assignee for %s" % rhs_value)
 
-
     def dump(self, file=None):
         nofile = file is None
         # Avoid early bind of sys.stdout as default value
@@ -1726,7 +1735,7 @@ class FunctionIR(object):
             text = file.getvalue()
             if config.HIGHLIGHT_DUMPS:
                 try:
-                    import pygments
+                    import pygments     # noqa: F401
                 except ImportError:
                     msg = "Please install pygments to see highlighted dumps"
                     raise ValueError(msg)
@@ -1740,7 +1749,6 @@ class FunctionIR(object):
             else:
                 print(text)
 
-
     def dump_to_string(self):
         with StringIO() as sb:
             self.dump(file=sb)
@@ -1751,8 +1759,9 @@ class FunctionIR(object):
         gi = self.generator_info
         print("generator state variables:", sorted(gi.state_vars), file=file)
         for index, yp in sorted(gi.yield_points.items()):
-            print("yield point #%d: live variables = %s, weak live variables = %s"
-                  % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
+            m = ("yield point #%d: live variables = %s, "
+                 "weak live variables = %s")
+            print(m % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
                   file=file)
 
     def render_dot(self, filename_prefix="numba_ir", include_ir=True):
@@ -1785,12 +1794,12 @@ class FunctionIR(object):
                 label = sb.getvalue()
             if include_ir:
                 label = ''.join(
-                    ['  {}\l'.format(x) for x in label.splitlines()],
+                    [r'  {}\l'.format(x) for x in label.splitlines()],
                 )
-                label = "block {}\l".format(k) + label
+                label = r"block {}\l".format(k) + label
                 g.node(str(k), label=label, shape='rect')
             else:
-                label = "{}\l".format(k)
+                label = r"{}\l".format(k)
                 g.node(str(k), label=label, shape='circle')
         # Populate the edges
         for src, blk in self.blocks.items():
