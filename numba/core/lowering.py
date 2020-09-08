@@ -739,10 +739,7 @@ class Lower(BaseLower):
         if isinstance(signature.return_type, types.Phantom):
             return self.context.get_dummy_value()
 
-        if isinstance(expr.func, ir.Intrinsic):
-            fnty = expr.func.name
-        else:
-            fnty = self.typeof(expr.func.name)
+        fnty = self.typeof(expr.func.name)
 
         if isinstance(fnty, types.ObjModeDispatcher):
             res = self._lower_call_ObjModeDispatcher(fnty, expr, signature)
@@ -980,8 +977,7 @@ class Lower(BaseLower):
         # Normal function resolution
         self.debug_print("# calling normal function: {0}".format(fnty))
         self.debug_print("# signature: {0}".format(signature))
-        if (isinstance(expr.func, ir.Intrinsic) or
-                isinstance(fnty, types.ObjModeDispatcher)):
+        if isinstance(fnty, types.ObjModeDispatcher):
             argvals = expr.func.args
         else:
             argvals = self.fold_call_args(

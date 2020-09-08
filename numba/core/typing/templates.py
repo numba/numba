@@ -1084,10 +1084,6 @@ def bound_function(template_key):
     return wrapper
 
 
-class MacroTemplate(object):
-    pass
-
-
 # -----------------------------
 
 class Registry(object):
