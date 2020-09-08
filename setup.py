@@ -60,7 +60,6 @@ class NumbaBuildExt(build_ext):
         self.werror = 0
         self.wall = 0
         self.noopt = 0
-        self.debug = 1
 
     def run(self):
         extra_compile_args = []
