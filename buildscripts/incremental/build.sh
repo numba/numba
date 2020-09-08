@@ -6,7 +6,7 @@ source activate $CONDA_ENV
 set -v -e
 
 # Build numba extensions without silencing compile errors
-python setup.py build_ext -q --inplace
+python setup.py build_ext -q --inplace --debug --werror --wall
 # (note we don't install to avoid problems with extra long Windows paths
 #  during distutils-dependent tests -- e.g. test_pycc)
 

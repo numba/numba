@@ -65,7 +65,10 @@ class NumbaBuildExt(build_ext):
     def run(self):
         extra_compile_args = []
         if self.noopt:
-            extra_compile_args.append('-O0')
+            if sys.platform == 'win32':
+                extra_compile_args.append('/Od')
+            else:
+                extra_compile_args.append('-O0')
         if self.werror:
             extra_compile_args.append('-Werror')
         if self.wall:
