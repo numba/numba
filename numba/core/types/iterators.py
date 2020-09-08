@@ -1,10 +1,13 @@
-from .common import SimpleIterableType, SimpleIteratorType
+import typing as pt
+
+from .abstract import IterableType, Type
+from .common import Buffer, SimpleIterableType, SimpleIteratorType
 from ..errors import TypingError
 
 
 class RangeType(SimpleIterableType):
 
-    def __init__(self, dtype):
+    def __init__(self, dtype: Type):
         self.dtype = dtype
         name = "range_state_%s" % (dtype,)
         super(SimpleIterableType, self).__init__(name)
@@ -19,7 +22,7 @@ class RangeType(SimpleIterableType):
 
 class RangeIteratorType(SimpleIteratorType):
 
-    def __init__(self, dtype):
+    def __init__(self, dtype: Type):
         name = "range_iter_%s" % (dtype,)
         super(SimpleIteratorType, self).__init__(name)
         self._yield_type = dtype
@@ -59,7 +62,7 @@ class EnumerateType(SimpleIteratorType):
     Type instances are parametered with the underlying source type.
     """
 
-    def __init__(self, iterable_type):
+    def __init__(self, iterable_type: IterableType):
         from numba.core.types import Tuple, intp
         self.source_type = iterable_type.iterator_type
         yield_type = Tuple([intp, self.source_type.yield_type])
@@ -67,7 +70,7 @@ class EnumerateType(SimpleIteratorType):
         super(EnumerateType, self).__init__(name, yield_type)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.source_type
 
 
@@ -77,7 +80,7 @@ class ZipType(SimpleIteratorType):
     Type instances are parametered with the underlying source types.
     """
 
-    def __init__(self, iterable_types):
+    def __init__(self, iterable_types: pt.Tuple[IterableType, ...]):
         from numba.core.types import Tuple
         self.source_types = tuple(tp.iterator_type for tp in iterable_types)
         yield_type = Tuple([tp.yield_type for tp in self.source_types])
@@ -85,7 +88,7 @@ class ZipType(SimpleIteratorType):
         super(ZipType, self).__init__(name, yield_type)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.source_types
 
 
@@ -94,7 +97,7 @@ class ArrayIterator(SimpleIteratorType):
     Type class for iterators of array and buffer objects.
     """
 
-    def __init__(self, array_type):
+    def __init__(self, array_type: Buffer):
         self.array_type = array_type
         name = "iter(%s)" % (self.array_type,)
         nd = array_type.ndim

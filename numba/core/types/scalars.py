@@ -1,4 +1,5 @@
 import enum
+import typing as pt
 
 import numpy as np
 
@@ -11,42 +12,48 @@ from numba.np import npdatetime_helpers
 
 class Boolean(Hashable):
 
-    def cast_python_value(self, value):
+    def cast_python_value(self, value: pt.Any) -> bool:
         return bool(value)
 
 
-def parse_integer_bitwidth(name):
-    for prefix in ('int', 'uint'):
+def _parse_bitwith(name: str, *possible_prefixes: str) -> int:
+    bitwidth: pt.Optional[int] = None
+
+    for prefix in possible_prefixes:
         if name.startswith(prefix):
             bitwidth = int(name[len(prefix):])
+
+    if bitwidth is None:
+        raise ValueError(f"Unable to parse integer with from {name}")
+
     return bitwidth
 
 
-def parse_integer_signed(name):
+def parse_integer_signed(name: str) -> bool:
     signed = name.startswith('int')
     return signed
 
 
 @total_ordering
 class Integer(Number):
-    def __init__(self, name, bitwidth=None, signed=None):
+    def __init__(self, name: str, bitwidth: pt.Optional[int]=None, signed: pt.Optional[bool]=None):
         super(Integer, self).__init__(name)
         if bitwidth is None:
-            bitwidth = parse_integer_bitwidth(name)
+            bitwidth = _parse_bitwith(name, "int", "uint")
         if signed is None:
             signed = parse_integer_signed(name)
         self.bitwidth = bitwidth
         self.signed = signed
 
     @classmethod
-    def from_bitwidth(cls, bitwidth, signed=True):
+    def from_bitwidth(cls, bitwidth: int, signed: bool=True):
         name = ('int%d' if signed else 'uint%d') % bitwidth
         return cls(name)
 
-    def cast_python_value(self, value):
-        return getattr(np, self.name)(value)
+    def cast_python_value(self, value: pt.Any) -> int:
+        return getattr(np, self.name)(value)  # type: ignore[no-any-return]
 
-    def __lt__(self, other):
+    def __lt__(self, other: pt.Any) -> pt.Union[bool, NotImplemented]:
         if self.__class__ is not other.__class__:
             return NotImplemented
         if self.signed != other.signed:
@@ -54,7 +61,7 @@ class Integer(Number):
         return self.bitwidth < other.bitwidth
 
     @property
-    def maxval(self):
+    def maxval(self) -> int:
         """
         The maximum value representable by this type.
         """
@@ -64,7 +71,7 @@ class Integer(Number):
             return (1 << self.bitwidth) - 1
 
     @property
-    def minval(self):
+    def minval(self) -> int:
         """
         The minimal value representable by this type.
         """
@@ -75,7 +82,7 @@ class Integer(Number):
 
 
 class IntegerLiteral(Literal, Integer):
-    def __init__(self, value):
+    def __init__(self, value: int):
         self._literal_init(value)
         name = 'Literal[int]({})'.format(value)
         basetype = self.literal_type
@@ -97,17 +104,14 @@ Literal.ctor_map[int] = IntegerLiteral
 
 @total_ordering
 class Float(Number):
-    def __init__(self, *args, **kws):
-        super(Float, self).__init__(*args, **kws)
-        # Determine bitwidth
-        assert self.name.startswith('float')
-        bitwidth = int(self.name[5:])
-        self.bitwidth = bitwidth
+    def __init__(self, name: str):
+        super(Float, self).__init__(name)
+        self.bitwidth = _parse_bitwith(name, "float")
 
-    def cast_python_value(self, value):
-        return getattr(np, self.name)(value)
+    def cast_python_value(self, value: pt.Any) -> float:
+        return getattr(np, self.name)(value)  # type: ignore[no-any-return]
 
-    def __lt__(self, other):
+    def __lt__(self, other: pt.Any) -> pt.Union[bool, NotImplemented]:
         if self.__class__ is not other.__class__:
             return NotImplemented
         return self.bitwidth < other.bitwidth
@@ -115,18 +119,15 @@ class Float(Number):
 
 @total_ordering
 class Complex(Number):
-    def __init__(self, name, underlying_float, **kwargs):
-        super(Complex, self).__init__(name, **kwargs)
+    def __init__(self, name: str, underlying_float: Float):
+        super(Complex, self).__init__(name)
         self.underlying_float = underlying_float
-        # Determine bitwidth
-        assert self.name.startswith('complex')
-        bitwidth = int(self.name[7:])
-        self.bitwidth = bitwidth
+        self.bitwidth = _parse_bitwith(name, "complex")
 
-    def cast_python_value(self, value):
-        return getattr(np, self.name)(value)
+    def cast_python_value(self, value: pt.Any) -> complex:
+        return getattr(np, self.name)(value)  # type: ignore[no-any-return]
 
-    def __lt__(self, other):
+    def __lt__(self, other: pt.Any) -> pt.Union[bool, NotImplemented]:
         if self.__class__ is not other.__class__:
             return NotImplemented
         return self.bitwidth < other.bitwidth
@@ -137,13 +138,15 @@ class _NPDatetimeBase(Type):
     Common base class for np.datetime64 and np.timedelta64.
     """
 
-    def __init__(self, unit, *args, **kws):
+    type_name: pt.ClassVar[str]
+
+    def __init__(self, unit: str):
         name = '%s[%s]' % (self.type_name, unit)
         self.unit = unit
         self.unit_code = npdatetime_helpers.DATETIME_UNITS[self.unit]
-        super(_NPDatetimeBase, self).__init__(name, *args, **kws)
+        super(_NPDatetimeBase, self).__init__(name)
 
-    def __lt__(self, other):
+    def __lt__(self, other: pt.Any) -> pt.Union[bool, NotImplemented]:
         if self.__class__ is not other.__class__:
             return NotImplemented
         # A coarser-grained unit is "smaller", i.e. less precise values
@@ -151,7 +154,7 @@ class _NPDatetimeBase(Type):
         # also greater...).
         return self.unit_code < other.unit_code
 
-    def cast_python_value(self, value):
+    def cast_python_value(self, value: pt.Any) -> pt.Any:
         cls = getattr(np, self.type_name)
         if self.unit:
             return cls(value, self.unit)
@@ -174,7 +177,7 @@ class EnumClass(Dummy):
     """
     basename = "Enum class"
 
-    def __init__(self, cls, dtype):
+    def __init__(self, cls: pt.Type[enum.Enum], dtype: Type):
         assert isinstance(cls, type)
         assert isinstance(dtype, Type)
         self.instance_class = cls
@@ -183,11 +186,11 @@ class EnumClass(Dummy):
         super(EnumClass, self).__init__(name)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.instance_class, self.dtype
 
     @utils.cached_property
-    def member_type(self):
+    def member_type(self) -> Type:
         """
         The type of this class' members.
         """
@@ -201,7 +204,7 @@ class IntEnumClass(EnumClass):
     basename = "IntEnum class"
 
     @utils.cached_property
-    def member_type(self):
+    def member_type(self) -> Type:
         """
         The type of this class' members.
         """
@@ -215,7 +218,7 @@ class EnumMember(Type):
     basename = "Enum"
     class_type_class = EnumClass
 
-    def __init__(self, cls, dtype):
+    def __init__(self, cls: pt.Type[enum.Enum], dtype: Type):
         assert isinstance(cls, type)
         assert isinstance(dtype, Type)
         self.instance_class = cls
@@ -224,11 +227,11 @@ class EnumMember(Type):
         super(EnumMember, self).__init__(name)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.instance_class, self.dtype
 
     @property
-    def class_type(self):
+    def class_type(self) -> Type:
         """
         The type of this member's class.
         """

@@ -40,7 +40,7 @@ class Pair(Type):
         super(Pair, self).__init__(name=name)
 
     @property
-    def key(self) -> pt.Tuple[Type, Type]:
+    def key(self) -> pt.Any:
         return self.first_type, self.second_type
 
     def unify(self, typingctx, other):
@@ -249,7 +249,7 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
         return self.__class__.__name__, (self.dtype, self.count)
 
     @property
-    def key(self) -> pt.Tuple[Type, int]:
+    def key(self) -> pt.Any:
         return self.dtype, self.count
 
     def unify(self, typingctx, other):
@@ -336,7 +336,7 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
         return self.__class__.__name__, tuple(t for t in self.types)
 
     @property
-    def key(self) -> pt.Tuple[Type, ...]:
+    def key(self) -> pt.Any:
         return self.types
 
     def unify(self, typingctx, other):
@@ -399,7 +399,7 @@ class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
         return UniTupleIter(self)
 
     @property
-    def key(self) -> pt.Tuple[pt.Type[pt.NamedTuple], Type, int]:
+    def key(self) -> pt.Any:
         return self.instance_class, self.dtype, self.count
 
 
@@ -415,7 +415,7 @@ class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
         super(NamedTuple, self).__init__(name)
 
     @property
-    def key(self) -> pt.Tuple[pt.Type[pt.NamedTuple], pt.Tuple[Type, ...]]:
+    def key(self) -> pt.Any:
         return self.instance_class, self.types
 
 
@@ -573,7 +573,7 @@ class Set(Container):
         super(Set, self).__init__(name=name)
 
     @property
-    def key(self) -> pt.Tuple[Type, bool]:
+    def key(self) -> pt.Any:
         return self.dtype, self.reflected
 
     @property
@@ -779,7 +779,7 @@ class DictType(IterableType, InitialValue):
                     return DictType(self.key_type, other.value_type)
 
     @property
-    def key(self) -> pt.Tuple[Type, Type, str]:
+    def key(self) -> pt.Any:
         return self.key_type, self.value_type, str(self.initial_value)
 
     def __unliteral__(self) -> "DictType":

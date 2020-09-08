@@ -1,13 +1,15 @@
 import collections
+import typing as pt
 
 from llvmlite import ir
 
 from .abstract import DTypeSpec, IteratorType, MutableSequence, Number, Type
-from .common import Buffer, Opaque, SimpleIteratorType
+from .common import Buffer, BufferLayoutType, Opaque, SimpleIteratorType
 from numba.core.typeconv import Conversion
 from numba.core import utils
 from .misc import UnicodeType
 from .containers import Bytes
+
 
 class CharSeq(Type):
     """
@@ -15,13 +17,13 @@ class CharSeq(Type):
     """
     mutable = True
 
-    def __init__(self, count):
+    def __init__(self, count: int):
         self.count = count
         name = "[char x %d]" % count
         super(CharSeq, self).__init__(name)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.count
 
     def can_convert_from(self, typingctx, other):
@@ -35,13 +37,13 @@ class UnicodeCharSeq(Type):
     """
     mutable = True
 
-    def __init__(self, count):
+    def __init__(self, count: int):
         self.count = count
         name = "[unichr x %d]" % count
         super(UnicodeCharSeq, self).__init__(name)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.count
 
     def can_convert_from(self, typingctx, other):
@@ -158,7 +160,7 @@ class Record(Type):
     def mangling_args(self):
         return self.__class__.__name__, (self._code,)
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Returns the number of fields
         """
         return len(self.fields)
@@ -213,18 +215,18 @@ class DType(DTypeSpec, Opaque):
     np.dtype('int32')
     """
 
-    def __init__(self, dtype):
+    def __init__(self, dtype: Type):
         assert isinstance(dtype, Type)
         self._dtype = dtype
         name = "dtype(%s)" % (dtype,)
         super(DTypeSpec, self).__init__(name)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.dtype
 
     @property
-    def dtype(self):
+    def dtype(self) -> Type:
         return self._dtype
 
     def __getitem__(self, arg):
@@ -237,7 +239,7 @@ class NumpyFlatType(SimpleIteratorType, MutableSequence):
     Type class for `ndarray.flat()` objects.
     """
 
-    def __init__(self, arrty):
+    def __init__(self, arrty: Buffer):
         self.array_type = arrty
         yield_type = arrty.dtype
         self.dtype = yield_type
@@ -245,7 +247,7 @@ class NumpyFlatType(SimpleIteratorType, MutableSequence):
         super(NumpyFlatType, self).__init__(name, yield_type)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.array_type
 
 
@@ -254,7 +256,7 @@ class NumpyNdEnumerateType(SimpleIteratorType):
     Type class for `np.ndenumerate()` objects.
     """
 
-    def __init__(self, arrty):
+    def __init__(self, arrty: Buffer):
         from . import Tuple, UniTuple, intp
         self.array_type = arrty
         yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
@@ -262,7 +264,7 @@ class NumpyNdEnumerateType(SimpleIteratorType):
         super(NumpyNdEnumerateType, self).__init__(name, yield_type)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.array_type
 
 
@@ -276,7 +278,7 @@ class NumpyNdIterType(IteratorType):
     F arrays).
     """
 
-    def __init__(self, arrays):
+    def __init__(self, arrays: pt.Sequence[Buffer]):
         # Note inputs arrays can also be scalars, in which case they are
         # broadcast.
         self.arrays = tuple(arrays)
@@ -301,18 +303,18 @@ class NumpyNdIterType(IteratorType):
         return 'F' if c['F'] > c['C'] else 'C'
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.arrays
 
     @property
-    def views(self):
+    def views(self) -> pt.List[Array]:
         """
         The views yielded by the iterator.
         """
         return [Array(dtype, 0, 'C') for dtype in self.dtypes]
 
     @property
-    def yield_type(self):
+    def yield_type(self) -> Type:
         from . import BaseTuple
         views = self.views
         if len(views) > 1:
@@ -321,7 +323,7 @@ class NumpyNdIterType(IteratorType):
             return views[0]
 
     @utils.cached_property
-    def indexers(self):
+    def indexers(self) -> pt.List[pt.Tuple[str, int, int, pt.List[int]]]:
         """
         A list of (kind, start_dim, end_dim, indices) where:
         - `kind` is either "flat", "indexed", "0d" or "scalar"
@@ -329,7 +331,8 @@ class NumpyNdIterType(IteratorType):
           this indexing takes place
         - `indices` is the indices of the indexed arrays in self.arrays
         """
-        d = collections.OrderedDict()
+        d: pt.Dict[pt.Tuple[str, int, int],
+                   pt.List[int]] = collections.OrderedDict()
         layout = self.layout
         ndim = self.ndim
         assert layout in 'CF'
@@ -352,7 +355,7 @@ class NumpyNdIterType(IteratorType):
         return list(k + (v,) for k, v in d.items())
 
     @utils.cached_property
-    def need_shaped_indexing(self):
+    def need_shaped_indexing(self) -> bool:
         """
         Whether iterating on this iterator requires keeping track of
         individual indices inside the shape.  If False, only a single index
@@ -377,7 +380,7 @@ class NumpyNdIndexType(SimpleIteratorType):
     Type class for `np.ndindex()` objects.
     """
 
-    def __init__(self, ndim):
+    def __init__(self, ndim: int):
         from . import UniTuple, intp
         self.ndim = ndim
         yield_type = UniTuple(intp, self.ndim)
@@ -385,7 +388,7 @@ class NumpyNdIndexType(SimpleIteratorType):
         super(NumpyNdIndexType, self).__init__(name, yield_type)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.ndim
 
 
@@ -394,12 +397,19 @@ class Array(Buffer):
     Type class for Numpy arrays.
     """
 
-    def __init__(self, dtype, ndim, layout, readonly=False, name=None,
-                 aligned=True):
+    def __init__(
+        self,
+        dtype: Type,
+        ndim: int,
+        layout: BufferLayoutType,
+        readonly: bool = False,
+        name: pt.Optional[str] = None,
+        aligned: bool = True
+    ):
         if readonly:
             self.mutable = False
         if (not aligned or
-            (isinstance(dtype, Record) and not dtype.aligned)):
+                (isinstance(dtype, Record) and not dtype.aligned)):
             self.aligned = False
         if name is None:
             type_name = "array"
@@ -417,7 +427,13 @@ class Array(Buffer):
                 'aligned' if self.aligned else 'unaligned']
         return self.__class__.__name__, args
 
-    def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
+    def copy(
+        self,
+        dtype: pt.Optional[Type] = None,
+        ndim: pt.Optional[int] = None,
+        layout: pt.Optional[BufferLayoutType] = None,
+        readonly: pt.Optional[bool] = None,
+    ) -> "Array":
         if dtype is None:
             dtype = self.dtype
         if ndim is None:
@@ -430,7 +446,7 @@ class Array(Buffer):
                      aligned=self.aligned)
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.dtype, self.ndim, self.layout, self.mutable, self.aligned
 
     def unify(self, typingctx, other):
@@ -455,13 +471,13 @@ class Array(Buffer):
         Convert this Array to the *other*.
         """
         if (isinstance(other, Array) and other.ndim == self.ndim
-            and other.dtype == self.dtype):
+                and other.dtype == self.dtype):
             if (other.layout in ('A', self.layout)
                 and (self.mutable or not other.mutable)
-                and (self.aligned or not other.aligned)):
+                    and (self.aligned or not other.aligned)):
                 return Conversion.safe
 
-    def is_precise(self):
+    def is_precise(self) -> bool:
         return self.dtype.is_precise()
 
 
@@ -469,6 +485,7 @@ class ArrayCTypes(Type):
     """
     This is the type for `np.ndarray.ctypes`.
     """
+
     def __init__(self, arytype):
         # This depends on the ndim for the shape and strides attributes,
         # even though they are not implemented, yet.
@@ -503,6 +520,7 @@ class ArrayFlags(Type):
     """
     This is the type for `np.ndarray.flags`.
     """
+
     def __init__(self, arytype):
         self.array_type = arytype
         name = "ArrayFlags({0})".format(self.array_type)
@@ -520,7 +538,7 @@ class NestedArray(Array):
     of dimensions is part of the type of a NestedArray.
     """
 
-    def __init__(self, dtype, shape):
+    def __init__(self, dtype: Number, shape: pt.Tuple[int, ...]):
         assert dtype.bitwidth % 8 == 0, \
             "Dtype bitwidth must be a multiple of bytes"
         self._shape = shape
@@ -529,29 +547,29 @@ class NestedArray(Array):
         super(NestedArray, self).__init__(dtype, ndim, 'C', name=name)
 
     @property
-    def shape(self):
+    def shape(self) -> pt.Tuple[int, ...]:
         return self._shape
 
     @property
-    def nitems(self):
+    def nitems(self) -> int:
         l = 1
         for s in self.shape:
             l = l * s
         return l
 
     @property
-    def size(self):
-        return self.dtype.bitwidth // 8
+    def size(self) -> int:
+        return self.dtype.bitwidth // 8  # type: ignore[no-any-return, attr-defined]
 
     @property
-    def strides(self):
+    def strides(self) -> pt.Tuple[int, ...]:
         stride = self.size
         strides = []
         for i in reversed(self._shape):
-             strides.append(stride)
-             stride *= i
+            strides.append(stride)
+            stride *= i
         return tuple(reversed(strides))
 
     @property
-    def key(self):
+    def key(self) -> pt.Any:
         return self.dtype, self.shape

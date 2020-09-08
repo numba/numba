@@ -105,7 +105,7 @@ class Buffer(IterableType, ArrayCompatible):
                               readonly=not self.mutable)
 
     @property
-    def key(self) -> pt.Tuple[Type, int, BufferLayoutType, bool]:
+    def key(self) -> pt.Any:
         return self.dtype, self.ndim, self.layout, self.mutable
 
     @property

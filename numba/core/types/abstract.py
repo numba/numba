@@ -248,6 +248,8 @@ class Number(Hashable):
     Base class for number types.
     """
 
+    bitwidth: int
+
     def unify(self, typingctx, other):
         """
         Unify the two number types using Numpy's rules.
@@ -302,7 +304,7 @@ class IterableType(Type):
 
     @property
     @abstractmethod
-    def iterator_type(self):
+    def iterator_type(self) -> "IteratorType":
         """
         The iterator type obtained when calling iter() (explicitly or implicitly).
         """
@@ -334,7 +336,7 @@ class IteratorType(IterableType):
 
     @property
     @abstractmethod
-    def yield_type(self):
+    def yield_type(self) -> Type:
         """
         The type of values yielded by the iterator.
         """
@@ -342,7 +344,7 @@ class IteratorType(IterableType):
     # This is a property to avoid recursivity (for pickling)
 
     @property
-    def iterator_type(self):
+    def iterator_type(self) -> "IteratorType":
         return self
 
 
