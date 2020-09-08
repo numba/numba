@@ -1268,7 +1268,6 @@ def _fix_nested_array(func_ir):
         extra_dims = fix_dependencies(size_tuple_def, extra_dims)
         size_tuple_def.items += extra_dims
         # Replace rhs_def to be getitem
-
         getitem = ir.Expr.getitem(
             value=get_definition(func_ir, lhs, lhs_only=True),
             index=stmt.index,
