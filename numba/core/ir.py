@@ -412,7 +412,7 @@ class Expr(Inst):
         return self._loc
 
     def __getattr__(self, name):
-        if name not in {'_op', '_loc', '_kws'}:
+        if name not in self.__slots__:
             try:
                 return self._kws[name]
             except KeyError:
@@ -420,7 +420,7 @@ class Expr(Inst):
         raise AttributeError(name)
 
     def __setattr__(self, name, value):
-        if name in {'op', '_op', 'loc', '_loc', '_kws'}:
+        if name in self.__slots__:
             Inst.__setattr__(self, name, value)
         else:
             self._kws[name] = value
