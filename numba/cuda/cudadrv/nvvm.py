@@ -320,6 +320,11 @@ def find_closest_arch(mycc):
     """
     supported_cc = get_supported_ccs()
 
+    if not supported_cc:
+        msg = "No supported GPU compute capabilities found. " \
+              "Please check your cudatoolkit version matches your CUDA version."
+        raise NvvmSupportError(msg)
+
     for i, cc in enumerate(supported_cc):
         if cc == mycc:
             # Matches
