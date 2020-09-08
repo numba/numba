@@ -2824,7 +2824,7 @@ class ArrayAnalysis(object):
                     return None
                 concat_shapes = sum(shapes, ())
                 return (concat_shapes, [])
-            except errors.GuardException:
+            except GuardException:
                 return None
 
         # else arrays
