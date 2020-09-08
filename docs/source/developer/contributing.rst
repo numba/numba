@@ -149,9 +149,9 @@ arguments:
 - ``--werror``: Compiles Numba's CPython extensions with the ``-Werror`` flag.
 - ``--wall``: Compiles Numba's CPython extensions with the ``-Wall`` flag.
 
-Note that Numba's CI and the conda recipe for Linux and macOS build with the
-``--werror`` and ``--wall`` flags, so any contributions that change the CPython
-extensions should be tested with these flags too.
+Note that Numba's CI and the conda recipe for Linux build with the ``--werror``
+and ``--wall`` flags, so any contributions that change the CPython extensions
+should be tested with these flags too.
 
 Running tests
 '''''''''''''
