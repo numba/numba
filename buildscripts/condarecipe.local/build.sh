@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ] && [[ "$(uname -p)" == *"86"* ]]; then
+if [[ "$(uname -s)" == *"Linux"* ]] && [[ "$(uname -p)" == *"86"* ]]; then
     EXTRA_BUILD_EXT_FLAGS="--werror --wall"
 else
     EXTRA_BUILD_EXT_FLAGS=""
