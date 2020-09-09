@@ -12,7 +12,12 @@ exemptLabels:
   - bug - miscompile
   - bug - regression
   - bug - segfault
+  - performance - compile time
+  - performance - run time
+  - performance
   - feature_request
+  - enhancement
+  - task
 # Label to use when marking an issue as stale
 staleLabel: stale
 # Comment to post when marking an issue as stale. Set to `false` to disable
