@@ -13,7 +13,7 @@
 #define NUMBA_EXPORT_FUNC(_rettype) VISIBILITY_HIDDEN _rettype
 #define NUMBA_EXPORT_DATA(_vartype) VISIBILITY_HIDDEN _vartype
 
-#define NUMBA_COMPILING_AOT
+#define PYCC_COMPILING
 
 #include "../_helperlib.c"
 #include "../_dynfunc.c"

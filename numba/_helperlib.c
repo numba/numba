@@ -978,7 +978,7 @@ numba_do_raise(PyObject *exc_packed)
     return status;
 }
 
-#ifdef NUMBA_COMPILING_AOT
+#ifdef PYCC_COMPILING
 /* AOT avoid the use of `numba.core.serialize` */
 NUMBA_EXPORT_FUNC(PyObject *)
 numba_unpickle(const char *data, int n, const char *hashed)
