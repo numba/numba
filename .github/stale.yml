@@ -21,4 +21,4 @@ markComment: >
   recent activity. It will be closed in 7 days if no further activity occurs.
 # Comment to post when closing a stale issue. Set to `false` to disable
 closeComment: >
-  This issue has been automatically closed as it was stale
+  This issue has been automatically closed as it was stale.
