@@ -49,6 +49,7 @@ GPU as possible - in particular, the following are supported:
 * Shared memory: declarations of shared memory arrays must be on separate source
   lines, since the simulator uses source line information to keep track of
   allocations of shared memory across threads.
+* Host and device memory operations.
 * :func:`.syncthreads` is supported - however, in the case where divergent
   threads enter different :func:`.syncthreads` calls, the launch will not fail,
   but unexpected behaviour will occur. A future version of the simulator may
