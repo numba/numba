@@ -106,7 +106,7 @@ typedef struct DispatcherObject{
     char can_fallback;       /* Can fallback */
     char exact_match_required;
     /* Borrowed references */
-    PyObject *firstdef, *fallbackdef, *interpdef;
+    PyObject *firstdef, *fallbackdef;
     /* Whether to fold named arguments and default values (false for lifted loops)*/
     int fold_args;
     /* Whether the last positional argument is a stararg */
@@ -163,7 +163,6 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     self->can_fallback = can_fallback;
     self->firstdef = NULL;
     self->fallbackdef = NULL;
-    self->interpdef = NULL;
     self->has_stararg = has_stararg;
     self->exact_match_required = exact_match_required;
     return 0;
@@ -184,14 +183,13 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     int i, sigsz;
     int *sig;
     int objectmode = 0;
-    int interpmode = 0;
 
-    if (!PyArg_ParseTuple(args, "OO|ii", &sigtup,
-                          &cfunc, &objectmode, &interpmode)) {
+    if (!PyArg_ParseTuple(args, "OO|i", &sigtup,
+                          &cfunc, &objectmode)) {
         return NULL;
     }
 
-    if (!interpmode && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
+    if (!PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
         PyErr_SetString(PyExc_TypeError, "must be builtin_function_or_method");
         return NULL;
     }
@@ -203,23 +201,18 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
         sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
     }
 
-    if (!interpmode) {
-        /* The reference to cfunc is borrowed; this only works because the
-           derived Python class also stores an (owned) reference to cfunc. */
-        dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
+    /* The reference to cfunc is borrowed; this only works because the
+       derived Python class also stores an (owned) reference to cfunc. */
+    dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
 
-        /* Add first definition */
-        if (!self->firstdef) {
-            self->firstdef = cfunc;
-        }
+    /* Add first definition */
+    if (!self->firstdef) {
+        self->firstdef = cfunc;
     }
+
     /* Add pure python fallback */
     if (!self->fallbackdef && objectmode){
         self->fallbackdef = cfunc;
-    }
-    /* Add interpreter fallback */
-    if (!self->interpdef && interpmode) {
-        self->interpdef = cfunc;
     }
 
     free(sig);

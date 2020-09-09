@@ -454,7 +454,6 @@ class NoPythonBackend(LoweringPass):
             call_helper=lowered.call_helper,
             signature=signature,
             objectmode=False,
-            interpmode=False,
             lifted=state.lifted,
             fndesc=lowered.fndesc,
             environment=lowered.env,
