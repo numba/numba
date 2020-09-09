@@ -6,7 +6,7 @@ source activate $CONDA_ENV
 set -v -e
 
 # Build numba extensions without silencing compile errors
-if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
+if [[ "$(uname -s)" == *"Linux"* ]] && [[ "$(uname -p)" == *"86"* ]]; then
     EXTRA_BUILD_EXT_FLAGS="--werror --wall"
 else
     EXTRA_BUILD_EXT_FLAGS=""
