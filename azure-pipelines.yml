@@ -100,6 +100,7 @@ jobs:
         NUMPY: '1.17'
         CONDA_ENV: travisci
         TEST_START_INDEX: 13
+        USE_C3I_TEST_CHANNEL: yes
       py37_np118:
         PYTHON: '3.7'
         NUMPY: '1.18'
@@ -110,6 +111,7 @@ jobs:
         NUMPY: '1.18'
         CONDA_ENV: travisci
         TEST_START_INDEX: 15
+        USE_C3I_TEST_CHANNEL: yes
 
 - template: buildscripts/azure/azure-windows.yml
   parameters:
