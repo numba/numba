@@ -18,6 +18,8 @@ exemptLabels:
   - feature_request
   - enhancement
   - task
+# Limit to only `issues` or `pulls`
+only: issues
 # Label to use when marking an issue as stale
 staleLabel: stale
 # Comment to post when marking an issue as stale. Set to `false` to disable
