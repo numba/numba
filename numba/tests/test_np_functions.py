@@ -45,6 +45,10 @@ def append(arr, values, axis):
     return np.append(arr, values, axis=axis)
 
 
+def putmask(a, mask, values):
+    return np.putmask(a, mask, values)
+
+
 def count_nonzero(arr, axis):
     return np.count_nonzero(arr, axis=axis)
 
@@ -576,6 +580,107 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(arr, values, axis=0.0)
         self.assertIn(
             'The third argument "axis" must be an integer',
+            str(raises.exception)
+        )
+
+    def test_putmask(self):
+        def arrays():
+            yield np.array([]), np.array([]), np.array([])
+            yield np.array([]), np.array([]), np.array([2, 2])
+            yield np.array(0), True, 2
+            yield np.array(0), 0, 2
+            yield np.array([0, 0]), np.array([12, 3]), np.array([2, 2])
+            yield np.array([0, 0]), np.array([-1, 1]), np.array([2, 2, 3])
+            yield np.array([0, 0]), np.array([0, 1]), np.array([2])
+            yield np.array([0, 0]), (0, 11), 2
+            x = np.arange(10).reshape((5, 2))
+            mask = np.arange(10) % 2 == 0
+            yield x, mask, 3.1
+            yield x, mask.astype(np.float), ((1.4, 2), (-1.9, -13.3))
+            yield x.astype(np.float), mask, ((np.inf, 2.0), (np.nan, -1.0))
+            yield x.astype(np.complex), mask, np.nan
+            yield x.astype(np.complex), mask, (True, False)
+            yield x.astype(np.complex), mask, (1 + 3j, 0)
+            yield x.astype(np.uint8), mask, (999.9, 1e-5)
+            x = np.array([[1 + 0j, -1 + 3j], [10 + 3j, 0 + 8j]])
+            mask = ((1, 0), (-1, 0))
+            yield x, mask, -9 + 0j
+            mask = ((1 + 1j, 0 + 1j), (1 + 0j, 0 + 0j))
+            yield x, mask, (-9 + 1j, 1)
+            yield x, mask, (1e-8, np.finfo(np.float).max)
+
+        pyfunc = putmask
+        cfunc = jit(nopython=True)(pyfunc)
+        for a, mask, values in arrays():
+            # apply to separate copies because a is updated inplace.
+            pya, ca = np.copy(a), np.copy(a)
+            pyfunc(pya, mask, values)
+            cfunc(ca, mask, values)
+            expected = pya
+            got = ca
+            self.assertPreciseEqual(expected, got)
+
+    def test_putmask_exceptions(self):
+        pyfunc = putmask
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.array([[1, 2, 3], [-1, -2, -3]])
+        mask = np.array([1, 0, 1, 0, 1, 1])
+        values = np.array([10, 9])
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(a.tolist(), mask, values)
+        self.assertIn(
+            'a must be np.ndarray',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(a, None, values)
+        self.assertIn(
+            'mask and values must be array-like',
+            str(raises.exception)
+        )
+
+        if numpy_version >= (1, 16):
+            with self.assertRaises(TypingError) as raises:
+                cfunc(a.astype(np.float), mask, values.astype(np.complex))
+            self.assertIn(
+                'cannot convert values to dtype of a',
+                str(raises.exception)
+            )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(a, mask, 1 + 0j)
+        self.assertIn(
+            'cannot assign complex dtype to non-complex',
+            str(raises.exception)
+        )
+
+        with self.assertRaises(TypingError) as raises:
+            cfunc(a, mask, None)
+        self.assertIn(
+            'mask and values must be array-like',
+            str(raises.exception)
+        )
+
+        self.disable_leak_check()
+
+        a = np.arange(3)
+        with self.assertRaises(ValueError) as raises:
+            cfunc(a, (True, False, True), np.inf)
+        self.assertIn(
+            'cannot convert non-finite value to integral',
+            str(raises.exception)
+        )
+
+        self.disable_leak_check()
+
+        a = np.array([1, 2, 3, 4])
+        m = np.array([1, 0, 1])
+        with self.assertRaises(ValueError) as raises:
+            cfunc(a, m, values)
+        self.assertIn(
+            'a and mask must be the same size',
             str(raises.exception)
         )
 

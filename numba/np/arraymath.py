@@ -3284,6 +3284,54 @@ def any_where(context, builder, sig, args):
     return impl_ret_new_ref(context, builder, sig.return_type, res)
 
 
+@overload(np.putmask)
+def np_putmask(a, mask, values):
+    if not isinstance(a, types.Array):
+        raise TypingError('a must be np.ndarray')
+    if not (type_can_asarray(mask) and type_can_asarray(values)):
+        raise TypingError('mask and values must be array-like')
+
+    if isinstance(values, types.Array) and numpy_version >= (1, 16):
+        # never down-cast array types
+        values_dt = _dtype_of_compound(values)
+        a_dt = _dtype_of_compound(a)
+        if not np.can_cast(values_dt, a_dt):
+            raise TypingError('cannot convert values to dtype of a')
+    else:
+        # never down-cast complex types
+        values_complex = isinstance(values, types.Complex)
+        a_complex = isinstance(a.dtype, types.Complex)
+        if values_complex and not a_complex:
+            raise TypingError('cannot assign complex dtype to non-complex')
+
+    @register_jitable
+    def assign_values(a, mask, values):
+        if a.size != mask.size:
+            raise ValueError('putmask(): a and mask must be the same size')
+        flat_mask = mask.flat
+        for idx in range(len(flat_mask)):
+            if flat_mask[idx]:
+                a.flat[idx] = values.flat[idx % values.size]
+
+    if isinstance(a.dtype, types.Integer):
+        # special case: convert finite float scalars to int
+        def putmask_impl(a, mask, values):
+            mask = np.asarray(mask)
+            values = np.asarray(values)
+            vfin = np.isfinite(values)
+            if not np.all(np.asarray(vfin)):
+                msg = 'putmask(): cannot convert non-finite value to integral'
+                raise ValueError(msg)
+            assign_values(a, mask, values)
+    else:
+        def putmask_impl(a, mask, values):
+            mask = np.asarray(mask)
+            values = np.asarray(values)
+            assign_values(a, mask, values)
+
+    return putmask_impl
+
+
 @overload(np.real)
 def np_real(a):
     def np_real_impl(a):
