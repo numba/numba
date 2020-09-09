@@ -81,6 +81,10 @@ Some limitations of the simulator include:
 * Most of the driver API is unimplemented.
 * It is not possible to link PTX code with CUDA Python functions.
 * Warps and warp-level operations are not yet implemented.
+* Operations directly against device arrays are only partially supported, that
+  is, testing equality, less than, greater than, and basic mathematical 
+  operations are supported, but many other operations,  such as the in in-place 
+  operators and bit operations are not.
 
 Obviously, the speed of the simulator is also much lower than that of a real
 device. It may be necessary to reduce the size of input data and the size of the
