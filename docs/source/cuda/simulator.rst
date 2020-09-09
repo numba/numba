@@ -84,7 +84,7 @@ Some limitations of the simulator include:
 * Operations directly against device arrays are only partially supported, that
   is, testing equality, less than, greater than, and basic mathematical 
   operations are supported, but many other operations,  such as the in in-place 
-  operators and bit operations are not.
+  operators and bit operators are not.
 
 Obviously, the speed of the simulator is also much lower than that of a real
 device. It may be necessary to reduce the size of input data and the size of the
