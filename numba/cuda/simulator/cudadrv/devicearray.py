@@ -186,6 +186,46 @@ class FakeCUDAArray(object):
     def __len__(self):
         return len(self._ary)
 
+    # TODO: Add inplace, bitwise, unary magic methods (or maybe inherit this class from numpy)?
+    def __eq__(self, other):
+        return FakeCUDAArray(self._ary == other)
+
+    def __ne__(self, other):
+        return FakeCUDAArray(self._ary != other)
+
+    def __lt__(self, other):
+        return FakeCUDAArray(self._ary < other)
+
+    def __le__(self, other):
+        return FakeCUDAArray(self._ary <= other)
+
+    def __gt__(self, other):
+        return FakeCUDAArray(self._ary > other)
+
+    def __ge__(self, other):
+        return FakeCUDAArray(self._ary >= other)
+
+    def __add__(self, other):
+        return FakeCUDAArray(self._ary + other)
+
+    def __sub__(self, other):
+        return FakeCUDAArray(self._ary - other)
+
+    def __mul__(self, other):
+        return FakeCUDAArray(self._ary * other)
+
+    def __floordiv__(self, other):
+        return FakeCUDAArray(self._ary // other)
+
+    def __truediv__(self, other):
+        return FakeCUDAArray(self._ary / other)
+
+    def __mod__(self, other):
+        return FakeCUDAArray(self._ary % other)
+
+    def __pow__(self, other):
+        return FakeCUDAArray(self._ary ** other)
+
     def split(self, section, stream=0):
         return [
             FakeCUDAArray(a)

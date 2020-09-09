@@ -39,11 +39,14 @@ class FakeCUDAContext(object):
         return _MemoryInfo(float('inf'), float('inf'))
 
     def memalloc(self, sz):
-        '''Returns a thing that, if you view it funny, looks like a malloc'''
+        """
+        Allocates memory on the simulated device
+        At present, there is no division between simulated host memory and simulated device memory.
+        """
         return np.ndarray(sz, dtype='u1')
 
     def memhostalloc(self, sz, mapped=False, portable=False, wc=False):
-        '''Returns a thing that, if you view it funny, looks like a malloc'''
+        '''Allocates memory on the host'''
         return self.memalloc(sz)
 
 
