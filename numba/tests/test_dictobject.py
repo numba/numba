@@ -2149,6 +2149,34 @@ class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
 
         np.testing.assert_allclose(foo(), np.ones(3) * 10)
 
+    def test_dict_with_single_literallist_value(self):
+        #see issue #6094
+        @njit
+        def foo():
+            z = {"A": [lambda a: 2 * a, "B"]}
+            return z["A"][0](5)
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+
+    def test_tuple_not_in_mro(self):
+        # Related to #6094, make sure that LiteralStrKey does not inherit from
+        # types.BaseTuple as this breaks isinstance checks.
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            self.assertFalse(isinstance(x, types.BaseTuple))
+            self.assertTrue(isinstance(x, types.LiteralStrKeyDict))
+            return lambda x: ...
+
+        @njit
+        def foo():
+            d = {'a': 1, 'b': 'c'}
+            bar(d)
+
+        foo()
+
 
 if __name__ == '__main__':
     unittest.main()

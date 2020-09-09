@@ -474,6 +474,11 @@ def math_isinf_isnan_int(context, builder, sig, args):
     return lc.Constant.int(lc.Type.int(1), 0)
 
 
+@lower(math.isfinite, types.Integer)
+def math_isfinite_int(context, builder, sig, args):
+    return lc.Constant.int(lc.Type.int(1), 1)
+
+
 def gen_deg_rad(const):
     def impl(context, builder, sig, args):
         argty, = sig.args

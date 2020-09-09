@@ -2679,8 +2679,6 @@ def _find_mask(typemap, func_ir, arr_def):
                 mask_indices.append(None)
             # Handle integer index
             elif isinstance(index_typ, types.Integer):
-                # The follow is never tested
-                raise AssertionError('unreachable')
                 count_consts += 1
                 mask_indices.append(ind)
 
@@ -2700,6 +2698,9 @@ class ParforPass(ParforPassStates):
     def _pre_run(self):
         # run array analysis, a pre-requisite for parfor translation
         self.array_analysis.run(self.func_ir.blocks)
+        # NOTE: Prepare _max_label. See #6102
+        ir_utils._max_label = max(ir_utils._max_label,
+                                  ir_utils.find_max_label(self.func_ir.blocks))
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls

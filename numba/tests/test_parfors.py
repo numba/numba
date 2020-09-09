@@ -38,7 +38,7 @@ from numba.core.typed_passes import IRLegalization
 from numba.tests.support import (TestCase, captured_stdout, MemoryLeakMixin,
                       override_env_config, linux_only, tag,
                       skip_parfors_unsupported, _32bit, needs_blas,
-                      needs_lapack, disabled_test)
+                      needs_lapack, disabled_test, skip_unless_scipy)
 import cmath
 import unittest
 
@@ -3102,6 +3102,27 @@ class TestParforsSlice(TestParforsBase):
 
         self.check(test_impl, d, k)
 
+    @skip_parfors_unsupported
+    @skip_unless_scipy
+    def test_issue6102(self):
+        # The problem is originally observed on Python3.8 because of the
+        # changes in how loops are represented in 3.8 bytecode.
+        @njit(parallel=True)
+        def f(r):
+            for ir in prange(r.shape[0]):
+                dist = np.inf
+                tr = np.array([0, 0, 0], dtype=np.float32)
+                for i in [1, 0, -1]:
+                    dist_t = np.linalg.norm(r[ir, :] + i)
+                    if dist_t < dist:
+                        dist = dist_t
+                        tr = np.array([i, i, i], dtype=np.float32)
+                r[ir, :] += tr
+            return r
+
+        r = np.array([[0., 0., 0.], [0., 0., 1.]])
+        self.assertPreciseEqual(f(r), f.py_func(r))
+
 
 class TestParforsOptions(TestParforsBase):
 
@@ -3566,6 +3587,22 @@ class TestParforsMisc(TestParforsBase):
         self.assertPreciseEqual(
             foo(src, method, out),
             foo.py_func(src, method, out)
+        )
+
+    @skip_parfors_unsupported
+    def test_issue6095_numpy_max(self):
+        @njit(parallel=True)
+        def find_maxima_3D_jit(args):
+            package = args
+            for index in range(0, 10):
+                z_stack = package[index, :, :]
+            return np.max(z_stack)
+
+        np.random.seed(0)
+        args = np.random.random((10, 10, 10))
+        self.assertPreciseEqual(
+            find_maxima_3D_jit(args),
+            find_maxima_3D_jit.py_func(args),
         )
 
 

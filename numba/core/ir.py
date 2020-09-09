@@ -419,7 +419,7 @@ class Expr(Inst):
 
     @classmethod
     def call(cls, func, args, kws, loc, vararg=None):
-        assert isinstance(func, (Var, Intrinsic))
+        assert isinstance(func, Var)
         assert isinstance(loc, Loc)
         op = 'call'
         return cls(op=op, loc=loc, func=func, args=args, kws=kws,
@@ -1046,28 +1046,6 @@ class Var(EqualityCheckMixin, AbstractRHS):
         """All known versioned and unversioned names for this variable
         """
         return self.versioned_names | {self.unversioned_name,}
-
-class Intrinsic(EqualityCheckMixin):
-    """
-    A low-level "intrinsic" function.  Suitable as the callable of a "call"
-    expression.
-
-    The given *name* is backend-defined and will be inserted as-is
-    in the generated low-level IR.
-    The *type* is the equivalent Numba signature of calling the intrinsic.
-    """
-
-    def __init__(self, name, type, args, loc=None):
-        self.name = name
-        self.type = type
-        self.loc = loc
-        self.args = args
-
-    def __repr__(self):
-        return 'Intrinsic(%s, %s, %s)' % (self.name, self.type, self.loc)
-
-    def __str__(self):
-        return self.name
 
 
 class Scope(EqualityCheckMixin):
