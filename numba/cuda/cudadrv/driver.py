@@ -783,6 +783,26 @@ class HostOnlyCUDAMemoryManager(BaseCUDAMemoryManager):
             return PinnedMemory(ctx, pointer, size, owner=owner,
                                 finalizer=finalizer)
 
+    def memallocmanaged(self, size, attach_global):
+        ptr = drvapi.cu_device_ptr()
+
+        def allocator():
+            flags = c_uint()
+            if attach_global:
+                flags = enums.CU_MEM_ATTACH_GLOBAL
+            else:
+                flags = enums.CU_MEM_ATTACH_HOST
+
+            driver.cuMemAllocManaged(byref(ptr), size, flags)
+
+        self._attempt_allocation(allocator)
+
+        finalizer = _alloc_finalizer(self, ptr, size)
+        ctx = weakref.proxy(self.context)
+        mem = ManagedMemory(ctx, ptr, size, finalizer=finalizer)
+        self.allocations[ptr.value] = mem
+        return mem.own()
+
     def reset(self):
         """Clears up all host memory (mapped and/or pinned) in the current
         context.
@@ -825,26 +845,6 @@ class NumbaCUDAMemoryManager(HostOnlyCUDAMemoryManager):
         finalizer = _alloc_finalizer(self, ptr, size)
         ctx = weakref.proxy(self.context)
         mem = AutoFreePointer(ctx, ptr, size, finalizer=finalizer)
-        self.allocations[ptr.value] = mem
-        return mem.own()
-
-    def memallocmanaged(self, size, attach_global):
-        ptr = drvapi.cu_device_ptr()
-
-        def allocator():
-            flags = c_uint()
-            if attach_global:
-                flags = enums.CU_MEM_ATTACH_GLOBAL
-            else:
-                flags = enums.CU_MEM_ATTACH_HOST
-
-            driver.cuMemAllocManaged(byref(ptr), size, flags)
-
-        self._attempt_allocation(allocator)
-
-        finalizer = _alloc_finalizer(self, ptr, size)
-        ctx = weakref.proxy(self.context)
-        mem = ManagedMemory(ctx, ptr, size, finalizer=finalizer)
         self.allocations[ptr.value] = mem
         return mem.own()
 
