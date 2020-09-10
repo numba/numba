@@ -115,13 +115,15 @@ CU_MEMHOSTREGISTER_PORTABLE = 0x01
 CU_MEMHOSTREGISTER_DEVICEMAP = 0x02
 
 
-# If set, managed memory is accessible from all streams on
-# all devices.
+# If set, managed memory is accessible from all streams on all devices.
 CU_MEM_ATTACH_GLOBAL = 0x01
 
-# If set, managed memory is not accessible from all streams on
-# all devices.
+# If set, managed memory is not accessible from any stream on any device.
 CU_MEM_ATTACH_HOST = 0x02
+
+# If set, managed memory is only accessible from a single stream on the
+# associated device.
+CU_MEM_ATTACH_SINGLE = 0x04
 
 
 # Default event flag
