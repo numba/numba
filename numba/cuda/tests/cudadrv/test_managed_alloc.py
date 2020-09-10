@@ -44,6 +44,15 @@ class TestManagedAlloc(ContextResettingTestCase):
         self.skip_if_cc_major_lt(3, msg)
         self._test_managed_alloc_driver(0.5)
 
+    # This test is skipped by default because it is easy to hang the machine
+    # for a very long time or get OOM killed if the GPU memory size is >50% of
+    # the system memory size. Even if the system does have more than 2x the RAM
+    # of the GPU, this test runs for a very long time (in comparison to the
+    # rest of the tests in the suite).
+    #
+    # However, it is left in here for manual testing as required.
+
+    @unittest.skip
     def test_managed_alloc_driver_oversubscribe(self):
         msg = "Oversubscription of managed memory unsupported prior to CC 6.0"
         self.skip_if_cc_major_lt(6, msg)
