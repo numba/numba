@@ -92,7 +92,7 @@ class TestManagedAlloc(ContextResettingTestCase):
 
         self.assertTrue(np.all(ary == magic))
 
-    def test_managed_array(self):
+    def _test_managed_array(self, attach_global=True):
         # Check the managed_array interface on both host and device.
 
         ary = cuda.managed_array(100, dtype=np.double)
@@ -109,6 +109,15 @@ class TestManagedAlloc(ContextResettingTestCase):
         cuda.current_context().synchronize()
 
         self.assertTrue(all(ary == 1.0))
+
+    def test_managed_array_attach_global(self):
+        self._test_managed_array()
+
+    def test_managed_array_attach_host(self):
+        self._test_managed_array()
+        msg = "Host attached managed memory is not accessible prior to CC 6.0"
+        self.skip_if_cc_major_lt(6, msg)
+        self._test_managed_array(attach_global=False)
 
 
 if __name__ == '__main__':
