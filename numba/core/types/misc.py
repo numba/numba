@@ -121,17 +121,6 @@ class Module(Dummy):
         return self.pymod
 
 
-class Macro(Type):
-    def __init__(self, template):
-        self.template = template
-        cls = type(self)
-        super(Macro, self).__init__("%s(%s)" % (cls.__name__, template))
-
-    @property
-    def key(self):
-        return self.template
-
-
 class MemInfoPointer(Type):
     """
     Pointer to a Numba "meminfo" (i.e. the information for a managed
