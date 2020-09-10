@@ -38,7 +38,9 @@ class CUDATypingContext(typing.BaseContext):
                 if not val._can_compile:
                     raise ValueError('using cpu function on device '
                                      'but its compilation is disabled')
-                jd = jitdevice(val, debug=val.targetoptions.get('debug'))
+                opt = val.targetoptions.get('opt', True)
+                jd = jitdevice(val, debug=val.targetoptions.get('debug'),
+                               opt=opt)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
                 val.__cudajitdevice = jd
@@ -234,8 +236,8 @@ class CUDATargetContext(BaseContext):
         kshape = [self.get_constant(types.intp, s) for s in arr.shape]
         kstrides = [self.get_constant(types.intp, s) for s in arr.strides]
         self.populate_array(ary, data=builder.bitcast(genptr, ary.data.type),
-                            shape=cgutils.pack_array(builder, kshape),
-                            strides=cgutils.pack_array(builder, kstrides),
+                            shape=kshape,
+                            strides=kstrides,
                             itemsize=ary.itemsize, parent=ary.parent,
                             meminfo=None)
 

@@ -1,6 +1,6 @@
 def init_jit():
-    from numba.cuda.dispatcher import CUDADispatcher
-    return CUDADispatcher
+    from numba.cuda.compiler import Dispatcher
+    return Dispatcher
 
 def initialize_all():
     # Import models to register them with the data model manager

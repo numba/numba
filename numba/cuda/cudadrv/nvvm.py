@@ -1,7 +1,9 @@
 """
 This is a direct translation of nvvm.h
 """
-import sys, logging, re
+import logging
+import re
+import sys
 from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
                     c_char)
 
@@ -58,6 +60,7 @@ def is_available():
 
 
 _nvvm_lock = threading.Lock()
+
 
 class NVVM(object):
     '''Process-wide singleton.
@@ -202,7 +205,7 @@ class CompilationUnit(object):
             if options.pop('debug'):
                 opts.append('-g')
 
-        if options.get('opt'):
+        if 'opt' in options:
             opts.append('-opt=%d' % options.pop('opt'))
 
         if options.get('arch'):
@@ -272,23 +275,39 @@ data_layout = {
 
 default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
+_supported_cc = None
 
-try:
-    NVVM_VERSION = NVVM().get_version()
-except:
-    # the CUDA driver may not be present
-    NVVM_VERSION = (0, 0)
 
-# List of supported compute capability in sorted order
-if NVVM_VERSION < (1, 4):
-    # CUDA 8.0
-    SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2)
-elif NVVM_VERSION < (1, 5):
-    # CUDA 9.0 and later
-    SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0)
-else:
-    # CUDA 10.0 and later
-    SUPPORTED_CC = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5)
+def get_supported_ccs():
+    global _supported_cc
+
+    if _supported_cc:
+        return _supported_cc
+
+    try:
+        from numba.cuda.cudadrv.runtime import runtime
+        cudart_version_major = runtime.get_version()[0]
+    except: # noqa: E722
+        # The CUDA Runtime may not be present
+        cudart_version_major = 0
+
+    # List of supported compute capability in sorted order
+    if cudart_version_major == 0:
+        _supported_cc = ()
+    elif cudart_version_major < 9:
+        # CUDA 8.x
+        _supported_cc = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2) # noqa: E501
+    elif cudart_version_major < 10:
+        # CUDA 9.x
+        _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0) # noqa: E501
+    elif cudart_version_major < 11:
+        # CUDA 10.x
+        _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5) # noqa: E501
+    else:
+        # CUDA 11.0 and later
+        _supported_cc = (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5), (8, 0) # noqa: E501
+
+    return _supported_cc
 
 
 def find_closest_arch(mycc):
@@ -299,7 +318,14 @@ def find_closest_arch(mycc):
     :param mycc: Compute capability as a tuple ``(MAJOR, MINOR)``
     :return: Closest supported CC as a tuple ``(MAJOR, MINOR)``
     """
-    for i, cc in enumerate(SUPPORTED_CC):
+    supported_cc = get_supported_ccs()
+
+    if not supported_cc:
+        msg = "No supported GPU compute capabilities found. " \
+              "Please check your cudatoolkit version matches your CUDA version."
+        raise NvvmSupportError(msg)
+
+    for i, cc in enumerate(supported_cc):
         if cc == mycc:
             # Matches
             return cc
@@ -307,14 +333,15 @@ def find_closest_arch(mycc):
             # Exceeded
             if i == 0:
                 # CC lower than supported
-                raise NvvmSupportError("GPU compute capability %d.%d is "
-                                       "not supported (requires >=%d.%d)" % (mycc + cc))
+                msg = "GPU compute capability %d.%d is not supported" \
+                      "(requires >=%d.%d)" % (mycc + cc)
+                raise NvvmSupportError(msg)
             else:
                 # return the previous CC
-                return SUPPORTED_CC[i - 1]
+                return supported_cc[i - 1]
 
     # CC higher than supported
-    return SUPPORTED_CC[-1]  # Choose the highest
+    return supported_cc[-1]  # Choose the highest
 
 
 def get_arch_option(major, minor):
@@ -373,7 +400,7 @@ define internal i32 @___numba_cas_hack(i32* %ptr, i32 %cmp, i32 %val) alwaysinli
     %out = cmpxchg volatile i32* %ptr, i32 %cmp, i32 %val monotonic
     ret i32 %out
 }
-"""
+""" # noqa: E501
 
 # Translation of code from CUDA Programming Guide v6.5, section B.12
 ir_numba_atomic_double_add = """
@@ -396,25 +423,28 @@ done:
     %result = bitcast i64 %old to double
     ret double %result
 }
-"""
+""" # noqa: E501
 
 
-ir_numba_atomic_max = """
-define internal {T} @___numba_atomic_{T}_max({T}* %ptr, {T} %val) alwaysinline {{
+ir_numba_atomic_minmax = """
+define internal {T} @___numba_atomic_{T}_{NAN}{FUNC}({T}* %ptr, {T} %val) alwaysinline {{
 entry:
     %ptrval = load volatile {T}, {T}* %ptr
-    ; Check if either value is a NaN and return *ptr early if so
-    %valnan = fcmp uno {T} %val, %ptrval
-    br i1 %valnan, label %done, label %lt_check
+    ; Return early when:
+    ; - For nanmin / nanmax when val is a NaN
+    ; - For min / max when val or ptr is a NaN
+    %early_return = fcmp uno {T} %val, %{PTR_OR_VAL}val
+    br i1 %early_return, label %done, label %lt_check
 
 lt_check:
     %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
-    ; Continue attempts if dold < val
-    %lt = fcmp nnan olt {T} %dold, %val
-    br i1 %lt, label %attempt, label %done
+    ; Continue attempts if dold less or greater than val (depending on whether min or max)
+    ; or if dold is NaN (for nanmin / nanmax)
+    %cmp = fcmp {OP} {T} %dold, %val
+    br i1 %cmp, label %attempt, label %done
 
 attempt:
-    ; Attempt to swap in the larger value
+    ; Attempt to swap in the value
     %iold = bitcast {T} %dold to {Ti}
     %iptr = bitcast {T}* %ptr to {Ti}*
     %ival = bitcast {T} %val to {Ti}
@@ -423,42 +453,9 @@ attempt:
     br label %lt_check
 
 done:
-    ; Return max
-    %ret = phi {T} [ %ptrval, %entry ], [ %dold, %lt_check ]
-    ret {T} %ret
+    ret {T} %ptrval
 }}
-"""
-
-
-ir_numba_atomic_min = """
-define internal {T} @___numba_atomic_{T}_min({T}* %ptr, {T} %val) alwaysinline{{
-entry:
-    %ptrval = load volatile {T}, {T}* %ptr
-    ; Check if either value is a NaN and return *ptr early if so
-    %valnan = fcmp uno {T} %val, %ptrval
-    br i1 %valnan, label %done, label %gt_check
-
-gt_check:
-    %dold = phi {T} [ %ptrval, %entry ], [ %dcas, %attempt ]
-    ; Continue attempts if dold > val
-    %lt = fcmp nnan ogt {T} %dold, %val
-    br i1 %lt, label %attempt, label %done
-
-attempt:
-    ; Attempt to swap in the smaller value
-    %iold = bitcast {T} %dold to {Ti}
-    %iptr = bitcast {T}* %ptr to {Ti}*
-    %ival = bitcast {T} %val to {Ti}
-    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %iold, {Ti} %ival monotonic
-    %dcas = bitcast {Ti} %cas to {T}
-    br label %gt_check
-
-done:
-    ; Return min
-    %ret = phi {T} [ %ptrval, %entry ], [ %dold, %gt_check ]
-    ret {T} %ret
-}}
-"""
+""" # noqa: E501
 
 
 def _replace_datalayout(llvmir):
@@ -495,18 +492,44 @@ def llvm_to_ptx(llvmir, **opts):
         ('declare double @___numba_atomic_double_add(double*, double)',
          ir_numba_atomic_double_add),
         ('declare float @___numba_atomic_float_max(float*, float)',
-         ir_numba_atomic_max.format(T='float', Ti='i32')),
+         ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='',
+                                       OP='nnan olt', PTR_OR_VAL='ptr',
+                                       FUNC='max')),
         ('declare double @___numba_atomic_double_max(double*, double)',
-         ir_numba_atomic_max.format(T='double', Ti='i64')),
+         ir_numba_atomic_minmax.format(T='double', Ti='i64', NAN='',
+                                       OP='nnan olt', PTR_OR_VAL='ptr',
+                                       FUNC='max')),
         ('declare float @___numba_atomic_float_min(float*, float)',
-         ir_numba_atomic_min.format(T='float', Ti='i32')),
+         ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='',
+                                       OP='nnan ogt', PTR_OR_VAL='ptr',
+                                       FUNC='min')),
         ('declare double @___numba_atomic_double_min(double*, double)',
-         ir_numba_atomic_min.format(T='double', Ti='i64')),
+         ir_numba_atomic_minmax.format(T='double', Ti='i64', NAN='',
+                                       OP='nnan ogt', PTR_OR_VAL='ptr',
+                                       FUNC='min')),
+        ('declare float @___numba_atomic_float_nanmax(float*, float)',
+         ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='nan',
+                                       OP='ult', PTR_OR_VAL='', FUNC='max')),
+        ('declare double @___numba_atomic_double_nanmax(double*, double)',
+         ir_numba_atomic_minmax.format(T='double', Ti='i64', NAN='nan',
+                                       OP='ult', PTR_OR_VAL='', FUNC='max')),
+        ('declare float @___numba_atomic_float_nanmin(float*, float)',
+         ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='nan',
+                                       OP='ugt', PTR_OR_VAL='', FUNC='min')),
+        ('declare double @___numba_atomic_double_nanmin(double*, double)',
+         ir_numba_atomic_minmax.format(T='double', Ti='i64', NAN='nan',
+                                       OP='ugt', PTR_OR_VAL='', FUNC='min')),
         ('immarg', '')
     ]
 
     for decl, fn in replacements:
         llvmir = llvmir.replace(decl, fn)
+
+    # llvm.numba_nvvm.atomic is used to prevent LLVM 9 onwards auto-upgrading
+    # these intrinsics into atomicrmw instructions, which are not recognized by
+    # NVVM. We can now replace them with the real intrinsic names, ready to
+    # pass to NVVM.
+    llvmir = llvmir.replace('llvm.numba_nvvm.atomic', 'llvm.nvvm.atomic')
 
     llvmir = llvm39_to_34_ir(llvmir)
     cu.add_module(llvmir.encode('utf8'))
@@ -539,7 +562,9 @@ def patch_ptx_debug_pubnames(ptx):
 re_metadata_def = re.compile(r"\!\d+\s*=")
 re_metadata_correct_usage = re.compile(r"metadata\s*\![{'\"0-9]")
 re_metadata_ref = re.compile(r"\!\d+")
-re_metadata_debuginfo = re.compile(r"\!{i32 \d, \!\"Debug Info Version\", i32 \d}".replace(' ', r'\s+'))
+
+debuginfo_pattern = r"\!{i32 \d, \!\"Debug Info Version\", i32 \d}"
+re_metadata_debuginfo = re.compile(debuginfo_pattern.replace(' ', r'\s+'))
 
 re_attributes_def = re.compile(r"^attributes #\d+ = \{ ([\w\s]+)\ }")
 supported_attributes = {'alwaysinline', 'cold', 'inlinehint', 'minsize',
@@ -596,12 +621,12 @@ def llvm39_to_34_ir(ir):
             line = line.replace('!numba.llvm.dbg.cu', '!llvm.dbg.cu')
 
         # We insert a dummy inlineasm to put debuginfo
-        if (line.lstrip().startswith('tail call void asm sideeffect "// dbg') and
-                '!numba.dbg' in line):
+        if (line.lstrip().startswith('tail call void asm sideeffect "// dbg')
+                and '!numba.dbg' in line):
             # Fix the metadata
             line = line.replace('!numba.dbg', '!dbg')
         if re_metadata_def.match(line):
-            # Rewrite metadata since LLVM 3.7 dropped the "metadata" type prefix.
+            # Rewrite metadata since LLVM 3.7 dropped the "metadata" type prefix
             if None is re_metadata_correct_usage.search(line):
                 # Reintroduce the "metadata" prefix
                 line = line.replace('!{', 'metadata !{')
@@ -613,7 +638,8 @@ def llvm39_to_34_ir(ir):
                 # Fix metadata reference
                 def fix_metadata_ref(m):
                     return 'metadata ' + m.group(0)
-                line = ' '.join((lhs, re_metadata_ref.sub(fix_metadata_ref, rhs)))
+                line = ' '.join((lhs,
+                                 re_metadata_ref.sub(fix_metadata_ref, rhs)))
         if line.startswith('source_filename ='):
             continue    # skip line
         if re_unsupported_keywords.search(line) is not None:
@@ -652,13 +678,13 @@ def llvm39_to_34_ir(ir):
                 line = re_parenthesized_list.sub(
                     _replace_llvm_memset_usage,
                     line,
-                    )
+                )
         if 'declare' in line:
             if '@llvm.memset' in line:
                 line = re_parenthesized_list.sub(
                     _replace_llvm_memset_declaration,
                     line,
-                    )
+                )
 
         # Remove unknown annotations
         line = re_annotations.sub('', line)
@@ -674,7 +700,11 @@ def _replace_llvm_memset_usage(m):
     Used as functor for `re.sub.
     """
     params = list(m.group(1).split(','))
-    align = re.search(r'align (\d+)', params[0]).group(1)
+    align_attr = re.search(r'align (\d+)', params[0])
+    if not align_attr:
+        raise ValueError("No alignment attribute found on memset dest")
+    else:
+        align = align_attr.group(1)
     params.insert(-1, 'i32 {}'.format(align))
     out = ', '.join(params)
     return '({})'.format(out)

@@ -434,11 +434,7 @@ class CmpOpGe(OrderedCmpOp):
     pass
 
 
-@infer_global(operator.eq)
-class CmpOpEq(UnorderedCmpOp):
-    pass
-
-
+# more specific overloads should be registered first
 @infer_global(operator.eq)
 class ConstOpEq(AbstractTemplate):
     def generic(self, args, kws):
@@ -450,6 +446,11 @@ class ConstOpEq(AbstractTemplate):
 
 @infer_global(operator.ne)
 class ConstOpNotEq(ConstOpEq):
+    pass
+
+
+@infer_global(operator.eq)
+class CmpOpEq(UnorderedCmpOp):
     pass
 
 
@@ -613,14 +614,42 @@ class StaticGetItemTuple(AbstractTemplate):
             ret = tup.types[idx]
         elif isinstance(idx, slice):
             ret = types.BaseTuple.from_types(tup.types[idx])
-        elif isinstance(tup, types.LiteralStrKeyDict):
-            if isinstance(idx, str):
-                lookup = tup.fields.index(idx)
-                ret = tup.types[lookup]
         if ret is not None:
             sig = signature(ret, *args)
             return sig
 
+
+@infer
+class StaticGetItemLiteralList(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        tup, idx = args
+        ret = None
+        if not isinstance(tup, types.LiteralList):
+            return
+        if isinstance(idx, int):
+            ret = tup.types[idx]
+        if ret is not None:
+            sig = signature(ret, *args)
+            return sig
+
+
+@infer
+class StaticGetItemLiteralStrKeyDict(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        tup, idx = args
+        ret = None
+        if not isinstance(tup, types.LiteralStrKeyDict):
+            return
+        if isinstance(idx, str):
+            lookup = tup.fields.index(idx)
+            ret = tup.types[lookup]
+        if ret is not None:
+            sig = signature(ret, *args)
+            return sig
 
 # Generic implementation for "not in"
 

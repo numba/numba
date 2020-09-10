@@ -251,7 +251,14 @@ class FunctionTemplate(ABC):
     # Set to true to disable unsafe cast.
     # subclass overide-able
     unsafe_casting = True
+    # Set to true to require exact match without casting.
+    # subclass overide-able
     exact_match_required = False
+    # Set to true to prefer literal arguments.
+    # Useful for definitions that specialize on literal but also support
+    # non-literals.
+    # subclass overide-able
+    prefer_literal = False
 
     def __init__(self, context):
         self.context = context
@@ -278,6 +285,28 @@ class FunctionTemplate(ABC):
             key = key.im_func
         return key
 
+    @classmethod
+    def get_source_code_info(cls, impl):
+        """
+        Gets the source information about function impl.
+        Returns:
+
+        code - str: source code as a string
+        firstlineno - int: the first line number of the function impl
+        path - str: the path to file containing impl
+
+        if any of the above are not available something generic is returned
+        """
+        try:
+            code, firstlineno = inspect.getsourcelines(impl)
+        except OSError: # missing source, probably a string
+            code = "None available (built from string?)"
+            firstlineno = 0
+        path = inspect.getsourcefile(impl)
+        if path is None:
+            path = "<unknown> (built from string?)"
+        return code, firstlineno, path
+
     @abstractmethod
     def get_template_info(self):
         """
@@ -295,6 +324,13 @@ class FunctionTemplate(ABC):
         }
         """
         pass
+
+    def __str__(self):
+        info = self.get_template_info()
+        srcinfo = f"{info['filename']}:{info['lines'][0]}"
+        return f"<{self.__class__.__name__} {srcinfo}>"
+
+    __repr__ = __str__
 
 
 class AbstractTemplate(FunctionTemplate):
@@ -332,14 +368,14 @@ class AbstractTemplate(FunctionTemplate):
     def get_template_info(self):
         impl = getattr(self, "generic")
         basepath = os.path.dirname(os.path.dirname(numba.__file__))
-        code, firstlineno = inspect.getsourcelines(impl)
-        path = inspect.getsourcefile(impl)
+
+        code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
             'kind': "overload",
             'name': getattr(impl, '__qualname__', impl.__name__),
             'sig': sig,
-            'filename': os.path.relpath(path, start=basepath),
+            'filename': utils.safe_relpath(path, start=basepath),
             'lines': (firstlineno, firstlineno + len(code) - 1),
             'docstring': impl.__doc__
         }
@@ -407,15 +443,14 @@ class CallableTemplate(FunctionTemplate):
     def get_template_info(self):
         impl = getattr(self, "generic")
         basepath = os.path.dirname(os.path.dirname(numba.__file__))
-        code, firstlineno = inspect.getsourcelines(impl)
-        path = inspect.getsourcefile(impl)
+        code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
             'kind': "overload",
             'name': getattr(self.key, '__name__',
                             getattr(impl, '__qualname__', impl.__name__),),
             'sig': sig,
-            'filename': os.path.relpath(path, start=basepath),
+            'filename': utils.safe_relpath(path, start=basepath),
             'lines': (firstlineno, firstlineno + len(code) - 1),
             'docstring': impl.__doc__
         }
@@ -682,6 +717,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             # should be using.
             sig, pyfunc = ovf_result
             args = sig.args
+            kws = {}
             cache_key = None            # don't cache
         else:
             # Regular case
@@ -699,6 +735,9 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         # Make dispatcher
         jitdecor = jit(nopython=True, **self._jit_options)
         disp = jitdecor(pyfunc)
+        # Make sure that the implementation can be fully compiled
+        disp_type = types.Dispatcher(disp)
+        disp_type.get_call_type(self.context, args, kws)
         if cache_key is not None:
             self._impl_cache[cache_key] = disp, args
         return disp, args
@@ -712,7 +751,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
     @classmethod
     def get_source_info(cls):
-        """Return a dictionary with information about the source code  of the
+        """Return a dictionary with information about the source code of the
         implementation.
 
         Returns
@@ -733,14 +772,13 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         """
         basepath = os.path.dirname(os.path.dirname(numba.__file__))
         impl = cls._overload_func
-        code, firstlineno = inspect.getsourcelines(impl)
-        path = inspect.getsourcefile(impl)
+        code, firstlineno, path = cls.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
             'kind': "overload",
             'name': getattr(impl, '__qualname__', impl.__name__),
             'sig': sig,
-            'filename': os.path.relpath(path, start=basepath),
+            'filename': utils.safe_relpath(path, start=basepath),
             'lines': (firstlineno, firstlineno + len(code) - 1),
             'docstring': impl.__doc__
         }
@@ -749,14 +787,13 @@ class _OverloadFunctionTemplate(AbstractTemplate):
     def get_template_info(self):
         basepath = os.path.dirname(os.path.dirname(numba.__file__))
         impl = self._overload_func
-        code, firstlineno = inspect.getsourcelines(impl)
-        path = inspect.getsourcefile(impl)
+        code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
             'kind': "overload",
             'name': getattr(impl, '__qualname__', impl.__name__),
             'sig': sig,
-            'filename': os.path.relpath(path, start=basepath),
+            'filename': utils.safe_relpath(path, start=basepath),
             'lines': (firstlineno, firstlineno + len(code) - 1),
             'docstring': impl.__doc__
         }
@@ -764,7 +801,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
 
 def make_overload_template(func, overload_func, jit_options, strict,
-                           inline):
+                           inline, prefer_literal=False):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -775,7 +812,7 @@ def make_overload_template(func, overload_func, jit_options, strict,
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
                _strict=strict, _inline=staticmethod(InlineOptions(inline)),
-               _inline_overloads={})
+               _inline_overloads={}, prefer_literal=prefer_literal)
     return type(base)(name, (base,), dct)
 
 
@@ -818,14 +855,13 @@ class _IntrinsicTemplate(AbstractTemplate):
     def get_template_info(self):
         basepath = os.path.dirname(os.path.dirname(numba.__file__))
         impl = self._definition_func
-        code, firstlineno = inspect.getsourcelines(impl)
-        path = inspect.getsourcefile(impl)
+        code, firstlineno, path = self.get_source_code_info(impl)
         sig = str(utils.pysignature(impl))
         info = {
             'kind': "intrinsic",
             'name': getattr(impl, '__qualname__', impl.__name__),
             'sig': sig,
-            'filename': os.path.relpath(path, start=basepath),
+            'filename': utils.safe_relpath(path, start=basepath),
             'lines': (firstlineno, firstlineno + len(code) - 1),
             'docstring': impl.__doc__
         }
@@ -967,6 +1003,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
             _inline = self._inline
             _overload_func = staticmethod(self._overload_func)
             _inline_overloads = self._inline_overloads
+            prefer_literal = self.prefer_literal
 
             def generic(_, args, kws):
                 args = (typ,) + tuple(args)
@@ -982,6 +1019,7 @@ class _OverloadMethodTemplate(_OverloadAttributeTemplate):
 
 
 def make_overload_attribute_template(typ, attr, overload_func, inline,
+                                     prefer_literal=False,
                                      base=_OverloadAttributeTemplate):
     """
     Make a template class for attribute *attr* of *typ* overloaded by
@@ -994,18 +1032,21 @@ def make_overload_attribute_template(typ, attr, overload_func, inline,
                _inline=staticmethod(InlineOptions(inline)),
                _inline_overloads={},
                _overload_func=staticmethod(overload_func),
+               prefer_literal=prefer_literal,
                )
-    return type(base)(name, (base,), dct)
+    obj = type(base)(name, (base,), dct)
+    return obj
 
 
-def make_overload_method_template(typ, attr, overload_func, inline):
+def make_overload_method_template(typ, attr, overload_func, inline,
+                                  prefer_literal=False):
     """
     Make a template class for method *attr* of *typ* overloaded by
     *overload_func*.
     """
     return make_overload_attribute_template(
         typ, attr, overload_func, inline=inline,
-        base=_OverloadMethodTemplate,
+        base=_OverloadMethodTemplate, prefer_literal=prefer_literal,
     )
 
 
@@ -1041,10 +1082,6 @@ def bound_function(template_key):
             return types.BoundFunction(MethodTemplate, ty)
         return attribute_resolver
     return wrapper
-
-
-class MacroTemplate(object):
-    pass
 
 
 # -----------------------------

@@ -133,8 +133,6 @@ Compiler Pipeline
   print nodes in the IR
 - :ghfile:`numba/core/rewrites/static_raise.py` - Converts exceptions with
   static arguments into a special form that can be lowered
-- :ghfile:`numba/core/rewrites/macros.py` - Generic support for macro expansion
-  in the Numba IR
 - :ghfile:`numba/core/rewrites/static_getitem.py` - Rewrites getitem and setitem
   with constant arguments to allow type inference
 - :ghfile:`numba/core/rewrites/static_binop.py` - Rewrites binary operations

@@ -23,7 +23,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
 
-def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
+def jit(signature_or_function=None, locals={}, cache=False,
         pipeline_class=None, boundscheck=False, **options):
     """
     This decorator is used to compile a Python function into native code.
@@ -41,7 +41,7 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         Mapping of local variable names to Numba types. Used to override the
         types deduced by Numba's type inference engine.
 
-    target: str
+    target (deprecated): str
         Specifies the target platform to compile for. Valid targets are cpu,
         gpu, npyufunc, and cuda. Defaults to cpu.
 
@@ -145,6 +145,11 @@ def jit(signature_or_function=None, locals={}, target='cpu', cache=False,
         raise DeprecationError(_msg_deprecated_signature_arg.format('restype'))
     if options.get('nopython', False) and options.get('forceobj', False):
         raise ValueError("Only one of 'nopython' or 'forceobj' can be True.")
+    if 'target' in options:
+        target = options.pop('target')
+        warnings.warn("The 'target' keyword argument is deprecated.", NumbaDeprecationWarning)
+    else:
+        target = options.pop('_target', 'cpu')
 
     options['boundscheck'] = boundscheck
 
@@ -252,7 +257,7 @@ def njit(*args, **kws):
     return jit(*args, **kws)
 
 
-def cfunc(sig, locals={}, cache=False, **options):
+def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
     """
     This decorator is used to compile a Python function into a C callback
     usable with foreign C libraries.
@@ -267,7 +272,10 @@ def cfunc(sig, locals={}, cache=False, **options):
 
     def wrapper(func):
         from numba.core.ccallback import CFunc
-        res = CFunc(func, sig, locals=locals, options=options)
+        additional_args = {}
+        if pipeline_class is not None:
+            additional_args['pipeline_class'] = pipeline_class
+        res = CFunc(func, sig, locals=locals, options=options, **additional_args)
         if cache:
             res.enable_caching()
         res.compile()
