@@ -674,6 +674,15 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
         self.gpu_data = gpu_data
 
 
+class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
+    """
+    A host array that uses CUDA managed memory.
+    """
+
+    def device_setup(self, gpu_data, stream=0):
+        self.gpu_data = gpu_data
+
+
 def from_array_like(ary, stream=0, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
     if ary.ndim == 0:

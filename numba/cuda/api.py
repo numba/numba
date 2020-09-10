@@ -127,7 +127,7 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 
 
 @require_context
-def managed_array(shape, dtype=np.float, strides=None, order='C'):
+def managed_array(shape, dtype=np.float, strides=None, order='C', stream=0):
     """managed_array(shape, dtype=np.float, strides=None, order='C')
 
     Allocate a np.ndarray with a buffer that is managed.
@@ -135,11 +135,13 @@ def managed_array(shape, dtype=np.float, strides=None, order='C'):
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
-    bytesize = driver.memory_size_from_info(shape, strides,
-                                            dtype.itemsize)
+    bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
     buffer = current_context().memallocmanaged(bytesize)
-    return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
+    npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
                       buffer=buffer)
+    managedview = np.ndarray.view(npary, type=devicearray.ManagedNDArray)
+    managedview.device_setup(buffer, stream=stream)
+    return managedview
 
 
 @require_context
