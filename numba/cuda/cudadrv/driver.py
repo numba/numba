@@ -1758,7 +1758,7 @@ class ManagedMemory(AutoFreePointer):
         self._bufptr_ = self.device_pointer.value
 
     def own(self):
-        return ManagedPointer(weakref.proxy(self))
+        return ManagedOwnedPointer(weakref.proxy(self))
 
 
 class OwnedPointer(object):
@@ -1796,7 +1796,7 @@ class MappedOwnedPointer(OwnedPointer, mviewbuf.MemAlloc):
     pass
 
 
-class ManagedPointer(OwnedPointer, mviewbuf.MemAlloc):
+class ManagedOwnedPointer(OwnedPointer, mviewbuf.MemAlloc):
     pass
 
 
