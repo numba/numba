@@ -61,7 +61,14 @@ class TestManagedAlloc(ContextResettingTestCase):
             self.skipTest(msg)
         self._test_managed_alloc_driver(2.0)
 
-    def _test_managed_alloc_driver(self, memory_factor):
+    def test_managed_alloc_driver_host_attach(self):
+        msg = "Host attached managed memory is not accessible prior to CC 6.0"
+        self.skip_if_cc_major_lt(6, msg)
+        # Only test with a small array (0.01 * memory size) to keep the test
+        # quick.
+        self._test_managed_alloc_driver(0.01, attach_global=False)
+
+    def _test_managed_alloc_driver(self, memory_factor, attach_global=True):
         # Verify that we can allocate and operate on managed
         # memory through the CUDA driver interface.
 
@@ -69,7 +76,7 @@ class TestManagedAlloc(ContextResettingTestCase):
         n_bytes = int(memory_factor * total_mem_size)
 
         ctx = cuda.current_context()
-        mem = ctx.memallocmanaged(n_bytes)
+        mem = ctx.memallocmanaged(n_bytes, attach_global=attach_global)
 
         dtype = np.dtype(np.uint8)
         n_elems = n_bytes // dtype.itemsize
