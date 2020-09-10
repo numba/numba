@@ -323,7 +323,8 @@ class TestStructRefCaching(MemoryLeakMixin, TestCase):
 class PolygonStructType(types.StructRef):
 
     def preprocess_fields(self, fields):
-        self.name = f"numba.PolygonStructType#{id(self)}" # temp name to allow Optional instantiation
+        # temp name to allow Optional instantiation
+        self.name = f"numba.PolygonStructType#{id(self)}"
         fields = tuple([
             ('value', types.Optional(types.int64)),
             ('parent', types.Optional(self)),
@@ -331,7 +332,11 @@ class PolygonStructType(types.StructRef):
 
         return fields
 
-polygon_struct_type = PolygonStructType(fields=(('value', types.Any), ('parent', types.Any)))
+
+polygon_struct_type = PolygonStructType(fields=(
+    ('value', types.Any),
+    ('parent', types.Any)
+))
 
 
 class PolygonStruct(structref.StructRefProxy):
@@ -354,23 +359,31 @@ def PolygonStruct_get_value(self):
 def PolygonStruct_get_parent(self):
     return self.parent
 
-structref.define_proxy(PolygonStruct, PolygonStructType, ["value", "parent"])
+
+structref.define_proxy(
+    PolygonStruct,
+    PolygonStructType,
+    ["value", "parent"]
+)
+
 
 @overload_method(PolygonStructType, "flip")
-def _ol_polygonstruct_flip(self):
+def _ol_polygon_struct_flip(self):
     def impl(self):
         if self.value is not None:
             self.value = -self.value
     return impl
 
+
 @overload_attribute(PolygonStructType, "prop")
-def _ol_polygonstruct_prop(self):
+def _ol_polygon_struct_prop(self):
     def get(self):
         return self.value, self.parent
     return get
 
+
 class TestStructRefForwardTyping(MemoryLeakMixin, TestCase):
-    def test_same_type_assignent(self):
+    def test_same_type_assignment(self):
         @njit
         def check(x):
             poly = PolygonStruct(None, None)

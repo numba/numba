@@ -108,14 +108,13 @@ class DataModel(object):
         queue = deque([self])
         while len(queue) > 0:
             dm = queue.popleft()
-            
+
             for i_dm in dm.inner_models():
                 if i_dm._fe_type not in types:
-                    queue.append(i_dm)                    
+                    queue.append(i_dm)
                     types.append(i_dm._fe_type)
 
         return types
-
 
     def inner_models(self):
         """
