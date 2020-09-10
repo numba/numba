@@ -1737,7 +1737,7 @@ def dump_blocks(blocks):
         for stmt in block.body:
             print("    ", stmt)
 
-def is_operator(expr):
+def is_operator_or_getitem(expr):
     """true if expr is unary or binary operator or getitem"""
     return (isinstance(expr, ir.Expr)
             and getattr(expr, 'op', False)
