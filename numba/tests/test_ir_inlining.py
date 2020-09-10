@@ -663,7 +663,9 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
         # noth getitem and static_getitem Exprs refer to opertor.getitem
         # hence they are checked using the same expect key
         self.check(impl, self.Dummy(), 1, inline_expect={'getitem': True})
-        self.check(impl_static_getitem, self.Dummy(), inline_expect={'getitem': True})
+        self.check(impl_static_getitem,
+                   self.Dummy(),
+                   inline_expect={'getitem': True})
 
     def test_inline_never_operators_getitem(self):
 
@@ -684,7 +686,9 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
         # noth getitem and static_getitem Exprs refer to opertor.getitem
         # hence they are checked using the same expect key
         self.check(impl, self.Dummy(), 1, inline_expect={'getitem': False})
-        self.check(impl_static_getitem, self.Dummy(), inline_expect={'getitem': False})
+        self.check(impl_static_getitem,
+                   self.Dummy(),
+                   inline_expect={'getitem': False})
 
     def test_inline_stararg_error(self):
         def foo(a, *b):

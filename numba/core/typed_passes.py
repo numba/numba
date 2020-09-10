@@ -576,7 +576,8 @@ class InlineOverloads(FunctionPass):
                 try:
                     func_ty = state.type_annotation.typemap[expr.func.name]
                 except KeyError:
-                    # e.g. Calls to CUDA Intrinsic have no mapped type so KeyError
+                    # e.g. Calls to CUDA Intrinsic have no mapped type
+                    # so KeyError
                     return None
                 if not hasattr(func_ty, 'get_call_type'):
                     return None
@@ -589,15 +590,16 @@ class InlineOverloads(FunctionPass):
             return func_ty
 
         if expr.op == 'call':
-            # try and get a definition for the call, this isn't always possible as
-            # it might be a eval(str)/part generated awaiting update etc. (parfors)
+            # try and get a definition for the call, this isn't always
+            # possible as it might be a eval(str)/part generated
+            # awaiting update etc. (parfors)
             to_inline = None
             try:
                 to_inline = state.func_ir.get_definition(expr.func)
             except Exception:
                 return None
 
-            # do not handle closure inlining here, another pass deals with that.
+            # do not handle closure inlining here, another pass deals with that
             if getattr(to_inline, 'op', False) == 'make_function':
                 return None
 
