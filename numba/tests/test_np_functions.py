@@ -827,6 +827,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield np.asarray([3, 1 + 0j, True])
             yield "hello world"
 
+        @jit(nopython=True)
+        def optional_fn(x, cond, cfunc):
+            y = x if cond else None
+            return cfunc(y)
+
         pyfuncs = [iscomplexobj, isrealobj]
         for pyfunc in pyfuncs:
             cfunc = jit(nopython=True)(pyfunc)
@@ -834,6 +839,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 expected = pyfunc(x)
                 got = cfunc(x)
                 self.assertEqual(expected, got)
+
+                # optional type
+                expected_optional = optional_fn.py_func(x, True, pyfunc)
+                got_optional = optional_fn(x, True, cfunc)
+                self.assertEqual(expected_optional, got_optional)
+
+                # none type
+                expected_none = optional_fn.py_func(x, False, pyfunc)
+                got_none = optional_fn(x, False, cfunc)
+                self.assertEqual(expected_none, got_none)
+
+            self.assertEqual(len(cfunc.signatures), 8)
 
     def test_is_real_or_complex(self):
         def values():

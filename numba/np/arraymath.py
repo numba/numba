@@ -830,14 +830,19 @@ def np_isreal(x):
 def iscomplexobj(x):
     # Implementation based on NumPy
     # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
-    if isinstance(x, types.Optional):
-        msg = f'Expected argument {x.key} but got {x}'
-        raise TypingError(msg)
     dt = determine_dtype(x)
+    if isinstance(x, types.Optional):
+        dt = determine_dtype(x.key)
     iscmplx = np.issubdtype(dt, np.complexfloating)
 
-    def impl(x):
-        return iscmplx
+    if isinstance(x, types.Optional):
+        def impl(x):
+            if x is None:
+                return False
+            return iscmplx
+    else:
+        def impl(x):
+            return iscmplx
     return impl
 
 
