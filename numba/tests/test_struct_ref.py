@@ -328,7 +328,7 @@ class PolygonStructType(types.StructRef):
         fields = tuple([
             ('value', types.Optional(types.int64)),
             ('parent', types.Optional(self)),
-            ])
+        ])
 
         return fields
 
@@ -351,9 +351,11 @@ class PolygonStruct(structref.StructRefProxy):
     def parent(self):
         return PolygonStruct_get_parent(self)
 
+
 @njit
 def PolygonStruct_get_value(self):
     return self.value
+
 
 @njit
 def PolygonStruct_get_parent(self):
