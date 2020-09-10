@@ -1649,7 +1649,7 @@ class AutoFreePointer(MemoryPointer):
 
 
 class MappedMemory(AutoFreePointer):
-    """A memory pointer that owns a buffer on the host that is mapped into
+    """A memory pointer that refers to a buffer on the host that is mapped into
     device memory.
 
     :param context: The context in which the pointer was mapped.
@@ -1727,8 +1727,8 @@ class PinnedMemory(mviewbuf.MemAlloc):
 
 
 class ManagedMemory(AutoFreePointer):
-    """A memory pointer that owns a managed memory buffer (can be accessed on both
-    host and device).
+    """A memory pointer that refers to a managed memory buffer (can be accessed
+    on both host and device).
 
     :param context: The context in which the pointer was mapped.
     :type context: Context
