@@ -1,3 +1,4 @@
+import pickle
 import sys
 
 import numpy as np
@@ -145,6 +146,12 @@ class TestUfuncBuilding(TestCase):
         builder.add("(int64, int64)")
         ufunc = builder.build_ufunc()
         self.assertEqual(ufunc(-1, 3), 2)
+
+    def test_pickle(self):
+        result = pickle.loads(pickle.dumps(inner_explicit))
+        self.assertEqual(result.__name__, inner_explicit.__name__)
+        result = pickle.loads(pickle.dumps(inner_explicit.ufunc))
+        self.assertEqual(result.__name__, inner_explicit.ufunc.__name__)
 
 
 class TestUfuncBuildingJitDisabled(TestUfuncBuilding):

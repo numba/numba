@@ -210,7 +210,7 @@ dufunc_init(PyDUFuncObject *self, PyObject *args, PyObject *kws)
     /* Construct the UFunc. */
     tmp = PyObject_GetAttrString(py_func_obj, "__name__");
     if (tmp) {
-        name = PyString_AsString(tmp);
+        name = PyString_AsString(PyString_FromFormat("%s.ufunc", PyString_AsString(tmp)));
     }
     Py_XDECREF(tmp);
     tmp = PyObject_GetAttrString(py_func_obj, "__doc__");
