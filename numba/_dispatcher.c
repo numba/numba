@@ -105,8 +105,8 @@ typedef struct DispatcherObject{
     char can_compile;        /* Can auto compile */
     char can_fallback;       /* Can fallback */
     char exact_match_required;
-    /* Borrowed references */
-    PyObject *firstdef, *fallbackdef;
+    /* Borrowed reference */
+    PyObject *fallbackdef;
     /* Whether to fold named arguments and default values (false for lifted loops)*/
     int fold_args;
     /* Whether the last positional argument is a stararg */
@@ -161,7 +161,6 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     self->dispatcher = dispatcher_new(tmaddr, argct);
     self->can_compile = 1;
     self->can_fallback = can_fallback;
-    self->firstdef = NULL;
     self->fallbackdef = NULL;
     self->has_stararg = has_stararg;
     self->exact_match_required = exact_match_required;
@@ -204,11 +203,6 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     /* The reference to cfunc is borrowed; this only works because the
        derived Python class also stores an (owned) reference to cfunc. */
     dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
-
-    /* Add first definition */
-    if (!self->firstdef) {
-        self->firstdef = cfunc;
-    }
 
     /* Add pure python fallback */
     if (!self->fallbackdef && objectmode){
