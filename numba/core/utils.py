@@ -364,7 +364,7 @@ class cached_property(pt.Generic[_T]):
         ...
 
     @pt.overload  # noqa: F811
-    def __get__(
+    def __get__(  # noqa: F811
         self, instance: _S, owner: pt.Optional[pt.Type[pt.Any]] = ...,
     ) -> _T:
         ...
