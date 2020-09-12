@@ -10,6 +10,8 @@ from numba.core.typeconv import Conversion
 from numba.np import npdatetime_helpers
 
 
+_ComparisonOrNotImplemented = pt.Union[bool, "NotImplemented"]
+
 class Boolean(Hashable):
 
     def cast_python_value(self, value: pt.Any) -> bool:
@@ -53,7 +55,7 @@ class Integer(Number):
     def cast_python_value(self, value: pt.Any) -> int:
         return getattr(np, self.name)(value)  # type: ignore[no-any-return]
 
-    def __lt__(self, other: pt.Any) -> pt.Union[bool, NotImplemented]:
+    def __lt__(self, other: pt.Any) -> _ComparisonOrNotImplemented:
         if self.__class__ is not other.__class__:
             return NotImplemented
         if self.signed != other.signed:
@@ -111,7 +113,7 @@ class Float(Number):
     def cast_python_value(self, value: pt.Any) -> float:
         return getattr(np, self.name)(value)  # type: ignore[no-any-return]
 
-    def __lt__(self, other: pt.Any) -> pt.Union[bool, NotImplemented]:
+    def __lt__(self, other: pt.Any) -> _ComparisonOrNotImplemented:
         if self.__class__ is not other.__class__:
             return NotImplemented
         return self.bitwidth < other.bitwidth
@@ -127,7 +129,7 @@ class Complex(Number):
     def cast_python_value(self, value: pt.Any) -> complex:
         return getattr(np, self.name)(value)  # type: ignore[no-any-return]
 
-    def __lt__(self, other: pt.Any) -> pt.Union[bool, NotImplemented]:
+    def __lt__(self, other: pt.Any) -> _ComparisonOrNotImplemented:
         if self.__class__ is not other.__class__:
             return NotImplemented
         return self.bitwidth < other.bitwidth
