@@ -1,6 +1,8 @@
-from collections import defaultdict
-from functools import total_ordering
 import enum
+import typing as pt
+from collections import defaultdict
+
+from numba.core.types import Type
 
 
 class Conversion(enum.IntEnum):
@@ -34,35 +36,35 @@ class CastSet(object):
     """
 
     def __init__(self):
-        self._rels = {}
+        self._rels: pt.Dict[Type, Conversion] = {}
 
-    def insert(self, to, rel):
+    def insert(self, to: Type, rel: Conversion):
         old = self.get(to)
         setrel = min(rel, old)
         self._rels[to] = setrel
         return old != setrel
 
-    def items(self):
+    def items(self) -> pt.Iterable[pt.Tuple[Type, Conversion]]:
         return self._rels.items()
 
-    def get(self, item):
+    def get(self, item: Type) -> Conversion:
         return self._rels.get(item, Conversion.nil)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._rels)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         body = ["{rel}({ty})".format(rel=rel, ty=ty)
                 for ty, rel in self._rels.items()]
         return "{" + ', '.join(body) + "}"
 
-    def __contains__(self, item):
+    def __contains__(self, item: Type) -> bool:
         return item in self._rels
 
-    def __iter__(self):
+    def __iter__(self) -> pt.Iterator[Type]:
         return iter(self._rels.keys())
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: Type) -> Conversion:
         return self._rels[item]
 
 
@@ -82,14 +84,14 @@ class TypeGraph(object):
             (from_type, to_type, castrel).
         """
         assert callback is None or callable(callback)
-        self._forwards = defaultdict(CastSet)
-        self._backwards = defaultdict(set)
+        self._forwards: pt.DefaultDict[Type, CastSet] = defaultdict(CastSet)
+        self._backwards: pt.DefaultDict[Type, pt.Set[Type]] = defaultdict(set)
         self._callback = callback
 
-    def get(self, ty):
+    def get(self, ty: Type) -> CastSet:
         return self._forwards[ty]
 
-    def propagate(self, a, b, baserel):
+    def propagate(self, a: Type, b: Type, baserel: Conversion) -> None:
         backset = self._backwards[a]
 
         # Forward propagate the relationship to all nodes that b leads to
@@ -116,18 +118,17 @@ class TypeGraph(object):
                     self._callback(child, b, rel)
                 self._backwards[b].add(child)
 
-    def insert_rule(self, a, b, rel):
+    def insert_rule(self, a: Type, b: Type, rel: Conversion) -> None:
         self._forwards[a].insert(b, rel)
         self._callback(a, b, rel)
         self._backwards[b].add(a)
         self.propagate(a, b, rel)
 
-    def promote(self, a, b):
+    def promote(self, a: Type, b: Type) -> None:
         self.insert_rule(a, b, Conversion.promote)
 
-    def safe(self, a, b):
+    def safe(self, a: Type, b: Type) -> None:
         self.insert_rule(a, b, Conversion.safe)
 
-    def unsafe(self, a, b):
+    def unsafe(self, a: Type, b: Type) -> None:
         self.insert_rule(a, b, Conversion.unsafe)
-

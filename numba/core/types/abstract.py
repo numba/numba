@@ -91,6 +91,9 @@ class Type(metaclass=_TypeMetaclass):
     # Rather the type is reflected at the python<->nopython boundary
     reflected = False
 
+    # Set in _TypeMetaclass call method.
+    _code: int
+
     def __init__(self, name: str):
         self.name = name
 
