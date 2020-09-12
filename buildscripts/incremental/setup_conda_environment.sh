@@ -35,12 +35,13 @@ conda list
 #  `conda env remove` issue)
 conda remove --all -q -y -n $CONDA_ENV
 
-# If VANILLA_INSTALL is yes, then only Python, NumPy and pip are installed, this
-# is to catch tests/code paths that require an optional package and are not
-# guarding against the possibility that it does not exist in the environment.
+# If VANILLA_INSTALL is yes, then only Python, NumPy, typing_extensions, and pip
+# are installed, this is to catch tests/code paths that require an optional
+# package and are not guarding against the possibility that it does not exist in
+# the environment.
 # Create a base env first and then add to it...
 
-conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip
+conda create -n $CONDA_ENV -q -y ${EXTRA_CHANNELS} python=$PYTHON numpy=$NUMPY pip typing_extensions
 
 # Activate first
 set +v

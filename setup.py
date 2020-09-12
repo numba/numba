@@ -303,7 +303,7 @@ install_requires = [
     'llvmlite >={},<{}'.format(min_llvmlite_version, max_llvmlite_version),
     'numpy >={}'.format(min_numpy_run_version),
     'setuptools',
-    'typing_extensions >= 3.7.4',
+    'typing_extensions',
 ]
 
 metadata = dict(
