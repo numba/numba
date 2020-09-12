@@ -35,10 +35,10 @@ class CastSet(object):
     There is at most one rule per target type.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._rels: pt.Dict[Type, Conversion] = {}
 
-    def insert(self, to: Type, rel: Conversion):
+    def insert(self, to: Type, rel: Conversion) -> bool:
         old = self.get(to)
         setrel = min(rel, old)
         self._rels[to] = setrel
@@ -75,11 +75,14 @@ class TypeGraph(object):
     propagating the rules.
     """
 
-    def __init__(self, callback=None):
+    def __init__(
+        self,
+        callback: pt.Callable[[Type, Type, Conversion], None],
+    ):
         """
         Args
         ----
-        - callback: callable or None
+        - callback: callable
             It is called for each new casting rule with
             (from_type, to_type, castrel).
         """

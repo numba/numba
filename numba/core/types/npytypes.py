@@ -307,7 +307,7 @@ class NumpyNdIterType(IteratorType):
         return self.arrays
 
     @property
-    def views(self) -> pt.List[Array]:
+    def views(self) -> pt.List["Array"]:
         """
         The views yielded by the iterator.
         """

@@ -31,9 +31,9 @@ class TypeManager(object):
         Conversion.promote: ord("p"),
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._ptr = _typeconv.new_type_manager()
-        self._types = set()
+        self._types: pt.Set[Type] = set()
 
     def select_overload(
         self,
@@ -58,7 +58,7 @@ class TypeManager(object):
         assert conv is not Conversion.nil
         return conv
 
-    def set_compatible(self, fromty: Type, toty: Type, by) -> None:
+    def set_compatible(self, fromty: Type, toty: Type, by: Conversion) -> None:
         code = self._conversion_codes[by]
         _typeconv.set_compatible(self._ptr, fromty._code, toty._code, code)
         # Ensure the types don't die, otherwise they may be recreated with
