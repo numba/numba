@@ -148,7 +148,7 @@ class _NPDatetimeBase(Type):
         self.unit_code = npdatetime_helpers.DATETIME_UNITS[self.unit]
         super(_NPDatetimeBase, self).__init__(name)
 
-    def __lt__(self, other: pt.Any) -> pt.Union[bool, NotImplemented]:
+    def __lt__(self, other: pt.Any) -> _ComparisonOrNotImplemented:
         if self.__class__ is not other.__class__:
             return NotImplemented
         # A coarser-grained unit is "smaller", i.e. less precise values
