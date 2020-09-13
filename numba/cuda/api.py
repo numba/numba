@@ -125,8 +125,8 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     """pinned_array(shape, dtype=np.float, strides=None, order='C')
 
-    Allocate a np.ndarray with a buffer that is pinned (pagelocked).
-    Similar to np.empty().
+    Allocate an :class:`ndarray <numpy.ndarray>` with a buffer that is pinned
+    (pagelocked).  Similar to :func:`np.empty() <numpy.empty>`.
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
@@ -222,23 +222,22 @@ def _fill_stride_by_order(shape, dtype, order):
     return tuple(strides)
 
 
-def device_array_like(ary, stream=0):
-    """Call cuda.devicearray() with information from the array.
+def _contiguous_strides_like_array(ary):
     """
-    # Avoid attempting to recompute strides if the default strides will be
-    # sufficient to create a contiguous array.
-    if ary.flags['C_CONTIGUOUS'] or ary.ndim <= 1:
-        return device_array(shape=ary.shape, dtype=ary.dtype, stream=stream)
-    elif ary.flags['F_CONTIGUOUS']:
-        return device_array(shape=ary.shape, dtype=ary.dtype, order='F',
-                            stream=stream)
+    Given an array, compute strides for a new contiguous array of the same
+    shape.
+    """
+    # Don't recompute strides if the default strides will be sufficient to
+    # create a contiguous array.
+    if ary.flags['C_CONTIGUOUS'] or ary.flags['F_CONTIGUOUS'] or ary.ndim <= 1:
+        return None
 
     # Otherwise, we need to compute new strides using an algorithm adapted from
     # NumPy v1.17.4's PyArray_NewLikeArrayWithShape in
     # core/src/multiarray/ctors.c. We permute the strides in ascending order
     # then compute the stride for the dimensions with the same permutation.
 
-    # Stride permuation. E.g. a stride array (4, -2, 12) becomes
+    # Stride permutation. E.g. a stride array (4, -2, 12) becomes
     # [(1, -2), (0, 4), (2, 12)]
     strideperm = [ x for x in enumerate(ary.strides) ]
     strideperm.sort(key = lambda x: x[1])
@@ -249,10 +248,47 @@ def device_array_like(ary, stream=0):
     for i_perm, _ in strideperm:
         strides[i_perm] = stride
         stride *= ary.shape[i_perm]
-    strides = tuple(strides)
+    return tuple(strides)
 
+
+def _order_like_array(ary):
+    if ary.flags['F_CONTIGUOUS'] and not ary.flags['C_CONTIGUOUS']:
+        return 'F'
+    else:
+        return 'C'
+
+
+def device_array_like(ary, stream=0):
+    """
+    Call :func:`device_array() <numba.cuda.device_array>` with information from
+    the array.
+    """
+    strides = _contiguous_strides_like_array(ary)
+    order = _order_like_array(ary)
     return device_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
-                        stream=stream)
+                        order=order, stream=stream)
+
+
+def mapped_array_like(ary, stream=0, portable=False, wc=False):
+    """
+    Call :func:`mapped_array() <numba.cuda.mapped_array>` with the information
+    from the array.
+    """
+    strides = _contiguous_strides_like_array(ary)
+    order = _order_like_array(ary)
+    return mapped_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
+                        order=order, stream=stream, portable=portable, wc=wc)
+
+
+def pinned_array_like(ary):
+    """
+    Call :func:`pinned_array() <numba.cuda.pinned_array>` with the information
+    from the array.
+    """
+    strides = _contiguous_strides_like_array(ary)
+    order = _order_like_array(ary)
+    return pinned_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
+                        order=order)
 
 
 # Stream helper

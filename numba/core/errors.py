@@ -560,13 +560,6 @@ class VerificationError(IRError):
     pass
 
 
-class MacroError(NumbaError):
-    """
-    An error occurred during macro expansion.
-    """
-    pass
-
-
 class DeprecationError(NumbaError):
     """
     Functionality is deprecated.
