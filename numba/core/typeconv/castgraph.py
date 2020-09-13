@@ -86,7 +86,7 @@ class TypeGraph(object):
             It is called for each new casting rule with
             (from_type, to_type, castrel).
         """
-        assert callback is None or callable(callback)
+        assert callable(callback)
         self._forwards: pt.DefaultDict[NumbaTypeInst, CastSet] = defaultdict(CastSet)  # noqa: E501
         self._backwards: pt.DefaultDict[NumbaTypeInst, pt.Set[NumbaTypeInst]] = defaultdict(set)  # noqa: E501
         self._callback = callback

@@ -23,7 +23,7 @@ def check_compatible(
     tmcap: _TypeManager,
     from_: int,
     to: int,
-) -> str:
+) -> pt.Optional[str]:
     ...
 
 
