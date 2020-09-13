@@ -109,7 +109,7 @@ class Type(metaclass=_TypeMetaclass):
         return self.name
 
     @property
-    def mangling_args(self) -> pt.Tuple[str, pt.Tuple[pt.Any, ...]]:
+    def mangling_args(self) -> pt.Tuple[str, pt.Sequence[pt.Any]]:
         """
         Returns `(basename, args)` where `basename` is the name of the type
         and `args` is a sequence of parameters of the type.
@@ -125,10 +125,10 @@ class Type(metaclass=_TypeMetaclass):
     def __hash__(self) -> int:
         return hash(self.key)
 
-    def __eq__(self, other: pt.Any) -> bool:
+    def __eq__(self, other: NumbaTypeInst) -> bool:  # type: ignore[override]
         return self.__class__ is other.__class__ and self.key == other.key
 
-    def __ne__(self, other: pt.Any) -> bool:
+    def __ne__(self, other: NumbaTypeInst) -> bool:  # type: ignore[override]
         return not (self == other)
 
     def __reduce__(self):
