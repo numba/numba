@@ -514,9 +514,9 @@ class NdConstructor(CallableTemplate):
                         nm = dtype.key[0].__name__
                         if hasattr (np, nm):
                             if hasattr(np, '%s_' %nm):
-                                msg = ("dtype 'np.%s' is not supported, "
-                                       "perhaps use 'np.%s_' or a more "
-                                       "specific dtype?" % (nm, nm))
+                                msg = ("dtype 'np.%s' is not supported. "
+                                       "Try using 'np.%s_' or a more "
+                                       "specific dtype." % (nm, nm))
                             else:
                                 msg = "dtype 'np.%s' is not supported" % nm
                             raise TypingError(msg)                            
