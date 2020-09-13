@@ -342,13 +342,17 @@ Type annotations
    evaluate Python type annotations.  For runtime checking of Python objects
    see ``typeof`` above.
 
+   For any numba type, ``as_numba_type(nb_type) == nb_type``.
+
       >>> numba.extending.as_numba_type(int)
       int64
       >>> import typing  # the Python library, not the Numba one
       >>> numba.extending.as_numba_type(typing.List[float])
       ListType[float64]
+      >>> numba.extending.as_numba_type(numba.int32)
+      int32
 
-   ``as_numba_type`` is automatically updated to include any ``@jitclass``es.
+   ``as_numba_type`` is automatically updated to include any ``@jitclass``.
 
       >>> @jitclass
       ... class Counter:
@@ -365,6 +369,4 @@ Type annotations
       >>> numba.extending.as_numba_type(Counter)
       instance.jitclass.Counter#11bad4278<x:int64>
 
-   For any numba type, ``as_numba_type(nb_type) == nb_type``.
-
-   Currently ``as_numba_type`` is only used to infer fields for ``@jitclass``es.
+   Currently ``as_numba_type`` is only used to infer fields for ``@jitclass``.
