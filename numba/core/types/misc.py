@@ -1,10 +1,10 @@
 import typing as pt
 
-from numba.core.types.abstract import Callable, Literal, Type
+from numba.core.errors import LiteralTypingError, TypingError
+from numba.core.typeconv import Conversion
+from numba.core.types.abstract import Callable, Literal, NumbaTypeInst, Type
 from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
-from numba.core.typeconv import Conversion
-from numba.core.errors import TypingError, LiteralTypingError
 
 
 class PyObject(Dummy):
@@ -46,12 +46,13 @@ class StringLiteral(Literal, Dummy):
 Literal.ctor_map[str] = StringLiteral
 
 
-def unliteral(lit_type: Type) -> Type:
+def unliteral(lit_type: NumbaTypeInst) -> NumbaTypeInst:
     """
     Get base type from Literal type.
     """
     if hasattr(lit_type, '__unliteral__'):
         return lit_type.__unliteral__()  # type: ignore[no-any-return, attr-defined]
+
     return getattr(lit_type, 'literal_type', lit_type)  # type: ignore[no-any-return]
 
 
@@ -104,7 +105,7 @@ class VarArg(Type):
     not for actual values.
     """
 
-    def __init__(self, dtype: Type):
+    def __init__(self, dtype: NumbaTypeInst):
         self.dtype = dtype
         super(VarArg, self).__init__("*%s" % dtype)
 
@@ -141,7 +142,7 @@ class MemInfoPointer(Type):
     """
     mutable = True
 
-    def __init__(self, dtype: Type):
+    def __init__(self, dtype: NumbaTypeInst):
         self.dtype = dtype
         name = "memory-managed *%s" % dtype
         super(MemInfoPointer, self).__init__(name)
@@ -157,7 +158,7 @@ class CPointer(Type):
     """
     mutable = True
 
-    def __init__(self, dtype: Type):
+    def __init__(self, dtype: NumbaTypeInst):
         self.dtype = dtype
         name = "%s*" % dtype
         super(CPointer, self).__init__(name)
@@ -181,7 +182,7 @@ class EphemeralArray(Type):
     rather than a single one.  The array size must be known at compile-time.
     """
 
-    def __init__(self, dtype: Type, count: int):
+    def __init__(self, dtype: NumbaTypeInst, count: int):
         self.dtype = dtype
         self.count = count
         name = "*%s[%d]" % (dtype, count)
@@ -211,7 +212,7 @@ class Optional(Type):
     Type class for optional types, i.e. union { some type, None }
     """
 
-    def __init__(self, typ: Type):
+    def __init__(self, typ: NumbaTypeInst):
         assert not isinstance(typ, (Optional, NoneType))
         typ = unliteral(typ)
         self.type = typ

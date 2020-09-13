@@ -1,13 +1,13 @@
 import typing as pt
 
-from .abstract import IterableType, Type
+from .abstract import IterableType, NumbaTypeInst
 from .common import Buffer, SimpleIterableType, SimpleIteratorType
 from ..errors import TypingError
 
 
 class RangeType(SimpleIterableType):
 
-    def __init__(self, dtype: Type):
+    def __init__(self, dtype: NumbaTypeInst):
         self.dtype = dtype
         name = "range_state_%s" % (dtype,)
         super(SimpleIterableType, self).__init__(name)
@@ -22,7 +22,7 @@ class RangeType(SimpleIterableType):
 
 class RangeIteratorType(SimpleIteratorType):
 
-    def __init__(self, dtype: Type):
+    def __init__(self, dtype: NumbaTypeInst):
         name = "range_iter_%s" % (dtype,)
         super(SimpleIteratorType, self).__init__(name)
         self._yield_type = dtype

@@ -1,14 +1,13 @@
 import enum
 import typing as pt
+from functools import total_ordering
 
 import numpy as np
-
-from .abstract import Dummy, Hashable, Literal, Number, Type
-from functools import total_ordering
 from numba.core import utils
 from numba.core.typeconv import Conversion
 from numba.np import npdatetime_helpers
 
+from .abstract import Dummy, Hashable, Literal, NumbaTypeInst, Number, Type
 
 _ComparisonOrNotImplemented = pt.Union[bool, "NotImplemented"]
 
@@ -38,7 +37,12 @@ def parse_integer_signed(name: str) -> bool:
 
 @total_ordering
 class Integer(Number):
-    def __init__(self, name: str, bitwidth: pt.Optional[int]=None, signed: pt.Optional[bool]=None):
+    def __init__(
+        self,
+        name: str,
+        bitwidth: pt.Optional[int]=None,
+        signed: pt.Optional[bool]=None,
+    ):
         super(Integer, self).__init__(name)
         if bitwidth is None:
             bitwidth = _parse_bitwith(name, "int", "uint")
@@ -179,7 +183,7 @@ class EnumClass(Dummy):
     """
     basename = "Enum class"
 
-    def __init__(self, cls: pt.Type[enum.Enum], dtype: Type):
+    def __init__(self, cls: pt.Type[enum.Enum], dtype: NumbaTypeInst):
         assert isinstance(cls, type)
         assert isinstance(dtype, Type)
         self.instance_class = cls
@@ -192,7 +196,7 @@ class EnumClass(Dummy):
         return self.instance_class, self.dtype
 
     @utils.cached_property
-    def member_type(self) -> Type:
+    def member_type(self) -> NumbaTypeInst:
         """
         The type of this class' members.
         """
@@ -206,7 +210,7 @@ class IntEnumClass(EnumClass):
     basename = "IntEnum class"
 
     @utils.cached_property
-    def member_type(self) -> Type:
+    def member_type(self) -> NumbaTypeInst:
         """
         The type of this class' members.
         """
@@ -220,7 +224,7 @@ class EnumMember(Type):
     basename = "Enum"
     class_type_class = EnumClass
 
-    def __init__(self, cls: pt.Type[enum.Enum], dtype: Type):
+    def __init__(self, cls: pt.Type[enum.Enum], dtype: NumbaTypeInst):
         assert isinstance(cls, type)
         assert isinstance(dtype, Type)
         self.instance_class = cls
@@ -233,7 +237,7 @@ class EnumMember(Type):
         return self.instance_class, self.dtype
 
     @property
-    def class_type(self) -> Type:
+    def class_type(self) -> NumbaTypeInst:
         """
         The type of this member's class.
         """

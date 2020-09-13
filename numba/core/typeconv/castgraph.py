@@ -2,7 +2,7 @@ import enum
 import typing as pt
 from collections import defaultdict
 
-from numba.core.types import Type
+from numba.core.types.abstract import NumbaTypeInst
 
 
 class Conversion(enum.IntEnum):
@@ -36,18 +36,18 @@ class CastSet(object):
     """
 
     def __init__(self) -> None:
-        self._rels: pt.Dict[Type, Conversion] = {}
+        self._rels: pt.Dict[NumbaTypeInst, Conversion] = {}
 
-    def insert(self, to: Type, rel: Conversion) -> bool:
+    def insert(self, to: NumbaTypeInst, rel: Conversion) -> bool:
         old = self.get(to)
         setrel = min(rel, old)
         self._rels[to] = setrel
         return old != setrel
 
-    def items(self) -> pt.Iterable[pt.Tuple[Type, Conversion]]:
+    def items(self) -> pt.Iterable[pt.Tuple[NumbaTypeInst, Conversion]]:
         return self._rels.items()
 
-    def get(self, item: Type) -> Conversion:
+    def get(self, item: NumbaTypeInst) -> Conversion:
         return self._rels.get(item, Conversion.nil)
 
     def __len__(self) -> int:
@@ -58,13 +58,13 @@ class CastSet(object):
                 for ty, rel in self._rels.items()]
         return "{" + ', '.join(body) + "}"
 
-    def __contains__(self, item: Type) -> bool:
+    def __contains__(self, item: NumbaTypeInst) -> bool:
         return item in self._rels
 
-    def __iter__(self) -> pt.Iterator[Type]:
+    def __iter__(self) -> pt.Iterator[NumbaTypeInst]:
         return iter(self._rels.keys())
 
-    def __getitem__(self, item: Type) -> Conversion:
+    def __getitem__(self, item: NumbaTypeInst) -> Conversion:
         return self._rels[item]
 
 
@@ -77,7 +77,7 @@ class TypeGraph(object):
 
     def __init__(
         self,
-        callback: pt.Callable[[Type, Type, Conversion], None],
+        callback: pt.Callable[[NumbaTypeInst, NumbaTypeInst, Conversion], None],
     ):
         """
         Args
@@ -87,14 +87,16 @@ class TypeGraph(object):
             (from_type, to_type, castrel).
         """
         assert callback is None or callable(callback)
-        self._forwards: pt.DefaultDict[Type, CastSet] = defaultdict(CastSet)
-        self._backwards: pt.DefaultDict[Type, pt.Set[Type]] = defaultdict(set)
+        self._forwards: pt.DefaultDict[NumbaTypeInst, CastSet] = defaultdict(CastSet)  # noqa: E501
+        self._backwards: pt.DefaultDict[NumbaTypeInst, pt.Set[NumbaTypeInst]] = defaultdict(set)  # noqa: E501
         self._callback = callback
 
-    def get(self, ty: Type) -> CastSet:
+    def get(self, ty: NumbaTypeInst) -> CastSet:
         return self._forwards[ty]
 
-    def propagate(self, a: Type, b: Type, baserel: Conversion) -> None:
+    def propagate(
+        self, a: NumbaTypeInst, b: NumbaTypeInst, baserel: Conversion,
+    ) -> None:
         backset = self._backwards[a]
 
         # Forward propagate the relationship to all nodes that b leads to
@@ -121,17 +123,19 @@ class TypeGraph(object):
                     self._callback(child, b, rel)
                 self._backwards[b].add(child)
 
-    def insert_rule(self, a: Type, b: Type, rel: Conversion) -> None:
+    def insert_rule(
+        self, a: NumbaTypeInst, b: NumbaTypeInst, rel: Conversion,
+    ) -> None:
         self._forwards[a].insert(b, rel)
         self._callback(a, b, rel)
         self._backwards[b].add(a)
         self.propagate(a, b, rel)
 
-    def promote(self, a: Type, b: Type) -> None:
+    def promote(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         self.insert_rule(a, b, Conversion.promote)
 
-    def safe(self, a: Type, b: Type) -> None:
+    def safe(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         self.insert_rule(a, b, Conversion.safe)
 
-    def unsafe(self, a: Type, b: Type) -> None:
+    def unsafe(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         self.insert_rule(a, b, Conversion.unsafe)

@@ -19,7 +19,7 @@ except ImportError as e:
     raise ImportError(msg % (url, reportme, str(e), sys.executable))
 
 from numba.core.typeconv import castgraph, Conversion
-from numba.core.types import Type
+from numba.core.types.abstract import NumbaTypeInst, Type
 
 
 class TypeManager(object):
@@ -33,12 +33,12 @@ class TypeManager(object):
 
     def __init__(self) -> None:
         self._ptr = _typeconv.new_type_manager()
-        self._types: pt.Set[Type] = set()
+        self._types: pt.Set[NumbaTypeInst] = set()
 
     def select_overload(
         self,
-        sig: pt.Sequence[Type],
-        overloads: pt.Sequence[pt.Sequence[Type]],
+        sig: pt.Sequence[NumbaTypeInst],
+        overloads: pt.Sequence[pt.Sequence[NumbaTypeInst]],
         allow_unsafe: bool,
         exact_match_required: bool
     ) -> int:
@@ -48,7 +48,7 @@ class TypeManager(object):
                                          allow_unsafe, exact_match_required)
 
     def check_compatible(
-        self, fromty: Type, toty: Type
+        self, fromty: NumbaTypeInst, toty: NumbaTypeInst
     ) -> pt.Optional[Conversion]:
         if not isinstance(toty, Type):
             raise ValueError("Specified type '%s' (%s) is not a Numba type" %
@@ -58,7 +58,9 @@ class TypeManager(object):
         assert conv is not Conversion.nil
         return conv
 
-    def set_compatible(self, fromty: Type, toty: Type, by: Conversion) -> None:
+    def set_compatible(
+        self, fromty: NumbaTypeInst, toty: NumbaTypeInst, by: Conversion,
+    ) -> None:
         code = self._conversion_codes[by]
         _typeconv.set_compatible(self._ptr, fromty._code, toty._code, code)
         # Ensure the types don't die, otherwise they may be recreated with
@@ -66,13 +68,17 @@ class TypeManager(object):
         self._types.add(fromty)
         self._types.add(toty)
 
-    def set_promote(self, fromty: Type, toty: Type) -> None:
+    def set_promote(self, fromty: NumbaTypeInst, toty: NumbaTypeInst) -> None:
         self.set_compatible(fromty, toty, Conversion.promote)
 
-    def set_unsafe_convert(self, fromty: Type, toty: Type) -> None:
+    def set_unsafe_convert(
+        self, fromty: NumbaTypeInst, toty: NumbaTypeInst,
+    ) -> None:
         self.set_compatible(fromty, toty, Conversion.unsafe)
 
-    def set_safe_convert(self, fromty: Type, toty: Type) -> None:
+    def set_safe_convert(
+        self, fromty: NumbaTypeInst, toty: NumbaTypeInst,
+    ) -> None:
         self.set_compatible(fromty, toty, Conversion.safe)
 
     def get_pointer(self) -> int:
@@ -87,46 +93,48 @@ class TypeCastingRules(object):
         self._tm = tm
         self._tg = castgraph.TypeGraph(self._cb_update)
 
-    def promote(self, a: Type, b: Type) -> None:
+    def promote(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         """
         Set `a` can promote to `b`
         """
         self._tg.promote(a, b)
 
-    def unsafe(self, a: Type, b: Type) -> None:
+    def unsafe(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         """
         Set `a` can unsafe convert to `b`
         """
         self._tg.unsafe(a, b)
 
-    def safe(self, a: Type, b: Type) -> None:
+    def safe(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         """
         Set `a` can safe convert to `b`
         """
         self._tg.safe(a, b)
 
-    def promote_unsafe(self, a: Type, b: Type) -> None:
+    def promote_unsafe(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         """
         Set `a` can promote to `b` and `b` can unsafe convert to `a`
         """
         self.promote(a, b)
         self.unsafe(b, a)
 
-    def safe_unsafe(self, a: Type, b: Type) -> None:
+    def safe_unsafe(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         """
         Set `a` can safe convert to `b` and `b` can unsafe convert to `a`
         """
         self._tg.safe(a, b)
         self._tg.unsafe(b, a)
 
-    def unsafe_unsafe(self, a: Type, b: Type) -> None:
+    def unsafe_unsafe(self, a: NumbaTypeInst, b: NumbaTypeInst) -> None:
         """
         Set `a` can unsafe convert to `b` and `b` can unsafe convert to `a`
         """
         self._tg.unsafe(a, b)
         self._tg.unsafe(b, a)
 
-    def _cb_update(self, a: Type, b: Type, rel: Conversion) -> None:
+    def _cb_update(
+        self, a: NumbaTypeInst, b: NumbaTypeInst, rel: Conversion,
+    ) -> None:
         """
         Callback for updating.
         """

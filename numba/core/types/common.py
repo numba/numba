@@ -3,9 +3,12 @@ Helper classes / mixins for defining types.
 """
 
 import typing as pt
+
 import typing_extensions as pt_ext
 
-from .abstract import ArrayCompatible, Dummy, IterableType, IteratorType, Type
+from .abstract import (
+    ArrayCompatible, Dummy, IterableType, IteratorType, NumbaTypeInst
+)
 
 
 class Opaque(Dummy):
@@ -53,7 +56,7 @@ class Buffer(IterableType, ArrayCompatible):
 
     def __init__(
         self,
-        dtype: Type,
+        dtype: NumbaTypeInst,
         ndim: int,
         layout: BufferLayoutType,
         readonly: bool = False,
@@ -90,7 +93,7 @@ class Buffer(IterableType, ArrayCompatible):
 
     def copy(
         self,
-        dtype: pt.Optional[Type] = None,
+        dtype: pt.Optional[NumbaTypeInst] = None,
         ndim: pt.Optional[int] = None,
         layout: pt.Optional[BufferLayoutType] = None,
     ) -> "Buffer":

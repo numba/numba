@@ -2,13 +2,14 @@ import collections
 import typing as pt
 
 from llvmlite import ir
-
-from .abstract import DTypeSpec, IteratorType, MutableSequence, Number, Type
-from .common import Buffer, BufferLayoutType, Opaque, SimpleIteratorType
-from numba.core.typeconv import Conversion
 from numba.core import utils
-from .misc import UnicodeType
+from numba.core.typeconv import Conversion
+
+from .abstract import (DTypeSpec, IteratorType, MutableSequence, NumbaTypeInst,
+                       Number, Type)
+from .common import Buffer, BufferLayoutType, Opaque, SimpleIteratorType
 from .containers import Bytes
+from .misc import UnicodeType
 
 
 class CharSeq(Type):
@@ -215,7 +216,7 @@ class DType(DTypeSpec, Opaque):
     np.dtype('int32')
     """
 
-    def __init__(self, dtype: Type):
+    def __init__(self, dtype: NumbaTypeInst):
         assert isinstance(dtype, Type)
         self._dtype = dtype
         name = "dtype(%s)" % (dtype,)
@@ -226,7 +227,7 @@ class DType(DTypeSpec, Opaque):
         return self.dtype
 
     @property
-    def dtype(self) -> Type:
+    def dtype(self) -> NumbaTypeInst:
         return self._dtype
 
     def __getitem__(self, arg):
@@ -314,7 +315,7 @@ class NumpyNdIterType(IteratorType):
         return [Array(dtype, 0, 'C') for dtype in self.dtypes]
 
     @property
-    def yield_type(self) -> Type:
+    def yield_type(self) -> NumbaTypeInst:
         from . import BaseTuple
         views = self.views
         if len(views) > 1:
@@ -399,7 +400,7 @@ class Array(Buffer):
 
     def __init__(
         self,
-        dtype: Type,
+        dtype: NumbaTypeInst,
         ndim: int,
         layout: BufferLayoutType,
         readonly: bool = False,
@@ -429,7 +430,7 @@ class Array(Buffer):
 
     def copy(
         self,
-        dtype: pt.Optional[Type] = None,
+        dtype: pt.Optional[NumbaTypeInst] = None,
         ndim: pt.Optional[int] = None,
         layout: pt.Optional[BufferLayoutType] = None,
         readonly: pt.Optional[bool] = None,

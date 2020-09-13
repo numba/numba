@@ -28,7 +28,10 @@ def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
 
 
-_TypeClassType = pt.TypeVar("_TypeClassType")
+# A subclass of Type (i.e. something which satisfies issubclass(x, Type)).
+NumbaTypeClass = pt.Type["Type"]
+# An instance of a Type (i.e. something which satisfies isinstance(x, Type)).
+NumbaTypeInst = pt.Union["Type"]
 
 class _TypeMetaclass(ABCMeta):
     """
@@ -59,7 +62,7 @@ class _TypeMetaclass(ABCMeta):
             _typecache[wr] = wr
             return inst
 
-    def __call__(cls, *args: pt.Any, **kwargs: pt.Any) -> "Type":
+    def __call__(cls, *args: pt.Any, **kwargs: pt.Any) -> NumbaTypeInst:
         """
         Instantiate *cls* (a Type subclass, presumably) and intern it.
         If an interned instance already exists, it is returned, otherwise
@@ -163,7 +166,7 @@ class Type(metaclass=_TypeMetaclass):
         """
         return True
 
-    def augment(self, other: "Type") -> pt.Optional["Type"]:
+    def augment(self, other: NumbaTypeInst) -> pt.Optional[NumbaTypeInst]:
         """
         Augment this type with the *other*.  Return the augmented type,
         or None if not supported.
@@ -339,7 +342,7 @@ class IteratorType(IterableType):
 
     @property
     @abstractmethod
-    def yield_type(self) -> Type:
+    def yield_type(self) -> NumbaTypeInst:
         """
         The type of values yielded by the iterator.
         """
@@ -362,7 +365,7 @@ class Sequence(Container):
     Base class for 1d sequence types.  Instances should have the *dtype*
     attribute.
     """
-    dtype: Type
+    dtype: NumbaTypeInst
 
 
 class MutableSequence(Sequence):
@@ -370,7 +373,7 @@ class MutableSequence(Sequence):
     Base class for 1d mutable sequence types.  Instances should have the
     *dtype* attribute.
     """
-    dtype: Type
+    dtype: NumbaTypeInst
 
 
 class ArrayCompatible(Type):
@@ -402,7 +405,7 @@ class ArrayCompatible(Type):
         return self.as_array.layout
 
     @cached_property
-    def dtype(self) -> Type:
+    def dtype(self) -> NumbaTypeInst:
         return self.as_array.dtype
 
 

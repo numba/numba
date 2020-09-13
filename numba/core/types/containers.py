@@ -9,6 +9,7 @@ from .abstract import (
     Hashable,
     IteratorType,
     MutableSequence,
+    NumbaTypeInst,
     Sequence,
     Type,
     TypeRef,
@@ -33,7 +34,7 @@ class Pair(Type):
     A heterogeneous pair.
     """
 
-    def __init__(self, first_type: Type, second_type: Type):
+    def __init__(self, first_type: NumbaTypeInst, second_type: NumbaTypeInst):
         self.first_type = first_type
         self.second_type = second_type
         name = "pair<%s, %s>" % (first_type, second_type)
@@ -129,7 +130,7 @@ class MemoryView(Buffer):
     """
 
 
-def is_homogeneous(*tys: Type) -> bool:
+def is_homogeneous(*tys: NumbaTypeInst) -> bool:
     """Are the types homogeneous?
     """
     if tys:
@@ -149,7 +150,7 @@ class BaseTuple(ConstSized, Hashable):
 
     @classmethod
     def from_types(
-        cls, tys: pt.Sequence[Type], pyclass: pt.Any = None,
+        cls, tys: pt.Sequence[NumbaTypeInst], pyclass: pt.Any = None,
     ) -> "BaseTuple":
         """
         Instantiate the right tuple type for the given element types.
@@ -176,11 +177,15 @@ class BaseTuple(ConstSized, Hashable):
             return cls._make_heterogeneous_tuple(tys)
 
     @classmethod
-    def _make_homogeneous_tuple(cls, dtype: Type, count: int) -> "UniTuple":
+    def _make_homogeneous_tuple(
+        cls, dtype: NumbaTypeInst, count: int,
+    ) -> "UniTuple":
         return UniTuple(dtype, count)
 
     @classmethod
-    def _make_heterogeneous_tuple(cls, tys: pt.Sequence[Type]) -> "Tuple":
+    def _make_heterogeneous_tuple(
+        cls, tys: pt.Sequence[NumbaTypeInst],
+    ) -> "Tuple":
         return Tuple(tys)
 
 
@@ -216,20 +221,20 @@ class _HomogeneousTuple(Sequence, BaseTuple):
     def iterator_type(self):
         return UniTupleIter(self)
 
-    def __getitem__(self, i: int) -> Type:
+    def __getitem__(self, i: int) -> NumbaTypeInst:
         """
         Return element at position i
         """
         return self.dtype
 
-    def __iter__(self) -> pt.Iterator[Type]:
+    def __iter__(self) -> pt.Iterator[NumbaTypeInst]:
         return iter([self.dtype] * self.count)
 
     def __len__(self) -> int:
         return self.count
 
     @property
-    def types(self) -> pt.Tuple[Type, ...]:
+    def types(self) -> pt.Tuple[NumbaTypeInst, ...]:
         return (self.dtype,) * self.count
 
 
@@ -238,7 +243,7 @@ class UniTuple(BaseAnonymousTuple, _HomogeneousTuple, Sequence):
     Type class for homogeneous tuples.
     """
 
-    def __init__(self, dtype: Type, count: int):
+    def __init__(self, dtype: NumbaTypeInst, count: int):
         self.dtype = dtype
         self.count = count
         name = "%s(%s x %d)" % (self.__class__.__name__, dtype, count,)
@@ -275,9 +280,9 @@ class UniTupleIter(BaseContainerIterator):
 
 class _HeterogeneousTuple(BaseTuple):
 
-    types: pt.Tuple[Type, ...]
+    types: pt.Tuple[NumbaTypeInst, ...]
 
-    def __getitem__(self, i: int) -> Type:
+    def __getitem__(self, i: int) -> NumbaTypeInst:
         """
         Return element at position i
         """
@@ -287,7 +292,7 @@ class _HeterogeneousTuple(BaseTuple):
         # Beware: this makes Tuple(()) false-ish
         return len(self.types)
 
-    def __iter__(self) -> pt.Iterator[Type]:
+    def __iter__(self) -> pt.Iterator[NumbaTypeInst]:
         return iter(self.types)
 
     @staticmethod
@@ -298,17 +303,17 @@ class _HeterogeneousTuple(BaseTuple):
 
 
 class UnionType(Type):
-    def __init__(self, types: pt.Sequence[Type]):
+    def __init__(self, types: pt.Sequence[NumbaTypeInst]):
         self.types = tuple(sorted(set(types), key=lambda x: x.name))
         name = "Union[{}]".format(",".join(map(str, self.types)))
         super(UnionType, self).__init__(name=name)
 
-    def get_type_tag(self, typ: Type) -> int:
+    def get_type_tag(self, typ: NumbaTypeInst) -> int:
         return self.types.index(typ)
 
 
 class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
-    def __new__(cls, types: pt.Sequence[Type]):
+    def __new__(cls, types: pt.Sequence[NumbaTypeInst]):
 
         t = utils.unified_function_type(types, require_precise=True)
         if t is not None:
@@ -321,7 +326,7 @@ class Tuple(BaseAnonymousTuple, _HeterogeneousTuple):
         else:
             return object.__new__(Tuple)
 
-    def __init__(self, types: pt.Sequence[Type]):
+    def __init__(self, types: pt.Sequence[NumbaTypeInst]):
         self.types = tuple(types)
         self.count = len(self.types)
         self.dtype = UnionType(types)
@@ -386,7 +391,9 @@ class BaseNamedTuple(BaseTuple):
 
 
 class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
-    def __init__(self, dtype: Type, count: int, cls: pt.Type[pt.NamedTuple]):
+    def __init__(
+        self, dtype: NumbaTypeInst, count: int, cls: pt.Type[pt.NamedTuple],
+    ):
         self.dtype = dtype
         self.count = count
         self.fields = tuple(cls._fields)
@@ -404,7 +411,9 @@ class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
 
 
 class NamedTuple(_HeterogeneousTuple, BaseNamedTuple):
-    def __init__(self, types: pt.Sequence[Type], cls: pt.Type[pt.NamedTuple]):
+    def __init__(
+        self, types: pt.Sequence[NumbaTypeInst], cls: pt.Type[pt.NamedTuple],
+    ):
         _HeterogeneousTuple.is_types_iterable(types)
 
         self.types = tuple(types)
@@ -428,7 +437,7 @@ class List(MutableSequence, InitialValue):
 
     def __init__(
         self,
-        dtype: Type,
+        dtype: NumbaTypeInst,
         reflected: bool = False,
         initial_value: pt.Optional[pt.List[pt.Any]] = None
     ):
@@ -442,7 +451,7 @@ class List(MutableSequence, InitialValue):
 
     def copy(
         self,
-        dtype: pt.Optional[Type] = None,
+        dtype: pt.Optional[NumbaTypeInst] = None,
         reflected: pt.Optional[bool] = None
     ) -> "List":
         if dtype is None:
@@ -585,7 +594,7 @@ class Set(Container):
 
     def copy(
         self,
-        dtype: pt.Optional[Type] = None,
+        dtype: pt.Optional[NumbaTypeInst] = None,
         reflected: pt.Optional[bool] = None
     ) -> "Set":
         if dtype is None:
@@ -639,7 +648,7 @@ class ListType(IterableType):
 
     mutable = True
 
-    def __init__(self, itemty: Type):
+    def __init__(self, itemty: NumbaTypeInst):
         assert not isinstance(itemty, TypeRef)
         itemty = unliteral(itemty)
         if isinstance(itemty, Optional):
@@ -659,7 +668,7 @@ class ListType(IterableType):
         return ListTypeIterableType(self).iterator_type
 
     @classmethod
-    def refine(cls, itemty: Type) -> "ListType":
+    def refine(cls, itemty: NumbaTypeInst) -> "ListType":
         """Refine to a precise list type
         """
         res = cls(itemty)
@@ -698,7 +707,7 @@ class ListTypeIteratorType(SimpleIteratorType):
         super(ListTypeIteratorType, self).__init__(name, yield_type)
 
 
-def _sentry_forbidden_types(key: Type, value: Type) -> None:
+def _sentry_forbidden_types(key: NumbaTypeInst, value: NumbaTypeInst) -> None:
     # Forbids List and Set for now
     if isinstance(key, (Set, List)):
         raise TypingError("{} as key is forbidden".format(key))
@@ -712,8 +721,8 @@ class DictType(IterableType, InitialValue):
 
     def __init__(
         self,
-        keyty: Type,
-        valty: Type,
+        keyty: NumbaTypeInst,
+        valty: NumbaTypeInst,
         initial_value: pt.Optional[pt.Dict[pt.Any, pt.Any]] = None,
     ):
         assert not isinstance(keyty, TypeRef)
@@ -749,7 +758,7 @@ class DictType(IterableType, InitialValue):
         return DictKeysIterableType(self).iterator_type
 
     @classmethod
-    def refine(cls, keyty: Type, valty: Type) -> "DictType":
+    def refine(cls, keyty: NumbaTypeInst, valty: NumbaTypeInst) -> "DictType":
         """Refine to a precise dictionary type
         """
         res = cls(keyty, valty)
@@ -844,7 +853,7 @@ class _DictIterableType(SimpleIterableType):
     """
 
     parent: DictType
-    yield_type: Type
+    yield_type: NumbaTypeInst
 
     def __init__(self, name: str, iterator_type: IteratorType):
         super().__init__(name=name, iterator_type=iterator_type)
