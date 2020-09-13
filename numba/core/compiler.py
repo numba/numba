@@ -91,6 +91,7 @@ CR_FIELDS = ["typing_context",
              # List of functions to call to initialize on unserialization
              # (i.e cache load).
              "reload_init",
+             "referenced_envs",
              ]
 
 
@@ -158,6 +159,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  call_helper=None,
                  metadata=None,  # Do not store, arbitrary & potentially large!
                  reload_init=reload_init,
+                 referenced_envs=referenced_envs,
                  )
 
         # Load Environments
