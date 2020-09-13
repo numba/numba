@@ -1,7 +1,7 @@
 import ctypes
 import pickle
 import random
-import typing as py_typing
+import typing as pt
 import unittest
 import warnings
 
@@ -47,7 +47,7 @@ def _get_meminfo(box):
 
 class TestJitClass(TestCase, MemoryLeakMixin):
 
-    def _check_spec(self, spec, test_cls=None, all_expected=None):
+    def _check_spec(self, spec=None, test_cls=None, all_expected=None):
         if test_cls is None:
             @jitclass(spec)
             class Test(object):
@@ -65,6 +65,8 @@ class TestJitClass(TestCase, MemoryLeakMixin):
                 all_expected = spec.items()
             else:
                 all_expected = spec
+
+        assert all_expected is not None
 
         self.assertEqual(len(names), len(all_expected))
         for got, expected in zip(zip(names, values), all_expected):
@@ -88,12 +90,29 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         @jitclass(spec)
         class Test1(object):
             x: int
-            y: py_typing.List[float]
+            y: pt.List[float]
 
             def __init__(self):
                 pass
 
         self._check_spec(spec, Test1, spec + [("y", types.ListType(float64))])
+
+    def test_type_annotation_inheritance(self):
+
+        class Foo:
+            x: int
+
+        @jitclass
+        class Bar(Foo):
+            y: float
+
+            def __init__(self, value: float) -> None:
+                self.x = int(value)
+                self.y = value
+
+        self._check_spec(
+            test_cls=Bar, all_expected=[("x", typeof(0)), ("y", typeof(0.0))]
+        )
 
     def test_spec_errors(self):
         spec1 = [("x", int), ("y", float32[:])]

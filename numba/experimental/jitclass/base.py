@@ -1,18 +1,17 @@
-from collections import OrderedDict
-from collections.abc import Sequence
-import types as pytypes
 import inspect
 import operator
+import types as pytypes
+import typing as pt
+from collections import OrderedDict
+from collections.abc import Sequence
 
 from llvmlite import ir as llvmir
-
-from numba.core import types, utils, errors, cgutils, imputils
-from numba.core.registry import cpu_target
-from numba import njit, as_numba_type
-from numba.core.typing import templates
+from numba import as_numba_type, njit
+from numba.core import cgutils, errors, imputils, types, utils
 from numba.core.datamodel import default_manager, models
+from numba.core.registry import cpu_target
+from numba.core.typing import templates
 from numba.experimental.jitclass import _box
-
 
 ##############################################################################
 # Data model
@@ -173,10 +172,9 @@ def register_class_type(cls, spec, class_ctor, builder):
         spec = OrderedDict(spec)
 
     # Extend spec with class annotations.
-    if hasattr(cls, "__annotations__"):
-        for attr, py_type in cls.__annotations__.items():
-            if attr not in spec:
-                spec[attr] = as_numba_type(py_type)
+    for attr, py_type in pt.get_type_hints(cls).items():
+        if attr not in spec:
+            spec[attr] = as_numba_type(py_type)
 
     _validate_spec(spec)
 
