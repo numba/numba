@@ -51,9 +51,9 @@ def unliteral(lit_type: NumbaTypeInst) -> NumbaTypeInst:
     Get base type from Literal type.
     """
     if hasattr(lit_type, '__unliteral__'):
-        return lit_type.__unliteral__()  # type: ignore[no-any-return, attr-defined]
+        return lit_type.__unliteral__()  # type: ignore[no-any-return, attr-defined]  # noqa: E501
 
-    return getattr(lit_type, 'literal_type', lit_type)  # type: ignore[no-any-return]
+    return getattr(lit_type, 'literal_type', lit_type)  # type: ignore[no-any-return]  # noqa: E501
 
 
 def literal(value: pt.Any) -> Literal:

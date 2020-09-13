@@ -89,7 +89,10 @@ class Record(Type):
         lltypes = []
         for k, ty in name_types:
             if not isinstance(ty, (Number, NestedArray)):
-                msg = "Only Number and NestedArray types are supported, found: {}. "
+                msg = (
+                    "Only Number and NestedArray types are supported,"
+                    " found: {}. "
+                )
                 raise TypeError(msg.format(ty))
             datatype = ctx.get_data_type(ty)
             lltypes.append(datatype)
@@ -348,7 +351,8 @@ class NumpyNdIterType(IteratorType):
                 else:
                     kind = 'indexed'
                 if layout == 'C':
-                    # If iterating in C order, broadcasting is done on the outer indices
+                    # If iterating in C order, broadcasting is done on the
+                    # outer indices.
                     indexer = (kind, ndim - a.ndim, ndim)
                 else:
                     indexer = (kind, 0, a.ndim)
@@ -560,7 +564,7 @@ class NestedArray(Array):
 
     @property
     def size(self) -> int:
-        return self.dtype.bitwidth // 8  # type: ignore[no-any-return, attr-defined]
+        return self.dtype.bitwidth // 8  # type: ignore[no-any-return, attr-defined]  # noqa: E501
 
     @property
     def strides(self) -> pt.Tuple[int, ...]:

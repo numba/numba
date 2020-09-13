@@ -11,6 +11,7 @@ from .abstract import Dummy, Hashable, Literal, NumbaTypeInst, Number, Type
 
 _ComparisonOrNotImplemented = pt.Union[bool, "NotImplemented"]
 
+
 class Boolean(Hashable):
 
     def cast_python_value(self, value: pt.Any) -> bool:
@@ -40,8 +41,8 @@ class Integer(Number):
     def __init__(
         self,
         name: str,
-        bitwidth: pt.Optional[int]=None,
-        signed: pt.Optional[bool]=None,
+        bitwidth: pt.Optional[int] = None,
+        signed: pt.Optional[bool] = None,
     ):
         super(Integer, self).__init__(name)
         if bitwidth is None:
@@ -52,7 +53,7 @@ class Integer(Number):
         self.signed = signed
 
     @classmethod
-    def from_bitwidth(cls, bitwidth: int, signed: bool=True):
+    def from_bitwidth(cls, bitwidth: int, signed: bool = True):
         name = ('int%d' if signed else 'uint%d') % bitwidth
         return cls(name)
 
@@ -97,7 +98,7 @@ class IntegerLiteral(Literal, Integer):
             name=name,
             bitwidth=basetype.bitwidth,
             signed=basetype.signed,
-            )
+        )
 
     def can_convert_to(self, typingctx, other):
         conv = typingctx.can_convert(self.literal_type, other)
@@ -172,6 +173,7 @@ class _NPDatetimeBase(Type):
 class NPTimedelta(_NPDatetimeBase):
     type_name = 'timedelta64'
 
+
 @total_ordering
 class NPDatetime(_NPDatetimeBase):
     type_name = 'datetime64'
@@ -188,7 +190,7 @@ class EnumClass(Dummy):
         assert isinstance(dtype, Type)
         self.instance_class = cls
         self.dtype = dtype
-        name = "%s<%s>(%s)" % (self.basename, self.dtype, self.instance_class.__name__)
+        name = f"{self.basename}<{self.dtype}>({self.instance_class.__name__})"
         super(EnumClass, self).__init__(name)
 
     @property
@@ -229,7 +231,7 @@ class EnumMember(Type):
         assert isinstance(dtype, Type)
         self.instance_class = cls
         self.dtype = dtype
-        name = "%s<%s>(%s)" % (self.basename, self.dtype, self.instance_class.__name__)
+        name = f"{self.basename}<{self.dtype}>({self.instance_class.__name__})"
         super(EnumMember, self).__init__(name)
 
     @property
