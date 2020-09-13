@@ -52,7 +52,6 @@ exclude =
     numba/core/rewrites/macros.py
     numba/core/rewrites/static_binop.py
     numba/core/rewrites/ir_print.py
-    numba/core/types/abstract.py
     numba/core/fastmathpass.py
     numba/cpython/setobj.py
     numba/core/options.py

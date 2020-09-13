@@ -16,13 +16,16 @@ from numba.core.utils import cached_property
 # in _dispatcher.c's internal caches).
 _typecodes = itertools.count()
 
+
 def _autoincr():
     n = next(_typecodes)
     # 4 billion types should be enough, right?
     assert n < 2 ** 32, "Limited to 4 billion types"
     return n
 
+
 _typecache: pt.Dict[weakref.ref, weakref.ref] = {}
+
 
 def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
@@ -33,6 +36,7 @@ NumbaTypeClass = pt.Type["Type"]
 # An instance of a Type (i.e. something which satisfies isinstance(x, Type)).
 NumbaTypeInst = pt.Union["Type"]
 
+
 class _TypeMetaclass(ABCMeta):
     """
     A metaclass that will intern instances after they are created.
@@ -41,7 +45,12 @@ class _TypeMetaclass(ABCMeta):
     and hashing), then looking it up in the _typecache registry.
     """
 
-    def __init__(cls, name: str, bases: pt.Tuple[pt.Type, ...], orig_vars: pt.Dict[str, pt.Any]):
+    def __init__(
+        cls,
+        name: str,
+        bases: pt.Tuple[pt.Type, ...],
+        orig_vars: pt.Dict[str, pt.Any],
+    ):
         # __init__ is hooked to mark whether a Type class being defined is a
         # Numba internal type (one which is defined somewhere under the `numba`
         # module) or an external type (one which is defined elsewhere, for
@@ -214,14 +223,17 @@ class Type(metaclass=_TypeMetaclass):
             else:
                 layout = 'A'
         else:
-            # Raise a KeyError to not be handled by collection constructors (e.g. list).
-            raise KeyError(f"Can only index numba types with slices with no start or stop, got {args}.")
+            # Raise a KeyError to not be handled by collection constructors
+            # (e.g. list).
+            raise KeyError(
+                "Can only index numba types with slices with no start or stop, "
+                f"got {args}."
+            )
 
         return ndim, layout
 
     def cast_python_value(self, args):
         raise NotImplementedError
-
 
     @property
     def is_internal(self):
@@ -230,11 +242,15 @@ class Type(metaclass=_TypeMetaclass):
         return self._is_internal
 
     def dump(self, tab=''):
-        print(f'{tab}DUMP {type(self).__name__}[code={self._code}, name={self.name}]')
+        print(
+            f"{tab}DUMP {type(self).__name__}"
+            f"[code={self._code}, name={self.name}]"
+        )
 
 # XXX we should distinguish between Dummy (no meaningful
 # representation, e.g. None or a builtin function) and Opaque (has a
 # meaningful representation, e.g. ExternalFunctionPointer)
+
 
 class Dummy(Type):
     """
@@ -312,7 +328,8 @@ class IterableType(Type):
     @abstractmethod
     def iterator_type(self) -> "IteratorType":
         """
-        The iterator type obtained when calling iter() (explicitly or implicitly).
+        The iterator type obtained when calling iter() (explicitly or
+        implicitly).
         """
 
 
@@ -468,7 +485,6 @@ class Literal(Type):
             self._literal_type_cache = res
 
         return self._literal_type_cache
-
 
 
 class TypeRef(Dummy):
