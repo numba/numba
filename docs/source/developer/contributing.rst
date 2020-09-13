@@ -257,6 +257,9 @@ There is potential for confusion between the Numba module ``typing`` and Python 
 hints, as well as between Numba types---such as ``Dict`` or ``Literal``---and ``typing`` types of the same name.
 To mitigate the risk of confusion we use a naming convention by which objects of the built-in ``typing`` module are
 imported with an ``pt`` prefix. For example, ``typing.Dict`` is imported as ``from typing import Dict as ptDict``.
+Similarly, the Python built-in ``typing`` module is imported as ``import typing as pt``.
+To avoid confusion with the overloaded term ``Type``, ``NumbaTypeClass`` and ``NumbaTypeInst`` should be used in place
+of ``numba.core.types.Type`` in type annotations.
 
 Stability
 '''''''''
