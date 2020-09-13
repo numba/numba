@@ -14,6 +14,10 @@ class AsNumbaTypeRegistry:
     A registry for python typing declarations.  This registry stores a lookup
     table for simple cases (e.g. int) and a list of functions for more
     complicated cases (e.g. generics like List[int]).
+
+    The as_numba_type registry is meant to work statically on type annotations
+    at compile type, not dynamically on instances at runtime. To check the type
+    of an object at runtime, see numba.typeof.
     """
 
     def __init__(self):

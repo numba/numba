@@ -87,6 +87,10 @@ the Numba type ``interval_type``::
 
    as_numba_type.register(Interval, interval_type)
 
+Note that ``as_numba_type`` is only used to infer types from type annotations at
+compile time.  The ``typeof`` registry above is used to infer the type of
+objects at runtime.
+
 
 Type inference for operations
 -----------------------------

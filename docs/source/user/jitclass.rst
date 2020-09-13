@@ -41,8 +41,8 @@ Methods and properties (getters and setters only) can be defined.  They will be
 automatically compiled.
 
 
-Inferred class member types with ``as_numba_type``
-==================================================
+Inferred class member types from type annotations with ``as_numba_type``
+========================================================================
 
 Fields of a ``jitclass`` can also be inferred from Python type annotations.
 
@@ -53,29 +53,39 @@ Fields of a ``jitclass`` can also be inferred from Python type annotations.
    :dedent: 8
 
 Any type annotations on the class will be used to extend the spec if that field
-is not already present.  The Numba type corresponding to given Python type is
-inferred using ``as_numba_type``.  For example, if we have the class
+is not already present.  The Numba type corresponding to the given Python type
+is inferred using ``as_numba_type``.  For example, if we have the class
 
 .. code-block:: python
 
-    @jitclass([("x", int32)])
+    @jitclass([("w", int32), ("y", float64[:])])
     class Foo:
-        x: int
-        y: float
+        w: int
+        x: float
+        y: np.ndarray
         z: SomeOtherType
 
-        def __init__(self, x: int, y: float, z: SomeOtherType):
+        def __init__(self, w: int, x: float, y: np.ndarray, z: SomeOtherType):
             ...
 
 then the full spec used for ``Foo`` will be:
 
-* ``"x": int32`` (specified in the original ``spec`` passed to ``jitclass``)
-* ``"y": float64`` (added from type annotation)
+* ``"w": int32`` (specified in the ``spec``)
+* ``"x": float64`` (added from type annotation)
+* ``"y": array(float64, 1d, A)`` (specified in the ``spec``)
 * ``"z": numba.as_numba_type(SomeOtherType)`` (added from type annotation)
 
 Here ``SomeOtherType`` could be any supported Python type (e.g.
 ``bool``, ``typing.Dict[int, typing.Tuple[float, float]]``, or another
 ``jitclass``).
+
+Note that only type annotations on the class will be used to infer spec
+elements.  Method type annotations (e.g. those of ``__init__`` above) are
+ignored.
+
+Numba requires knowing the dtype and rank of numpy arrays, which cannot
+currently be expressed with type annotations. Because of this, numpy arrays need
+to be included in the ``spec`` explicitly.
 
 
 Specifying ``numba.typed`` containers as class members explicitly

@@ -17,8 +17,8 @@ def jitclass(cls_or_spec=None, spec=None):
     With a sequence, it must contain 2-tuples of (fieldname, fieldtype).
 
     Any class annotations for field names not listed in spec will be added.
-    For class annotation `x: T` we will append `("x", numba.typeof(T))` to
-    spec if x is not already a key in spec.
+    For class annotation `x: T` we will append ``("x", as_numba_type(T))`` to
+    the spec if ``x`` is not already a key in spec.
 
 
     Examples
