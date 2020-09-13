@@ -508,6 +508,21 @@ class NdConstructor(CallableTemplate):
             else:
                 nb_dtype = parse_dtype(dtype)
 
+            if nb_dtype is None:
+                if isinstance(dtype, types.Function):
+                    try:
+                        nm = dtype.key[0].__name__
+                        if hasattr (np, nm):
+                            if hasattr(np, '%s_' %nm):
+                                msg = ("dtype 'np.%s' is not supported, "
+                                       "perhaps use 'np.%s_' or a more "
+                                       "specific dtype?" % (nm, nm))
+                            else:
+                                msg = "dtype 'np.%s' is not supported" % nm
+                            raise TypingError(msg)                            
+                    except AttributeError:
+                        pass
+                raise TypingError("dtype '%s' is unsupported." % dtype)
             ndim = parse_shape(shape)
             if nb_dtype is not None and ndim is not None:
                 return types.Array(dtype=nb_dtype, ndim=ndim, layout='C')
