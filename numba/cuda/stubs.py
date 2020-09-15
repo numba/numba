@@ -124,20 +124,6 @@ class grid(Stub):
     _description_ = '<grid(ndim)>'
 
 
-class this_grid(Stub):
-    '''
-    A reference to the current grid_group.
-    '''
-    _description_ = '<this_grid()>'
-
-
-class sync_group(Stub):
-    '''
-    Synchronise the given group
-    '''
-    _description_ = '<sync_group()>'
-
-
 class gridsize(Stub):
     '''gridsize(ndim)
 
