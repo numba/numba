@@ -6,7 +6,7 @@ from .stubs import (threadIdx, blockIdx, blockDim, gridDim, laneid,
                     vote_sync_intrinsic, match_any_sync, match_all_sync,
                     threadfence_block, threadfence_system,
                     threadfence, selp, popc, brev, clz, ffs, fma,
-                    this_grid, sync_group)
+                    cg)
 from .cudadrv.error import CudaSupportError
 from numba.cuda.cudadrv.driver import (BaseCUDAMemoryManager,
                                        HostOnlyCUDAMemoryManager,

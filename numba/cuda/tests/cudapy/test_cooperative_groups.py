@@ -8,13 +8,13 @@ from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 @cuda.jit
 def this_grid(A):
-    cuda.this_grid()
+    cuda.cg.this_grid()
     A[0] = 1.0
 
 
 @cuda.jit
 def sync_group(A):
-    g = cuda.this_grid()
+    g = cuda.cg.this_grid()
     g.sync()
     A[0] = 1.0
 

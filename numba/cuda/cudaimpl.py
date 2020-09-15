@@ -12,7 +12,7 @@ from numba.core import types, cgutils
 from .cudadrv import nvvm
 from numba import cuda
 from numba.cuda import nvvmutils, stubs
-from numba.cuda.types import dim3
+from numba.cuda.types import dim3, grid_group
 
 
 registry = Registry()
@@ -72,8 +72,8 @@ def dim3_z(context, builder, sig, args):
     return builder.extract_value(args, 2)
 
 
-@lower(stubs.this_grid)
-def ptx_this_grid(context, builder, sig, args):
+@lower(cuda.cg.this_grid)
+def cg_this_grid(context, builder, sig, args):
     one = context.get_constant(types.int32, 1)
     lmod = builder.module
     return builder.call(
@@ -81,7 +81,7 @@ def ptx_this_grid(context, builder, sig, args):
         (one,))
 
 
-@lower(stubs.sync_group, types.int64)
+@lower('GridGroup.sync', grid_group)
 def ptx_sync_group(context, builder, sig, args):
     flags = context.get_constant(types.int32, 0)
     lmod = builder.module
