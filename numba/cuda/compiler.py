@@ -658,6 +658,19 @@ class _Kernel(serialize.ReduceMixin):
             self._prepare_args(t, v, stream, retr, kernelargs)
 
         # Configure kernel
+        if self.cooperative:
+            ctx = get_context()
+            kwargs = dict(
+                func=cufunc,
+                blocksize=256,
+                memsize=sharedmem,
+            )
+            active_per_sm = ctx.get_active_blocks_per_multiprocessor(**kwargs)
+            sm_count = ctx.device.MULTIPROCESSOR_COUNT
+            max_active = active_per_sm * sm_count
+            print(f"Max active: {max_active}")
+            print(f"Grid dim: {griddim}")
+
         cu_func = cufunc.configure(griddim, blockdim,
                                    stream=stream,
                                    sharedmem=sharedmem,
