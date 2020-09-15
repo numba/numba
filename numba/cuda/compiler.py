@@ -670,6 +670,7 @@ class _Kernel(serialize.ReduceMixin):
             max_active = active_per_sm * sm_count
             print(f"Max active: {max_active}")
             print(f"Grid dim: {griddim}")
+            print(f"Coop launch support: {ctx.device.COOPERATIVE_LAUNCH}")
 
         cu_func = cufunc.configure(griddim, blockdim,
                                    stream=stream,
