@@ -87,6 +87,7 @@ class Math_pow(ConcreteTemplate):
 
 @infer_global(math.isinf)
 @infer_global(math.isnan)
+@infer_global(math.isfinite)
 class Math_isnan(ConcreteTemplate):
     cases = [
         signature(types.boolean, types.int64),

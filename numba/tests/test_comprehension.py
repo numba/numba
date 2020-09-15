@@ -282,6 +282,16 @@ class TestArrayComprehension(unittest.TestCase):
         finally:
             ic.enable_inline_arraycall = True
 
+    def test_comp_with_array_noinline_issue_6053(self):
+        def comp_with_array_noinline(n):
+            lst = [0]
+            for i in range(n):
+                lst.append(i)
+            l = np.array(lst)
+            return l
+
+        self.check(comp_with_array_noinline, 5, assert_allocate_list=True)
+
     def test_comp_nest_with_array(self):
         def comp_nest_with_array(n):
             l = np.array([[i * j for j in range(n)] for i in range(n)])

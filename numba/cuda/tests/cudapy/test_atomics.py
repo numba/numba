@@ -264,7 +264,7 @@ class TestCudaAtomics(CUDATestCase):
 
     @skip_unless_cc_50
     def test_atomic_add_double(self):
-        idx = np.random.randint(0, 32, size=32)
+        idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
         cuda_func = cuda.jit('void(int64[:], float64[:])')(atomic_add_double)
         cuda_func[1, 32](idx, ary)
@@ -295,7 +295,7 @@ class TestCudaAtomics(CUDATestCase):
 
     @skip_unless_cc_50
     def test_atomic_add_double_global(self):
-        idx = np.random.randint(0, 32, size=32)
+        idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
         cuda_func = cuda.jit('void(int64[:], float64[:])')(atomic_add_double_global)
         cuda_func[1, 32](idx, ary)

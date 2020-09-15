@@ -341,6 +341,10 @@ class Numpy_method_redirection(AbstractTemplate):
     array method of the same name (e.g. ndarray.sum).
     """
 
+    # Arguments like *axis* can specialize on literals but also support
+    # non-literals
+    prefer_literal = True
+
     def generic(self, args, kws):
         pysig = None
         if kws:
