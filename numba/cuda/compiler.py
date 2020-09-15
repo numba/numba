@@ -1,4 +1,5 @@
 import ctypes
+import functools
 import inspect
 import os
 import subprocess
@@ -639,6 +640,27 @@ class _Kernel(serialize.ReduceMixin):
         print(self._type_annotation, file=file)
         print('=' * 80, file=file)
 
+    def max_cooperative_grid_blocks(self, blockdim, dynsmemsize=0):
+        '''
+        Returns the maximum number of blocks that can be launched for this
+        kernel in a cooperative grid in this context for the given block and
+        dynamic shared memory sizes.
+
+        :param blockdim: Block dimensions, either as a scalar for a 1D block, or
+                         a tuple for 2D or 3D blocks.
+        :param dynsmemsize: Dynamic shared memory size in bytes.
+        '''
+        ctx = get_context()
+        cufunc = self._func.get()
+
+        if isinstance(blockdim, tuple):
+            blockdim = functools.reduce(lambda x, y: x * y, blockdim)
+        active_per_sm = ctx.get_active_blocks_per_multiprocessor(cufunc,
+                                                                 blockdim,
+                                                                 dynsmemsize)
+        sm_count = ctx.device.MULTIPROCESSOR_COUNT
+        return active_per_sm * sm_count
+
     def launch(self, args, griddim, blockdim, stream=0, sharedmem=0):
         # Prepare kernel
         cufunc = self._func.get()
@@ -658,20 +680,6 @@ class _Kernel(serialize.ReduceMixin):
             self._prepare_args(t, v, stream, retr, kernelargs)
 
         # Configure kernel
-        if self.cooperative:
-            ctx = get_context()
-            kwargs = dict(
-                func=cufunc,
-                blocksize=256,
-                memsize=sharedmem,
-            )
-            active_per_sm = ctx.get_active_blocks_per_multiprocessor(**kwargs)
-            sm_count = ctx.device.MULTIPROCESSOR_COUNT
-            max_active = active_per_sm * sm_count
-            print(f"Max active: {max_active}")
-            print(f"Grid dim: {griddim}")
-            print(f"Coop launch support: {ctx.device.COOPERATIVE_LAUNCH}")
-
         cu_func = cufunc.configure(griddim, blockdim,
                                    stream=stream,
                                    sharedmem=sharedmem,
