@@ -50,7 +50,7 @@ GPU as possible - in particular, the following are supported:
   lines, since the simulator uses source line information to keep track of
   allocations of shared memory across threads.
 * Mapped arrays.
-* Host and device memory operations.
+* Host and device memory operations: copying and setting memory.
 * :func:`.syncthreads` is supported - however, in the case where divergent
   threads enter different :func:`.syncthreads` calls, the launch will not fail,
   but unexpected behaviour will occur. A future version of the simulator may
