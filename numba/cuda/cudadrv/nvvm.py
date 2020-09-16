@@ -425,6 +425,50 @@ done:
 }
 """ # noqa: E501
 
+ir_numba_atomic_float_sub = """
+define internal float @___numba_atomic_float_sub(float* %ptr, float %val) alwaysinline {
+entry:
+    %iptr = bitcast float* %ptr to i32*
+    %old2 = load volatile i32, i32* %iptr
+    br label %attempt
+
+attempt:
+    %old = phi i32 [ %old2, %entry ], [ %cas, %attempt ]
+    %dold = bitcast i32 %old to float
+    %dnew = fsub float %dold, %val
+    %new = bitcast float %dnew to i32
+    %cas = cmpxchg volatile i32* %iptr, i32 %old, i32 %new monotonic
+    %repeat = icmp ne i32 %cas, %old
+    br i1 %repeat, label %attempt, label %done
+
+done:
+    %result = bitcast i32 %old to float
+    ret float %result
+}
+""" # noqa: E501
+
+
+ir_numba_atomic_double_sub = """
+define internal double @___numba_atomic_double_sub(double* %ptr, double %val) alwaysinline {
+entry:
+    %iptr = bitcast double* %ptr to i64*
+    %old2 = load volatile i64, i64* %iptr
+    br label %attempt
+
+attempt:
+    %old = phi i64 [ %old2, %entry ], [ %cas, %attempt ]
+    %dold = bitcast i64 %old to double
+    %dnew = fsub double %dold, %val
+    %new = bitcast double %dnew to i64
+    %cas = cmpxchg volatile i64* %iptr, i64 %old, i64 %new monotonic
+    %repeat = icmp ne i64 %cas, %old
+    br i1 %repeat, label %attempt, label %done
+
+done:
+    %result = bitcast i64 %old to double
+    ret double %result
+}
+""" # noqa: E501
 
 ir_numba_atomic_minmax = """
 define internal {T} @___numba_atomic_{T}_{NAN}{FUNC}({T}* %ptr, {T} %val) alwaysinline {{
@@ -491,6 +535,10 @@ def llvm_to_ptx(llvmir, **opts):
          ir_numba_cas_hack),
         ('declare double @___numba_atomic_double_add(double*, double)',
          ir_numba_atomic_double_add),
+        ('declare float @___numba_atomic_float_sub(float*, float)',
+         ir_numba_atomic_float_sub),
+        ('declare double @___numba_atomic_double_sub(double*, double)',
+         ir_numba_atomic_double_sub),
         ('declare float @___numba_atomic_float_max(float*, float)',
          ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='',
                                        OP='nnan olt', PTR_OR_VAL='ptr',
