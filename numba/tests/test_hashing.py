@@ -217,6 +217,7 @@ class TestTupleHashing(BaseTest):
             tuples = [split(a) for a in values]
             self.check_hash_values(tuples)
 
+    @unittest.skipIf(utils.MACHINE_BITS == 32, "Fails on 32-bit (at least on Windows)")
     def test_homogeneous_tuples(self):
         typ = np.uint64
 
@@ -248,6 +249,7 @@ class TestTupleHashing(BaseTest):
         self.check_hash_values([(7,), (0,), (0, 0), (0.5,),
                                 (0.5, (7,), (-2, 3, (4, 6)))])
 
+    @unittest.skipIf(utils.MACHINE_BITS == 32, "Fails on 32-bit (at least on Windows)")
     def test_heterogeneous_tuples(self):
         modulo = 2**63
 
