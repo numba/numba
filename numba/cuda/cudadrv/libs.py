@@ -35,7 +35,7 @@ def open_libdevice(arch):
         return bcfile.read()
 
 
-def get_cudalib(lib, platform=None):
+def get_cudalib(lib, platform=None, static=False):
     """
     Find the path of a CUDA library based on a search of known locations. If
     the search fails, return a generic filename for the library (e.g.
@@ -47,7 +47,7 @@ def get_cudalib(lib, platform=None):
     else:
         libdir = get_cuda_paths()['cudalib_dir'].info
 
-    candidates = find_lib(lib, libdir, platform)
+    candidates = find_lib(lib, libdir, platform=platform, static=static)
     return max(candidates) if candidates else _dllnamepattern % lib
 
 

@@ -526,7 +526,7 @@ class _Kernel(serialize.ReduceMixin):
         self.cooperative = 'cudaCGGetIntrinsicHandle' in ptx.llvmir
         # We need to link against cudadevrt if grid sync is being used.
         if self.cooperative:
-            link.append(get_cudalib('cudadevrt', platform='linux-static'))
+            link.append(get_cudalib('cudadevrt', static=True))
         cufunc = CachedCUFunction(name, ptx, link, max_registers)
 
         # populate members
