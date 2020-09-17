@@ -36,7 +36,7 @@ def declare_atomic_add_float64(lmod):
 def declare_atomic_sub_float32(lmod):
     fname = '___numba_atomic_float_sub'
     fnty = lc.Type.function(lc.Type.float(),
-        (lc.Type.pointer(lc.Type.float(), 0), lc.Type.float()))
+        (lc.Type.pointer(lc.Type.float()), lc.Type.float()))
     return lmod.get_or_insert_function(fnty, name=fname)
 
 def declare_atomic_sub_float64(lmod):

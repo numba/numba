@@ -97,6 +97,7 @@ class FakeCUDAShared(object):
         return res
 
 addlock = threading.Lock()
+sublock = threading.Lock()
 maxlock = threading.Lock()
 minlock = threading.Lock()
 caslock = threading.Lock()
@@ -107,6 +108,12 @@ class FakeCUDAAtomic(object):
         with addlock:
             old = array[index]
             array[index] += val
+        return old
+
+    def sub(self, array, index, val):
+        with sublock:
+            old = array[index]
+            array[index] -= val
         return old
 
     def max(self, array, index, val):

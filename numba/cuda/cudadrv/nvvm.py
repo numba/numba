@@ -425,48 +425,25 @@ done:
 }
 """ # noqa: E501
 
-ir_numba_atomic_float_sub = """
-define internal float @___numba_atomic_float_sub(float* %ptr, float %val) alwaysinline {
+ir_numba_atomic_binary = """
+define internal {T} @___numba_atomic_{T}_{FUNC}({T}* %ptr, {T} %val) alwaysinline {
 entry:
-    %iptr = bitcast float* %ptr to i32*
-    %old2 = load volatile i32, i32* %iptr
+    %iptr = bitcast {T}* %ptr to {Ti}*
+    %old2 = load volatile {Ti}, {Ti}* %iptr
     br label %attempt
 
 attempt:
-    %old = phi i32 [ %old2, %entry ], [ %cas, %attempt ]
-    %dold = bitcast i32 %old to float
-    %dnew = fsub float %dold, %val
-    %new = bitcast float %dnew to i32
-    %cas = cmpxchg volatile i32* %iptr, i32 %old, i32 %new monotonic
-    %repeat = icmp ne i32 %cas, %old
+    %old = phi {Ti} [ %old2, %entry ], [ %cas, %attempt ]
+    %dold = bitcast {Ti} %old to {T}
+    %dnew = {OP} {T} %dold, %val
+    %new = bitcast {T} %dnew to {Ti}
+    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %old, {Ti} %new monotonic
+    %repeat = icmp ne {Ti} %cas, %old
     br i1 %repeat, label %attempt, label %done
 
 done:
-    %result = bitcast i32 %old to float
-    ret float %result
-}
-""" # noqa: E501
-
-
-ir_numba_atomic_double_sub = """
-define internal double @___numba_atomic_double_sub(double* %ptr, double %val) alwaysinline {
-entry:
-    %iptr = bitcast double* %ptr to i64*
-    %old2 = load volatile i64, i64* %iptr
-    br label %attempt
-
-attempt:
-    %old = phi i64 [ %old2, %entry ], [ %cas, %attempt ]
-    %dold = bitcast i64 %old to double
-    %dnew = fsub double %dold, %val
-    %new = bitcast double %dnew to i64
-    %cas = cmpxchg volatile i64* %iptr, i64 %old, i64 %new monotonic
-    %repeat = icmp ne i64 %cas, %old
-    br i1 %repeat, label %attempt, label %done
-
-done:
-    %result = bitcast i64 %old to double
-    ret double %result
+    %result = bitcast {Ti} %old to {T}
+    ret {T} %result
 }
 """ # noqa: E501
 
@@ -533,12 +510,14 @@ def llvm_to_ptx(llvmir, **opts):
     replacements = [
         ('declare i32 @___numba_cas_hack(i32*, i32, i32)',
          ir_numba_cas_hack),
-        ('declare double @___numba_atomic_double_add(double*, double)',
+        ('declare doubleQ @___numba_atomic_double_add(double*, double)',
          ir_numba_atomic_double_add),
         ('declare float @___numba_atomic_float_sub(float*, float)',
-         ir_numba_atomic_float_sub),
+         ir_numba_atomic_binary.format(T='float', Ti='i32', OP='fsub',
+                                       FUNC='sub')),
         ('declare double @___numba_atomic_double_sub(double*, double)',
-         ir_numba_atomic_double_sub),
+         ir_numba_atomic_binary.format(T='double', Ti='i64', OP='fsub',
+                                       FUNC='sub')),
         ('declare float @___numba_atomic_float_max(float*, float)',
          ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='',
                                        OP='nnan olt', PTR_OR_VAL='ptr',

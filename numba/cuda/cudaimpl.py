@@ -553,7 +553,7 @@ def ptx_atomic_add_tuple(context, builder, dtype, ptr, val):
 @lower(stubs.atomic.sub, types.Array, types.UniTuple, types.Any)
 @lower(stubs.atomic.sub, types.Array, types.Tuple, types.Any)
 @_atomic_dispatcher
-def ptx_atomic_sub_tuple(context, builder, dtype, ptr, val):
+def ptx_atomic_sub(context, builder, dtype, ptr, val):
     if dtype == types.float32:
         lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_sub_float32(lmod),
