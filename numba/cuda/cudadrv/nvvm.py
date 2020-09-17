@@ -403,30 +403,8 @@ define internal i32 @___numba_cas_hack(i32* %ptr, i32 %cmp, i32 %val) alwaysinli
 """ # noqa: E501
 
 # Translation of code from CUDA Programming Guide v6.5, section B.12
-ir_numba_atomic_double_add = """
-define internal double @___numba_atomic_double_add(double* %ptr, double %val) alwaysinline {
-entry:
-    %iptr = bitcast double* %ptr to i64*
-    %old2 = load volatile i64, i64* %iptr
-    br label %attempt
-
-attempt:
-    %old = phi i64 [ %old2, %entry ], [ %cas, %attempt ]
-    %dold = bitcast i64 %old to double
-    %dnew = fadd double %dold, %val
-    %new = bitcast double %dnew to i64
-    %cas = cmpxchg volatile i64* %iptr, i64 %old, i64 %new monotonic
-    %repeat = icmp ne i64 %cas, %old
-    br i1 %repeat, label %attempt, label %done
-
-done:
-    %result = bitcast i64 %old to double
-    ret double %result
-}
-""" # noqa: E501
-
 ir_numba_atomic_binary = """
-define internal {T} @___numba_atomic_{T}_{FUNC}({T}* %ptr, {T} %val) alwaysinline {
+define internal {T} @___numba_atomic_{T}_{FUNC}({T}* %ptr, {T} %val) alwaysinline {{
 entry:
     %iptr = bitcast {T}* %ptr to {Ti}*
     %old2 = load volatile {Ti}, {Ti}* %iptr
@@ -444,7 +422,7 @@ attempt:
 done:
     %result = bitcast {Ti} %old to {T}
     ret {T} %result
-}
+}}
 """ # noqa: E501
 
 ir_numba_atomic_minmax = """
@@ -511,7 +489,8 @@ def llvm_to_ptx(llvmir, **opts):
         ('declare i32 @___numba_cas_hack(i32*, i32, i32)',
          ir_numba_cas_hack),
         ('declare double @___numba_atomic_double_add(double*, double)',
-         ir_numba_atomic_double_add),
+         ir_numba_atomic_binary.format(T='double', Ti='i64', OP='fadd',
+                                       FUNC='add')),
         ('declare float @___numba_atomic_float_sub(float*, float)',
          ir_numba_atomic_binary.format(T='float', Ti='i32', OP='fsub',
                                        FUNC='sub')),
