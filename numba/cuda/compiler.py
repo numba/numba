@@ -642,13 +642,14 @@ class _Kernel(serialize.ReduceMixin):
 
     def max_cooperative_grid_blocks(self, blockdim, dynsmemsize=0):
         '''
-        Returns the maximum number of blocks that can be launched for this
-        kernel in a cooperative grid in this context for the given block and
-        dynamic shared memory sizes.
+        Calculates the maximum number of blocks that can be launched for this
+        kernel in a cooperative grid in the current context, for the given block
+        and dynamic shared memory sizes.
 
         :param blockdim: Block dimensions, either as a scalar for a 1D block, or
                          a tuple for 2D or 3D blocks.
         :param dynsmemsize: Dynamic shared memory size in bytes.
+        :return: The maximum number of blocks in the grid.
         '''
         ctx = get_context()
         cufunc = self._func.get()
