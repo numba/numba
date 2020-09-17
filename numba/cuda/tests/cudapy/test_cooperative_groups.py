@@ -2,7 +2,7 @@ from __future__ import print_function
 
 import numpy as np
 
-from numba import cuda
+from numba import cuda, int32, void
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
@@ -24,7 +24,7 @@ def no_sync(A):
     A[0] = cuda.grid(1)
 
 
-@cuda.jit
+@cuda.jit(void(int32[:,::1]))
 def sequential_rows(M):
     # The grid writes rows one at a time. Each thread reads an element from
     # the previous row written by its "opposite" thread.
@@ -92,6 +92,19 @@ class TestCudaCooperativeGroups(CUDATestCase):
 
         reference = np.tile(np.arange(1024), (1024, 1)).T
         np.testing.assert_equal(A, reference)
+
+    def test_max_cooperative_grid_blocks(self):
+        # The maximum number of blocks will vary based on the device so we
+        # can't test for an expected value, but we can check that the function
+        # doesn't error, and that varying the number of dimensions of the block
+        # whilst keeping the total number of threads constant doesn't change
+        # the maximum to validate some of the logic.
+        defn = sequential_rows.definition
+        blocks1d = defn.max_cooperative_grid_blocks(256)
+        blocks2d = defn.max_cooperative_grid_blocks((16, 16))
+        blocks3d = defn.max_cooperative_grid_blocks((16, 4, 4))
+        self.assertEqual(blocks1d, blocks2d)
+        self.assertEqual(blocks1d, blocks3d)
 
 
 if __name__ == '__main__':
