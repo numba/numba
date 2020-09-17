@@ -24,6 +24,27 @@ def no_sync(A):
     A[0] = cuda.grid(1)
 
 
+@cuda.jit
+def sequential_rows(M):
+    # The grid writes rows one at a time. Each thread reads an element from
+    # the previous row written by its "opposite" thread.
+    #
+    # A failure to sync the grid at each row would result in an incorrect
+    # result as some threads could run ahead of threads in other blocks, or
+    # fail to see the update to the previous row from their opposite thread.
+
+    col = cuda.grid(1)
+    g = cuda.cg.this_grid()
+
+    rows = M.shape[0]
+    cols = M.shape[1]
+
+    for row in range(1, rows):
+        opposite = cols - col - 1
+        M[row, col] = M[row - 1, opposite] + 1
+        g.sync()
+
+
 @skip_on_cudasim("Cooperative groups not supported on simulator")
 class TestCudaCooperativeGroups(CUDATestCase):
     def test_this_grid(self):
@@ -61,6 +82,16 @@ class TestCudaCooperativeGroups(CUDATestCase):
             self.assertFalse(defn.cooperative)
             for link in defn._func.linking:
                 self.assertNotIn('cudadevrt', link)
+
+    def test_sync_at_matrix_row(self):
+        A = np.zeros((1024, 1024), dtype=np.int32)
+        blockdim = 32
+        griddim = A.shape[1] // blockdim
+
+        sequential_rows[griddim, blockdim](A)
+
+        reference = np.tile(np.arange(1024), (1024, 1)).T
+        np.testing.assert_equal(A, reference)
 
 
 if __name__ == '__main__':
