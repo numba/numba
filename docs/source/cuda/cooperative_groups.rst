@@ -8,17 +8,20 @@ Supported features
 Numba's Cooperative Groups support presently provides grid groups and grid
 synchronization, along with cooperative kernel launches.
 
+Cooperative groups are supported on Linux, and Windows for devices in TCC mode.
 
 Using Grid Groups
 -----------------
 
-To get the current grid group, use the ``cg.this_grid()`` function:
+To get the current grid group, use the :meth:`cg.this_grid()
+<numba.cuda.cg.this_grid>` function:
 
 .. code-block:: python
 
    g = cuda.cg.this_grid()
 
-Synchronizing the grid is done with the ``sync()`` method of the grid group:
+Synchronizing the grid is done with the :meth:`sync()
+<numba.cuda.cg.GridGroup.sync>` method of the grid group:
 
 .. code-block:: python
 

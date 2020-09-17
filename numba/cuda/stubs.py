@@ -204,8 +204,14 @@ class cg(Stub):
     @stub_function
     def this_grid():
         '''
-        Return the current grid.
+        Get the current grid group.
         '''
+
+    class GridGroup(Stub):
+        def sync():
+            '''
+            Synchronize the current grid group.
+            '''
 
 
 #-------------------------------------------------------------------------------
