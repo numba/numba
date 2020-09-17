@@ -510,7 +510,7 @@ def llvm_to_ptx(llvmir, **opts):
     replacements = [
         ('declare i32 @___numba_cas_hack(i32*, i32, i32)',
          ir_numba_cas_hack),
-        ('declare doubleQ @___numba_atomic_double_add(double*, double)',
+        ('declare double @___numba_atomic_double_add(double*, double)',
          ir_numba_atomic_double_add),
         ('declare float @___numba_atomic_float_sub(float*, float)',
          ir_numba_atomic_binary.format(T='float', Ti='i32', OP='fsub',
