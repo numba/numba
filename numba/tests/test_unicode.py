@@ -503,8 +503,8 @@ class TestUnicode(BaseTest):
             self.assertEqual(pyfunc(s), cfunc(s), msg=msg.format(s))
 
     def test_expandtabs_with_tabsize(self):
-        pyfuncs = [expandtabs_with_tabsize_usecase,
-                   expandtabs_with_tabsize_kwarg_usecase]
+        fns = [njit(expandtabs_with_tabsize_usecase),
+               njit(expandtabs_with_tabsize_kwarg_usecase)]
         messages = ['Results of "{}".expandtabs({}) must be equal',
                     'Results of "{}".expandtabs(tabsize={}) must be equal']
 
@@ -513,9 +513,8 @@ class TestUnicode(BaseTest):
 
         for s in cases:
             for tabsize in range(-1, 10):
-                for pyfunc, msg in zip(pyfuncs, messages):
-                    cfunc = njit(pyfunc)
-                    self.assertEqual(pyfunc(s, tabsize), cfunc(s, tabsize),
+                for fn, msg in zip(fns, messages):
+                    self.assertEqual(fn.py_func(s, tabsize), fn(s, tabsize),
                                      msg=msg.format(s, tabsize))
 
     def test_expandtabs_exception_noninteger_tabsize(self):
