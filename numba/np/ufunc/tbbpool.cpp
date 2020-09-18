@@ -236,9 +236,11 @@ static void prepare_fork(void)
             tbb::set_assertion_handler(orig);
             need_reinit_after_fork = true;
         }
-        else if (_DEBUG)
+        else
         {
-            puts("NUMBA: Attempt to fork from non-main thread, TBB may be in incorrect state in child processes");
+            fprintf(stderr, "Numba: Attempted to fork from a non-main thread, "
+                            "the TBB library may be in an invalid state in the "
+                            "child process.");
         }
     }
 }

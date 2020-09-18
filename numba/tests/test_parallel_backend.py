@@ -858,6 +858,69 @@ class TestForkSafetyIssues(ThreadLayerTestHelper):
 
 
 @skip_parfors_unsupported
+@skip_no_tbb
+class TestTBBSpecificIssues(ThreadLayerTestHelper):
+
+    _DEBUG = False
+
+    def test_fork_from_non_main_thread(self):
+        # See issue #5973 and PR #6208 for context.
+        runme = """if 1:
+            import threading
+            import numba
+            numba.config.THREADING_LAYER='tbb'
+            from numba import njit, prange, objmode
+            import os
+
+            def runner(e_running, e_proceed):
+                @njit(parallel=True, nogil=True)
+                def work():
+                    acc = 0
+                    for x in prange(10):
+                        acc += x
+                    with objmode():
+                        e_running.set()
+                        # wait for forker() to have forked
+                        while not e_proceed.isSet():
+                            pass
+                    return acc
+                work()
+
+            def forker(e_running, e_proceed):
+                # wait for the jit function to say it's running
+                while not e_running.isSet():
+                    pass
+                # then fork
+                os.fork()
+                # now fork is done signal the runner to proceed to exit
+                e_proceed.set()
+
+            e_running = threading.Event()
+            e_proceed = threading.Event()
+            numba_runner = threading.Thread(target=runner,
+                                            args=(e_running, e_proceed,))
+            fork_runner =  threading.Thread(target=forker,
+                                            args=(e_running, e_proceed,))
+
+            threads = (numba_runner, fork_runner)
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        """
+
+        cmdline = [sys.executable, '-c', runme]
+        out, err = self.run_cmd(cmdline)
+        # assert error message printed on stderr
+        msg_head = "Attempted to fork from a non-main thread, the TBB library"
+        self.assertIn(msg_head, err)
+
+        if self._DEBUG:
+            print("OUT:", out)
+            print("ERR:", err)
+
+
+@skip_parfors_unsupported
 class TestInitSafetyIssues(TestCase):
 
     _DEBUG = False
