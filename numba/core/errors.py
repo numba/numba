@@ -544,8 +544,8 @@ class NotDefinedError(IRError):
 
     def __init__(self, name, loc=None):
         self.name = name
-        msg = "The compiler failed to analyze the bytecode\n \
-               Variable '%s' is not defined." % name
+        msg = ("The compiler failed to analyze the bytecode. "
+               "Variable '%s' is not defined." % name)
         super(NotDefinedError, self).__init__(msg, loc=loc)
 
 
