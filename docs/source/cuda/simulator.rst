@@ -11,8 +11,8 @@ be used to debug CUDA Python code, either by adding print statements to your
 code, or by using the debugger to step through the execution of an individual
 thread.
 
-The simulator to deliberately allows non-CUDA code like starting a debugger and
-printing arbitrary expressions to run for debugging purposes. Therefore, it is
+The simulator deliberately allows running non-CUDA code like starting a debugger 
+and printing arbitrary expressions for debugging purposes. Therefore, it is
 best to start from code that compiles for the CUDA target, and then move over to
 the simulator to investigate issues.
 
