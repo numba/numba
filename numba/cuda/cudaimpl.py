@@ -247,12 +247,12 @@ def ptx_threadfence_device(context, builder, sig, args):
 
 @lower(stubs.syncwarp)
 def ptx_syncwarp(context, builder, sig, args):
-    mask = context.get_constant(types.uint32, 0xFFFFFFFF)
-    mask_sig = signature(types.none, types.uint32)
+    mask = context.get_constant(types.int32, 0xFFFFFFFF)
+    mask_sig = signature(types.none, types.int32)
     return ptx_syncwarp_mask(context, builder, mask_sig, [mask])
 
 
-@lower(stubs.syncwarp, types.u4)
+@lower(stubs.syncwarp, types.i4)
 def ptx_syncwarp_mask(context, builder, sig, args):
     fname = 'llvm.nvvm.bar.warp.sync'
     lmod = builder.module
