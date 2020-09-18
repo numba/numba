@@ -240,7 +240,7 @@ static void prepare_fork(void)
         {
             fprintf(stderr, "Numba: Attempted to fork from a non-main thread, "
                             "the TBB library may be in an invalid state in the "
-                            "child process.");
+                            "child process.\n");
         }
     }
 }
