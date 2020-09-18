@@ -863,6 +863,7 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
 
     _DEBUG = False
 
+    @linux_only # os.fork required.
     def test_fork_from_non_main_thread(self):
         # See issue #5973 and PR #6208 for context.
         runme = """if 1:
