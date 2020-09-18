@@ -6,6 +6,14 @@ from numba import cuda, int32, void
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
+def cc_X_or_above(major, minor):
+    return cuda.current_context().device.compute_capability >= (major, minor)
+
+
+def skip_unless_cc_60(fn):
+    return unittest.skipUnless(cc_X_or_above(6, 0), "requires cc >= 6.0")(fn)
+
+
 @cuda.jit
 def this_grid(A):
     cuda.cg.this_grid()
@@ -46,6 +54,7 @@ def sequential_rows(M):
 
 @skip_on_cudasim("Cooperative groups not supported on simulator")
 class TestCudaCooperativeGroups(CUDATestCase):
+    @skip_unless_cc_60
     def test_this_grid(self):
         A = np.full(1, fill_value=np.nan)
         this_grid[1, 1](A)
@@ -57,6 +66,7 @@ class TestCudaCooperativeGroups(CUDATestCase):
         for key, defn in this_grid.definitions.items():
             self.assertTrue(defn.cooperative)
 
+    @skip_unless_cc_60
     def test_sync_group(self):
         A = np.full(1, fill_value=np.nan)
         sync_group[1, 1](A)
@@ -82,6 +92,7 @@ class TestCudaCooperativeGroups(CUDATestCase):
             for link in defn._func.linking:
                 self.assertNotIn('cudadevrt', link)
 
+    @skip_unless_cc_60
     def test_sync_at_matrix_row(self):
         A = np.zeros((1024, 1024), dtype=np.int32)
         blockdim = 32
@@ -93,6 +104,7 @@ class TestCudaCooperativeGroups(CUDATestCase):
         reference = np.tile(np.arange(1024), (1024, 1)).T
         np.testing.assert_equal(A, reference)
 
+    @skip_unless_cc_60
     def test_max_cooperative_grid_blocks(self):
         # The maximum number of blocks will vary based on the device so we
         # can't test for an expected value, but we can check that the function
