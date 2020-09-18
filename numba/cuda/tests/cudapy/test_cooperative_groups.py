@@ -24,7 +24,6 @@ def no_sync(A):
     A[0] = cuda.grid(1)
 
 
-@cuda.jit(void(int32[:,::1]))
 def sequential_rows(M):
     # The grid writes rows one at a time. Each thread reads an element from
     # the previous row written by its "opposite" thread.
@@ -88,7 +87,8 @@ class TestCudaCooperativeGroups(CUDATestCase):
         blockdim = 32
         griddim = A.shape[1] // blockdim
 
-        sequential_rows[griddim, blockdim](A)
+        c_sequential_rows = cuda.jit(void(int32[:,::1]))(sequential_rows)
+        c_sequential_rows[griddim, blockdim](A)
 
         reference = np.tile(np.arange(1024), (1024, 1)).T
         np.testing.assert_equal(A, reference)
@@ -99,7 +99,8 @@ class TestCudaCooperativeGroups(CUDATestCase):
         # doesn't error, and that varying the number of dimensions of the block
         # whilst keeping the total number of threads constant doesn't change
         # the maximum to validate some of the logic.
-        defn = sequential_rows.definition
+        c_sequential_rows = cuda.jit(void(int32[:,::1]))(sequential_rows)
+        defn = c_sequential_rows.definition
         blocks1d = defn.max_cooperative_grid_blocks(256)
         blocks2d = defn.max_cooperative_grid_blocks((16, 16))
         blocks3d = defn.max_cooperative_grid_blocks((16, 4, 4))
