@@ -140,6 +140,19 @@ This assumes you have a working C compiler and runtime on your development
 system.  You will have to run this command again whenever you modify
 C files inside the Numba source tree.
 
+The ``build_ext`` command in Numba's setup also accepts the following
+arguments:
+
+- ``--noopt``: This disables optimization when compiling Numba's CPython
+  extensions, which makes debugging them much easier. Recommended in
+  conjunction with the standard ``build_ext`` option ``--debug``.
+- ``--werror``: Compiles Numba's CPython extensions with the ``-Werror`` flag.
+- ``--wall``: Compiles Numba's CPython extensions with the ``-Wall`` flag.
+
+Note that Numba's CI and the conda recipe for Linux build with the ``--werror``
+and ``--wall`` flags, so any contributions that change the CPython extensions
+should be tested with these flags too.
+
 Running tests
 '''''''''''''
 
