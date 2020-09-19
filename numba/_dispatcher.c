@@ -611,7 +611,7 @@ static PyMethodDef Dispatcher_methods[] = {
 };
 
 static PyMemberDef Dispatcher_members[] = {
-    {"_can_compile", T_BOOL, offsetof(DispatcherObject, can_compile), 0},
+    {"_can_compile", T_BOOL, offsetof(DispatcherObject, can_compile), 0, NULL },
     {NULL}  /* Sentinel */
 };
 
@@ -655,6 +655,20 @@ static PyTypeObject DispatcherType = {
     (initproc)Dispatcher_init,                   /* tp_init */
     0,                                           /* tp_alloc */
     0,                                           /* tp_new */
+    0,                                           /* tp_free */
+    0,                                           /* tp_is_gc */
+    0,                                           /* tp_bases */
+    0,                                           /* tp_mro */
+    0,                                           /* tp_cache */
+    0,                                           /* tp_subclasses */
+    0,                                           /* tp_weaklist */
+    0,                                           /* tp_del */
+    0,                                           /* tp_version_tag */
+    0,                                           /* tp_finalize */
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
+    0,                                           /* tp_vectorcall */
+    0,                                           /* tp_print */
+#endif
 };
 
 

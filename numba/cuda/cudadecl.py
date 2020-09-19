@@ -283,6 +283,18 @@ class Cuda_atomic_add(AbstractTemplate):
         elif ary.ndim > 1:
             return signature(ary.dtype, ary, idx, ary.dtype)
 
+@register
+class Cuda_atomic_sub(AbstractTemplate):
+    key = cuda.atomic.sub
+
+    def generic(self, args, kws):
+        assert not kws
+        ary, idx, val = args
+
+        if ary.ndim == 1:
+            return signature(ary.dtype, ary, types.intp, ary.dtype)
+        elif ary.ndim > 1:
+            return signature(ary.dtype, ary, idx, ary.dtype)
 
 class Cuda_atomic_maxmin(AbstractTemplate):
     def generic(self, args, kws):
@@ -380,6 +392,9 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_add(self, mod):
         return types.Function(Cuda_atomic_add)
+
+    def resolve_sub(self, mod):
+        return types.Function(Cuda_atomic_sub)
 
     def resolve_max(self, mod):
         return types.Function(Cuda_atomic_max)

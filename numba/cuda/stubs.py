@@ -4,7 +4,6 @@ This scripts specifies all PTX special objects.
 import functools
 import llvmlite.llvmpy.core as lc
 import operator
-from numba.core.rewrites.macros import Macro
 from numba.core import types, typing, ir
 from .cudadrv import nvvm
 
@@ -385,6 +384,16 @@ class atomic(Stub):
         """add(ary, idx, val)
 
         Perform atomic ary[idx] += val. Supported on int32, float32, and
+        float64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class sub(Stub):
+        """sub(ary, idx, val)
+
+        Perform atomic ary[idx] -= val. Supported on int32, float32, and
         float64 operands only.
 
         Returns the old value at the index location as if it is loaded
