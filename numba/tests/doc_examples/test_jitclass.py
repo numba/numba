@@ -92,6 +92,48 @@ class DocsJitclassUsageTest(TestCase):
             self.assertAlmostEqual(loop_itr.get(), items[idx % len(items)])
             self.assertEqual(loop_itr.counter.value, idx + 1)
 
+    def test_ex_jitclass_annotated(self):
+        # magictoken.ex_jitclass_annotated.begin
+        import numpy as np
+        from numba.experimental import jitclass
+        import typing_extensions as pt_ext
+
+        @jitclass
+        class MatrixWrapper:
+            m: pt_ext.Annotated[np.ndarray, np.float32, 2]
+
+            def __init__(self, shape):
+                assert len(shape) == 2
+                self.m = np.zeros(shape, dtype=np.float32)
+
+            @property
+            def size(self):
+                return self.m.size
+
+            @property
+            def row_sum(self):
+                return self.m.sum(axis=0)
+
+            @property
+            def col_sum(self):
+                return self.m.sum(axis=1)
+
+            def set_value(self, i, j, value):
+                self.m[i, j] = value
+
+            def get_value(self, i, j):
+                return self.m[i, j]
+
+        mat = MatrixWrapper((3, 3))
+        mat.set_value(0, 0, 1)
+        mat.set_value(1, 2, 3.1415)
+        # magictoken.ex_jitclass_annotated.end
+
+        self.assertEqual(mat.size, 9)
+        np.testing.assert_allclose(mat.col_sum, np.array([1, 3.1415, 0]))
+        np.testing.assert_allclose(mat.row_sum, np.array([1, 0, 3.1415]))
+        self.assertAlmostEqual(mat.get_value(1, 2), 3.1415)
+
 
 if __name__ == '__main__':
     unittest.main()

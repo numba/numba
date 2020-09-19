@@ -2,6 +2,9 @@ import inspect
 import operator
 import types as pytypes
 import typing as pt
+import typing_extensions as pt_ext
+import sys
+
 from collections import OrderedDict
 from collections.abc import Sequence
 
@@ -155,6 +158,16 @@ def _add_linking_libs(context, call):
         context.add_linking_libs(libs)
 
 
+def _get_type_hints_with_annotations(obj):
+    """
+    Return type hints for obj, including Annotated.
+    """
+    if (sys.version_info.major, sys.version_info.minor) == (3, 6):
+        return pt.get_type_hints(obj)
+    else:
+        return pt_ext.get_type_hints(obj, include_extras=True)
+
+
 def register_class_type(cls, spec, class_ctor, builder):
     """
     Internal function to create a jitclass.
@@ -173,7 +186,7 @@ def register_class_type(cls, spec, class_ctor, builder):
         spec = OrderedDict(spec)
 
     # Extend spec with class annotations.
-    for attr, py_type in pt.get_type_hints(cls).items():
+    for attr, py_type in _get_type_hints_with_annotations(cls).items():
         if attr not in spec:
             spec[attr] = as_numba_type(py_type)
 

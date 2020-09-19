@@ -79,6 +79,30 @@ Here ``SomeOtherType`` could be any supported Python type (e.g.
 ``bool``, ``typing.Dict[int, typing.Tuple[float, float]]``, or another
 ``jitclass``).
 
+For the cases above where additional information Numba is required in the
+``spec``, ``typing_extensions.Annotated`` can be used instead.  The above
+example is equivalent to
+
+.. code-block:: python
+
+    @jitclass
+    class Foo:
+        w: Annotated[int, int32]
+        x: float
+        y: Annotated[np.ndarray, float64, 1]
+        z: SomeOtherType
+
+        def __init__(self, w: int, x: float, y: np.ndarray, z: SomeOtherType):
+            ...
+
+This can be used like
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_jitclass.py
+   :language: python
+   :start-after: magictoken.ex_jitclass_annotated.begin
+   :end-before: magictoken.ex_jitclass_annotated.end
+   :dedent: 8
+
 Note that only type annotations on the class will be used to infer spec
 elements.  Method type annotations (e.g. those of ``__init__`` above) are
 ignored.

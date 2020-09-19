@@ -190,6 +190,7 @@ class TestTypes(TestCase):
                 "stop, got", str(raises.exception))
 
         scalar = types.int32
+        check(scalar[tuple()], scalar, 0, 'A')
         check(scalar[:], scalar, 1, 'A')
         check(scalar[::1], scalar, 1, 'C')
         check(scalar[:, :], scalar, 2, 'A')
