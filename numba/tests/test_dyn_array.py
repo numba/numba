@@ -509,6 +509,20 @@ class TestDynArray(NrtRefCtTest, TestCase):
 
 class ConstructorBaseTest(NrtRefCtTest):
 
+    def test_check_zeros_prototype(self):
+        def func():
+            return np.zeros((2, 2), dtype=np.float)
+        cfunc = nrtjit(func)
+        expected = np.zeros((2, 2), dtype=np.float)
+        result = cfunc()
+        np.testing.assert_equal(result, expected)
+        # errors
+        with self.assertRaises(TypingError) as cm:
+            cfunc(-1)
+        self.assertEqual(str(cm.exception), "TypingError: dtype 'np.float' is "
+                                            "not supported. Try using "
+                                            "'np.float_' or a more specific dtype.")
+
     def check_0d(self, pyfunc):
         cfunc = nrtjit(pyfunc)
         expected = pyfunc()
