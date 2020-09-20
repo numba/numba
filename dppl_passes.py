@@ -121,6 +121,8 @@ class DPPLPreParforPass(FunctionPass):
         assert state.func_ir
         functions_map = replace_functions_map.copy()
         functions_map.pop(('dot', 'numpy'), None)
+        functions_map.pop(('sum', 'numpy'), None)
+        functions_map.pop(('argmax', 'numpy'), None)
 
         preparfor_pass = _parfor_PreParforPass(
             state.func_ir,
@@ -229,7 +231,7 @@ class SpirvFriendlyLowering(LoweringPass):
         # current target context we have to launch kernels.
         # This is broken as this essentially adds the new lowering in a list which
         # means it does not get replaced with the new lowering_buitins
-        from . import experimental_linalg_lowering_overload
+        from . import experimental_numpy_lowering_overload
         targetctx.refresh()
 
         library   = state.library
