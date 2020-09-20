@@ -889,9 +889,6 @@ class JITCPUCodegen(BaseCPUCodegen):
         # This overrides default feature selection by CPU model above
         options['features'] = self._tm_features
 
-        # Enable JIT debug
-        options['jitdebug'] = True
-
     def _customize_tm_features(self):
         # For JIT target, we will use LLVM to get the feature map
         return self._get_host_cpu_features()
