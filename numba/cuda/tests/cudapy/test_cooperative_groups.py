@@ -2,12 +2,16 @@ from __future__ import print_function
 
 import numpy as np
 
-from numba import cuda, int32, void
+from numba import config, cuda, int32, void
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
 def cc_X_or_above(major, minor):
-    return cuda.current_context().device.compute_capability >= (major, minor)
+    if not config.ENABLE_CUDASIM:
+        cc = cuda.current_context().device.compute_capability
+        return cc >= (major, minor)
+    else:
+        return True
 
 
 def skip_unless_cc_60(fn):
