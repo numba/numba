@@ -636,7 +636,8 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
 
         excstr = str(raises.exception)
         self.assertIn('No match', excstr)
-        self.assertIn('{}(int64, unicode_type)'.format(pyfunc.__name__), excstr)
+        self.assertIn('{}({}, unicode_type)'.format(pyfunc.__name__,
+                                                    np.intp.__name__), excstr)
 
     def test_2d(self):
         pyfunc = self.pyfunc
@@ -731,8 +732,8 @@ class TestNdFull(ConstructorBaseTest, TestCase):
 
         excstr = str(raises.exception)
         self.assertIn('No match', excstr)
-        self.assertIn('full(UniTuple(int64 x 1), float64, unicode_type)',
-                      excstr)
+        self.assertIn('full(UniTuple({} x 1), float64, unicode_type)'.format(
+            np.intp.__name__), excstr)
 
     def test_2d(self):
         def func(m, n):
@@ -1024,7 +1025,8 @@ class TestNdIdentity(BaseTest):
 
         excstr = str(raises.exception)
         self.assertIn('No match', excstr)
-        self.assertIn('identity(int64, unicode_type)', excstr)
+        self.assertIn('identity({}, unicode_type)'.format(np.intp.__name__),
+                      excstr)
 
 
 class TestNdEye(BaseTest):
@@ -1270,7 +1272,8 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
 
         excstr = str(raises.exception)
         self.assertIn('No match', excstr)
-        self.assertIn('array(UniTuple(int64 x 2), dtype=unicode_type)', excstr)
+        self.assertIn('array(UniTuple({} x 2), dtype=unicode_type)'.format(
+            np.intp.__name__), excstr)
 
     def test_2d(self):
         def pyfunc(arg):
