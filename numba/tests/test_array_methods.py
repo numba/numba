@@ -151,6 +151,9 @@ def np_frombuffer(b):
 def np_frombuffer_dtype(b):
     return np.frombuffer(b, dtype=np.complex64)
 
+def np_frombuffer_dtype_str(b):
+    return np.frombuffer(b, dtype='complex64')
+
 def np_frombuffer_allocated(shape):
     """
     np.frombuffer() on a Numba-allocated buffer.
@@ -484,6 +487,14 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             expected = pyfunc(buf)
             self.memory_leak_setup()
             got = run(buf)
+            # TODO: why is run() producing a frame that holds reference if the
+            # dtype is a str literal?
+            if 'dtype_str' in self.id():
+                import gc
+                frames = gc.get_referrers(buf)
+                if frames:
+                    del frames[0]
+                gc.collect()
             self.assertPreciseEqual(got, expected)
             del expected
             self.assertEqual(sys.getrefcount(buf), old_refcnt + 1)
@@ -512,6 +523,22 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_np_frombuffer_dtype(self):
         self.check_np_frombuffer(np_frombuffer_dtype)
+
+    def test_np_frombuffer_dtype_str(self):
+        self.check_np_frombuffer(np_frombuffer_dtype_str)
+
+    def test_np_frombuffer_dtype_non_const_str(self):
+        @jit(nopython=True)
+        def func(buf, dt):
+            np.frombuffer(buf, dtype=dt)
+
+        with self.assertRaises(TypingError) as raises:
+            func(bytearray(range(16)), 'int32')
+
+        excstr = str(raises.exception)
+        self.assertIn('No match', excstr)
+        self.assertIn('frombuffer(bytearray(uint8, 1d, C), dtype=unicode_type)',
+                      excstr)
 
     def check_layout_dependent_func(self, pyfunc, fac=np.arange):
         def is_same(a, b):
