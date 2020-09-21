@@ -383,7 +383,7 @@ class _EnvReloader(object):
 
         # Experimental
         EXPERIMENTAL_REFPRUNE_PASS = _readenv(
-            "NUMBA_EXPERIMENTAL_REFPRUNE_PASS", int, 0,
+            "NUMBA_EXPERIMENTAL_REFPRUNE_PASS", int, 1,
         )
 
         # Inject the configuration values into the module globals
