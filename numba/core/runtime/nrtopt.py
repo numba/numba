@@ -4,7 +4,7 @@ NRT specific optimizations
 import re
 from collections import defaultdict, deque
 from llvmlite import binding as ll
-from numba.core import cgutils
+from numba.core import cgutils, config
 
 _regex_incref = re.compile(r'\s*(?:tail)?\s*call void @NRT_incref\((.*)\)')
 _regex_decref = re.compile(r'\s*(?:tail)?\s*call void @NRT_decref\((.*)\)')
@@ -167,6 +167,8 @@ def remove_redundant_nrt_refct(ll_module):
 
     Note: non-threadsafe due to usage of global LLVMcontext
     """
+    if config.EXPERIMENTAL_REFPRUNE_PASS:
+        return ll_module
     # Early escape if NRT_incref is not used
     try:
         ll_module.get_function('NRT_incref')
