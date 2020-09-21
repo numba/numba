@@ -1106,6 +1106,7 @@ def _early_return(val):
     return impl
 
 
+@overload_method(types.Array, 'ptp')
 @overload(np.ptp)
 def np_ptp(a):
 
