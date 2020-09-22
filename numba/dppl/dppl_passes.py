@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import warnings
 
+import numpy as np
 from numba.core import ir
 import weakref
 from collections import namedtuple, deque
@@ -45,6 +46,27 @@ class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
         # Ensure we have an IR and type information.
         assert state.func_ir
         func_ir = state.func_ir
+
+        typingctx = state.typingctx
+        from numba.core.typing.templates import builtin_registry as reg, infer_global
+        from numba.core.typing.templates import (AbstractTemplate, signature)
+
+        @infer_global(np.cov)
+        class NPCov(AbstractTemplate):
+            def generic(self, args, kws):
+                nb_dtype = types.float64
+                return_type = types.Array(dtype=nb_dtype, ndim=2, layout='C')
+                return signature(return_type, *args)
+
+        prev = None
+        for idx, g in enumerate(reg.globals):
+            if g[0] == np.cov:
+                if not prev:
+                    prev = g[1]
+                else:
+                    prev.templates = g[1].templates
+
+        typingctx.refresh()
 
         _DEBUG = False
 
@@ -105,6 +127,9 @@ class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
         return True
 
 
+def bla_impl(return_type, *args):
+    b = 2
+
 @register_pass(mutates_CFG=True, analysis_only=False)
 class DPPLPreParforPass(FunctionPass):
 
@@ -117,6 +142,7 @@ class DPPLPreParforPass(FunctionPass):
         """
         Preprocessing for data-parallel computations.
         """
+
         # Ensure we have an IR and type information.
         assert state.func_ir
         functions_map = replace_functions_map.copy()

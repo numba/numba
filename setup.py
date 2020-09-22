@@ -299,12 +299,36 @@ def get_ext_modules():
 
     ext_modules += ext_np_ufunc_backends
 
-    return ext_modules
+
+    # check if dpnp is present
+    dpnp_present = False
+
+    try:
+        import dpnp
+    except:
+        pass
+    else:
+        dpnp_present = True
+
+    if dpnp_present:
+        from Cython.Build import cythonize
+        ext_dpnp_glue = Extension(name='numba.dppl.dpnp_glue.dpnp_fptr_interface',
+                                  sources=['numba/dppl/dpnp_glue/dpnp_fptr_interface.pyx'],
+                                  include_dirs=[dpnp.get_include()],
+                                  libraries=['dpnp_backend_c'],
+                                  library_dirs=['/localdisk/work/rhoque/production/dpnp/dpnp'],
+                                  language="c++")
+        ext_modules += [ext_dpnp_glue]
+
+    if dpnp_present:
+        return cythonize(ext_modules)
+    else:
+        return ext_modules
 
 
 packages = find_packages(include=["numba", "numba.*"])
 
-build_requires = [f'numpy >={min_numpy_build_version}']
+build_requires = [f'numpy >={min_numpy_build_version}', 'cython']
 
 install_requires = [
     f'llvmlite >={min_llvmlite_version},<={max_llvmlite_version}',
