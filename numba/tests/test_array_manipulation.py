@@ -588,7 +588,7 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
     def test_transpose_array_npm(self):
         self.test_transpose_array(flags=no_pyobj_flags)
 
-    def test_swapaxes_array(self, flags=no_pyobj_flags):
+    def test_swapaxes_array(self, flags=enable_pyobj_flags):
         a = np.arange(24).reshape(4, 3, 2)
         axis1 = 0
         axis2 = -1
