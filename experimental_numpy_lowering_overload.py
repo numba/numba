@@ -59,6 +59,13 @@ ll_intp_p = intp_t.as_pointer()
 
 
 def call_dpnp(context, builder, fn_name, type_names, params, param_tys, ret_ty):
+    from .dpnp_glue import dpnp_fptr_interface as dpnp_glue
+    print(type_names)
+    ret = dpnp_glue.get_dpnp_fn_ptr(fn_name, type_names)
+    import pdb
+    pdb.set_trace()
+    return
+
     import ctypes
     dpnp_lib = ctypes.cdll.LoadLibrary("libdpnp_backend_c.so")
     C_get_function = dpnp_lib.get_backend_function_name
@@ -80,6 +87,7 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
     np.dot(vector, vector)
     np.vdot(vector, vector)
     """
+
     aty, bty = sig.args
     a = make_array(aty)(context, builder, args[0])
     b = make_array(bty)(context, builder, args[1])
@@ -104,10 +112,10 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
 
     type_names = []
     for argty in sig.args:
-        type_names.append(argty.name.encode('utf-8'))
-    type_names.append(sig.return_type.name.encode('utf-8'))
+        type_names.append(argty.dtype.name)
+    type_names.append(sig.return_type.name)
 
-    call_dpnp(context, builder, b"dpnp_dot", type_names, params, param_tys, ll_void)
+    call_dpnp(context, builder, "dpnp_dot", type_names, params, param_tys, ll_void)
 
     return builder.load(out)
 
@@ -152,39 +160,10 @@ def array_sum(context, builder, sig, args):
 
     type_names = []
     for argty in sig.args:
-        type_names.append(argty.name.encode('utf-8'))
-    type_names.append(sig.return_type.name.encode('utf-8'))
+        type_names.append(argty.dtype.name)
+    type_names.append(sig.return_type.name)
 
-    call_dpnp(context, builder, b"dpnp_sum", type_names, params, param_tys, ll_void)
-    return builder.load(out)
-
-
-@lower_builtin(np.argmax, types.Array)
-def array_argmax(context, builder, sig, args):
-    def argmax_checker(arry):
-        if arry.size == 0:
-            raise ValueError("attempt to get argmax of an empty sequence")
-
-    context.compile_internal(builder, argmax_checker,
-                             signature(types.none, *sig.args), args)
-
-    aty = sig.args[0]
-    a = make_array(aty)(context, builder, args[0])
-    size, = cgutils.unpack_tuple(builder, a.shape)
-
-    out = cgutils.alloca_once(builder, context.get_value_type(sig.return_type))
-
-    # arguments are : a ->void*, result->void*, size->int64
-    param_tys = [ll_void_p, ll_void_p, ir.IntType(64)]
-    params = (builder.bitcast(a.data, ll_void_p), builder.bitcast(out, ll_void_p), size)
-
-    type_names = []
-    for argty in sig.args:
-        type_names.append(argty.dtype.name.encode('utf-8'))
-    type_names.append(sig.return_type.name.encode('utf-8'))
-
-    call_dpnp(context, builder, b"dpnp_argmax", type_names, params, param_tys, ll_void)
-
+    call_dpnp(context, builder, "dpnp_sum", type_names, params, param_tys, ll_void)
     return builder.load(out)
 
 
@@ -209,10 +188,10 @@ def array_argmax(context, builder, sig, args):
 
     type_names = []
     for argty in sig.args:
-        type_names.append(argty.dtype.name.encode('utf-8'))
-    type_names.append(sig.return_type.name.encode('utf-8'))
+        type_names.append(argty.dtype.name)
+    type_names.append(sig.return_type.name)
 
-    call_dpnp(context, builder, b"dpnp_argmax", type_names, params, param_tys, ll_void)
+    call_dpnp(context, builder, "dpnp_argmax", type_names, params, param_tys, ll_void)
 
     return builder.load(out)
 
@@ -237,8 +216,54 @@ def array_argsort(context, builder, sig, args):
 
     type_names = []
     for argty in sig.args[:1]:
-        type_names.append(argty.dtype.name.encode('utf-8'))
-    type_names.append(sig.return_type.name.encode('utf-8'))
+        type_names.append(argty.dtype.name)
+    type_names.append(sig.return_type.name)
 
-    call_dpnp(context, builder, b"dpnp_argsort", type_names, params, param_tys, ll_void)
+    call_dpnp(context, builder, "dpnp_argsort", type_names, params, param_tys, ll_void)
+    return out
+
+
+@lower_builtin(np.cov, types.Array)
+def array_cov(context, builder, sig, args):
+    def make_res(A):
+        return np.empty((A.size, A.size))
+
+    aty = sig.args[0]
+    a = make_array(aty)(context, builder, args[0])
+
+    if a.shape == 2:
+        m, n = cgutils.unpack_tuple(builder, a.shape)
+    elif a.shape == 1:
+        m, = cgutils.unpack_tuple(builder, a.shape)
+    else:
+        #TODO: Throw error, cov is supported for only 1D and 2D array
+        pass
+
+    out = context.compile_internal(builder, make_res,
+            signature(sig.return_type, *sig.args[:1]), args[:1])
+
+    outary = make_array(sig.return_type)(context, builder, out)
+
+    import pdb
+    pdb.set_trace()
+
+    if a.shape == 2:
+        shape =  cgutils.alloca_once(builder, context.get_value_type(ir.IntType(64)), size=2)
+        builder.store(m, cgutils.gep(builder, shape, 0))
+        builder.store(n, cgutils.gep(builder, shape, 0))
+    elif a.shape == 1:
+        shape =  cgutils.alloca_once(builder, context.get_value_type(ir.IntType(64)), size=1)
+        builder.store(m, cgutils.gep(builder, shape, 0))
+
+    # arguments are : a ->void*, result->void*, size->int64
+    param_tys = [ll_void_p, ll_void_p, ll_intp_p]
+    params = (builder.bitcast(a.data, ll_void_p), builder.bitcast(outary.data, ll_void_p),
+            builder.bitcast(shape, ll_intp_p))
+
+    type_names = []
+    for argty in sig.args[:1]:
+        type_names.append(argty.dtype.name)
+    type_names.append(sig.return_type.name)
+
+    call_dpnp(context, builder, "dpnp_cov", type_names, params, param_tys, ll_void)
     return out
