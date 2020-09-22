@@ -3303,6 +3303,18 @@ def np_imag(a):
 #----------------------------------------------------------------------------
 # Misc functions
 
+@overload_method(types.Array, "__contains__")
+def np_contains(arr, key):
+
+    if not isinstance(arr, types.Array):
+        return
+
+    def np_contains_impl(arr, key):
+        return key in arr
+
+    return np_contains_impl
+
+
 @overload(np.count_nonzero)
 def np_count_nonzero(arr, axis=None):
     if not type_can_asarray(arr):

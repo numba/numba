@@ -321,6 +321,10 @@ def flip_ud(a):
     return np.flipud(a)
 
 
+def array_contains(a, key):
+    return key in a
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -435,6 +439,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = [np.array(x_values, dtype=np.complex128)]
         x_types = [typeof(v) for v in x_values]
         check(x_types, x_values, ulps=2)
+
+    def test_contains(self):
+        def arrs():
+            a_0 = np.arange(10, 50)
+            k_0 = 20
+
+            yield a_0, k_0
+
+            a_1 = np.arange(6)
+            k_1 = 10
+
+            yield a_1, k_1
+
+        pyfunc = array_contains
+
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, key in arrs():
+            expected = pyfunc(arr, key)
+            received = cfunc(arr, key)
+
+            self.assertPreciseEqual(expected, received)
 
     def test_angle(self, flags=no_pyobj_flags):
         """
