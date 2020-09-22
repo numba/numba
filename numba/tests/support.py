@@ -123,9 +123,9 @@ class CompilationCache(object):
         from numba.core.registry import cpu_target
 
         cache_key = (func, args, return_type, flags)
-        try:
+        if cache_key in self.cr_cache:
             cr = self.cr_cache[cache_key]
-        except KeyError:
+        else:
             # Register the contexts in case for nested @jit or @overload calls
             # (same as compile_isolated())
             with cpu_target.nested_context(self.typingctx, self.targetctx):

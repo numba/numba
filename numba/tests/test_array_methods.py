@@ -487,14 +487,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             expected = pyfunc(buf)
             self.memory_leak_setup()
             got = run(buf)
-            # TODO: why is run() producing a frame that holds reference if the
-            # dtype is a str literal?
-            if 'dtype_str' in self.id():
-                import gc
-                frames = gc.get_referrers(buf)
-                if frames:
-                    del frames[0]
-                gc.collect()
             self.assertPreciseEqual(got, expected)
             del expected
             self.assertEqual(sys.getrefcount(buf), old_refcnt + 1)
