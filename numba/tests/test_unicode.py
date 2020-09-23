@@ -1184,7 +1184,8 @@ class TestUnicode(BaseTest):
 
     def test_getitem_scalar_kind(self):
         # See issue #6135, make sure that getitem returns a char of the minimal
-        # kind required to represent the "got" item.
+        # kind required to represent the "got" item, this is done via the use
+        # of `hash` in the test function as it is sensitive to kind.
         pyfunc = getitem_check_kind_usecase
         cfunc = njit(pyfunc)
         samples = ['a\u1234', '¡着']
@@ -1234,8 +1235,8 @@ class TestUnicode(BaseTest):
                                      "'%s'[%d:%d]?" % (s, i, j))
 
     def test_getitem_slice2_kind(self):
-        # See issue #6135, make sure that getitem returns a slice of the minimal
-        # kind required to represent the "got" item.
+        # See issue #6135. Also see note in test_getitem_scalar_kind regarding
+        # testing.
         pyfunc = getitem_check_kind_usecase
         cfunc = njit(pyfunc)
         samples = ['abc\u1234\u1234', '¡¡¡着着着']
@@ -1261,8 +1262,8 @@ class TestUnicode(BaseTest):
                                          "'%s'[%d:%d:%d]?" % (s, i, j, k))
 
     def test_getitem_slice3_kind(self):
-        # See issue #6135, make sure that getitem returns a slice of the minimal
-        # kind required to represent the "got" item.
+        # See issue #6135. Also see note in test_getitem_scalar_kind regarding
+        # testing.
         pyfunc = getitem_check_kind_usecase
         cfunc = njit(pyfunc)
         samples = ['abc\u1234\u1234',
