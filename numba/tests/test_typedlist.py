@@ -3,6 +3,7 @@ from textwrap import dedent
 
 import numpy as np
 
+from numba import config
 from numba import njit
 from numba import int32, float32, prange
 from numba.core import types
@@ -985,7 +986,11 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(d)
 
         c = foo()
-        self.assertEqual(2, c)
+        if config.EXPERIMENTAL_REFPRUNE_PASS:
+            # Because the pruner cleared all other increfs
+            self.assertEqual(1, c)
+        else:
+            self.assertEqual(2, c)
 
     def test_dict_as_item_in_list_multi_refcount(self):
         @njit
@@ -999,7 +1004,11 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(d)
 
         c = foo()
-        self.assertEqual(3, c)
+        if config.EXPERIMENTAL_REFPRUNE_PASS:
+            # Because the pruner cleared all other increfs
+            self.assertEqual(1, c)
+        else:
+            self.assertEqual(3, c)
 
     def test_list_as_value_in_dict(self):
         @njit
@@ -1012,7 +1021,11 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(l)
 
         c = foo()
-        self.assertEqual(2, c)
+        if config.EXPERIMENTAL_REFPRUNE_PASS:
+            # Because the pruner cleared all other increfs
+            self.assertEqual(1, c)
+        else:
+            self.assertEqual(2, c)
 
     def test_list_as_item_in_list(self):
         nested_type = types.ListType(types.int32)
