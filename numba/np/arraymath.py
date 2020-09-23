@@ -7,6 +7,7 @@ import math
 from collections import namedtuple
 from enum import IntEnum
 from functools import partial
+import operator
 
 import numpy as np
 
@@ -154,7 +155,7 @@ def _gen_index_tuple(tyctx, shape_tuple, value, axis):
     return function_sig, codegen
 
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Basic stats and aggregates
 
 @lower_builtin(np.sum, types.Array)
@@ -1134,7 +1135,7 @@ def np_ptp(a):
     return np_ptp_impl
 
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Median and partitioning
 
 @register_jitable
@@ -1541,7 +1542,7 @@ def np_partition(a, kth):
     return np_partition_impl
 
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Building matrices
 
 @register_jitable
@@ -1727,7 +1728,7 @@ def _dtype_of_compound(inobj):
         if isinstance(obj, (types.Number, types.Boolean)):
             return as_dtype(obj)
         l = getattr(obj, '__len__', None)
-        if l is not None and l() == 0: # empty tuple or similar
+        if l is not None and l() == 0:  # empty tuple or similar
             return np.float64
         dt = getattr(obj, 'dtype', None)
         if dt is None:
@@ -1951,7 +1952,7 @@ def np_roll(a, shift):
         return np_roll_impl
 
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Mathematical functions
 
 LIKELY_IN_CACHE_SIZE = 8
@@ -2505,7 +2506,7 @@ def np_interp(x, xp, fp):
     return np_interp_impl
 
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Statistics
 
 @register_jitable
@@ -2782,7 +2783,7 @@ def np_corrcoef(x, y=None, rowvar=True):
         return np_corrcoef_impl
 
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Element-wise computations
 
 
@@ -3062,9 +3063,9 @@ def scalar_sinc(context, builder, sig, args):
     scalar_dtype = sig.return_type
 
     def scalar_sinc_impl(val):
-        if val == 0.e0: # to match np impl
+        if val == 0.e0:  # to match np impl
             val = 1e-20
-        val *= np.pi # np sinc is the normalised variant
+        val *= np.pi  # np sinc is the normalised variant
         return np.sin(val) / val
     res = context.compile_internal(builder, scalar_sinc_impl, sig, args,
                                    locals=dict(c=scalar_dtype))
@@ -3300,17 +3301,19 @@ def np_imag(a):
     return np_imag_impl
 
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Misc functions
 
-@overload_method(types.Array, "__contains__")
+@overload(operator.contains)
 def np_contains(arr, key):
-
     if not isinstance(arr, types.Array):
         return
 
     def np_contains_impl(arr, key):
-        return key in arr
+        for x in np.nditer(arr):
+            if x == key:
+                return True
+        return False
 
     return np_contains_impl
 
@@ -3362,7 +3365,7 @@ def np_delete(arr, obj):
             return arr[keep]
         return np_delete_impl
 
-    else: # scalar value
+    else:  # scalar value
         if not isinstance(obj, types.Integer):
             raise TypingError('obj should be of Integer dtype')
 
@@ -3916,11 +3919,11 @@ def _np_correlate_core_impl(ap1, ap2, mode, direction):
         n2 = len(ap2)
         length = n1
         n = n2
-        if mode == Mode.VALID: # mode == valid == 0, correlate default
+        if mode == Mode.VALID:  # mode == valid == 0, correlate default
             length = length - n + 1
             n_left = 0
             n_right = 0
-        elif mode == Mode.FULL: # mode == full == 2, convolve default
+        elif mode == Mode.FULL:  # mode == full == 2, convolve default
             n_right = n - 1
             n_left = n - 1
             length = length + n - 1
@@ -4171,7 +4174,7 @@ def np_select(condlist, choicelist, default=0):
 
     return np_select_arr_impl
 
-#----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Windowing functions
 #   - translated from the numpy implementations found in:
 #   https://github.com/numpy/numpy/blob/v1.16.1/numpy/lib/function_base.py#L2543-L3233    # noqa: E501
