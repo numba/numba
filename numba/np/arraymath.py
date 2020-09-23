@@ -4395,7 +4395,7 @@ def np_cross(a, b):
             raise ValueError((
                 "Dimensions for both inputs is 2.\n"
                 "Please replace your numpy.cross(a, b) call with "
-                "numba.numpy_extensions.cross2d(a, b)."
+                "numba.np.extensions.cross2d(a, b)."
             ))
     return impl
 
