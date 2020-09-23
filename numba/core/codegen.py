@@ -714,7 +714,8 @@ class BaseCPUCodegen(object):
         missed...
         """
         pmb = lp.create_pass_manager_builder(
-            opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
+            opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE,
+            slp_vectorize=True)
         return pmb
 
     def _check_llvm_bugs(self):
