@@ -28,7 +28,9 @@ Note. To use the GPU users should be added to "video" user group on Linux system
 The following requisites will need to be present in the system. Refer to next section for more details.
 *******************************************************************************************************
 
-- NUMBA v0.50          : The DPPL backend has only been tested for NUMBA v0.50. The included install script downloads and applies the DDPy patch to the correct NUMBA version.
+- NUMBA v0.51          : The DPPL backend has only been tested for NUMBA v0.51.
+                         The included install script downloads and applies
+                         the DPPy patch to the correct NUMBA version.
 
 - LLVM-SPIRV translator: Used for SPIRV generation from LLVM IR.
 

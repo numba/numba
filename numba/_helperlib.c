@@ -275,6 +275,12 @@ numba_recreate_record(void *pdata, int size, PyObject *dtype) {
     PyObject *record = NULL;
     PyArray_Descr *descr = NULL;
 
+    if (dtype == NULL) {
+        PyErr_Format(PyExc_RuntimeError,
+            "In 'numba_recreate_record', 'dtype' is NULL");
+        return NULL;
+    }
+
     numpy = PyImport_ImportModuleNoBlock("numpy");
     if (!numpy) goto CLEANUP;
 
@@ -825,143 +831,17 @@ error:
     _PyErr_ChainExceptions(exc, val, tb);
 }
 
-/* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
-   This *consumes* a reference count to its argument. */
-NUMBA_EXPORT_FUNC(int)
-numba_do_raise(PyObject *exc_packed)
-{
-    PyObject *exc = NULL, *type = NULL, *value = NULL, *loc = NULL;
+
+/*
+ * Add traceback information to *loc* to the active exception.
+ * loc can be NULL, which causes this function to become a no-op.
+ */
+static
+void traceback_add_loc(PyObject *loc) {
     const char *function_name_str = NULL, *filename_str = NULL;
     PyObject *function_name = NULL, *filename = NULL, *lineno = NULL;
     Py_ssize_t pos;
 
-    /* We support the following forms of raise:
-       raise
-       raise <instance>
-       raise <type> */
-
-    /* could be a tuple from npm (some exc like thing, args, location) */
-    if (PyTuple_CheckExact(exc_packed)) {
-        /* Unpack a (class/inst/tuple, arguments, location) tuple. */
-        if (!PyArg_ParseTuple(exc_packed, "OOO", &exc, &value, &loc)) {
-            Py_DECREF(exc_packed);
-            goto raise_error_w_loc;
-        }
-
-        if (exc == Py_None) {
-            /* Reraise */
-            PyThreadState *tstate = PyThreadState_GET();
-            PyObject *tb;
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
-            _PyErr_StackItem *tstate_exc = tstate->exc_info;
-#else
-            PyThreadState *tstate_exc = tstate;
-#endif
-            Py_DECREF(exc_packed);
-            type = tstate_exc->exc_type;
-            value = tstate_exc->exc_value;
-            tb = tstate_exc->exc_traceback;
-            if (type == Py_None) {
-                PyErr_SetString(PyExc_RuntimeError,
-                                "No active exception to reraise");
-                return 0;
-            }
-            Py_XINCREF(type);
-            Py_XINCREF(value);
-            Py_XINCREF(tb);
-            PyErr_Restore(type, value, tb);
-            return 1;
-        }
-
-        /* the unpacked exc should be a class, value and loc are set from above
-         */
-        Py_XINCREF(value);
-        Py_XINCREF(loc);
-        if (PyExceptionClass_Check(exc)) {
-            /* It is a class, type used here just as a tmp var */
-            type = PyObject_CallObject(exc, value);
-            if (type == NULL)
-                goto raise_error_w_loc;
-            if (!PyExceptionInstance_Check(type)) {
-                PyErr_SetString(PyExc_TypeError,
-                                "exceptions must derive from BaseException");
-                goto raise_error_w_loc;
-            }
-            /* all ok, set type to the exc */
-            Py_DECREF(type);
-            type = exc;
-        } else {
-            /* this should be unreachable as typing should catch it */
-            /* Not something you can raise.  You get an exception
-            anyway, just not what you specified :-) */
-            Py_DECREF(exc_packed);
-            PyErr_SetString(PyExc_TypeError,
-                            "exceptions must derive from BaseException");
-            goto raise_error_w_loc;
-        }
-
-        /* as this branch is exited:
-         * - type should be an exception class
-         * - value should be the args for the exception class instantiation
-         * - loc should be the location information (or None)
-         */
-    } else {  /* could be a reraise or an exception from objmode */
-        exc = exc_packed;
-        if (exc == Py_None) {
-            /* Reraise */
-            PyThreadState *tstate = PyThreadState_GET();
-            PyObject *tb;
-#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
-            _PyErr_StackItem *tstate_exc = tstate->exc_info;
-#else
-            PyThreadState *tstate_exc = tstate;
-#endif
-            Py_DECREF(exc);
-            type = tstate_exc->exc_type;
-            value = tstate_exc->exc_value;
-            tb = tstate_exc->exc_traceback;
-            if (type == Py_None) {
-                PyErr_SetString(PyExc_RuntimeError,
-                                "No active exception to reraise");
-                return 0;
-            }
-            Py_XINCREF(type);
-            Py_XINCREF(value);
-            Py_XINCREF(tb);
-            PyErr_Restore(type, value, tb);
-            return 1;
-        }
-
-        /* exc should be an exception class or an instance of an exception */
-        if (PyExceptionClass_Check(exc)) {
-            type = exc;
-            value = PyObject_CallObject(exc, value);
-            if (value == NULL)
-                goto raise_error;
-            if (!PyExceptionInstance_Check(value)) {
-                PyErr_SetString(PyExc_TypeError,
-                                "exceptions must derive from BaseException");
-                goto raise_error;
-            }
-        }
-        else if (PyExceptionInstance_Check(exc)) {
-            value = exc;
-            type = PyExceptionInstance_Class(exc);
-            Py_INCREF(type);
-        }
-        else {
-            /* Not something you can raise.  You get an exception
-            anyway, just not what you specified :-) */
-            Py_DECREF(exc); // exc points to exc_packed
-            PyErr_SetString(PyExc_TypeError,
-                            "exceptions must derive from BaseException");
-            goto raise_error;
-        }
-    }
-
-    PyErr_SetObject(type, value);
-
-raise_error_w_loc:
     /* instance is instantiated/internal exception is raised, if loc is present
      * add a frame for it into the traceback */
     if(loc && loc != Py_None && PyTuple_Check(loc))
@@ -977,31 +857,141 @@ raise_error_w_loc:
         traceback_add(function_name_str, filename_str, \
                       (int)PyLong_AsLong(lineno));
     }
-
-    /* PyErr_SetObject incref's its arguments */
-    Py_XDECREF(value);
-    Py_XDECREF(type);
-    return 0;
-
-raise_error:
-    Py_XDECREF(value);
-    Py_XDECREF(type);
-    return 0;
 }
 
-NUMBA_EXPORT_FUNC(PyObject *)
-numba_unpickle(const char *data, int n)
+/**
+ * Re-raise the current active exception.
+ * Called internal by process_raise() when *exc* is None.
+ */
+static
+int reraise_exc_is_none(void) {
+    /* Reraise */
+    PyThreadState *tstate = PyThreadState_GET();
+    PyObject *tb, *type, *value;
+#if (PY_MAJOR_VERSION >= 3) && (PY_MINOR_VERSION >= 7)
+    _PyErr_StackItem *tstate_exc = tstate->exc_info;
+#else
+    PyThreadState *tstate_exc = tstate;
+#endif
+    type = tstate_exc->exc_type;
+    value = tstate_exc->exc_value;
+    tb = tstate_exc->exc_traceback;
+    if (type == Py_None) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "No active exception to reraise");
+        return 0;
+    }
+    /* incref needed because PyErr_Restore DOES NOT */
+    Py_XINCREF(type);
+    Py_XINCREF(value);
+    Py_XINCREF(tb);
+    PyErr_Restore(type, value, tb);
+    return 1;
+}
+
+/*
+ * Set exception given the Exception type and the constructor argument.
+ * Equivalent to ``raise exc(value)``.
+ * PyExceptionClass_Check(exc) must be True.
+ * value can be NULL.
+ */
+static
+int process_exception_class(PyObject *exc, PyObject *value) {
+    PyObject *type;
+    /* It is a class, type used here just as a tmp var */
+    type = PyObject_CallObject(exc, value);
+    if (type == NULL){
+        return 0;
+    }
+    if (!PyExceptionInstance_Check(type)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "exceptions must derive from BaseException");
+        Py_DECREF(type);
+        return 0;
+    }
+    /* all ok, set type to the exc */
+    Py_DECREF(type);
+    type = exc;
+    PyErr_SetObject(type, value);
+    return 1;
+}
+
+/*
+ * Internal routine to process exceptions.
+ * exc cannot be NULL. It can be a None, Exception type, or Exception instance.
+ * value can be NULL for absent, or any PyObject valid for the exception.
+ */
+static
+int process_raise(PyObject *exc, PyObject *value) {
+    /* exc is None */
+    if (exc == Py_None) {
+        return reraise_exc_is_none();
+    }
+    /* exc should be an exception class */
+    else if (PyExceptionClass_Check(exc)) {
+        return process_exception_class(exc, value);
+    }
+    /* exc is an instance of an Exception */
+    else if (PyExceptionInstance_Check(exc)) {
+        PyObject *type = PyExceptionInstance_Class(exc);
+        PyErr_SetObject(type, exc);
+        return 0;
+    }
+    else {
+        /* Not something you can raise.  You get an exception
+        anyway, just not what you specified :-) */
+        PyErr_SetString(PyExc_TypeError,
+                        "exceptions must derive from BaseException");
+        return 0;
+    }
+}
+
+/* Logic for raising an arbitrary object.  Adapted from CPython's ceval.c.
+   This *consumes* a reference count to its argument. */
+NUMBA_EXPORT_FUNC(int)
+numba_do_raise(PyObject *exc_packed)
 {
-    PyObject *buf, *obj;
-    static PyObject *loads;
+    int status;
+    PyObject *exc = NULL, *value = NULL, *loc = NULL;
+
+    /* We support the following forms of raise:
+       raise
+       raise <instance>
+       raise <type> */
+
+    /* could be a tuple from npm (some exc like thing, args, location) */
+    if (PyTuple_CheckExact(exc_packed)) {
+        /* Unpack a (class/inst/tuple, arguments, location) tuple. */
+        if (!PyArg_ParseTuple(exc_packed, "OOO", &exc, &value, &loc)) {
+            traceback_add_loc(loc);
+            return 0;
+        }
+    } else {
+        /* could be a reraise or an exception from objmode */
+        exc = exc_packed;
+        /* branch exit with value = NULL and loc = NULL */
+    }
+    /* value is either NULL or borrowed */
+    status = process_raise(exc, value);
+    traceback_add_loc(loc);
+    Py_DECREF(exc_packed);
+    return status;
+}
+
+
+NUMBA_EXPORT_FUNC(PyObject *)
+numba_unpickle(const char *data, int n, const char *hashed)
+{
+    PyObject *buf=NULL, *obj=NULL, *addr=NULL, *hashedbuf=NULL;
+    static PyObject *loads=NULL;
 
     /* Caching the pickle.loads function shaves a couple µs here. */
     if (loads == NULL) {
         PyObject *picklemod;
-        picklemod = PyImport_ImportModule("pickle");
+        picklemod = PyImport_ImportModule("numba.core.serialize");
         if (picklemod == NULL)
             return NULL;
-        loads = PyObject_GetAttrString(picklemod, "loads");
+        loads = PyObject_GetAttrString(picklemod, "_numba_unpickle");
         Py_DECREF(picklemod);
         if (loads == NULL)
             return NULL;
@@ -1010,7 +1000,17 @@ numba_unpickle(const char *data, int n)
     buf = PyBytes_FromStringAndSize(data, n);
     if (buf == NULL)
         return NULL;
-    obj = PyObject_CallFunctionObjArgs(loads, buf, NULL);
+    /* SHA1 produces 160 bit or 20 bytes */
+    hashedbuf = PyBytes_FromStringAndSize(hashed, 20);
+    if (hashedbuf == NULL)
+        goto error;
+    addr = PyLong_FromVoidPtr((void*)data);
+    if (addr == NULL)
+        goto error;
+    obj = PyObject_CallFunctionObjArgs(loads, addr, buf, hashedbuf, NULL);
+error:
+    Py_XDECREF(addr);
+    Py_XDECREF(hashedbuf);
     Py_DECREF(buf);
     return obj;
 }

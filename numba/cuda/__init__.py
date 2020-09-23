@@ -1,4 +1,4 @@
-import numba.testing
+from numba import runtests
 from numba.core import config
 
 if config.ENABLE_CUDASIM:
@@ -13,4 +13,4 @@ def test(*args, **kwargs):
     if not is_available():
         raise cuda_error()
 
-    return numba.testing.test("numba.cuda.tests", *args, **kwargs)
+    return runtests.main("numba.cuda.tests", *args, **kwargs)

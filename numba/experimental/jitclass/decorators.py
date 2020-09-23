@@ -36,7 +36,7 @@ def _warning_jitclass(spec):
     To be used in numba/__init__.py.
     This endpoint is deprecated.
     """
-    url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+    url = ("https://numba.pydata.org/numba-doc/latest/reference/"
            "deprecation.html#change-of-jitclass-location")
 
     msg = ("The 'numba.jitclass' decorator has moved to "

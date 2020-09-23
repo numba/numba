@@ -403,12 +403,12 @@ def get_sysinfo():
         sys_info[_hsa_agents_count] = len(hsa.agents)
         agents = []
         for i, agent in enumerate(hsa.agents):
-            agents += {
+            agents.append({
                 'Agent id': i,
                 'Vendor': decode(agent.vendor_name),
                 'Name': decode(agent.name),
                 'Type': agent.device,
-            }
+            })
         sys_info[_hsa_agents] = agents
 
         _dgpus = []

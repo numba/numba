@@ -4,18 +4,62 @@ CUDA Kernel API
 Kernel declaration
 ------------------
 
-The ``@cuda.jit`` decorator is used to create a CUDA kernel:
+The ``@cuda.jit`` decorator is used to create a CUDA dispatcher object that can
+be configured and launched:
 
 .. autofunction:: numba.cuda.jit
 
-.. autoclass:: numba.cuda.compiler.AutoJitCUDAKernel
-   :members: inspect_asm, inspect_llvm, inspect_types, specialize, extensions
 
-Individual specialized kernels are instances of
-:class:`numba.cuda.compiler.CUDAKernel`:
+Dispatcher objects
+------------------
 
-.. autoclass:: numba.cuda.compiler.CUDAKernel
-   :members: bind, ptx, device, inspect_llvm, inspect_asm, inspect_types
+The usual syntax for configuring a Dispatcher with a launch configuration uses
+subscripting, with the arguments being as in the following:
+
+.. code-block:: python
+
+   # func is some function decorated with @cuda.jit
+   func[griddim, blockdim, stream, sharedmem]
+
+
+The ``griddim`` and ``blockdim`` arguments specify the size of the grid and
+thread blocks, and may be either integers or tuples of length up to 3. The
+``stream`` parameter is an optional stream on which the kernel will be launched,
+and the ``sharedmem`` parameter specifies the size of dynamic shared memory in
+bytes.
+
+Subscripting the Dispatcher returns a configuration object that can be called
+with the kernel arguments:
+
+.. code-block:: python
+
+   configured = func[griddim, blockdim, stream, sharedmem]
+   configured(x, y, z)
+
+
+However, it is more idiomatic to configure and call the kernel within a single
+statement:
+
+.. code-block:: python
+
+   func[griddim, blockdim, stream, sharedmem](x, y, z)
+
+This is similar to launch configuration in CUDA C/C++:
+
+.. code-block:: cuda
+
+   func<<<griddim, blockdim, sharedmem, stream>>>(x, y, z)
+
+.. note:: The order of ``stream`` and ``sharedmem`` are reversed in Numba
+   compared to in CUDA C/C++.
+
+Dispatcher objects also provide several utility methods for inspection and
+creating a specialized instance:
+
+.. autoclass:: numba.cuda.compiler.Dispatcher
+   :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
+             specialize, specialized, extensions
+
 
 Intrinsic Attributes and Functions
 ----------------------------------
