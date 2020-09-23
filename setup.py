@@ -311,12 +311,13 @@ def get_ext_modules():
         dpnp_present = True
 
     if dpnp_present:
+        lib_path = os.path.dirname(dpnp.__file__)
         from Cython.Build import cythonize
         ext_dpnp_glue = Extension(name='numba.dppl.dpnp_glue.dpnp_fptr_interface',
                                   sources=['numba/dppl/dpnp_glue/dpnp_fptr_interface.pyx'],
                                   include_dirs=[dpnp.get_include()],
                                   libraries=['dpnp_backend_c'],
-                                  library_dirs=['/localdisk/work/rhoque/production/dpnp/dpnp'],
+                                  library_dirs=[lib_path],
                                   language="c++")
         ext_modules += [ext_dpnp_glue]
 

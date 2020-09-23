@@ -58,6 +58,7 @@ cdef DPNPFuncType get_DPNPFuncType_from_str(name):
         return DPNPFuncType.DPNP_FT_LONG
 
 from libc.stdio cimport printf
+from libc.stdint cimport uintptr_t
 
 cpdef get_dpnp_fn_ptr(name, types):
     print("inside function")
@@ -66,5 +67,6 @@ cpdef get_dpnp_fn_ptr(name, types):
     cdef DPNPFuncType second_type = DPNP_FT_NONE
 
     cdef DPNPFuncData kernel_data = get_dpnp_function_ptr(func_name, first_type, second_type)
-    printf("pointer %p\n", kernel_data.ptr)
-    print(hex(<object>kernel_data.ptr))
+    cdef uintptr_t fn_ptr = <uintptr_t>kernel_data.ptr
+
+    return <object>fn_ptr

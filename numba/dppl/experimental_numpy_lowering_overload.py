@@ -60,12 +60,9 @@ ll_intp_p = intp_t.as_pointer()
 
 def call_dpnp(context, builder, fn_name, type_names, params, param_tys, ret_ty):
     from .dpnp_glue import dpnp_fptr_interface as dpnp_glue
-    print(type_names)
-    ret = dpnp_glue.get_dpnp_fn_ptr(fn_name, type_names)
-    import pdb
-    pdb.set_trace()
-    return
+    f_ptr = dpnp_glue.get_dpnp_fn_ptr(fn_name, type_names)
 
+    '''
     import ctypes
     dpnp_lib = ctypes.cdll.LoadLibrary("libdpnp_backend_c.so")
     C_get_function = dpnp_lib.get_backend_function_name
@@ -74,6 +71,7 @@ def call_dpnp(context, builder, fn_name, type_names, params, param_tys, ret_ty):
     f_ptr = dpnp_lib.get_backend_function_name(fn_name, type_names[0])
 
     print(hex(f_ptr))
+    '''
 
     fnty = ir.FunctionType(ret_ty, param_tys)
     addr_constant = context.get_constant(int64, f_ptr)
