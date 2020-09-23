@@ -444,7 +444,11 @@ class CPUCallConv(BaseCallConv):
             self._return_errcode_raw(builder, status.code)
 
     def _return_errcode_raw(self, builder, code):
-        builder.ret(code)
+        ret = builder.ret(code)
+
+        from llvmlite import ir
+        md = builder.module.add_metadata([ir.IntType(1)(1)])
+        ret.set_metadata("ret_is_raise", md)
 
     def _get_return_status(self, builder, code, excinfoptr):
         """
