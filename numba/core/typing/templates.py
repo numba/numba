@@ -799,22 +799,6 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         }
         return info
 
-    def get_template_info(self):
-        basepath = os.path.dirname(os.path.dirname(numba.__file__))
-        impl = self._overload_func
-        code, firstlineno = inspect.getsourcelines(impl)
-        path = inspect.getsourcefile(impl)
-        sig = str(utils.pysignature(impl))
-        info = {
-            'kind': "overload",
-            'name': getattr(impl, '__qualname__', impl.__name__),
-            'sig': sig,
-            'filename': os.path.relpath(path, start=basepath),
-            'lines': (firstlineno, firstlineno + len(code) - 1),
-            'docstring': impl.__doc__
-        }
-        return info
-
 
 def make_overload_template(func, overload_func, jit_options, strict,
                            inline, prefer_literal=False):
