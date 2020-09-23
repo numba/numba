@@ -1199,7 +1199,7 @@ Enhancements from user contributed PRs (with thanks!):
 * Lucio Fernandez-Arjona extended Numba's ``np.sum`` support to now accept the
   ``dtype`` kwarg in #4472.
 * Pedro A. Morales Maries added support for ``np.cross`` in #4128 and also added
-  the necessary extension ``numba.numpy_.extensions.cross2d`` in #4595.
+  the necessary extension ``numba.numpy_extensions.cross2d`` in #4595.
 * David Hoese, Eric Firing, Joshua Adelman, and Juan Nunez-Iglesias all made
   documentation fixes in #4565, #4482, #4455, #4375 respectively.
 * Vyacheslav Smirnov and Rujal Desai enabled support for ``count()`` on unicode
