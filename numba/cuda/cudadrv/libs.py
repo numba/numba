@@ -69,7 +69,7 @@ def test(_platform=None, print_paths=True):
     """Test library lookup.  Path info is printed to stdout.
     """
     failed = False
-    libs = 'cublas cusparse cufft curand nvvm'.split()
+    libs = 'cublas cusparse cufft curand nvvm cudart'.split()
     for lib in libs:
         path = get_cudalib(lib, _platform)
         print('Finding {} from {}'.format(lib, _get_source_variable(lib)))

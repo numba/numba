@@ -54,6 +54,31 @@ class Loop(collections.namedtuple("Loop",
         return hash(self.header)
 
 
+class _DictOfContainers(collections.defaultdict):
+    """A defaultdict with customized equality checks that ignore empty values.
+
+    Non-empty value is checked by: `bool(value_item) == True`.
+    """
+
+    def __eq__(self, other):
+        if isinstance(other, _DictOfContainers):
+            mine = self._non_empty_items()
+            theirs = other._non_empty_items()
+            return mine == theirs
+
+        return NotImplemented
+
+    def __ne__(self, other):
+        ret = self.__eq__(other)
+        if ret is NotImplemented:
+            return ret
+        else:
+            return not ret
+
+    def _non_empty_items(self):
+        return [(k, vs) for k, vs in sorted(self.items()) if vs]
+
+
 class CFGraph(object):
     """
     Generic (almost) implementation of a Control Flow Graph.
@@ -61,8 +86,8 @@ class CFGraph(object):
 
     def __init__(self):
         self._nodes = set()
-        self._preds = collections.defaultdict(set)
-        self._succs = collections.defaultdict(set)
+        self._preds = _DictOfContainers(set)
+        self._succs = _DictOfContainers(set)
         self._edge_data = {}
         self._entry_point = None
 
@@ -113,22 +138,13 @@ class CFGraph(object):
 
     def process(self):
         """
-        Compute various properties of the control flow graph.  The graph
-        must have been fully populated, and its entry point specified.
+        Compute essential properties of the control flow graph.  The graph
+        must have been fully populated, and its entry point specified. Other
+        graph properties are computed on-demand.
         """
         if self._entry_point is None:
             raise RuntimeError("no entry point defined!")
         self._eliminate_dead_blocks()
-        self._find_exit_points()
-        self._find_dominators()
-        self._find_back_edges()
-        self._find_topo_order()
-        self._find_descendents()
-        self._find_loops()
-        self._find_post_dominators()
-        self._find_immediate_dominators()
-        self._find_dominance_frontier()
-        self._find_dominator_tree()
 
     def dominators(self):
         """
@@ -177,6 +193,50 @@ class CFGraph(object):
         The domtree(B) is the closest strict set of nodes that B dominates
         """
         return self._domtree
+
+    @utils.cached_property
+    def _exit_points(self):
+        return self._find_exit_points()
+
+    @utils.cached_property
+    def _doms(self):
+        return self._find_dominators()
+
+    @utils.cached_property
+    def _back_edges(self):
+        return self._find_back_edges()
+
+    @utils.cached_property
+    def _topo_order(self):
+        return self._find_topo_order()
+
+    @utils.cached_property
+    def _descs(self):
+        return self._find_descendents()
+
+    @utils.cached_property
+    def _loops(self):
+        return self._find_loops()
+
+    @utils.cached_property
+    def _in_loops(self):
+        return self._find_in_loops()
+
+    @utils.cached_property
+    def _post_doms(self):
+        return self._find_post_dominators()
+
+    @utils.cached_property
+    def _idom(self):
+        return self._find_immediate_dominators()
+
+    @utils.cached_property
+    def _df(self):
+        return self._find_dominance_frontier()
+
+    @utils.cached_property
+    def _domtree(self):
+        return self._find_dominator_tree()
 
     def descendents(self, node):
         """
@@ -353,7 +413,7 @@ class CFGraph(object):
         for n in self._nodes:
             if not self._succs.get(n):
                 exit_points.add(n)
-        self._exit_points = exit_points
+        return exit_points
 
     def _find_postorder(self):
         succs = self._succs
@@ -410,11 +470,11 @@ class CFGraph(object):
                     idom[u] = new_idom
                     changed = True
 
-        self._idom = idom
+        return idom
 
     def _find_dominator_tree(self):
         idom = self._idom
-        domtree = collections.defaultdict(set)
+        domtree = _DictOfContainers(set)
 
         for u, v in idom.items():
             # v dominates u
@@ -423,7 +483,7 @@ class CFGraph(object):
             if u != v:
                 domtree[v].add(u)
 
-        self._domtree = domtree
+        return domtree
 
     def _find_dominance_frontier(self):
         idom = self._idom
@@ -438,7 +498,7 @@ class CFGraph(object):
                     df[v].add(u)
                     v = idom[v]
 
-        self._df = df
+        return df
 
     def _find_dominators_internal(self, post=False):
         # See theoretical description in
@@ -484,7 +544,7 @@ class CFGraph(object):
         return doms
 
     def _find_dominators(self):
-        self._doms = self._find_dominators_internal(post=False)
+        return self._find_dominators_internal(post=False)
 
     def _find_post_dominators(self):
         # To handle infinite loops correctly, we need to add a dummy
@@ -495,30 +555,72 @@ class CFGraph(object):
             if not loop.exits:
                 for b in loop.body:
                     self._add_edge(b, dummy_exit)
-        self._post_doms = self._find_dominators_internal(post=True)
+        pdoms = self._find_dominators_internal(post=True)
         # Fix the _post_doms table to make no reference to the dummy exit
-        del self._post_doms[dummy_exit]
-        for doms in self._post_doms.values():
+        del pdoms[dummy_exit]
+        for doms in pdoms.values():
             doms.discard(dummy_exit)
         self._remove_node_edges(dummy_exit)
         self._exit_points.remove(dummy_exit)
+        return pdoms
 
     # Finding loops and back edges: see
     # http://pages.cs.wisc.edu/~fischer/cs701.f08/finding.loops.html
 
-    def _find_back_edges(self):
+    def _find_back_edges(self, stats=None):
         """
         Find back edges.  An edge (src, dest) is a back edge if and
         only if *dest* dominates *src*.
         """
+        # Prepare stats to capture execution information
+        if stats is not None:
+            if not isinstance(stats, dict):
+                raise TypeError(f"*stats* must be a dict; got {type(stats)}")
+            stats.setdefault('iteration_count', 0)
+
+        # Uses a simple DFS to find back-edges.
+        # The new algorithm is faster than the the previous dominator based
+        # algorithm.
         back_edges = set()
-        for src, succs in self._succs.items():
-            back = self._doms[src] & succs
-            # In CPython bytecode, at most one back edge can flow from a
-            # given block.
-            assert len(back) <= 1
-            back_edges.update((src, dest) for dest in back)
-        self._back_edges = back_edges
+        # stack: keeps track of the traversal path
+        stack = []
+        # succs_state: keep track of unvisited successors of a node
+        succs_state = {}
+        entry_point = self.entry_point()
+
+        checked = set()
+
+        def push_state(node):
+            stack.append(node)
+            succs_state[node] = [dest for dest in self._succs[node]]
+
+        push_state(entry_point)
+
+        # Keep track for iteration count for debugging
+        iter_ct = 0
+        while stack:
+            iter_ct += 1
+            tos = stack[-1]
+            tos_succs = succs_state[tos]
+            # Are there successors not checked?
+            if tos_succs:
+                # Check the next successor
+                cur_node = tos_succs.pop()
+                # Is it in our traversal path?
+                if cur_node in stack:
+                    # Yes, it's a backedge
+                    back_edges.add((tos, cur_node))
+                elif cur_node not in checked:
+                    # Push
+                    push_state(cur_node)
+            else:
+                # Checked all successors. Pop
+                stack.pop()
+                checked.add(tos)
+
+        if stats is not None:
+            stats['iteration_count'] += iter_ct
+        return back_edges
 
     def _find_topo_order(self):
         succs = self._succs
@@ -536,7 +638,7 @@ class CFGraph(object):
 
         _dfs_rec(self._entry_point)
         post_order.reverse()
-        self._topo_order = post_order
+        return post_order
 
     def _find_descendents(self):
         descs = {}
@@ -546,7 +648,7 @@ class CFGraph(object):
                 if (node, succ) not in self._back_edges:
                     node_descs.add(succ)
                     node_descs.update(descs[succ])
-        self._descs = descs
+        return descs
 
     def _find_loops(self):
         """
@@ -582,8 +684,10 @@ class CFGraph(object):
                 exits.update(self._succs[n] - body)
             loop = Loop(header=header, body=body, entries=entries, exits=exits)
             loops[header] = loop
-        self._loops = loops
+        return loops
 
+    def _find_in_loops(self):
+        loops = self._loops
         # Compute the loops to which each node belongs.
         in_loops = dict((n, []) for n in self._nodes)
         # Sort loops from longest to shortest
@@ -591,7 +695,7 @@ class CFGraph(object):
         for loop in sorted(loops.values(), key=lambda loop: len(loop.body)):
             for n in loop.body:
                 in_loops[n].append(loop.header)
-        self._in_loops = in_loops
+        return in_loops
 
     def _dump_adj_lists(self, file):
         adj_lists = dict((src, sorted(list(dests)))
@@ -603,10 +707,7 @@ class CFGraph(object):
         if not isinstance(other, CFGraph):
             raise NotImplementedError
 
-        # A few derived items are checked to makes sure process() has been
-        # invoked equally.
-        for x in ['_nodes', '_edge_data', '_entry_point', '_preds', '_succs',
-                  '_doms', '_back_edges']:
+        for x in ['_nodes', '_edge_data', '_entry_point', '_preds', '_succs']:
             this = getattr(self, x, None)
             that = getattr(other, x, None)
             if this != that:

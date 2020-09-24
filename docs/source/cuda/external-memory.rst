@@ -166,6 +166,19 @@ follows:
    :member-order: bysource
 
 
+The IPC Handle Mixin
+--------------------
+
+An implementation of the ``get_ipc_handle()`` function is is provided in the
+``GetIpcHandleMixin`` class. This uses the driver API to determine the base
+address of an allocation for opening an IPC handle. If this implementation is
+appropriate for an EMM plugin, it can be added by mixing in the
+``GetIpcHandleMixin`` class:
+
+.. autoclass:: numba.cuda.GetIpcHandleMixin
+   :members: get_ipc_handle
+
+
 Classes and structures of returned objects
 ==========================================
 
@@ -272,10 +285,36 @@ Function
 --------
 
 The :func:`~numba.cuda.set_memory_manager` function can be used to set the
-memory manager at runtime. This must be called prior to the initialization of
-any contexts, and EMM Plugin instances are instantiated along with contexts.
-
-It is recommended that the memory manager is set once prior to using any CUDA
-functionality, and left unchanged for the remainder of execution.
+memory manager at runtime. This should be called prior to the initialization of
+any contexts, as EMM Plugin instances are instantiated along with contexts.
 
 .. autofunction:: numba.cuda.set_memory_manager
+
+
+Resetting the memory manager
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It is recommended that the memory manager is set once prior to using any CUDA
+functionality, and left unchanged for the remainder of execution. It is possible
+to set the memory manager multiple times, noting the following:
+
+* At the time of their creation, contexts are bound to an instance of a memory
+  manager for their lifetime.
+* Changing the memory manager will have no effect on existing contexts - only
+  contexts created after the memory manager was updated will use instances of
+  the new memory manager.
+* :func:`numba.cuda.close` can be used to destroy contexts after setting the
+  memory manager so that they get re-created with the new memory manager.
+
+  - This will invalidate any arrays, streams, events, and modules owned by the
+    context.
+  - Attempting to use invalid arrays, streams, or events will likely fail with
+    an exception being raised due to a ``CUDA_ERROR_INVALID_CONTEXT`` or
+    ``CUDA_ERROR_CONTEXT_IS_DESTROYED`` return code from a Driver API function.
+  - Attempting to use an invalid module will result in similar, or in some
+    cases a segmentation fault / access violation.
+
+.. note:: The invalidation of modules means that all functions compiled with
+          ``@cuda.jit`` prior to context destruction will need to be
+          redefined, as the code underlying them will also have been unloaded
+          from the GPU.

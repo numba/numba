@@ -69,6 +69,10 @@ def bincount2(a, w):
     return np.bincount(a, weights=w)
 
 
+def bincount3(a, w=None, minlength=0):
+    return np.bincount(a, w, minlength)
+
+
 def searchsorted(a, v):
     return np.searchsorted(a, v)
 
@@ -747,6 +751,37 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc([2, -1], [0])
         self.assertIn("weights and list don't have the same length",
+                      str(raises.exception))
+
+    def test_bincount3(self):
+        pyfunc = bincount3
+        cfunc = jit(nopython=True)(pyfunc)
+        for seq in self.bincount_sequences():
+            a_max = max(seq)
+            # Length should be a_max in the first case, minlength in the second
+            for minlength in (a_max, a_max + 2):
+                expected = pyfunc(seq, None, minlength)
+                got = cfunc(seq, None, minlength)
+                self.assertEqual(len(expected), len(got))
+                self.assertPreciseEqual(expected, got)
+
+    def test_bincount3_exceptions(self):
+        pyfunc = bincount3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Negative input
+        with self.assertRaises(ValueError) as raises:
+            cfunc([2, -1], [0, 0])
+        self.assertIn("first argument must be non-negative",
+                      str(raises.exception))
+
+        # Negative minlength
+        with self.assertRaises(ValueError) as raises:
+            cfunc([17, 38], None, -1)
+        self.assertIn("'minlength' must not be negative",
                       str(raises.exception))
 
     def test_searchsorted(self):
@@ -3105,6 +3140,31 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     check_pass_through(cfunc, True, params)
                 else:
                     check_pass_through(cfunc, True, params)
+
+    def test_asarray_literal(self):
+
+        def case1():
+            return np.asarray("hello world")
+
+        def case2(): # kind1
+            s = "hello world"
+            return np.asarray(s)
+
+        def case3(): # kind2
+            s = '大处 着眼，小处着手。大大大处'
+            return np.asarray(s)
+
+        def case4():
+            s = ''
+            return np.asarray(s)
+
+        funcs = [case1, case2, case3, case4]
+
+        for pyfunc in funcs:
+            cfunc = jit(nopython=True)(pyfunc)
+            expected = pyfunc()
+            got = cfunc()
+            self.assertPreciseEqual(expected, got)
 
     def test_asarray_rejects_List_with_illegal_dtype(self):
         self.disable_leak_check()
