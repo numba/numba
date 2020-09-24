@@ -328,6 +328,7 @@ def flip_lr(a):
 def flip_ud(a):
     return np.flipud(a)
 
+
 def np_asarray_chkfinite(a, dtype=None, order='C'):
     return np.asarray_chkfinite(a, dtype, order)
 
@@ -3904,7 +3905,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             (
                 np.array([1, 2], dtype=np.int64),
             ),
-            
             # 3x2 (with higher order broadcasting)
             (
                 np.arange(36).reshape(6, 2, 3),
@@ -3922,7 +3922,10 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as e:
             cfunc(2)
-        self.assertIn("The argument to np.asarray_chkfinite must be array-like", str(e.exception))
+        self.assertIn(
+            "The argument to np.asarray_chkfinite must be array-like",
+            str(e.exception)
+            )
 
         with self.assertRaises(TypingError) as e:
             cfunc(np.array([2, 4, np.nan, 5]))
