@@ -7,7 +7,7 @@ import argparse
 import timeit
 
 from numba import dppl
-import dppl.ocldrv as ocldrv
+import dpctl.ocldrv as ocldrv
 
 parser = argparse.ArgumentParser(description='Program to compute pairwise distance')
 

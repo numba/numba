@@ -1,7 +1,7 @@
 dppl_present = False
 
 try:
-    from dppl.ocldrv import *
+    from dpctl.ocldrv import *
 except:
     pass
 else:

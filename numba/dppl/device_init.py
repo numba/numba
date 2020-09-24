@@ -23,7 +23,7 @@ DEFAULT_LOCAL_SIZE = []
 from . import initialize
 
 from .decorators import kernel, func, autojit
-from dppl.ocldrv import runtime
+from dpctl.ocldrv import runtime
 from . import target
 
 

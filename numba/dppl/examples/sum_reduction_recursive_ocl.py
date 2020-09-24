@@ -3,7 +3,7 @@ import numpy as np
 from numba import dppl, int32
 import math
 
-import dppl.ocldrv as ocldrv
+import dpctl.ocldrv as ocldrv
 
 
 def recursive_reduction(size, group_size,

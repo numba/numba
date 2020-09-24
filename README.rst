@@ -47,18 +47,17 @@ Make sure the following dependencies of NUMBA-PyDPPL are installed
 in your conda environemtn:
 
 - llvmlite =0.33
-- pydppl =0.2
 - spirv-tools
 - llvm-spirv
 - llvmdev
+- dpCtl =0.3
 
 Make sure the dependencies are installed with consistent version of LLVM 10.
 
-Install PyDPPL backend
-***********************
-NUMBA-PyDPPL also depend on PyDPPL backend. It can be found `here <https://github.com/IntelPython/PyDPPL>`_.
-Please run `build_for_develop.sh` to install PyDPPL backend in development mode
-or install PyDPPL from package.
+Install dpCtl backend
+*********************
+NUMBA-PyDPPL also depend on dpCtl backend. It can be found `here <https://github.com/IntelPython/dpCtl>`_.
+Please install dpCtl from package.
 
 Install NUMBA-PyDPPL
 ********************
