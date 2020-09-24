@@ -253,16 +253,6 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
 * :meth:`~numpy.ndarray.__contains__` (only the 1-argument form ``key``)
 
-.. code:: pycon
-    >>> import numpy as np
-    >>> from numba import njit
-    >>> @njit
-    ... def nd_contains():
-    ...     arr = np.array([0, 3, 7, 5])
-    ...     print(5 in arr) 
-    >>> nd_contains()
-    True
-
 
 .. warning::
    Sorting may be slightly slower than Numpy's implementation.
