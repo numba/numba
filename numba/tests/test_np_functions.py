@@ -3587,7 +3587,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array((3, 4))
             )
         self.assertIn(
-            'Dimensions for both inputs is 2',
+            'Dimensions for both inputs is 2.',
+            str(raises.exception)
+        )
+
+        self.assertIn(
+            '`cross2d(a, b)` from `numba.np.extensions`.',
             str(raises.exception)
         )
 
