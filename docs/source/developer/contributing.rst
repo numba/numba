@@ -336,14 +336,18 @@ to make sure. The Numba project's private build and test farm will actually
 exercise all the applicable tests on all the combinations noted above on real
 hardware!
 
-Helping with Public CI load
-'''''''''''''''''''''''''''
+Things that help with pull requests
+'''''''''''''''''''''''''''''''''''
 
 Even with the mitigating design above public CI can get overloaded which causes
 a backlog of builds. It's therefore really helpful when opening pull requests if
 you can limit the frequency of pushing changes. Ideally, please squash commits
-to reduce the number of patches and/or push as infrequently as possible. The
-core developers thank everyone for their cooperation with this!
+to reduce the number of patches and/or push as infrequently as possible. Also,
+once a pull request review has started, please don't rebase/force push/squash
+or do anything that rewrites history of the reviewed code as GitHub cannot track
+this and it makes it very hard for reviewers to see what has changed.
+
+The core developers thank everyone for their cooperation with the above!
 
 
 Documentation
