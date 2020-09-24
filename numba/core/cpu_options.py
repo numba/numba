@@ -50,6 +50,7 @@ class ParallelOptions(object):
             self.enabled = value
             self.comprehension = value
             self.reduction = value
+            self.inplace_binop = value
             self.setitem = value
             self.numpy = value
             self.stencil = value
@@ -59,6 +60,7 @@ class ParallelOptions(object):
             self.enabled = True
             self.comprehension = value.pop('comprehension', True)
             self.reduction = value.pop('reduction', True)
+            self.inplace_binop = value.pop('inplace_binop', True)
             self.setitem = value.pop('setitem', True)
             self.numpy = value.pop('numpy', True)
             self.stencil = value.pop('stencil', True)

@@ -1,6 +1,7 @@
 from collections import namedtuple
 import contextlib
 import pickle
+import hashlib
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
@@ -8,8 +9,9 @@ import llvmlite.llvmpy.core as lc
 
 import ctypes
 from numba import _helperlib
-from numba.core import types, utils, config, lowering, cgutils, imputils
-
+from numba.core import (
+    types, utils, config, lowering, cgutils, imputils, serialize,
+)
 
 PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
 PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
@@ -129,10 +131,28 @@ class EnvironmentManager(object):
         """
         Look up constant number *index* inside the environment body.
         A borrowed reference is returned.
+
+        The returned LLVM value may have NULL value at runtime which indicates
+        an error at runtime.
         """
         assert index < len(self.env.consts)
 
-        return self.pyapi.list_getitem(self.env_body.consts, index)
+        builder = self.pyapi.builder
+        consts = self.env_body.consts
+        ret = cgutils.alloca_once(builder, self.pyapi.pyobj, zfill=True)
+        with builder.if_else(cgutils.is_not_null(builder, consts)) as \
+                (br_not_null, br_null):
+            with br_not_null:
+                getitem = self.pyapi.list_getitem(consts, index)
+                builder.store(getitem, ret)
+            with br_null:
+                # This can happen when the Environment is accidentally released
+                # and has subsequently been garbage collected.
+                self.pyapi.err_set_string(
+                    "PyExc_RuntimeError",
+                    "`env.consts` is NULL in `read_const`",
+                )
+        return builder.load(ret)
 
 
 _IteratorLoop = namedtuple('_IteratorLoop', ('value', 'do_break'))
@@ -181,7 +201,8 @@ class PythonAPI(object):
     def get_env_manager(self, env, env_body, env_ptr):
         return EnvironmentManager(self, env, env_body, env_ptr)
 
-    def emit_environment_sentry(self, envptr, return_pyobject=False):
+    def emit_environment_sentry(self, envptr, return_pyobject=False,
+                                debug_msg=''):
         """Emits LLVM code to ensure the `envptr` is not NULL
         """
         is_null = cgutils.is_null(self.builder, envptr)
@@ -189,13 +210,15 @@ class PythonAPI(object):
             if return_pyobject:
                 fnty = self.builder.function.type.pointee
                 assert fnty.return_type == self.pyobj
-                self.err_set_string("PyExc_RuntimeError",
-                                    "missing Environment")
+                self.err_set_string(
+                    "PyExc_RuntimeError", f"missing Environment: {debug_msg}",
+                )
                 self.builder.ret(self.get_null_object())
             else:
-                self.context.call_conv.return_user_exc(self.builder,
-                                                       RuntimeError,
-                                                       ("missing Environment",))
+                self.context.call_conv.return_user_exc(
+                    self.builder, RuntimeError,
+                    (f"missing Environment: {debug_msg}",),
+                )
 
     # ------ Python API -----
 
@@ -950,10 +973,10 @@ class PythonAPI(object):
             return self.builder.call(fn, (lhs, rhs, lopid))
         elif opstr == 'is':
             bitflag = self.builder.icmp(lc.ICMP_EQ, lhs, rhs)
-            return self.from_native_value(types.boolean, bitflag)
+            return self.bool_from_bool(bitflag)
         elif opstr == 'is not':
             bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
-            return self.from_native_value(types.boolean, bitflag)
+            return self.bool_from_bool(bitflag)
         elif opstr in ('in', 'not in'):
             fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
             fn = self._get_function(fnty, name="PySequence_Contains")
@@ -1294,27 +1317,37 @@ class PythonAPI(object):
         Unserialize some data.  *structptr* should be a pointer to
         a {i8* data, i32 length} structure.
         """
-        fnty = Type.function(self.pyobj, (self.voidptr, ir.IntType(32)))
+        fnty = Type.function(self.pyobj,
+                             (self.voidptr, ir.IntType(32), self.voidptr))
         fn = self._get_function(fnty, name="numba_unpickle")
         ptr = self.builder.extract_value(self.builder.load(structptr), 0)
         n = self.builder.extract_value(self.builder.load(structptr), 1)
-        return self.builder.call(fn, (ptr, n))
+        hashed = self.builder.extract_value(self.builder.load(structptr), 2)
+        return self.builder.call(fn, (ptr, n, hashed))
 
     def serialize_uncached(self, obj):
         """
         Same as serialize_object(), but don't create a global variable,
-        simply return a literal {i8* data, i32 length} structure.
+        simply return a literal {i8* data, i32 length, i8* hashbuf} structure.
         """
         # First make the array constant
-        data = pickle.dumps(obj, protocol=-1)
+        data = serialize.dumps(obj)
         assert len(data) < 2**31
         name = ".const.pickledata.%s" % (id(obj) if config.DIFF_IR == 0 else "DIFF_IR")
         bdata = cgutils.make_bytearray(data)
+        # Make SHA1 hash on the pickled content
+        # NOTE: update buffer size in numba_unpickle() when changing the
+        #       hash algorithm.
+        hashed = cgutils.make_bytearray(hashlib.sha1(data).digest())
         arr = self.context.insert_unique_const(self.module, name, bdata)
+        hasharr = self.context.insert_unique_const(
+            self.module, f"{name}.sha1", hashed,
+        )
         # Then populate the structure constant
         struct = ir.Constant.literal_struct([
             arr.bitcast(self.voidptr),
             ir.Constant(ir.IntType(32), arr.type.pointee.count),
+            hasharr.bitcast(self.voidptr),
             ])
         return struct
 
@@ -1567,3 +1600,57 @@ class PythonAPI(object):
         res = builder.load(res_ptr)
         return is_error, res
 
+
+class ObjModeUtils:
+    """Internal utils for calling objmode dispatcher from within NPM code.
+    """
+    def __init__(self, pyapi):
+        self.pyapi = pyapi
+
+    def load_dispatcher(self, fnty, argtypes):
+        builder = self.pyapi.builder
+        tyctx = self.pyapi.context
+        m = builder.module
+
+        # Add a global variable to cache the objmode dispatcher
+        gv = ir.GlobalVariable(
+            m, self.pyapi.pyobj,
+            name=m.get_unique_name("cached_objmode_dispatcher"),
+        )
+        gv.initializer = gv.type.pointee(None)
+        gv.linkage = 'internal'
+
+        cached = builder.load(gv)
+        with builder.if_then(cgutils.is_null(builder, cached)):
+            if serialize.is_serialiable(fnty.dispatcher):
+                cls = type(self)
+                compiler = self.pyapi.unserialize(
+                    self.pyapi.serialize_object(cls._call_objmode_dispatcher)
+                )
+                serialized_dispatcher = self.pyapi.serialize_object(
+                    (fnty.dispatcher, tuple(argtypes)),
+                )
+                compile_args = self.pyapi.unserialize(serialized_dispatcher)
+                callee = self.pyapi.call_function_objargs(
+                    compiler, [compile_args],
+                )
+                # Clean up
+                self.pyapi.decref(compiler)
+                self.pyapi.decref(compile_args)
+            else:
+                entry_pt = fnty.dispatcher.compile(tuple(argtypes))
+                callee = tyctx.add_dynamic_addr(
+                    builder, id(entry_pt), info="with_objectmode",
+                )
+            # Incref the dispatcher and cache it
+            self.pyapi.incref(callee)
+            builder.store(callee, gv)
+
+        callee = builder.load(gv)
+        return callee
+
+    @staticmethod
+    def _call_objmode_dispatcher(compile_args):
+        dispatcher, argtypes = compile_args
+        entrypt = dispatcher.compile(argtypes)
+        return entrypt

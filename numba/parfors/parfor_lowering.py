@@ -90,6 +90,9 @@ def _lower_parfor_parallel(lowerer, parfor):
         parfor, parfor.params)
     parfor_redvars, parfor_reddict = numba.parfors.parfor.get_parfor_reductions(
         lowerer.func_ir, parfor, parfor.params, lowerer.fndesc.calltypes)
+    if config.DEBUG_ARRAY_OPT:
+        print("parfor_redvars:", parfor_redvars)
+        print("parfor_reddict:", parfor_reddict)
 
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
@@ -135,7 +138,6 @@ def _lower_parfor_parallel(lowerer, parfor):
                 typ=types.intp,
                 name='num_threads',
             )
-
 
             size_var_list = [num_threads_var]
 
@@ -212,6 +214,25 @@ def _lower_parfor_parallel(lowerer, parfor):
                     )
             else:
                 redtoset = redvar
+
+                if config.DEBUG_ARRAY_OPT_RUNTIME:
+                    res_print_str = "res_print1 for redvar " + str(redvar) + ":"
+                    strconsttyp = types.StringLiteral(res_print_str)
+
+                    lhs = pfbdr.make_const_variable(
+                        cval=res_print_str,
+                        typ=strconsttyp,
+                        name="str_const",
+                    )
+
+                    res_print = ir.Print(args=[lhs, redvar],
+                                         vararg=None, loc=loc)
+                    lowerer.fndesc.calltypes[res_print] = signature(types.none,
+                                                             typemap[lhs.name],
+                                                             typemap[redvar.name])
+                    print("res_print_redvar", res_print)
+                    lowerer.lower_inst(res_print)
+
 
             # For each thread, initialize the per-worker reduction array to the current reduction array value.
             for j in range(thread_count):
@@ -304,7 +325,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                 res_print_str = "res_print"
                 strconsttyp = types.StringLiteral(res_print_str)
 
-                lhs = pfbldr.make_const_variable(
+                lhs = pfbdr.make_const_variable(
                     cval=res_print_str,
                     typ=strconsttyp,
                     name="str_const",
@@ -1236,7 +1257,7 @@ def _create_gufunc_for_parfor_body(
                     # Make print node
                     print_node = ir.Print(args=[lhs, inst.target], vararg=None, loc=loc)
                     new_block.append(print_node)
-                    sig = numba.typing.signature(types.none,
+                    sig = numba.core.typing.signature(types.none,
                                            typemap[lhs.name],
                                            typemap[inst.target.name])
                     lowerer.fndesc.calltypes[print_node] = sig

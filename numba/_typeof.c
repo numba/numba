@@ -4,6 +4,7 @@
 #include <time.h>
 #include <assert.h>
 
+#include "_numba_common.h"
 #include "_typeof.h"
 #include "_hashtable.h"
 
@@ -372,7 +373,7 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         PyBuffer_Release(&buf);
         return 0;
     }
-    if (PyArray_DescrCheck(val)) {
+    if (NUMBA_PyArray_DescrCheck(val)) {
         TRY(string_writer_put_char, w, OP_NP_DTYPE);
         return compute_dtype_fingerprint(w, (PyArray_Descr *) val);
     }

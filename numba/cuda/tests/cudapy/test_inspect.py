@@ -1,7 +1,10 @@
+import numpy as np
+
 from io import StringIO
-from numba import cuda, float64, intp
+from numba import cuda, float32, float64, int32, intp
 from numba.cuda.testing import unittest, CUDATestCase
-from numba.cuda.testing import skip_on_cudasim
+from numba.cuda.testing import (skip_on_cudasim, skip_with_nvdisasm,
+                                skip_without_nvdisasm)
 
 
 @skip_on_cudasim('Simulator does not generate code to be inspected')
@@ -69,6 +72,57 @@ class TestInspect(CUDATestCase):
         # NNVM inserted in PTX
         self.assertIn("foo", asmdict[self.cc, (intp, intp)])
         self.assertIn("foo", asmdict[self.cc, (float64, float64)])
+
+    def _test_inspect_sass(self, kernel, name, sass):
+        # Ensure function appears in output
+        seen_function = False
+        for line in sass.split():
+            if '.text' in line and name in line:
+                seen_function = True
+        self.assertTrue(seen_function)
+
+        # Some instructions common to all supported architectures that should
+        # appear in the output
+        self.assertIn('S2R', sass)   # Special register to register
+        self.assertIn('BRA', sass)   # Branch
+        self.assertIn('EXIT', sass)  # Exit program
+
+    @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
+    def test_inspect_sass_eager(self):
+        @cuda.jit((float32[::1], int32[::1]))
+        def add(x, y):
+            i = cuda.grid(1)
+            if i < len(x):
+                x[i] += y[i]
+
+        self._test_inspect_sass(add, 'add', add.inspect_sass())
+
+    @skip_without_nvdisasm('nvdisasm needed for inspect_sass()')
+    def test_inspect_sass_lazy(self):
+        @cuda.jit
+        def add(x, y):
+            i = cuda.grid(1)
+            if i < len(x):
+                x[i] += y[i]
+
+        x = np.arange(10).astype(np.int32)
+        y = np.arange(10).astype(np.float32)
+        add[1, 10](x, y)
+
+        signature = (int32[::1], float32[::1])
+        self._test_inspect_sass(add, 'add', add.inspect_sass(signature))
+
+    @skip_with_nvdisasm('Missing nvdisasm exception only generated when it is '
+                        'not present')
+    def test_inspect_sass_nvdisasm_missing(self):
+        @cuda.jit((float32[::1],))
+        def f(x):
+            x[0] = 0
+
+        with self.assertRaises(RuntimeError) as raises:
+            f.inspect_sass()
+
+        self.assertIn('nvdisasm is required', str(raises.exception))
 
 
 if __name__ == '__main__':

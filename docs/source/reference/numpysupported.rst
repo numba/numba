@@ -343,7 +343,7 @@ The following top-level functions are supported:
 * :func:`numpy.atleast_2d`
 * :func:`numpy.atleast_3d`
 * :func:`numpy.bartlett`
-* :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.bincount`
 * :func:`numpy.blackman`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
@@ -608,6 +608,7 @@ Math operations
  remainder           Yes          Yes
  mod                 Yes          Yes
  fmod                Yes          Yes
+ divmod (*)          Yes          Yes
  abs                 Yes          Yes
  absolute            Yes          Yes
  fabs                Yes          Yes
@@ -629,6 +630,7 @@ Math operations
  lcm                 Yes          Yes
 ==============  =============  ===============
 
+(\*) not supported on timedelta types
 
 Trigonometric functions
 -----------------------

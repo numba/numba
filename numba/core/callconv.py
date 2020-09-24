@@ -316,8 +316,9 @@ class _MinimalCallHelper(object):
             msg = "unknown error %d in native function" % exc_id
             return SystemError, (msg,)
 
-
-excinfo_t = ir.LiteralStructType([GENERIC_POINTER, int32_t])
+# The structure type constructed by PythonAPI.serialize_uncached()
+# i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf}
+excinfo_t = ir.LiteralStructType([GENERIC_POINTER, int32_t, GENERIC_POINTER])
 excinfo_ptr_t = ir.PointerType(excinfo_t)
 
 
