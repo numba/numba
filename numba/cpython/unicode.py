@@ -1669,10 +1669,11 @@ def unicode_getitem(s, idx):
                     if kind != new_kind:
                         kind = _pick_kind(kind, new_kind)
                     # TODO: it might be possible to break here if the kind
-                    # is PY_UNICODE_4BYTE_KIND but there's potentially
+                    # is PY_UNICODE_4BYTE_KIND but there are potentially
                     # strings coming from other internal functions that are
-                    # this wide and also actually ASCII, so it's necessary
-                    # to continue.
+                    # this wide and also actually ASCII (i.e. kind is larger
+                    # than actually required for storing the code point), so
+                    # it's necessary to continue.
 
                 if slice_idx.step == 1 and kind == s._kind:
                     # Can return a view, the slice has the same kind as the
