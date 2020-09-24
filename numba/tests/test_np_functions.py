@@ -3922,10 +3922,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         with self.assertRaises(TypingError) as e:
             cfunc(2)
-        self.assertIn(
-                    "The argument to np.asarray_chkfinite must be array-like",
-                    str(e.exception)
-                    )
+        msg = "The argument to np.asarray_chkfinite must be array-like"
+        self.assertIn(msg, str(e.exception))
 
         with self.assertRaises(TypingError) as e:
             cfunc(np.array([2, 4, np.nan, 5]))
