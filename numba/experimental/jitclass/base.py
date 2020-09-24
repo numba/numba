@@ -8,7 +8,7 @@ from llvmlite import ir as llvmir
 
 from numba.core import types, utils, errors, cgutils, imputils
 from numba.core.registry import cpu_target
-from numba import njit
+from numba import njit, as_numba_type
 from numba.core.typing import templates
 from numba.core.datamodel import default_manager, models
 from numba.experimental.jitclass import _box
@@ -167,8 +167,17 @@ def register_class_type(cls, spec, class_ctor, builder):
     builder: the internal jitclass builder
     """
     # Normalize spec
-    if isinstance(spec, Sequence):
+    if spec is None:
+        spec = OrderedDict()
+    elif isinstance(spec, Sequence):
         spec = OrderedDict(spec)
+
+    # Extend spec with class annotations.
+    if hasattr(cls, "__annotations__"):
+        for attr, py_type in cls.__annotations__.items():
+            if attr not in spec:
+                spec[attr] = as_numba_type(py_type)
+
     _validate_spec(spec)
 
     # Fix up private attribute names
@@ -240,6 +249,7 @@ def register_class_type(cls, spec, class_ctor, builder):
     # Register class
     targetctx = cpu_target.target_context
     builder(class_type, typingctx, targetctx).register()
+    as_numba_type.register(cls, class_type.instance_type)
 
     return cls
 
