@@ -4163,10 +4163,9 @@ def np_select(condlist, choicelist, default=0):
 @overload(np.asarray_chkfinite)
 def np_asarray_chkfinite(a, dtype=None, order='C'):
 
+    msg = "The argument to np.asarray_chkfinite must be array-like"
     if not isinstance(a, (types.Array, types.Sequence, types.Tuple)):
-        raise TypingError(
-                "The argument to np.asarray_chkfinite must be array-like"
-                )
+        raise TypingError(msg)
 
     if is_nonelike(dtype):
         dt = a.dtype
@@ -4180,7 +4179,6 @@ def np_asarray_chkfinite(a, dtype=None, order='C'):
         return a
 
     return impl
-
 
 #----------------------------------------------------------------------------
 # Windowing functions
