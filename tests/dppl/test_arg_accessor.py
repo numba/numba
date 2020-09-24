@@ -5,7 +5,7 @@ import numpy as np
 from numba import dppl
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
-import dppl.ocldrv as ocldrv
+import dpctl.ocldrv as ocldrv
 
 
 @dppl.kernel(access_types={"read_only": ['a', 'b'], "write_only": ['c'], "read_write": []})

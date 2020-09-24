@@ -5,7 +5,7 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppl
-import dppl.ocldrv as ocldrv
+import dpctl.ocldrv as ocldrv
 
 
 @dppl.kernel

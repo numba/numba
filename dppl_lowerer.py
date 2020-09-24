@@ -40,7 +40,7 @@ from numba.core.errors import NumbaParallelSafetyWarning, NumbaPerformanceWarnin
 from .target import SPIR_GENERIC_ADDRSPACE
 from .dufunc_inliner import dufunc_inliner
 from . import dppl_host_fn_call_gen as dppl_call_gen
-import dppl.ocldrv as driver
+import dpctl.ocldrv as driver
 from numba.dppl.target import DPPLTargetContext
 
 

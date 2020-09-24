@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
-import dppl.ocldrv as driver
+import dpctl.ocldrv as driver
 import llvmlite.llvmpy.core as lc
 import llvmlite.ir.values as liv
 import llvmlite.ir as lir

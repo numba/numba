@@ -8,7 +8,7 @@ from numba import dppl, njit, prange
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
 
-import dppl.ocldrv as ocldrv
+import dpctl.ocldrv as ocldrv
 
 
 @unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')

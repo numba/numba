@@ -8,7 +8,7 @@ from numba import dppl, njit
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
 
-import dppl.ocldrv as ocldrv
+import dpctl.ocldrv as ocldrv
 
 class TestNumpy_comparison_functions(DPPLTestCase):
     a = np.array([4,5,6])

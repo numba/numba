@@ -10,8 +10,7 @@ import ctypes
 from types import FunctionType
 from inspect import signature
 
-#import dppl.ocldrv as driver
-import dppl
+import dpctl.ocldrv as driver
 from . import spirv_generator
 
 import os

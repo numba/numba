@@ -3,7 +3,7 @@ import numpy as np
 from numba import dppl
 import math
 
-import dppl.ocldrv as ocldrv
+import dpctl.ocldrv as ocldrv
 
 
 @dppl.func

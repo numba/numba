@@ -5,7 +5,7 @@ import math
 import time
 
 from numba import dppl
-import dppl.ocldrv as ocldrv
+import dpctl.ocldrv as ocldrv
 
 
 @dppl.kernel
