@@ -1,13 +1,10 @@
 """
 Compiler-side implementation of the Numba  typed-list.
 """
-import ctypes
 import operator
 from enum import IntEnum
 
 from llvmlite import ir
-
-from numba import _helperlib
 
 from numba.core.extending import (
     overload,
@@ -69,8 +66,9 @@ class ListModel(models.StructModel):
 class ListIterModel(models.StructModel):
     def __init__(self, dmm, fe_type):
         members = [
-            ('parent', fe_type.parent),  # reference to the list
-            ('state', types.voidptr),    # iterator state in C code
+            ('size', types.intp), # the size of the iteration space
+            ('parent', fe_type.parent), # the parent list
+            ('index', types.EphemeralPointer(types.intp)), # current index
         ]
         super(ListIterModel, self).__init__(dmm, fe_type, members)
 
@@ -679,50 +677,70 @@ def handle_slice(l, s):
     return range(start, stop, s.step)
 
 
-@intrinsic
-def _list_getitem(typingctx, l_ty, index_ty):
-    resty = types.Tuple([types.int32, types.Optional(l_ty.item_type)])
-    sig = resty(l_ty, index_ty)
+def _gen_getitem(borrowed):
 
-    def codegen(context, builder, sig, args):
-        [tl, tindex] = sig.args
-        [l, index] = args
-        fnty = ir.FunctionType(
-            ll_voidptr_type,
-            [ll_list_type],
-        )
-        fn = builder.module.get_or_insert_function(fnty,
-                                                   name='numba_list_base_ptr')
-        fn.attributes.add('alwaysinline')
-        fn.attributes.add('nounwind')
-        fn.attributes.add('readonly')
+    @intrinsic
+    def impl(typingctx, l_ty, index_ty):
 
-        lp = _container_get_data(context, builder, tl, l)
+        is_none = isinstance(l_ty.item_type, types.NoneType)
+        if is_none:
+            resty = types.Tuple([types.int32, l_ty.item_type])
+        else:
+            resty = types.Tuple([types.int32, types.Optional(l_ty.item_type)])
+        sig = resty(l_ty, index_ty)
 
-        base_ptr = builder.call(
-            fn,
-            [lp,],
-        )
+        def codegen(context, builder, sig, args):
+            [tl, tindex] = sig.args
+            [l, index] = args
+            fnty = ir.FunctionType(
+                ll_voidptr_type,
+                [ll_list_type],
+            )
+            fname = 'numba_list_base_ptr'
+            fn = builder.module.get_or_insert_function(fnty, fname)
+            fn.attributes.add('alwaysinline')
+            fn.attributes.add('nounwind')
+            fn.attributes.add('readonly')
 
-        llty = context.get_data_type(tl.item_type)
-        casted_base_ptr = builder.bitcast(base_ptr, llty.as_pointer())
+            lp = _container_get_data(context, builder, tl, l)
 
-        item_ptr = cgutils.gep(builder, casted_base_ptr, index)
+            base_ptr = builder.call(
+                fn,
+                [lp,],
+            )
 
-        out = context.make_optional_none(builder, tl.item_type)
-        pout = cgutils.alloca_once_value(builder, out)
+            llty = context.get_data_type(tl.item_type)
+            casted_base_ptr = builder.bitcast(base_ptr, llty.as_pointer())
 
-        dm_item = context.data_model_manager[tl.item_type]
-        item = dm_item.load_from_data_pointer(builder, item_ptr)
-        context.nrt.incref(builder, tl.item_type, item)
-        # probably need to actually do something about Optional
-        loaded = context.make_optional_value(builder, tl.item_type, item)
-        builder.store(loaded, pout)
+            item_ptr = cgutils.gep(builder, casted_base_ptr, index)
 
-        out = builder.load(pout)
-        return context.make_tuple(builder, resty, [ll_status(0), out])
+            if is_none:
+                out = builder.load(item_ptr)
+            else:
+                out = context.make_optional_none(builder, tl.item_type)
+                pout = cgutils.alloca_once_value(builder, out)
 
-    return sig, codegen
+                dm_item = context.data_model_manager[tl.item_type]
+                item = dm_item.load_from_data_pointer(builder, item_ptr)
+                if not borrowed:
+                    context.nrt.incref(builder, tl.item_type, item)
+
+                if is_none:
+                    loaded = item
+                else:
+                    loaded = context.make_optional_value(builder, tl.item_type,
+                                                         item)
+                builder.store(loaded, pout)
+
+                out = builder.load(pout)
+            return context.make_tuple(builder, resty, [ll_status(0), out])
+
+        return sig, codegen
+    return impl
+
+
+_list_getitem = _gen_getitem(False)
+_list_getitem_borrowed = _gen_getitem(True)
 
 
 @overload(operator.getitem)
@@ -1409,85 +1427,95 @@ def impl_greater_than_or_equal(this, other):
     return compare_helper(this, other, (0, 1))
 
 
+class ListIterInstance(object):
+
+    def __init__(self, context, builder, iter_type, iter_val):
+        self._context = context
+        self._builder = builder
+        self._iter_ty = iter_type
+        self._list_ty = self._iter_ty.parent
+        self._iter = context.make_helper(builder, iter_type, iter_val)
+
+    @classmethod
+    def from_list(cls, context, builder, iter_type, list_val):
+        self = cls(context, builder, iter_type, None)
+        index = context.get_constant(types.intp, 0)
+        self._iter.index = cgutils.alloca_once_value(builder, index)
+        self._iter.parent = list_val
+        self._iter.size = cls._size_of_list(context, builder, self._list_ty,
+                                            self._iter.parent)
+        return self
+
+    @classmethod
+    def _size_of_list(cls, context, builder, list_ty, ll_list):
+        tyctx = context.typing_context
+        fnty = tyctx.resolve_value_type(len)
+        sig = fnty.get_call_type(tyctx, (list_ty,), {})
+        impl = context.get_function(fnty, sig)
+        return impl(builder, (ll_list,))
+
+    @property
+    def size(self):
+        tyctx = self._context.typing_context
+        fnty = tyctx.resolve_value_type(len)
+        ty = self._list_ty
+        sig = fnty.get_call_type(tyctx, (ty,), {})
+        impl = self._context.get_function(fnty, sig)
+        return impl(self._builder, (self._iter.parent,))
+
+    @property
+    def value(self):
+        return self._iter._getvalue()
+
+    def getitem(self, index):
+        tyctx = self._context.typing_context
+        ty = self._list_ty
+        sig, fn = _list_getitem_borrowed._defn(tyctx, ty, types.intp)
+
+        statnitem = fn(self._context, self._builder, sig, (self._iter.parent,
+                                                           index))
+        _, item = cgutils.unpack_tuple(self._builder, statnitem)
+        retty = sig.return_type[1]
+        if isinstance(self._list_ty.dtype, types.NoneType):
+            raw_ty = self._list_ty.dtype
+        else:
+            raw_ty = retty.type
+        raw_item = self._context.cast(self._builder, item, retty, raw_ty)
+        return raw_item
+
+    @property
+    def index(self):
+        return self._builder.load(self._iter.index)
+
+    @index.setter
+    def index(self, value):
+        self._builder.store(value, self._iter.index)
+
+
 @lower_builtin('getiter', types.ListType)
-def impl_list_getiter(context, builder, sig, args):
-    """Implement iter(List).
-    """
-    [tl] = sig.args
-    [l] = args
-    iterablety = types.ListTypeIterableType(tl)
-    it = context.make_helper(builder, iterablety.iterator_type)
-
-    fnty = ir.FunctionType(
-        ir.VoidType(),
-        [ll_listiter_type, ll_list_type],
-    )
-
-    fn = builder.module.get_or_insert_function(fnty, name='numba_list_iter')
-
-    proto = ctypes.CFUNCTYPE(ctypes.c_size_t)
-    listiter_sizeof = proto(_helperlib.c_helpers['list_iter_sizeof'])
-    state_type = ir.ArrayType(ir.IntType(8), listiter_sizeof())
-
-    pstate = cgutils.alloca_once(builder, state_type, zfill=True)
-    it.state = _as_bytes(builder, pstate)
-    it.parent = l
-
-    dp = _container_get_data(context, builder, iterablety.parent, args[0])
-    builder.call(fn, [it.state, dp])
-    return impl_ret_borrowed(
-        context,
-        builder,
-        sig.return_type,
-        it._getvalue(),
-    )
+def getiter_list(context, builder, sig, args):
+    inst = ListIterInstance.from_list(context, builder, sig.return_type,
+                                      args[0])
+    return impl_ret_borrowed(context, builder, sig.return_type, inst.value)
 
 
 @lower_builtin('iternext', types.ListTypeIteratorType)
 @iternext_impl(RefType.BORROWED)
-def impl_iterator_iternext(context, builder, sig, args, result):
-    iter_type = sig.args[0]
-    it = context.make_helper(builder, iter_type, args[0])
+def iternext_listiter(context, builder, sig, args, result):
+    inst = ListIterInstance(context, builder, sig.args[0], args[0])
+    index = inst.index
 
-    iternext_fnty = ir.FunctionType(
-        ll_status,
-        [ll_listiter_type, ll_bytes.as_pointer()]
-    )
-    iternext = builder.module.get_or_insert_function(
-        iternext_fnty,
-        name='numba_list_iter_next',
-    )
-    item_raw_ptr = cgutils.alloca_once(builder, ll_bytes)
-
-    status = builder.call(iternext, (it.state, item_raw_ptr))
-
-    # check for list mutation
-    mutated_status = status.type(int(ListStatus.LIST_ERR_MUTATED))
-    is_mutated = builder.icmp_signed('==', status, mutated_status)
+    # if the current count is different to the initial count, bail, list is
+    nitems = inst.size # this is current size
+    init_size = inst._iter.size # this is initial size
+    # being mutated whilst iterated.
+    is_mutated = builder.icmp_signed('!=', init_size, nitems)
     with builder.if_then(is_mutated, likely=False):
         context.call_conv.return_user_exc(
             builder, RuntimeError, ("list was mutated during iteration",))
 
-    # if the list wasn't mutated it is either fine or the iterator was
-    # exhausted
-    ok_status = status.type(int(ListStatus.LIST_OK))
-    is_valid = builder.icmp_signed('==', status, ok_status)
+    is_valid = builder.icmp_signed('<', index, nitems)
     result.set_valid(is_valid)
-
-    with builder.if_then(is_valid, likely=True):
-        item_ty = iter_type.parent.item_type
-
-        dm_item = context.data_model_manager[item_ty]
-
-        item_ptr = builder.bitcast(
-            builder.load(item_raw_ptr),
-            dm_item.get_data_type().as_pointer(),
-        )
-
-        item = dm_item.load_from_data_pointer(builder, item_ptr)
-
-        if isinstance(iter_type.iterable, ListTypeIterableType):
-            result.yield_(item)
-        else:
-            # unreachable
-            raise AssertionError('unknown type: {}'.format(iter_type.iterable))
+    with builder.if_then(is_valid):
+        result.yield_(inst.getitem(index))
+        inst.index = builder.add(index, context.get_constant(types.intp, 1))
