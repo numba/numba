@@ -4190,8 +4190,9 @@ def np_asarray_chkfinite(a, dtype=None, order='C'):
 
     def impl(a, dtype=None, order='C'):
         a = np.asarray(a, dtype=dt)
-        if not np.all(np.isfinite(a)):
-            raise TypingError("array must not contain infs or NaNs")
+        for i in np.nditer(a):
+            if np.isnan(i) or np.isinf(i):
+                raise ValueError("array must not contain infs or NaNs")
         return a
 
     return impl
