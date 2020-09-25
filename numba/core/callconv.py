@@ -89,7 +89,7 @@ class BaseCallConv(object):
         self._return_errcode_raw(builder, RETCODE_NONE)
 
     def return_exc(self, builder):
-        self._return_errcode_raw(builder, RETCODE_EXC)
+        self._return_errcode_raw(builder, RETCODE_EXC, mark_exc=True)
 
     def return_stop_iteration(self, builder):
         self._return_errcode_raw(builder, RETCODE_STOPIT)
@@ -206,12 +206,12 @@ class MinimalCallConv(BaseCallConv):
 
         call_helper = self._get_call_helper(builder)
         exc_id = call_helper._add_exception(exc, exc_args, locinfo)
-        self._return_errcode_raw(builder, _const_int(exc_id))
+        self._return_errcode_raw(builder, _const_int(exc_id), mark_exc=True)
 
     def return_status_propagate(self, builder, status):
         self._return_errcode_raw(builder, status.code)
 
-    def _return_errcode_raw(self, builder, code):
+    def _return_errcode_raw(self, builder, code, mark_exc=False):
         if isinstance(code, int):
             code = _const_int(code)
         builder.ret(code)
@@ -441,14 +441,15 @@ class CPUCallConv(BaseCallConv):
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(status.excinfoptr, excptr)
         with builder.if_then(builder.not_(trystatus.in_try)):
-            self._return_errcode_raw(builder, status.code)
+            self._return_errcode_raw(builder, status.code, mark_exc=True)
 
-    def _return_errcode_raw(self, builder, code):
+    def _return_errcode_raw(self, builder, code, mark_exc=False):
         ret = builder.ret(code)
 
-        from llvmlite import ir
-        md = builder.module.add_metadata([ir.IntType(1)(1)])
-        ret.set_metadata("ret_is_raise", md)
+        if mark_exc:
+            from llvmlite import ir
+            md = builder.module.add_metadata([ir.IntType(1)(1)])
+            ret.set_metadata("ret_is_raise", md)
 
     def _get_return_status(self, builder, code, excinfoptr):
         """
