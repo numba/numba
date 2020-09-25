@@ -118,6 +118,125 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
     return builder.load(out)
 
 
+def dot_2_mm(context, builder, sig, args):
+    """
+    np.dot(matrix, matrix)
+    """
+    def make_res(a, b):
+        m, n = a.shape
+        _n, k = b.shape
+        if _n != n:
+            raise ValueError("incompatible array sizes for np.dot(a, b)")
+        return np.empty((m, k), a.dtype)
+
+    aty, bty = sig.args
+    a = make_array(aty)(context, builder, args[0])
+    b = make_array(bty)(context, builder, args[1])
+    m, n = cgutils.unpack_tuple(builder, a.shape)
+    _n, k = cgutils.unpack_tuple(builder, b.shape)
+
+
+    out = context.compile_internal(builder, make_res,
+            signature(sig.return_type, *sig.args), args)
+
+    outary = make_array(sig.return_type)(context, builder, out)
+
+    # arguments are : a->void*, b->void*, result->void*, m->int64, n->int64, k->int64
+    param_tys = [ll_void_p, ll_void_p, ll_void_p, ir.IntType(64), ir.IntType(64), ir.IntType(64)]
+    params = (builder.bitcast(a.data, ll_void_p),
+              builder.bitcast(b.data, ll_void_p),
+              builder.bitcast(outary.data, ll_void_p),
+              m, n, k)
+
+    type_names = []
+    for argty in sig.args[:1]:
+        type_names.append(argty.dtype.name.encode('utf-8'))
+    type_names.append(sig.return_type.name.encode('utf-8'))
+
+    call_dpnp(context, builder, b"dpnp_matmul", type_names, params, param_tys, ll_void)
+    return out
+
+
+def dot_2_mv(context, builder, sig, args):
+    """
+    np.dot(matrix, matrix)
+    """
+    def make_res(a, b):
+        m, n = a.shape
+        _n = b.shape
+        if _n != n:
+            raise ValueError("incompatible array sizes for np.dot(a, b)")
+        return np.empty((m, ) a.dtype)
+
+    aty, bty = sig.args
+    a = make_array(aty)(context, builder, args[0])
+    b = make_array(bty)(context, builder, args[1])
+    m, n = cgutils.unpack_tuple(builder, a.shape)
+    _n,  = cgutils.unpack_tuple(builder, b.shape)
+
+    k = context.get_constant(types.int64, 1)
+
+    out = context.compile_internal(builder, make_res,
+            signature(sig.return_type, *sig.args), args)
+
+    outary = make_array(sig.return_type)(context, builder, out)
+
+    # arguments are : a->void*, b->void*, result->void*, m->int64, n->int64, k->int64
+    param_tys = [ll_void_p, ll_void_p, ll_void_p, ir.IntType(64), ir.IntType(64), ir.IntType(64)]
+    params = (builder.bitcast(a.data, ll_void_p),
+              builder.bitcast(b.data, ll_void_p),
+              builder.bitcast(outary.data, ll_void_p),
+              m, n, k)
+
+    type_names = []
+    for argty in sig.args[:1]:
+        type_names.append(argty.dtype.name.encode('utf-8'))
+    type_names.append(sig.return_type.name.encode('utf-8'))
+
+    call_dpnp(context, builder, b"dpnp_matmul", type_names, params, param_tys, ll_void)
+    return out
+
+
+def dot_2_vm(context, builder, sig, args):
+    """
+    np.dot(matrix, matrix)
+    """
+    def make_res(a, b):
+        m,  = a.shape
+        n, k = b.shape
+        if m != n:
+            raise ValueError("incompatible array sizes for np.dot(a, b)")
+        return np.empty((k, ) a.dtype)
+
+    aty, bty = sig.args
+    a = make_array(aty)(context, builder, args[0])
+    b = make_array(bty)(context, builder, args[1])
+    m,  = cgutils.unpack_tuple(builder, a.shape)
+    n, k  = cgutils.unpack_tuple(builder, b.shape)
+
+    m = context.get_constant(types.int64, 1)
+
+    out = context.compile_internal(builder, make_res,
+            signature(sig.return_type, *sig.args), args)
+
+    outary = make_array(sig.return_type)(context, builder, out)
+
+    # arguments are : a->void*, b->void*, result->void*, m->int64, n->int64, k->int64
+    param_tys = [ll_void_p, ll_void_p, ll_void_p, ir.IntType(64), ir.IntType(64)]
+    params = (builder.bitcast(a.data, ll_void_p),
+              builder.bitcast(b.data, ll_void_p),
+              builder.bitcast(outary.data, ll_void_p),
+              m, n, k)
+
+    type_names = []
+    for argty in sig.args[:1]:
+        type_names.append(argty.dtype.name.encode('utf-8'))
+    type_names.append(sig.return_type.name.encode('utf-8'))
+
+    call_dpnp(context, builder, b"dpnp_matmul", type_names, params, param_tys, ll_void)
+    return out
+
+
 @lower_builtin(np.dot, types.Array, types.Array)
 def dot_dppl(context, builder, sig, args):
     """
@@ -128,14 +247,11 @@ def dot_dppl(context, builder, sig, args):
     with make_contiguous(context, builder, sig, args) as (sig, args):
         ndims = [x.ndim for x in sig.args[:2]]
         if ndims == [2, 2]:
-            print("gemm")
-            #return dot_2_mm(context, builder, sig, args)
+            return dot_2_mm(context, builder, sig, args)
         elif ndims == [2, 1]:
-            print("gemv")
-            #return dot_2_mv(context, builder, sig, args)
+            return dot_2_mv(context, builder, sig, args)
         elif ndims == [1, 2]:
-            print("gemv")
-            #return dot_2_vm(context, builder, sig, args)
+            return dot_2_vm(context, builder, sig, args)
         elif ndims == [1, 1]:
             print("dot")
             return dot_2_vv(context, builder, sig, args)
@@ -165,7 +281,7 @@ def array_sum(context, builder, sig, args):
     return builder.load(out)
 
 
-@lower_builtin(np.argsort, types.Array)
+@lower_builtin(np.argmax, types.Array)
 def array_argmax(context, builder, sig, args):
     def argmax_checker(arry):
         if arry.size == 0:
@@ -192,6 +308,36 @@ def array_argmax(context, builder, sig, args):
     call_dpnp(context, builder, "dpnp_argmax", type_names, params, param_tys, ll_void)
 
     return builder.load(out)
+
+
+@lower_builtin(np.argmin, types.Array)
+def array_argmin(context, builder, sig, args):
+    def argmin_checker(arry):
+        if arry.size == 0:
+            raise ValueError("attempt to get argmin of an empty sequence")
+
+    context.compile_internal(builder, argmax_checker,
+                             signature(types.none, *sig.args), args)
+
+    aty = sig.args[0]
+    a = make_array(aty)(context, builder, args[0])
+    size, = cgutils.unpack_tuple(builder, a.shape)
+
+    out = cgutils.alloca_once(builder, context.get_value_type(sig.return_type))
+
+    # arguments are : a ->void*, result->void*, size->int64
+    param_tys = [ll_void_p, ll_void_p, ir.IntType(64)]
+    params = (builder.bitcast(a.data, ll_void_p), builder.bitcast(out, ll_void_p), size)
+
+    type_names = []
+    for argty in sig.args:
+        type_names.append(argty.dtype.name)
+    type_names.append(sig.return_type.name)
+
+    call_dpnp(context, builder, "dpnp_argmin", type_names, params, param_tys, ll_void)
+
+    return builder.load(out)
+
 
 
 @lower_builtin(np.argsort, types.Array, types.StringLiteral)
@@ -223,40 +369,45 @@ def array_argsort(context, builder, sig, args):
 
 @lower_builtin(np.cov, types.Array)
 def array_cov(context, builder, sig, args):
-    def make_res(A):
-        return np.empty((A.size, A.size))
+    def make_1D_res(size):
+        return np.empty(1, dtype=np.float64)
+
+    def make_2D_res(size):
+        return np.empty((size, size), dtype=np.float64)
 
     aty = sig.args[0]
     a = make_array(aty)(context, builder, args[0])
 
-    if a.shape == 2:
+    if aty.ndim == 2:
         m, n = cgutils.unpack_tuple(builder, a.shape)
-    elif a.shape == 1:
+        out = context.compile_internal(builder, make_2D_res,
+                signature(sig.return_type, types.int64), (m,))
+    elif aty.ndim == 1:
         m, = cgutils.unpack_tuple(builder, a.shape)
+        out = context.compile_internal(builder, make_1D_res,
+                signature(sig.return_type, types.int64), (m,))
     else:
         #TODO: Throw error, cov is supported for only 1D and 2D array
         pass
 
-    out = context.compile_internal(builder, make_res,
-            signature(sig.return_type, *sig.args[:1]), args[:1])
-
     outary = make_array(sig.return_type)(context, builder, out)
 
-    import pdb
-    pdb.set_trace()
+    nrows = cgutils.alloca_once(builder, context.get_value_type(types.int64))
+    ncols = cgutils.alloca_once(builder, context.get_value_type(types.int64))
 
-    if a.shape == 2:
-        shape =  cgutils.alloca_once(builder, context.get_value_type(ir.IntType(64)), size=2)
-        builder.store(m, cgutils.gep(builder, shape, 0))
-        builder.store(n, cgutils.gep(builder, shape, 0))
-    elif a.shape == 1:
-        shape =  cgutils.alloca_once(builder, context.get_value_type(ir.IntType(64)), size=1)
-        builder.store(m, cgutils.gep(builder, shape, 0))
+    if aty.ndim == 2:
+        builder.store(m, nrows)
+        builder.store(n, ncols)
 
-    # arguments are : a ->void*, result->void*, size->int64
-    param_tys = [ll_void_p, ll_void_p, ll_intp_p]
+    elif aty.ndim == 1:
+        builder.store(context.get_constant(types.int64, 1), nrows)
+        builder.store(m, ncols)
+
+
+    # arguments are : a ->void*, result->void*, nrows->int64, ncols->int64
+    param_tys = [ll_void_p, ll_void_p, ir.IntType(64), ir.IntType(64)]
     params = (builder.bitcast(a.data, ll_void_p), builder.bitcast(outary.data, ll_void_p),
-            builder.bitcast(shape, ll_intp_p))
+              nrows, ncols)
 
     type_names = []
     for argty in sig.args[:1]:
@@ -265,3 +416,35 @@ def array_cov(context, builder, sig, args):
 
     call_dpnp(context, builder, "dpnp_cov", type_names, params, param_tys, ll_void)
     return out
+
+
+'''
+@lower_builtin(np.linalg.eig, types.Array)
+def array_cov(context, builder, sig, args):
+    pass
+
+@lower_builtin("np.random.sample")
+def random_impl(context, builder, sig, args):
+
+    def make_res(shape):
+        return np.empty(shape, dtype=np.float64)
+
+    import pdb
+    pdb.set_trace()
+    out = context.compile_internal(builder, make_res,
+            signature(sig.return_type, *sig.args), args)
+
+    outary = make_array(sig.return_type)(context, builder, out)
+
+    # arguments are : result->void*, size->int64
+    param_tys = [ll_void_p, ll_intp_p]
+    params = (builder.bitcast(outary.data, ll_void_p), )
+
+
+    type_names = []
+    for argty in sig.args[:1]:
+        type_names.append(argty.dtype.name.encode('utf-8'))
+    type_names.append(sig.return_type.name.encode('utf-8'))
+
+    call_dpnp(context, builder, b"dpnp_cov", type_names, params, param_tys, ll_void)
+'''

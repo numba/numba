@@ -54,17 +54,22 @@ class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
         @infer_global(np.cov)
         class NPCov(AbstractTemplate):
             def generic(self, args, kws):
+                assert not kws
+                if args[0].ndim > 2:
+                    return
+
                 nb_dtype = types.float64
-                return_type = types.Array(dtype=nb_dtype, ndim=2, layout='C')
+                return_type = types.Array(dtype=nb_dtype, ndim=args[0].ndim, layout='C')
                 return signature(return_type, *args)
 
-        prev = None
+        prev_cov = None
         for idx, g in enumerate(reg.globals):
             if g[0] == np.cov:
-                if not prev:
-                    prev = g[1]
+                if not prev_cov:
+                    prev_cov = g[1]
                 else:
-                    prev.templates = g[1].templates
+                    prev_cov.templates = g[1].templates
+
 
         typingctx.refresh()
 
