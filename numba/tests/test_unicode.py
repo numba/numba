@@ -42,6 +42,10 @@ def getitem_usecase(x, i):
     return x[i]
 
 
+def getitem_check_kind_usecase(x, i):
+    return hash(x[i])
+
+
 def zfill_usecase(x, y):
     return x.zfill(y)
 
@@ -1172,7 +1176,20 @@ class TestUnicode(BaseTest):
         cfunc = njit(pyfunc)
 
         for s in UNICODE_EXAMPLES:
-            for i in range(-len(s)):
+            for i in range(-len(s), len(s)):
+                self.assertEqual(pyfunc(s, i),
+                                 cfunc(s, i),
+                                 "'%s'[%d]?" % (s, i))
+
+    def test_getitem_scalar_kind(self):
+        # See issue #6135, make sure that getitem returns a char of the minimal
+        # kind required to represent the "got" item, this is done via the use
+        # of `hash` in the test function as it is sensitive to kind.
+        pyfunc = getitem_check_kind_usecase
+        cfunc = njit(pyfunc)
+        samples = ['a\u1234', '¡着']
+        for s in samples:
+            for i in range(-len(s), len(s)):
                 self.assertEqual(pyfunc(s, i),
                                  cfunc(s, i),
                                  "'%s'[%d]?" % (s, i))
@@ -1216,11 +1233,46 @@ class TestUnicode(BaseTest):
                                      cfunc(s, sl),
                                      "'%s'[%d:%d]?" % (s, i, j))
 
+    def test_getitem_slice2_kind(self):
+        # See issue #6135. Also see note in test_getitem_scalar_kind regarding
+        # testing.
+        pyfunc = getitem_check_kind_usecase
+        cfunc = njit(pyfunc)
+        samples = ['abc\u1234\u1234', '¡¡¡着着着']
+        for s in samples:
+            for i in [-2, -1, 0, 1, 2, len(s), len(s) + 1]:
+                for j in [-2, -1, 0, 1, 2, len(s), len(s) + 1]:
+                    sl = slice(i, j)
+                    self.assertEqual(pyfunc(s, sl),
+                                     cfunc(s, sl),
+                                     "'%s'[%d:%d]?" % (s, i, j))
+
     def test_slice3(self):
         pyfunc = getitem_usecase
         cfunc = njit(pyfunc)
 
         for s in UNICODE_EXAMPLES:
+            for i in range(-len(s), len(s)):
+                for j in range(-len(s), len(s)):
+                    for k in [-2, -1, 1, 2]:
+                        sl = slice(i, j, k)
+                        self.assertEqual(pyfunc(s, sl),
+                                         cfunc(s, sl),
+                                         "'%s'[%d:%d:%d]?" % (s, i, j, k))
+
+    def test_getitem_slice3_kind(self):
+        # See issue #6135. Also see note in test_getitem_scalar_kind regarding
+        # testing.
+        pyfunc = getitem_check_kind_usecase
+        cfunc = njit(pyfunc)
+        samples = ['abc\u1234\u1234',
+                   'a\u1234b\u1234c'
+                   '¡¡¡着着着',
+                   '¡着¡着¡着',
+                   '着a着b着c',
+                   '¡着a¡着b¡着c',
+                   '¡着a着¡c',]
+        for s in samples:
             for i in range(-len(s), len(s)):
                 for j in range(-len(s), len(s)):
                     for k in [-2, -1, 1, 2]:
