@@ -3738,7 +3738,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             kwargs = args[-1]
             expected = pyfunc(x, y, **kwargs)
             got = cfunc(x, y, **kwargs)
-            self.assertPreciseEqual(expected, got)
+            self.assertEqual(expected, got)
 
     def test_allclose_exceptions(self):
         cfunc = jit(nopython=True)(np_allclose)
