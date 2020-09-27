@@ -13,7 +13,6 @@ import numpy as np
 import llvmlite.llvmpy.core as lc
 
 from numba import generated_jit
-from numba import typeof
 from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import as_dtype, type_can_asarray
