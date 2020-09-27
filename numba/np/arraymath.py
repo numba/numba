@@ -4451,7 +4451,7 @@ def _broadcastable_(a, b):
 
 
 @register_jitable
-def _equal_operation(a, b, rtol=1e-5, atol=1e-8, equal_nan=False):
+def _close_operation(a, b, rtol=1e-5, atol=1e-8, equal_nan=False):
     if np.isnan(a) or np.isnan(b):
         if equal_nan and np.isnan(a) and np.isnan(b):
             return True
@@ -4486,7 +4486,7 @@ def np_allclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=False):
             bf = b_.flat
 
             for i in range(a_.size):
-                if not _equal_operation(af[i], bf[i], rtol, atol, equal_nan):
+                if not _close_operation(af[i], bf[i], rtol, atol, equal_nan):
                     return False
             return True
 
