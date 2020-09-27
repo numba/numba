@@ -13,6 +13,7 @@ import numpy as np
 import llvmlite.llvmpy.core as lc
 
 from numba import generated_jit
+from numba import typeof
 from numba.core import types, cgutils
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import as_dtype, type_can_asarray
@@ -4434,5 +4435,59 @@ def cross2d(a, b):
                 "(dimension must be 2 for both inputs)"
             ))
         return _cross2d_operation(a_, b_)
+
+    return impl
+
+
+@register_jitable
+def _broadcastable_(a, b):
+    s = min(a.ndim, b.ndim)
+    for i in range(1, s + 1):
+        m = a.shape[-i]
+        n = b.shape[-i]
+        if not((m == n) or (m == 1) or (n == 1)):
+            return False
+    return True
+
+
+@register_jitable
+def _equal_operation(a, b, rtol=1e-5, atol=1e-8, equal_nan=False):
+    if np.isnan(a) or np.isnan(b):
+        if equal_nan and np.isnan(a) and np.isnan(b):
+            return True
+        else:
+            return False
+
+    if abs(a - b) > (atol + rtol * abs(b)):
+        return False
+    return True
+
+
+@overload(np.allclose)
+def np_allclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=False):
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(a, b, rtol=1e-5, atol=1e-8, equal_nan=False):
+        a_ = np.asarray(a)
+        b_ = np.asarray(b)
+
+        if not _broadcastable_(a_, b_):
+            raise ValueError('Arrays could not be broadcast together.')
+
+        if a_.ndim != b_.ndim:
+            return False
+        else:
+            for i in range(a_.ndim):
+                if a_.shape[i] != b_.shape[i]:
+                    return False
+
+            af = a_.flat
+            bf = b_.flat
+
+            for i in range(a_.size):
+                if not _equal_operation(af[i], bf[i], rtol, atol, equal_nan):
+                    return False
+            return True
 
     return impl
