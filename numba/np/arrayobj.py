@@ -35,7 +35,6 @@ from numba.cpython.unsafe.tuple import tuple_setitem
 from numba.np.unsafe.ndarray import to_fixed_tuple
 
 
-
 def set_range_metadata(builder, load, lower_bound, upper_bound):
     """
     Set the "range" metadata on a load instruction.
@@ -1546,7 +1545,8 @@ def numpy_transpose(a, axes=None):
 
 @overload(np.swapaxes)
 def numpy_swapaxes(a, axis1, axis2):
-    force_literal = lambda a, axis1, axis2: (a, literally(axis1), literally(axis2))
+    force_literal = lambda a, axis1, axis2: (
+                        a, literally(axis1), literally(axis2))
     if isinstance(axis1, types.Literal):
         axis1_val = axis1.literal_value
     else:
