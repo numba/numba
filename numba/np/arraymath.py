@@ -832,7 +832,7 @@ def iscomplexobj(x):
     # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/lib/type_check.py#L282-L320
     dt = determine_dtype(x)
     if isinstance(x, types.Optional):
-        dt = determine_dtype(x.key)
+        dt = determine_dtype(x.type)
     iscmplx = np.issubdtype(dt, np.complexfloating)
 
     if isinstance(x, types.Optional):
