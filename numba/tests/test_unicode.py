@@ -9,6 +9,7 @@ from numba.tests.support import (TestCase, no_pyobj_flags, MemoryLeakMixin)
 from numba.core.errors import TypingError
 from numba.cpython.unicode import _MAX_UNICODE
 from numba.core.types.functions import _header_lead
+from numba.extending import overload
 
 
 _py37_or_later = utils.PYVERSION >= (3, 7)
@@ -2514,6 +2515,27 @@ class TestUnicodeAuxillary(BaseTest):
         with self.assertRaises(TypingError) as raises:
             cfunc('abc')
         self.assertIn(_header_lead, str(raises.exception))
+
+    def test_unicode_type_mro(self):
+        # see issue #5635
+        def bar(x):
+            return True
+
+        @overload(bar)
+        def ol_bar(x):
+            ok = False
+            if isinstance(x, types.UnicodeType):
+                if isinstance(x, types.Hashable):
+                    ok = True
+            return lambda x: ok
+
+        @njit
+        def foo(strinst):
+            return bar(strinst)
+
+        inst = "abc"
+        self.assertEqual(foo.py_func(inst), foo(inst))
+        self.assertIn(types.Hashable, types.unicode_type.__class__.__mro__)
 
 
 if __name__ == '__main__':
