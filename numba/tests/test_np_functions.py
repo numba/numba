@@ -3719,7 +3719,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
     def test_allclose(self):
         pyfunc = np_allclose
         cfunc = jit(nopython=True)(pyfunc)
-        
+
         args_list = [
             ([1e10, 1e-7], [1.00001e10, 1e-8], {}),
             ([1e10, 1e-8], [1.00001e10, 1e-9], {}),
@@ -3765,7 +3765,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             '',
             str(raises.exception)
         )
-        # TODO: implement a test in allclose to detect if types are numeric or not
+        # TODO: implement a test in allclose to detect if types are numeric
 
 
 class TestNPMachineParameters(TestCase):
