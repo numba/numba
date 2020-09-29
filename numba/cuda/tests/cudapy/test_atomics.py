@@ -2,7 +2,7 @@ import random
 import numpy as np
 from textwrap import dedent
 
-from numba import cuda, uint32, uint64, float32, float64
+from numba import cuda, uint32, uint64, float32, float64, void
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.core import config
 
@@ -20,229 +20,154 @@ def skip_unless_cc_32(fn):
 def skip_unless_cc_50(fn):
     return unittest.skipUnless(cc_X_or_above(5, 0), "require cc >= 5.0")(fn)
 
+@cuda.jit(device=True)
+def atomic_cast_to_uint64(num):
+    return uint64(num)
 
-def atomic_add(ary):
+
+@cuda.jit(device=True)
+def atomic_cast_to_int(num):
+    return int(num)
+
+
+@cuda.jit(device=True)
+def atomic_cast_none(num):
+    return num
+
+
+@cuda.jit(device=True)
+def atomic_binary_1dim_shared(ary, idx, op2, ary_dtype, ary_nelements, binop_func, cast_func, initializer):
     tid = cuda.threadIdx.x
-    sm = cuda.shared.array(32, uint32)
-    sm[tid] = 0
+    sm = cuda.shared.array(ary_nelements, ary_dtype)
+    sm[tid] = initializer
     cuda.syncthreads()
-    bin = ary[tid] % 32
-    cuda.atomic.add(sm, bin, 1)
+    bin = cast_func (idx[tid] % ary_nelements)
+    binop_func(sm, bin, op2)
     cuda.syncthreads()
     ary[tid] = sm[tid]
+
+
+@cuda.jit(device=True)
+def atomic_binary_2dim_shared(ary, op2, ary_dtype, ary_shape, binop_func, y_cast_func):
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    sm = cuda.shared.array(ary_shape, ary_dtype)
+    sm[tx, ty] = ary[tx, ty]
+    cuda.syncthreads()
+    binop_func(sm, (tx, y_cast_func(ty)), op2)
+    cuda.syncthreads()
+    ary[tx, ty] = sm[tx, ty]
+
+
+@cuda.jit(device=True)
+def atomic_binary_2dim_global(ary, op2, binop_func, y_cast_func):
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    binop_func(ary, (tx, y_cast_func(ty)), op2)
+
+
+@cuda.jit(device=True)
+def atomic_binary_1dim_global(ary, idx, ary_nelements, op2, binop_func):
+    tid = cuda.threadIdx.x
+    bin = idx[tid] % ary_nelements
+    binop_func(ary, bin, op2)
+
+
+def atomic_add(ary):
+    atomic_binary_1dim_shared(ary, ary, 1, uint32, 32, cuda.atomic.add, atomic_cast_none, 0)
 
 
 def atomic_add2(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), uint32)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.add(sm, (tx, ty), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1, uint32, (4,8), cuda.atomic.add, atomic_cast_none)
 
 
 def atomic_add3(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), uint32)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.add(sm, (tx, uint64(ty)), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1, uint32, (4,8), cuda.atomic.add, atomic_cast_to_uint64)
 
 
 def atomic_add_float(ary):
-    tid = cuda.threadIdx.x
-    sm = cuda.shared.array(32, float32)
-    sm[tid] = 0
-    cuda.syncthreads()
-    bin = int(ary[tid] % 32)
-    cuda.atomic.add(sm, bin, 1.0)
-    cuda.syncthreads()
-    ary[tid] = sm[tid]
+    atomic_binary_1dim_shared(ary, ary, 1.0, float32, 32, cuda.atomic.add, atomic_cast_to_int, 0.0)
 
 
 def atomic_add_float_2(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), float32)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.add(sm, (tx, ty), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1.0, float32, (4,8), cuda.atomic.add, atomic_cast_none)
 
 
 def atomic_add_float_3(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), float32)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.add(sm, (tx, uint64(ty)), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1.0, float32, (4,8), cuda.atomic.add, atomic_cast_to_uint64)
 
 
 def atomic_add_double_global(idx, ary):
-    tid = cuda.threadIdx.x
-    bin = idx[tid] % 32
-    cuda.atomic.add(ary, bin, 1.0)
+    atomic_binary_1dim_global (ary, idx, 32, 1.0, cuda.atomic.add)
 
 
 def atomic_add_double_global_2(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    cuda.atomic.add(ary, (tx, ty), 1)
+    atomic_binary_2dim_global(ary, 1, cuda.atomic.add, atomic_cast_none)
 
 
 def atomic_add_double_global_3(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    cuda.atomic.add(ary, (tx, uint64(ty)), 1)
+    atomic_binary_2dim_global(ary, 1, cuda.atomic.add, atomic_cast_to_uint64)
 
 
 def atomic_add_double(idx, ary):
-    tid = cuda.threadIdx.x
-    sm = cuda.shared.array(32, float64)
-    sm[tid] = 0.0
-    cuda.syncthreads()
-    bin = idx[tid] % 32
-    cuda.atomic.add(sm, bin, 1.0)
-    cuda.syncthreads()
-    ary[tid] = sm[tid]
+    atomic_binary_1dim_shared(ary, idx, 1.0, float64, 32, cuda.atomic.add, atomic_cast_none, 0.0)
 
 
 def atomic_add_double_2(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), float64)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.add(sm, (tx, ty), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1.0, float64, (4,8), cuda.atomic.add, atomic_cast_none)
 
 
 def atomic_add_double_3(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), float64)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.add(sm, (tx, uint64(ty)), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1.0, float64, (4,8), cuda.atomic.add, atomic_cast_to_uint64)
+
 
 def atomic_sub(ary):
-    tid = cuda.threadIdx.x
-    sm = cuda.shared.array(32, uint32)
-    sm[tid] = 0
-    cuda.syncthreads()
-    bin = ary[tid] % 32
-    cuda.atomic.sub(sm, bin, 1)
-    cuda.syncthreads()
-    ary[tid] = sm[tid]
+    atomic_binary_1dim_shared(ary, ary, 1, uint32, 32, cuda.atomic.sub, atomic_cast_none, 0)
 
 
 def atomic_sub2(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), uint32)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.sub(sm, (tx, ty), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1, uint32, (4,8), cuda.atomic.sub, atomic_cast_none)
 
 
 def atomic_sub3(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), uint32)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.sub(sm, (tx, uint64(ty)), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1, uint32, (4,8), cuda.atomic.sub, atomic_cast_to_uint64)
+
 
 def atomic_sub_float(ary):
-    tid = cuda.threadIdx.x
-    sm = cuda.shared.array(32, float32)
-    sm[tid] = 0
-    cuda.syncthreads()
-    bin = int(ary[tid] % 32)
-    cuda.atomic.sub(sm, bin, 1.0)
-    cuda.syncthreads()
-    ary[tid] = sm[tid]
+    atomic_binary_1dim_shared(ary, ary, 1.0, float32, 32, cuda.atomic.sub, atomic_cast_to_int, 0.0)
+
 
 def atomic_sub_float_2(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), float32)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.sub(sm, (tx, ty), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1.0, float32, (4,8), cuda.atomic.sub, atomic_cast_none)
+
 
 def atomic_sub_float_3(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), float32)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.sub(sm, (tx, uint64(ty)), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1.0, float32, (4,8), cuda.atomic.sub, atomic_cast_to_uint64)
+
 
 def atomic_sub_double(idx, ary):
-    tid = cuda.threadIdx.x
-    sm = cuda.shared.array(32, float64)
-    sm[tid] = 0.0
-    cuda.syncthreads()
-    bin = idx[tid] % 32
-    cuda.atomic.sub(sm, bin, 1.0)
-    cuda.syncthreads()
-    ary[tid] = sm[tid]
+    atomic_binary_1dim_shared(ary, idx, 1.0, float64, 32, cuda.atomic.sub, atomic_cast_none, 0.0)
+
 
 def atomic_sub_double_2(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), float64)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.sub(sm, (tx, ty), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1.0, float64, (4,8), cuda.atomic.sub, atomic_cast_none)
+
 
 def atomic_sub_double_3(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    sm = cuda.shared.array((4, 8), float64)
-    sm[tx, ty] = ary[tx, ty]
-    cuda.syncthreads()
-    cuda.atomic.sub(sm, (tx, uint64(ty)), 1)
-    cuda.syncthreads()
-    ary[tx, ty] = sm[tx, ty]
+    atomic_binary_2dim_shared(ary, 1.0, float64, (4,8), cuda.atomic.sub, atomic_cast_to_uint64)
+
 
 def atomic_sub_double_global(idx, ary):
-    tid = cuda.threadIdx.x
-    bin = idx[tid] % 32
-    cuda.atomic.sub(ary, bin, 1.0)
+    atomic_binary_1dim_global (ary, idx, 32, 1.0, cuda.atomic.sub)
+
 
 def atomic_sub_double_global_2(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    cuda.atomic.sub(ary, (tx, ty), 1)
+    atomic_binary_2dim_global(ary, 1.0, cuda.atomic.sub, atomic_cast_none)
+
 
 def atomic_sub_double_global_3(ary):
-    tx = cuda.threadIdx.x
-    ty = cuda.threadIdx.y
-    cuda.atomic.sub(ary, (tx, uint64(ty)), 1)
+    atomic_binary_2dim_shared(ary, 1.0, float64, (4,8), cuda.atomic.sub, atomic_cast_to_uint64)
+
 
 def gen_atomic_extreme_funcs(func):
 
