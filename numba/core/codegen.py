@@ -3,6 +3,8 @@ import functools
 import locale
 import weakref
 import ctypes
+import html
+import textwrap
 
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
@@ -60,8 +62,369 @@ class _CFG(object):
     the graph in DOT format.  The ``.display()`` method plots the graph in
     PDF.  If in IPython notebook, the returned image can be inlined.
     """
-    def __init__(self, dot):
-        self.dot = dot
+    def __init__(self, cres, name, py_func, **kwargs):
+        self.cres = cres
+        self.name = name
+        self.py_func = py_func
+        fn = cres.get_function(name)
+        self.dot = ll.get_function_cfg(fn)
+        self.kwargs = kwargs
+
+    def pretty_printer(self, filename=None, view=None, highlight=True,
+                      interleave=False, strip_ir=False, show_key=True,
+                      fontsize=10):
+        """
+        "Pretty" prints the DOT graph of the CFG.
+        For explanation of the parameters see the docstring for
+        numba.core.dispatcher::inspect_cfg.
+        """
+        import graphviz as gv
+        import re
+        import json
+        import inspect
+        from llvmlite import binding as ll
+        from numba.typed import List
+        from types import SimpleNamespace
+        from collections import defaultdict
+
+        _default = False
+        _highlight = SimpleNamespace(incref=_default,
+                                    decref=_default,
+                                    returns=_default,
+                                    raises=_default,
+                                    meminfo=_default,
+                                    branches=_default)
+        _interleave = SimpleNamespace(python=_default, lineinfo=_default)
+
+        def parse_config(_config, kwarg):
+            """ Parses the kwarg into a consistent format for use in configuring
+            the Digraph rendering. _config is the configuration instance to
+            update, kwarg is the kwarg on which to base the updates.
+            """
+            if isinstance(kwarg, bool):
+                for attr in _config.__dict__:
+                    setattr(_config, attr, kwarg)
+            elif isinstance(kwarg, dict):
+                for k, v in kwarg.items():
+                    if k not in _config.__dict__:
+                        raise ValueError("Unexpected key in kwarg: %s" % k)
+                    if isinstance(v, bool):
+                        setattr(_config, k, v)
+                    else:
+                        msg = "Unexpected value for key: %s, got:%s"
+                        raise ValueError(msg % (k, v))
+            elif isinstance(kwarg, set):
+                for item in kwarg:
+                    if item not in _config.__dict__:
+                        raise ValueError("Unexpected key in kwarg: %s" % item)
+                    else:
+                        setattr(_config, item, True)
+            else:
+                msg = "Unhandled configuration type for kwarg %s"
+                raise ValueError(msg % type(kwarg))
+
+        parse_config(_highlight, highlight)
+        parse_config(_interleave, interleave)
+
+        # This is the colour scheme. The graphviz HTML label renderer only takes
+        # names for colours: https://www.graphviz.org/doc/info/shapes.html#html
+        cs = defaultdict(lambda: 'white') # default bg colour is white
+        cs['marker'] = 'orange'
+        cs['python'] = 'yellow'
+        cs['truebr'] = 'green'
+        cs['falsebr'] = 'red'
+        cs['incref'] = 'cyan'
+        cs['decref'] = 'turquoise'
+        cs['raise'] = 'lightpink'
+        cs['meminfo'] = 'lightseagreen'
+        cs['return'] = 'purple'
+
+        # Get the raw dot format information from LLVM and the LLVM IR
+        fn = self.cres.get_function(self.name)
+        #raw_dot = ll.get_function_cfg(fn).replace('\\l...', '')
+        llvm_str = self.cres.get_llvm_str()
+
+        def get_metadata(llvm_str):
+            """ Gets the metadata entries from the LLVM IR, these look something
+            like '!123 = INFORMATION'. Returns a map of metadata key to metadata
+            value, i.e. from the example {'!123': INFORMATION}"""
+            md = {}
+            metadata_entry = re.compile(r'(^[!][0-9]+)(\s+=\s+.*)')
+            for x in llvm_str.splitlines():
+                match = metadata_entry.match(x)
+                if match is not None:
+                    g = match.groups()
+                    if g is not None:
+                        assert len(g) == 2
+                        md[g[0]] = g[1]
+            return md
+
+        md = get_metadata(llvm_str)
+
+        # setup digraph with initial properties
+        def init_digraph(name, fname, fontsize):
+            # name and fname are arbitrary graph and file names, they appear in
+            # some rendering formats, the fontsize determines the output
+            # fontsize.
+            f = gv.Digraph(name, fname)
+            f.attr(rankdir='TB')
+            f.attr('node', shape='none', fontsize='%s' % str(fontsize))
+            return f
+
+        f = init_digraph(self.name, self.name, fontsize)
+
+        # A lot of regex is needed to parse the raw dot output. This output
+        # contains a mix of LLVM IR in the labels, and also DOT markup.
+
+        # DOT syntax, matches a "port" (where the tail of an edge starts)
+        port_match = re.compile('.*{(.*)}.*')
+        # DOT syntax, matches the "port" value from a found "port_match"
+        port_jmp_match = re.compile('.*<(.*)>(.*)')
+        # DOT syntax, matches the DOT object (node), captures the entire node
+        node = re.compile(r'.*Node0x.*=".*', re.DOTALL|re.MULTILINE)
+        # LLVM syntax, matches a LLVM debug marker
+        metadata_marker = re.compile(r'.*!dbg\s+(![0-9]+).*')
+        # LLVM syntax, matches a location entry
+        location_expr = (r'.*!DILocation\(line:\s+([0-9]+),'
+                         '\s+column:\s+([0-9]),.*')
+        location_entry = re.compile(location_expr)
+        # LLVM syntax, matches LLVMs internal debug value calls
+        dbg_value = re.compile(r'.*call void @llvm.dbg.value.*')
+        # LLVM syntax, matches tokens for highlighting
+        nrt_incref = re.compile("NRT_incref")
+        nrt_decref = re.compile("NRT_decref")
+        nrt_meminfo = re.compile("NRT_MemInfo")
+        ll_raise = re.compile("ret i32 1,")
+        ll_return = re.compile("ret i32 [^1],")
+
+        # wrapper function for line wrapping LLVM lines
+        def wrap(s):
+            return textwrap.wrap(s, width=120, subsequent_indent='... ')
+
+        # function to fix (sometimes escaped for DOT!) LLVM IR etc that needs to
+        # be HTML escaped
+        def clean(s):
+            s = html.escape(s) # deals with  &, < and >
+            s = s.replace('\\{', "&#123;")
+            s = s.replace('\\}', "&#125;")
+            s = s.replace('\\', "&#92;")
+            s = s.replace('%', "&#37;")
+            return s.replace('!', "&#33;")
+
+        # These hold the node and edge ids from the raw dot information. They
+        # are used later to wire up a new DiGraph that has the same structure
+        # as the raw dot but with new nodes.
+        node_ids = {}
+        edge_ids = {}
+
+        # Python source lines, used if python source interleave is requested
+        if _interleave.python:
+            src_code, firstlineno = inspect.getsourcelines(self.py_func)
+
+        # This is the dot info from LLVM, it's in DOT form and has continuation
+        # lines, strip them and then re-parse into `dot_json` form for use in
+        # producing a formatted output.
+        raw_dot = ll.get_function_cfg(fn).replace('\\l...', '')
+        json_bytes = gv.Source(raw_dot).pipe(format='dot_json')
+        jzon = json.loads(json_bytes.decode('utf-8'))
+
+        idc = 0
+        # Walk the "objects" (nodes) in the DOT output
+        for obj in jzon['objects']:
+            # These are used to keep tabs on the current line and column numbers
+            # as per the markers. They are tracked so as to make sure a marker
+            # is only emitted if there's a change in the marker.
+            cur_line, cur_col = -1, -1
+            label = obj['label']
+            name = obj['name']
+            gvid = obj['_gvid']
+            node_ids[gvid] = name
+            # Label is DOT format, it needs the head and tail removing and then
+            # splitting for walking.
+            label = label[1:-1]
+            lines =  label.split('\\l')
+
+            # Holds the new lines
+            new_lines = []
+
+            # Aim is to produce an HTML table a bit like this:
+            #
+            # |------------|
+            # | HEADER     | <-- this is the block header
+            # |------------|
+            # | LLVM SRC   | <--
+            # | Marker?    | < this is the label/block body
+            # | Python src?| <--
+            # |------------|
+            # | T   |  F   |  <-- this is the "ports", also determines col_span
+            # --------------
+            #
+
+            # This is HTML syntax, its the column span. If there's a switch or a
+            # branch at the bottom of the node this is rendered as multiple
+            # columns in a table. First job is to go and render that and work
+            # out how many columns are needed as that dictates how many columns
+            # the rest of the source lines must span. In DOT syntax the places
+            # that edges join nodes are referred to as "ports". Syntax in DOT
+            # is like `node:port`.
+            col_span = 1
+
+            # First see if there is a port entry for this node
+            port_line = ''
+            matched = port_match.match(lines[-1])
+            sliced_lines = lines
+            if matched is not None:
+                # There is a port
+                ports = matched.groups()[0]
+                ports_tokens = ports.split('|')
+                col_span = len(ports_tokens)
+                # Generate HTML table data cells, one for each port. If the
+                # ports correspond to a branch then they can optionally
+                # highlighted based on T/F.
+                tdfmt = ('<td BGCOLOR="{}" BORDER="1" ALIGN="center" '
+                         'PORT="{}">{}</td>')
+                tbl_data = []
+                if _highlight.branches:
+                    colors = {'T': cs['truebr'], 'F': cs['falsebr']}
+                else:
+                    colors = {}
+                for tok in ports_tokens:
+                    target, value = port_jmp_match.match(tok).groups()
+                    color = colors.get(value, 'white')
+                    tbl_data.append(tdfmt.format(color, target, value))
+                port_line = ''.join(tbl_data)
+                # Drop the last line from the rest of the parse as it's the port
+                # and just been dealt with.
+                sliced_lines = lines[:-1]
+
+            # loop peel the block header, it needs a HTML border
+            fmtheader = ('<tr><td BGCOLOR="{}" BORDER="1" ALIGN="left" '
+                         'COLSPAN="{}">{}</td></tr>')
+            new_lines.append(fmtheader.format(cs['default'], col_span,
+                                              clean(sliced_lines[0].strip())))
+
+            # process rest of block creating the table row at a time.
+            fmt = ('<tr><td BGCOLOR="{}" BORDER="0" ALIGN="left" '
+                   'COLSPAN="{}">{}</td></tr>')
+            for l in sliced_lines[1:]:
+
+                # Drop LLVM debug call entries
+                if dbg_value.match(l):
+                    continue
+                # find the debug marker but only if interleaving of some form
+                # is requested
+                matched = None
+                if _interleave.lineinfo or _interleave.python:
+                    matched = metadata_marker.match(l)
+                if matched is not None:
+                    # there's a metadata marker
+                    g = matched.groups()
+                    if g is not None:
+                        assert len(g) == 1, g
+                        marker = g[0]
+                        debug_data = md.get(marker, None)
+                        if debug_data is not None:
+                            # and the metadata marker has a corresponding piece
+                            # of metadata
+                            ld = location_entry.match(debug_data)
+                            if ld is not None:
+                                # and the metadata is line info... proceed
+                                assert len(ld.groups()) == 2, ld
+                                line, col = ld.groups()
+                                # only emit a new marker if the line number in
+                                # the metadata is "new".
+                                if line != cur_line or col != cur_col:
+                                    if _interleave.lineinfo:
+                                        mfmt = 'Marker %s, Line %s, column %s'
+                                        mark_line =  mfmt % (marker, line, col)
+                                        ln = fmt.format(cs['marker'], col_span,
+                                                        clean(mark_line))
+                                        new_lines.append(ln)
+                                    if _interleave.python:
+                                        # TODO:
+                                        # +1 for decorator, this probably needs
+                                        # the same thing doing as for the
+                                        # error messages where the decorator
+                                        # is scanned for, its not always +1!
+                                        lidx = int(line) - (firstlineno + 1)
+                                        source_line = src_code[lidx]
+                                        ln = fmt.format(cs['python'], col_span,
+                                                        clean(source_line))
+                                        new_lines.append(ln)
+                                    cur_line, cur_col = line, col
+                # Highlight other LLVM features if requested, HTML BGCOLOR
+                # property is set by this.
+                if _highlight.incref and nrt_incref.search(l):
+                    colour = cs['incref']
+                elif _highlight.decref and nrt_decref.search(l):
+                    colour = cs['decref']
+                elif _highlight.meminfo and nrt_meminfo.search(l):
+                    colour = cs['meminfo']
+                elif _highlight.raises and ll_raise.search(l):
+                    # search for raise as its more specific than exit
+                    colour = cs['raise']
+                elif _highlight.returns and ll_return.search(l):
+                    colour = cs['return']
+                else:
+                    colour = cs['default']
+
+                # Use the default coloring as a flag to force printing if a
+                # special token print was requested AND LLVM ir stripping is
+                # required
+                if colour is not cs['default'] or not strip_ir:
+                    for x in wrap(clean(l)):
+                        new_lines.append(fmt.format(colour, col_span, x))
+
+            # add in the port line at the end of the block if it was present
+            # (this was built right at the top of the parse)
+            if port_line:
+                new_lines.append('<tr>{}</tr>'.format(port_line))
+
+            # If there was data, create a table, else don't!
+            dat = ''.join(new_lines)
+            if dat:
+                tab = ('<table id="%s" BORDER="1" CELLBORDER="0" CELLPADDING="0" '
+                       'CELLSPACING="0">%s</table>') % (idc, dat)
+                label = '<{}>'.format(tab)
+            else:
+                label = ''
+
+            # finally, add a replacement node for the original with a new marked
+            # up label.
+            f.node(name, label=label)
+
+        # Parse the edge data
+        for edge in jzon['edges']:
+            gvid = edge['_gvid']
+            tp = edge.get('tailport', None)
+            edge_ids[gvid] = (edge['head'], edge['tail'], tp)
+
+        # Write in the edge wiring with respect to the new nodes:ports.
+        for gvid, edge in edge_ids.items():
+            tail = node_ids[edge[1]]
+            head = node_ids[edge[0]]
+            port = edge[2]
+            if port is not None:
+                tail += ':%s' % port
+            f.edge(tail, head)
+
+        # Add a key to the graph if requested.
+        if show_key:
+            key_tab = []
+            for k, v in cs.items():
+                key_tab.append(('<tr><td BGCOLOR="{}" BORDER="0" ALIGN="center"'
+                                '>{}</td></tr>').format(v, k))
+            # The first < and last > are DOT syntax, rest is DOT HTML.
+            f.node("Key", label=('<<table BORDER="1" CELLBORDER="1" '
+                    'CELLPADDING="2" CELLSPACING="1"><tr><td BORDER="0">'
+                    'Key:</td></tr>{}</table>>').format(''.join(key_tab)))
+
+        # Render if required
+        if filename is not None or view is not None:
+            f.render(filename=filename, view=view, format='pdf')
+
+        # Else pipe out a SVG
+        return f.pipe(format='svg')
 
     def display(self, filename=None, view=False):
         """
@@ -72,7 +435,11 @@ class _CFG(object):
         output to write to.  If *view* option is True, the plot is opened by
         the system default application for the image format (PDF).
         """
-        return ll.view_dot_graph(self.dot, filename=filename, view=view)
+        rawbyt = self.pretty_printer(filename=filename, view=view, **self.kwargs)
+        return rawbyt.decode('utf-8')
+
+    def _repr_svg_(self):
+        return self.pretty_printer(**self.kwargs).decode('utf-8')
 
     def __repr__(self):
         return self.dot
@@ -323,14 +690,12 @@ class CodeLibrary(object):
         self._sentry_cache_disable_inspection()
         return str(self._codegen._tm.emit_assembly(self._final_module))
 
-    def get_function_cfg(self, name):
+    def get_function_cfg(self, name, py_func=None, **kwargs):
         """
         Get control-flow graph of the LLVM function
         """
         self._sentry_cache_disable_inspection()
-        fn = self.get_function(name)
-        dot = ll.get_function_cfg(fn)
-        return _CFG(dot)
+        return _CFG(self, name, py_func, **kwargs)
 
     def get_disasm_cfg(self):
         """
