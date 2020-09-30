@@ -10,7 +10,6 @@ import ctypes
 from types import FunctionType
 from inspect import signature
 
-#import dpctl.ocldrv as driver
 import dpctl
 
 from . import spirv_generator
@@ -116,7 +115,6 @@ def compile_kernel(sycl_queue, pyfunc, args, access_types, debug=False):
         print("compile_kernel", args)
     if not sycl_queue:
         # This will be get_current_queue
-        #device = driver.runtime.get_current_device()
         sycl_queue = dpctl.get_current_queue()
 
     cres = compile_with_dppl(pyfunc, None, args, debug=debug)
@@ -141,7 +139,6 @@ def compile_kernel_parfor(sycl_queue, func_ir, args, args_with_addrspaces,
 
     cres = compile_with_dppl(func_ir, None, args_with_addrspaces,
                              debug=debug)
-    #cres = compile_with_dppl(func_ir, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
 
     if DEBUG:
@@ -298,7 +295,7 @@ class DPPLKernelBase(object):
         """
         clone = self.copy()
         clone.global_size = global_size
-        clone.local_size = local_size if local_size else []
+        clone.local_size = local_size
         clone.sycl_queue = sycl_queue
 
         return clone
@@ -345,22 +342,9 @@ class DPPLKernel(DPPLKernelBase):
                 f.write(self.binary)
         self.spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
 
-
-
-
-        ''' Both these are combined to one DPPLKernel_CreateKernelFromSpirv() '''
-
-        # TODO: Write a dppl cython warapper for DPPLKernel_CreateKernelFromSpirv
-        # that will return a sycl kernel python object, and will take SyclContext type
-        # object and the spirv_bc
-
-
-
         # create a program
-        #self.program = driver.Program(self.sycl_queue, self.spirv_bc)
         self.program = dpctl.create_program_from_spirv(self.sycl_queue, self.spirv_bc)
         #  create a kernel
-        #self.kernel = driver.Kernel(self.sycl_queue, self.program, self.entry_name)
         self.kernel = self.program.get_sycl_kernel(self.entry_name)
 
     def __call__(self, *args):
@@ -375,12 +359,9 @@ class DPPLKernel(DPPLKernelBase):
             self._unpack_argument(ty, val, self.sycl_queue, retr,
                     kernelargs, internal_device_arrs, access_type)
 
-        # enqueues the kernel
-        #driver.enqueue_kernel(self.sycl_queue, self.kernel, kernelargs,
-        #                      self.global_size, self.local_size)
 
         self.sycl_queue.submit(self.kernel, kernelargs, self.global_size, self.local_size)
-
+        self.sycl_queue.wait()
 
 
         for ty, val, i_dev_arr, access_type in zip(self.argument_types, args,
@@ -403,32 +384,22 @@ class DPPLKernel(DPPLKernelBase):
     def _unpack_device_array_argument(self, val, kernelargs):
         # this function only takes DeviceArray created for ndarrays
         void_ptr_arg = True
+
         # meminfo
-        #kernelargs.append(driver.KernelArg(None, void_ptr_arg))
+        # TODO: How to pass Null pointer
         kernelargs.append(driver.KernelArg(None, void_ptr_arg))
         # parent
         kernelargs.append(driver.KernelArg(None, void_ptr_arg))
 
-        #kernelargs.append(driver.
-        #                  KernelArg(ctypes.c_size_t(val._ndarray.size)))
         kernelargs.append(ctypes.c_size_t(val._ndarray.size))
-        #kernelargs.append(driver.
-        #                  KernelArg(
-        #                      ctypes.c_size_t(val._ndarray.dtype.itemsize)))
         kernelargs.append(ctypes.c_size_t(val._ndarray.dtype.itemsize))
 
         # This should be the dparray type that will have an attribute holding the actual pointer to the usm buffer
         kernelargs.append(driver.KernelArg(val))
 
         for ax in range(val._ndarray.ndim):
-            #kernelargs.append(driver.
-            #                  KernelArg(
-            #                      ctypes.c_size_t(val._ndarray.shape[ax])))
             kernelargs.append(ctypes.c_size_t(val._ndarray.shape[ax]))
         for ax in range(val._ndarray.ndim):
-            #kernelargs.append(driver.
-            #                  KernelArg(
-            #                      ctypes.c_size_t(val._ndarray.strides[ax])))
             kernelargs.append(ctypes.c_size_t(val._ndarray.strides[ax]))
 
 
@@ -439,7 +410,6 @@ class DPPLKernel(DPPLKernelBase):
         """
 
         device_arrs.append(None)
-        print(val)
         '''
         if isinstance(val, driver.DeviceArray):
             self._unpack_device_array_argument(val, kernelargs)
@@ -452,7 +422,6 @@ class DPPLKernel(DPPLKernelBase):
             # if type is of dparray then do nothing as the data pointer is valid in device
             # else create
             #dparr = dppl.DPArray(val)
-
 
             if (default_behavior or
                 self.valid_access_types[access_type] == _NUMBA_DPPL_READ_ONLY or
@@ -467,26 +436,21 @@ class DPPLKernel(DPPLKernelBase):
             device_arrs[-1] = dArr
             self._unpack_device_array_argument(dArr, kernelargs)
 
-        elif isinstance(ty, types.Integer):
-            cval = ctypes.c_size_t(val)
-            #kernelargs.append(driver.KernelArg(cval))
+        elif ty == types.int64:
+            cval = ctypes.c_long(val)
             kernelargs.append(cval)
-
+        elif ty == types.int32:
+            cval = ctypes.c_int(val)
+            kernelargs.append(cval)
         elif ty == types.float64:
             cval = ctypes.c_double(val)
-            #kernelargs.append(driver.KernelArg(cval))
             kernelargs.append(cval)
-
         elif ty == types.float32:
             cval = ctypes.c_float(val)
-            #kernelargs.append(driver.KernelArg(cval))
             kernelargs.append(cval)
-
         elif ty == types.boolean:
             cval = ctypes.c_uint8(int(val))
-            #kernelargs.append(driver.KernelArg(cval))
             kernelargs.append(cval)
-
         elif ty == types.complex64:
             #kernelargs.append(ctypes.c_float(val.real))
             #kernelargs.append(ctypes.c_float(val.imag))
