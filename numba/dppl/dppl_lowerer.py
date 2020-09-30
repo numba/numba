@@ -40,7 +40,7 @@ from numba.core.errors import NumbaParallelSafetyWarning, NumbaPerformanceWarnin
 from .target import SPIR_GENERIC_ADDRSPACE
 from .dufunc_inliner import dufunc_inliner
 from . import dppl_host_fn_call_gen as dppl_call_gen
-import dpctl.ocldrv as driver
+import dpctl
 from numba.dppl.target import DPPLTargetContext
 
 
@@ -608,10 +608,8 @@ def _create_gufunc_for_parfor_body(
         print('after DUFunc inline'.center(80, '-'))
         gufunc_ir.dump()
 
-    # FIXME : We should not always use gpu device, instead select the default
-    # device as configured in dppl.
     kernel_func = numba.dppl.compiler.compile_kernel_parfor(
-        driver.runtime.get_current_device(),
+        dpctl.get_current_queue(),
         gufunc_ir,
         gufunc_param_types,
         param_types_addrspaces)

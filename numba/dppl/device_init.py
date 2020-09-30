@@ -23,7 +23,7 @@ DEFAULT_LOCAL_SIZE = []
 from . import initialize
 
 from .decorators import kernel, func, autojit
-from dpctl.ocldrv import runtime
+import dpctl
 from . import target
 
 
@@ -32,7 +32,7 @@ def is_available():
 
     This will initialize the driver if it hasn't been initialized.
     """
-    return runtime.has_gpu
+    return dpctl.has_gpu_queues()
 
 
 #def ocl_error():
