@@ -1267,14 +1267,17 @@ def _fix_nested_array(func_ir):
         debug_print("size_tuple_def = ", size_tuple_def)
         extra_dims = fix_dependencies(size_tuple_def, extra_dims)
         size_tuple_def.items += extra_dims
-        # In-place modify rhs_def to be getitem
-        rhs_def.op = 'getitem'
-        rhs_def.value = get_definition(func_ir, lhs, lhs_only=True)
-        rhs_def.index = stmt.index
-        del rhs_def._kws['func']
-        del rhs_def._kws['args']
-        del rhs_def._kws['vararg']
-        del rhs_def._kws['kws']
+        # Replace rhs_def to be getitem
+        getitem = ir.Expr.getitem(
+            value=get_definition(func_ir, lhs, lhs_only=True),
+            index=stmt.index,
+            loc=stmt.loc,
+        )
+        func_ir.replace_definition(
+            var=get_definition(func_ir, stmt.value, lhs_only=True),
+            old_value=rhs_def,
+            new_value=getitem,
+        )
         # success
         return True
 

@@ -1,4 +1,3 @@
-from collections import defaultdict
 import copy
 import itertools
 import os
@@ -7,13 +6,13 @@ import pprint
 import re
 import sys
 import operator
+from collections import defaultdict
 from types import FunctionType, BuiltinFunctionType
 from functools import total_ordering
 from io import StringIO
 
 from numba.core import errors, config
-from numba.core.utils import (BINOPS_TO_OPERATORS, INPLACE_BINOPS_TO_OPERATORS,
-                              UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS)
+from numba.core.utils import UNARY_BUITINS_TO_OPERATORS, OPERATORS_TO_BUILTINS
 from numba.core.errors import (NotDefinedError, RedefinedError,
                                VerificationError, ConstantInferenceError)
 from numba.core import consts
@@ -26,7 +25,9 @@ class Loc(object):
     """Source location
 
     """
-    _defmatcher = re.compile('def\s+(\w+)\(.*')
+    __slots__ = '_filename', '_line', '_col', '_lines_cache', '_maybe_decorator'
+
+    _defmatcher = re.compile(r'def\s+(\w+)\(.*')
 
     def __init__(self, filename, line, col=None, maybe_decorator=False):
         """ Arguments:
@@ -35,18 +36,38 @@ class Loc(object):
         col - column
         maybe_decorator - Set to True if location is likely a jit decorator
         """
-        self.filename = filename
-        self.line = line
-        self.col = col
-        self.lines = None # the source lines from the linecache
-        self.maybe_decorator = maybe_decorator
+        self._filename = filename
+        self._line = line
+        self._col = col
+        self._maybe_decorator = maybe_decorator
+        self._lines_cache = None  # the source lines from the linecache
+
+    @property
+    def filename(self):
+        return self._filename
+
+    @property
+    def line(self):
+        return self._line
+
+    @property
+    def col(self):
+        return self._col
+
+    @property
+    def maybe_decorator(self):
+        return self._maybe_decorator
 
     def __eq__(self, other):
         # equivalence is solely based on filename, line and col
-        if type(self) is not type(other): return False
-        if self.filename != other.filename: return False
-        if self.line != other.line: return False
-        if self.col != other.col: return False
+        if type(self) is not type(other):
+            return False
+        if self.filename != other.filename:
+            return False
+        if self.line != other.line:
+            return False
+        if self.col != other.col:
+            return False
         return True
 
     def __ne__(self, other):
@@ -88,11 +109,10 @@ class Loc(object):
             return None
 
     def get_lines(self):
-        if self.lines is None:
+        if self._lines_cache is None:
+            self._lines_cache = linecache.getlines(self._get_path())
 
-            self.lines = linecache.getlines(self._get_path())
-
-        return self.lines
+        return self._lines_cache
 
     def _get_path(self):
         path = None
@@ -106,7 +126,6 @@ class Loc(object):
             # This may happen on windows if the drive is different
             path = os.path.abspath(self.filename)
         return path
-
 
     def strformat(self, nlines_up=2):
 
@@ -135,7 +154,6 @@ class Loc(object):
                         index = idx
                         break
                 use_line = use_line + index
-
 
         ret = [] # accumulates output
         if lines and use_line:
@@ -169,7 +187,7 @@ class Loc(object):
                 if fn_name:
                     ret.append(fn_name)
                     spaces = count_spaces(x)
-                    ret.append(' '*(4 + spaces) + '<source elided>\n')
+                    ret.append(' ' * (4 + spaces) + '<source elided>\n')
 
             if selected:
                 ret.extend(selected[:-1])
@@ -177,13 +195,13 @@ class Loc(object):
 
                 # point at the problem with a caret
                 spaces = count_spaces(selected[-1])
-                ret.append(' '*(spaces) + _termcolor.indicate("^"))
+                ret.append(' ' * (spaces) + _termcolor.indicate("^"))
 
         # if in the REPL source may not be available
         if not ret:
             ret = "<source missing, REPL/exec in use?>"
 
-        err = _termcolor.filename('\nFile "%s", line %d:')+'\n%s'
+        err = _termcolor.filename('\nFile "%s", line %d:') + '\n%s'
         tmp = err % (self._get_path(), use_line, _termcolor.code(''.join(ret)))
         return tmp
 
@@ -214,6 +232,8 @@ class SlotEqualityCheckMixin(object):
     def __eq__(self, other):
         if type(self) is type(other):
             for name in self.__slots__:
+                if name in {'_loc', '_scope'}:
+                    continue
                 if getattr(self, name) != getattr(other, name):
                     return False
             else:
@@ -230,6 +250,7 @@ class SlotEqualityCheckMixin(object):
 @total_ordering
 class EqualityCheckMixin(object):
     """ Mixin for basic equality checking """
+    __slots__ = ()
 
     def __eq__(self, other):
         if type(self) is type(other):
@@ -297,12 +318,14 @@ class AbstractRHS(object):
     """Abstract base class for anything that can be the RHS of an assignment.
     This class **does not** define any methods.
     """
+    __slots__ = ()
 
 
-class Inst(EqualityCheckMixin, AbstractRHS):
+class Inst(SlotEqualityCheckMixin, AbstractRHS):
     """
     Base class for all IR instructions.
     """
+    __slots__ = ()
 
     def list_vars(self):
         """
@@ -337,6 +360,7 @@ class Stmt(Inst):
     Base class for IR statements (instructions which can appear on their
     own in a Block).
     """
+    __slots__ = ()
     # Whether this statement ends its basic block (i.e. it will either jump
     # to another block or exit the function).
     is_terminator = False
@@ -344,7 +368,8 @@ class Stmt(Inst):
     is_exit = False
 
     def list_vars(self):
-        return self._rec_list_vars(self.__dict__)
+        d = {k: getattr(self, k) for k in self.__slots__}
+        return self._rec_list_vars(d)
 
 
 class Terminator(Stmt):
@@ -357,6 +382,7 @@ class Terminator(Stmt):
     All subclass of Terminator must override `.get_targets()` to return a list
     of jump targets.
     """
+    __slots__ = ()
     is_terminator = True
 
     def get_targets(self):
@@ -368,22 +394,34 @@ class Expr(Inst):
     An IR expression (an instruction which can only be part of a larger
     statement).
     """
+    __slots__ = '_op', '_loc', '_kws'
 
     def __init__(self, op, loc, **kws):
         assert isinstance(op, str)
         assert isinstance(loc, Loc)
-        self.op = op
-        self.loc = loc
+        self._op = op
+        self._loc = loc
         self._kws = kws
 
+    @property
+    def op(self):
+        return self._op
+
+    @property
+    def loc(self):
+        return self._loc
+
     def __getattr__(self, name):
-        if name.startswith('_'):
-            return Inst.__getattr__(self, name)
-        return self._kws[name]
+        if name not in self.__slots__:
+            try:
+                return self._kws[name]
+            except KeyError:
+                pass
+        raise AttributeError(name)
 
     def __setattr__(self, name, value):
-        if name in ('op', 'loc', '_kws'):
-            self.__dict__[name] = value
+        if name in self.__slots__:
+            Inst.__setattr__(self, name, value)
         else:
             self._kws[name] = value
 
@@ -542,7 +580,8 @@ class Expr(Inst):
         """
         assert isinstance(loc, Loc)
         op = 'make_function'
-        return cls(op=op, name=name, code=code, closure=closure, defaults=defaults, loc=loc)
+        return cls(op=op, name=name, code=code, closure=closure,
+                   defaults=defaults, loc=loc)
 
     @classmethod
     def null(cls, loc):
@@ -558,7 +597,9 @@ class Expr(Inst):
     def __repr__(self):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)
-            pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
+            pres_order = (self._kws.items()
+                          if config.DIFF_IR == 0
+                          else sorted(self._kws.items()))
             kws = ', '.join('%s=%s' % (k, v) for k, v in pres_order)
             vararg = '*%s' % (self.vararg,) if self.vararg is not None else ''
             arglist = ', '.join(filter(None, [args, vararg, kws]))
@@ -570,7 +611,9 @@ class Expr(Inst):
             fn = OPERATORS_TO_BUILTINS.get(self.fn, self.fn)
             return '%s %s %s' % (lhs, fn, rhs)
         else:
-            pres_order = self._kws.items() if config.DIFF_IR == 0 else sorted(self._kws.items())
+            pres_order = (self._kws.items()
+                          if config.DIFF_IR == 0
+                          else sorted(self._kws.items()))
             args = ('%s=%s' % (k, v) for k, v in pres_order)
             return '%s(%s)' % (self.op, ', '.join(args))
 
@@ -585,6 +628,7 @@ class SetItem(Stmt):
     """
     target[index] = value
     """
+    __slots__ = 'target', 'index', 'value', '_loc'
 
     def __init__(self, target, index, value, loc):
         assert isinstance(target, Var)
@@ -594,7 +638,11 @@ class SetItem(Stmt):
         self.target = target
         self.index = index
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
@@ -604,6 +652,7 @@ class StaticSetItem(Stmt):
     """
     target[constant index] = value
     """
+    __slots__ = 'target', 'index', 'index_var', 'value', '_loc'
 
     def __init__(self, target, index, index_var, value, loc):
         assert isinstance(target, Var)
@@ -615,7 +664,11 @@ class StaticSetItem(Stmt):
         self.index = index
         self.index_var = index_var
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return '%s[%r] = %s' % (self.target, self.index, self.value)
@@ -625,6 +678,7 @@ class DelItem(Stmt):
     """
     del target[index]
     """
+    __slots__ = 'target', 'index', '_loc'
 
     def __init__(self, target, index, loc):
         assert isinstance(target, Var)
@@ -632,13 +686,19 @@ class DelItem(Stmt):
         assert isinstance(loc, Loc)
         self.target = target
         self.index = index
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return 'del %s[%s]' % (self.target, self.index)
 
 
 class SetAttr(Stmt):
+    __slots__ = 'target', 'attr', 'value', '_loc'
+
     def __init__(self, target, attr, value, loc):
         assert isinstance(target, Var)
         assert isinstance(attr, str)
@@ -647,26 +707,38 @@ class SetAttr(Stmt):
         self.target = target
         self.attr = attr
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return '(%s).%s = %s' % (self.target, self.attr, self.value)
 
 
 class DelAttr(Stmt):
+    __slots__ = 'target', 'attr', '_loc'
+
     def __init__(self, target, attr, loc):
         assert isinstance(target, Var)
         assert isinstance(attr, str)
         assert isinstance(loc, Loc)
         self.target = target
         self.attr = attr
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return 'del (%s).%s' % (self.target, self.attr)
 
 
 class StoreMap(Stmt):
+    __slots__ = 'dct', 'key', 'value', '_loc'
+
     def __init__(self, dct, key, value, loc):
         assert isinstance(dct, Var)
         assert isinstance(key, Var)
@@ -675,31 +747,46 @@ class StoreMap(Stmt):
         self.dct = dct
         self.key = key
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return '%s[%s] = %s' % (self.dct, self.key, self.value)
 
 
 class Del(Stmt):
+    __slots__ = 'value', '_loc'
+
     def __init__(self, value, loc):
         assert isinstance(value, str)
         assert isinstance(loc, Loc)
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return "del %s" % self.value
 
 
 class Raise(Terminator):
+    __slots__ = 'exception', '_loc'
     is_exit = True
 
     def __init__(self, exception, loc):
         assert exception is None or isinstance(exception, Var)
         assert isinstance(loc, Loc)
         self.exception = exception
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return "raise %s" % self.exception
@@ -714,6 +801,7 @@ class StaticRaise(Terminator):
     Note that if *exc_class* is None, a bare "raise" statement is implied
     (i.e. re-raise the current exception).
     """
+    __slots__ = 'exc_class', 'exc_args', '_loc'
     is_exit = True
 
     def __init__(self, exc_class, exc_args, loc):
@@ -722,7 +810,11 @@ class StaticRaise(Terminator):
         assert exc_args is None or isinstance(exc_args, tuple)
         self.exc_class = exc_class
         self.exc_args = exc_args
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         if self.exc_class is None:
@@ -730,8 +822,10 @@ class StaticRaise(Terminator):
         elif self.exc_args is None:
             return "<static> raise %s" % (self.exc_class,)
         else:
-            return "<static> raise %s(%s)" % (self.exc_class,
-                                     ", ".join(map(repr, self.exc_args)))
+            return "<static> raise %s(%s)" % (
+                self.exc_class,
+                ", ".join(map(repr, self.exc_args)),
+            )
 
     def get_targets(self):
         return []
@@ -741,11 +835,17 @@ class TryRaise(Stmt):
     """A raise statement inside a try-block
     Similar to ``Raise`` but does not terminate.
     """
+    __slots__ = 'exception', '_loc'
+
     def __init__(self, exception, loc):
         assert exception is None or isinstance(exception, Var)
         assert isinstance(loc, Loc)
         self.exception = exception
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return "try_raise %s" % self.exception
@@ -755,6 +855,7 @@ class StaticTryRaise(Stmt):
     """A raise statement inside a try-block.
     Similar to ``StaticRaise`` but does not terminate.
     """
+    __slots__ = 'exc_class', 'exc_args', '_loc'
 
     def __init__(self, exc_class, exc_args, loc):
         assert exc_class is None or isinstance(exc_class, type)
@@ -762,7 +863,11 @@ class StaticTryRaise(Stmt):
         assert exc_args is None or isinstance(exc_args, tuple)
         self.exc_class = exc_class
         self.exc_args = exc_args
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         if self.exc_class is None:
@@ -770,21 +875,29 @@ class StaticTryRaise(Stmt):
         elif self.exc_args is None:
             return "static_try_raise %s" % (self.exc_class,)
         else:
-            return "static_try_raise %s(%s)" % (self.exc_class,
-                                     ", ".join(map(repr, self.exc_args)))
+            return "static_try_raise %s(%s)" % (
+                self.exc_class,
+                ", ".join(map(repr, self.exc_args)),
+            )
 
 
 class Return(Terminator):
     """
     Return to caller.
     """
+    __slots__ = 'value', '_loc'
+
     is_exit = True
 
     def __init__(self, value, loc):
         assert isinstance(value, Var), type(value)
         assert isinstance(loc, Loc)
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'return %s' % self.value
@@ -797,11 +910,16 @@ class Jump(Terminator):
     """
     Unconditional branch.
     """
+    __slots__ = 'target', '_loc'
 
     def __init__(self, target, loc):
         assert isinstance(loc, Loc)
         self.target = target
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'jump %s' % self.target
@@ -814,6 +932,7 @@ class Branch(Terminator):
     """
     Conditional branch.
     """
+    __slots__ = 'cond', 'truebr', 'falsebr', '_loc'
 
     def __init__(self, cond, truebr, falsebr, loc):
         assert isinstance(cond, Var)
@@ -821,7 +940,11 @@ class Branch(Terminator):
         self.cond = cond
         self.truebr = truebr
         self.falsebr = falsebr
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'branch %s, %s, %s' % (self.cond, self.truebr, self.falsebr)
@@ -834,13 +957,24 @@ class Assign(Stmt):
     """
     Assign to a variable.
     """
+    __slots__ = 'value', 'target', '_loc'
+
     def __init__(self, value, target, loc):
         assert isinstance(value, AbstractRHS)
         assert isinstance(target, Var)
         assert isinstance(loc, Loc)
         self.value = value
         self.target = target
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
+
+    def replace(self, **kwargs):
+        d = dict(value=self.value, target=self.target, loc=self.loc)
+        d.update(kwargs)
+        return type(self)(**d)
 
     def __str__(self):
         return '%s = %s' % (self.target, self.value)
@@ -850,6 +984,8 @@ class Print(Stmt):
     """
     Print some values.
     """
+    __slots__ = 'args', 'vararg', 'consts', '_loc'
+
     def __init__(self, args, vararg, loc):
         assert all(isinstance(x, Var) for x in args)
         assert vararg is None or isinstance(vararg, Var)
@@ -858,19 +994,29 @@ class Print(Stmt):
         self.vararg = vararg
         # Constant-inferred arguments
         self.consts = {}
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'print(%s)' % ', '.join(str(v) for v in self.args)
 
 
 class Yield(Inst):
+    __slots__ = 'value', '_loc', 'index'
+
     def __init__(self, value, loc, index):
         assert isinstance(value, Var)
         assert isinstance(loc, Loc)
         self.value = value
-        self.loc = loc
+        self._loc = loc
         self.index = index
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'yield %s' % (self.value,)
@@ -882,6 +1028,8 @@ class Yield(Inst):
 class EnterWith(Stmt):
     """Enter a "with" context
     """
+    __slots__ = 'contextmanager', 'begin', 'end', '_loc'
+
     def __init__(self, contextmanager, begin, end, loc):
         """
         Parameters
@@ -897,7 +1045,11 @@ class EnterWith(Stmt):
         self.contextmanager = contextmanager
         self.begin = begin
         self.end = end
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'enter_with {}'.format(self.contextmanager)
@@ -906,14 +1058,20 @@ class EnterWith(Stmt):
         return [self.contextmanager]
 
 
-class Arg(EqualityCheckMixin, AbstractRHS):
+class Arg(SlotEqualityCheckMixin, AbstractRHS):
+    __slots__ = 'name', 'index', '_loc'
+
     def __init__(self, name, index, loc):
         assert isinstance(name, str)
         assert isinstance(index, int)
         assert isinstance(loc, Loc)
         self.name = name
         self.index = index
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return 'arg(%d, name=%s)' % (self.index, self.name)
@@ -922,13 +1080,19 @@ class Arg(EqualityCheckMixin, AbstractRHS):
         raise ConstantInferenceError('%s' % self, loc=self.loc)
 
 
-class Const(EqualityCheckMixin, AbstractRHS):
+class Const(SlotEqualityCheckMixin, AbstractRHS):
+    __slots__ = 'value', '_loc', 'use_literal_type'
+
     def __init__(self, value, loc, use_literal_type=True):
         assert isinstance(loc, Loc)
         self.value = value
-        self.loc = loc
+        self._loc = loc
         # Note: need better way to tell if this is a literal or not.
         self.use_literal_type = use_literal_type
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return 'const(%s, %s)' % (type(self.value).__name__, self.value)
@@ -944,12 +1108,18 @@ class Const(EqualityCheckMixin, AbstractRHS):
         )
 
 
-class Global(EqualityCheckMixin, AbstractRHS):
+class Global(SlotEqualityCheckMixin, AbstractRHS):
+    __slots__ = 'name', 'value', '_loc'
+
     def __init__(self, name, value, loc):
         assert isinstance(loc, Loc)
         self.name = name
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'global(%s: %s)' % (self.name, self.value)
@@ -963,11 +1133,12 @@ class Global(EqualityCheckMixin, AbstractRHS):
         return Global(self.name, self.value, copy.deepcopy(self.loc))
 
 
-class FreeVar(EqualityCheckMixin, AbstractRHS):
+class FreeVar(SlotEqualityCheckMixin, AbstractRHS):
     """
     A freevar, as loaded by LOAD_DECREF.
     (i.e. a variable defined in an enclosing non-global scope)
     """
+    __slots__ = 'index', 'name', 'value', '_loc'
 
     def __init__(self, index, name, value, loc):
         assert isinstance(index, int)
@@ -979,7 +1150,11 @@ class FreeVar(EqualityCheckMixin, AbstractRHS):
         self.name = name
         # frozen value
         self.value = value
-        self.loc = loc
+        self._loc = loc
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __str__(self):
         return 'freevar(%s: %s)' % (self.name, self.value)
@@ -993,8 +1168,7 @@ class FreeVar(EqualityCheckMixin, AbstractRHS):
                        loc=self.loc)
 
 
-
-class Var(EqualityCheckMixin, AbstractRHS):
+class Var(SlotEqualityCheckMixin, AbstractRHS):
     """
     Attributes
     -----------
@@ -1006,14 +1180,28 @@ class Var(EqualityCheckMixin, AbstractRHS):
         Definition location
     """
 
+    __slots__ = '_scope', '_name', '_loc'
+
     def __init__(self, scope, name, loc):
         # NOTE: Use of scope=None should be removed.
         assert scope is None or isinstance(scope, Scope)
         assert isinstance(name, str)
         assert isinstance(loc, Loc)
-        self.scope = scope
-        self.name = name
-        self.loc = loc
+        self._scope = scope
+        self._name = name
+        self._loc = loc
+
+    @property
+    def scope(self):
+        return self._scope
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def loc(self):
+        return self._loc
 
     def __repr__(self):
         return 'Var(%s, %s)' % (self.name, self.loc.short())
@@ -1138,6 +1326,7 @@ class Scope(EqualityCheckMixin):
         Gets all known versions of a given name
         """
         vers = set()
+
         def walk(thename):
             redefs = self.var_redefinitions.get(thename, None)
             if redefs:
@@ -1451,6 +1640,16 @@ class FunctionIR(object):
             name = name.name
         return self._consts.infer_constant(name)
 
+    def replace_definition(self, var, old_value, new_value):
+        """Replace assignment to *var* with *new_value*
+        """
+        for blk in self.blocks.values():
+            for idx, stmt in enumerate(blk.body):
+                if (isinstance(stmt, Assign) and
+                        stmt.target == var and
+                        stmt.value == old_value):
+                    blk.body[idx] = stmt.replace(value=new_value)
+
     def get_definition(self, value, lhs_only=False):
         """
         Get the definition site for the given variable name or instance.
@@ -1497,7 +1696,6 @@ class FunctionIR(object):
 
         raise ValueError("Could not find an assignee for %s" % rhs_value)
 
-
     def dump(self, file=None):
         nofile = file is None
         # Avoid early bind of sys.stdout as default value
@@ -1509,7 +1707,7 @@ class FunctionIR(object):
             text = file.getvalue()
             if config.HIGHLIGHT_DUMPS:
                 try:
-                    import pygments
+                    import pygments     # noqa: F401
                 except ImportError:
                     msg = "Please install pygments to see highlighted dumps"
                     raise ValueError(msg)
@@ -1523,7 +1721,6 @@ class FunctionIR(object):
             else:
                 print(text)
 
-
     def dump_to_string(self):
         with StringIO() as sb:
             self.dump(file=sb)
@@ -1534,8 +1731,9 @@ class FunctionIR(object):
         gi = self.generator_info
         print("generator state variables:", sorted(gi.state_vars), file=file)
         for index, yp in sorted(gi.yield_points.items()):
-            print("yield point #%d: live variables = %s, weak live variables = %s"
-                  % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
+            m = ("yield point #%d: live variables = %s, "
+                 "weak live variables = %s")
+            print(m % (index, sorted(yp.live_vars), sorted(yp.weak_live_vars)),
                   file=file)
 
     def render_dot(self, filename_prefix="numba_ir", include_ir=True):
@@ -1568,12 +1766,12 @@ class FunctionIR(object):
                 label = sb.getvalue()
             if include_ir:
                 label = ''.join(
-                    ['  {}\l'.format(x) for x in label.splitlines()],
+                    [r'  {}\l'.format(x) for x in label.splitlines()],
                 )
-                label = "block {}\l".format(k) + label
+                label = r"block {}\l".format(k) + label
                 g.node(str(k), label=label, shape='rect')
             else:
-                label = "{}\l".format(k)
+                label = r"{}\l".format(k)
                 g.node(str(k), label=label, shape='circle')
         # Populate the edges
         for src, blk in self.blocks.items():
