@@ -4175,7 +4175,7 @@ def np_asarray_chkfinite(a, dtype=None, order='C'):
     def impl(a, dtype=None, order='C'):
         a = np.asarray(a, dtype=dt)
         for i in np.nditer(a):
-            if np.isnan(i) or np.isinf(i):
+            if not np.isfinite(i):
                 raise ValueError("array must not contain infs or NaNs")
         return a
 
