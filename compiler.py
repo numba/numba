@@ -252,7 +252,7 @@ def _ensure_valid_work_item_grid(val, sycl_queue):
         raise ValueError(error_message)
     '''
 
-    return list(val)
+    return list(val[::-1]) # reversing due to sycl and opencl interop kernel range mismatch semantic
 
 def _ensure_valid_work_group_size(val, work_item_grid):
 
@@ -269,7 +269,7 @@ def _ensure_valid_work_group_size(val, work_item_grid):
                          "dimensions of global and local work items has to be the same ")
         raise ValueError(error_message)
 
-    return list(val)
+    return list(val[::-1]) # reversing due to sycl and opencl interop kernel range mismatch semantic
 
 
 class DPPLKernelBase(object):
