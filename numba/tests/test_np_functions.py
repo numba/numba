@@ -466,8 +466,7 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             bool_arr = np.array([True, False])
             yield bool_arr, True
-            yield  bool_arr, k_0
-
+            yield bool_arr, k_0
 
             float_arr = np.random.rand(10)
             rand_k = np.random.rand()
@@ -480,12 +479,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield complx_arr, complx_arr[0]
             yield complx_arr, rand_k
 
-
             uint_arr = np.random.randint(10, size=15, dtype=np.uint8)
             yield uint_arr, 5
             yield uint_arr, 25
-
-
 
         pyfunc = array_contains
 
