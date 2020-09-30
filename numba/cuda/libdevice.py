@@ -1,8 +1,10 @@
 import sys
 import math
+import operator
 from llvmlite.llvmpy.core import Type
 from numba.core import types, cgutils
 from numba.core.imputils import Registry
+from numba.core.types import float32, complex64
 
 registry = Registry()
 lower = registry.lower
@@ -165,3 +167,58 @@ def modf_implement(nvname, ty):
 for (ty, intrin) in ((types.float64, '__nv_modf',),
                      (types.float32, '__nv_modff',)):
     lower(math.modf, ty)(modf_implement(intrin, ty))
+
+
+# Complex power implementations - translations of _Py_c_pow from CPython
+# 3.7.5.
+#
+# The complex64 variant casts all constants and some variables to ensure that
+# as much computation is done in single precision as possible. A small number
+# of operations are still done in 64-bit, but these come from libdevice code.
+
+@lower(operator.pow, types.complex64, types.complex64)
+@lower(operator.ipow, types.complex64, types.complex64)
+@lower(pow, types.complex64, types.complex64)
+def cpow_impl(context, builder, sig, args):
+    def cuda_cpowf(a, b):
+
+        if b.real == float32(0.0) and b.imag == float32(0.0):
+            return complex64(1.0) + complex64(0.0j)
+        elif a.real == float32(0.0) and b.real == float32(0.0):
+            return complex64(0.0) + complex64(0.0j)
+
+        vabs = math.hypot(a.real, a.imag)
+        len = math.pow(vabs, b.real)
+        at = math.atan2(a.imag, a.real)
+        phase = at * b.real
+        if b.imag != float32(0.0):
+            len /= math.exp(at * b.imag)
+            phase += b.imag * math.log(vabs)
+
+        return len * (complex64(math.cos(phase)) +
+                      complex64(math.sin(phase) * complex64(1.0j)))
+
+    return context.compile_internal(builder, cuda_cpowf, sig, args)
+
+@lower(operator.pow, types.complex128, types.complex128)
+@lower(operator.ipow, types.complex128, types.complex128)
+@lower(pow, types.complex128, types.complex128)
+def cpow_impl(context, builder, sig, args):
+    def cuda_cpow(a, b):
+
+        if b.real == 0.0 and b.imag == 0.0:
+            return 1.0 + 0.0j
+        elif a.real == 0.0 and b.real == 0.0:
+            return 0.0 + 0.0j
+
+        vabs = math.hypot(a.real, a.imag)
+        len = math.pow(vabs, b.real)
+        at = math.atan2(a.imag, a.real)
+        phase = at * b.real
+        if b.imag != 0.0:
+            len /= math.exp(at * b.imag)
+            phase += b.imag * math.log(vabs)
+
+        return len * (math.cos(phase) + math.sin(phase) * 1.0j)
+
+    return context.compile_internal(builder, cuda_cpow, sig, args)
