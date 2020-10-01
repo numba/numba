@@ -408,7 +408,9 @@ class TestCudaIntrinsic(CUDATestCase):
             # Common case branch of round_to_impl
             -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5,
             # The algorithm currently implemented can only round to 13 digits
-            # with single precision
+            # with single precision. Note that this doesn't trigger the
+            # "overflow safe" branch of the implementation, which can only be
+            # hit when using double precision.
             13
         )
         for val, ndigits in itertools.product(vals, digits):
@@ -428,15 +430,12 @@ class TestCudaIntrinsic(CUDATestCase):
         compiled[1, 1](ary, val, ndigits)
         self.assertPreciseEqual(ary[0], round(val, ndigits), prec='single')
 
-
     def test_round_to_f8(self):
         compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
         ary = np.zeros(1, dtype=np.float64)
         vals = np.random.random(32)
         np.concatenate((vals, np.array([np.inf, -np.inf, np.nan])))
-        digits = (
-            -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5,
-        )
+        digits = (-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5)
 
         for val, ndigits in itertools.product(vals, digits):
             with self.subTest(val=val, ndigits=ndigits):
@@ -457,7 +456,7 @@ class TestCudaIntrinsic(CUDATestCase):
         ary = np.zeros(1, dtype=np.float64)
         # Value chosen to trigger the "round to even" branch of the
         # implementation, with a value that is not exactly representable with a
-        # float32.
+        # float32, but only a float64.
         val = 0.5425
         ndigits = 3
         compiled[1, 1](ary, val, ndigits)
