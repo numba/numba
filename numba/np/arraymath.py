@@ -4483,7 +4483,7 @@ def np_isclose(a, b, rtol=1.e-5, atol=1.e-8, equal_nan=False):
             finite = xfin & yfin
             cond = np.zeros_like(finite)
 
-            finite_f = finite.flatten()
+            finite_f = finite.ravel()
 
             x = x * np.ones_like(cond)
             y = y * np.ones_like(cond)
@@ -4492,7 +4492,9 @@ def np_isclose(a, b, rtol=1.e-5, atol=1.e-8, equal_nan=False):
             y_f = y.ravel()
             cond_f = cond.ravel()
 
-            cond_f[finite_f] = within_tol(x_f[finite_f], y_f[finite_f], rtol, atol)
+            cond_f[finite_f] = within_tol(x_f[finite_f], y_f[finite_f],
+                                          rtol, atol)
+
             cond_f[~finite_f] = (x_f[~finite_f] == y_f[~finite_f])
 
             if equal_nan:
@@ -4513,6 +4515,8 @@ def np_allclose(a, b, rtol=1.e-5, atol=1.e-8, equal_nan=False):
 
     def impl(a, b, rtol=1.e-5, atol=1.e-8, equal_nan=False):
 
-        return np.all(np.isclose(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan))
+        return np.all(
+            np.isclose(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
+        )
 
     return impl
