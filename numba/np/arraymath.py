@@ -4177,7 +4177,7 @@ def np_select(condlist, choicelist, default=0):
 
 
 @overload(np.asarray_chkfinite)
-def np_asarray_chkfinite(a, dtype=None, order='C'):
+def np_asarray_chkfinite(a, dtype=None):
 
     msg = "The argument to np.asarray_chkfinite must be array-like"
     if not isinstance(a, (types.Array, types.Sequence, types.Tuple)):
@@ -4188,7 +4188,7 @@ def np_asarray_chkfinite(a, dtype=None, order='C'):
     else:
         dt = dtype.dtype
 
-    def impl(a, dtype=None, order='C'):
+    def impl(a, dtype=None):
         a = np.asarray(a, dtype=dt)
         for i in np.nditer(a):
             if not np.isfinite(i):

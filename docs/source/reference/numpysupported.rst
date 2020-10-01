@@ -393,7 +393,7 @@ The following top-level functions are supported:
 * :func:`numpy.array_equal`
 * :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
-* :func:`numpy.asarray_chkfinite` (only the first first arguments)
+* :func:`numpy.asarray_chkfinite` (only the 2 first arguments)
 * :func:`numpy.asfarray` 
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`

@@ -329,8 +329,8 @@ def flip_ud(a):
     return np.flipud(a)
 
 
-def np_asarray_chkfinite(a, dtype=None, order='C'):
-    return np.asarray_chkfinite(a, dtype, order)
+def np_asarray_chkfinite(a, dtype=None):
+    return np.asarray_chkfinite(a, dtype)
 
 
 def array_contains(a, key):
@@ -3880,7 +3880,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             (
                 np.array([1, 2, 3]),
                 np.float32,
-                'C'
             ),
             #1D array
             (
@@ -3894,7 +3893,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             (
                 np.array([[1, 2], [3, 4]]),
                 np.float32,
-                'C'
             ),
             # 2x2 array-like (n-dims)
             (
