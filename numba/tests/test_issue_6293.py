@@ -2,6 +2,7 @@ from numba import jit, types
 from numba.core import ir
 import unittest
 
+
 class TestIssue6293(unittest.TestCase):
     def test_issue_6293(self):
         @jit(nopython=True)
