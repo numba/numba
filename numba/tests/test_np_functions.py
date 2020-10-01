@@ -313,6 +313,10 @@ def np_cross(a, b):
     return np.cross(a, b)
 
 
+def np_isclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=False):
+    return np.isclose(a, b, rtol, atol, equal_nan)
+
+
 def np_allclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=False):
     return np.allclose(a, b, rtol, atol, equal_nan)
 
@@ -3716,6 +3720,44 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
+    def test_isclose(self):
+        pyfunc = np_isclose
+        cfunc = jit(nopython=True)(pyfunc)
+
+        args_list = [
+            ([1e10, 1e-7], [1.00001e10, 1e-8], {}),
+            ([1e10, 1e-8], [1.00001e10, 1e-9], {}),
+            ([1e10, 1e-8], [1.0001e10, 1e-9], {}),
+            ([1.0, np.nan], [1.0, np.nan], {}),
+            ([1.0, np.nan], [1.0, np.nan], {'equal_nan': True}),
+            (np.random.rand(4, 5), np.random.rand(4, 5), {'atol': 2.0}),
+            (np.random.rand(4, 5), np.random.rand(4, 5), {})
+        ]
+
+        for args in args_list:
+            x, y = args[:-1]
+            x = np.asarray(x)
+            y = np.asarray(y)
+            kwargs = args[-1]
+            expected = pyfunc(x, y, **kwargs)
+            got = cfunc(x, y, **kwargs)
+            self.assertPreciseEqual(expected, got)
+
+    def test_isclose_exceptions(self):
+        cfunc = jit(nopython=True)(np_isclose)
+        self.disable_leak_check()
+
+        # test incompatible dimensions
+        with self.assertRaises(ValueError) as raises:
+            cfunc(
+                np.random.rand(4, 3),
+                np.random.rand(3, 5)
+            )
+        self.assertIn(
+            'unable to broadcast',
+            str(raises.exception)
+        )
+
     def test_allclose(self):
         pyfunc = np_allclose
         cfunc = jit(nopython=True)(pyfunc)
@@ -3751,21 +3793,9 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.random.rand(3, 5)
             )
         self.assertIn(
-            'Arrays could not be broadcast together.',
+            'unable to broadcast',
             str(raises.exception)
         )
-
-        # test incompatible input types
-        with self.assertRaises(TypingError) as raises:
-            cfunc(
-                'Test',
-                'Test'
-            )
-        self.assertIn(
-            '',
-            str(raises.exception)
-        )
-        # TODO: implement a test in allclose to detect if types are numeric
 
 
 class TestNPMachineParameters(TestCase):

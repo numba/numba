@@ -4462,31 +4462,57 @@ def _close_operation(a, b, rtol=1e-5, atol=1e-8, equal_nan=False):
     return True
 
 
-@overload(np.allclose)
-def np_allclose(a, b, rtol=1e-5, atol=1e-8, equal_nan=False):
+@overload(np.isclose)
+def np_isclose(a, b, rtol=1.e-5, atol=1.e-8, equal_nan=False):
     if not type_can_asarray(a) or not type_can_asarray(b):
         raise TypingError("Inputs must be array-like.")
 
-    def impl(a, b, rtol=1e-5, atol=1e-8, equal_nan=False):
-        a_ = np.asarray(a)
-        b_ = np.asarray(b)
+    def impl(a, b, rtol=1.e-5, atol=1.e-8, equal_nan=False):
+        x = np.atleast_1d(a)
+        y = np.atleast_1d(b)
 
-        if not _broadcastable_(a_, b_):
-            raise ValueError('Arrays could not be broadcast together.')
+        def within_tol(x, y, rtol, atol):
+            return np.abs(x - y) <= (atol + rtol * np.abs(y))
 
-        if a_.ndim != b_.ndim:
-            return False
+        xfin = np.isfinite(x)
+        yfin = np.isfinite(y)
+
+        if np.all(xfin) and np.all(yfin):
+            res = within_tol(x, y, rtol, atol)
         else:
-            for i in range(a_.ndim):
-                if a_.shape[i] != b_.shape[i]:
-                    return False
+            finite = xfin & yfin
+            cond = np.zeros_like(finite)
 
-            af = a_.flat
-            bf = b_.flat
+            finite_f = finite.flatten()
 
-            for i in range(a_.size):
-                if not _close_operation(af[i], bf[i], rtol, atol, equal_nan):
-                    return False
-            return True
+            x = x * np.ones_like(cond)
+            y = y * np.ones_like(cond)
+
+            x_f = x.ravel()
+            y_f = y.ravel()
+            cond_f = cond.ravel()
+
+            cond_f[finite_f] = within_tol(x_f[finite_f], y_f[finite_f], rtol, atol)
+            cond_f[~finite_f] = (x_f[~finite_f] == y_f[~finite_f])
+
+            if equal_nan:
+                both_nan = (np.isnan(x) & np.isnan(y)).ravel()
+                cond_f[both_nan] = both_nan[both_nan]
+
+            res = cond[()]
+
+        return res
+
+    return impl
+
+
+@overload(np.allclose)
+def np_allclose(a, b, rtol=1.e-5, atol=1.e-8, equal_nan=False):
+    if not type_can_asarray(a) or not type_can_asarray(b):
+        raise TypingError("Inputs must be array-like.")
+
+    def impl(a, b, rtol=1.e-5, atol=1.e-8, equal_nan=False):
+
+        return np.all(np.isclose(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan))
 
     return impl
