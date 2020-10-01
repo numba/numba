@@ -421,7 +421,9 @@ class TestCudaIntrinsic(CUDATestCase):
         # Presently not passing
         compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
         ary = np.zeros(1, dtype=np.float32)
-        val = 0.5425
+        # Value chosen to trigger the "round to even" branch of the
+        # implementation
+        val = 0.3425
         ndigits = 3
         compiled[1, 1](ary, val, ndigits)
         self.assertPreciseEqual(ary[0], round(val, ndigits), prec='single')
@@ -430,8 +432,6 @@ class TestCudaIntrinsic(CUDATestCase):
     def test_round_to_f8(self):
         compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
         ary = np.zeros(1, dtype=np.float64)
-        #vals = np.random.random(32)
-        #digits = np.arange(-5, 5)
         vals = np.random.random(32)
         np.concatenate((vals, np.array([np.inf, -np.inf, np.nan])))
         digits = (
@@ -444,12 +444,25 @@ class TestCudaIntrinsic(CUDATestCase):
                 self.assertPreciseEqual(ary[0], round(val, ndigits),
                                         prec='exact')
 
+        # Trigger the "overflow safe" branch of the implementation
         val = 0.12345678987654321 * 10e-15
         ndigits = 23
         with self.subTest(val=val, ndigits=ndigits):
             compiled[1, 1](ary, val, ndigits)
             self.assertPreciseEqual(ary[0], round(val, ndigits),
                                     prec='double')
+
+    def test_round_to_f8_halfway(self):
+        compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float64)
+        # Value chosen to trigger the "round to even" branch of the
+        # implementation, with a value that is not exactly representable with a
+        # float32.
+        val = 0.5425
+        ndigits = 3
+        compiled[1, 1](ary, val, ndigits)
+        self.assertPreciseEqual(ary[0], round(val, ndigits), prec='double')
+
 
 
 if __name__ == '__main__':
