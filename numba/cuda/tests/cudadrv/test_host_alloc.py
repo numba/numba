@@ -46,18 +46,19 @@ class TestHostAlloc(ContextResettingTestCase):
         self.assertTrue(sum(ary != 0) == 0)
 
     def test_host_operators(self):
-        ary = cuda.mapped_array(10, dtype=np.uint32)
-        ary[:] = range(10)
-        self.assertTrue(sum(ary + 1) == 55)
-        self.assertTrue(sum((ary + 1) * 2 - 1) == 100)
-        self.assertTrue(sum(ary < 5) == 5)
-        self.assertTrue(sum(ary <= 5) == 6)
-        self.assertTrue(sum(ary > 6) == 3)
-        self.assertTrue(sum(ary >= 6) == 4)
-        self.assertTrue(sum(ary ** 2) == 285)
-        self.assertTrue(sum(ary // 2) == 20)
-        self.assertTrue(sum(ary / 2.0) == 22.5)
-        self.assertTrue(sum(ary % 2) == 5)
+        for ary in [cuda.mapped_array(10, dtype=np.uint32),
+                    cuda.pinned_array(10, dtype=np.uint32)]:
+            ary[:] = range(10)
+            self.assertTrue(sum(ary + 1) == 55)
+            self.assertTrue(sum((ary + 1) * 2 - 1) == 100)
+            self.assertTrue(sum(ary < 5) == 5)
+            self.assertTrue(sum(ary <= 5) == 6)
+            self.assertTrue(sum(ary > 6) == 3)
+            self.assertTrue(sum(ary >= 6) == 4)
+            self.assertTrue(sum(ary ** 2) == 285)
+            self.assertTrue(sum(ary // 2) == 20)
+            self.assertTrue(sum(ary / 2.0) == 22.5)
+            self.assertTrue(sum(ary % 2) == 5)
 
 
 if __name__ == '__main__':
