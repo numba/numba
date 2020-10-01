@@ -5,7 +5,7 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppl
-import dpctl.ocldrv as ocldrv
+import dpctl
 
 
 @dppl.kernel
@@ -15,17 +15,11 @@ def data_parallel_sum(a, b, c):
     c[i,j] = a[i,j] + b[i,j]
 
 
-def driver(device_env, a, b, c, global_size):
-    # Copy the data to the device
-    dA = device_env.copy_array_to_device(a)
-    dB = device_env.copy_array_to_device(b)
-    dC = device_env.create_device_array(c)
-
-    print("before A: ", dA.get_ndarray())
-    print("before B: ", dB.get_ndarray())
-    data_parallel_sum[global_size, dppl.DEFAULT_LOCAL_SIZE](dA, dB, dC)
-    device_env.copy_array_from_device(dC)
-    print("after  C : ", dC.get_ndarray())
+def driver(a, b, c, global_size):
+    print("before A: ", a)
+    print("before B: ", b)
+    data_parallel_sum[global_size, dppl.DEFAULT_LOCAL_SIZE](a, b, c)
+    print("after  C : ", c)
 
 
 def main():
@@ -38,12 +32,12 @@ def main():
     b = np.array(np.random.random(X*Y), dtype=np.float32).reshape(X,Y)
     c = np.ones_like(a).reshape(X,Y)
 
-    if ocldrv.has_gpu_device:
-        with ocldrv.igpu_context(0) as device_env:
-            driver(device_env, a, b, c, global_size)
-    elif ocldrv.has_cpu_device:
-        with ocldrv.cpu_context(0) as device_env:
-            driver(device_env, a, b, c, global_size)
+    if dpctl.has_gpu_queues():
+        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+            driver(a, b, c, global_size)
+    elif dpctl.has_cpu_queues():
+        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+            driver(a, b, c, global_size)
     else:
         print("No device found")
         exit()

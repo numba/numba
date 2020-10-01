@@ -5,7 +5,7 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppl
-import dpctl.ocldrv as ocldrv
+import dpctl
 
 
 @dppl.kernel
@@ -28,15 +28,9 @@ griddim = X, X
 blockdim = Y, Y
 
 
-def driver(device_env, a, b, c):
-    # Copy the data to the device
-    dA = device_env.copy_array_to_device(a)
-    dB = device_env.copy_array_to_device(b)
-    dC = device_env.create_device_array(c)
+def driver(a, b, c):
     # Invoke the kernel
-    dppl_gemm[griddim,blockdim](dA, dB, dC)
-    # Copy results back to host
-    device_env.copy_array_from_device(dC)
+    dppl_gemm[griddim,blockdim](a, b, c)
 
 
 def main():
@@ -44,12 +38,12 @@ def main():
     b = np.array(np.random.random(X*X), dtype=np.float32).reshape(X,X)
     c = np.ones_like(a).reshape(X,X)
 
-    if ocldrv.has_gpu_device:
-        with ocldrv.igpu_context(0) as device_env:
-            driver(device_env, a, b, c)
-    elif ocldrv.has_cpu_device:
-        with ocldrv.cpu_context(0) as device_env:
-            driver(device_env, a, b, c)
+    if dpctl.has_gpu_queues():
+        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+            driver(a, b, c)
+    elif dpctl.has_cpu_queues():
+        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+            driver(a, b, c)
     else:
         print("No device found")
         exit()

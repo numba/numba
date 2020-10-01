@@ -11,6 +11,8 @@ from types import FunctionType
 from inspect import signature
 
 import dpctl
+import dpctl._memory as dpctl_mem
+import numpy as np
 
 from . import spirv_generator
 
@@ -359,10 +361,8 @@ class DPPLKernel(DPPLKernelBase):
             self._unpack_argument(ty, val, self.sycl_queue, retr,
                     kernelargs, internal_device_arrs, access_type)
 
-
         self.sycl_queue.submit(self.kernel, kernelargs, self.global_size, self.local_size)
         self.sycl_queue.wait()
-
 
         for ty, val, i_dev_arr, access_type in zip(self.argument_types, args,
                 internal_device_arrs, self.ordered_arg_access_types):
@@ -379,28 +379,28 @@ class DPPLKernel(DPPLKernelBase):
             # we get the date back to host if have created a
             # device_array or if access_type of this device_array
             # is not of type read_only and read_write
-            sycl_queue.copy_array_from_device(device_arr)
+            usm_buf, usm_ndarr, orig_ndarray = device_arr
+            np.copyto(orig_ndarray, usm_ndarr)
+
 
     def _unpack_device_array_argument(self, val, kernelargs):
-        # this function only takes DeviceArray created for ndarrays
+        # this function only takes ndarrays created using USM allocated buffer
         void_ptr_arg = True
 
         # meminfo
-        # TODO: How to pass Null pointer
-        kernelargs.append(driver.KernelArg(None, void_ptr_arg))
+        kernelargs.append(ctypes.c_long(0))
         # parent
-        kernelargs.append(driver.KernelArg(None, void_ptr_arg))
+        kernelargs.append(ctypes.c_long(0))
 
-        kernelargs.append(ctypes.c_size_t(val._ndarray.size))
-        kernelargs.append(ctypes.c_size_t(val._ndarray.dtype.itemsize))
+        kernelargs.append(ctypes.c_long(val.size))
+        kernelargs.append(ctypes.c_long(val.dtype.itemsize))
 
-        # This should be the dparray type that will have an attribute holding the actual pointer to the usm buffer
-        kernelargs.append(driver.KernelArg(val))
+        kernelargs.append(val.base)
 
-        for ax in range(val._ndarray.ndim):
-            kernelargs.append(ctypes.c_size_t(val._ndarray.shape[ax]))
-        for ax in range(val._ndarray.ndim):
-            kernelargs.append(ctypes.c_size_t(val._ndarray.strides[ax]))
+        for ax in range(val.ndim):
+            kernelargs.append(ctypes.c_long(val.shape[ax]))
+        for ax in range(val.ndim):
+            kernelargs.append(ctypes.c_long(val.strides[ax]))
 
 
     def _unpack_argument(self, ty, val, sycl_queue, retr, kernelargs,
@@ -410,36 +410,31 @@ class DPPLKernel(DPPLKernelBase):
         """
 
         device_arrs.append(None)
-        '''
-        if isinstance(val, driver.DeviceArray):
-            self._unpack_device_array_argument(val, kernelargs)
-        '''
 
         if isinstance(ty, types.Array):
             default_behavior = self.check_for_invalid_access_type(access_type)
-            dArr = None
 
-            # if type is of dparray then do nothing as the data pointer is valid in device
-            # else create
-            #dparr = dppl.DPArray(val)
+            usm_buf = dpctl_mem.MemoryUSMShared(val.size * val.dtype.itemsize)
+            usm_ndarr = np.ndarray(val.shape, buffer=usm_buf, dtype=val.dtype)
 
             if (default_behavior or
                 self.valid_access_types[access_type] == _NUMBA_DPPL_READ_ONLY or
                 self.valid_access_types[access_type] == _NUMBA_DPPL_READ_WRITE):
-                # default, read_only and read_write case
-                dArr = sycl_queue.copy_array_to_device(val)
-            elif self.valid_access_types[access_type] == _NUMBA_DPPL_WRITE_ONLY:
-                # write_only case, we do not copy the host data
-                dArr = sycl_queue.create_device_array(val)
+                np.copyto(usm_ndarr, val)
 
-            assert (dArr != None), "Problem in allocating device buffer"
-            device_arrs[-1] = dArr
-            self._unpack_device_array_argument(dArr, kernelargs)
+            device_arrs[-1] = (usm_buf, usm_ndarr, val)
+            self._unpack_device_array_argument(usm_ndarr, kernelargs)
 
         elif ty == types.int64:
             cval = ctypes.c_long(val)
             kernelargs.append(cval)
+        elif ty == types.uint64:
+            cval = ctypes.c_long(val)
+            kernelargs.append(cval)
         elif ty == types.int32:
+            cval = ctypes.c_int(val)
+            kernelargs.append(cval)
+        elif ty == types.uint32:
             cval = ctypes.c_int(val)
             kernelargs.append(cval)
         elif ty == types.float64:

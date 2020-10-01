@@ -6,12 +6,12 @@ import numba
 from numba import dppl
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
-import dpctl.ocldrv as ocldrv
+import dpctl
 import sys
 import io
 
 
-@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+@unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestDPPLFallback(DPPLTestCase):
 
     def capture_stderr(self, func):
