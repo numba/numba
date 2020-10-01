@@ -1669,12 +1669,30 @@ def get_ir_of_code(glbls, fcode):
             self.state.typemap = None
             self.state.return_type = None
             self.state.calltypes = None
-    rewrites.rewrite_registry.apply('before-inference', DummyPipeline(ir).state)
+    state = DummyPipeline(ir).state
+    rewrites.rewrite_registry.apply('before-inference', state)
     # call inline pass to handle cases like stencils and comprehensions
     swapped = {} # TODO: get this from diagnostics store
     inline_pass = numba.core.inline_closurecall.InlineClosureCallPass(
         ir, numba.core.cpu.ParallelOptions(False), swapped)
     inline_pass.run()
+
+    # TODO: DO NOT ADD MORE THINGS HERE!
+    # If adding more things here is being contemplated, it really is time to
+    # retire this function and work on getting the InlineWorker class from
+    # numba.core.inline_closurecall into sufficient shape as a replacement.
+    # The issue with `get_ir_of_code` is that it doesn't run a full compilation
+    # pipeline and as a result various additional things keep needing to be
+    # added to create valid IR.
+
+    # rebuild IR in SSA form
+    from numba.core.untyped_passes import ReconstructSSA
+    from numba.core.typed_passes import PreLowerStripPhis
+    reconstruct_ssa = ReconstructSSA()
+    phistrip = PreLowerStripPhis()
+    reconstruct_ssa.run_pass(state)
+    phistrip.run_pass(state)
+
     post_proc = postproc.PostProcessor(ir)
     post_proc.run(True)
     return ir
@@ -2003,7 +2021,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "in a function is unsupported (strange things happen!), use "
                "numba.gdb_breakpoint() to create additional breakpoints "
                "instead.\n\nRelevant documentation is available here:\n"
-               "http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
+               "https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
                "/troubleshoot.html#using-numba-s-direct-gdb-bindings-in-"
                "nopython-mode\n\nConflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
@@ -2021,7 +2039,7 @@ def warn_deprecated(func_ir, typemap):
                 arg = name.split('.')[1]
                 fname = func_ir.func_id.func_qualname
                 tyname = 'list' if isinstance(ty, types.List) else 'set'
-                url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+                url = ("https://numba.pydata.org/numba-doc/latest/reference/"
                        "deprecation.html#deprecation-of-reflection-for-list-and"
                        "-set-types")
                 msg = ("\nEncountered the use of a type that is scheduled for "

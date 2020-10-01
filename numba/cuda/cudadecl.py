@@ -283,6 +283,18 @@ class Cuda_atomic_add(AbstractTemplate):
         elif ary.ndim > 1:
             return signature(ary.dtype, ary, idx, ary.dtype)
 
+@register
+class Cuda_atomic_sub(AbstractTemplate):
+    key = cuda.atomic.sub
+
+    def generic(self, args, kws):
+        assert not kws
+        ary, idx, val = args
+
+        if ary.ndim == 1:
+            return signature(ary.dtype, ary, types.intp, ary.dtype)
+        elif ary.ndim > 1:
+            return signature(ary.dtype, ary, idx, ary.dtype)
 
 class Cuda_atomic_maxmin(AbstractTemplate):
     def generic(self, args, kws):
@@ -311,6 +323,16 @@ class Cuda_atomic_max(Cuda_atomic_maxmin):
 @register
 class Cuda_atomic_min(Cuda_atomic_maxmin):
     key = cuda.atomic.min
+
+
+@register
+class Cuda_atomic_nanmax(Cuda_atomic_maxmin):
+    key = cuda.atomic.nanmax
+
+
+@register
+class Cuda_atomic_nanmin(Cuda_atomic_maxmin):
+    key = cuda.atomic.nanmin
 
 
 @register
@@ -371,11 +393,20 @@ class CudaAtomicTemplate(AttributeTemplate):
     def resolve_add(self, mod):
         return types.Function(Cuda_atomic_add)
 
+    def resolve_sub(self, mod):
+        return types.Function(Cuda_atomic_sub)
+
     def resolve_max(self, mod):
         return types.Function(Cuda_atomic_max)
 
     def resolve_min(self, mod):
         return types.Function(Cuda_atomic_min)
+
+    def resolve_nanmin(self, mod):
+        return types.Function(Cuda_atomic_nanmin)
+
+    def resolve_nanmax(self, mod):
+        return types.Function(Cuda_atomic_nanmax)
 
     def resolve_compare_and_swap(self, mod):
         return types.Function(Cuda_atomic_compare_and_swap)

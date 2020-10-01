@@ -1,4 +1,5 @@
 from functools import partial
+from collections import deque
 
 from llvmlite import ir
 
@@ -103,11 +104,21 @@ class DataModel(object):
         """
         Recursively list all frontend types involved in this model.
         """
-        return [self._fe_type] + self.inner_types()
+        types = [self._fe_type]
+        queue = deque([self])
+        while len(queue) > 0:
+            dm = queue.popleft()
 
-    def inner_types(self):
+            for i_dm in dm.inner_models():
+                if i_dm._fe_type not in types:
+                    queue.append(i_dm)
+                    types.append(i_dm._fe_type)
+
+        return types
+
+    def inner_models(self):
         """
-        List all *inner* frontend types.
+        List all *inner* models.
         """
         return []
 
@@ -163,6 +174,7 @@ class OmittedArgDataModel(DataModel):
 
 
 @register_default(types.Boolean)
+@register_default(types.BooleanLiteral)
 class BooleanModel(DataModel):
     _bit_type = ir.IntType(1)
     _byte_type = ir.IntType(8)
@@ -302,7 +314,6 @@ class EnumModel(ProxyModel):
 @register_default(types.Dummy)
 @register_default(types.ExceptionInstance)
 @register_default(types.ExternalFunction)
-@register_default(types.Macro)
 @register_default(types.EnumClass)
 @register_default(types.IntEnumClass)
 @register_default(types.NumberClass)
@@ -311,6 +322,7 @@ class EnumModel(ProxyModel):
 @register_default(types.DType)
 @register_default(types.RecursiveCall)
 @register_default(types.MakeFunctionLiteral)
+@register_default(types.Poison)
 class OpaqueModel(PrimitiveModel):
     """
     Passed as opaque pointers
@@ -325,8 +337,8 @@ class OpaqueModel(PrimitiveModel):
 @register_default(types.MemInfoPointer)
 class MemInfoModel(OpaqueModel):
 
-    def inner_types(self):
-        return self._dmm.lookup(self._fe_type.dtype).traverse_types()
+    def inner_models(self):
+        return [self._dmm.lookup(self._fe_type.dtype)]
 
     def has_nrt_meminfo(self):
         return True
@@ -484,8 +496,8 @@ class UniTupleModel(DataModel):
         return [(self._fe_type.dtype, partial(getter, i))
                 for i in range(self._count)]
 
-    def inner_types(self):
-        return self._elem_model.traverse_types()
+    def inner_models(self):
+        return [self._elem_model]
 
 
 class CompositeModel(DataModel):
@@ -699,11 +711,8 @@ class StructModel(CompositeModel):
 
         return [(self.get_type(k), partial(getter, k)) for k in self._fields]
 
-    def inner_types(self):
-        types = []
-        for dm in self._models:
-            types += dm.traverse_types()
-        return types
+    def inner_models(self):
+        return self._models
 
 
 @register_default(types.Complex)
@@ -718,6 +727,8 @@ class ComplexModel(StructModel):
         super(ComplexModel, self).__init__(dmm, fe_type, members)
 
 
+@register_default(types.LiteralList)
+@register_default(types.LiteralStrKeyDict)
 @register_default(types.Tuple)
 @register_default(types.NamedTuple)
 @register_default(types.StarArgTuple)
@@ -1342,3 +1353,25 @@ class DeferredStructModel(CompositeModel):
     def traverse(self, builder):
         return [(self.actual_fe_type,
                  lambda value: builder.extract_value(value, [0]))]
+
+
+@register_default(types.StructRefPayload)
+class StructPayloadModel(StructModel):
+    """Model for the payload of a mutable struct
+    """
+    def __init__(self, dmm, fe_typ):
+        members = tuple(fe_typ.field_dict.items())
+        super().__init__(dmm, fe_typ, members)
+
+
+class StructRefModel(StructModel):
+    """Model for a mutable struct.
+    A reference to the payload
+    """
+    def __init__(self, dmm, fe_typ):
+        dtype = fe_typ.get_data_type()
+        members = [
+            ("meminfo", types.MemInfoPointer(dtype)),
+        ]
+        super().__init__(dmm, fe_typ, members)
+

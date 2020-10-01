@@ -57,6 +57,41 @@ def generic_is(context, builder, sig, args):
         return cgutils.false_bit
 
 
+@lower_builtin(operator.is_, types.Opaque, types.Opaque)
+def opaque_is(context, builder, sig, args):
+    """
+    Implementation for `x is y` for Opaque types.
+    """
+    lhs_type, rhs_type = sig.args
+    # the lhs and rhs have the same type
+    if lhs_type == rhs_type:
+        lhs_ptr = builder.ptrtoint(args[0], cgutils.intp_t)
+        rhs_ptr = builder.ptrtoint(args[1], cgutils.intp_t)
+
+        return builder.icmp_unsigned('==', lhs_ptr, rhs_ptr)
+    else:
+        return cgutils.false_bit
+
+
+@lower_builtin(operator.is_, types.Boolean, types.Boolean)
+def bool_is_impl(context, builder, sig, args):
+    """
+    Implementation for `x is y` for types derived from types.Boolean
+    (e.g. BooleanLiteral), and cross-checks between literal and non-literal
+    booleans, to satisfy Python's behavior preserving identity for bools.
+    """
+    arg1, arg2 = args
+    arg1_type, arg2_type = sig.args
+    _arg1 = context.cast(builder, arg1, arg1_type, types.boolean)
+    _arg2 = context.cast(builder, arg2, arg2_type, types.boolean)
+    eq_impl = context.get_function(
+        operator.eq,
+        typing.signature(types.boolean, types.boolean, types.boolean)
+    )
+    return eq_impl(builder, (_arg1, _arg2))
+
+
+# keep types.IntegerLiteral, as otherwise there's ambiguity between this and int_eq_impl
 @lower_builtin(operator.eq, types.Literal, types.Literal)
 @lower_builtin(operator.eq, types.IntegerLiteral, types.IntegerLiteral)
 def const_eq_impl(context, builder, sig, args):
@@ -68,7 +103,9 @@ def const_eq_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-@lower_builtin(operator.ne, types.StringLiteral, types.StringLiteral)
+# keep types.IntegerLiteral, as otherwise there's ambiguity between this and int_ne_impl
+@lower_builtin(operator.ne, types.Literal, types.Literal)
+@lower_builtin(operator.ne, types.IntegerLiteral, types.IntegerLiteral)
 def const_ne_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     val = 0
@@ -415,24 +452,14 @@ def bool_none(x):
 
 def get_type_max_value(typ):
     if isinstance(typ, types.Float):
-        bw = typ.bitwidth
-        if bw == 32:
-            return np.finfo(np.float32).max
-        if bw == 64:
-            return np.finfo(np.float64).max
-        raise NotImplementedError("Unsupported floating point type")
+        return np.inf
     if isinstance(typ, types.Integer):
         return typ.maxval
     raise NotImplementedError("Unsupported type")
 
 def get_type_min_value(typ):
     if isinstance(typ, types.Float):
-        bw = typ.bitwidth
-        if bw == 32:
-            return np.finfo(np.float32).min
-        if bw == 64:
-            return np.finfo(np.float64).min
-        raise NotImplementedError("Unsupported floating point type")
+        return -np.inf
     if isinstance(typ, types.Integer):
         return typ.minval
     raise NotImplementedError("Unsupported type")
@@ -455,7 +482,7 @@ def lower_get_type_min_value(context, builder, sig, args):
         else:
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
-        res = ir.Constant(lty, np.finfo(npty).min)
+        res = ir.Constant(lty, -np.inf)
     return impl_ret_untracked(context, builder, lty, res)
 
 @lower_builtin(get_type_max_value, types.NumberClass)
@@ -476,7 +503,7 @@ def lower_get_type_max_value(context, builder, sig, args):
         else:
             raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
         npty = getattr(np, 'float{}'.format(bw))
-        res = ir.Constant(lty, np.finfo(npty).max)
+        res = ir.Constant(lty, np.inf)
     return impl_ret_untracked(context, builder, lty, res)
 
 # -----------------------------------------------------------------------------

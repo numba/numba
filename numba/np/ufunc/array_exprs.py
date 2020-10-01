@@ -2,6 +2,7 @@ import ast
 from collections import defaultdict, OrderedDict
 import contextlib
 import sys
+from types import SimpleNamespace
 
 import numpy as np
 import operator
@@ -392,6 +393,10 @@ def _lower_array_expr(lowerer, expr):
             return self.cast(result, inner_sig.return_type,
                              self.outer_sig.return_type)
 
+    # create a fake ufunc object which is enough to trick numpy_ufunc_kernel
+    ufunc = SimpleNamespace(nin=len(expr_args), nout=1, __name__=expr_name)
+    ufunc.nargs = ufunc.nin + ufunc.nout
+
     args = [lowerer.loadvar(name) for name in expr_args]
     return npyimpl.numpy_ufunc_kernel(
-        context, builder, outer_sig, args, ExprKernel, explicit_output=False)
+        context, builder, outer_sig, args, ufunc, ExprKernel)

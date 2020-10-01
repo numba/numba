@@ -15,7 +15,7 @@ from numba.np.numpy_support import numpy_version
 from numba.core.errors import TypingError
 from numba.core.config import IS_WIN32, IS_32BITS
 from numba.core.utils import pysignature
-from numba.np.arraymath import cross2d
+from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
                                  needs_blas, skip_ppc64le_issue4026)
 import unittest
@@ -67,6 +67,10 @@ def bincount1(a):
 
 def bincount2(a, w):
     return np.bincount(a, weights=w)
+
+
+def bincount3(a, w=None, minlength=0):
+    return np.bincount(a, w, minlength)
 
 
 def searchsorted(a, v):
@@ -239,6 +243,10 @@ def asarray(a):
 
 def asarray_kws(a, dtype):
     return np.asarray(a, dtype=dtype)
+
+
+def asfarray(a, dtype=np.float64):
+    return np.asfarray(a, dtype=dtype)
 
 
 def extract(condition, arr):
@@ -747,6 +755,37 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             cfunc([2, -1], [0])
         self.assertIn("weights and list don't have the same length",
+                      str(raises.exception))
+
+    def test_bincount3(self):
+        pyfunc = bincount3
+        cfunc = jit(nopython=True)(pyfunc)
+        for seq in self.bincount_sequences():
+            a_max = max(seq)
+            # Length should be a_max in the first case, minlength in the second
+            for minlength in (a_max, a_max + 2):
+                expected = pyfunc(seq, None, minlength)
+                got = cfunc(seq, None, minlength)
+                self.assertEqual(len(expected), len(got))
+                self.assertPreciseEqual(expected, got)
+
+    def test_bincount3_exceptions(self):
+        pyfunc = bincount3
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        # Negative input
+        with self.assertRaises(ValueError) as raises:
+            cfunc([2, -1], [0, 0])
+        self.assertIn("first argument must be non-negative",
+                      str(raises.exception))
+
+        # Negative minlength
+        with self.assertRaises(ValueError) as raises:
+            cfunc([17, 38], None, -1)
+        self.assertIn("'minlength' must not be negative",
                       str(raises.exception))
 
     def test_searchsorted(self):
@@ -3106,6 +3145,31 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 else:
                     check_pass_through(cfunc, True, params)
 
+    def test_asarray_literal(self):
+
+        def case1():
+            return np.asarray("hello world")
+
+        def case2(): # kind1
+            s = "hello world"
+            return np.asarray(s)
+
+        def case3(): # kind2
+            s = '大处 着眼，小处着手。大大大处'
+            return np.asarray(s)
+
+        def case4():
+            s = ''
+            return np.asarray(s)
+
+        funcs = [case1, case2, case3, case4]
+
+        for pyfunc in funcs:
+            cfunc = jit(nopython=True)(pyfunc)
+            expected = pyfunc()
+            got = cfunc()
+            self.assertPreciseEqual(expected, got)
+
     def test_asarray_rejects_List_with_illegal_dtype(self):
         self.disable_leak_check()
         cfunc = jit(nopython=True)(asarray)
@@ -3147,6 +3211,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         test_reject(make_nested_list())
         test_reject(make_nested_list_with_dict())
         test_reject(make_unicode_list())
+
+    def test_asfarray(self):
+        def inputs():
+            yield np.array([1, 2, 3]), None
+            yield np.array([2, 3], dtype=np.float32), np.float32
+            yield np.array([2, 3], dtype=np.int8), np.int8
+            yield np.array([2, 3], dtype=np.int8), np.complex64
+            yield np.array([2, 3], dtype=np.int8), np.complex128
+
+        pyfunc = asfarray
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, dt in inputs():
+            if dt is None:
+                expected = pyfunc(arr)
+                got = cfunc(arr)
+            else:
+                expected = pyfunc(arr, dtype=dt)
+                got = cfunc(arr, dtype=dt)
+
+            self.assertPreciseEqual(expected, got)
+            self.assertTrue(np.issubdtype(got.dtype, np.inexact), got.dtype)
 
     def test_repeat(self):
         # np.repeat(a, repeats)
@@ -3501,7 +3587,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array((3, 4))
             )
         self.assertIn(
-            'Dimensions for both inputs is 2',
+            'Dimensions for both inputs is 2.',
+            str(raises.exception)
+        )
+
+        self.assertIn(
+            '`cross2d(a, b)` from `numba.np.extensions`.',
             str(raises.exception)
         )
 

@@ -11,6 +11,11 @@ be used to debug CUDA Python code, either by adding print statements to your
 code, or by using the debugger to step through the execution of an individual
 thread.
 
+The simulator deliberately allows running non-CUDA code like starting a debugger 
+and printing arbitrary expressions for debugging purposes. Therefore, it is
+best to start from code that compiles for the CUDA target, and then move over to
+the simulator to investigate issues.
+
 Execution of kernels is performed by the simulator one block at a time. One
 thread is spawned for each thread in the block, and scheduling of the execution
 of these threads is left up to the operating system.

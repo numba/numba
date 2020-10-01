@@ -10,6 +10,7 @@ from numba.core.compiler import compile_isolated
 from numba import jit
 from numba.core import types, utils
 from numba.core.errors import TypingError, LoweringError
+from numba.core.types.functions import _header_lead
 from numba.tests.support import tag, _32bit, captured_stdout
 
 
@@ -185,12 +186,21 @@ class TestListComprehension(TestCase):
             z = [float(y) if y > 3 else y for y in x]
             return z
 
+        def list25(x):
+            # See issue #6260. Old style inline_closure_call uses get_ir_of_code
+            # for the closure->IR transform, without SSA there's multiply
+            # defined labels, the unary negation is self referent and DCE runs
+            # eliminating the duplicated labels.
+            included = np.array([1, 2, 6, 8])
+            not_included = [i for i in range(10) if i not in list(included)]
+            return not_included
+
         # functions to test that are expected to pass
         f = [list1, list2, list3, list4,
              list6, list7, list8, list9, list10, list11,
              list12, list13, list14, list15,
              list16, list17, list18, list19, list20,
-             list21, list22, list23, list24]
+             list21, list22, list23, list24, list25]
 
         var = [1, 2, 3, 4, 5]
         for ref in f:
@@ -281,6 +291,16 @@ class TestArrayComprehension(unittest.TestCase):
         finally:
             ic.enable_inline_arraycall = True
 
+    def test_comp_with_array_noinline_issue_6053(self):
+        def comp_with_array_noinline(n):
+            lst = [0]
+            for i in range(n):
+                lst.append(i)
+            l = np.array(lst)
+            return l
+
+        self.check(comp_with_array_noinline, 5, assert_allocate_list=True)
+
     def test_comp_nest_with_array(self):
         def comp_nest_with_array(n):
             l = np.array([[i * j for j in range(n)] for i in range(n)])
@@ -347,7 +367,7 @@ class TestArrayComprehension(unittest.TestCase):
         # test is expected to fail
         with self.assertRaises(TypingError) as raises:
             self.check(comp_nest_with_dependency, 5)
-        self.assertIn('Invalid use of Function', str(raises.exception))
+        self.assertIn(_header_lead, str(raises.exception))
         self.assertIn('array(undefined,', str(raises.exception))
 
     def test_no_array_comp(self):
@@ -432,7 +452,7 @@ class TestArrayComprehension(unittest.TestCase):
             cfunc = jit(nopython=True)(array_comp)
             cfunc(10, 2.3j)
         self.assertIn(
-            "Invalid use of Function({})".format(operator.setitem),
+            _header_lead + " Function({})".format(operator.setitem),
             str(raises.exception),
         )
         self.assertIn(

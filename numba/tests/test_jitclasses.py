@@ -2,20 +2,19 @@ from collections import OrderedDict
 import ctypes
 import random
 import pickle
-import warnings
 
-import numba
 import numpy as np
 
 from numba import (float32, float64, int16, int32, boolean, deferred_type,
                    optional)
 from numba import njit, typeof
 from numba.core import types, errors
-from numba.tests.support import TestCase, MemoryLeakMixin
-from numba.experimental.jitclass import _box
-from numba.core.runtime.nrt import MemInfo
+from numba.core.dispatcher import Dispatcher
 from numba.core.errors import LoweringError
+from numba.core.runtime.nrt import MemInfo
 from numba.experimental import jitclass
+from numba.experimental.jitclass import _box
+from numba.tests.support import TestCase, MemoryLeakMixin
 import unittest
 
 
@@ -629,6 +628,7 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         @jitclass([])
         class Apple(object):
             "Class docstring"
+
             def __init__(self):
                 "init docstring"
 
@@ -942,19 +942,88 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         pickled = pickle.dumps(ty)
         self.assertIs(pickle.loads(pickled), ty)
 
-    def test_import_warnings(self):
-        class Test:
+    def test_static_methods(self):
+        @jitclass([("x", int32)])
+        class Test1:
+            def __init__(self, x):
+                self.x = x
+
+            def increase(self, y):
+                self.x = self.add(self.x, y)
+                return self.x
+
+            @staticmethod
+            def add(a, b):
+                return a + b
+
+            @staticmethod
+            def sub(a, b):
+                return a - b
+
+        @jitclass([("x", int32)])
+        class Test2:
+            def __init__(self, x):
+                self.x = x
+
+            def increase(self, y):
+                self.x = self.add(self.x, y)
+                return self.x
+
+            @staticmethod
+            def add(a, b):
+                return a - b
+
+        self.assertIsInstance(Test1.add, Dispatcher)
+        self.assertIsInstance(Test1.sub, Dispatcher)
+        self.assertIsInstance(Test2.add, Dispatcher)
+        self.assertNotEqual(Test1.add, Test2.add)
+
+        self.assertEqual(3, Test1.add(1, 2))
+        self.assertEqual(-1, Test2.add(1, 2))
+        self.assertEqual(4, Test1.sub(6, 2))
+
+        t1 = Test1(0)
+        t2 = Test2(0)
+        self.assertEqual(1, t1.increase(1))
+        self.assertEqual(-1, t2.increase(1))
+        self.assertEqual(2, t1.add(1, 1))
+        self.assertEqual(0, t1.sub(1, 1))
+        self.assertEqual(0, t2.add(1, 1))
+        self.assertEqual(2j, t1.add(1j, 1j))
+        self.assertEqual(1j, t1.sub(2j, 1j))
+        self.assertEqual("foobar", t1.add("foo", "bar"))
+
+        with self.assertRaises(AttributeError) as raises:
+            Test2.sub(3, 1)
+        self.assertIn("has no attribute 'sub'",
+                      str(raises.exception))
+
+        with self.assertRaises(TypeError) as raises:
+            Test1.add(3)
+        self.assertIn("not enough arguments: expected 2, got 1",
+                      str(raises.exception))
+
+        # Check error message for calling a static method as a class attr from
+        # another method (currently unsupported).
+
+        @jitclass([])
+        class Test3:
             def __init__(self):
                 pass
 
-        with warnings.catch_warnings(record=True) as ws:
-            numba.experimental.jitclass([])(Test)
-            self.assertEqual(len(ws), 0)
+            @staticmethod
+            def a_static_method(a, b):
+                pass
 
-            numba.jitclass([])(Test)
-            self.assertEqual(len(ws), 1)
-            self.assertIs(ws[0].category, errors.NumbaDeprecationWarning)
-            self.assertIn("numba.experimental.jitclass", ws[0].message.msg)
+            def call_static(self):
+                return Test3.a_static_method(1, 2)
+
+        invalid = Test3()
+        with self.assertRaises(errors.TypingError) as raises:
+            invalid.call_static()
+
+        self.assertIn("Unknown attribute 'a_static_method'",
+                      str(raises.exception))
 
 
 if __name__ == '__main__':

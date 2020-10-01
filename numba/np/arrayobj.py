@@ -3507,6 +3507,7 @@ def numpy_empty_nd(context, builder, sig, args):
 
 @lower_builtin(np.empty_like, types.Any)
 @lower_builtin(np.empty_like, types.Any, types.DTypeSpec)
+@lower_builtin(np.empty_like, types.Any, types.StringLiteral)
 def numpy_empty_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
@@ -3524,6 +3525,7 @@ def numpy_zeros_nd(context, builder, sig, args):
 
 @lower_builtin(np.zeros_like, types.Any)
 @lower_builtin(np.zeros_like, types.Any, types.DTypeSpec)
+@lower_builtin(np.zeros_like, types.Any, types.StringLiteral)
 def numpy_zeros_like_nd(context, builder, sig, args):
     arrtype, shapes = _parse_empty_like_args(context, builder, sig, args)
     ary = _empty_nd_impl(context, builder, arrtype, shapes)
@@ -3545,6 +3547,7 @@ def numpy_full_nd(context, builder, sig, args):
 
 
 @lower_builtin(np.full, types.Any, types.Any, types.DTypeSpec)
+@lower_builtin(np.full, types.Any, types.Any, types.StringLiteral)
 def numpy_full_dtype_nd(context, builder, sig, args):
 
     def full(shape, value, dtype):
@@ -3571,6 +3574,7 @@ def numpy_full_like_nd(context, builder, sig, args):
 
 
 @lower_builtin(np.full_like, types.Any, types.Any, types.DTypeSpec)
+@lower_builtin(np.full_like, types.Any, types.Any, types.StringLiteral)
 def numpy_full_like_nd_type_spec(context, builder, sig, args):
 
     def full_like(arr, value, dtype):
@@ -3599,6 +3603,7 @@ def numpy_ones_nd(context, builder, sig, args):
 
 
 @lower_builtin(np.ones, types.Any, types.DTypeSpec)
+@lower_builtin(np.ones, types.Any, types.StringLiteral)
 def numpy_ones_dtype_nd(context, builder, sig, args):
 
     def ones(shape, dtype):
@@ -3625,6 +3630,7 @@ def numpy_ones_like_nd(context, builder, sig, args):
 
 
 @lower_builtin(np.ones_like, types.Any, types.DTypeSpec)
+@lower_builtin(np.ones_like, types.Any, types.StringLiteral)
 def numpy_ones_like_dtype_nd(context, builder, sig, args):
 
     def ones_like(arr, dtype):
@@ -3651,6 +3657,7 @@ def numpy_identity(context, builder, sig, args):
 
 
 @lower_builtin(np.identity, types.Integer, types.DTypeSpec)
+@lower_builtin(np.identity, types.Integer, types.StringLiteral)
 def numpy_identity_type_spec(context, builder, sig, args):
 
     def identity(n, dtype):
@@ -4092,6 +4099,7 @@ def array_astype(context, builder, sig, args):
 
 @lower_builtin(np.frombuffer, types.Buffer)
 @lower_builtin(np.frombuffer, types.Buffer, types.DTypeSpec)
+@lower_builtin(np.frombuffer, types.Buffer, types.StringLiteral)
 def np_frombuffer(context, builder, sig, args):
     bufty = sig.args[0]
     aryty = sig.return_type
@@ -4327,6 +4335,7 @@ def assign_sequence_to_array(context, builder, data, shapes, strides,
 
 @lower_builtin(np.array, types.Any)
 @lower_builtin(np.array, types.Any, types.DTypeSpec)
+@lower_builtin(np.array, types.Any, types.StringLiteral)
 def np_array(context, builder, sig, args):
     arrty = sig.return_type
     ndim = arrty.ndim

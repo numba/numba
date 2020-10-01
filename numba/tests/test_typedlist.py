@@ -1016,6 +1016,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     def test_list_as_item_in_list(self):
         nested_type = types.ListType(types.int32)
+
         @njit
         def foo():
             la = List.empty_list(nested_type)
@@ -1030,6 +1031,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
 
     def test_array_as_item_in_list(self):
         nested_type = types.Array(types.float64, 1, 'C')
+
         @njit
         def foo():
             l = List.empty_list(nested_type)
@@ -1321,6 +1323,7 @@ class TestImmutable(MemoryLeakMixin, TestCase):
 
     def test_append_fails(self):
         self.disable_leak_check()
+
         @njit
         def foo():
             l = List()
@@ -1470,21 +1473,27 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
     def test_ndarray_twod(self):
 
         @njit
-        def foo():
-            return List(np.array([[1,2],[3,4]]))
+        def foo(x):
+            return List(x)
 
-        expected = List()
-        expected.append(np.array([1,2]))
-        expected.append(np.array([3,4]))
-        received = foo()
+        carr = np.array([[1, 2], [3, 4]])
+        farr = np.asfortranarray(carr)
+        aarr = np.arange(8).reshape((2, 4))[:, ::2]
 
-        np.testing.assert_equal(expected[0], received[0])
-        np.testing.assert_equal(expected[1], received[1])
+        for layout, arr in zip('CFA', (carr, farr, aarr)):
+            self.assertEqual(typeof(arr).layout, layout)
+            expected = List()
+            expected.append(arr[0, :])
+            expected.append(arr[1, :])
+            received = foo(arr)
 
-        pyreceived = foo.py_func()
+            np.testing.assert_equal(expected[0], received[0])
+            np.testing.assert_equal(expected[1], received[1])
 
-        np.testing.assert_equal(expected[0], pyreceived[0])
-        np.testing.assert_equal(expected[1], pyreceived[1])
+            pyreceived = foo.py_func(arr)
+
+            np.testing.assert_equal(expected[0], pyreceived[0])
+            np.testing.assert_equal(expected[1], pyreceived[1])
 
     def test_exception_on_plain_int(self):
         @njit

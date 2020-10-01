@@ -177,7 +177,7 @@ class ObjectModeBackEnd(LoweringPass):
             warnings.warn(errors.NumbaWarning(warn_msg,
                                               state.func_ir.loc))
 
-            url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+            url = ("https://numba.pydata.org/numba-doc/latest/reference/"
                    "deprecation.html#deprecation-of-object-mode-fall-"
                    "back-behaviour-when-using-jit")
             msg = ("\nFall-back from the nopython compilation path to the "

@@ -58,6 +58,7 @@ class CPUContext(BaseContext):
 
         # Initialize additional implementations
         import numba.cpython.unicode
+        import numba.cpython.charseq
         import numba.typed.dictimpl
         import numba.experimental.function_type
 
@@ -106,7 +107,9 @@ class CPUContext(BaseContext):
                                         self.get_env_name(self.fndesc))
         envarg = builder.load(envgv)
         pyapi = self.get_python_api(builder)
-        pyapi.emit_environment_sentry(envarg)
+        pyapi.emit_environment_sentry(
+            envarg, debug_msg=self.fndesc.env_name,
+        )
         env_body = self.get_env_body(builder, envarg)
         return pyapi.get_env_manager(self.environment, env_body, envarg)
 
