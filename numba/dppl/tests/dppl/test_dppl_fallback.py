@@ -49,7 +49,7 @@ class TestDPPLFallback(DPPLTestCase):
         ref_result = ref()
 
         np.testing.assert_array_equal(dppl_result, ref_result)
-        self.assertTrue('Failed to lower parfor on GPU' in err)
+        self.assertTrue('Failed to lower parfor on DPPL-device' in err)
 
 
 if __name__ == '__main__':
