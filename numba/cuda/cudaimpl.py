@@ -468,6 +468,9 @@ def ptx_round(context, builder, sig, args):
     ])
 
 
+# This rounding implementation follows the algorithm used in the "fallback
+# version" of double_round in CPython 3.7.5's Objects/floatobject.c.
+
 @lower(round, types.f4, types.Integer)
 @lower(round, types.f8, types.Integer)
 def round_to_impl(context, builder, sig, args):
@@ -487,12 +490,10 @@ def round_to_impl(context, builder, sig, args):
             y = (x * pow1) * pow2
             if math.isinf(y):
                 return x
-            #return (round(y) / pow2) / pow1
 
         else:
             pow1 = 10.0 ** (-ndigits)
             y = x / pow1
-            #return round(y) * pow1
 
         z = round(y)
         if (math.fabs(y - z) == 0.5):
