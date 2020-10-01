@@ -44,6 +44,9 @@ class TestHostAlloc(ContextResettingTestCase):
         driver.device_memset(ary, 0, driver.device_memory_size(ary))
         self.assertTrue(all(ary == 0))
         self.assertTrue(sum(ary != 0) == 0)
+
+    def test_host_operators(self):
+        ary = cuda.mapped_array(10, dtype=np.uint32)
         ary[:] = range(10)
         self.assertTrue(sum(ary + 1) == 55)
         self.assertTrue(sum((ary + 1) * 2 - 1) == 100)
