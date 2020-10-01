@@ -7,11 +7,11 @@ import argparse
 import timeit
 
 from numba import dppl
-import dpctl.ocldrv as ocldrv
+import dpctl
 
 parser = argparse.ArgumentParser(description='Program to compute pairwise distance')
 
-parser.add_argument('-n', type=int, default=10, required=True, help='Number of points')
+parser.add_argument('-n', type=int, default=10, help='Number of points')
 parser.add_argument('-d', type=int, default=3, help='Dimensions')
 parser.add_argument('-r', type=int, default=1, help='repeat')
 parser.add_argument('-l', type=int, default=1, help='local_work_size')
@@ -40,24 +40,18 @@ def pairwise_distance(X, D, xshape0, xshape1):
         D[idx, j] = sqrt(d)
 
 
-def driver(device_env):
+def driver():
     #measure running time
     times = list()
 
-    # Copy the data to the device
-    dX = device_env.copy_array_to_device(X)
-    dD = ocldrv.DeviceArray(device_env.get_env_ptr(), D)
 
     for repeat in range(args.r):
         start = time()
-        pairwise_distance[global_size, local_size](dX, dD, X.shape[0], X.shape[1])
+        pairwise_distance[global_size, local_size](X, D, X.shape[0], X.shape[1])
         end = time()
 
         total_time = end - start
         times.append(total_time)
-
-    # Get the data back from device to host
-    device_env.copy_array_from_device(dD)
 
     return times
 
@@ -65,12 +59,12 @@ def driver(device_env):
 def main():
     times = None
 
-    if ocldrv.has_gpu_device:
-        with ocldrv.igpu_context(0) as device_env:
-            times = driver(device_env)
-    elif ocldrv.has_cpu_device:
-        with ocldrv.cpu_context(0) as device_env:
-            times = driver(device_env)
+    if dpctl.has_gpu_queues():
+        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+            times = driver()
+    elif dpctl.has_cpu_queues():
+        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+            times = driver()
     else:
         print("No device found")
         exit()

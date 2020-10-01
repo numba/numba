@@ -5,7 +5,7 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppl
-import dpctl.ocldrv as ocldrv
+import dpctl
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
 import math
@@ -50,24 +50,21 @@ N = global_size
 
 a = np.array(np.random.random(N), dtype=np.float32)
 
-def driver(a, device_env, jitfunc):
+def driver(a, jitfunc):
     b = np.ones_like(a)
     # Device buffers
-    dA = device_env.copy_array_to_device(a)
-    dB = device_env.create_device_array(b)
-    jitfunc[global_size, dppl.DEFAULT_LOCAL_SIZE](dA, dB)
-    device_env.copy_array_from_device(dB)
-    return dB.get_ndarray()
+    jitfunc[global_size, dppl.DEFAULT_LOCAL_SIZE](a, b)
+    return b
 
 
 def test_driver(input_arr, device_ty, jitfunc):
     out_actual = None
     if device_ty == "GPU":
-        with ocldrv.igpu_context(0) as device_env:
-            out_actual = driver(input_arr, device_env, jitfunc)
+        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+            out_actual = driver(input_arr, jitfunc)
     elif device_ty == "CPU":
-        with ocldrv.cpu_context(0) as device_env:
-            out_actual = driver(input_arr, device_env, jitfunc)
+        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+            out_actual = driver(input_arr, jitfunc)
     else:
         print("Unknown device type")
         raise SystemExit()
@@ -75,7 +72,7 @@ def test_driver(input_arr, device_ty, jitfunc):
     return out_actual
 
 
-@unittest.skipUnless(ocldrv.has_cpu_device, 'test only on CPU system')
+@unittest.skipUnless(dpctl.has_cpu_queues(), 'test only on CPU system')
 class TestDPPLMathFunctionsCPU(DPPLTestCase):
     def test_fabs_cpu(self):
         b_actual = test_driver(a, "CPU", dppl_fabs)
@@ -108,7 +105,7 @@ class TestDPPLMathFunctionsCPU(DPPLTestCase):
         self.assertTrue(np.allclose(b_actual,b_expected))
 
 
-@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+@unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestDPPLMathFunctionsGPU(DPPLTestCase):
     def test_fabs_gpu(self):
         b_actual = test_driver(a, "GPU", dppl_fabs)
