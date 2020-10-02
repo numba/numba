@@ -39,7 +39,7 @@ from numba.core.errors import NumbaParallelSafetyWarning, NumbaPerformanceWarnin
 
 from .target import SPIR_GENERIC_ADDRSPACE
 from .dufunc_inliner import dufunc_inliner
-from . import dppl_host_fn_call_gen as dppl_call_gen
+from . import dppl_host_fn_call_gen1 as dppl_call_gen
 import dpctl
 from numba.dppl.target import DPPLTargetContext
 
@@ -866,6 +866,7 @@ def generate_dppl_host_wrapper(lowerer,
         print("modified_arrays", modified_arrays)
 #        print("cres.library", cres.library, type(cres.library))
 #        print("cres.fndesc", cres.fndesc, type(cres.fndesc))
+
 
     # get dppl_cpu_portion_lowerer object
     dppl_cpu_lowerer = dppl_call_gen.DPPLHostFunctionCallsGenerator(
