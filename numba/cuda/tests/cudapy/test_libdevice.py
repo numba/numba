@@ -64,8 +64,8 @@ class TestLibdevice(CUDATestCase):
 
         frac_expect, exp_expect = np.frexp(arr)
 
-        np.testing.assert_allclose(frac_expect, fracres)
-        np.testing.assert_allclose(exp_expect, expres)
+        np.testing.assert_array_equal(frac_expect, fracres)
+        np.testing.assert_array_equal(exp_expect, expres)
 
     def test_sad(self):
         # Test return of a scalar from a libdevice function
@@ -77,7 +77,7 @@ class TestLibdevice(CUDATestCase):
         cufunc = cuda.jit(use_sad)
         cufunc[4, 32](r, x, y, z)
 
-        np.testing.assert_allclose(np.abs(x - y) + z, r)
+        np.testing.assert_array_equal(np.abs(x - y) + z, r)
 
 
 # A template for generating tests of compiling calls to libdevice functions.
