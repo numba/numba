@@ -20,3 +20,4 @@ class DpplOffloadDispatcher(dispatcher.Dispatcher):
                 targetoptions=targetoptions, impl_kind=impl_kind, pipeline_class=pipeline_class)
 
 dispatcher_registry['__dppl_offload_gpu__'] = DpplOffloadDispatcher
+dispatcher_registry['__dppl_offload_cpu__'] = DpplOffloadDispatcher
