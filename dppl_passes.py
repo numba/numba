@@ -49,7 +49,8 @@ class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
 
         typingctx = state.typingctx
         from numba.core.typing.templates import builtin_registry as reg, infer_global
-        from numba.core.typing.templates import (AbstractTemplate, signature)
+        from numba.core.typing.templates import (AbstractTemplate, CallableTemplate, signature)
+        from numba.core.typing.npydecl import MatMulTyperMixin
 
         @infer_global(np.cov)
         class NPCov(AbstractTemplate):
@@ -61,6 +62,18 @@ class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
                 nb_dtype = types.float64
                 return_type = types.Array(dtype=nb_dtype, ndim=args[0].ndim, layout='C')
                 return signature(return_type, *args)
+
+        @infer_global(np.matmul, typing_key="np.matmul")
+        class matmul(MatMulTyperMixin, AbstractTemplate):
+            key = np.matmul
+            func_name = "np.matmul()"
+
+            def generic(self, args, kws):
+                assert not kws
+                restype = self.matmul_typer(*args)
+                if restype is not None:
+                    return signature(restype, *args)
+
 
         prev_cov = None
         for idx, g in enumerate(reg.globals):
@@ -153,7 +166,9 @@ class DPPLPreParforPass(FunctionPass):
         functions_map = replace_functions_map.copy()
         functions_map.pop(('dot', 'numpy'), None)
         functions_map.pop(('sum', 'numpy'), None)
+        functions_map.pop(('prod', 'numpy'), None)
         functions_map.pop(('argmax', 'numpy'), None)
+        functions_map.pop(('argin', 'numpy'), None)
 
         preparfor_pass = _parfor_PreParforPass(
             state.func_ir,
