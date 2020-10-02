@@ -412,18 +412,22 @@ class DPPLKernel(DPPLKernelBase):
         device_arrs.append(None)
 
         if isinstance(ty, types.Array):
-            default_behavior = self.check_for_invalid_access_type(access_type)
 
-            usm_buf = dpctl_mem.MemoryUSMShared(val.size * val.dtype.itemsize)
-            usm_ndarr = np.ndarray(val.shape, buffer=usm_buf, dtype=val.dtype)
+            if val.base != None and isinstance(val.base, dpctl_mem.Memory):
+                self._unpack_device_array_argument(val, kernelargs)
+            else:
+                default_behavior = self.check_for_invalid_access_type(access_type)
 
-            if (default_behavior or
-                self.valid_access_types[access_type] == _NUMBA_DPPL_READ_ONLY or
-                self.valid_access_types[access_type] == _NUMBA_DPPL_READ_WRITE):
-                np.copyto(usm_ndarr, val)
+                usm_buf = dpctl_mem.MemoryUSMShared(val.size * val.dtype.itemsize)
+                usm_ndarr = np.ndarray(val.shape, buffer=usm_buf, dtype=val.dtype)
 
-            device_arrs[-1] = (usm_buf, usm_ndarr, val)
-            self._unpack_device_array_argument(usm_ndarr, kernelargs)
+                if (default_behavior or
+                    self.valid_access_types[access_type] == _NUMBA_DPPL_READ_ONLY or
+                    self.valid_access_types[access_type] == _NUMBA_DPPL_READ_WRITE):
+                    np.copyto(usm_ndarr, val)
+
+                device_arrs[-1] = (usm_buf, usm_ndarr, val)
+                self._unpack_device_array_argument(usm_ndarr, kernelargs)
 
         elif ty == types.int64:
             cval = ctypes.c_long(val)

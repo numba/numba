@@ -8,6 +8,7 @@ import timeit
 
 from numba import dppl
 import dpctl
+import dpctl._memory as dpctl_mem
 
 parser = argparse.ArgumentParser(description='Program to compute pairwise distance')
 
@@ -44,14 +45,24 @@ def driver():
     #measure running time
     times = list()
 
+    xbuf = dpctl_mem.MemoryUSMShared(X.size * X.dtype.itemsize)
+    x_ndarray = np.ndarray(X.shape, buffer=xbuf, dtype=X.dtype)
+    np.copyto(x_ndarray, X)
+
+    dbuf = dpctl_mem.MemoryUSMShared(D.size * D.dtype.itemsize)
+    d_ndarray = np.ndarray(D.shape, buffer=dbuf, dtype=D.dtype)
+    np.copyto(d_ndarray, D)
 
     for repeat in range(args.r):
         start = time()
-        pairwise_distance[global_size, local_size](X, D, X.shape[0], X.shape[1])
+        pairwise_distance[global_size, local_size](x_ndarray, d_ndarray, X.shape[0], X.shape[1])
         end = time()
 
         total_time = end - start
         times.append(total_time)
+
+    np.copyto(X, x_ndarray)
+    np.copyto(D, d_ndarray)
 
     return times
 
