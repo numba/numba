@@ -635,7 +635,6 @@ def _lower_parfor_gufunc(lowerer, parfor):
        the reduction function across the reduction arrays to produce
        the final reduction values.
     """
-
     typingctx = lowerer.context.typing_context
     targetctx = lowerer.context
     # We copy the typemap here because for race condition variable we'll
@@ -1017,6 +1016,9 @@ def lower_parfor_rollback(lowerer, parfor):
     except Exception as e:
         msg = "Failed to lower parfor on DPPL-device"
         warnings.warn(NumbaPerformanceWarning(msg, parfor.loc))
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+        print(exc_type, fname, exc_tb.tb_lineno)
         raise e
     finally:
         parfor.params = cache_parfor_params
