@@ -50,7 +50,6 @@ cdef DPNPFuncName get_DPNPFuncName_from_str(name):
     elif name == "dpnp_matmul":
         return DPNPFuncName.DPNP_FN_MATMUL
     elif name == "dpnp_sum":
-    elif name == "dpnp_sum":
         return DPNPFuncName.DPNP_FN_SUM
     elif name == "dpnp_argmax":
         return DPNPFuncName.DPNP_FN_ARGMAX

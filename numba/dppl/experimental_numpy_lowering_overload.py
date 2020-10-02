@@ -58,6 +58,15 @@ intp_t = cgutils.intp_t
 ll_intp_p = intp_t.as_pointer()
 
 
+def ensure_dpnp(name):
+    try:
+       # import dpnp
+        from .dpnp_glue import dpnp_fptr_interface as dpnp_glue
+    except ImportError:
+        raise ImportError("dpNP is needed to call np.%s" % name)
+
+
+
 def call_dpnp(context, builder, fn_name, type_names, params, param_tys, ret_ty):
     from .dpnp_glue import dpnp_fptr_interface as dpnp_glue
     f_ptr = dpnp_glue.get_dpnp_fn_ptr(fn_name, type_names)
@@ -150,10 +159,10 @@ def dot_2_mm(context, builder, sig, args):
 
     type_names = []
     for argty in sig.args[:1]:
-        type_names.append(argty.dtype.name.encode('utf-8'))
-    type_names.append(sig.return_type.name.encode('utf-8'))
+        type_names.append(argty.dtype.name)
+    type_names.append(sig.return_type.name)
 
-    call_dpnp(context, builder, b"dpnp_matmul", type_names, params, param_tys, ll_void)
+    call_dpnp(context, builder, "dpnp_matmul", type_names, params, param_tys, ll_void)
     return out
 
 
@@ -166,7 +175,7 @@ def dot_2_mv(context, builder, sig, args):
         _n = b.shape
         if _n != n:
             raise ValueError("incompatible array sizes for np.dot(a, b)")
-        return np.empty((m, ) a.dtype)
+        return np.empty((m, ), a.dtype)
 
     aty, bty = sig.args
     a = make_array(aty)(context, builder, args[0])
@@ -190,10 +199,10 @@ def dot_2_mv(context, builder, sig, args):
 
     type_names = []
     for argty in sig.args[:1]:
-        type_names.append(argty.dtype.name.encode('utf-8'))
-    type_names.append(sig.return_type.name.encode('utf-8'))
+        type_names.append(argty.dtype.name)
+    type_names.append(sig.return_type.name)
 
-    call_dpnp(context, builder, b"dpnp_matmul", type_names, params, param_tys, ll_void)
+    call_dpnp(context, builder, "dpnp_matmul", type_names, params, param_tys, ll_void)
     return out
 
 
@@ -206,7 +215,7 @@ def dot_2_vm(context, builder, sig, args):
         n, k = b.shape
         if m != n:
             raise ValueError("incompatible array sizes for np.dot(a, b)")
-        return np.empty((k, ) a.dtype)
+        return np.empty((k, ), a.dtype)
 
     aty, bty = sig.args
     a = make_array(aty)(context, builder, args[0])
@@ -230,10 +239,10 @@ def dot_2_vm(context, builder, sig, args):
 
     type_names = []
     for argty in sig.args[:1]:
-        type_names.append(argty.dtype.name.encode('utf-8'))
-    type_names.append(sig.return_type.name.encode('utf-8'))
+        type_names.append(argty.dtype.name)
+    type_names.append(sig.return_type.name)
 
-    call_dpnp(context, builder, b"dpnp_matmul", type_names, params, param_tys, ll_void)
+    call_dpnp(context, builder, "dpnp_matmul", type_names, params, param_tys, ll_void)
     return out
 
 
@@ -243,6 +252,8 @@ def dot_dppl(context, builder, sig, args):
     np.dot(a, b)
     a @ b
     """
+
+    ensure_dpnp("dot")
 
     with make_contiguous(context, builder, sig, args) as (sig, args):
         ndims = [x.ndim for x in sig.args[:2]]
@@ -260,11 +271,61 @@ def dot_dppl(context, builder, sig, args):
     raise ImportError("scipy 0.16+ is required for linear algebra")
 
 
+@lower_builtin("np.matmul", types.Array, types.Array)
+def matmul_dppl(context, builder, sig, args):
+    """
+    np.matmul(matrix, matrix)
+    """
+
+    ensure_dpnp("matmul")
+    with make_contiguous(context, builder, sig, args) as (sig, args):
+        ndims = [x.ndim for x in sig.args[:2]]
+        if ndims != [2, 2]:
+            raise ValueError("array dimension has to be 2 for np.matmul(a, b)")
+
+        def make_res(a, b):
+            m, n = a.shape
+            _n, k = b.shape
+            if _n != n:
+                raise ValueError("incompatible array sizes for np.matmul(a, b)")
+            return np.empty((m, k), a.dtype)
+
+        aty, bty = sig.args
+        a = make_array(aty)(context, builder, args[0])
+        b = make_array(bty)(context, builder, args[1])
+        m, n = cgutils.unpack_tuple(builder, a.shape)
+        _n, k = cgutils.unpack_tuple(builder, b.shape)
+
+
+        out = context.compile_internal(builder, make_res,
+                signature(sig.return_type, *sig.args), args)
+
+        outary = make_array(sig.return_type)(context, builder, out)
+
+        # arguments are : a->void*, b->void*, result->void*, m->int64, n->int64, k->int64
+        param_tys = [ll_void_p, ll_void_p, ll_void_p, ir.IntType(64), ir.IntType(64), ir.IntType(64)]
+        params = (builder.bitcast(a.data, ll_void_p),
+                  builder.bitcast(b.data, ll_void_p),
+                  builder.bitcast(outary.data, ll_void_p),
+                  m, n, k)
+
+        type_names = []
+        for argty in sig.args[:1]:
+            type_names.append(argty.dtype.name)
+        type_names.append(sig.return_type.name)
+
+        call_dpnp(context, builder, "dpnp_matmul", type_names, params, param_tys, ll_void)
+        return out
+
+
 @lower_builtin(np.sum, types.Array)
 def array_sum(context, builder, sig, args):
+    ensure_dpnp("sum")
+
     aty = sig.args[0]
     a = make_array(aty)(context, builder, args[0])
-    size, = cgutils.unpack_tuple(builder, a.shape)
+    #size, = cgutils.unpack_tuple(builder, a.shape)
+    size = a.nitems
 
     out = cgutils.alloca_once(builder, context.get_value_type(sig.return_type))
 
@@ -281,8 +342,35 @@ def array_sum(context, builder, sig, args):
     return builder.load(out)
 
 
+@lower_builtin(np.prod, types.Array)
+def array_prod(context, builder, sig, args):
+    ensure_dpnp("prod")
+
+    aty = sig.args[0]
+    a = make_array(aty)(context, builder, args[0])
+
+    #size, = cgutils.unpack_tuple(builder, a.shape)
+    size = a.nitems
+
+    out = cgutils.alloca_once(builder, context.get_value_type(sig.return_type))
+
+    # arguments are : a ->void*, result->void*, size->int64
+    param_tys = [ll_void_p, ll_void_p, ir.IntType(64)]
+    params = (builder.bitcast(a.data, ll_void_p), builder.bitcast(out, ll_void_p), size)
+
+    type_names = []
+    for argty in sig.args:
+        type_names.append(argty.dtype.name)
+    type_names.append(sig.return_type.name)
+
+    call_dpnp(context, builder, "dpnp_prod", type_names, params, param_tys, ll_void)
+    return builder.load(out)
+
+
 @lower_builtin(np.argmax, types.Array)
 def array_argmax(context, builder, sig, args):
+    ensure_dpnp("argmax")
+
     def argmax_checker(arry):
         if arry.size == 0:
             raise ValueError("attempt to get argmax of an empty sequence")
@@ -312,6 +400,7 @@ def array_argmax(context, builder, sig, args):
 
 @lower_builtin(np.argmin, types.Array)
 def array_argmin(context, builder, sig, args):
+    ensure_dpnp("argmin")
     def argmin_checker(arry):
         if arry.size == 0:
             raise ValueError("attempt to get argmin of an empty sequence")
@@ -339,9 +428,9 @@ def array_argmin(context, builder, sig, args):
     return builder.load(out)
 
 
-
 @lower_builtin(np.argsort, types.Array, types.StringLiteral)
 def array_argsort(context, builder, sig, args):
+    ensure_dpnp("argsort")
     def make_res(A):
         return np.arange(A.size)
 
@@ -369,6 +458,7 @@ def array_argsort(context, builder, sig, args):
 
 @lower_builtin(np.cov, types.Array)
 def array_cov(context, builder, sig, args):
+    ensure_dpnp("cov")
     def make_1D_res(size):
         return np.empty(1, dtype=np.float64)
 
