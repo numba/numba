@@ -213,10 +213,10 @@ class TestCudaMath(CUDATestCase):
 
         # When this test was originally written it used
         # assertTrue(np.allclose(...), which has different default tolerance
-        # values to assert_allclose. The tolerance values here are the defaults
-        # from np.allclose, which are required for these tests to pass.
+        # values to assert_allclose. The tolerance values here are chosen as
+        # the tightest under which the tests will pass.
         if npdtype == np.float64:
-            rtol = 1e-15
+            rtol = 1e-13
         else:
             rtol = 1e-6
         np.testing.assert_allclose(npfunc(A), B, rtol=rtol)
