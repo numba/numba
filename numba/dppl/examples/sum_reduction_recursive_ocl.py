@@ -4,6 +4,7 @@ from numba import dppl, int32
 import math
 
 import dpctl
+import dpctl._memory as dpctl_mem
 
 
 def recursive_reduction(size, group_size,
@@ -77,9 +78,17 @@ def sum_reduction_recursive():
 
     if dpctl.has_gpu_queues():
         with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+            inp_buf = dpctl_mem.MemoryUSMShared(inp.size * inp.dtype.itemsize)
+            inp_ndarray = np.ndarray(inp.shape, buffer=inp_buf, dtype=inp.dtype)
+            np.copyto(inp_ndarray, inp)
+
+            partial_sums_buf = dpctl_mem.MemoryUSMShared(partial_sums.size * partial_sums.dtype.itemsize)
+            partial_sums_ndarray = np.ndarray(partial_sums.shape, buffer=partial_sums_buf, dtype=partial_sums.dtype)
+            np.copyto(partial_sums_ndarray, partial_sums)
+
             print("Running recursive reduction")
             result = recursive_reduction(global_size, work_group_size,
-                                         inp, partial_sums)
+                                         inp_ndarray, partial_sums_ndarray)
     else:
         print("No device found")
         exit()
