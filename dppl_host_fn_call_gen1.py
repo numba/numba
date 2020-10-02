@@ -20,8 +20,8 @@ class DPPLHostFunctionCallsGenerator(object):
 
 
         self.sycl_queue = dpctl.get_current_queue()
-        self.sycl_queue_addr = self.sycl_queue.get_queue_ref_address()
-        print("IN PYTHON  +++", hex(self.sycl_queue_addr))
+        #self.sycl_queue_addr = self.sycl_queue.get_queue_ref_address()
+        #print("IN PYTHON  +++", hex(self.sycl_queue_addr))
 
         self.kernel = cres.kernel
         self.kernel_addr = self.kernel.get_kernel_ref_address()
@@ -61,6 +61,9 @@ class DPPLHostFunctionCallsGenerator(object):
         self.byte_ptr_t      = lc.Type.pointer(self.byte_t)
         self.byte_ptr_ptr_t  = lc.Type.pointer(self.byte_ptr_t)
         self.intp_t          = self.context.get_value_type(types.intp)
+        self.long_t          = self.context.get_value_type(types.int64)
+        self.int32_t         = self.context.get_value_type(types.int32)
+        self.int32_ptr_t     = lc.Type.pointer(self.int32_t)
         self.uintp_t         = self.context.get_value_type(types.uintp)
         self.intp_ptr_t      = lc.Type.pointer(self.intp_t)
         self.uintp_ptr_t     = lc.Type.pointer(self.uintp_t)
@@ -74,14 +77,16 @@ class DPPLHostFunctionCallsGenerator(object):
         #self.current_device_int_const = self.context.get_constant(
         #                                    types.uintp,
         #                                    self.current_device_int)
-        self.sycl_queue_addr_const = self.context.get_constant(
-                                            types.uintp,
-                                            self.sycl_queue_addr)
+        self.sycl_queue_val = None
 
     def _declare_functions(self):
+        get_queue_fnty = lc.Type.function(self.void_ptr_t, ())
+        self.get_queue = self.builder.module.get_or_insert_function(get_queue_fnty,
+                                                                name="DPPLQueueMgr_GetCurrentQueue")
+
         submit_range_fnty = lc.Type.function(self.void_ptr_t,
                 [self.void_ptr_t, self.void_ptr_t, self.void_ptr_ptr_t,
-                    self.uintp_ptr_t, self.intp_t, self.intp_ptr_t,
+                    self.int32_ptr_t, self.intp_t, self.intp_ptr_t,
                     self.intp_t, self.void_ptr_t, self.intp_t])
         self.submit_range = self.builder.module.get_or_insert_function(submit_range_fnty,
                                                                 name="DPPLQueue_SubmitRange")
@@ -142,6 +147,9 @@ class DPPLHostFunctionCallsGenerator(object):
 
 
     def allocate_kenrel_arg_array(self, num_kernel_args):
+        self.sycl_queue_val = cgutils.alloca_once(self.builder, self.void_ptr_t)
+        self.builder.store(self.builder.call(self.get_queue, []), self.sycl_queue_val)
+
         self.total_kernel_args = num_kernel_args
 
         # we need a kernel arg array to enqueue
@@ -150,7 +158,7 @@ class DPPLHostFunctionCallsGenerator(object):
                 types.uintp, num_kernel_args), name="kernel_arg_array")
 
         self.kernel_arg_ty_array = cgutils.alloca_once(
-            self.builder, self.intp_t, size=self.context.get_constant(
+            self.builder, self.int32_t, size=self.context.get_constant(
                 types.uintp, num_kernel_args), name="kernel_arg_ty_array")
 
     def _call_dppl_kernel_arg_fn(self, args):
@@ -167,19 +175,19 @@ class DPPLHostFunctionCallsGenerator(object):
     def resolve_and_return_dpctl_type(self, ty):
         val = None
         if ty == types.int32:
-            val = self.context.get_constant(types.intp, 4)
+            val = self.context.get_constant(types.int32, 4)
         elif ty == types.uint32:
-            val = self.context.get_constant(types.intp, 5)
+            val = self.context.get_constant(types.int32, 5)
         elif ty == types.int64:
-            val = self.context.get_constant(types.intp, 6)
+            val = self.context.get_constant(types.int32, 6)
         elif ty == types.uint64:
-            val = self.context.get_constant(types.intp, 7)
+            val = self.context.get_constant(types.int32, 7)
         elif ty == types.float32:
-            val = self.context.get_constant(types.intp, 11)
+            val = self.context.get_constant(types.int32, 11)
         elif ty == types.float64:
-            val = self.context.get_constant(types.intp, 12)
+            val = self.context.get_constant(types.int32, 12)
         elif ty == types.voidptr:
-            val = self.context.get_constant(types.intp, 14)
+            val = self.context.get_constant(types.int32, 14)
         else:
             raise NotImplementedError
 
@@ -189,8 +197,8 @@ class DPPLHostFunctionCallsGenerator(object):
 
 
     def form_kernel_arg_and_arg_ty(self, val, ty):
-        kernel_arg_dst = self.builder.gep(self.kernel_arg_array, [self.context.get_constant(types.intp, self.cur_arg)])
-        kernel_arg_ty_dst = self.builder.gep(self.kernel_arg_ty_array, [self.context.get_constant(types.intp, self.cur_arg)])
+        kernel_arg_dst = self.builder.gep(self.kernel_arg_array, [self.context.get_constant(types.int32, self.cur_arg)])
+        kernel_arg_ty_dst = self.builder.gep(self.kernel_arg_ty_array, [self.context.get_constant(types.int32, self.cur_arg)])
         self.cur_arg += 1
         self.builder.store(val, kernel_arg_dst)
         self.builder.store(ty, kernel_arg_ty_dst)
@@ -208,9 +216,8 @@ class DPPLHostFunctionCallsGenerator(object):
             import pdb
             #pdb.set_trace()
 
-            storage = cgutils.alloca_once(self.builder, self.uintp_t)
-            self.builder.store(self.context.get_constant(types.uintp, 0), storage)
-            self.builder.load(storage)
+            storage = cgutils.alloca_once(self.builder, self.long_t)
+            self.builder.store(self.context.get_constant(types.int64, 0), storage)
             ty = self.resolve_and_return_dpctl_type(types.int64)
             self.form_kernel_arg_and_arg_ty(self.builder.bitcast(storage, self.void_ptr_t), ty)
 
@@ -219,9 +226,8 @@ class DPPLHostFunctionCallsGenerator(object):
             #args = [self.null_ptr, self.context.get_constant(types.uintp, self.sizeof_void_ptr)]
             #self._call_dppl_kernel_arg_fn(args)
 
-            storage = cgutils.alloca_once(self.builder, self.uintp_t)
-            self.builder.store(self.context.get_constant(types.uintp, 0), storage)
-            self.builder.load(storage)
+            storage = cgutils.alloca_once(self.builder, self.long_t)
+            self.builder.store(self.context.get_constant(types.int64, 0), storage)
             ty = self.resolve_and_return_dpctl_type(types.int64)
             self.form_kernel_arg_and_arg_ty(self.builder.bitcast(storage, self.void_ptr_t), ty)
 
@@ -268,7 +274,7 @@ class DPPLHostFunctionCallsGenerator(object):
 
 
             args = [self.builder.load(total_size),
-                    self.builder.inttoptr(self.sycl_queue_addr_const, self.void_ptr_t)]
+                    self.builder.load(self.sycl_queue_val)]
             self.builder.store(self.builder.call(self.usm_shared, args), buffer_ptr)
 
 
@@ -295,7 +301,7 @@ class DPPLHostFunctionCallsGenerator(object):
 
                 #self.builder.call(self.write_mem_buffer_to_device, args)
 
-                args = [self.builder.inttoptr(self.sycl_queue_addr_const, self.void_ptr_t),
+                args = [self.builder.load(self.sycl_queue_val),
                         self.builder.load(buffer_ptr),
                         self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t),
                         self.builder.load(total_size)]
@@ -372,9 +378,8 @@ class DPPLHostFunctionCallsGenerator(object):
                                self.builder.gep(global_range, [self.context.get_constant(types.uintp, (num_dim-1)-i)]))
 
 
-
         args = [self.builder.inttoptr(self.context.get_constant(types.uintp, self.kernel_addr), self.void_ptr_t),
-                self.builder.inttoptr(self.sycl_queue_addr_const, self.void_ptr_t),
+                self.builder.load(self.sycl_queue_val),
                 self.kernel_arg_array,
                 self.kernel_arg_ty_array,
                 self.context.get_constant(types.uintp, self.total_kernel_args),
@@ -384,6 +389,8 @@ class DPPLHostFunctionCallsGenerator(object):
                 self.context.get_constant(types.uintp, 0)
                 ]
         self.builder.call(self.submit_range, args)
+
+        self.builder.call(self.queue_wait, [self.builder.load(self.sycl_queue_val)])
 
         '''
         # Package dim start and stops for auto-blocking enqueue.
@@ -435,7 +442,7 @@ class DPPLHostFunctionCallsGenerator(object):
                     self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t)]
             self.builder.call(self.read_mem_buffer_from_device, args)
             '''
-            args = [self.builder.inttoptr(self.sycl_queue_addr_const, self.void_ptr_t),
+            args = [self.builder.load(self.sycl_queue_val),
                     self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t),
                     self.builder.load(buffer_ptr),
                     self.builder.load(total_size)]
