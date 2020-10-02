@@ -83,7 +83,7 @@ Some limitations of the simulator include:
 * Warps and warp-level operations are not yet implemented.
 * Operations directly against device arrays are only partially supported, that
   is, testing equality, less than, greater than, and basic mathematical 
-  operations are supported, but many other operations,  such as the in-place 
+  operations are supported, but many other operations, such as the in-place 
   operators and bit operators are not.
 
 Obviously, the speed of the simulator is also much lower than that of a real
