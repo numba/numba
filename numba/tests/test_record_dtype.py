@@ -803,8 +803,8 @@ class TestRecordDtype(unittest.TestCase):
         self.assertIn('Array', transformed)
         self.assertNotIn('first', transformed)
         self.assertNotIn('second', transformed)
-        # Length is usually 50 - 5 chars tolerance as above.
-        self.assertLess(len(transformed), 50)
+        # Length is usually 60 - 5 chars tolerance as above.
+        self.assertLess(len(transformed), 60)
 
     def test_record_two_arrays(self):
         """

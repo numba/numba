@@ -673,7 +673,14 @@ class _MemoMixin:
         self._recent.append(self)
 
 
-class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
+import abc
+
+class DispatcherMeta(abc.ABCMeta):
+    def __instancecheck__(self, other):
+        return type(type(other)) == DispatcherMeta
+
+
+class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase, metaclass=DispatcherMeta):
     """
     Implementation of user-facing dispatcher objects (i.e. created using
     the @jit decorator).
