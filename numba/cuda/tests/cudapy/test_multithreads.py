@@ -38,7 +38,8 @@ def check_concurrent_compiling():
 def spawn_process_entry(q):
     try:
         check_concurrent_compiling()
-    except:
+    # Catch anything that goes wrong in the threads
+    except:  # noqa: E722
         msg = traceback.format_exc()
         q.put('\n'.join(['', '=' * 80, msg]))
     else:

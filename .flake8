@@ -108,48 +108,6 @@ exclude =
     numba/cuda/decorators.py
     numba/cuda/kernels/transpose.py
     numba/cuda/tests/cudasim/test_cudasim_issues.py
-    numba/cuda/tests/cudapy/test_deprecation.py
-    numba/cuda/tests/cudapy/test_ipc.py
-    numba/cuda/tests/cudapy/test_vectorize.py
-    numba/cuda/tests/cudapy/test_smart_array.py
-    numba/cuda/tests/cudapy/test_atomics.py
-    numba/cuda/tests/cudapy/test_py2_div_issue.py
-    numba/cuda/tests/cudapy/test_freevar.py
-    numba/cuda/tests/cudapy/test_const_string.py
-    numba/cuda/tests/cudapy/test_print.py
-    numba/cuda/tests/cudapy/test_laplace.py
-    numba/cuda/tests/cudapy/test_powi.py
-    numba/cuda/tests/cudapy/test_nondet.py
-    numba/cuda/tests/cudapy/test_sync.py
-    numba/cuda/tests/cudapy/test_lang.py
-    numba/cuda/tests/cudapy/test_multithreads.py
-    numba/cuda/tests/cudapy/test_errors.py
-    numba/cuda/tests/cudapy/test_autojit.py
-    numba/cuda/tests/cudapy/test_slicing.py
-    numba/cuda/tests/cudapy/test_montecarlo.py
-    numba/cuda/tests/cudapy/test_array.py
-    numba/cuda/tests/cudapy/test_sm.py
-    numba/cuda/tests/cudapy/test_intrinsics.py
-    numba/cuda/tests/cudapy/test_mandel.py
-    numba/cuda/tests/cudapy/test_idiv.py
-    numba/cuda/tests/cudapy/test_constmem.py
-    numba/cuda/tests/cudapy/test_alignment.py
-    numba/cuda/tests/cudapy/test_vectorize_scalar_arg.py
-    numba/cuda/tests/cudapy/test_multigpu.py
-    numba/cuda/tests/cudapy/test_complex_kernel.py
-    numba/cuda/tests/cudapy/test_casting.py
-    numba/cuda/tests/cudapy/test_blackscholes.py
-    numba/cuda/tests/cudapy/test_exception.py
-    numba/cuda/tests/cudapy/test_fastmath.py
-    numba/cuda/tests/cudapy/test_userexc.py
-    numba/cuda/tests/cudapy/test_cuda_autojit.py
-    numba/cuda/tests/cudapy/test_warp_ops.py
-    numba/cuda/tests/cudapy/test_complex.py
-    numba/cuda/tests/cudapy/test_array_args.py
-    numba/cuda/tests/cudapy/test_math.py
-    numba/cuda/tests/cudapy/test_record_dtype.py
-    numba/cuda/tests/cudapy/test_gufunc.py
-    numba/cuda/tests/cudapy/test_random.py
     numba/cuda/tests/cudadrv/test_reset_device.py
     numba/cuda/tests/cudadrv/test_linker.py
     numba/cuda/tests/cudadrv/test_cuda_driver.py
