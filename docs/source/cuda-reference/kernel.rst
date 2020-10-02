@@ -58,7 +58,7 @@ creating a specialized instance:
 
 .. autoclass:: numba.cuda.compiler.Dispatcher
    :members: inspect_asm, inspect_llvm, inspect_sass, inspect_types,
-             specialize, specialized, extensions
+             specialize, specialized, extensions, forall
 
 
 Intrinsic Attributes and Functions
@@ -171,6 +171,16 @@ Synchronization and Atomic Operations
     float64 only. The ``idx`` argument can be an integer or a tuple of integer
     indices for indexing into multiple dimensional arrays. The number of element
     in ``idx`` must match the number of dimension of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.sub(array, idx, value)
+
+    Perform ``array[idx] -= value``. Supports int32, int64, float32 and
+    float64 only. The ``idx`` argument can be an integer or a tuple of integer
+    indices for indexing into multi-dimensional arrays. The number of elements
+    in ``idx`` must match the number of dimensions of ``array``.
 
     Returns the value of ``array[idx]`` before the storing the new value.
     Behaves like an atomic load.

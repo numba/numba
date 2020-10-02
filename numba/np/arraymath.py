@@ -1106,6 +1106,7 @@ def _early_return(val):
     return impl
 
 
+@overload_method(types.Array, 'ptp')
 @overload(np.ptp)
 def np_ptp(a):
 
@@ -4070,6 +4071,19 @@ def np_asarray(a, dtype=None):
     return impl
 
 
+@overload(np.asfarray)
+def np_asfarray(a, dtype=np.float64):
+    dtype = as_dtype(dtype)
+    if not np.issubdtype(dtype, np.inexact):
+        dx = types.float64
+    else:
+        dx = dtype
+
+    def impl(a, dtype=np.float64):
+        return np.asarray(a, dx)
+    return impl
+
+
 @overload(np.extract)
 def np_extract(condition, arr):
 
@@ -4381,7 +4395,7 @@ def np_cross(a, b):
             raise ValueError((
                 "Dimensions for both inputs is 2.\n"
                 "Please replace your numpy.cross(a, b) call with "
-                "numba.numpy_extensions.cross2d(a, b)."
+                "a call to `cross2d(a, b)` from `numba.np.extensions`."
             ))
     return impl
 

@@ -434,11 +434,7 @@ class CmpOpGe(OrderedCmpOp):
     pass
 
 
-@infer_global(operator.eq)
-class CmpOpEq(UnorderedCmpOp):
-    pass
-
-
+# more specific overloads should be registered first
 @infer_global(operator.eq)
 class ConstOpEq(AbstractTemplate):
     def generic(self, args, kws):
@@ -450,6 +446,11 @@ class ConstOpEq(AbstractTemplate):
 
 @infer_global(operator.ne)
 class ConstOpNotEq(ConstOpEq):
+    pass
+
+
+@infer_global(operator.eq)
+class CmpOpEq(UnorderedCmpOp):
     pass
 
 

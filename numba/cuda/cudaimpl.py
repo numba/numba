@@ -538,6 +538,23 @@ def ptx_atomic_add_tuple(context, builder, dtype, ptr, val):
         return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
 
+@lower(stubs.atomic.sub, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.sub, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.sub, types.Array, types.Tuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_sub(context, builder, dtype, ptr, val):
+    if dtype == types.float32:
+        lmod = builder.module
+        return builder.call(nvvmutils.declare_atomic_sub_float32(lmod),
+                            (ptr, val))
+    elif dtype == types.float64:
+        lmod = builder.module
+        return builder.call(nvvmutils.declare_atomic_sub_float64(lmod),
+                            (ptr, val))
+    else:
+        return builder.atomic_rmw('sub', ptr, val, 'monotonic')
+
+
 @lower(stubs.atomic.max, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.max, types.Array, types.Tuple, types.Any)
 @lower(stubs.atomic.max, types.Array, types.UniTuple, types.Any)

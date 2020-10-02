@@ -172,12 +172,6 @@ exclude =
     numba/cuda/simulator/cudadrv/driver.py
     numba/cuda/simulator/cudadrv/devices.py
     numba/cuda/simulator/cudadrv/devicearray.py
-    numba/cuda/cudadrv/enums.py
-    numba/cuda/cudadrv/nvvm.py
-    numba/cuda/cudadrv/drvapi.py
-    numba/cuda/cudadrv/driver.py
-    numba/cuda/cudadrv/autotune.py
-    numba/cuda/cudadrv/devicearray.py
     numba/pycc/cc.py
     numba/pycc/compiler.py
     numba/pycc/llvm_types.py

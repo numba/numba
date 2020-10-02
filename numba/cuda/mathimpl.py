@@ -12,6 +12,7 @@ lower = registry.lower
 booleans = []
 booleans += [('isnand', 'isnanf', math.isnan)]
 booleans += [('isinfd', 'isinff', math.isinf)]
+booleans += [('isfinited', 'finitef', math.isfinite)]
 
 unarys = []
 unarys += [('ceil', 'ceilf', math.ceil)]
@@ -52,6 +53,11 @@ binarys += [('hypot', 'hypotf', math.hypot)]
 @lower(math.isnan, types.Integer)
 def math_isinf_isnan_int(context, builder, sig, args):
     return context.get_constant(types.boolean, 0)
+
+
+@lower(math.isfinite, types.Integer)
+def math_isfinite_int(context, builder, sig, args):
+    return context.get_constant(types.boolean, 1)
 
 
 def impl_boolean(key, ty, libfunc):
@@ -171,3 +177,31 @@ def impl_modf(ty, libfunc):
 
 impl_modf(types.float32, libdevice.modff)
 impl_modf(types.float64, libdevice.modf)
+
+
+def impl_frexp(ty, libfunc):
+    retty = types.Tuple((ty, types.int32))
+
+    def lower_frexp_impl(context, builder, sig, args):
+        frexp_sig = typing.signature(retty, ty)
+        libfunc_impl = context.get_function(libfunc, frexp_sig)
+        return libfunc_impl(builder, args)
+
+    lower(math.frexp, ty)(lower_frexp_impl)
+
+
+impl_frexp(types.float32, libdevice.frexpf)
+impl_frexp(types.float64, libdevice.frexp)
+
+
+def impl_ldexp(ty, libfunc):
+    def lower_ldexp_impl(context, builder, sig, args):
+        ldexp_sig = typing.signature(ty, ty, types.int32)
+        libfunc_impl = context.get_function(libfunc, ldexp_sig)
+        return libfunc_impl(builder, args)
+
+    lower(math.ldexp, ty, types.int32)(lower_ldexp_impl)
+
+
+impl_ldexp(types.float32, libdevice.ldexpf)
+impl_ldexp(types.float64, libdevice.ldexp)

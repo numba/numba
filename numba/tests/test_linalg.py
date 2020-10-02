@@ -2609,8 +2609,9 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
             with self.assertNoNRTLeak():
                 cfunc(a, b, **kwargs)
 
-        for size1, size2, dtype in \
-                product(self.sizes, self.sizes, self.dtypes):
+        dts = cycle(self.dtypes)
+        for size1, size2 in product(self.sizes, self.sizes):
+            dtype = next(dts)
             (a, b) = self._get_input(size1, size2, dtype)
             check(a, b)
             c = np.empty((np.asarray(a).size, np.asarray(b).size),

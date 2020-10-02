@@ -224,6 +224,7 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.item` (without arguments)
 * :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
+* :meth:`~numpy.ndarray.ptp` (without arguments)
 * :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
@@ -338,6 +339,7 @@ The following top-level functions are supported:
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.array_equal`
 * :func:`numpy.asarray` (only the 2 first arguments)
+* :func:`numpy.asfarray` 
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`

@@ -993,7 +993,7 @@ class TypeInferer(object):
 
     def _get_return_vars(self):
         rets = []
-        for blk in utils.itervalues(self.blocks):
+        for blk in self.blocks.values():
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 rets.append(inst.value)
@@ -1019,7 +1019,7 @@ class TypeInferer(object):
             self.lock_type(var.name, typ, loc=None)
 
     def build_constraint(self):
-        for blk in utils.itervalues(self.blocks):
+        for blk in self.blocks.values():
             for inst in blk.body:
                 self.constrain_statement(inst)
 
@@ -1604,12 +1604,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
-            if isinstance(expr.func, ir.Intrinsic):
-                sig = expr.func.type
-                self.add_type(target.name, sig.return_type, loc=inst.loc)
-                self.add_calltype(expr, sig)
-            else:
-                self.typeof_call(inst, target, expr)
+            self.typeof_call(inst, target, expr)
         elif expr.op in ('getiter', 'iternext'):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'exhaust_iter':
