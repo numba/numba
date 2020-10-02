@@ -106,8 +106,6 @@ exclude =
     numba/cuda/cudadecl.py
     numba/cuda/codegen.py
     numba/cuda/decorators.py
-    numba/cuda/kernels/transpose.py
-    numba/cuda/tests/cudasim/test_cudasim_issues.py
     numba/cuda/tests/cudapy/test_deprecation.py
     numba/cuda/tests/cudapy/test_ipc.py
     numba/cuda/tests/cudapy/test_vectorize.py
@@ -164,14 +162,6 @@ exclude =
     numba/cuda/tests/cudadrv/test_select_device.py
     numba/cuda/tests/cudadrv/test_events.py
     numba/cuda/tests/cudadrv/test_cuda_memory.py
-    numba/cuda/simulator/kernel.py
-    numba/cuda/simulator/reduction.py
-    numba/cuda/simulator/api.py
-    numba/cuda/simulator/kernelapi.py
-    numba/cuda/simulator/cudadrv/nvvm.py
-    numba/cuda/simulator/cudadrv/driver.py
-    numba/cuda/simulator/cudadrv/devices.py
-    numba/cuda/simulator/cudadrv/devicearray.py
     numba/pycc/cc.py
     numba/pycc/compiler.py
     numba/pycc/llvm_types.py
