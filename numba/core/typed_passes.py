@@ -19,6 +19,7 @@ from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  get_definition, remove_dels,
                                  build_definitions, compute_cfg_from_blocks)
 from numba.core import postproc
+from llvmlite import binding as llvm
 
 
 @contextmanager
@@ -353,6 +354,7 @@ class NativeLowering(LoweringPass):
         calltypes = state.calltypes
         flags = state.flags
         metadata = state.metadata
+        pre_stats = llvm.passmanagers.dump_refprune_stats()
 
         msg = ("Function %s failed at nopython "
                "mode lowering" % (state.func_id.func_name,))
@@ -400,6 +402,10 @@ class NativeLowering(LoweringPass):
                 targetctx.insert_user_function(cfunc, fndesc, [library])
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=cfunc, env=env)
+
+            # capture pruning stats
+            post_stats = llvm.passmanagers.dump_refprune_stats()
+            metadata['prune_stats'] = post_stats - pre_stats
         return True
 
 
