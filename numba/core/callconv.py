@@ -393,7 +393,7 @@ class CPUCallConv(BaseCallConv):
             builder.branch(try_info['target'])
         else:
             # Return from the current function
-            self._return_errcode_raw(builder, RETCODE_USEREXC)
+            self._return_errcode_raw(builder, RETCODE_USEREXC, mark_exc=True)
 
     def _get_try_state(self, builder):
         try:
