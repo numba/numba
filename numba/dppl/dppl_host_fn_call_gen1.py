@@ -262,8 +262,8 @@ class DPPLHostFunctionCallsGenerator(object):
                                self.builder.load(item_size_member)), self.intp_t), total_size)
 
             # Handle data
-            kernel_arg = cgutils.alloca_once(self.builder, self.void_ptr_t,
-                    size=self.one, name="kernel_arg" + str(self.cur_arg))
+            #kernel_arg = cgutils.alloca_once(self.builder, self.void_ptr_t,
+            #        size=self.one, name="kernel_arg" + str(self.cur_arg))
             data_member = self.builder.gep(llvm_arg,
                     [self.context.get_constant(types.int32, 0), self.context.get_constant(types.int32, 4)])
 
@@ -314,7 +314,7 @@ class DPPLHostFunctionCallsGenerator(object):
             #self.builder.store(self.builder.load(kernel_arg), dst)
 
             ty =  self.resolve_and_return_dpctl_type(types.voidptr)
-            self.form_kernel_arg_and_arg_ty(self.builder.bitcast(buffer_ptr, self.void_ptr_t), ty)
+            self.form_kernel_arg_and_arg_ty(self.builder.load(buffer_ptr), ty)
 
             # Handle shape
             shape_member = self.builder.gep(llvm_arg,
