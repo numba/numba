@@ -912,6 +912,24 @@ class TestDictObject(MemoryLeakMixin, TestCase):
 
         self.assertEqual(foo(), [1, 2])
 
+    def test_024_unicode_getitem_keys(self):
+        # See issue #6135
+        @njit
+        def foo():
+            s = 'a\u1234'
+            d = {s[0] : 1}
+            return d['a']
+
+        self.assertEqual(foo(), foo.py_func())
+
+        @njit
+        def foo():
+            s = 'abc\u1234'
+            d = {s[:1] : 1}
+            return d['a']
+
+        self.assertEqual(foo(), foo.py_func())
+
 
 class TestDictTypeCasting(TestCase):
     def check_good(self, fromty, toty):

@@ -2,7 +2,9 @@ import typing as pt
 
 from numba.core.errors import LiteralTypingError, TypingError
 from numba.core.typeconv import Conversion
-from numba.core.types.abstract import Callable, Literal, NumbaTypeInst, Type
+from numba.core.types.abstract import (
+    Callable, Literal, NumbaTypeInst, Type, Hashable,
+)
 from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
 
@@ -501,7 +503,7 @@ class ContextManager(Callable, Phantom):
         return typing.signature(self, *posargs)
 
 
-class UnicodeType(IterableType):
+class UnicodeType(IterableType, Hashable):
 
     def __init__(self, name):
         super(UnicodeType, self).__init__(name)

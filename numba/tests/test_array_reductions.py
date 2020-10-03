@@ -128,6 +128,9 @@ def array_nanpercentile_global(arr, q):
 def array_ptp_global(a):
     return np.ptp(a)
 
+def array_ptp(a):
+    return a.ptp()
+
 def array_quantile_global(arr, q):
     return np.quantile(arr, q)
 
@@ -796,6 +799,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         for a in a_variations():
             check(a)
+
+    def test_ptp_method(self):
+        # checks wiring of np.ndarray.ptp() only, `np.ptp` test above checks
+        # the actual alg
+        pyfunc = array_ptp
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.arange(10)
+        expected = pyfunc(a)
+        got = cfunc(a)
+        self.assertPreciseEqual(expected, got)
 
     def test_ptp_complex(self):
         pyfunc = array_ptp_global
