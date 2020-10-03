@@ -175,8 +175,6 @@ class BaseLower(object):
         # Run target specific post lowering transformation
         self.context.post_lowering(self.module, self.library)
 
-        import pdb
-        #pdb.set_trace()
         # Materialize LLVM Module
         self.library.add_ir_module(self.module)
 

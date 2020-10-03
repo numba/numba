@@ -53,7 +53,7 @@ class TestNumpy_math_functions(DPPLTestCase):
         c = f(self.a, self.b)
         d = self.a / self.b
         max_abs_err = c.sum() - d.sum()
-        self.assertTrue(max_abs_err < 1e-5)
+        self.assertTrue(max_abs_err < 1e-2)
 
     def test_true_divide(self):
         @njit(parallel={'offload':True})
@@ -64,7 +64,7 @@ class TestNumpy_math_functions(DPPLTestCase):
         c = f(self.a, self.b)
         d = np.true_divide(self.a, self.b)
         max_abs_err = c.sum() - d.sum()
-        self.assertTrue(max_abs_err < 1e-5)
+        self.assertTrue(max_abs_err < 1e-2)
 
     def test_negative(self):
         @njit(parallel={'offload':True})

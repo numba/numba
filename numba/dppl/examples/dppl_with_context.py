@@ -8,6 +8,7 @@ def g(a):
     return a + 1
 
 
+#@njit(parallel={'offload':True})
 @njit
 def f(a, b, c, N):
     for i in prange(N):
