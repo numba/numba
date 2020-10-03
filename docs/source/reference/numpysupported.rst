@@ -251,7 +251,7 @@ The following methods of Numpy arrays are supported:
 
 * :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
-* :meth:`~numpy.ndarray.__contains__` (only the 1-argument form ``key``)
+* :meth:`~numpy.ndarray.__contains__` 
 
 
 .. warning::
