@@ -81,10 +81,10 @@ _is_armv7l = platform.machine() == 'armv7l'
 
 disabled_test = unittest.skipIf(True, 'Test disabled')
 
-# See issue #4026, PPC64LE LLVM bug
-skip_ppc64le_issue4026 = unittest.skipIf(platform.machine() == 'ppc64le',
-                                         ("Hits: 'LLVM Invalid PPC CTR Loop! "
-                                          "UNREACHABLE executed' bug"))
+# See issue #4563, PPC64LE LLVM bug
+skip_ppc64le_issue4563 = unittest.skipIf(platform.machine() == 'ppc64le',
+                                         ("Hits: 'Parameter area must exist "
+                                          "to pass an argument in memory'"))
 
 try:
     import scipy.linalg.cython_lapack
