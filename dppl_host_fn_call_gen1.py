@@ -15,20 +15,9 @@ class DPPLHostFunctionCallsGenerator(object):
         self.context = self.lowerer.context
         self.builder = self.lowerer.builder
 
-        #self.current_device_int = int(driver.ffi.cast("uintptr_t",
-        #                                          self.current_device_env))
-
-
-        self.sycl_queue = dpctl.get_current_queue()
-        #self.sycl_queue_addr = self.sycl_queue.get_queue_ref_address()
-        #print("IN PYTHON  +++", hex(self.sycl_queue_addr))
-
         self.kernel = cres.kernel
         self.kernel_addr = self.kernel.get_kernel_ref_address()
 
-        #self.kernel_t_obj = cres.kernel._kernel_t_obj[0]
-        #self.kernel_int = int(driver.ffi.cast("uintptr_t",
-        #                                      self.kernel_t_obj))
 
         # Initialize commonly used LLVM types and constant
         self._init_llvm_types_and_constants()
@@ -74,9 +63,6 @@ class DPPLHostFunctionCallsGenerator(object):
         self.void_ptr_t      = self.context.get_value_type(types.voidptr)
         self.void_ptr_ptr_t  = lc.Type.pointer(self.void_ptr_t)
         self.sizeof_void_ptr = self.context.get_abi_sizeof(self.intp_t)
-        #self.current_device_int_const = self.context.get_constant(
-        #                                    types.uintp,
-        #                                    self.current_device_int)
         self.sycl_queue_val = None
 
     def _declare_functions(self):
@@ -105,47 +91,6 @@ class DPPLHostFunctionCallsGenerator(object):
                                                                 name="DPPLmalloc_shared")
 
 
-        '''
-        create_dppl_kernel_arg_fnty = lc.Type.function(
-            self.intp_t,
-             [self.void_ptr_ptr_t, self.intp_t, self.void_ptr_ptr_t])
-
-        self.create_dppl_kernel_arg = self.builder.module.get_or_insert_function(create_dppl_kernel_arg_fnty,
-                                                              name="create_dp_kernel_arg")
-
-        create_dppl_kernel_arg_from_buffer_fnty = lc.Type.function(
-            self.intp_t, [self.void_ptr_ptr_t, self.void_ptr_ptr_t])
-        self.create_dppl_kernel_arg_from_buffer = self.builder.module.get_or_insert_function(
-                                                   create_dppl_kernel_arg_from_buffer_fnty,
-                                                   name="create_dp_kernel_arg_from_buffer")
-
-        create_dppl_rw_mem_buffer_fnty = lc.Type.function(
-            self.intp_t, [self.void_ptr_t, self.intp_t, self.void_ptr_ptr_t])
-        self.create_dppl_rw_mem_buffer = self.builder.module.get_or_insert_function(
-                                          create_dppl_rw_mem_buffer_fnty,
-                                          name="create_dp_rw_mem_buffer")
-
-        write_mem_buffer_to_device_fnty = lc.Type.function(
-            self.intp_t, [self.void_ptr_t, self.void_ptr_t, self.intp_t, self.intp_t, self.intp_t, self.void_ptr_t])
-        self.write_mem_buffer_to_device = self.builder.module.get_or_insert_function(
-                                          write_mem_buffer_to_device_fnty,
-                                          name="write_dp_mem_buffer_to_device")
-
-        read_mem_buffer_from_device_fnty = lc.Type.function(
-            self.intp_t, [self.void_ptr_t, self.void_ptr_t, self.intp_t, self.intp_t, self.intp_t, self.void_ptr_t])
-        self.read_mem_buffer_from_device = self.builder.module.get_or_insert_function(
-                                        read_mem_buffer_from_device_fnty,
-                                        name="read_dp_mem_buffer_from_device")
-
-        enqueue_kernel_fnty = lc.Type.function(
-            self.intp_t, [self.void_ptr_t, self.void_ptr_t, self.intp_t, self.void_ptr_ptr_t,
-                     self.intp_t, self.intp_ptr_t, self.intp_ptr_t])
-        self.enqueue_kernel = self.builder.module.get_or_insert_function(
-                                      enqueue_kernel_fnty,
-                                      name="set_args_and_enqueue_dp_kernel_auto_blocking")
-        '''
-
-
     def allocate_kenrel_arg_array(self, num_kernel_args):
         self.sycl_queue_val = cgutils.alloca_once(self.builder, self.void_ptr_t)
         self.builder.store(self.builder.call(self.get_queue, []), self.sycl_queue_val)
@@ -161,20 +106,10 @@ class DPPLHostFunctionCallsGenerator(object):
             self.builder, self.int32_t, size=self.context.get_constant(
                 types.uintp, num_kernel_args), name="kernel_arg_ty_array")
 
-    def _call_dppl_kernel_arg_fn(self, args):
-        kernel_arg = cgutils.alloca_once(self.builder, self.void_ptr_t,
-                                         size=self.one, name="kernel_arg" + str(self.cur_arg))
-
-        args.append(kernel_arg)
-        self.builder.call(self.create_dppl_kernel_arg, args)
-        dst = self.builder.gep(self.kernel_arg_array, [self.context.get_constant(types.intp, self.cur_arg)])
-        self.cur_arg += 1
-        self.builder.store(self.builder.load(kernel_arg), dst)
-
 
     def resolve_and_return_dpctl_type(self, ty):
         val = None
-        if ty == types.int32:
+        if ty == types.int32 or isinstance(ty, types.scalars.IntegerLiteral):
             val = self.context.get_constant(types.int32, 4)
         elif ty == types.uint32:
             val = self.context.get_constant(types.int32, 5)
@@ -205,26 +140,14 @@ class DPPLHostFunctionCallsGenerator(object):
 
 
     def process_kernel_arg(self, var, llvm_arg, arg_type, gu_sig, val_type, index, modified_arrays):
-
         if isinstance(arg_type, types.npytypes.Array):
             if llvm_arg is None:
                 raise NotImplementedError(arg_type, var)
-
-            # Handle meminfo.  Not used by kernel so just write a null pointer.
-            #args = [self.null_ptr, self.context.get_constant(types.uintp, self.sizeof_void_ptr)]
-            #self._call_dppl_kernel_arg_fn(args)
-            import pdb
-            #pdb.set_trace()
 
             storage = cgutils.alloca_once(self.builder, self.long_t)
             self.builder.store(self.context.get_constant(types.int64, 0), storage)
             ty = self.resolve_and_return_dpctl_type(types.int64)
             self.form_kernel_arg_and_arg_ty(self.builder.bitcast(storage, self.void_ptr_t), ty)
-
-
-            # Handle parent.  Not used by kernel so just write a null pointer.
-            #args = [self.null_ptr, self.context.get_constant(types.uintp, self.sizeof_void_ptr)]
-            #self._call_dppl_kernel_arg_fn(args)
 
             storage = cgutils.alloca_once(self.builder, self.long_t)
             self.builder.store(self.context.get_constant(types.int64, 0), storage)
@@ -235,21 +158,14 @@ class DPPLHostFunctionCallsGenerator(object):
             # Handle array size
             array_size_member = self.builder.gep(llvm_arg,
                     [self.context.get_constant(types.int32, 0), self.context.get_constant(types.int32, 2)])
-            #args = [self.builder.bitcast(array_size_member, self.void_ptr_ptr_t),
-            #        self.context.get_constant(types.uintp, self.sizeof_intp)]
-            #self._call_dppl_kernel_arg_fn(args)
 
             ty =  self.resolve_and_return_dpctl_type(types.int64)
             self.form_kernel_arg_and_arg_ty(self.builder.bitcast(array_size_member, self.void_ptr_t), ty)
 
 
-
             # Handle itemsize
             item_size_member = self.builder.gep(llvm_arg,
                     [self.context.get_constant(types.int32, 0), self.context.get_constant(types.int32, 3)])
-            #args = [self.builder.bitcast(item_size_member, self.void_ptr_ptr_t),
-            #        self.context.get_constant(types.uintp, self.sizeof_intp)]
-            #self._call_dppl_kernel_arg_fn(args)
 
             ty =  self.resolve_and_return_dpctl_type(types.int64)
             self.form_kernel_arg_and_arg_ty(self.builder.bitcast(item_size_member, self.void_ptr_t), ty)
@@ -262,14 +178,11 @@ class DPPLHostFunctionCallsGenerator(object):
                                self.builder.load(item_size_member)), self.intp_t), total_size)
 
             # Handle data
-            #kernel_arg = cgutils.alloca_once(self.builder, self.void_ptr_t,
-            #        size=self.one, name="kernel_arg" + str(self.cur_arg))
             data_member = self.builder.gep(llvm_arg,
                     [self.context.get_constant(types.int32, 0), self.context.get_constant(types.int32, 4)])
 
             buffer_name = "buffer_ptr" + str(self.cur_arg)
             buffer_ptr = cgutils.alloca_once(self.builder, self.void_ptr_t,
-                                             #size=self.one, name=buffer_name)
                                              name=buffer_name)
 
 
@@ -277,12 +190,6 @@ class DPPLHostFunctionCallsGenerator(object):
                     self.builder.load(self.sycl_queue_val)]
             self.builder.store(self.builder.call(self.usm_shared, args), buffer_ptr)
 
-
-            # env, buffer_size, buffer_ptr
-            #args = [self.builder.inttoptr(self.current_device_int_const, self.void_ptr_t),
-            #        self.builder.load(total_size),
-            #        buffer_ptr]
-            #self.builder.call(self.create_dppl_rw_mem_buffer, args)
 
             # names are replaces usig legalize names, we have to do the same for them to match
             legal_names = legalize_names([var])
@@ -292,26 +199,12 @@ class DPPLHostFunctionCallsGenerator(object):
 
             # We really need to detect when an array needs to be copied over
             if index < self.num_inputs:
-                #args = [self.builder.inttoptr(self.current_device_int_const, self.void_ptr_t),
-                #        self.builder.load(buffer_ptr),
-                #        self.one,
-                #        self.zero,
-                #        self.builder.load(total_size),
-                #        self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t)]
-
-                #self.builder.call(self.write_mem_buffer_to_device, args)
-
                 args = [self.builder.load(self.sycl_queue_val),
                         self.builder.load(buffer_ptr),
                         self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t),
                         self.builder.load(total_size)]
                 self.builder.call(self.queue_memcpy, args)
 
-
-            #self.builder.call(self.create_dppl_kernel_arg_from_buffer, [buffer_ptr, kernel_arg])
-            #dst = self.builder.gep(self.kernel_arg_array, [self.context.get_constant(types.intp, self.cur_arg)])
-            #self.cur_arg += 1
-            #self.builder.store(self.builder.load(kernel_arg), dst)
 
             ty =  self.resolve_and_return_dpctl_type(types.voidptr)
             self.form_kernel_arg_and_arg_ty(self.builder.load(buffer_ptr), ty)
@@ -325,10 +218,6 @@ class DPPLHostFunctionCallsGenerator(object):
                 shape_entry = self.builder.gep(shape_member,
                                 [self.context.get_constant(types.int32, 0),
                                  self.context.get_constant(types.int32, this_dim)])
-
-                #args = [self.builder.bitcast(shape_entry, self.void_ptr_ptr_t),
-                #        self.context.get_constant(types.uintp, self.sizeof_intp)]
-                #self._call_dppl_kernel_arg_fn(args)
 
                 ty =  self.resolve_and_return_dpctl_type(types.int64)
                 self.form_kernel_arg_and_arg_ty(self.builder.bitcast(shape_entry, self.void_ptr_t), ty)
@@ -344,18 +233,10 @@ class DPPLHostFunctionCallsGenerator(object):
                                 [self.context.get_constant(types.int32, 0),
                                  self.context.get_constant(types.int32, this_stride)])
 
-                #args = [self.builder.bitcast(stride_entry, self.void_ptr_ptr_t),
-                #        self.context.get_constant(types.uintp, self.sizeof_intp)]
-                #self._call_dppl_kernel_arg_fn(args)
-
                 ty =  self.resolve_and_return_dpctl_type(types.int64)
                 self.form_kernel_arg_and_arg_ty(self.builder.bitcast(stride_entry, self.void_ptr_t), ty)
 
         else:
-            #args = [self.builder.bitcast(llvm_arg, self.void_ptr_ptr_t),
-            #        self.context.get_constant(types.uintp, self.context.get_abi_sizeof(val_type))]
-            #self._call_dppl_kernel_arg_fn(args)
-
             ty =  self.resolve_and_return_dpctl_type(arg_type)
             self.form_kernel_arg_and_arg_ty(self.builder.bitcast(llvm_arg, self.void_ptr_t), ty)
 
@@ -392,56 +273,9 @@ class DPPLHostFunctionCallsGenerator(object):
 
         self.builder.call(self.queue_wait, [self.builder.load(self.sycl_queue_val)])
 
-        '''
-        # Package dim start and stops for auto-blocking enqueue.
-        dim_starts = cgutils.alloca_once(
-                        self.builder, self.uintp_t,
-                        size=self.context.get_constant(types.uintp, num_dim), name="dims")
-
-        dim_stops = cgutils.alloca_once(
-                        self.builder, self.uintp_t,
-                        size=self.context.get_constant(types.uintp, num_dim), name="dims")
-
-        for i in range(num_dim):
-            start, stop, step = loop_ranges[i]
-            if start.type != self.one_type:
-                start = self.builder.sext(start, self.one_type)
-            if stop.type != self.one_type:
-                stop = self.builder.sext(stop, self.one_type)
-            if step.type != self.one_type:
-                step = self.builder.sext(step, self.one_type)
-
-            # substract 1 because do-scheduling takes inclusive ranges
-            stop = self.builder.sub(stop, self.one)
-
-            self.builder.store(start,
-                               self.builder.gep(dim_starts, [self.context.get_constant(types.uintp, i)]))
-            self.builder.store(stop,
-                               self.builder.gep(dim_stops, [self.context.get_constant(types.uintp, i)]))
-
-        args = [self.builder.inttoptr(self.current_device_int_const, self.void_ptr_t),
-                self.builder.inttoptr(self.context.get_constant(types.uintp, self.kernel_int), self.void_ptr_t),
-                self.context.get_constant(types.uintp, self.total_kernel_args),
-                self.kernel_arg_array,
-                self.context.get_constant(types.uintp, num_dim),
-                dim_starts,
-                dim_stops]
-
-        self.builder.call(self.enqueue_kernel, args)
-        '''
-
         # read buffers back to host
         for read_buf in self.read_bufs_after_enqueue:
             buffer_ptr, total_size, data_member = read_buf
-            '''
-            args = [self.builder.inttoptr(self.current_device_int_const, self.void_ptr_t),
-                    self.builder.load(buffer_ptr),
-                    self.one,
-                    self.zero,
-                    self.builder.load(array_size_member),
-                    self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t)]
-            self.builder.call(self.read_mem_buffer_from_device, args)
-            '''
             args = [self.builder.load(self.sycl_queue_val),
                     self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t),
                     self.builder.load(buffer_ptr),

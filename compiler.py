@@ -412,8 +412,7 @@ class DPPLKernel(DPPLKernelBase):
         device_arrs.append(None)
 
         if isinstance(ty, types.Array):
-
-            if val.base != None and isinstance(val.base, dpctl_mem.Memory):
+            if isinstance(val.base, dpctl_mem.Memory):
                 self._unpack_device_array_argument(val, kernelargs)
             else:
                 default_behavior = self.check_for_invalid_access_type(access_type)
