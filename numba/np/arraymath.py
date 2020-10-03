@@ -4170,7 +4170,7 @@ def np_asarray_chkfinite(a, dtype=None):
     if is_nonelike(dtype):
         dt = a.dtype
     else:
-        dt = dtype.dtype
+        dt = as_dtype(dtype)
 
     def impl(a, dtype=None):
         a = np.asarray(a, dtype=dt)
