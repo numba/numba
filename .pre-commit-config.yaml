@@ -3,8 +3,10 @@ repos:
   rev: 3.8.3
   hooks:
   - id: flake8
+    files: '^numba/'
 - repo: https://github.com/pre-commit/mirrors-mypy
-  rev: 'v0.770'
+  rev: 'v0.782'
   hooks:
   - id: mypy
-    args: ["--config-file=mypy.ini"]
+    args: ['--config-file=mypy.ini']
+    files: '^numba/'
