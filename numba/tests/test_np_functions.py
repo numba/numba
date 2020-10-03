@@ -3934,16 +3934,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc(np.array([1, 2, np.inf, 4]))
         self.assertIn("array must not contain infs or NaNs", str(e.exception))
 
-        #test for both inf and NaNs
-        with self.assertRaises(ValueError) as e:
-            cfunc(np.array([np.inf, np.nan]))
-        self.assertIn("array must not contain infs or NaNs", str(e.exception))
-
-        #test for NaNs
-        with self.assertRaises(ValueError) as e:
-            cfunc(np.array([np.nan, np.nan, np.nan]))
-        self.assertIn("array must not contain infs or NaNs", str(e.exception))
-
 
 class TestNPMachineParameters(TestCase):
     # tests np.finfo, np.iinfo, np.MachAr
