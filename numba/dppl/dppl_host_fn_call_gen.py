@@ -32,7 +32,10 @@ class DPPLHostFunctionCallsGenerator(object):
         self.num_inputs        = num_inputs
 
         # list of buffer that needs to comeback to host
-        self.read_bufs_after_enqueue = []
+        self.write_buffs = []
+
+        # list of buffer that does not need to comeback to host
+        self.read_only_buffs = []
 
 
     def _create_null_ptr(self):
@@ -90,6 +93,9 @@ class DPPLHostFunctionCallsGenerator(object):
         self.usm_shared = self.builder.module.get_or_insert_function(usm_shared_fnty,
                                                                 name="DPPLmalloc_shared")
 
+        usm_free_fnty = lc.Type.function(lir.VoidType(), [self.void_ptr_t, self.void_ptr_t])
+        self.usm_free = self.builder.module.get_or_insert_function(usm_free_fnty,
+                                                                   name="DPPLfree_with_queue")
 
     def allocate_kenrel_arg_array(self, num_kernel_args):
         self.sycl_queue_val = cgutils.alloca_once(self.builder, self.void_ptr_t)
@@ -195,7 +201,9 @@ class DPPLHostFunctionCallsGenerator(object):
             legal_names = legalize_names([var])
 
             if legal_names[var] in modified_arrays:
-                self.read_bufs_after_enqueue.append((buffer_ptr, total_size, data_member))
+                self.write_buffs.append((buffer_ptr, total_size, data_member))
+            else:
+                self.read_only_buffs.append((buffer_ptr, total_size, data_member))
 
             # We really need to detect when an array needs to be copied over
             if index < self.num_inputs:
@@ -274,11 +282,16 @@ class DPPLHostFunctionCallsGenerator(object):
         self.builder.call(self.queue_wait, [self.builder.load(self.sycl_queue_val)])
 
         # read buffers back to host
-        for read_buf in self.read_bufs_after_enqueue:
-            buffer_ptr, total_size, data_member = read_buf
+        for write_buff in self.write_buffs:
+            buffer_ptr, total_size, data_member = write_buff
             args = [self.builder.load(self.sycl_queue_val),
                     self.builder.bitcast(self.builder.load(data_member), self.void_ptr_t),
                     self.builder.load(buffer_ptr),
                     self.builder.load(total_size)]
             self.builder.call(self.queue_memcpy, args)
 
+            self.builder.call(self.usm_free, [self.builder.load(buffer_ptr), self.builder.load(self.sycl_queue_val)])
+
+        for read_buff in self.read_only_buffs:
+            buffer_ptr, total_size, data_member = read_buff
+            self.builder.call(self.usm_free, [self.builder.load(buffer_ptr), self.builder.load(self.sycl_queue_val)])
