@@ -47,6 +47,25 @@ def test_for_different_datatypes(fn, test_fn, dims, arg_count, tys, np_all=False
 
     return True
 
+def test_for_dimensions(fn, test_fn, dims, tys, np_all=False):
+    total_size = 1
+    for d in dims:
+        total_size *= d
+
+    for ty in tys:
+        a = np.array(np.random.random(total_size), dtype=ty).reshape(dims)
+        c = fn(a)
+        d = test_fn(a)
+        if np_all:
+            max_abs_err = np.all(c - d)
+        else:
+            max_abs_err = c - d
+        if not (max_abs_err < 1e-4):
+            return False
+
+    return True
+
+
 class Testdpnp_functions(DPPLTestCase):
     N = 10
 
@@ -61,6 +80,8 @@ class Testdpnp_functions(DPPLTestCase):
             return c
 
         self.assertTrue(test_for_different_datatypes(f, np.sum, [10], 1, self.tys))
+        self.assertTrue(test_for_dimensions(f, np.sum, [10, 2], self.tys))
+        self.assertTrue(test_for_dimensions(f, np.sum, [10, 2, 3], self.tys))
 
     def test_prod(self):
         @njit(parallel={'offload':True})
@@ -69,6 +90,8 @@ class Testdpnp_functions(DPPLTestCase):
             return c
 
         self.assertTrue(test_for_different_datatypes(f, np.prod, [10], 1, self.tys))
+        self.assertTrue(test_for_dimensions(f, np.prod, [10, 2], self.tys))
+        self.assertTrue(test_for_dimensions(f, np.prod, [10, 2, 3], self.tys))
 
     def test_argmax(self):
         @njit(parallel={'offload':True})
@@ -77,6 +100,8 @@ class Testdpnp_functions(DPPLTestCase):
             return c
 
         self.assertTrue(test_for_different_datatypes(f, np.argmax, [10], 1, self.tys))
+        self.assertTrue(test_for_dimensions(f, np.argmax, [10, 2], self.tys))
+        self.assertTrue(test_for_dimensions(f, np.argmax, [10, 2, 3], self.tys))
 
     def test_max(self):
         @njit(parallel={'offload':True})
@@ -85,6 +110,8 @@ class Testdpnp_functions(DPPLTestCase):
             return c
 
         self.assertTrue(test_for_different_datatypes(f, np.max, [10], 1, self.tys))
+        self.assertTrue(test_for_dimensions(f, np.max, [10, 2], self.tys))
+        self.assertTrue(test_for_dimensions(f, np.max, [10, 2, 3], self.tys))
 
     def test_argmin(self):
         @njit(parallel={'offload':True})
@@ -93,6 +120,8 @@ class Testdpnp_functions(DPPLTestCase):
             return c
 
         self.assertTrue(test_for_different_datatypes(f, np.argmin, [10], 1, self.tys))
+        self.assertTrue(test_for_dimensions(f, np.argmin, [10, 2], self.tys))
+        self.assertTrue(test_for_dimensions(f, np.argmin, [10, 2, 3], self.tys))
 
     def test_min(self):
         @njit(parallel={'offload':True})
@@ -101,6 +130,8 @@ class Testdpnp_functions(DPPLTestCase):
             return c
 
         self.assertTrue(test_for_different_datatypes(f, np.min, [10], 1, self.tys))
+        self.assertTrue(test_for_dimensions(f, np.min, [10, 2], self.tys))
+        self.assertTrue(test_for_dimensions(f, np.min, [10, 2, 3], self.tys))
 
     def test_argsort(self):
         @njit(parallel={'offload':True})
@@ -117,6 +148,8 @@ class Testdpnp_functions(DPPLTestCase):
             return c
 
         self.assertTrue(test_for_different_datatypes(f, np.median, [10], 1, self.tys))
+        self.assertTrue(test_for_dimensions(f, np.median, [10, 2], self.tys))
+        self.assertTrue(test_for_dimensions(f, np.median, [10, 2, 3], self.tys))
 
     def test_mean(self):
         @njit(parallel={'offload':True})
@@ -125,6 +158,8 @@ class Testdpnp_functions(DPPLTestCase):
             return c
 
         self.assertTrue(test_for_different_datatypes(f, np.mean, [10], 1, self.tys))
+        self.assertTrue(test_for_dimensions(f, np.mean, [10, 2], self.tys))
+        self.assertTrue(test_for_dimensions(f, np.mean, [10, 2, 3], self.tys))
 
     def test_matmul(self):
         @njit(parallel={'offload':True})
