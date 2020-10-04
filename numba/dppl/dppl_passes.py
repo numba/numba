@@ -31,22 +31,14 @@ from numba.parfors.parfor import ParforPass as _parfor_ParforPass
 from numba.parfors.parfor import Parfor
 
 
-@register_pass(mutates_CFG=True, analysis_only=False)
-class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
-
-    _name = "dppl_constant_size_static_local_memory_pass"
+@register_pass(mutates_CFG=False, analysis_only=True)
+class DPPLAddNumpyOverloadPass(FunctionPass):
+    _name = "dppl_add_numpy_overload_pass"
 
     def __init__(self):
         FunctionPass.__init__(self)
 
     def run_pass(self, state):
-        """
-        Preprocessing for data-parallel computations.
-        """
-        # Ensure we have an IR and type information.
-        assert state.func_ir
-        func_ir = state.func_ir
-
         typingctx = state.typingctx
         from numba.core.typing.templates import builtin_registry as reg, infer_global
         from numba.core.typing.templates import (AbstractTemplate, CallableTemplate, signature)
@@ -117,9 +109,25 @@ class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
                 else:
                     prev_mean.templates = g[1].templates
 
-
-
         typingctx.refresh()
+        return True
+
+
+@register_pass(mutates_CFG=True, analysis_only=False)
+class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
+
+    _name = "dppl_constant_size_static_local_memory_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        """
+        Preprocessing for data-parallel computations.
+        """
+        # Ensure we have an IR and type information.
+        assert state.func_ir
+        func_ir = state.func_ir
 
         _DEBUG = False
 
@@ -179,9 +187,6 @@ class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
 
         return True
 
-
-def bla_impl(return_type, *args):
-    b = 2
 
 @register_pass(mutates_CFG=True, analysis_only=False)
 class DPPLPreParforPass(FunctionPass):
