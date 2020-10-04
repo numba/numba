@@ -168,7 +168,7 @@ class DPPLPreParforPass(FunctionPass):
         functions_map.pop(('sum', 'numpy'), None)
         functions_map.pop(('prod', 'numpy'), None)
         functions_map.pop(('argmax', 'numpy'), None)
-        functions_map.pop(('argin', 'numpy'), None)
+        functions_map.pop(('argmin', 'numpy'), None)
 
         preparfor_pass = _parfor_PreParforPass(
             state.func_ir,
