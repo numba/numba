@@ -17,8 +17,14 @@ cu_link_state = c_void_p
 cu_function_attribute = c_int
 cu_ipc_mem_handle = (c_byte * _extras.CUDA_IPC_HANDLE_SIZE)   # 64 bytes wide
 
+cu_stream_callback_pyobj = CFUNCTYPE(None, cu_stream, c_int, py_object)
+
 cu_occupancy_b2d_size = CFUNCTYPE(c_size_t, c_int)
 
+# See https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__TYPES.html
+CU_STREAM_DEFAULT = 0
+CU_STREAM_LEGACY = 1
+CU_STREAM_PER_THREAD = 2
 
 API_PROTOTYPES = {
 # CUresult cuInit(unsigned int Flags);
@@ -154,6 +160,9 @@ API_PROTOTYPES = {
 
 # CUresult cuStreamSynchronize(CUstream hStream);
 'cuStreamSynchronize':  (c_int, cu_stream),
+
+# CUresult cuStreamAddCallback(CUstream hStream, CUstreamCallback callback, void* userData, unsigned int flags)
+'cuStreamAddCallback':  (c_int, cu_stream, cu_stream_callback_pyobj, py_object, c_uint),
 
 # CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX,
 #                        unsigned int gridDimY,

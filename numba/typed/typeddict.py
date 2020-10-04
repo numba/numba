@@ -243,11 +243,17 @@ def box_dicttype(typ, val, c):
 
     dicttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
 
-    res = c.pyapi.call_function_objargs(fmp_fn, (boxed_meminfo, dicttype_obj))
-    c.pyapi.decref(fmp_fn)
-    c.pyapi.decref(typeddict_mod)
-    c.pyapi.decref(boxed_meminfo)
-    return res
+    result_var = builder.alloca(c.pyapi.pyobj)
+    builder.store(cgutils.get_null_value(c.pyapi.pyobj), result_var)
+    with builder.if_then(cgutils.is_not_null(builder, dicttype_obj)):
+        res = c.pyapi.call_function_objargs(
+            fmp_fn, (boxed_meminfo, dicttype_obj),
+        )
+        c.pyapi.decref(fmp_fn)
+        c.pyapi.decref(typeddict_mod)
+        c.pyapi.decref(boxed_meminfo)
+        builder.store(res, result_var)
+    return builder.load(result_var)
 
 
 @unbox(types.DictType)
@@ -275,11 +281,6 @@ def unbox_dicttype(typ, val, c):
 
     c.pyapi.decref(miptr)
     return NativeValue(dctobj, is_error=is_error)
-
-
-#
-# The following contains the logic for the type-inferred constructor
-#
 
 
 @type_callable(DictType)

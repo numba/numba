@@ -4,7 +4,7 @@ import numpy as np
 
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
-import dppl.ocldrv as ocldrv
+import dpctl.ocldrv as ocldrv
 
 
 @unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')

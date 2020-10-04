@@ -356,8 +356,8 @@ class TestReportedSSAIssues(SSABaseTest):
         # We have to create a custom pipeline to force a SSA reconstruction
         # and stripping.
         from numba.core.compiler import CompilerBase, DefaultPassBuilder
-        from numba.untyped_passes import ReconstructSSA, IRProcessing
-        from numba.typed_passes import PreLowerStripPhis
+        from numba.core.untyped_passes import ReconstructSSA, IRProcessing
+        from numba.core.typed_passes import PreLowerStripPhis
 
         class CustomPipeline(CompilerBase):
             def define_pipelines(self):
@@ -444,3 +444,52 @@ class TestReportedSSAIssues(SSABaseTest):
 
         np.testing.assert_array_equal(python, expect)
         np.testing.assert_array_equal(nb, expect)
+
+    def test_issue5678_non_minimal_phi(self):
+        # There should be only one phi for variable "i"
+
+        from numba.core.compiler import CompilerBase, DefaultPassBuilder
+        from numba.core.untyped_passes import (
+            ReconstructSSA, FunctionPass, register_pass,
+        )
+
+        phi_counter = []
+
+        @register_pass(mutates_CFG=False, analysis_only=True)
+        class CheckSSAMinimal(FunctionPass):
+            # A custom pass to count the number of phis
+
+            _name = self.__class__.__qualname__ + ".CheckSSAMinimal"
+
+            def __init__(self):
+                super().__init__(self)
+
+            def run_pass(self, state):
+                ct = 0
+                for blk in state.func_ir.blocks.values():
+                    ct += len(list(blk.find_exprs('phi')))
+                phi_counter.append(ct)
+                return True
+
+        class CustomPipeline(CompilerBase):
+            def define_pipelines(self):
+                pm = DefaultPassBuilder.define_nopython_pipeline(self.state)
+                pm.add_pass_after(CheckSSAMinimal, ReconstructSSA)
+                pm.finalize()
+                return [pm]
+
+        @njit(pipeline_class=CustomPipeline)
+        def while_for(n, max_iter=1):
+            a = np.empty((n,n))
+            i = 0
+            while i <= max_iter:
+                for j in range(len(a)):
+                    for k in range(len(a)):
+                        a[j,k] = j + k
+                i += 1
+            return a
+
+        # Runs fine?
+        self.assertPreciseEqual(while_for(10), while_for.py_func(10))
+        # One phi?
+        self.assertEqual(phi_counter, [1])

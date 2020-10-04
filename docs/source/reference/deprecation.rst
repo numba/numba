@@ -17,7 +17,7 @@ All Numba deprecations are issued via ``NumbaDeprecationWarning`` or
 ``NumbaPendingDeprecationWarning`` s, to suppress the reporting of
 these the following code snippet can be used::
 
-    from numba.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
+    from numba.core.errors import NumbaDeprecationWarning, NumbaPendingDeprecationWarning
     import warnings
 
     warnings.simplefilter('ignore', category=NumbaDeprecationWarning)
@@ -100,8 +100,8 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Pending-deprecation warnings will be issued in version 0.44.0
-* Deprecation warnings and replacements will be issued in version 0.50.0
-* Support will be removed in version 0.51.0
+* Deprecation warnings and replacements will be issued in version 0.52.0
+* Support will be removed in version 0.53.0
 
 Recommendations
 ---------------
@@ -205,7 +205,7 @@ Schedule
 This feature will be removed with respect to this schedule:
 
 * Deprecation warnings will be issued in version 0.44.0
-* Support will be removed in version 0.50.0
+* Support will be removed in version 0.54.0
 
 Recommendations
 ---------------
@@ -253,4 +253,23 @@ This feature will be moved with respect to this schedule:
 
 * Deprecation warnings will be issued in version 0.49.0
 * Support for importing from ``numba.jitclass`` will be removed in version
-  0.51.0.
+  0.52.0.
+
+Deprecation of the target kwarg
+===============================
+There have been a number of users attempting to use the ``target`` keyword
+argument that's meant for internal use only. We are deprecating this argument,
+as alternative solutions are available to achieve the same behaviour.
+
+Recommendations
+---------------
+Update the ``jit`` decorator as follows:
+
+* Change ``@numba.jit(..., target='cuda')`` to ``numba.cuda.jit(...)``.
+
+Schedule
+--------
+This feature will be moved with respect to this schedule:
+
+* Deprecation warnings will be issued in 0.51.0.
+* The target kwarg will be removed in version 0.53.0.

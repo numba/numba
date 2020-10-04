@@ -2,7 +2,6 @@
 Expose top-level symbols that are safe for import *
 """
 
-import importlib
 import platform
 import re
 import sys
@@ -59,90 +58,6 @@ import numba.cpython.charseq
 test = runtests.main
 
 
-# needed for compatibility until 0.50.0. Note that accessing members of
-# any of these modules, or the modules themselves, will raise DeprecationWarning
-_auto_import_submodules = {
-    'numba.numpy_support': 'numba.np.numpy_support',
-    'numba.special': 'numba.misc.special',
-    'numba.analysis': 'numba.core.analysis',
-    'numba.datamodel': 'numba.core.datamodel',
-    'numba.unsafe': 'numba.core.unsafe',
-    'numba.annotations': 'numba.core.annotations',
-    'numba.appdirs': 'numba.misc.appdirs',
-    'numba.array_analysis': 'numba.parfors.array_analysis',
-    'numba.bytecode': 'numba.core.bytecode',
-    'numba.byteflow': 'numba.core.byteflow',
-    'numba.caching': 'numba.core.caching',
-    'numba.callwrapper': 'numba.core.callwrapper',
-    'numba.cgutils': 'numba.core.cgutils',
-    'numba.charseq': 'numba.cpython.charseq',
-    'numba.compiler': 'numba.core.compiler',
-    'numba.compiler_lock': 'numba.core.compiler_lock',
-    'numba.compiler_machinery': 'numba.core.compiler_machinery',
-    'numba.consts': 'numba.core.consts',
-    'numba.controlflow': 'numba.core.controlflow',
-    'numba.dataflow': 'numba.core.dataflow',
-    'numba.debuginfo': 'numba.core.debuginfo',
-    'numba.decorators': 'numba.core.decorators',
-    'numba.dictobject': 'numba.typed.dictobject',
-    'numba.dispatcher': 'numba.core.dispatcher',
-    'numba.entrypoints': 'numba.core.entrypoints',
-    'numba.funcdesc': 'numba.core.funcdesc',
-    'numba.generators': 'numba.core.generators',
-    'numba.inline_closurecall': 'numba.core.inline_closurecall',
-    'numba.interpreter': 'numba.core.interpreter',
-    'numba.ir': 'numba.core.ir',
-    'numba.ir_utils': 'numba.core.ir_utils',
-    'numba.itanium_mangler': 'numba.core.itanium_mangler',
-    'numba.listobject': 'numba.typed.listobject',
-    'numba.lowering': 'numba.core.lowering',
-    'numba.npdatetime': 'numba.np.npdatetime',
-    'numba.object_mode_passes': 'numba.core.object_mode_passes',
-    'numba.parfor': 'numba.parfors.parfor',
-    'numba.postproc': 'numba.core.postproc',
-    'numba.pylowering': 'numba.core.pylowering',
-    'numba.pythonapi': 'numba.core.pythonapi',
-    'numba.rewrites': 'numba.core.rewrites',
-    'numba.runtime': 'numba.core.runtime',
-    'numba.serialize': 'numba.core.serialize',
-    'numba.sigutils': 'numba.core.sigutils',
-    'numba.stencilparfor': 'numba.stencils.stencilparfor',
-    'numba.tracing': 'numba.core.tracing',
-    'numba.transforms': 'numba.core.transforms',
-    'numba.typeconv': 'numba.core.typeconv',
-    'numba.withcontexts': 'numba.core.withcontexts',
-    'numba.typed_passes': 'numba.core.typed_passes',
-    'numba.untyped_passes': 'numba.core.untyped_passes',
-    'numba.utils': 'numba.core.utils',
-    'numba.unicode_support': 'numba.cpython.unicode_support',
-    'numba.unicode': 'numba.cpython.unicode',
-    'numba.typing': 'numba.core.typing',
-    'numba.typeinfer': 'numba.core.typeinfer',
-    'numba.typedobjectutils': 'numba.typed.typedobjectutils',
-}
-
-if sys.version_info < (3, 7):
-    with warnings.catch_warnings():
-        # Ignore warnings from making top-level alias.
-        warnings.simplefilter(
-            "ignore", category=errors.NumbaDeprecationWarning,
-        )
-        for _old_mod in _auto_import_submodules.keys():
-            importlib.import_module(_old_mod)
-else:
-    def __getattr__(attr):
-        submodule_name = 'numba.{}'.format(attr)
-        try:
-            new_name = _auto_import_submodules[submodule_name]
-        except KeyError:
-            raise AttributeError(
-                f"module {__name__!r} has no attribute {attr!r}",
-            ) from None
-        else:
-            errors.deprecate_moved_module(submodule_name, new_name)
-            return importlib.import_module(new_name)
-
-
 __all__ = """
     cfunc
     from_dtype
@@ -166,8 +81,8 @@ __all__ = """
     """.split() + types.__all__ + errors.__all__
 
 
-_min_llvmlite_version = (0, 31, 0)
-_min_llvm_version = (7, 0, 0)
+_min_llvmlite_version = (0, 33, 0)
+_min_llvm_version = (9, 0, 0)
 
 def _ensure_llvm():
     """

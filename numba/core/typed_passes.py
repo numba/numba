@@ -17,7 +17,7 @@ from numba.core.ir_utils import (raise_on_unsupported_feature, warn_deprecated,
                                  check_and_legalize_ir, guard,
                                  dead_code_elimination, simplify_CFG,
                                  get_definition, remove_dels,
-                                 build_definitions)
+                                 build_definitions, compute_cfg_from_blocks)
 from numba.core import postproc
 
 
@@ -304,7 +304,7 @@ class ParforPass(FunctionPass):
             # parfor calls the compiler chain again with a string
             if not (config.DISABLE_PERFORMANCE_WARNINGS or
                     state.func_ir.loc.filename == '<string>'):
-                url = ("http://numba.pydata.org/numba-doc/latest/user/"
+                url = ("https://numba.pydata.org/numba-doc/latest/user/"
                        "parallel.html#diagnostics")
                 msg = ("\nThe keyword argument 'parallel=True' was specified "
                        "but no transformation for parallel execution was "
@@ -487,8 +487,20 @@ class InlineOverloads(FunctionPass):
         """
         if self._DEBUG:
             print('before overload inline'.center(80, '-'))
+            print(state.func_id.unique_name)
             print(state.func_ir.dump())
             print(''.center(80, '-'))
+        from numba.core.inline_closurecall import (InlineWorker,
+                                                   callee_ir_validator)
+        inline_worker = InlineWorker(state.typingctx,
+                                     state.targetctx,
+                                     state.locals,
+                                     state.pipeline,
+                                     state.flags,
+                                     callee_ir_validator,
+                                     state.typemap,
+                                     state.calltypes,
+                                     )
         modified = False
         work_list = list(state.func_ir.blocks.items())
         # use a work list, look for call sites via `ir.Expr.op == call` and
@@ -506,16 +518,22 @@ class InlineOverloads(FunctionPass):
                         else:
                             continue
 
-                        if guard(workfn, state, work_list, block, i, expr):
+                        if guard(workfn, state, work_list, block, i, expr,
+                                 inline_worker):
                             modified = True
                             break  # because block structure changed
 
         if self._DEBUG:
             print('after overload inline'.center(80, '-'))
+            print(state.func_id.unique_name)
             print(state.func_ir.dump())
             print(''.center(80, '-'))
 
         if modified:
+            # Remove dead blocks, this is safe as it relies on the CFG only.
+            cfg = compute_cfg_from_blocks(state.func_ir.blocks)
+            for dead in cfg.dead_nodes():
+                del state.func_ir.blocks[dead]
             # clean up blocks
             dead_code_elimination(state.func_ir,
                                   typemap=state.type_annotation.typemap)
@@ -525,12 +543,12 @@ class InlineOverloads(FunctionPass):
 
         if self._DEBUG:
             print('after overload inline DCE'.center(80, '-'))
+            print(state.func_id.unique_name)
             print(state.func_ir.dump())
             print(''.center(80, '-'))
-
         return True
 
-    def _do_work_getattr(self, state, work_list, block, i, expr):
+    def _do_work_getattr(self, state, work_list, block, i, expr, inline_worker):
         recv_type = state.type_annotation.typemap[expr.value.name]
         recv_type = types.unliteral(recv_type)
         matched = state.typingctx.find_matching_getattr_template(
@@ -564,10 +582,10 @@ class InlineOverloads(FunctionPass):
         is_method = False
         return self._run_inliner(
             state, inline_type, sig, template, arg_typs, expr, i, impl, block,
-            work_list, is_method,
+            work_list, is_method, inline_worker,
         )
 
-    def _do_work_call(self, state, work_list, block, i, expr):
+    def _do_work_call(self, state, work_list, block, i, expr, inline_worker):
         # try and get a definition for the call, this isn't always possible as
         # it might be a eval(str)/part generated awaiting update etc. (parfors)
         to_inline = None
@@ -627,15 +645,13 @@ class InlineOverloads(FunctionPass):
         # definitely something that could be inlined.
         return self._run_inliner(
             state, inline_type, sig, template, arg_typs, expr, i, impl, block,
-            work_list, is_method,
+            work_list, is_method, inline_worker,
         )
 
     def _run_inliner(
         self, state, inline_type, sig, template, arg_typs, expr, i, impl, block,
-        work_list, is_method,
+        work_list, is_method, inline_worker,
     ):
-        from numba.core.inline_closurecall import (inline_closure_call,
-                                                   callee_ir_validator)
 
         do_inline = True
         if not inline_type.is_always_inline:
@@ -657,15 +673,17 @@ class InlineOverloads(FunctionPass):
                 if not self._add_method_self_arg(state, expr):
                     return False
             arg_typs = template._inline_overloads[arg_typs]['folded_args']
-            # pass is typed so use the callee globals
-            inline_closure_call(state.func_ir, impl.__globals__,
-                                block, i, impl, typingctx=state.typingctx,
-                                arg_typs=arg_typs,
-                                typemap=state.type_annotation.typemap,
-                                calltypes=state.type_annotation.calltypes,
-                                work_list=work_list,
-                                replace_freevars=False,
-                                callee_validator=callee_ir_validator)
+            iinfo = template._inline_overloads[arg_typs]['iinfo']
+            freevars = iinfo.func_ir.func_id.func.__code__.co_freevars
+            _, _, _, new_blocks = inline_worker.inline_ir(state.func_ir,
+                                                          block,
+                                                          i,
+                                                          iinfo.func_ir,
+                                                          freevars,
+                                                          arg_typs=arg_typs)
+            if work_list is not None:
+                for blk in new_blocks:
+                    work_list.append(blk)
             return True
         else:
             return False

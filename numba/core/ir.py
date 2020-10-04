@@ -444,10 +444,11 @@ class Expr(Inst):
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
-    def build_map(cls, items, size, loc):
+    def build_map(cls, items, size, literal_value, value_indexes, loc):
         assert isinstance(loc, Loc)
         op = 'build_map'
-        return cls(op=op, loc=loc, items=items, size=size)
+        return cls(op=op, loc=loc, items=items, size=size,
+                   literal_value=literal_value, value_indexes=value_indexes)
 
     @classmethod
     def pair_first(cls, value, loc):
@@ -725,11 +726,11 @@ class StaticRaise(Terminator):
 
     def __str__(self):
         if self.exc_class is None:
-            return "raise"
+            return "<static> raise"
         elif self.exc_args is None:
-            return "raise %s" % (self.exc_class,)
+            return "<static> raise %s" % (self.exc_class,)
         else:
-            return "raise %s(%s)" % (self.exc_class,
+            return "<static> raise %s(%s)" % (self.exc_class,
                                      ", ".join(map(repr, self.exc_args)))
 
     def get_targets(self):
@@ -935,6 +936,13 @@ class Const(EqualityCheckMixin, AbstractRHS):
     def infer_constant(self):
         return self.value
 
+    def __deepcopy__(self, memo):
+        # Override to not copy constant values in code
+        return Const(
+            value=self.value, loc=self.loc,
+            use_literal_type=self.use_literal_type,
+        )
+
 
 class Global(EqualityCheckMixin, AbstractRHS):
     def __init__(self, name, value, loc):
@@ -978,6 +986,12 @@ class FreeVar(EqualityCheckMixin, AbstractRHS):
 
     def infer_constant(self):
         return self.value
+
+    def __deepcopy__(self, memo):
+        # Override to not copy constant values in code
+        return FreeVar(index=self.index, name=self.name, value=self.value,
+                       loc=self.loc)
+
 
 
 class Var(EqualityCheckMixin, AbstractRHS):

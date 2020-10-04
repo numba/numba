@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod, abstractproperty
+from typing import Dict as ptDict, Type as ptType
 import itertools
 import weakref
 
@@ -21,7 +22,7 @@ def _autoincr():
     assert n < 2 ** 32, "Limited to 4 billion types"
     return n
 
-_typecache = {}
+_typecache: ptDict[weakref.ref, weakref.ref] = {}
 
 def _on_type_disposal(wr, _pop=_typecache.pop):
     _pop(wr, None)
@@ -188,7 +189,10 @@ class Type(object):
     def _determine_array_spec(self, args):
         # XXX non-contiguous by default, even for 1d arrays,
         # doesn't sound very intuitive
-        if isinstance(args, (tuple, list)):
+        def validate_slice(s):
+            return isinstance(s, slice) and s.start is None and s.stop is None
+
+        if isinstance(args, (tuple, list)) and all(map(validate_slice, args)):
             ndim = len(args)
             if args[0].step == 1:
                 layout = 'F'
@@ -196,15 +200,15 @@ class Type(object):
                 layout = 'C'
             else:
                 layout = 'A'
-        elif isinstance(args, slice):
+        elif validate_slice(args):
             ndim = 1
             if args.step == 1:
                 layout = 'C'
             else:
                 layout = 'A'
         else:
-            ndim = 1
-            layout = 'A'
+            # Raise a KeyError to not be handled by collection constructors (e.g. list).
+            raise KeyError(f"Can only index numba types with slices with no start or stop, got {args}.")
 
         return ndim, layout
 
@@ -402,7 +406,7 @@ class Literal(Type):
     # for constructing a numba type for a given Python type.
     # It is used in `literal(val)` function.
     # To add new Literal subclass, register a new mapping to this dict.
-    ctor_map = {}
+    ctor_map: ptDict[type, ptType['Literal']] = {}
 
     # *_literal_type_cache* is used to cache the numba type of the given value.
     _literal_type_cache = None
@@ -437,7 +441,15 @@ class Literal(Type):
         if self._literal_type_cache is None:
             from numba.core import typing
             ctx = typing.Context()
-            res = ctx.resolve_value_type(self.literal_value)
+            try:
+                res = ctx.resolve_value_type(self.literal_value)
+            except ValueError:
+                # Not all literal types have a literal_value that can be
+                # resolved to a type, for example, LiteralStrKeyDict has a
+                # literal_value that is a python dict for which there's no
+                # `typeof` support.
+                msg = "{} has no attribute 'literal_type'".format(self)
+                raise AttributeError(msg)
             self._literal_type_cache = res
 
         return self._literal_type_cache
@@ -453,3 +465,33 @@ class TypeRef(Dummy):
         self.instance_type = instance_type
         super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
 
+
+class InitialValue(object):
+    """
+    Used as a mixin for a type will potentially have an initial value that will
+    be carried in the .initial_value attribute.
+    """
+    def __init__(self, initial_value):
+        self._initial_value = initial_value
+
+    @property
+    def initial_value(self):
+        return self._initial_value
+
+
+class Poison(Type):
+    """
+    This is the "bottom" type in the type system. It won't unify and it's
+    unliteral version is Poison of itself. It's advisable for debugging purposes
+    to call the constructor with the type that's being poisoned (for whatever
+    reason) but this isn't strictly required.
+    """
+    def __init__(self, ty):
+        self.ty = ty
+        super(Poison, self).__init__(name="Poison<%s>" % ty)
+
+    def __unliteral__(self):
+        return Poison(self)
+
+    def unify(self, typingctx, other):
+        return None

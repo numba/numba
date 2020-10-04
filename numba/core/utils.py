@@ -13,7 +13,7 @@ import weakref
 import warnings
 from types import ModuleType
 from importlib import import_module
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 import numpy as np
 
 from inspect import signature as pysignature # noqa: F401
@@ -102,6 +102,23 @@ def erase_traceback(exc_value):
     if exc_value.__traceback__ is not None:
         traceback.clear_frames(exc_value.__traceback__)
     return exc_value.with_traceback(None)
+
+
+def safe_relpath(path, start=os.curdir):
+    """
+    Produces a "safe" relative path, on windows relpath doesn't work across
+    drives as technically they don't share the same root.
+    See: https://bugs.python.org/issue7195 for details.
+    """
+    # find the drive letters for path and start and if they are not the same
+    # then don't use relpath!
+    drive_letter = lambda x: os.path.splitdrive(os.path.abspath(x))[0]
+    drive_path = drive_letter(path)
+    drive_start = drive_letter(start)
+    if drive_path != drive_start:
+        return os.path.abspath(path)
+    else:
+        return os.path.relpath(path, start=start)
 
 
 # Mapping between operator module functions and the corresponding built-in
@@ -478,8 +495,7 @@ def unified_function_type(numba_types, require_precise=True):
 
     Parameters
     ----------
-    numba_types : tuple
-      Numba type instances.
+    numba_types : Sequence of numba Type instances.
     require_precise : bool
       If True, the returned Numba function type must be precise.
 
@@ -501,9 +517,10 @@ def unified_function_type(numba_types, require_precise=True):
     """
     from numba.core.errors import NumbaExperimentalFeatureWarning
 
-    if not (numba_types
-            and isinstance(numba_types[0],
-                           (types.Dispatcher, types.FunctionType))):
+    if not (isinstance(numba_types, Sequence) and
+            len(numba_types) > 0 and
+            isinstance(numba_types[0],
+                       (types.Dispatcher, types.FunctionType))):
         return
 
     warnings.warn("First-class function type feature is experimental",
@@ -529,7 +546,7 @@ def unified_function_type(numba_types, require_precise=True):
             if mnargs is None:
                 mnargs = mxargs = t.nargs
             elif not (mnargs == mxargs == t.nargs):
-                return numba_types
+                return
             if isinstance(t, types.UndefinedFunctionType):
                 if undefined_function is None:
                     undefined_function = t

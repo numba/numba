@@ -11,7 +11,7 @@ import warnings
 
 import numpy as np
 
-from numba import njit
+from numba import njit, literally
 from numba import int32, int64, float32, float64
 from numba import typeof
 from numba.typed import Dict, dictobject
@@ -21,6 +21,7 @@ from numba.core import types
 from numba.tests.support import (TestCase, MemoryLeakMixin, unittest,
                                  override_config, forbid_codegen)
 from numba.experimental import jitclass
+from numba.extending import overload
 
 
 class TestDictObject(MemoryLeakMixin, TestCase):
@@ -1629,3 +1630,553 @@ class TestDictIterator(TestCase):
         self.assertEqual([10,20,30], res1[1])
         self.assertEqual([4,5,6], res2[0])
         self.assertEqual([77,88,99], res2[1])
+
+
+class TestTypedDictInitialValues(MemoryLeakMixin, TestCase):
+    """Tests that typed dictionaries carry their initial value if present"""
+
+    def test_homogeneous_and_literal(self):
+        def bar(d):
+            ...
+
+        @overload(bar)
+        def ol_bar(d):
+            if d.initial_value is None:
+                return lambda d: literally(d)
+            self.assertTrue(isinstance(d, types.DictType))
+            self.assertEqual(d.initial_value, {'a': 1, 'b': 2, 'c': 3})
+            self.assertEqual(hasattr(d, 'literal_value'), False)
+            return lambda d: d
+
+        @njit
+        def foo():
+            # keys and values all have literal representation
+            x = {'a': 1, 'b': 2, 'c': 3}
+            bar(x)
+
+        foo()
+
+    def test_heterogeneous_but_castable_to_homogeneous(self):
+        def bar(d):
+            ...
+
+        @overload(bar)
+        def ol_bar(d):
+            self.assertTrue(isinstance(d, types.DictType))
+            self.assertEqual(d.initial_value, None)
+            self.assertEqual(hasattr(d, 'literal_value'), False)
+            return lambda d: d
+
+        @njit
+        def foo():
+            # This dictionary will be typed based on 1j, i.e. complex128
+            # as the values are not all literals, there's no "initial_value"
+            # available irrespective of whether it's possible to rip this
+            # information out of the bytecode.
+            x = {'a': 1j, 'b': 2, 'c': 3}
+            bar(x)
+
+        foo()
+
+    def test_heterogeneous_but_not_castable_to_homogeneous(self):
+        def bar(d):
+            ...
+
+        @overload(bar)
+        def ol_bar(d):
+            a = {'a': 1, 'b': 2j, 'c': 3}
+
+            def specific_ty(z):
+                return types.literal(z) if types.maybe_literal(z) else typeof(z)
+            expected = {types.literal(x): specific_ty(y) for x, y in a.items()}
+            self.assertTrue(isinstance(d, types.LiteralStrKeyDict))
+            self.assertEqual(d.literal_value, expected)
+            self.assertEqual(hasattr(d, 'initial_value'), False)
+            return lambda d: d
+
+        @njit
+        def foo():
+            # This dictionary will be typed based on 1, i.e. intp, as the values
+            # cannot all be cast to this type, but the keys are literal strings
+            # this is a LiteralStrKey[Dict], there's no initial_value but there
+            # is a literal_value.
+            x = {'a': 1, 'b': 2j, 'c': 3}
+            bar(x)
+
+        foo()
+
+    def test_mutation_not_carried(self):
+        def bar(d):
+            ...
+
+        @overload(bar)
+        def ol_bar(d):
+            if d.initial_value is None:
+                return lambda d: literally(d)
+            self.assertTrue(isinstance(d, types.DictType))
+            self.assertEqual(d.initial_value, {'a': 1, 'b': 2, 'c': 3})
+            return lambda d: d
+
+        @njit
+        def foo():
+            # This dictionary is mutated, check the initial_value carries
+            # correctly and is not mutated
+            x = {'a': 1, 'b': 2, 'c': 3}
+            x['d'] = 4
+            bar(x)
+
+        foo()
+
+    def test_mutation_not_carried_single_function(self):
+        # this is another pattern for using literally
+
+        @njit
+        def nop(*args):
+            pass
+
+        for fn, iv in (nop, None), (literally, {'a': 1, 'b': 2, 'c': 3}):
+            @njit
+            def baz(x):
+                pass
+
+            def bar(z):
+                pass
+
+            @overload(bar)
+            def ol_bar(z):
+                def impl(z):
+                    fn(z)
+                    baz(z)
+                return impl
+
+            @njit
+            def foo():
+                x = {'a': 1, 'b': 2, 'c': 3}
+                bar(x)
+                x['d'] = 4
+                return x
+
+            foo()
+            # baz should be specialised based on literally being invoked and
+            # the literal/unliteral arriving at the call site
+            larg = baz.signatures[0][0]
+            self.assertEqual(larg.initial_value, iv)
+
+    def test_unify_across_function_call(self):
+
+        @njit
+        def bar(x):
+            o = {1: 2}
+            if x:
+                o = {2: 3}
+            return o
+
+        @njit
+        def foo(x):
+            if x:
+                d = {3: 4}
+            else:
+                d = bar(x)
+            return d
+
+        e1 = Dict()
+        e1[3] = 4
+        e2 = Dict()
+        e2[1] = 2
+        self.assertEqual(foo(True), e1)
+        self.assertEqual(foo(False), e2)
+
+
+class TestLiteralStrKeyDict(MemoryLeakMixin, TestCase):
+    """ Tests for dictionaries with string keys that can map to anything!"""
+
+    def test_basic_const_lowering_boxing(self):
+        @njit
+        def foo():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            return (ld['a'], ld['b'], ld['c'])
+
+        self.assertEqual(foo(), (1, 2j, 'd'))
+
+    def test_basic_nonconst_in_scope(self):
+        @njit
+        def foo(x):
+            y = x + 5
+            e = True if y > 2 else False
+            ld = {'a': 1, 'b': 2j, 'c': 'd', 'non_const': e}
+            return ld['non_const']
+
+        # Recall that key non_const has a value of a known type, bool, and it's
+        # value is stuffed in at run time, this is permitted as the dictionary
+        # is immutable in type
+        self.assertTrue(foo(34))
+        self.assertFalse(foo(-100))
+
+    def test_basic_nonconst_freevar(self):
+        e = 5
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            self.assertEqual(x.literal_value,
+                             {types.literal('a'): types.literal(1),
+                              types.literal('b'): typeof(2j),
+                              types.literal('c'): types.literal('d'),
+                              types.literal('d'): types.literal(5)})
+
+            def impl(x):
+                pass
+            return impl
+
+        @njit
+        def foo():
+            ld = {'a': 1, 'b': 2j, 'c': 'd', 'd': e}
+            bar(ld)
+
+        foo()
+
+    def test_literal_value(self):
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            self.assertEqual(x.literal_value,
+                             {types.literal('a'): types.literal(1),
+                              types.literal('b'): typeof(2j),
+                              types.literal('c'): types.literal('d')})
+
+            def impl(x):
+                pass
+            return impl
+
+        @njit
+        def foo():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            bar(ld)
+
+        foo()
+
+    def test_list_and_array_as_value(self):
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            self.assertEqual(x.literal_value,
+                             {types.literal('a'): types.literal(1),
+                              types.literal('b'):
+                              types.List(types.intp, initial_value=[1,2,3]),
+                              types.literal('c'): typeof(np.zeros(5))})
+
+            def impl(x):
+                pass
+            return impl
+
+        @njit
+        def foo():
+            b = [1, 2, 3]
+            ld = {'a': 1, 'b': b, 'c': np.zeros(5)}
+            bar(ld)
+
+        foo()
+
+    def test_repeated_key_literal_value(self):
+
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            # order is important, 'a' was seen first, but updated later
+            self.assertEqual(x.literal_value,
+                             {types.literal('a'): types.literal('aaaa'),
+                              types.literal('b'): typeof(2j),
+                              types.literal('c'): types.literal('d')})
+
+            def impl(x):
+                pass
+            return impl
+
+        @njit
+        def foo():
+            ld = {'a': 1, 'a': 10, 'b': 2j, 'c': 'd', 'a': 'aaaa'} # noqa #F601
+            bar(ld)
+
+        foo()
+
+    def test_read_only(self):
+
+        def _len():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            return len(ld)
+
+        def static_getitem():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            return ld['b']
+
+        def contains():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            return 'b' in ld, 'f' in ld
+
+        def copy():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            new = ld.copy()
+            return ld == new
+
+        rdonlys = (_len, static_getitem, contains, copy)
+
+        for test in rdonlys:
+            with self.subTest(test.__name__):
+                self.assertPreciseEqual(njit(test)(), test())
+
+    def test_mutation_failure(self):
+
+        def setitem():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            ld['a'] = 12
+
+        def delitem():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            del ld['a']
+
+        def popitem():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            ld.popitem()
+
+        def pop():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            ld.pop()
+
+        def clear():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            ld.clear()
+
+        def setdefault():
+            ld = {'a': 1, 'b': 2j, 'c': 'd'}
+            ld.setdefault('f', 1)
+
+        illegals = (setitem, delitem, popitem, pop, clear, setdefault)
+
+        for test in illegals:
+            with self.subTest(test.__name__):
+                with self.assertRaises(TypingError) as raises:
+                    njit(test)()
+                expect = "Cannot mutate a literal dictionary"
+                self.assertIn(expect, str(raises.exception))
+
+    def test_get(self):
+
+        @njit
+        def get(x):
+            ld = {'a': 2j, 'c': 'd'}
+            return ld.get(x)
+
+        @njit
+        def getitem(x):
+            ld = {'a': 2j, 'c': 'd'}
+            return ld[x]
+
+        for test in (get, getitem):
+            with self.subTest(test.__name__):
+                with self.assertRaises(TypingError) as raises:
+                    test('a')
+                expect = "Cannot get{item}() on a literal dictionary"
+                self.assertIn(expect, str(raises.exception))
+
+    def test_dict_keys(self):
+
+        @njit
+        def foo():
+            ld = {'a': 2j, 'c': 'd'}
+            return [x for x in ld.keys()]
+
+        self.assertEqual(foo(), ['a', 'c'])
+
+    def test_dict_values(self):
+
+        @njit
+        def foo():
+            ld = {'a': 2j, 'c': 'd'}
+            return ld.values()
+
+        self.assertEqual(foo(), (2j, 'd'))
+
+    def test_dict_items(self):
+        @njit
+        def foo():
+            ld = {'a': 2j, 'c': 'd', 'f': np.zeros((5))}
+            return ld.items()
+
+        self.assertPreciseEqual(foo(),
+                                (('a', 2j), ('c', 'd'), ('f', np.zeros((5)))))
+
+    def test_dict_return(self):
+
+        @njit
+        def foo():
+            ld = {'a': 2j, 'c': 'd'}
+            return ld
+
+        # escaping heterogeneous dictionary is not supported
+        with self.assertRaises(TypeError) as raises:
+            foo()
+
+        excstr = str(raises.exception)
+        self.assertIn("cannot convert native LiteralStrKey", excstr)
+
+    def test_dict_unify(self):
+        @njit
+        def foo(x):
+            if x + 7 > 4:
+                a = {'a': 2j, 'c': 'd', 'e': np.zeros(4)}
+            else:
+                # Note the use of a different literal str for key 'c'
+                a = {'a': 5j, 'c': 'CAT', 'e': np.zeros((5,))}
+            return a['c']
+
+        self.assertEqual(foo(100), 'd')
+        self.assertEqual(foo(-100), 'CAT')
+        self.assertEqual(foo(100), foo.py_func(100))
+        self.assertEqual(foo(-100), foo.py_func(-100))
+
+    def test_dict_not_unify(self):
+
+        @njit
+        def key_mismatch(x):
+            if x + 7 > 4:
+                a = {'BAD_KEY': 2j, 'c': 'd', 'e': np.zeros(4)}
+            else:
+                a = {'a': 5j, 'c': 'CAT', 'e': np.zeros((5,))}
+            return a['a']
+
+        with self.assertRaises(TypingError) as raises:
+            key_mismatch(100)
+
+        self.assertIn("Cannot unify LiteralStrKey", str(raises.exception))
+
+        @njit
+        def value_type_mismatch(x):
+            if x + 7 > 4:
+                a = {'a': 2j, 'c': 'd', 'e': np.zeros((4, 3))}
+            else:
+                a = {'a': 5j, 'c': 'CAT', 'e': np.zeros((5,))}
+            return a['a']
+
+        with self.assertRaises(TypingError) as raises:
+            value_type_mismatch(100)
+
+        self.assertIn("Cannot unify LiteralStrKey", str(raises.exception))
+
+    def test_dict_value_coercion(self):
+        # checks that things coerce or not!
+
+        #    safe convertible: TypedDict
+        p = {(np.int32, np.int32): types.DictType,
+             # unsafe but convertible: TypedDict
+             (np.int8, np.int32): types.DictType,
+             # safe convertible: TypedDict
+             (np.complex128, np.int32): types.DictType,
+             # unsafe not convertible: LiteralStrKey
+             (np.int32, np.complex128): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey
+             (np.int32, np.array): types.LiteralStrKeyDict,
+             # unsafe not convertible: LiteralStrKey
+             (np.array, np.int32): types.LiteralStrKeyDict,}
+
+        def bar(x):
+            pass
+
+        for dts, container in p.items():
+            @overload(bar)
+            def ol_bar(x):
+                self.assertTrue(isinstance(x, container))
+
+                def impl(x):
+                    pass
+                return impl
+
+            ty1, ty2 = dts
+
+            @njit
+            def foo():
+                d = {'a': ty1(1), 'b': ty2(2)}
+                bar(d)
+
+            foo()
+
+    def test_build_map_op_code(self):
+        # tests building dictionaries via `build_map`, which, for statically
+        # determinable str key->things cases is just a single key:value
+        # any other build_map would either end up as being non-const str keys
+        # or keys of some non-string type and therefore not considered.
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            def impl(x):
+                pass
+            return impl
+
+        @njit
+        def foo():
+            a = {'a': {'b1': 10, 'b2': 'string'}}
+            bar(a)
+
+        foo()
+
+    def test_dict_as_arg(self):
+        @njit
+        def bar(fake_kwargs=None):
+            if fake_kwargs is not None:
+                # Add 10 to array in key 'd'
+                fake_kwargs['d'][:] += 10
+
+        @njit
+        def foo():
+            a = 1
+            b = 2j
+            c = 'string'
+            d = np.zeros(3)
+            e = {'a': a, 'b': b, 'c': c, 'd': d}
+            bar(fake_kwargs=e)
+            return e['d']
+
+        np.testing.assert_allclose(foo(), np.ones(3) * 10)
+
+    def test_dict_with_single_literallist_value(self):
+        #see issue #6094
+        @njit
+        def foo():
+            z = {"A": [lambda a: 2 * a, "B"]}
+            return z["A"][0](5)
+
+        self.assertPreciseEqual(foo(), foo.py_func())
+
+    def test_tuple_not_in_mro(self):
+        # Related to #6094, make sure that LiteralStrKey does not inherit from
+        # types.BaseTuple as this breaks isinstance checks.
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            self.assertFalse(isinstance(x, types.BaseTuple))
+            self.assertTrue(isinstance(x, types.LiteralStrKeyDict))
+            return lambda x: ...
+
+        @njit
+        def foo():
+            d = {'a': 1, 'b': 'c'}
+            bar(d)
+
+        foo()
+
+
+if __name__ == '__main__':
+    unittest.main()
