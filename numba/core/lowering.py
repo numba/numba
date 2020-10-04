@@ -283,7 +283,8 @@ class Lower(BaseLower):
         BaseLower.__init__(self, context, library, fndesc, func_ir, metadata)
         from numba.parfors.parfor_lowering import _lower_parfor_parallel
         from numba.parfors import parfor
-        lower_extensions[parfor.Parfor] = _lower_parfor_parallel
+        if parfor.Parfor not in lower_extensions:
+            lower_extensions[parfor.Parfor] = _lower_parfor_parallel
 
     def pre_block(self, block):
         from numba.core.unsafe import eh
