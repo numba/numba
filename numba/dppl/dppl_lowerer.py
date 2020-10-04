@@ -40,7 +40,7 @@ from numba.core.errors import NumbaParallelSafetyWarning, NumbaPerformanceWarnin
 from .target import SPIR_GENERIC_ADDRSPACE
 from .dufunc_inliner import dufunc_inliner
 from . import dppl_host_fn_call_gen as dppl_call_gen
-import dpctl.ocldrv as driver
+import dpctl
 from numba.dppl.target import DPPLTargetContext
 
 
@@ -608,10 +608,8 @@ def _create_gufunc_for_parfor_body(
         print('after DUFunc inline'.center(80, '-'))
         gufunc_ir.dump()
 
-    # FIXME : We should not always use gpu device, instead select the default
-    # device as configured in dppl.
     kernel_func = numba.dppl.compiler.compile_kernel_parfor(
-        driver.runtime.get_current_device(),
+        dpctl.get_current_queue(),
         gufunc_ir,
         gufunc_param_types,
         param_types_addrspaces)
@@ -869,6 +867,7 @@ def generate_dppl_host_wrapper(lowerer,
 #        print("cres.library", cres.library, type(cres.library))
 #        print("cres.fndesc", cres.fndesc, type(cres.fndesc))
 
+
     # get dppl_cpu_portion_lowerer object
     dppl_cpu_lowerer = dppl_call_gen.DPPLHostFunctionCallsGenerator(
                            lowerer, cres, num_inputs)
@@ -990,7 +989,7 @@ class DPPLLower(Lower):
             lowering.lower_extensions[parfor.Parfor] = lower_parfor_rollback
             self.gpu_lower.lower()
             self.base_lower = self.gpu_lower
-            lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
+            #lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
         except:
             lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
             self.cpu_lower.lower()

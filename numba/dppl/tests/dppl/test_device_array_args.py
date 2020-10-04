@@ -5,7 +5,7 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppl
-import dpctl.ocldrv as ocldrv
+import dpctl
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
 
@@ -23,34 +23,24 @@ b = np.array(np.random.random(N), dtype=np.float32)
 d = a + b
 
 
-@unittest.skipUnless(ocldrv.has_cpu_device, 'test only on CPU system')
+@unittest.skipUnless(dpctl.has_cpu_queues(), 'test only on CPU system')
 class TestDPPLDeviceArrayArgsGPU(DPPLTestCase):
     def test_device_array_args_cpu(self):
         c = np.ones_like(a)
 
-        with ocldrv.cpu_context(0) as device_env:
-            # Copy the data to the device
-            dA = device_env.copy_array_to_device(a)
-            dB = device_env.copy_array_to_device(b)
-            dC = device_env.create_device_array(c)
-            data_parallel_sum[global_size, dppl.DEFAULT_LOCAL_SIZE](dA, dB, dC)
-            device_env.copy_array_from_device(dC)
+        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+            data_parallel_sum[global_size, dppl.DEFAULT_LOCAL_SIZE](a, b, c)
 
             self.assertTrue(np.all(c == d))
 
 
-@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+@unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestDPPLDeviceArrayArgsCPU(DPPLTestCase):
     def test_device_array_args_gpu(self):
         c = np.ones_like(a)
 
-        with ocldrv.igpu_context(0) as device_env:
-            # Copy the data to the device
-            dA = device_env.copy_array_to_device(a)
-            dB = device_env.copy_array_to_device(b)
-            dC = device_env.create_device_array(c)
-            data_parallel_sum[global_size, dppl.DEFAULT_LOCAL_SIZE](dA, dB, dC)
-            device_env.copy_array_from_device(dC)
+        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+            data_parallel_sum[global_size, dppl.DEFAULT_LOCAL_SIZE](a, b, c)
 
         self.assertTrue(np.all(c == d))
 
