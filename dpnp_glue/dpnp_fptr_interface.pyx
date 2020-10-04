@@ -95,8 +95,16 @@ cdef DPNPFuncName get_DPNPFuncName_from_str(name):
         return DPNPFuncName.DPNP_FN_PROD
     elif name == "dpnp_argmax":
         return DPNPFuncName.DPNP_FN_ARGMAX
+    elif name == "dpnp_max":
+        return DPNPFuncName.DPNP_FN_MAX
     elif name == "dpnp_argmin":
         return DPNPFuncName.DPNP_FN_ARGMIN
+    elif name == "dpnp_min":
+        return DPNPFuncName.DPNP_FN_MIN
+    elif name == "dpnp_mean":
+        return DPNPFuncName.DPNP_FN_MEAN
+    elif name == "dpnp_median":
+        return DPNPFuncName.DPNP_FN_MEDIAN
     elif name == "dpnp_argsort":
         return DPNPFuncName.DPNP_FN_ARGSORT
     elif name == "dpnp_cov":

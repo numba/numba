@@ -74,14 +74,49 @@ class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
                 if restype is not None:
                     return signature(restype, *args)
 
+        @infer_global(np.median)
+        class NPMedian(AbstractTemplate):
+            def generic(self, args, kws):
+                assert not kws
+
+                retty = args[0].dtype
+                return signature(retty, *args)
+
+        @infer_global(np.mean)
+        #@infer_global("array.mean")
+        class NPMean(AbstractTemplate):
+            def generic(self, args, kws):
+                assert not kws
+
+                if args[0].dtype == types.float32:
+                    retty = types.float32
+                else:
+                    retty = types.float64
+                return signature(retty, *args)
+
 
         prev_cov = None
+        prev_median = None
+        prev_mean = None
         for idx, g in enumerate(reg.globals):
             if g[0] == np.cov:
                 if not prev_cov:
                     prev_cov = g[1]
                 else:
                     prev_cov.templates = g[1].templates
+
+            if g[0] == np.median:
+                if not prev_median:
+                    prev_median = g[1]
+                else:
+                    prev_median.templates = g[1].templates
+
+            if g[0] == np.mean:
+                if not prev_mean:
+                    prev_mean = g[1]
+                else:
+                    prev_mean.templates = g[1].templates
+
 
 
         typingctx.refresh()
@@ -168,7 +203,10 @@ class DPPLPreParforPass(FunctionPass):
         functions_map.pop(('sum', 'numpy'), None)
         functions_map.pop(('prod', 'numpy'), None)
         functions_map.pop(('argmax', 'numpy'), None)
+        functions_map.pop(('max', 'numpy'), None)
         functions_map.pop(('argmin', 'numpy'), None)
+        functions_map.pop(('min', 'numpy'), None)
+        functions_map.pop(('mean', 'numpy'), None)
 
         preparfor_pass = _parfor_PreParforPass(
             state.func_ir,
