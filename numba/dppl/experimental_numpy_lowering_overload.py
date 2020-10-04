@@ -5,6 +5,7 @@ from numba.core.typing import signature
 from numba.np.arrayobj import make_array, _empty_nd_impl, array_copy
 from numba.core import itanium_mangler
 from llvmlite import ir
+import llvmlite.llvmpy.core as lc
 import contextlib
 
 from numba import int32, int64, uint32, uint64, float32, float64
@@ -55,6 +56,7 @@ ll_void_p = ll_char_p
 ll_intc = ir.IntType(32)
 ll_intc_p = ll_intc.as_pointer()
 intp_t = cgutils.intp_t
+ll_intp_t = ir.IntType(64)
 ll_intp_p = intp_t.as_pointer()
 
 
@@ -65,6 +67,55 @@ def ensure_dpnp(name):
     except ImportError:
         raise ImportError("dpNP is needed to call np.%s" % name)
 
+def get_total_size_of_array(context, builder, aty, ary):
+    total_size = cgutils.alloca_once(builder, ll_intp_t)
+    builder.store(builder.sext(builder.mul(ary.nitems,
+       context.get_constant(types.intp, context.get_abi_sizeof(context.get_value_type(aty)))), ll_intp_t), total_size)
+    return builder.load(total_size)
+
+def get_sycl_queue(context, builder):
+    void_ptr_t = context.get_value_type(types.voidptr)
+    get_queue_fnty = lc.Type.function(void_ptr_t, ())
+    get_queue = builder.module.get_or_insert_function(get_queue_fnty,
+                                            name="DPPLQueueMgr_GetCurrentQueue")
+    sycl_queue_val = cgutils.alloca_once(builder, void_ptr_t)
+    builder.store(builder.call(get_queue, []), sycl_queue_val)
+
+    return sycl_queue_val
+
+def allocate_usm(context, builder, size, sycl_queue):
+    void_ptr_t = context.get_value_type(types.voidptr)
+    usm_shared_fnty = lc.Type.function(void_ptr_t, [ll_intp_t, void_ptr_t])
+    usm_shared = builder.module.get_or_insert_function(usm_shared_fnty,
+                                                       name="DPPLmalloc_shared")
+
+    buffer_ptr = cgutils.alloca_once(builder, void_ptr_t)
+    args = [size, builder.load(sycl_queue)]
+    builder.store(builder.call(usm_shared, args), buffer_ptr)
+
+    return builder.load(buffer_ptr)
+
+def copy_usm(context, builder, src, dst, size, sycl_queue):
+    void_ptr_t = context.get_value_type(types.voidptr)
+    queue_memcpy_fnty = lc.Type.function(ir.VoidType(), [void_ptr_t, void_ptr_t, void_ptr_t,
+                                                         ll_intp_t])
+    queue_memcpy = builder.module.get_or_insert_function(queue_memcpy_fnty,
+                                                       name="DPPLQueue_Memcpy")
+    args = [builder.load(sycl_queue),
+            builder.bitcast(dst, void_ptr_t),
+            builder.bitcast(src, void_ptr_t),
+            size]
+    builder.call(queue_memcpy, args)
+
+
+def free_usm(context, builder, usm_buf, sycl_queue):
+    void_ptr_t = context.get_value_type(types.voidptr)
+
+    usm_free_fnty = lc.Type.function(ir.VoidType(), [void_ptr_t, void_ptr_t])
+    usm_free = builder.module.get_or_insert_function(usm_free_fnty,
+                                               name="DPPLfree_with_queue")
+
+    builder.call(usm_free, [usm_buf, builder.load(sycl_queue)])
 
 
 def call_dpnp(context, builder, fn_name, type_names, params, param_tys, ret_ty):
@@ -264,7 +315,6 @@ def dot_dppl(context, builder, sig, args):
         elif ndims == [1, 2]:
             return dot_2_vm(context, builder, sig, args)
         elif ndims == [1, 1]:
-            print("dot")
             return dot_2_vv(context, builder, sig, args)
         else:
             assert 0
@@ -276,7 +326,6 @@ def matmul_dppl(context, builder, sig, args):
     """
     np.matmul(matrix, matrix)
     """
-
     ensure_dpnp("matmul")
     with make_contiguous(context, builder, sig, args) as (sig, args):
         ndims = [x.ndim for x in sig.args[:2]]
@@ -297,10 +346,22 @@ def matmul_dppl(context, builder, sig, args):
         _n, k = cgutils.unpack_tuple(builder, b.shape)
 
 
+        total_size_a = get_total_size_of_array(context, builder, aty, a)
+        a_usm = allocate_usm(context, builder, total_size_a, sycl_queue)
+        copy_usm(context, builder, a.data, a_usm, total_size_a, sycl_queue)
+
+        total_size_b = get_total_size_of_array(context, builder, bty, b)
+        b_usm = allocate_usm(context, builder, total_size_b, sycl_queue)
+        copy_usm(context, builder, b.data, b_usm, total_size_b, sycl_queue)
+
         out = context.compile_internal(builder, make_res,
                 signature(sig.return_type, *sig.args), args)
 
         outary = make_array(sig.return_type)(context, builder, out)
+
+        total_size_b = get_total_size_of_array(context, builder, bty, b)
+        b_usm = allocate_usm(context, builder, total_size_b, sycl_queue)
+        copy_usm(context, builder, b.data, b_usm, total_size_b, sycl_queue)
 
         # arguments are : a->void*, b->void*, result->void*, m->int64, n->int64, k->int64
         param_tys = [ll_void_p, ll_void_p, ll_void_p, ir.IntType(64), ir.IntType(64), ir.IntType(64)]
@@ -318,114 +379,117 @@ def matmul_dppl(context, builder, sig, args):
         return out
 
 
-@lower_builtin(np.sum, types.Array)
-def array_sum(context, builder, sig, args):
-    ensure_dpnp("sum")
+def common_sum_prod_impl(context, builder, sig, args, fn_type):
+    def array_size_checker(arry):
+        if arry.size == 0:
+            raise ValueError("Passed Empty array")
+
+    context.compile_internal(builder, array_size_checker,
+                             signature(types.none, *sig.args), args)
+
+    sycl_queue = get_sycl_queue(context, builder)
 
     aty = sig.args[0]
     a = make_array(aty)(context, builder, args[0])
-    #size, = cgutils.unpack_tuple(builder, a.shape)
     size = a.nitems
 
+    total_size_a = get_total_size_of_array(context, builder, aty.dtype, a)
+    a_usm = allocate_usm(context, builder, total_size_a, sycl_queue)
+    copy_usm(context, builder, a.data, a_usm, total_size_a, sycl_queue)
+
     out = cgutils.alloca_once(builder, context.get_value_type(sig.return_type))
+    builder.store(context.get_constant(sig.return_type, 0), out)
+    out_usm = allocate_usm(context, builder,
+            context.get_constant(types.intp, context.get_abi_sizeof(context.get_value_type(aty.dtype))), sycl_queue)
 
     # arguments are : a ->void*, result->void*, size->int64
     param_tys = [ll_void_p, ll_void_p, ir.IntType(64)]
-    params = (builder.bitcast(a.data, ll_void_p), builder.bitcast(out, ll_void_p), size)
+    params = (a_usm, out_usm, size)
 
     type_names = []
-    for argty in sig.args:
-        type_names.append(argty.dtype.name)
-    type_names.append(sig.return_type.name)
+    type_names.append(aty.dtype.name)
+    type_names.append("NONE")
 
-    call_dpnp(context, builder, "dpnp_sum", type_names, params, param_tys, ll_void)
+    call_dpnp(context, builder, fn_type, type_names, params, param_tys, ll_void)
+
+    copy_usm(context, builder, out_usm, out,
+            context.get_constant(types.intp, context.get_abi_sizeof(context.get_value_type(aty.dtype))), sycl_queue)
+
+    free_usm(context, builder, a_usm, sycl_queue)
+    free_usm(context, builder, out_usm, sycl_queue)
+
     return builder.load(out)
+
+
+
+@lower_builtin(np.sum, types.Array)
+def array_sum(context, builder, sig, args):
+    ensure_dpnp("sum")
+    return common_sum_prod_impl(context, builder, sig, args, "dpnp_sum")
 
 
 @lower_builtin(np.prod, types.Array)
 def array_prod(context, builder, sig, args):
     ensure_dpnp("prod")
 
+    return common_sum_prod_impl(context, builder, sig, args, "dpnp_prod")
+
+
+def common_argmax_argmin_impl(context, builder, sig, args, fn_type):
+    def array_size_checker(arry):
+        if arry.size == 0:
+            raise ValueError("Passed Empty array")
+
+    context.compile_internal(builder, array_size_checker,
+                             signature(types.none, *sig.args), args)
+
+    sycl_queue = get_sycl_queue(context, builder)
+
     aty = sig.args[0]
     a = make_array(aty)(context, builder, args[0])
-
-    #size, = cgutils.unpack_tuple(builder, a.shape)
     size = a.nitems
 
+    total_size_a = get_total_size_of_array(context, builder, aty.dtype, a)
+    a_usm = allocate_usm(context, builder, total_size_a, sycl_queue)
+    copy_usm(context, builder, a.data, a_usm, total_size_a, sycl_queue)
+
     out = cgutils.alloca_once(builder, context.get_value_type(sig.return_type))
+    builder.store(context.get_constant(sig.return_type, 0), out)
+    out_usm = allocate_usm(context, builder,
+            context.get_constant(types.intp, context.get_abi_sizeof(context.get_value_type(sig.return_type))), sycl_queue)
 
     # arguments are : a ->void*, result->void*, size->int64
     param_tys = [ll_void_p, ll_void_p, ir.IntType(64)]
-    params = (builder.bitcast(a.data, ll_void_p), builder.bitcast(out, ll_void_p), size)
+    params = (a_usm, out_usm, size)
 
     type_names = []
-    for argty in sig.args:
-        type_names.append(argty.dtype.name)
+    type_names.append(aty.dtype.name)
     type_names.append(sig.return_type.name)
 
-    call_dpnp(context, builder, "dpnp_prod", type_names, params, param_tys, ll_void)
+    call_dpnp(context, builder, fn_type, type_names, params, param_tys, ll_void)
+
+    copy_usm(context, builder, out_usm, out,
+            context.get_constant(types.intp, context.get_abi_sizeof(context.get_value_type(sig.return_type))), sycl_queue)
+
+    free_usm(context, builder, a_usm, sycl_queue)
+    free_usm(context, builder, out_usm, sycl_queue)
+
     return builder.load(out)
+
 
 
 @lower_builtin(np.argmax, types.Array)
 def array_argmax(context, builder, sig, args):
     ensure_dpnp("argmax")
 
-    def argmax_checker(arry):
-        if arry.size == 0:
-            raise ValueError("attempt to get argmax of an empty sequence")
-
-    context.compile_internal(builder, argmax_checker,
-                             signature(types.none, *sig.args), args)
-
-    aty = sig.args[0]
-    a = make_array(aty)(context, builder, args[0])
-    size, = cgutils.unpack_tuple(builder, a.shape)
-
-    out = cgutils.alloca_once(builder, context.get_value_type(sig.return_type))
-
-    # arguments are : a ->void*, result->void*, size->int64
-    param_tys = [ll_void_p, ll_void_p, ir.IntType(64)]
-    params = (builder.bitcast(a.data, ll_void_p), builder.bitcast(out, ll_void_p), size)
-
-    type_names = []
-    for argty in sig.args:
-        type_names.append(argty.dtype.name)
-    type_names.append(sig.return_type.name)
-
-    call_dpnp(context, builder, "dpnp_argmax", type_names, params, param_tys, ll_void)
-
-    return builder.load(out)
+    return common_argmax_argmin_impl(context, builder, sig, args, "dpnp_argmax")
 
 
 @lower_builtin(np.argmin, types.Array)
 def array_argmin(context, builder, sig, args):
     ensure_dpnp("argmin")
-    def argmin_checker(arry):
-        if arry.size == 0:
-            raise ValueError("attempt to get argmin of an empty sequence")
 
-    context.compile_internal(builder, argmax_checker,
-                             signature(types.none, *sig.args), args)
-
-    aty = sig.args[0]
-    a = make_array(aty)(context, builder, args[0])
-    size, = cgutils.unpack_tuple(builder, a.shape)
-
-    out = cgutils.alloca_once(builder, context.get_value_type(sig.return_type))
-
-    # arguments are : a ->void*, result->void*, size->int64
-    param_tys = [ll_void_p, ll_void_p, ir.IntType(64)]
-    params = (builder.bitcast(a.data, ll_void_p), builder.bitcast(out, ll_void_p), size)
-
-    type_names = []
-    for argty in sig.args:
-        type_names.append(argty.dtype.name)
-    type_names.append(sig.return_type.name)
-
-    call_dpnp(context, builder, "dpnp_argmin", type_names, params, param_tys, ll_void)
-
-    return builder.load(out)
+    return common_argmax_argmin_impl(context, builder, sig, args, "dpnp_argmax")
 
 
 @lower_builtin(np.argsort, types.Array, types.StringLiteral)
