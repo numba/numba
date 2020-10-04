@@ -5,12 +5,12 @@ import numpy as np
 from numba import dppl
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
-import dpctl.ocldrv as ocldrv
+import dpctl
 
 
-@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+@unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestDPPLFunc(DPPLTestCase):
-    N = 256
+    N = 257
 
     def test_dppl_func_device_array(self):
         @dppl.func
@@ -25,15 +25,9 @@ class TestDPPLFunc(DPPLTestCase):
         a = np.ones(self.N)
         b = np.ones(self.N)
 
-        with ocldrv.igpu_context(0) as device_env:
-            # Copy data to the device
-            dA = device_env.copy_array_to_device(a)
-            dB = device_env.copy_array_to_device(b)
+        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+            f[self.N, dppl.DEFAULT_LOCAL_SIZE](a, b)
 
-            f[self.N, dppl.DEFAULT_LOCAL_SIZE](dA, dB)
-
-            # Copy data from the device
-            device_env.copy_array_from_device(dB)
 
         self.assertTrue(np.all(b == 2))
 
@@ -55,7 +49,7 @@ class TestDPPLFunc(DPPLTestCase):
         a = np.ones(self.N)
         b = np.ones(self.N)
 
-        with ocldrv.igpu_context(0) as device_env:
+        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
             f[self.N, dppl.DEFAULT_LOCAL_SIZE](a, b)
 
             self.assertTrue(np.all(b == 2))

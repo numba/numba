@@ -5,13 +5,14 @@ import numpy as np
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
 from numba import dppl, float32
-import dpctl.ocldrv as ocldrv
+import dpctl
 
 
-@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+@unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestBarrier(unittest.TestCase):
     def test_proper_lowering(self):
-        @dppl.kernel("void(float32[::1])")
+        #@dppl.kernel("void(float32[::1])")
+        @dppl.kernel
         def twice(A):
             i = dppl.get_global_id(0)
             d = A[i]
@@ -22,14 +23,15 @@ class TestBarrier(unittest.TestCase):
         arr = np.random.random(N).astype(np.float32)
         orig = arr.copy()
 
-        with ocldrv.igpu_context(0) as device_env:
+        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
             twice[N, N//2](arr)
 
         # The computation is correct?
         np.testing.assert_allclose(orig * 2, arr)
 
     def test_no_arg_barrier_support(self):
-        @dppl.kernel("void(float32[::1])")
+        #@dppl.kernel("void(float32[::1])")
+        @dppl.kernel
         def twice(A):
             i = dppl.get_global_id(0)
             d = A[i]
@@ -41,7 +43,7 @@ class TestBarrier(unittest.TestCase):
         arr = np.random.random(N).astype(np.float32)
         orig = arr.copy()
 
-        with ocldrv.igpu_context(0) as device_env:
+        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
             twice[N, dppl.DEFAULT_LOCAL_SIZE](arr)
 
         # The computation is correct?
@@ -51,7 +53,8 @@ class TestBarrier(unittest.TestCase):
     def test_local_memory(self):
         blocksize = 10
 
-        @dppl.kernel("void(float32[::1])")
+        #@dppl.kernel("void(float32[::1])")
+        @dppl.kernel
         def reverse_array(A):
             lm = dppl.local.static_alloc(shape=10, dtype=float32)
             i = dppl.get_global_id(0)
@@ -66,7 +69,7 @@ class TestBarrier(unittest.TestCase):
         arr = np.arange(blocksize).astype(np.float32)
         orig = arr.copy()
 
-        with ocldrv.igpu_context(0) as device_env:
+        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
             reverse_array[blocksize, dppl.DEFAULT_LOCAL_SIZE](arr)
 
         expected = orig[::-1] + orig

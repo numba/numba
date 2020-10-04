@@ -5,7 +5,7 @@ from timeit import default_timer as time
 import sys
 import numpy as np
 from numba import dppl
-import dpctl.ocldrv as ocldrv
+import dpctl
 
 
 @dppl.kernel
@@ -19,37 +19,29 @@ global_size = N,
 
 
 def main():
-    if ocldrv.has_cpu_device:
-        with ocldrv.cpu_context(0) as device_env:
+    if dpctl.has_cpu_queues():
+        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
             print("-----Running in CPU-----")
             a = np.array(np.random.random(N), dtype=np.float32)
             b = np.array(np.random.random(N), dtype=np.float32)
             c = np.ones_like(a)
-            dA = device_env.copy_array_to_device(a)
-            dB = device_env.copy_array_to_device(b)
-            dC = device_env.create_device_array(c)
-            print("before A: ", dA.get_ndarray())
-            print("before B: ", dB.get_ndarray())
-            data_parallel_sum[global_size, dppl.DEFAULT_LOCAL_SIZE](dA, dB, dC)
-            device_env.copy_array_from_device(dC)
-            print("after  C: ", dC.get_ndarray())
+            print("before A: ", a)
+            print("before B: ", b)
+            data_parallel_sum[global_size, dppl.DEFAULT_LOCAL_SIZE](a, b, c)
+            print("after  C: ", c)
     else:
         print("CPU device not found")
 
-    if ocldrv.has_gpu_device:
-        with ocldrv.igpu_context(0) as device_env:
+    if dpctl.has_gpu_queues():
+        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
             print("-----Running in GPU-----")
             a = np.array(np.random.random(N), dtype=np.float32)
             b = np.array(np.random.random(N), dtype=np.float32)
             c = np.ones_like(a)
-            dA = device_env.copy_array_to_device(a)
-            dB = device_env.copy_array_to_device(b)
-            dC = device_env.create_device_array(c)
-            print("before A: ", dA.get_ndarray())
-            print("before B: ", dB.get_ndarray())
-            data_parallel_sum[global_size, dppl.DEFAULT_LOCAL_SIZE](dA, dB, dC)
-            device_env.copy_array_from_device(dC)
-            print("after  C: ", dC.get_ndarray())
+            print("before A: ", a)
+            print("before B: ", b)
+            data_parallel_sum[global_size, dppl.DEFAULT_LOCAL_SIZE](a, b, c)
+            print("after  C: ", c)
     else:
         print("GPU device not found")
         exit()
