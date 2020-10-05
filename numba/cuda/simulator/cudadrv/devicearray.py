@@ -186,6 +186,47 @@ class FakeCUDAArray(object):
     def __len__(self):
         return len(self._ary)
 
+    # TODO: Add inplace, bitwise, unary magic methods
+    #  (or maybe inherit this class from numpy)?
+    def __eq__(self, other):
+        return FakeCUDAArray(self._ary == other)
+
+    def __ne__(self, other):
+        return FakeCUDAArray(self._ary != other)
+
+    def __lt__(self, other):
+        return FakeCUDAArray(self._ary < other)
+
+    def __le__(self, other):
+        return FakeCUDAArray(self._ary <= other)
+
+    def __gt__(self, other):
+        return FakeCUDAArray(self._ary > other)
+
+    def __ge__(self, other):
+        return FakeCUDAArray(self._ary >= other)
+
+    def __add__(self, other):
+        return FakeCUDAArray(self._ary + other)
+
+    def __sub__(self, other):
+        return FakeCUDAArray(self._ary - other)
+
+    def __mul__(self, other):
+        return FakeCUDAArray(self._ary * other)
+
+    def __floordiv__(self, other):
+        return FakeCUDAArray(self._ary // other)
+
+    def __truediv__(self, other):
+        return FakeCUDAArray(self._ary / other)
+
+    def __mod__(self, other):
+        return FakeCUDAArray(self._ary % other)
+
+    def __pow__(self, other):
+        return FakeCUDAArray(self._ary ** other)
+
     def split(self, section, stream=0):
         return [
             FakeCUDAArray(a)
@@ -266,6 +307,13 @@ def to_device(ary, stream=0, copy=True, to=None):
 @contextmanager
 def pinned(arg):
     yield
+
+
+def mapped_array(*args, **kwargs):
+    for unused_arg in ('portable', 'wc'):
+        if unused_arg in kwargs:
+            kwargs.pop(unused_arg)
+    return device_array(*args, **kwargs)
 
 
 def pinned_array(shape, dtype=np.float, strides=None, order='C'):

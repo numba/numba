@@ -1,4 +1,3 @@
-import sys
 import math
 from llvmlite.llvmpy.core import Type
 from numba.core import types, cgutils
@@ -21,7 +20,6 @@ def bool_implement(nvname, ty):
         return context.cast(builder, result, types.int32, types.boolean)
 
     return core
-
 
 
 def unary_implement(nvname, ty):
@@ -56,7 +54,6 @@ def powi_implement(nvname):
         fnty = Type.function(fty, [fty, ity])
         fn = lmod.get_or_insert_function(fnty, name=nvname)
         return builder.call(fn, [base, pow])
-
 
     return core
 
@@ -147,6 +144,7 @@ for name64, name32, key in binarys:
     impl32 = binary_implement(name32, types.float32)
     lower(key, types.float32, types.float32)(impl32)
 
+
 def modf_implement(nvname, ty):
     def core(context, builder, sig, args):
         arg, = args
@@ -161,6 +159,7 @@ def modf_implement(nvname, ty):
                                  [out, builder.load(ptr)])
         return ret
     return core
+
 
 for (ty, intrin) in ((types.float64, '__nv_modf',),
                      (types.float32, '__nv_modff',)):

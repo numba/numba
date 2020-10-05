@@ -54,6 +54,8 @@ GPU as possible - in particular, the following are supported:
 * Shared memory: declarations of shared memory arrays must be on separate source
   lines, since the simulator uses source line information to keep track of
   allocations of shared memory across threads.
+* Mapped arrays.
+* Host and device memory operations: copying and setting memory.
 * :func:`.syncthreads` is supported - however, in the case where divergent
   threads enter different :func:`.syncthreads` calls, the launch will not fail,
   but unexpected behaviour will occur. A future version of the simulator may
@@ -87,6 +89,10 @@ Some limitations of the simulator include:
 * Because the simulator executes kernels using the Python interpreter,
   structured array access by attribute that works with the hardware target may
   fail in the simulator - see :ref:`structured-array-access`.
+* Operations directly against device arrays are only partially supported, that
+  is, testing equality, less than, greater than, and basic mathematical 
+  operations are supported, but many other operations, such as the in-place 
+  operators and bit operators are not.
 
 Obviously, the speed of the simulator is also much lower than that of a real
 device. It may be necessary to reduce the size of input data and the size of the
