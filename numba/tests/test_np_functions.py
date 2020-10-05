@@ -17,7 +17,7 @@ from numba.core.config import IS_WIN32, IS_32BITS
 from numba.core.utils import pysignature
 from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas, skip_ppc64le_issue4026)
+                                 needs_blas)
 import unittest
 
 
@@ -639,8 +639,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
-    # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
-    @skip_ppc64le_issue4026
     def test_delete(self):
 
         def arrays():
