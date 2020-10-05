@@ -186,7 +186,8 @@ class FakeCUDAArray(object):
     def __len__(self):
         return len(self._ary)
 
-    # TODO: Add inplace, bitwise, unary magic methods (or maybe inherit this class from numpy)?
+    # TODO: Add inplace, bitwise, unary magic methods
+    #  (or maybe inherit this class from numpy)?
     def __eq__(self, other):
         return FakeCUDAArray(self._ary == other)
 
