@@ -91,20 +91,6 @@ exclude =
     numba/misc/mergesort.py
     numba/core/base.py
     numba/np/npdatetime.py
-    numba/cuda/dispatcher.py
-    numba/cuda/printimpl.py
-    numba/cuda/libdevice.py
-    numba/cuda/device_init.py
-    numba/cuda/initialize.py
-    numba/cuda/simulator_init.py
-    numba/cuda/random.py
-    numba/cuda/api.py
-    numba/cuda/stubs.py
-    numba/cuda/target.py
-    numba/cuda/cudamath.py
-    numba/cuda/nvvmutils.py
-    numba/cuda/cudadecl.py
-    numba/cuda/codegen.py
     numba/cuda/decorators.py
     numba/cuda/kernels/transpose.py
     numba/cuda/tests/cudasim/test_cudasim_issues.py
@@ -374,3 +360,9 @@ exclude =
     numba/core/datamodel/packer.py
     numba/core/datamodel/testing.py
     numba/core/datamodel/manager.py
+
+per-file-ignores =
+    # Ignore star imports, unused imports, and "may be defined by star imports"
+    # errors in device_init because its purpose is to bring together a lot of
+    # the public API to be star-imported in numba.cuda.__init__
+    numba/cuda/device_init.py:F401,F403,F405
