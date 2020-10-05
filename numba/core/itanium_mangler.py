@@ -94,7 +94,7 @@ def _escape_string(text):
     hex format.
     """
     def repl(m):
-        return ''.join(('$%02x' % utils.asbyteint(ch))
+        return ''.join(('$%02x' % ch)
                        for ch in m.group(0).encode('utf8'))
     ret = re.sub(_re_invalid_char, repl, text)
     # Return str if we got a unicode (for py2)
