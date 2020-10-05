@@ -76,8 +76,10 @@ class TestCudaArray(CUDATestCase):
         self.assertEqual(array.shape, array_like.shape)
         self.assertEqual(array.strides, array_like.strides)
         self.assertEqual(array.dtype, array_like.dtype)
-        self.assertEqual(array.flags['C_CONTIGUOUS'], array_like.flags['C_CONTIGUOUS'])
-        self.assertEqual(array.flags['F_CONTIGUOUS'], array_like.flags['F_CONTIGUOUS'])
+        self.assertEqual(array.flags['C_CONTIGUOUS'],
+                         array_like.flags['C_CONTIGUOUS'])
+        self.assertEqual(array.flags['F_CONTIGUOUS'],
+                         array_like.flags['F_CONTIGUOUS'])
 
     def test_array_like_1d(self):
         d_a = cuda.device_array(10, order='C')
@@ -179,7 +181,6 @@ class TestCudaArray(CUDATestCase):
     @skip_on_cudasim('Numba and NumPy stride semantics differ for transpose')
     def test_array_like_2d_view_transpose_device(self):
         shape = (10, 12)
-        view = np.zeros(shape)[::2, ::2].T
         d_view = cuda.device_array(shape)[::2, ::2].T
         for like_func in ARRAY_LIKE_FUNCTIONS:
             with self.subTest(like_func=like_func):
@@ -194,7 +195,8 @@ class TestCudaArray(CUDATestCase):
                 self.assertTrue(like.flags['C_CONTIGUOUS'])
                 self.assertFalse(like.flags['F_CONTIGUOUS'])
 
-    @skip_unless_cudasim('Numba and NumPy stride semantics differ for transpose')
+    @skip_unless_cudasim('Numba and NumPy stride semantics differ for '
+                         'transpose')
     def test_array_like_2d_view_transpose_simulator(self):
         shape = (10, 12)
         view = np.zeros(shape)[::2, ::2].T
