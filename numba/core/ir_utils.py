@@ -1503,7 +1503,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
         if isinstance(callee_def, (ir.Global, ir.FreeVar)):
             # require(callee_def.value == numpy)
             # these checks support modules like numpy, numpy.random as well as
-            # calls like len() and intrinsitcs like assertEquiv
+            # calls like len() and intrinsics like assertEquiv
             keys = ['name', '_name', '__name__']
             value = None
             for key in keys:
@@ -1521,15 +1521,25 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
                 def_val = def_val._defn
             if hasattr(def_val, '__module__'):
                 mod_name = def_val.__module__
+                # The reason for first checking if the function is in NumPy's
+                # top level name space by module is that some functions are
+                # deprecated in NumPy but the functions' names are aliased with
+                # other common names. This prevents deprecation warnings on
+                # e.g. getattr(numpy, 'bool') were a bool the target.
+                # For context see #6175, impacts NumPy>=1.20.
+                mod_not_none = mod_name is not None
+                numpy_toplevel = (mod_not_none and
+                                  (mod_name == 'numpy'
+                                   or mod_name.startswith('numpy.')))
                 # it might be a numpy function imported directly
-                if (hasattr(numpy, value)
+                if (numpy_toplevel and hasattr(numpy, value)
                         and def_val == getattr(numpy, value)):
                     attrs += ['numpy']
                 # it might be a np.random function imported directly
                 elif (hasattr(numpy.random, value)
                         and def_val == getattr(numpy.random, value)):
                     attrs += ['random', 'numpy']
-                elif mod_name is not None:
+                elif mod_not_none:
                     attrs.append(mod_name)
             else:
                 class_name = def_val.__class__.__name__
