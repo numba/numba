@@ -23,6 +23,7 @@ from .dppl_passes import (
         DPPLParforPass,
         SpirvFriendlyLowering,
         DPPLAddNumpyOverloadPass,
+        DPPLAddNumpyRemoveOverloadPass,
         DPPLNoPythonBackend
         )
 
@@ -107,5 +108,6 @@ class DPPLPassBuilder(object):
         # lower
         pm.add_pass(SpirvFriendlyLowering, "SPIRV-friendly lowering pass")
         pm.add_pass(DPPLNoPythonBackend, "nopython mode backend")
+        pm.add_pass(DPPLAddNumpyRemoveOverloadPass, "dppl remove typing template for Numpy functions")
         pm.finalize()
         return pm

@@ -112,6 +112,31 @@ class DPPLAddNumpyOverloadPass(FunctionPass):
         typingctx.refresh()
         return True
 
+@register_pass(mutates_CFG=False, analysis_only=True)
+class DPPLAddNumpyRemoveOverloadPass(FunctionPass):
+    _name = "dppl_remove_numpy_overload_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        typingctx = state.typingctx
+        targetctx = state.targetctx
+
+        from importlib import reload
+        from numba.np import npyimpl, arrayobj, arraymath
+        reload(npyimpl)
+        reload(arrayobj)
+        reload(arraymath)
+        targetctx.refresh()
+
+
+        import numba
+        from numba.core import lowering
+        from numba.parfors import parfor
+        lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
+
+        return True
 
 @register_pass(mutates_CFG=True, analysis_only=False)
 class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
@@ -364,6 +389,7 @@ class SpirvFriendlyLowering(LoweringPass):
                 targetctx.insert_user_function(cfunc, fndesc, [library])
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=cfunc, env=env)
+
         return True
 
 
