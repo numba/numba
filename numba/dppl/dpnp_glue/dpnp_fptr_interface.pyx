@@ -116,7 +116,7 @@ cdef DPNPFuncName get_DPNPFuncName_from_str(name):
 cdef DPNPFuncType get_DPNPFuncType_from_str(name):
     if name == "float32":
         return DPNPFuncType.DPNP_FT_FLOAT
-    elif name == "int32" or name == "uint32":
+    elif name == "int32" or name == "uint32" or name == "bool":
         return DPNPFuncType.DPNP_FT_INT
     elif name == "float64":
         return DPNPFuncType.DPNP_FT_DOUBLE
