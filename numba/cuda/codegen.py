@@ -6,7 +6,6 @@ from numba.core import utils
 from .cudadrv import nvvm
 
 
-
 CUDA_TRIPLE = {32: 'nvptx-nvidia-cuda',
                64: 'nvptx64-nvidia-cuda'}
 
@@ -35,8 +34,8 @@ class CUDACodeLibrary(CodeLibrary):
 
 class JITCUDACodegen(BaseCPUCodegen):
     """
-    This codegen implementation for CUDA actually only generates optimized
-    LLVM IR.  Generation of PTX code is done separately (see numba.cuda.compiler).
+    This codegen implementation for CUDA actually only generates optimized LLVM
+    IR.  Generation of PTX code is done separately (see numba.cuda.compiler).
     """
 
     _library_class = CUDACodeLibrary
