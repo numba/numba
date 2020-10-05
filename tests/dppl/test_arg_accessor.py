@@ -36,14 +36,14 @@ D = A + B
 class TestDPPLArgAccessorCPU(DPPLTestCase):
     def test_arg_with_accessor(self):
         C = np.ones_like(A)
-        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+        with dpctl.device_context("opencl:cpu") as cpu_queue:
             call_kernel(global_size, local_size,
                         A, B, C, sum_with_accessor)
         self.assertTrue(np.all(D == C))
 
     def test_arg_without_accessor(self):
         C = np.ones_like(A)
-        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+        with dpctl.device_context("opencl:cpu") as cpu_queue:
             call_kernel(global_size, local_size,
                         A, B, C, sum_without_accessor)
         self.assertTrue(np.all(D == C))
@@ -53,14 +53,14 @@ class TestDPPLArgAccessorCPU(DPPLTestCase):
 class TestDPPLArgAccessorGPU(DPPLTestCase):
     def test_arg_with_accessor(self):
         C = np.ones_like(A)
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             call_kernel(global_size, local_size,
                         A, B, C, sum_with_accessor)
         self.assertTrue(np.all(D == C))
 
     def test_arg_without_accessor(self):
         C = np.ones_like(A)
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             call_kernel(global_size, local_size,
                         A, B, C, sum_without_accessor)
         self.assertTrue(np.all(D == C))

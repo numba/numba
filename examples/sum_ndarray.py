@@ -25,14 +25,14 @@ c = np.ones_like(a)
 
 def main():
     if dpctl.has_gpu_queues():
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             print("----Running in GPU----")
             print("before A: ", a)
             print("before B: ", b)
             data_parallel_sum[global_size, local_size](a, b, c)
             print("after  C: ", c)
     if dpctl.has_cpu_queues():
-        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+        with dpctl.device_context("opencl:cpu") as cpu_queue:
             print("----Running in CPU----")
             print("before A: ", a)
             print("before B: ", b)

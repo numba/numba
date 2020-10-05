@@ -22,10 +22,10 @@ def main():
     c = np.ones(N)
 
     if dpctl.has_gpu_queues():
-        with dpctl.device_context(dpctl.device_type.gpu):
+        with dpctl.device_context("opencl:gpu"):
             f(a, b, c, N)
     elif dpctl.has_cpu_queues():
-        with dpctl.device_context(dpctl.device_type.cpu):
+        with dpctl.device_context("opencl:cpu"):
             f(a, b, c, N)
     else:
         print("No device found")

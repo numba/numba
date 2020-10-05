@@ -24,7 +24,7 @@ class TestCaching(DPPLTestCase):
         c = np.ones_like(a)
 
 
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             func = dppl.kernel(data_parallel_sum)
             caching_kernel = func[global_size, dppl.DEFAULT_LOCAL_SIZE].specialize(a, b, c)
 

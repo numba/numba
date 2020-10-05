@@ -30,7 +30,7 @@ class TestPrint(DPPLTestCase):
         a = np.ones(N)
         b = np.ones(N)
 
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             f[N, dppl.DEFAULT_LOCAL_SIZE](a, b)
 
 
