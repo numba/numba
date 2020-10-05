@@ -60,10 +60,10 @@ def driver(a, jitfunc):
 def test_driver(input_arr, device_ty, jitfunc):
     out_actual = None
     if device_ty == "GPU":
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             out_actual = driver(input_arr, jitfunc)
     elif device_ty == "CPU":
-        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+        with dpctl.device_context("opencl:cpu") as cpu_queue:
             out_actual = driver(input_arr, jitfunc)
     else:
         print("Unknown device type")

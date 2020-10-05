@@ -39,10 +39,10 @@ def main():
     c = np.ones_like(a).reshape(X,X)
 
     if dpctl.has_gpu_queues():
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             driver(a, b, c)
     elif dpctl.has_cpu_queues():
-        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+        with dpctl.device_context("opencl:cpu") as cpu_queue:
             driver(a, b, c)
     else:
         print("No device found")

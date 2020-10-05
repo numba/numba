@@ -23,7 +23,7 @@ class TestBarrier(unittest.TestCase):
         arr = np.random.random(N).astype(np.float32)
         orig = arr.copy()
 
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             twice[N, N//2](arr)
 
         # The computation is correct?
@@ -43,7 +43,7 @@ class TestBarrier(unittest.TestCase):
         arr = np.random.random(N).astype(np.float32)
         orig = arr.copy()
 
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             twice[N, dppl.DEFAULT_LOCAL_SIZE](arr)
 
         # The computation is correct?
@@ -69,7 +69,7 @@ class TestBarrier(unittest.TestCase):
         arr = np.arange(blocksize).astype(np.float32)
         orig = arr.copy()
 
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             reverse_array[blocksize, dppl.DEFAULT_LOCAL_SIZE](arr)
 
         expected = orig[::-1] + orig

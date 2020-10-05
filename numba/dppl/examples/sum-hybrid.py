@@ -20,7 +20,7 @@ global_size = N,
 
 def main():
     if dpctl.has_cpu_queues():
-        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+        with dpctl.device_context("opencl:cpu") as cpu_queue:
             print("-----Running in CPU-----")
             a = np.array(np.random.random(N), dtype=np.float32)
             b = np.array(np.random.random(N), dtype=np.float32)
@@ -33,7 +33,7 @@ def main():
         print("CPU device not found")
 
     if dpctl.has_gpu_queues():
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             print("-----Running in GPU-----")
             a = np.array(np.random.random(N), dtype=np.float32)
             b = np.array(np.random.random(N), dtype=np.float32)

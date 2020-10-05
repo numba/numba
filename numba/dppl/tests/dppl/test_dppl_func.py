@@ -25,7 +25,7 @@ class TestDPPLFunc(DPPLTestCase):
         a = np.ones(self.N)
         b = np.ones(self.N)
 
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             f[self.N, dppl.DEFAULT_LOCAL_SIZE](a, b)
 
 
@@ -49,7 +49,7 @@ class TestDPPLFunc(DPPLTestCase):
         a = np.ones(self.N)
         b = np.ones(self.N)
 
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             f[self.N, dppl.DEFAULT_LOCAL_SIZE](a, b)
 
             self.assertTrue(np.all(b == 2))

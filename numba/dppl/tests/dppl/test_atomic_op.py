@@ -53,7 +53,7 @@ class TestAtomicOp(DPPLTestCase):
         N = 100
         B = np.array([0])
 
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             atomic_add[N, dppl.DEFAULT_LOCAL_SIZE](B)
 
         self.assertTrue(B[0] == N)
@@ -68,7 +68,7 @@ class TestAtomicOp(DPPLTestCase):
         N = 100
         B = np.array([100])
 
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             atomic_sub[N, dppl.DEFAULT_LOCAL_SIZE](B)
 
         self.assertTrue(B[0] == 0)
@@ -78,7 +78,7 @@ class TestAtomicOp(DPPLTestCase):
         orig = ary.copy()
         #dppl_atomic_add = dppl.kernel('void(uint32[:])')(atomic_add)
         dppl_atomic_add = dppl.kernel(atomic_add)
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dppl_atomic_add[32, dppl.DEFAULT_LOCAL_SIZE](ary)
 
         gold = np.zeros(32, dtype=np.uint32)
@@ -92,7 +92,7 @@ class TestAtomicOp(DPPLTestCase):
         orig = ary.copy()
         #dppl_atomic_add2 = dppl.kernel('void(uint32[:,:])')(atomic_add2)
         dppl_atomic_add2 = dppl.kernel(atomic_add2)
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dppl_atomic_add2[(4, 8), dppl.DEFAULT_LOCAL_SIZE](ary)
         self.assertTrue(np.all(ary == orig + 1))
 
@@ -101,7 +101,7 @@ class TestAtomicOp(DPPLTestCase):
         orig = ary.copy()
         #dppl_atomic_add3 = dppl.kernel('void(uint32[:,:])')(atomic_add3)
         dppl_atomic_add3 = dppl.kernel(atomic_add3)
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dppl_atomic_add3[(4, 8), dppl.DEFAULT_LOCAL_SIZE](ary)
 
         self.assertTrue(np.all(ary == orig + 1))
