@@ -9,13 +9,15 @@ from numba.core import config
 
 def cc_X_or_above(major, minor):
     if not config.ENABLE_CUDASIM:
-        return cuda.current_context().device.compute_capability >= (major, minor)
+        ctx = cuda.current_context()
+        return ctx.device.compute_capability >= (major, minor)
     else:
         return True
 
 
 def skip_unless_cc_32(fn):
     return unittest.skipUnless(cc_X_or_above(3, 2), "require cc >= 3.2")(fn)
+
 
 def skip_unless_cc_50(fn):
     return unittest.skipUnless(cc_X_or_above(5, 0), "require cc >= 5.0")(fn)
@@ -132,6 +134,7 @@ def atomic_add_double_3(ary):
                               cuda.atomic.add, atomic_cast_to_uint64)
 
 
+
 def atomic_sub(ary):
     atomic_binary_1dim_shared(ary, ary, 1, uint32, 32,
                               cuda.atomic.sub, atomic_cast_none, 0)
@@ -147,9 +150,11 @@ def atomic_sub3(ary):
                               cuda.atomic.sub, atomic_cast_to_uint64)
 
 
+
 def atomic_sub_float(ary):
     atomic_binary_1dim_shared(ary, ary, 1.0, float32, 32,
                               cuda.atomic.sub, atomic_cast_to_int, 0.0)
+
 
 
 def atomic_sub_float_2(ary):
@@ -157,9 +162,11 @@ def atomic_sub_float_2(ary):
                               cuda.atomic.sub, atomic_cast_none)
 
 
+
 def atomic_sub_float_3(ary):
     atomic_binary_2dim_shared(ary, 1.0, float32, (4, 8),
                               cuda.atomic.sub, atomic_cast_to_uint64)
+
 
 
 def atomic_sub_double(idx, ary):
@@ -167,9 +174,11 @@ def atomic_sub_double(idx, ary):
                               cuda.atomic.sub, atomic_cast_none, 0.0)
 
 
+
 def atomic_sub_double_2(ary):
     atomic_binary_2dim_shared(ary, 1.0, float64, (4, 8),
                               cuda.atomic.sub, atomic_cast_none)
+
 
 
 def atomic_sub_double_3(ary):
@@ -177,12 +186,15 @@ def atomic_sub_double_3(ary):
                               cuda.atomic.sub, atomic_cast_to_uint64)
 
 
+
 def atomic_sub_double_global(idx, ary):
     atomic_binary_1dim_global(ary, idx, 32, 1.0, cuda.atomic.sub)
 
 
+
 def atomic_sub_double_global_2(ary):
     atomic_binary_2dim_global(ary, 1.0, cuda.atomic.sub, atomic_cast_none)
+
 
 
 def atomic_sub_double_global_3(ary):
@@ -190,10 +202,10 @@ def atomic_sub_double_global_3(ary):
                               cuda.atomic.sub, atomic_cast_to_uint64)
 
 
+
 def gen_atomic_extreme_funcs(func):
 
-    fns = dedent(
-    """
+    fns = dedent("""
     def atomic(res, ary):
         tx = cuda.threadIdx.x
         bx = cuda.blockIdx.x
@@ -226,16 +238,18 @@ def gen_atomic_extreme_funcs(func):
     return (ld['atomic'], ld['atomic_double_normalizedindex'],
             ld['atomic_double_oneindex'], ld['atomic_double_shared'])
 
+
 (atomic_max, atomic_max_double_normalizedindex, atomic_max_double_oneindex,
  atomic_max_double_shared) = gen_atomic_extreme_funcs('cuda.atomic.max')
 (atomic_min, atomic_min_double_normalizedindex, atomic_min_double_oneindex,
  atomic_min_double_shared) = gen_atomic_extreme_funcs('cuda.atomic.min')
 (atomic_nanmax, atomic_nanmax_double_normalizedindex,
  atomic_nanmax_double_oneindex, atomic_nanmax_double_shared) = \
-     gen_atomic_extreme_funcs('cuda.atomic.nanmax')
+    gen_atomic_extreme_funcs('cuda.atomic.nanmax')
 (atomic_nanmin, atomic_nanmin_double_normalizedindex,
  atomic_nanmin_double_oneindex, atomic_nanmin_double_shared) = \
-     gen_atomic_extreme_funcs('cuda.atomic.nanmin')
+    gen_atomic_extreme_funcs('cuda.atomic.nanmin')
+
 
 def atomic_compare_and_swap(res, old, ary):
     gid = cuda.grid(1)
@@ -350,7 +364,8 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_add_double_global(self):
         idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
-        cuda_func = cuda.jit('void(int64[:], float64[:])')(atomic_add_double_global)
+        sig = 'void(int64[:], float64[:])'
+        cuda_func = cuda.jit(sig)(atomic_add_double_global)
         cuda_func[1, 32](idx, ary)
 
         gold = np.zeros(32, dtype=np.uint32)
@@ -458,7 +473,8 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_sub_double_global(self):
         idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
-        cuda_func = cuda.jit('void(int64[:], float64[:])')(atomic_sub_double_global)
+        sig = 'void(int64[:], float64[:])'
+        cuda_func = cuda.jit(sig)(atomic_sub_double_global)
         cuda_func[1, 32](idx, ary)
 
         gold = np.zeros(32, dtype=np.float64)
@@ -623,7 +639,8 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_max_double_shared(self):
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
         res = np.zeros(1, np.float64)
-        cuda_func = cuda.jit('void(float64[:], float64[:])')(atomic_max_double_shared)
+        sig = 'void(float64[:], float64[:])'
+        cuda_func = cuda.jit(sig)(atomic_max_double_shared)
         cuda_func[1, 32](res, vals)
 
         gold = np.max(vals)
@@ -632,7 +649,8 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_min_double_shared(self):
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
         res = np.ones(1, np.float64) * 32
-        cuda_func = cuda.jit('void(float64[:], float64[:])')(atomic_min_double_shared)
+        sig = 'void(float64[:], float64[:])'
+        cuda_func = cuda.jit(sig)(atomic_min_double_shared)
         cuda_func[1, 32](res, vals)
 
         gold = np.min(vals)
@@ -776,7 +794,8 @@ class TestCudaAtomics(CUDATestCase):
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
         vals[1::2] = np.nan
         res = np.array([0], dtype=vals.dtype)
-        cuda_func = cuda.jit('void(float64[:], float64[:])')(atomic_nanmax_double_shared)
+        sig = 'void(float64[:], float64[:])'
+        cuda_func = cuda.jit(sig)(atomic_nanmax_double_shared)
         cuda_func[1, 32](res, vals)
 
         gold = np.nanmax(vals)
@@ -828,7 +847,8 @@ class TestCudaAtomics(CUDATestCase):
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
         vals[1::2] = np.nan
         res = np.array([32], dtype=vals.dtype)
-        cuda_func = cuda.jit('void(float64[:], float64[:])')(atomic_nanmin_double_shared)
+        sig = 'void(float64[:], float64[:])'
+        cuda_func = cuda.jit(sig)(atomic_nanmin_double_shared)
         cuda_func[1, 32](res, vals)
 
         gold = np.nanmin(vals)
@@ -844,7 +864,6 @@ class TestCudaAtomics(CUDATestCase):
 
         gold = np.nanmin(vals)
         np.testing.assert_equal(res, gold)
-
 
     # Returning old value tests
 

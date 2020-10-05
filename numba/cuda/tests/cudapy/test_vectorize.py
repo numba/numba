@@ -4,18 +4,11 @@ from numba import vectorize
 from numba import cuda, int32, float32, float64
 from numba.cuda.testing import skip_on_cudasim
 from numba.cuda.testing import CUDATestCase
-from numba.core import config
 import unittest
 
 sig = [int32(int32, int32),
        float32(float32, float32),
        float64(float64, float64)]
-
-
-target='cuda'
-if config.ENABLE_CUDASIM:
-    target='cpu'
-
 
 test_dtypes = np.float32, np.int32
 
@@ -26,7 +19,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_scalar(self):
 
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -37,7 +30,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_1d(self):
 
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -60,7 +53,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_1d_async(self):
 
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -89,7 +82,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def test_nd(self):
 
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -121,7 +114,7 @@ class TestCUDAVectorize(CUDATestCase):
         self.reduce_test2(2 ** 10 + 1)
 
     def test_output_arg(self):
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -132,7 +125,7 @@ class TestCUDAVectorize(CUDATestCase):
         self.assertTrue(np.allclose(A + B, C))
 
     def reduce_test(self, n):
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -144,7 +137,7 @@ class TestCUDAVectorize(CUDATestCase):
 
     def reduce_test2(self, n):
 
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -158,7 +151,7 @@ class TestCUDAVectorize(CUDATestCase):
         self.assertEqual(result, gold)
 
     def test_auto_transfer(self):
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
@@ -171,7 +164,7 @@ class TestCUDAVectorize(CUDATestCase):
         np.testing.assert_equal(y, x + x)
 
     def test_ufunc_output_ravel(self):
-        @vectorize(sig, target=target)
+        @vectorize(sig, target='cuda')
         def vector_add(a, b):
             return a + b
 
