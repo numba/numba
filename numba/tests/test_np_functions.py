@@ -2032,6 +2032,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     params = {'ary': ary, 'to_begin': a, 'to_end': b}
                     _check(params)
 
+    @unittest.skipIf(numpy_version >= (1, 19), ("Unstable bevahiour, see:"
+                     "https://github.com/numpy/numpy/pull/17457"))
     def test_ediff1d_edge_cases(self):
         # NOTE: NumPy 1.16 has a variety of behaviours for type conversion, see
         # https://github.com/numpy/numpy/issues/13103, as this is not resolved
