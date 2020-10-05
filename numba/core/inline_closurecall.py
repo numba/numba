@@ -488,7 +488,7 @@ class InlineWorker(object):
         state.typemap = None
         state.calltypes = None
         state.type_annotation = None
-        state.status = _CompileStatus(False, False)
+        state.status = _CompileStatus(False)
         state.return_type = None
         state.parfor_diagnostics = ParforDiagnostics()
         state.metadata = {}
