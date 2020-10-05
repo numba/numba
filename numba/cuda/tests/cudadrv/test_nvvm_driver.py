@@ -1,7 +1,7 @@
 from llvmlite.llvmpy.core import Module, Type, Builder
-from numba.cuda.cudadrv.nvvm import (NVVM, CompilationUnit, llvm_to_ptx,
-                                     set_cuda_kernel, fix_data_layout,
-                                     get_arch_option, get_supported_ccs)
+from numba.cuda.cudadrv.nvvm import (llvm_to_ptx, set_cuda_kernel,
+                                     fix_data_layout, get_arch_option,
+                                     get_supported_ccs)
 from ctypes import c_size_t, c_uint64, sizeof
 from numba.cuda.testing import unittest
 from numba.cuda.cudadrv.nvvm import LibDevice, NvvmError
@@ -13,8 +13,6 @@ is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 @skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestNvvmDriver(unittest.TestCase):
     def get_ptx(self):
-        nvvm = NVVM()
-
         if is64bit:
             return gpu64
         else:
@@ -134,7 +132,7 @@ declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
 
 !nvvm.annotations = !{!1}
 !1 = metadata !{void (i32*)* @simple, metadata !"kernel", i32 1}
-'''
+'''  # noqa: E501
 
 gpu32 = '''
 target triple="nvptx-"
@@ -170,7 +168,7 @@ declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
 !nvvm.annotations = !{!1}
 !1 = metadata !{void (i32*)* @simple, metadata !"kernel", i32 1}
 
-'''
+'''  # noqa: E501
 
 if __name__ == '__main__':
     unittest.main()
