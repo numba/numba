@@ -942,7 +942,7 @@ class PythonAPI(object):
 
     def call(self, callee, args=None, kws=None):
         if args is None:
-            args = self.get_null_object()
+            args = self.tuple_new(0)
         if kws is None:
             kws = self.get_null_object()
         fnty = Type.function(self.pyobj, [self.pyobj] * 3)
