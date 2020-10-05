@@ -133,7 +133,7 @@ class InliningBase(TestCase):
         return fir  # for use in further analysis
 
     def make_dummy_type(self):
-        # Use test_id to makesure no collision is possible.
+        # Use test_id to make sure no collision is possible.
         test_id = self.id()
         DummyType = type('DummyTypeFor{}'.format(test_id), (types.Opaque,), {})
 
@@ -660,8 +660,8 @@ class TestOverloadInlining(MemoryLeakMixin, InliningBase):
             if isinstance(obj, self.DummyType):
                 return dummy_getitem_impl
 
-        # noth getitem and static_getitem Exprs refer to opertor.getitem
-        # hence they are checked using the same expect key
+        # note getitem and static_getitem Exprs refer to operator.getitem
+        # hence they are checked using the same expected key
         self.check(impl, self.Dummy(), 1, inline_expect={'getitem': True})
         self.check(impl_static_getitem,
                    self.Dummy(),
