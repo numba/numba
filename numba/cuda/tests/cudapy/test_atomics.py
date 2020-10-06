@@ -22,6 +22,7 @@ def skip_unless_cc_32(fn):
 def skip_unless_cc_50(fn):
     return unittest.skipUnless(cc_X_or_above(5, 0), "require cc >= 5.0")(fn)
 
+
 @cuda.jit(device=True)
 def atomic_cast_to_uint64(num):
     return uint64(num)
@@ -134,7 +135,6 @@ def atomic_add_double_3(ary):
                               cuda.atomic.add, atomic_cast_to_uint64)
 
 
-
 def atomic_sub(ary):
     atomic_binary_1dim_shared(ary, ary, 1, uint32, 32,
                               cuda.atomic.sub, atomic_cast_none, 0)
@@ -150,11 +150,9 @@ def atomic_sub3(ary):
                               cuda.atomic.sub, atomic_cast_to_uint64)
 
 
-
 def atomic_sub_float(ary):
     atomic_binary_1dim_shared(ary, ary, 1.0, float32, 32,
                               cuda.atomic.sub, atomic_cast_to_int, 0.0)
-
 
 
 def atomic_sub_float_2(ary):
@@ -162,11 +160,9 @@ def atomic_sub_float_2(ary):
                               cuda.atomic.sub, atomic_cast_none)
 
 
-
 def atomic_sub_float_3(ary):
     atomic_binary_2dim_shared(ary, 1.0, float32, (4, 8),
                               cuda.atomic.sub, atomic_cast_to_uint64)
-
 
 
 def atomic_sub_double(idx, ary):
@@ -174,11 +170,9 @@ def atomic_sub_double(idx, ary):
                               cuda.atomic.sub, atomic_cast_none, 0.0)
 
 
-
 def atomic_sub_double_2(ary):
     atomic_binary_2dim_shared(ary, 1.0, float64, (4, 8),
                               cuda.atomic.sub, atomic_cast_none)
-
 
 
 def atomic_sub_double_3(ary):
@@ -186,21 +180,17 @@ def atomic_sub_double_3(ary):
                               cuda.atomic.sub, atomic_cast_to_uint64)
 
 
-
 def atomic_sub_double_global(idx, ary):
     atomic_binary_1dim_global(ary, idx, 32, 1.0, cuda.atomic.sub)
-
 
 
 def atomic_sub_double_global_2(ary):
     atomic_binary_2dim_global(ary, 1.0, cuda.atomic.sub, atomic_cast_none)
 
 
-
 def atomic_sub_double_global_3(ary):
     atomic_binary_2dim_shared(ary, 1.0, float64, (4, 8),
                               cuda.atomic.sub, atomic_cast_to_uint64)
-
 
 
 def gen_atomic_extreme_funcs(func):
