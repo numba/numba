@@ -170,7 +170,7 @@ for (ty, intrin) in ((types.float64, '__nv_modf',),
 
 
 # Complex power implementations - translations of _Py_c_pow from CPython
-# 3.7.5.
+# https://github.com/python/cpython/blob/a755410e054e1e2390de5830befc08fe80706c66/Objects/complexobject.c#L123-L151
 #
 # The complex64 variant casts all constants and some variables to ensure that
 # as much computation is done in single precision as possible. A small number
