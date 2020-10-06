@@ -96,6 +96,7 @@ class FakeCUDAShared(object):
             self._allocations[caller] = res
         return res
 
+
 addlock = threading.Lock()
 sublock = threading.Lock()
 maxlock = threading.Lock()

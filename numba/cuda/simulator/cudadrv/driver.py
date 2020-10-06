@@ -32,4 +32,3 @@ class FakeDriver(object):
 driver = FakeDriver()
 
 Linker = None
-
