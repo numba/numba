@@ -26,7 +26,7 @@ class TestWithDPPLContext(DPPLTestCase):
         got_gpu = np.ones((64), dtype=np.float64)
 
         with captured_stdout() as got_gpu_message:
-            with dpctl.device_context(dpctl.device_type.gpu):
+            with dpctl.device_context("opencl:gpu"):
                 func(got_gpu)
 
         func(expected)
@@ -51,7 +51,7 @@ class TestWithDPPLContext(DPPLTestCase):
         got_cpu = np.ones((64), dtype=np.float64)
 
         with captured_stdout() as got_cpu_message:
-            with dpctl.device_context(dpctl.device_type.cpu):
+            with dpctl.device_context("opencl:cpu"):
                 func(got_cpu)
 
         func(expected)
@@ -87,19 +87,19 @@ class TestWithDPPLContext(DPPLTestCase):
         b = np.ones((64), dtype=np.float64)
 
         with self.assertRaises(errors.UnsupportedError) as raises_1:
-            with dpctl.device_context(dpctl.device_type.gpu):
+            with dpctl.device_context("opencl:gpu"):
                 nested_func_target(a, b)
 
         with self.assertRaises(errors.UnsupportedError) as raises_2:
-            with dpctl.device_context(dpctl.device_type.gpu):
+            with dpctl.device_context("opencl:gpu"):
                 func_target(a)
 
         with self.assertRaises(errors.UnsupportedError) as raises_3:
-            with dpctl.device_context(dpctl.device_type.gpu):
+            with dpctl.device_context("opencl:gpu"):
                 func_no_target(a)
 
         with self.assertRaises(errors.UnsupportedError) as raises_4:
-            with dpctl.device_context(dpctl.device_type.gpu):
+            with dpctl.device_context("opencl:gpu"):
                 func_no_parallel(a)
 
         msg_1 = "Can't use 'with' context with explicitly specified target"

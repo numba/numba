@@ -77,7 +77,7 @@ def sum_reduction_recursive():
 
 
     if dpctl.has_gpu_queues():
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             inp_buf = dpctl_mem.MemoryUSMShared(inp.size * inp.dtype.itemsize)
             inp_ndarray = np.ndarray(inp.shape, buffer=inp_buf, dtype=inp.dtype)
             np.copyto(inp_ndarray, inp)

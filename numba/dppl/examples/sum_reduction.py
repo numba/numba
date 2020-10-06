@@ -28,7 +28,7 @@ def test_sum_reduction():
     R = np.array(np.random.random(math.ceil(N/2)), dtype=np.float32)
 
     if dpctl.has_gpu_queues():
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             total = N
 
             while (total > 1):

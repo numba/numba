@@ -389,9 +389,9 @@ class DPPLKernel(DPPLKernelBase):
         void_ptr_arg = True
 
         # meminfo
-        kernelargs.append(ctypes.c_long(0))
+        kernelargs.append(ctypes.c_size_t(0))
         # parent
-        kernelargs.append(ctypes.c_long(0))
+        kernelargs.append(ctypes.c_size_t(0))
 
         kernelargs.append(ctypes.c_long(val.size))
         kernelargs.append(ctypes.c_long(val.dtype.itemsize))
@@ -506,13 +506,21 @@ class JitDPPLKernel(DPPLKernelBase):
     def specialize(self, *args):
         argtypes = tuple([self.typingctx.resolve_argument_type(a)
                           for a in args])
+        q = None
+        kernel = None
         # we were previously using the _env_ptr of the device_env, the sycl_queue
         # should be sufficient to cache the compiled kernel for now, but we should
         # use the device type to cache such kernels
-        key_definitions = (self.sycl_queue, argtypes)
-        kernel = self.definitions.get(key_definitions)
-        if kernel is None:
+        #key_definitions = (self.sycl_queue, argtypes)
+        key_definitions = (argtypes)
+        result = self.definitions.get(key_definitions)
+        if result:
+            q, kernel = result
+
+        if q and self.sycl_queue.equals(q):
+                return kernel
+        else:
             kernel = compile_kernel(self.sycl_queue, self.py_func, argtypes,
                                     self.access_types)
-            self.definitions[key_definitions] = kernel
+            self.definitions[key_definitions] = (self.sycl_queue, kernel)
         return kernel

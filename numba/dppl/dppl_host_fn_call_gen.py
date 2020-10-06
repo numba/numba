@@ -16,8 +16,7 @@ class DPPLHostFunctionCallsGenerator(object):
         self.builder = self.lowerer.builder
 
         self.kernel = cres.kernel
-        self.kernel_addr = self.kernel.get_kernel_ref_address()
-
+        self.kernel_addr = self.kernel.addressof_ref()
 
         # Initialize commonly used LLVM types and constant
         self._init_llvm_types_and_constants()
@@ -119,16 +118,18 @@ class DPPLHostFunctionCallsGenerator(object):
             val = self.context.get_constant(types.int32, 4)
         elif ty == types.uint32:
             val = self.context.get_constant(types.int32, 5)
+        elif ty == types.boolean:
+            val = self.context.get_constant(types.int32, 5)
         elif ty == types.int64:
-            val = self.context.get_constant(types.int32, 6)
-        elif ty == types.uint64:
             val = self.context.get_constant(types.int32, 7)
+        elif ty == types.uint64:
+            val = self.context.get_constant(types.int32, 8)
         elif ty == types.float32:
-            val = self.context.get_constant(types.int32, 11)
-        elif ty == types.float64:
             val = self.context.get_constant(types.int32, 12)
+        elif ty == types.float64:
+            val = self.context.get_constant(types.int32, 13)
         elif ty == types.voidptr:
-            val = self.context.get_constant(types.int32, 14)
+            val = self.context.get_constant(types.int32, 15)
         else:
             raise NotImplementedError
 

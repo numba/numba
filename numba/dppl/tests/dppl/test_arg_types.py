@@ -27,13 +27,13 @@ B = np.array(np.random.random(N), dtype=np.float32)
 class TestDPPLArrayArgCPU(DPPLTestCase):
     def test_integer_arg(self):
         x = np.int32(2)
-        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+        with dpctl.device_context("opencl:cpu") as cpu_queue:
             call_mul_device_kernel(global_size, A, B, x)
         self.assertTrue(np.all((A * x) == B))
 
     def test_float_arg(self):
         x = np.float32(2.0)
-        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+        with dpctl.device_context("opencl:cpu") as cpu_queue:
             call_mul_device_kernel(global_size, A, B, x)
             self.assertTrue(np.all(A * x == B))
 
@@ -51,7 +51,7 @@ class TestDPPLArrayArgCPU(DPPLTestCase):
 
         A = np.array([0], dtype='float64')
 
-        with dpctl.device_context(dpctl.device_type.cpu, 0) as cpu_queue:
+        with dpctl.device_context("opencl:cpu") as cpu_queue:
             check_bool_kernel[global_size, dppl.DEFAULT_LOCAL_SIZE](A, True)
             self.assertTrue(A[0] == 111)
             check_bool_kernel[global_size, dppl.DEFAULT_LOCAL_SIZE](A, False)
@@ -62,13 +62,13 @@ class TestDPPLArrayArgCPU(DPPLTestCase):
 class TestDPPLArrayArgGPU(DPPLTestCase):
     def test_integer_arg(self):
         x = np.int32(2)
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             call_mul_device_kernel(global_size, A, B, x)
         self.assertTrue(np.all((A * x) == B))
 
     def test_float_arg(self):
         x = np.float32(2.0)
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             call_mul_device_kernel(global_size, A, B, x)
             self.assertTrue(np.all(A * x == B))
 
@@ -86,7 +86,7 @@ class TestDPPLArrayArgGPU(DPPLTestCase):
 
         A = np.array([0], dtype='float64')
 
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             check_bool_kernel[global_size, dppl.DEFAULT_LOCAL_SIZE](A, True)
             self.assertTrue(A[0] == 111)
             check_bool_kernel[global_size, dppl.DEFAULT_LOCAL_SIZE](A, False)
