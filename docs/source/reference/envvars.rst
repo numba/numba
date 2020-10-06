@@ -3,6 +3,10 @@
 Environment variables
 =====================
 
+.. note:: This section relates to environment variables that impact Numba's
+          runtime, for compile time environment variables see
+          :ref:`numba-source-install-env_vars`.
+
 Numba allows its behaviour to be changed through the use of environment
 variables. Unless otherwise mentioned, those variables have integer values and
 default to zero.
@@ -253,14 +257,6 @@ Compilation options
 
     If set to non-zero and Intel SVML is available, the use of SVML will be
     disabled.
-
-.. envvar:: NUMBA_COMPATIBILITY_MODE
-
-   If set to non-zero, compilation of JIT functions will never entirely
-   fail, but instead generate a fallback that simply interprets the
-   function.  This is only to be used if you are migrating a large
-   codebase from an old Numba version (before 0.12), and want to avoid
-   breaking everything at once.  Otherwise, please don't use this.
 
 .. envvar:: NUMBA_DISABLE_JIT
 

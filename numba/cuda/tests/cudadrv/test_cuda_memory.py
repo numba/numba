@@ -95,7 +95,6 @@ class TestCudaMemory(ContextResettingTestCase):
         self.assertEqual(dtor_invoked[0], 2)
 
 
-@skip_on_cudasim('CUDA Memory API unsupported in the simulator')
 class TestCudaMemoryFunctions(ContextResettingTestCase):
     def setUp(self):
         self.context = devices.get_context()

@@ -68,7 +68,7 @@ class TestSharedMemoryCreation(CUDATestCase):
         udt = cuda.jit((float32[:, :],))(udt_global_build_tuple)
         udt[1, 1](self.getarg2())
 
-    @skip_on_cudasim('Simulator does not perform macro expansion')
+    @skip_on_cudasim('Simulator does not prohibit lists for shared array shape')
     def test_global_build_list(self):
         with self.assertRaises(TypingError) as raises:
             cuda.jit((float32[:, :],))(udt_global_build_list)
@@ -77,7 +77,8 @@ class TestSharedMemoryCreation(CUDATestCase):
                       "Function(<function shared.array",
                       str(raises.exception))
         self.assertIn("found for signature:\n \n "
-                      ">>> array(shape=list(int64), dtype=class(float32)",
+                      ">>> array(shape=list(int64)<iv=[5, 6]>, "
+                      "dtype=class(float32)",
                       str(raises.exception))
 
     def test_global_constant_tuple(self):

@@ -1,7 +1,314 @@
-Version 0.51.0
+Version 0.52.0
 --------------
 
 In development
+
+
+Version 0.51.2 (September 2, 2020)
+----------------------------------
+
+This is a bugfix release for 0.51.1. It fixes a critical performance bug in the
+CFG back edge computation algorithm that leads to exponential time complexity
+arising in compilation for use cases with certain pathological properties.
+
+* PR #6195: PR 6187 Continue. Don't visit already checked successors
+
+Authors:
+
+* Graham Markall
+* Siu Kwan Lam (core dev)
+
+
+Version 0.51.1 (August 26, 2020)
+--------------------------------
+
+This is a bugfix release for 0.51.0, it fixes a critical bug in caching, another
+critical bug in the CUDA target initialisation sequence and also fixes some
+compile time performance regressions:
+
+* PR #6141: Fix #6130 objmode cache segfault
+* PR #6146: Fix compilation slowdown due to controlflow analysis
+* PR #6147: CUDA: Don't make a runtime call on import
+* PR #6153: Fix for #6151. Make UnicodeCharSeq into str for comparison.
+* PR #6168: Fix Issue #6167: Failure in test_cuda_submodules
+
+Authors:
+
+* Graham Markall
+* Siu Kwan Lam (core dev)
+* Stuart Archibald (core dev)
+
+
+Version 0.51.0 (August 12, 2020)
+--------------------------------
+
+This release continues to add new features to Numba and also contains a
+significant number of bug fixes and stability improvements.
+
+Highlights of core feature changes include:
+
+* The compilation chain is now based on LLVM 10 (Valentin Haenel).
+* Numba has internally switched to prefer non-literal types over literal ones so
+  as to reduce function over-specialisation, this with view of speeding up
+  compile times (Siu Kwan Lam).
+* On the CUDA target: Support for CUDA Toolkit 11, Ampere, and Compute
+  Capability 8.0; Printing of ``SASS`` code for kernels; Callbacks to Python
+  functions can be inserted into CUDA streams, and streams are async awaitable;
+  Atomic ``nanmin`` and ``nanmax`` functions are added; Fixes for various
+  miscompilations and segfaults. (mostly Graham Markall; call backs on
+  streams by Peter Würtz).
+
+Intel also kindly sponsored research and development that lead to some exciting
+new features:
+
+* Support for heterogeneous immutable lists and heterogeneous immutable string
+  key dictionaries. Also optional initial/construction value capturing for all
+  lists and dictionaries containing literal values (Stuart Archibald).
+* A new pass-by-reference mutable structure extension type ``StructRef`` (Siu
+  Kwan Lam).
+* Object mode blocks are now cacheable, with the side effect of numerous bug
+  fixes and performance improvements in caching. This also permits caching of
+  functions defined in closures (Siu Kwan Lam).
+
+Deprecations to note:
+
+To align with other targets, the ``argtypes`` and ``restypes`` kwargs to
+``@cuda.jit`` are now deprecated, the ``bind`` kwarg is also deprecated.
+Further the ``target`` kwarg to the ``numba.jit`` decorator family is
+deprecated.
+
+General Enhancements:
+
+* PR #5463: Add str(int) impl
+* PR #5526: Impl. np.asarray(literal)
+* PR #5619: Add support for multi-output ufuncs
+* PR #5711: Division with timedelta input
+* PR #5763: Support minlength argument to np.bincount
+* PR #5779: Return zero array from np.dot when the arguments are empty.
+* PR #5796: Add implementation for np.positive
+* PR #5849: Setitem for records when index is StringLiteral, including literal
+  unroll
+* PR #5856: Add support for conversion of inplace_binop to parfor.
+* PR #5893: Allocate 1D iteration space one at a time for more even
+  distribution.
+* PR #5922: Reduce objmode and unpickling overhead
+* PR #5944: re-enable OpenMP in wheels
+* PR #5946: Implement literal dictionaries and lists.
+* PR #5956: Update numba_sysinfo.py
+* PR #5978: Add structref as a mutable struct that is pass-by-ref
+* PR #5980: Deprecate target kwarg for numba.jit.
+* PR #6058: Add prefer_literal option to overload API
+
+Fixes:
+
+* PR #5674: Fix #3955. Allow `with objmode` to be cached
+* PR #5724: Initialize process lock lazily to prevent multiprocessing issue
+* PR #5783: Make np.divide and np.remainder code more similar
+* PR #5808: Fix 5665 Block jit(nopython=True, forceobj=True) and suppress
+  njit(forceobj=True)
+* PR #5834: Fix the is operator on Ellipsis
+* PR #5838: Ensure ``Dispatcher.__eq__`` always returns a bool
+* PR #5841: cleanup: Use PythonAPI.bool_from_bool in more places
+* PR #5862: Do not leak loop iteration variables into the numba.np.npyimpl
+  namespace
+* PR #5869: Update repomap
+* PR #5879: Fix erroneous input mutation in linalg routines
+* PR #5882: Type check function in jit decorator
+* PR #5925: Use np.inf and -np.inf for max and min float values respectively.
+* PR #5935: Fix default arguments with multiprocessing
+* PR #5952: Fix "Internal error ... local variable 'errstr' referenced before
+  assignment during BoundFunction(...)"
+* PR #5962: Fix SVML tests with LLVM 10 and AVX512
+* PR #5972: fix flake8 for numba/runtests.py
+* PR #5995: Update setup.py with new llvmlite versions
+* PR #5996: Set lower bound for llvmlite to 0.33
+* PR #6004: Fix problem in branch pruning with LiteralStrKeyDict
+* PR #6017: Fixing up numba_do_raise
+* PR #6028: Fix #6023
+* PR #6031: Continue 5821
+* PR #6035: Fix overspecialize of literal
+* PR #6046: Fixes statement reordering bug in maximize fusion step.
+* PR #6056: Fix issue on invalid inlining of non-empty build_list by
+  inline_arraycall
+* PR #6057: fix aarch64/python_3.8 failure on master
+* PR #6070: Fix overspecialized containers
+* PR #6071: Remove f-strings in setup.py
+* PR #6072: Fix for #6005
+* PR #6073: Fixes invalid C prototype in helper function.
+* PR #6078: Duplicate NumPy's PyArray_DescrCheck macro
+* PR #6081: Fix issue with cross drive use and relpath.
+* PR #6083: Fix bug in initial value unify.
+* PR #6087: remove invalid sanity check from randrange tests
+* PR #6089: Fix invalid reference to TypingError
+* PR #6097: Add function code and closure bytes into cache key
+* PR #6099: Restrict upper limit of TBB version due to ABI changes.
+* PR #6101: Restrict lower limit of icc_rt version due to assumed SVML bug.
+* PR #6107: Fix and test #6095
+* PR #6109: Fixes an issue reported in #6094
+* PR #6111: Decouple LiteralList and LiteralStrKeyDict from tuple
+* PR #6116: Fix #6102. Problem with non-unique label.
+
+CUDA Enhancements/Fixes:
+
+* PR #5359: Remove special-casing of 0d arrays
+* PR #5709: CUDA: Refactoring of cuda.jit and kernel / dispatcher abstractions
+* PR #5732: CUDA Docs: document ``forall`` method of kernels
+* PR #5745: CUDA stream callbacks and async awaitable streams
+* PR #5761: Add implmentation for int types for isnan and isinf for CUDA
+* PR #5819: Add support for CUDA 11 and Ampere / CC 8.0
+* PR #5826: CUDA: Add function to get SASS for kernels
+* PR #5846: CUDA: Allow disabling NVVM optimizations, and fix debug issues
+* PR #5851: CUDA EMM enhancements - add default get_ipc_handle implementation,
+  skip a test conditionally
+* PR #5852: CUDA: Fix ``cuda.test()``
+* PR #5857: CUDA docs: Add notes on resetting the EMM plugin
+* PR #5859: CUDA: Fix reduce docs and style improvements
+* PR #6016: Fixes change of list spelling in a cuda test.
+* PR #6020: CUDA: Fix #5820, adding atomic nanmin / nanmax
+* PR #6030: CUDA: Don't optimize IR before sending it to NVVM
+* PR #6052: Fix dtype for atomic_add_double testsuite
+* PR #6080: CUDA: Prevent auto-upgrade of atomic intrinsics
+* PR #6123: Fix #6121
+
+Documentation Updates:
+
+* PR #5782: Host docs on Read the Docs
+* PR #5830: doc: Mention that caching uses pickle
+* PR #5963: Fix broken link to numpy ufunc signature docs
+* PR #5975: restructure communication section
+* PR #5981: Document bounds-checking behavior in python deviations page
+* PR #5993: Docs for structref
+* PR #6008: Small fix so bullet points are rendered by sphinx
+* PR #6013: emphasize cuda kernel functions are asynchronous
+* PR #6036: Update deprecation doc from numba.errors to numba.core.errors
+* PR #6062: Change references to numba.pydata.org to https
+
+CI updates:
+
+* PR #5850: Updates the "New Issue" behaviour to better redirect users.
+* PR #5940: Add discourse badge
+* PR #5960: Setting mypy on CI
+
+Enhancements from user contributed PRs (with thanks!):
+
+* Aisha Tammy added the ability to switch off TBB support at compile time in
+  #5821 (continued in #6031 by Stuart Archibald).
+* Alexander Stiebing fixed a reference before assignment bug in #5952.
+* Alexey Kozlov fixed a bug in tuple getitem for literals in #6028.
+* Andrew Eckart updated the repomap in #5869, added support for Read the Docs
+  in #5782, fixed a bug in the ``np.dot`` implementation to correctly handle
+  empty arrays in #5779 and added support for ``minlength`` to ``np.bincount``
+  in #5763.
+* ``@bitsisbits`` updated ``numba_sysinfo.py`` to handle HSA agents correctly in
+  #5956.
+* Daichi Suzuo Fixed a bug in the threading backend initialisation sequence such
+  that it is now correctly a lazy lock in #5724.
+* Eric Wieser contributed a number of patches, particularly in enhancing and
+  improving the ``ufunc`` capabilities:
+
+  * #5359: Remove special-casing of 0d arrays
+  * #5834: Fix the is operator on Ellipsis
+  * #5619: Add support for multi-output ufuncs
+  * #5841: cleanup: Use PythonAPI.bool_from_bool in more places
+  * #5862: Do not leak loop iteration variables into the numba.np.npyimpl
+    namespace
+  * #5838: Ensure ``Dispatcher.__eq__`` always returns a bool
+  * #5830: doc: Mention that caching uses pickle
+  * #5783: Make np.divide and np.remainder code more similar
+
+* Ethan Pronovost added a guard to prevent the common mistake of applying a jit
+  decorator to the same function twice in #5881.
+* Graham Markall contributed many patches to the CUDA target, as follows:
+
+  * #6052: Fix dtype for atomic_add_double tests
+  * #6030: CUDA: Don't optimize IR before sending it to NVVM
+  * #5846: CUDA: Allow disabling NVVM optimizations, and fix debug issues
+  * #5826: CUDA: Add function to get SASS for kernels
+  * #5851: CUDA EMM enhancements - add default get_ipc_handle implementation,
+    skip a test conditionally
+  * #5709: CUDA: Refactoring of cuda.jit and kernel / dispatcher abstractions
+  * #5819: Add support for CUDA 11 and Ampere / CC 8.0
+  * #6020: CUDA: Fix #5820, adding atomic nanmin / nanmax
+  * #5857: CUDA docs: Add notes on resetting the EMM plugin
+  * #5859: CUDA: Fix reduce docs and style improvements
+  * #5852: CUDA: Fix ``cuda.test()``
+  * #5732: CUDA Docs: document ``forall`` method of kernels
+
+* Guilherme Leobas added support for ``str(int)`` in #5463 and
+  ``np.asarray(literal value)``` in #5526.
+* Hameer Abbasi deprecated the ``target`` kwarg for ``numba.jit`` in #5980.
+* Hannes Pahl added a badge to the Numba github page linking to the new
+  discourse forum in #5940 and also fixed a bug that permitted illegal
+  combinations of flags to be passed into ``@jit`` in #5808.
+* Kayran Schmidt emphasized that CUDA kernel functions are asynchronous in the
+  documentation in #6013.
+* Leonardo Uieda fixed a broken link to the NumPy ufunc signature docs in #5963.
+* Lucio Fernandez-Arjona added mypy to CI and started adding type annotations to
+  the code base in #5960, also fixed a (de)serialization problem on the
+  dispatcher in #5935, improved the undefined variable error message in #5876,
+  added support for division with timedelta input in #5711 and implemented
+  ``setitem`` for records when the index is a ``StringLiteral`` in #5849.
+* Ludovic Tiako documented Numba's bounds-checking behavior in the python
+  deviations page in #5981.
+* Matt Roeschke changed all ``http`` references ``https`` in #6062.
+* ``@niteya-shah`` implemented ``isnan`` and ``isinf`` for integer types on the
+  CUDA target in #5761 and implemented ``np.positive`` in #5796.
+* Peter Würtz added CUDA stream callbacks and async awaitable streams in #5745.
+* ``@rht`` fixed an invalid import referred to in the deprecation documentation
+  in #6036.
+* Sergey Pokhodenko updated the SVML tests for LLVM 10 in #5962.
+* Shyam Saladi fixed a Sphinx rendering bug in #6008.
+
+Authors:
+
+* Aisha Tammy
+* Alexander Stiebing
+* Alexey Kozlov
+* Andrew Eckart
+* ``@bitsisbits``
+* Daichi Suzuo
+* Eric Wieser
+* Ethan Pronovost
+* Graham Markall
+* Guilherme Leobas
+* Hameer Abbasi
+* Hannes Pahl
+* Kayran Schmidt
+* Kozlov, Alexey
+* Leonardo Uieda
+* Lucio Fernandez-Arjona
+* Ludovic Tiako
+* Matt Roeschke
+* ``@niteya-shah``
+* Peter Würtz
+* Sergey Pokhodenko
+* Shyam Saladi
+* ``@rht``
+* Siu Kwan Lam (core dev)
+* Stuart Archibald (core dev)
+* Todd A. Anderson (core dev)
+* Valentin Haenel (core dev)
+
+
+Version 0.50.1 (Jun 24, 2020)
+-----------------------------
+
+This is a bugfix release for 0.50.0, it fixes a critical bug in error reporting
+and a number of other smaller issues:
+
+* PR #5861: Added except for possible Windows get_terminal_size exception
+* PR #5876: Improve undefined variable error message
+* PR #5884: Update the deprecation notices for 0.50.1
+* PR #5889: Fixes literally not forcing re-dispatch for inline='always'
+* PR #5912: Fix bad attr access on certain typing templates breaking exceptions.
+* PR #5918: Fix cuda test due to #5876
+
+Authors:
+
+* ``@pepping_dore``
+* Lucio Fernandez-Arjona
+* Siu Kwan Lam (core dev)
+* Stuart Archibald (core dev)
 
 
 Version 0.50.0 (Jun 10, 2020)

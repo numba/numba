@@ -99,8 +99,8 @@ class _ModuleCompiler(object):
                                     lt._int8_star))
 
     method_def_ptr = lc.Type.pointer(method_def_ty)
-
-    env_def_ty = lc.Type.struct((lt._void_star, lt._int32))
+    # The structure type constructed by PythonAPI.serialize_uncached()
+    env_def_ty = lc.Type.struct((lt._void_star, lt._int32, lt._void_star))
     env_def_ptr = lc.Type.pointer(env_def_ty)
 
     def __init__(self, export_entries, module_name, use_nrt=False,
