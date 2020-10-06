@@ -52,8 +52,7 @@ requirements:
     - cudatoolkit >=8.0
     # scipy 1.0 or later
     - scipy >=1.0
-    # icc_rt > 2018.0.2, see https://github.com/numba/numba/issues/6100
-    - icc_rt >=2018.0.3
+
 test:
   requires:
     - jinja2
