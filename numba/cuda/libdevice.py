@@ -3380,5 +3380,3 @@ def ynf(n, x):
     :type x: float32
     :rtype: float32
 """
-
-

@@ -1,7 +1,7 @@
 import math
-from numba.core import types, utils
-from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    signature, Registry)
+from numba.core import types
+from numba.core.typing.templates import ConcreteTemplate, signature, Registry
+
 
 registry = Registry()
 infer_global = registry.register_global
@@ -111,6 +111,7 @@ class Math_isnan(ConcreteTemplate):
         signature(types.boolean, types.float32),
         signature(types.boolean, types.float64),
     ]
+
 
 @infer_global(math.modf)
 class Math_modf(ConcreteTemplate):

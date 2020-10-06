@@ -20,13 +20,15 @@ from .errors import KernelRuntimeError
 from .decorators import jit, declare_device
 from .api import *
 from .api import _auto_device
-
-from .kernels import reduction
-reduce = Reduce = reduction.Reduce
+from .args import In, Out, InOut
 
 from .intrinsic_wrapper import (all_sync, any_sync, eq_sync, ballot_sync,
                                 shfl_sync, shfl_up_sync, shfl_down_sync,
                                 shfl_xor_sync)
+
+from .kernels import reduction
+
+reduce = Reduce = reduction.Reduce
 
 
 def is_available():
@@ -47,9 +49,11 @@ def is_available():
 
     return driver_is_available and nvvm.is_available()
 
+
 def cuda_error():
     """Returns None or an exception if the CUDA driver fails to initialize.
     """
     return driver.driver.initialization_error
+
 
 initialize.initialize_all()
