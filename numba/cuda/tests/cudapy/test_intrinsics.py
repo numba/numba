@@ -422,7 +422,6 @@ class TestCudaIntrinsic(CUDATestCase):
                                         prec='single')
 
     def test_round_to_f4_halfway(self):
-        # Presently not passing
         compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
         ary = np.zeros(1, dtype=np.float32)
         # Value chosen to trigger the "round to even" branch of the
@@ -463,7 +462,6 @@ class TestCudaIntrinsic(CUDATestCase):
         ndigits = 3
         compiled[1, 1](ary, val, ndigits)
         self.assertPreciseEqual(ary[0], round(val, ndigits), prec='double')
-
 
 
 if __name__ == '__main__':
