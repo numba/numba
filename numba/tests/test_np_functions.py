@@ -2219,6 +2219,18 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             yield a, (1,)
             yield a, (np.int32(4), 10)
 
+            a = np.array([])
+            yield a, 1
+            yield a, 2
+            yield a, (2, 3), 0
+            yield a, 1, 0
+
+            a = np.array([[]])
+            yield a, 1
+            yield a, (2, 3), 1
+            yield a, 1, 0
+            yield a, 1, 1
+
         for args in args_variations():
             expected = pyfunc(*args)
             got = cfunc(*args)

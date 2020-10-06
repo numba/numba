@@ -5042,8 +5042,12 @@ def np_split(ary, indices_or_sections, axis=0):
                 raise ValueError(
                     "array split does not result in an equal division"
                 )
+            indices = np.cumsum(np.array(
+                [l + 1] * rem +
+                [l] * (indices_or_sections - rem - 1)
+            ))
             return np.array_split(
-                ary, np.arange(l, ary.shape[axis], l), axis=axis
+                ary, indices, axis=axis
             )
 
         return impl
