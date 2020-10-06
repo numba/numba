@@ -81,10 +81,10 @@ _is_armv7l = platform.machine() == 'armv7l'
 
 disabled_test = unittest.skipIf(True, 'Test disabled')
 
-# See issue #4026, PPC64LE LLVM bug
-skip_ppc64le_issue4026 = unittest.skipIf(platform.machine() == 'ppc64le',
-                                         ("Hits: 'LLVM Invalid PPC CTR Loop! "
-                                          "UNREACHABLE executed' bug"))
+# See issue #4563, PPC64LE LLVM bug
+skip_ppc64le_issue4563 = unittest.skipIf(platform.machine() == 'ppc64le',
+                                         ("Hits: 'Parameter area must exist "
+                                          "to pass an argument in memory'"))
 
 try:
     import scipy.linalg.cython_lapack
@@ -123,9 +123,9 @@ class CompilationCache(object):
         from numba.core.registry import cpu_target
 
         cache_key = (func, args, return_type, flags)
-        try:
+        if cache_key in self.cr_cache:
             cr = self.cr_cache[cache_key]
-        except KeyError:
+        else:
             # Register the contexts in case for nested @jit or @overload calls
             # (same as compile_isolated())
             with cpu_target.nested_context(self.typingctx, self.targetctx):
@@ -204,7 +204,7 @@ class TestCase(unittest.TestCase):
 
 
     _bool_types = (bool, np.bool_)
-    _exact_typesets = [_bool_types, utils.INT_TYPES, (str,), (np.integer,),
+    _exact_typesets = [_bool_types, (int,), (str,), (np.integer,),
                        (bytes, np.bytes_)]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple, list)]

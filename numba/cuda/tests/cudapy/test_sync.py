@@ -70,7 +70,6 @@ def use_syncthreads_or(ary_in, ary_out):
     ary_out[i] = cuda.syncthreads_or(ary_in[i])
 
 
-
 class TestCudaSync(CUDATestCase):
     def test_useless_sync(self):
         compiled = cuda.jit("void(int32[::1])")(useless_sync)

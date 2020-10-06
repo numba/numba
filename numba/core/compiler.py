@@ -31,7 +31,7 @@ from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
                                      InlineOverloads, PreLowerStripPhis)
 
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
-                                           ObjectModeBackEnd, CompileInterpMode)
+                                           ObjectModeBackEnd)
 
 
 class Flags(utils.ConfigOptions):
@@ -83,7 +83,6 @@ CR_FIELDS = ["typing_context",
              "objectmode",
              "lifted",
              "fndesc",
-             "interpmode",
              "library",
              "call_helper",
              "environment",
@@ -115,8 +114,8 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
         # Include all referenced environments
         referenced_envs = self._find_referenced_environments()
         return (libdata, self.fndesc, self.environment, self.signature,
-                self.objectmode, self.interpmode, self.lifted, typeann,
-                self.reload_init, tuple(referenced_envs))
+                self.objectmode, self.lifted, typeann, self.reload_init,
+                tuple(referenced_envs))
 
     def _find_referenced_environments(self):
         """Returns a list of referenced environments
@@ -135,7 +134,7 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
 
     @classmethod
     def _rebuild(cls, target_context, libdata, fndesc, env,
-                 signature, objectmode, interpmode, lifted, typeann,
+                 signature, objectmode, lifted, typeann,
                  reload_init, referenced_envs):
         if reload_init:
             # Re-run all
@@ -153,7 +152,6 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  type_annotation=typeann,
                  signature=signature,
                  objectmode=objectmode,
-                 interpmode=interpmode,
                  lifted=lifted,
                  typing_error=None,
                  call_helper=None,
@@ -240,12 +238,11 @@ class _CompileStatus(object):
     """
     Describes the state of compilation. Used like a C record.
     """
-    __slots__ = ['fail_reason', 'can_fallback', 'can_giveup']
+    __slots__ = ['fail_reason', 'can_fallback']
 
-    def __init__(self, can_fallback, can_giveup):
+    def __init__(self, can_fallback):
         self.fail_reason = None
         self.can_fallback = can_fallback
-        self.can_giveup = can_giveup
 
     def __repr__(self):
         vals = []
@@ -343,20 +340,12 @@ class CompilerBase(object):
             self.state.parfor_diagnostics
 
         self.state.status = _CompileStatus(
-            can_fallback=self.state.flags.enable_pyobject,
-            can_giveup=config.COMPATIBILITY_MODE
+            can_fallback=self.state.flags.enable_pyobject
         )
 
     def compile_extra(self, func):
         self.state.func_id = bytecode.FunctionIdentity.from_function(func)
-        try:
-            ExtractByteCode().run_pass(self.state)
-        except Exception as e:
-            if self.state.status.can_giveup:
-                CompileInterpMode().run_pass(self.state)
-                return self.state.cr
-            else:
-                raise e
+        ExtractByteCode().run_pass(self.state)
 
         self.state.lifted = ()
         self.state.lifted_from = None
@@ -444,10 +433,6 @@ class Compiler(CompilerBase):
         if self.state.status.can_fallback or self.state.flags.force_pyobject:
             pms.append(
                 DefaultPassBuilder.define_objectmode_pipeline(self.state)
-            )
-        if self.state.status.can_giveup:
-            pms.append(
-                DefaultPassBuilder.define_interpreted_pipeline(self.state)
             )
         return pms
 
@@ -584,16 +569,6 @@ class DefaultPassBuilder(object):
         pm.add_pass(AnnotateTypes, "annotate types")
         pm.add_pass(IRLegalization, "ensure IR is legal prior to lowering")
         pm.add_pass(ObjectModeBackEnd, "object mode backend")
-        pm.finalize()
-        return pm
-
-    @staticmethod
-    def define_interpreted_pipeline(state, name="interpreted"):
-        """Returns an interpreted mode pipeline based PassManager
-        """
-        pm = PassManager(name)
-        pm.add_pass(CompileInterpMode,
-                    "compiling with interpreter mode")
         pm.finalize()
         return pm
 
