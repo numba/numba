@@ -123,7 +123,8 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 @require_context
 def managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
                   attach_global=True):
-    """managed_array(shape, dtype=np.float, strides=None, order='C', stream=0, attach_global=True)
+    """managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+                     attach_global=True)
 
     Allocate a np.ndarray with a buffer that is managed.
     Similar to np.empty().
@@ -140,7 +141,7 @@ def managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
     buffer = current_context().memallocmanaged(bytesize,
                                                attach_global=attach_global)
     npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
-                      buffer=buffer)
+                       buffer=buffer)
     managedview = np.ndarray.view(npary, type=devicearray.ManagedNDArray)
     managedview.device_setup(buffer, stream=stream)
     return managedview

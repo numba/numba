@@ -1769,11 +1769,11 @@ class ManagedMemory(AutoFreePointer):
     :type pointer: ctypes.c_void_p
     :param size: The size of the buffer in bytes.
     :type size: int
-    :param owner: The owner is sometimes set by the internals of this class, or used for
-                  Numba's internal memory management. It should not be provided
-                  by an external user of the ``ManagedMemory`` class (e.g. from
-                  within an EMM Plugin); the default of `None` should always
-                  suffice.
+    :param owner: The owner is sometimes set by the internals of this class, or
+                  used for Numba's internal memory management. It should not be
+                  provided by an external user of the ``ManagedMemory`` class
+                  (e.g. from within an EMM Plugin); the default of `None`
+                  should always suffice.
     :type owner: NoneType
     :param finalizer: A function that is called when the buffer is to be freed.
     :type finalizer: function
