@@ -7,6 +7,7 @@ import math
 from collections import namedtuple
 from enum import IntEnum
 from functools import partial
+import operator
 
 import numpy as np
 
@@ -3303,6 +3304,20 @@ def np_imag(a):
 
 #----------------------------------------------------------------------------
 # Misc functions
+
+@overload(operator.contains)
+def np_contains(arr, key):
+    if not isinstance(arr, types.Array):
+        return
+
+    def np_contains_impl(arr, key):
+        for x in np.nditer(arr):
+            if x == key:
+                return True
+        return False
+
+    return np_contains_impl
+
 
 @overload(np.count_nonzero)
 def np_count_nonzero(arr, axis=None):

@@ -1,6 +1,6 @@
 import numpy as np
 import re
-from numba import cuda, int32, float32
+from numba import cuda
 from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
@@ -176,8 +176,9 @@ class TestCudaIntrinsic(CUDATestCase):
 
     @skip_on_cudasim('Tests PTX emission')
     def test_selp(self):
-        cu_branching_with_ifs = cuda.jit('void(i8[:], i8, i8[:])')(branching_with_ifs)
-        cu_branching_with_selps = cuda.jit('void(i8[:], i8, i8[:])')(branching_with_selps)
+        sig = 'void(i8[:], i8, i8[:])'
+        cu_branching_with_ifs = cuda.jit(sig)(branching_with_ifs)
+        cu_branching_with_selps = cuda.jit(sig)(branching_with_selps)
 
         n = 32
         b = 6
@@ -303,7 +304,8 @@ class TestCudaIntrinsic(CUDATestCase):
 
     def test_clz_u4(self):
         """
-        Although the CUDA Math API (http://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html)
+        Although the CUDA Math API
+        (http://docs.nvidia.com/cuda/cuda-math-api/group__CUDA__MATH__INTRINSIC__INT.html)
         only says int32 & int64 arguments are supported in C code, the LLVM
         IR input supports i8, i16, i32 & i64 (LLVM doesn't have a concept of
         unsigned integers, just unsigned operations on integers).
@@ -367,9 +369,9 @@ class TestCudaIntrinsic(CUDATestCase):
     def test_simple_laneid(self):
         compiled = cuda.jit("void(int32[:])")(simple_laneid)
         count = 2
-        ary = np.zeros(count*32, dtype=np.int32)
+        ary = np.zeros(count * 32, dtype=np.int32)
         exp = np.tile(np.arange(32, dtype=np.int32), count)
-        compiled[1, count*32](ary)
+        compiled[1, count * 32](ary)
         self.assertTrue(np.all(ary == exp))
 
     def test_simple_warpsize(self):
