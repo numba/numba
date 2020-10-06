@@ -22,7 +22,7 @@ class TestParforMessage(DPPLTestCase):
         jitted = njit(parallel={'offload':True})(prange_example)
 
         with captured_stdout() as got:
-            with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+            with dpctl.device_context("opencl:gpu") as gpu_queue:
                 jitted()
 
         self.assertTrue('Parfor lowered on DPPL-device' in got.getvalue())
