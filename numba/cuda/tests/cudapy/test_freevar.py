@@ -13,6 +13,7 @@ class TestFreeVar(CUDATestCase):
 
         size = 1024
         nbtype = float32
+
         @cuda.jit("(float32[::1], intp)")
         def foo(A, i):
             "Dummy function"

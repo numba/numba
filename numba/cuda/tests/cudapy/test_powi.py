@@ -122,4 +122,3 @@ class TestCudaPowi(CUDATestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
