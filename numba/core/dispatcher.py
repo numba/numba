@@ -984,7 +984,8 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             args, return_type = sigutils.normalize_signature(sig)
 
             # for objmode we should have ffi_forced_objects as args
-            # also there is probably no benefit in rewrites passes, so turn them off
+            # and no_rewrites flag can be set to avoid recompilation with and
+            # without rewrites in compile_ir
             if isinstance(self, ObjModeLiftedWith):
                 args = [types.ffi_forced_object] * len(args)
                 flags.no_rewrites = True

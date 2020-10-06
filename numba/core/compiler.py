@@ -611,12 +611,6 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
     For internal use only.
     """
 
-    def compile_local(the_ir, the_flags):
-        pipeline = pipeline_class(typingctx, targetctx, library,
-                                  args, return_type, the_flags, locals)
-        return pipeline.compile_ir(func_ir=the_ir, lifted=lifted,
-                                   lifted_from=lifted_from)
-
     # This is a special branch that should only run on IR from a lifted loop
     if is_lifted_loop:
         # This code is pessimistic and costly, but it is a not often trodden
@@ -627,35 +621,49 @@ def compile_ir(typingctx, targetctx, func_ir, args, return_type, flags,
         # cannot compile it. As a result the following approach is taken:
         # 1. Create some new flags that copy the original ones but switch
         #    off rewrites.
-        # 2. If rewrites are on in original flags try to compile with a copy of
-        #    func_ir and original flags (with possibly IR being rewritten)
-        #    ignoring compile exceptions
-        # 3. If above succeeded and we have compile result return it
-        # 4. Othwerise try and compile another compile result with rewrites off
-        #    and propagating exceptions up the stack.
+        # 2. Compile with 1. to get a compile result
+        # 3. Try and compile another compile result but this time with the
+        #    original flags (and IR being rewritten).
+        # 4. If 3 was successful, use the result, else use 2.
 
+        # create flags with no rewrites
         norw_flags = copy.deepcopy(flags)
         norw_flags.no_rewrites = True
 
+        def compile_local(the_ir, the_flags):
+            pipeline = pipeline_class(typingctx, targetctx, library,
+                                      args, return_type, the_flags, locals)
+            return pipeline.compile_ir(func_ir=the_ir, lifted=lifted,
+                                       lifted_from=lifted_from)
+
+        # compile with rewrites off, IR shouldn't be mutated irreparably
+        norw_cres = compile_local(func_ir.copy(), norw_flags)
+
+        # try and compile with rewrites on if no_rewrites was not set in the
+        # original flags, IR might get broken but we've got a CompileResult
+        # that's usable from above.
         rw_cres = None
         if not flags.no_rewrites:
-            try:
-                rw_cres = compile_local(func_ir.copy(), flags)
-            except Exception:
-                pass
-
+            # Suppress warnings in compilation retry
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", errors.NumbaWarning)
+                try:
+                    rw_cres = compile_local(func_ir.copy(), flags)
+                except Exception:
+                    pass
+        # if the rewrite variant of compilation worked, use it, else use
+        # the norewrites backup
         if rw_cres is not None:
-            return rw_cres
-
-        # Suppress warnings in compilation retry
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", errors.NumbaWarning)
-            norw_cres = compile_local(func_ir.copy(), norw_flags)
-
-        return norw_cres
+            cres = rw_cres
+        else:
+            cres = norw_cres
+        return cres
 
     else:
-        return compile_local(func_ir, flags)
+        pipeline = pipeline_class(typingctx, targetctx, library,
+                                  args, return_type, flags, locals)
+        return pipeline.compile_ir(func_ir=func_ir, lifted=lifted,
+                                   lifted_from=lifted_from)
 
 
 def compile_internal(typingctx, targetctx, library,
