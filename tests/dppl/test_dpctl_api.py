@@ -10,7 +10,7 @@ import dpctl
 @unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestDPCTLAPI(DPPLTestCase):
     def test_dpctl_api(self):
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dpctl.dump()
             dpctl.get_current_queue()
             dpctl.get_num_platforms()

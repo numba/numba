@@ -42,7 +42,7 @@ def sum_reduction_device_plus_host():
     partial_sums = np.zeros(nb_work_groups).astype(np.int32)
 
     if dpctl.has_gpu_queues():
-        with dpctl.device_context(dpctl.device_type.gpu, 0) as gpu_queue:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             print("Running Device + Host reduction")
             sum_reduction_kernel[global_size, work_group_size](inp, partial_sums)
     else:
