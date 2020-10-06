@@ -15,8 +15,6 @@ from numba.dppl import target
 from . import stubs
 from numba.dppl.codegen import SPIR_DATA_LAYOUT
 
-import dppl.ocldrv as driver
-
 
 registry = Registry()
 lower = registry.lower
@@ -61,7 +59,6 @@ def _declare_function(context, builder, name, sig, cargs,
     fn = mod.get_or_insert_function(fnty, mangled)
     fn.calling_convention = target.CC_SPIR_FUNC
     return fn
-
 
 @lower(stubs.get_global_id, types.uint32)
 def get_global_id_impl(context, builder, sig, args):
@@ -179,8 +176,9 @@ def insert_and_call_atomic_fn(context, builder, sig, fn_type,
             raise TypeError("Operation type is not supported %s" %
                              (fn_type))
     elif dtype.name == "int64" or dtype.name == "uint64":
-        device_env = driver.runtime.get_current_device()
-        if device_env.device_support_int64_atomics():
+        # dpctl needs to expose same functions()
+        #if device_env.device_support_int64_atomics():
+        if True:
             ll_val = ir.IntType(64)
             ll_p = ll_val.as_pointer()
             if fn_type == "add":
@@ -190,9 +188,9 @@ def insert_and_call_atomic_fn(context, builder, sig, fn_type,
             else:
                 raise TypeError("Operation type is not supported %s" %
                                  (fn_type))
-        else:
-            raise TypeError("Current device does not support atomic " +
-                             "operations on 64-bit Integer")
+        #else:
+        #    raise TypeError("Current device does not support atomic " +
+        #                     "operations on 64-bit Integer")
     elif dtype.name == "float32":
         ll_val = ir.FloatType()
         ll_p = ll_val.as_pointer()
@@ -204,8 +202,9 @@ def insert_and_call_atomic_fn(context, builder, sig, fn_type,
             raise TypeError("Operation type is not supported %s" %
                              (fn_type))
     elif dtype.name == "float64":
-        device_env = driver.runtime.get_current_device()
-        if device_env.device_support_float64_atomics():
+        #if device_env.device_support_float64_atomics():
+        # dpctl needs to expose same functions()
+        if True:
             ll_val = ir.DoubleType()
             ll_p = ll_val.as_pointer()
             if fn_type == "add":
@@ -215,9 +214,9 @@ def insert_and_call_atomic_fn(context, builder, sig, fn_type,
             else:
                 raise TypeError("Operation type is not supported %s" %
                                  (fn_type))
-        else:
-            raise TypeError("Current device does not support atomic " +
-                            "operations on 64-bit Float")
+        #else:
+        #    raise TypeError("Current device does not support atomic " +
+        #                    "operations on 64-bit Float")
     else:
         raise TypeError("Atomic operation is not supported for type %s" %
                         (dtype.name))

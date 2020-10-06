@@ -1,5 +1,6 @@
 import sys
 import multiprocessing as mp
+import itertools
 import traceback
 import pickle
 
@@ -7,7 +8,8 @@ import numpy as np
 
 from numba import cuda
 from numba.cuda.cudadrv import drvapi, devicearray
-from numba.cuda.testing import skip_on_cudasim, ContextResettingTestCase
+from numba.cuda.testing import (skip_on_cudasim, skip_under_cuda_memcheck,
+                                ContextResettingTestCase, ForeignArray)
 from numba.tests.support import linux_only
 import unittest
 
@@ -80,6 +82,7 @@ def ipc_array_test(ipcarr, result_queue):
 
 
 @linux_only
+@skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcMemory(ContextResettingTestCase):
@@ -109,12 +112,22 @@ class TestIpcMemory(ContextResettingTestCase):
             np.testing.assert_equal(arr, out)
         proc.join(3)
 
-    def check_ipc_handle_serialization(self, index_arg=None):
+    def variants(self):
+        # Test with no slicing and various different slices
+        indices = (None, slice(3, None), slice(3, 8), slice(None, 8))
+        # Test with a Numba DeviceNDArray, or an array from elsewhere through
+        # the CUDA Array Interface
+        foreigns = (False, True)
+        return itertools.product(indices, foreigns)
+
+    def check_ipc_handle_serialization(self, index_arg=None, foreign=False):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
         devarr = cuda.to_device(arr)
         if index_arg is not None:
             devarr = devarr[index_arg]
+        if foreign:
+            devarr = cuda.as_cuda_array(ForeignArray(devarr))
         expect = devarr.copy_to_host()
 
         # create IPC handle
@@ -142,20 +155,19 @@ class TestIpcMemory(ContextResettingTestCase):
         proc.join(3)
 
     def test_ipc_handle_serialization(self):
-        # test no slicing
-        self.check_ipc_handle_serialization()
-        # slicing tests
-        self.check_ipc_handle_serialization(slice(3, None))
-        self.check_ipc_handle_serialization(slice(3, 8))
-        self.check_ipc_handle_serialization(slice(None, 8))
+        for index, foreign, in self.variants():
+            with self.subTest(index=index, foreign=foreign):
+                self.check_ipc_handle_serialization(index, foreign)
 
-    def check_ipc_array(self, index_arg=None):
+    def check_ipc_array(self, index_arg=None, foreign=False):
         # prepare data for IPC
         arr = np.arange(10, dtype=np.intp)
         devarr = cuda.to_device(arr)
         # Slice
         if index_arg is not None:
             devarr = devarr[index_arg]
+        if foreign:
+            devarr = cuda.as_cuda_array(ForeignArray(devarr))
         expect = devarr.copy_to_host()
         ipch = devarr.get_ipc_handle()
 
@@ -173,12 +185,10 @@ class TestIpcMemory(ContextResettingTestCase):
         proc.join(3)
 
     def test_ipc_array(self):
-        # test no slicing
-        self.check_ipc_array()
-        # slicing tests
-        self.check_ipc_array(slice(3, None))
-        self.check_ipc_array(slice(3, 8))
-        self.check_ipc_array(slice(None, 8))
+        for index, foreign, in self.variants():
+            with self.subTest(index=index, foreign=foreign):
+                self.check_ipc_array(index, foreign)
+
 
 @unittest.skipIf(linux, 'Only on OS other than Linux')
 @skip_on_cudasim('Ipc not available in CUDASIM')
@@ -235,6 +245,7 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
 
 
 @linux_only
+@skip_under_cuda_memcheck('Hangs cuda-memcheck')
 @unittest.skipUnless(has_mp_get_context, "requires multiprocessing.get_context")
 @skip_on_cudasim('Ipc not available in CUDASIM')
 class TestIpcStaged(ContextResettingTestCase):

@@ -355,13 +355,14 @@ class List(MutableSequence):
         return _pop(self, i)
 
     def extend(self, iterable):
+        # Empty iterable, do nothing
+        if len(iterable) == 0:
+            return self
         if not self._typed:
             # Need to get the first element of the iterable to initialise the
             # type of the list. FIXME: this may be a problem if the iterable
             # can not be sliced.
             self._initialise_list(iterable[0])
-            self.append(iterable[0])
-            return _extend(self, iterable[1:])
         return _extend(self, iterable)
 
     def remove(self, item):
@@ -435,11 +436,18 @@ def box_lsttype(typ, val, c):
 
     lsttype_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ))
 
-    res = c.pyapi.call_function_objargs(fmp_fn, (boxed_meminfo, lsttype_obj))
-    c.pyapi.decref(fmp_fn)
-    c.pyapi.decref(typedlist_mod)
-    c.pyapi.decref(boxed_meminfo)
-    return res
+    result_var = builder.alloca(c.pyapi.pyobj)
+    builder.store(cgutils.get_null_value(c.pyapi.pyobj), result_var)
+
+    with builder.if_then(cgutils.is_not_null(builder, lsttype_obj)):
+        res = c.pyapi.call_function_objargs(
+            fmp_fn, (boxed_meminfo, lsttype_obj),
+        )
+        c.pyapi.decref(fmp_fn)
+        c.pyapi.decref(typedlist_mod)
+        c.pyapi.decref(boxed_meminfo)
+        builder.store(res, result_var)
+    return builder.load(result_var)
 
 
 @unbox(types.ListType)
@@ -481,7 +489,7 @@ def _guess_dtype(iterable):
             "List() argument must be iterable")
     # Special case for nested NumPy arrays.
     elif isinstance(iterable, types.Array) and iterable.ndim > 1:
-        return iterable.copy(ndim=iterable.ndim - 1)
+        return iterable.copy(ndim=iterable.ndim - 1, layout='A')
     elif hasattr(iterable, "dtype"):
         return iterable.dtype
     elif hasattr(iterable, "yield_type"):

@@ -103,5 +103,6 @@ class ArrayIterator(SimpleIteratorType):
         elif nd == 1:
             yield_type = array_type.dtype
         else:
-            yield_type = array_type.copy(ndim=array_type.ndim - 1)
+            # iteration semantics leads to A order layout
+            yield_type = array_type.copy(ndim=array_type.ndim - 1, layout='A')
         super(ArrayIterator, self).__init__(name, yield_type)

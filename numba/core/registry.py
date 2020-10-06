@@ -2,6 +2,7 @@ import contextlib
 
 from numba.core.descriptors import TargetDescriptor
 from numba.core import utils, typing, dispatcher, cpu
+from numba.core.compiler_lock import global_compiler_lock
 
 # -----------------------------------------------------------------------------
 # Default CPU target descriptors
@@ -26,16 +27,19 @@ class CPUTarget(TargetDescriptor):
     _nested = _NestedContext()
 
     @utils.cached_property
+    @global_compiler_lock
     def _toplevel_target_context(self):
         # Lazily-initialized top-level target context, for all threads
         return cpu.CPUContext(self.typing_context)
 
     @utils.cached_property
+    @global_compiler_lock
     def _toplevel_typing_context(self):
         # Lazily-initialized top-level typing context, for all threads
         return typing.Context()
 
     @property
+    @global_compiler_lock
     def target_context(self):
         """
         The target context for CPU targets.
@@ -47,6 +51,7 @@ class CPUTarget(TargetDescriptor):
             return self._toplevel_target_context
 
     @property
+    @global_compiler_lock
     def typing_context(self):
         """
         The typing context for CPU targets.
@@ -57,6 +62,7 @@ class CPUTarget(TargetDescriptor):
         else:
             return self._toplevel_typing_context
 
+    @global_compiler_lock
     def nested_context(self, typing_context, target_context):
         """
         A context manager temporarily replacing the contexts with the

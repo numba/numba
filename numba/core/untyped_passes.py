@@ -203,6 +203,7 @@ class InlineClosureLikes(FunctionPass):
             state.parfor_diagnostics.replaced_fns,
             typed_pass)
         inline_pass.run()
+
         # Remove all Dels, and re-run postproc
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run()
@@ -288,6 +289,16 @@ class InlineInlinables(FunctionPass):
             print('before inline'.center(80, '-'))
             print(state.func_ir.dump())
             print(''.center(80, '-'))
+
+        from numba.core.inline_closurecall import (InlineWorker,
+                                                   callee_ir_validator)
+        inline_worker = InlineWorker(state.typingctx,
+                                     state.targetctx,
+                                     state.locals,
+                                     state.pipeline,
+                                     state.flags,
+                                     validator=callee_ir_validator)
+
         modified = False
         # use a work list, look for call sites via `ir.Expr.op == call` and
         # then pass these to `self._do_work` to make decisions about inlining.
@@ -299,13 +310,18 @@ class InlineInlinables(FunctionPass):
                     expr = instr.value
                     if isinstance(expr, ir.Expr) and expr.op == 'call':
                         if guard(self._do_work, state, work_list, block, i,
-                                 expr):
+                                 expr, inline_worker):
                             modified = True
                             break  # because block structure changed
 
         if modified:
             # clean up unconditional branches that appear due to inlined
             # functions introducing blocks
+            cfg = compute_cfg_from_blocks(state.func_ir.blocks)
+            for dead in cfg.dead_nodes():
+                del state.func_ir.blocks[dead]
+            post_proc = postproc.PostProcessor(state.func_ir)
+            post_proc.run()
             state.func_ir.blocks = simplify_CFG(state.func_ir.blocks)
 
         if self._DEBUG:
@@ -314,9 +330,7 @@ class InlineInlinables(FunctionPass):
             print(''.center(80, '-'))
         return True
 
-    def _do_work(self, state, work_list, block, i, expr):
-        from numba.core.inline_closurecall import (inline_closure_call,
-                                                   callee_ir_validator)
+    def _do_work(self, state, work_list, block, i, expr, inline_worker):
         from numba.core.compiler import run_frontend
         from numba.core.cpu import InlineOptions
 
@@ -373,12 +387,12 @@ class InlineInlinables(FunctionPass):
                                                     py_func_ir)
                         # if do_inline is True then inline!
                         if do_inline:
-                            inline_closure_call(
-                                state.func_ir,
-                                pyfunc.__globals__,
-                                block, i, pyfunc,
-                                work_list=work_list,
-                                callee_validator=callee_ir_validator)
+                            _, _, _, new_blocks = \
+                                inline_worker.inline_function(state.func_ir,
+                                                              block, i, pyfunc,)
+                            if work_list is not None:
+                                for blk in new_blocks:
+                                    work_list.append(blk)
                             return True
         return False
 
@@ -603,7 +617,7 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
     """
     _name = "transform_literal_unroll_const_list_to_tuple"
 
-    _accepted_types = (types.BaseTuple,)
+    _accepted_types = (types.BaseTuple, types.LiteralList)
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -726,7 +740,7 @@ class MixedContainerUnroller(FunctionPass):
 
     _DEBUG = False
 
-    _accepted_types = (types.BaseTuple,)
+    _accepted_types = (types.BaseTuple, types.LiteralList)
 
     def __init__(self):
         FunctionPass.__init__(self)
@@ -1250,7 +1264,7 @@ class IterLoopCanonicalization(FunctionPass):
     _DEBUG = False
 
     # if partial typing info is available it will only look at these types
-    _accepted_types = (types.BaseTuple,)
+    _accepted_types = (types.BaseTuple, types.LiteralList)
     _accepted_calls = (literal_unroll,)
 
     def __init__(self):
@@ -1493,6 +1507,12 @@ class ReconstructSSA(FunctionPass):
         # example generator_info
         post_proc = postproc.PostProcessor(state.func_ir)
         post_proc.run(emit_dels=False)
+
+        if config.DEBUG or config.DUMP_SSA:
+            name = state.func_ir.func_id.func_qualname
+            print(f"SSA IR DUMP: {name}".center(80, "-"))
+            state.func_ir.dump()
+
         return True      # XXX detect if it actually got changed
 
     def _patch_locals(self, state):

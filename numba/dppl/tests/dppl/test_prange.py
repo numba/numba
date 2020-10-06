@@ -8,8 +8,6 @@ from numba import dppl, njit, prange
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
 
-import dppl.ocldrv as ocldrv
-
 
 class TestPrange(DPPLTestCase):
     def test_one_prange(self):

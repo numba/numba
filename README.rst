@@ -1,6 +1,5 @@
-
-DPPL
-====
+Numba with PyDPPL
+=================
 
 ========
 1. What?
@@ -29,7 +28,9 @@ Note. To use the GPU users should be added to "video" user group on Linux system
 The following requisites will need to be present in the system. Refer to next section for more details.
 *******************************************************************************************************
 
-- NUMBA v0.48          : The DPPL backend has only been tested for NUMBA v0.48. The included install script downloads and applies the DDPy patch to the correct NUMBA version.
+- NUMBA v0.51          : The DPPL backend has only been tested for NUMBA v0.51.
+                         The included install script downloads and applies
+                         the DPPy patch to the correct NUMBA version.
 
 - LLVM-SPIRV translator: Used for SPIRV generation from LLVM IR.
 
@@ -41,38 +42,27 @@ The following requisites will need to be present in the system. Refer to next se
 3. How to install?
 ==================
 Install Pre-requisites
-*************************
-Make sure the dependencies of NUMBA-DPPL are installed in the system, for convenience
-and to make sure the dependencies are installed with consistent version of LLVM we provide
-installation script that will create a CONDA environment and install LLVM-SPIRV translator,
-SPIRV-Tools and llvmlite in that environment. **To use this CONDA has to be available in the system**.
+**********************
+Make sure the following dependencies of NUMBA-PyDPPL are installed
+in your conda environemtn:
 
-The above mentioned installation script can be found `here <https://github.intel.com/SAT/numba-dppl-build-scripts>`_. Please follow the README to run the installation script.
+- llvmlite =0.33
+- spirv-tools
+- llvm-spirv
+- llvmdev
+- dpCtl =0.3
 
-After successful installation the following message should be displayed:
+Make sure the dependencies are installed with consistent version of LLVM 10.
 
-    | #
-    | # Use the following to activate the correct environment
-    | #
-    | # `    $ ``conda activate numba-dppl-env`` `
-    | #
-    | #  Use the following to deactivate environment
-    | #
-    | # `    $ ``conda deactivate`` `
-
-The installer script creates a new conda environment called numba-dppl-env with
-all the needed dependencies already installed. **Please activate the numba-dppl-env before proceeding**.
-
-
-Install DPPL backend
-***********************
-NUMBA-DPPL also depend on DPPL backend. It can be found `here <https://github.com/IntelPython/PyDPPL>`_. Please run
-`build_for_develop.sh` to install DPPL backend.
-
-Install NUMBA-DPPL
+Install dpCtl backend
 *********************
-After all the dependencies are installed please run ``build_for_develop.sh`` to get a local installation of NUMBA-DPPL. **Both step 2 and 3 assumes CONDA environment with
-the dependencies of NUMBA-DPPL installed in it, was activated**.
+NUMBA-PyDPPL also depend on dpCtl backend. It can be found `here <https://github.com/IntelPython/dpCtl>`_.
+Please install dpCtl from package.
+
+Install NUMBA-PyDPPL
+********************
+After all the dependencies are installed please run ``build_for_develop.sh``
+to get a local installation of NUMBA-PyDPPL.
 
 ================
 4. Running tests
@@ -81,11 +71,13 @@ the dependencies of NUMBA-DPPL installed in it, was activated**.
 To make sure the installation was successful, try running the examples and the
 test suite:
 
-    $PATH_TO_NUMBA-DPPL/numba/dppl/examples/
+    $PATH_TO_NUMBA-PyDPPL/numba/dppl/examples/
 
 To run the test suite execute the following:
 
-    $ ``python -m numba.runtests numba.dppl.tests``
+.. code-block:: bash
+
+    python -m numba.runtests numba.dppl.tests
 
 ===========================
 5. How Tos and Known Issues
@@ -94,11 +86,12 @@ To run the test suite execute the following:
 Refer the HowTo.rst guide for an overview of the programming semantics,
 examples, supported functionalities, and known issues.
 
-*Installing while Intel OneAPI basekit is actvated have shown to throw error while installation of NUMBA-DPPL because of incompatible TBB interface, one way around that is to temporaily move env variable TBBROOT to something else*
-
+* Installing while Intel OneAPI basekit is actvated have shown to throw error
+while installation of NUMBA-PyDPPL because of incompatible TBB interface,
+one way around that is to temporaily move env variable TBBROOT to something else*
 
 ===================
 6. Reporting issues
 ===================
 
-Please email diptorup.deb@intel.com to report issues and bugs.
+Please use https://github.com/IntelPython/numba/issues to report issues and bugs.

@@ -1,17 +1,18 @@
 """
 This scripts specifies all PTX special objects.
 """
-import operator
-import numpy
+import functools
 import llvmlite.llvmpy.core as lc
+import operator
 from numba.core.rewrites.macros import Macro
 from numba.core import types, typing, ir
 from .cudadrv import nvvm
 
 
 class Stub(object):
-    '''A stub object to represent special objects which is meaningless
-    outside the context of CUDA-python.
+    '''
+    A stub object to represent special objects that are meaningless
+    outside the context of a CUDA kernel
     '''
     _description_ = '<ptx special value>'
     __slots__ = () # don't allocate __dict__
@@ -22,115 +23,115 @@ class Stub(object):
     def __repr__(self):
         return self._description_
 
-#-------------------------------------------------------------------------------
-# SREG
 
-SREG_SIGNATURE = typing.signature(types.int32)
-
-
-class threadIdx(Stub):
+def stub_function(fn):
     '''
-    The thread indices in the current thread block, accessed through the
-    attributes ``x``, ``y``, and ``z``. Each index is an integer spanning the
-    range from 0 inclusive to the corresponding value of the attribute in
-    :attr:`numba.cuda.blockDim` exclusive.
+    A stub function to represent special functions that are meaningless
+    outside the context of a CUDA kernel
+    '''
+    @functools.wraps(fn)
+    def wrapped(*args, **kwargs):
+        raise NotImplementedError("%s cannot be called from host code" % fn)
+    return wrapped
+
+
+#-------------------------------------------------------------------------------
+# Thread and grid indices and dimensions
+
+
+class Dim3(Stub):
+    '''A triple, (x, y, z)'''
+    _description_ = '<Dim3>'
+
+    @property
+    def x(self):
+        pass
+
+    @property
+    def y(self):
+        pass
+
+    @property
+    def z(self):
+        pass
+
+
+class threadIdx(Dim3):
+    '''
+    The thread indices in the current thread block. Each index is an integer
+    spanning the range from 0 inclusive to the corresponding value of the
+    attribute in :attr:`numba.cuda.blockDim` exclusive.
     '''
     _description_ = '<threadIdx.{x,y,z}>'
 
-    x = Macro('tid.x', SREG_SIGNATURE)
-    y = Macro('tid.y', SREG_SIGNATURE)
-    z = Macro('tid.z', SREG_SIGNATURE)
 
-
-class blockIdx(Stub):
+class blockIdx(Dim3):
     '''
-    The block indices in the grid of thread blocks, accessed through the
-    attributes ``x``, ``y``, and ``z``. Each index is an integer spanning the
-    range from 0 inclusive to the corresponding value of the attribute in
-    :attr:`numba.cuda.gridDim` exclusive.
+    The block indices in the grid of thread blocks. Each index is an integer
+    spanning the range from 0 inclusive to the corresponding value of the
+    attribute in :attr:`numba.cuda.gridDim` exclusive.
     '''
     _description_ = '<blockIdx.{x,y,z}>'
 
-    x = Macro('ctaid.x', SREG_SIGNATURE)
-    y = Macro('ctaid.y', SREG_SIGNATURE)
-    z = Macro('ctaid.z', SREG_SIGNATURE)
 
-
-class blockDim(Stub):
+class blockDim(Dim3):
     '''
-    The shape of a block of threads, as declared when instantiating the
-    kernel.  This value is the same for all threads in a given kernel, even
-    if they belong to different blocks (i.e. each block is "full").
+    The shape of a block of threads, as declared when instantiating the kernel.
+    This value is the same for all threads in a given kernel launch, even if
+    they belong to different blocks (i.e. each block is "full").
     '''
-    x = Macro('ntid.x', SREG_SIGNATURE)
-    y = Macro('ntid.y', SREG_SIGNATURE)
-    z = Macro('ntid.z', SREG_SIGNATURE)
+    _description_ = '<blockDim.{x,y,z}>'
 
 
-class gridDim(Stub):
+class gridDim(Dim3):
     '''
-    The shape of the grid of blocks, accressed through the attributes ``x``,
-    ``y``, and ``z``.
+    The shape of the grid of blocks. This value is the same for all threads in
+    a given kernel launch.
     '''
     _description_ = '<gridDim.{x,y,z}>'
-    x = Macro('nctaid.x', SREG_SIGNATURE)
-    y = Macro('nctaid.y', SREG_SIGNATURE)
-    z = Macro('nctaid.z', SREG_SIGNATURE)
 
 
-warpsize = Macro('warpsize', SREG_SIGNATURE)
-laneid = Macro('laneid', SREG_SIGNATURE)
-
-#-------------------------------------------------------------------------------
-# Grid Macro
-
-def _ptx_grid1d(): pass
-
-
-def _ptx_grid2d(): pass
+class warpsize(Stub):
+    '''
+    The size of a warp. All architectures implemented to date have a warp size
+    of 32.
+    '''
+    _description_ = '<warpsize>'
 
 
-def grid_expand(ndim):
-    """grid(ndim)
+class laneid(Stub):
+    '''
+    This thread's lane within a warp. Ranges from 0 to
+    :attr:`numba.cuda.warpsize` - 1.
+    '''
+    _description_ = '<laneid>'
 
-    Return the absolute position of the current thread in the entire
-    grid of blocks.  *ndim* should correspond to the number of dimensions
-    declared when instantiating the kernel.  If *ndim* is 1, a single integer
-    is returned.  If *ndim* is 2 or 3, a tuple of the given number of
-    integers is returned.
 
-    Computation of the first integer is as follows::
+class grid(Stub):
+    '''grid(ndim)
 
-        cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+    Return the absolute position of the current thread in the entire grid of
+    blocks.  *ndim* should correspond to the number of dimensions declared when
+    instantiating the kernel. If *ndim* is 1, a single integer is returned.
+    If *ndim* is 2 or 3, a tuple of the given number of integers is returned.
+
+	Computation of the first integer is as follows::
+
+		cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
 
     and is similar for the other two indices, but using the ``y`` and ``z``
     attributes.
-    """
-    if ndim == 1:
-        fname = "ptx.grid.1d"
-        restype = types.int32
-    elif ndim == 2:
-        fname = "ptx.grid.2d"
-        restype = types.UniTuple(types.int32, 2)
-    elif ndim == 3:
-        fname = "ptx.grid.3d"
-        restype = types.UniTuple(types.int32, 3)
-    else:
-        raise ValueError('argument can only be 1, 2, 3')
+    '''
+    _description_ = '<grid(ndim)>'
 
-    return ir.Intrinsic(fname, typing.signature(restype, types.intp),
-                        args=[ndim])
 
-grid = Macro('ptx.grid', grid_expand, callable=True)
+class gridsize(Stub):
+    '''gridsize(ndim)
 
-#-------------------------------------------------------------------------------
-# Gridsize Macro
-
-def gridsize_expand(ndim):
-    """
     Return the absolute size (or shape) in threads of the entire grid of
     blocks. *ndim* should correspond to the number of dimensions declared when
-    instantiating the kernel.
+    instantiating the kernel. If *ndim* is 1, a single integer is returned.
+    If *ndim* is 2 or 3, a tuple of the given number of integers is returned.
 
     Computation of the first integer is as follows::
 
@@ -138,24 +139,60 @@ def gridsize_expand(ndim):
 
     and is similar for the other two indices, but using the ``y`` and ``z``
     attributes.
-    """
-    if ndim == 1:
-        fname = "ptx.gridsize.1d"
-        restype = types.int32
-    elif ndim == 2:
-        fname = "ptx.gridsize.2d"
-        restype = types.UniTuple(types.int32, 2)
-    elif ndim == 3:
-        fname = "ptx.gridsize.3d"
-        restype = types.UniTuple(types.int32, 3)
-    else:
-        raise ValueError('argument can only be 1, 2 or 3')
-
-    return ir.Intrinsic(fname, typing.signature(restype, types.intp),
-                        args=[ndim])
+    '''
+    _description_ = '<gridsize(ndim)>'
 
 
-gridsize = Macro('ptx.gridsize', gridsize_expand, callable=True)
+#-------------------------------------------------------------------------------
+# Array creation
+
+class shared(Stub):
+    '''
+    Shared memory namespace
+    '''
+    _description_ = '<shared>'
+
+    @stub_function
+    def array(shape, dtype):
+        '''
+        Allocate a shared array of the given *shape* and *type*. *shape* is
+        either an integer or a tuple of integers representing the array's
+        dimensions.  *type* is a :ref:`Numba type <numba-types>` of the
+        elements needing to be stored in the array.
+
+        The returned array-like object can be read and written to like any
+        normal device array (e.g. through indexing).
+        '''
+
+
+class local(Stub):
+    '''
+    Local memory namespace
+    '''
+    _description_ = '<local>'
+
+    @stub_function
+    def array(shape, dtype):
+        '''
+        Allocate a local array of the given *shape* and *type*. The array is
+        private to the current thread, and resides in global memory. An
+        array-like object is returned which can be read and written to like any
+        standard array (e.g.  through indexing).
+        '''
+
+
+class const(Stub):
+    '''
+    Constant memory namespace
+    '''
+
+    @stub_function
+    def array_like(ndarray):
+        '''
+        Create a const array from *ndarry*. The resulting const array will have
+        the same shape, type, and values as *ndarray*.
+        '''
+
 
 #-------------------------------------------------------------------------------
 # syncthreads
@@ -237,7 +274,8 @@ class match_any_sync(Stub):
     match_any_sync(mask, value)
 
     Nvvm intrinsic for performing a compare and broadcast across a warp.
-    Returns a mask of threads that have same value as the given value from within the masked warp.
+    Returns a mask of threads that have same value as the given value from
+    within the masked warp.
     '''
     _description_ = '<match_any_sync()>'
 
@@ -278,101 +316,6 @@ class threadfence(Stub):
     '''
     _description_ = '<threadfence()>'
 
-
-# -------------------------------------------------------------------------------
-# shared
-
-def _legalize_shape(shape):
-    if isinstance(shape, tuple):
-        return shape
-    elif isinstance(shape, int):
-        return (shape,)
-    else:
-        raise TypeError("invalid type for shape; got {0}".format(type(shape)))
-
-
-def shared_array(shape, dtype):
-    shape = _legalize_shape(shape)
-    ndim = len(shape)
-    fname = "ptx.smem.alloc"
-    restype = types.Array(dtype, ndim, 'C')
-    sig = typing.signature(restype, types.UniTuple(types.intp, ndim), types.Any)
-    return ir.Intrinsic(fname, sig, args=(shape, dtype))
-
-
-class shared(Stub):
-    """
-    Shared memory namespace.
-    """
-    _description_ = '<shared>'
-
-    array = Macro('shared.array', shared_array, callable=True,
-                        argnames=['shape', 'dtype'])
-    '''
-    Allocate a shared array of the given *shape* and *type*. *shape* is either
-    an integer or a tuple of integers representing the array's dimensions.
-    *type* is a :ref:`Numba type <numba-types>` of the elements needing to be
-    stored in the array.
-
-    The returned array-like object can be read and written to like any normal
-    device array (e.g. through indexing).
-    '''
-
-
-#-------------------------------------------------------------------------------
-# local array
-
-
-def local_array(shape, dtype):
-    shape = _legalize_shape(shape)
-    ndim = len(shape)
-    fname = "ptx.lmem.alloc"
-    restype = types.Array(dtype, ndim, 'C')
-    sig = typing.signature(restype, types.UniTuple(types.intp, ndim), types.Any)
-    return ir.Intrinsic(fname, sig, args=(shape, dtype))
-
-
-class local(Stub):
-    '''
-    Local memory namespace.
-    '''
-    _description_ = '<local>'
-
-    array = Macro('local.array', local_array, callable=True,
-                        argnames=['shape', 'dtype'])
-    '''
-    Allocate a local array of the given *shape* and *type*. The array is private
-    to the current thread, and resides in global memory. An array-like object is
-    returned which can be read and written to like any standard array (e.g.
-    through indexing).
-    '''
-
-#-------------------------------------------------------------------------------
-# const array
-
-
-def const_array_like(ndarray):
-    fname = "ptx.cmem.arylike"
-
-    from .descriptor import CUDATargetDesc
-    aryty = CUDATargetDesc.typingctx.resolve_argument_type(ndarray)
-
-    sig = typing.signature(aryty, aryty)
-    return ir.Intrinsic(fname, sig, args=[ndarray])
-
-
-class const(Stub):
-    '''
-    Constant memory namespace.
-    '''
-    _description_ = '<const>'
-
-    array_like = Macro('const.array_like', const_array_like,
-                             callable=True, argnames=['ary'])
-    '''
-    Create a const array from *ary*. The resulting const array will have the
-    same shape, type, and values as *ary*.
-    '''
 
 #-------------------------------------------------------------------------------
 # bit manipulation
@@ -416,7 +359,8 @@ class selp(Stub):
     """
     selp(a, b, c)
 
-    Select between source operands, based on the value of the predicate source operand.
+    Select between source operands, based on the value of the predicate source
+    operand.
     """
 
 #-------------------------------------------------------------------------------
@@ -450,12 +394,10 @@ class atomic(Stub):
     class max(Stub):
         """max(ary, idx, val)
 
-        Perform atomic ary[idx] = max(ary[idx], val). NaN is treated as a
-        missing value, so max(NaN, n) == max(n, NaN) == n. Note that this
-        differs from Python and Numpy behaviour, where max(a, b) is always
-        a when either a or b is a NaN.
+        Perform atomic ary[idx] = max(ary[idx], val).
 
-        Supported on int32, int64, uint32, uint64, float32, float64 operands only.
+        Supported on int32, int64, uint32, uint64, float32, float64 operands
+        only.
 
         Returns the old value at the index location as if it is loaded
         atomically.
@@ -464,12 +406,43 @@ class atomic(Stub):
     class min(Stub):
         """min(ary, idx, val)
 
-        Perform atomic ary[idx] = min(ary[idx], val). NaN is treated as a
-        missing value, so min(NaN, n) == min(n, NaN) == n. Note that this
-        differs from Python and Numpy behaviour, where min(a, b) is always
-        a when either a or b is a NaN.
+        Perform atomic ary[idx] = min(ary[idx], val).
 
-        Supported on int32, int64, uint32, uint64, float32, float64 operands only.
+        Supported on int32, int64, uint32, uint64, float32, float64 operands
+        only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class nanmax(Stub):
+        """nanmax(ary, idx, val)
+
+        Perform atomic ary[idx] = max(ary[idx], val).
+
+        NOTE: NaN is treated as a missing value such that:
+        nanmax(NaN, n) == n, nanmax(n, NaN) == n
+
+        Supported on int32, int64, uint32, uint64, float32, float64 operands
+        only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class nanmin(Stub):
+        """nanmin(ary, idx, val)
+
+        Perform atomic ary[idx] = min(ary[idx], val).
+
+        NOTE: NaN is treated as a missing value, such that:
+        nanmin(NaN, n) == n, nanmin(n, NaN) == n
+
+        Supported on int32, int64, uint32, uint64, float32, float64 operands
+        only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
         """
 
     class compare_and_swap(Stub):

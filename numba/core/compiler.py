@@ -8,6 +8,7 @@ from numba.core import (utils, errors, typing, interpreter, bytecode, postproc,
 from numba.parfors.parfor import ParforDiagnostics
 from numba.core.inline_closurecall import InlineClosureCallPass
 from numba.core.errors import CompilerError
+from numba.core.environment import lookup_environment
 
 from numba.core.compiler_machinery import PassManager
 
@@ -90,6 +91,7 @@ CR_FIELDS = ["typing_context",
              # List of functions to call to initialize on unserialization
              # (i.e cache load).
              "reload_init",
+             "referenced_envs",
              ]
 
 
@@ -110,15 +112,31 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
         fndesc = self.fndesc
         # Those don't need to be pickled and may fail
         fndesc.typemap = fndesc.calltypes = None
-
+        # Include all referenced environments
+        referenced_envs = self._find_referenced_environments()
         return (libdata, self.fndesc, self.environment, self.signature,
                 self.objectmode, self.interpmode, self.lifted, typeann,
-                self.reload_init)
+                self.reload_init, tuple(referenced_envs))
+
+    def _find_referenced_environments(self):
+        """Returns a list of referenced environments
+        """
+        mod = self.library._final_module
+        # Find environments
+        referenced_envs = []
+        for gv in mod.global_variables:
+            gvn = gv.name
+            if gvn.startswith("_ZN08NumbaEnv"):
+                env = lookup_environment(gvn)
+                if env is not None:
+                    if env.can_cache():
+                        referenced_envs.append(env)
+        return referenced_envs
 
     @classmethod
     def _rebuild(cls, target_context, libdata, fndesc, env,
                  signature, objectmode, interpmode, lifted, typeann,
-                 reload_init):
+                 reload_init, referenced_envs):
         if reload_init:
             # Re-run all
             for fn in reload_init:
@@ -141,7 +159,13 @@ class CompileResult(namedtuple("_CompileResult", CR_FIELDS)):
                  call_helper=None,
                  metadata=None,  # Do not store, arbitrary & potentially large!
                  reload_init=reload_init,
+                 referenced_envs=referenced_envs,
                  )
+
+        # Load Environments
+        for env in referenced_envs:
+            library.codegen.set_env(env.env_name, env)
+
         return cr
 
     def dump(self, tab=''):
@@ -435,11 +459,68 @@ class DefaultPassBuilder(object):
       - nopython
       - objectmode
       - interpreted
+      - typed
+      - untyped
+      - nopython lowering
     """
     @staticmethod
     def define_nopython_pipeline(state, name='nopython'):
         """Returns an nopython mode pipeline based PassManager
         """
+        # compose pipeline from untyped, typed and lowering parts
+        dpb = DefaultPassBuilder
+        pm = PassManager(name)
+        untyped_passes = dpb.define_untyped_pipeline(state)
+        pm.passes.extend(untyped_passes.passes)
+
+        typed_passes = dpb.define_typed_pipeline(state)
+        pm.passes.extend(typed_passes.passes)
+
+        lowering_passes = dpb.define_nopython_lowering_pipeline(state)
+        pm.passes.extend(lowering_passes.passes)
+
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_nopython_lowering_pipeline(state, name='nopython_lowering'):
+        pm = PassManager(name)
+        # legalise
+        pm.add_pass(IRLegalization,
+                    "ensure IR is legal prior to lowering")
+
+        # lower
+        pm.add_pass(NoPythonBackend, "nopython mode backend")
+        pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_typed_pipeline(state, name="typed"):
+        """Returns the typed part of the nopython pipeline"""
+        pm = PassManager(name)
+        # typing
+        pm.add_pass(NopythonTypeInference, "nopython frontend")
+        pm.add_pass(AnnotateTypes, "annotate types")
+
+        # strip phis
+        pm.add_pass(PreLowerStripPhis, "remove phis nodes")
+
+        # optimisation
+        pm.add_pass(InlineOverloads, "inline overloaded functions")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(PreParforPass, "Preprocessing for parfors")
+        if not state.flags.no_rewrites:
+            pm.add_pass(NopythonRewrites, "nopython rewrites")
+        if state.flags.auto_parallel.enabled:
+            pm.add_pass(ParforPass, "convert to parfors")
+
+        pm.finalize()
+        return pm
+
+    @staticmethod
+    def define_untyped_pipeline(state, name='untyped'):
+        """Returns an untyped part of the nopython pipeline"""
         pm = PassManager(name)
         if state.func_ir is None:
             pm.add_pass(TranslateByteCode, "analyzing bytecode")
@@ -471,29 +552,7 @@ class DefaultPassBuilder(object):
 
         if state.flags.enable_ssa:
             pm.add_pass(ReconstructSSA, "ssa")
-        # typing
-        pm.add_pass(NopythonTypeInference, "nopython frontend")
-        pm.add_pass(AnnotateTypes, "annotate types")
 
-        # strip phis
-        pm.add_pass(PreLowerStripPhis, "remove phis nodes")
-
-        # optimisation
-        pm.add_pass(InlineOverloads, "inline overloaded functions")
-        if state.flags.auto_parallel.enabled:
-            pm.add_pass(PreParforPass, "Preprocessing for parfors")
-        if not state.flags.no_rewrites:
-            pm.add_pass(NopythonRewrites, "nopython rewrites")
-        if state.flags.auto_parallel.enabled:
-            pm.add_pass(ParforPass, "convert to parfors")
-
-        # legalise
-        pm.add_pass(IRLegalization,
-                    "ensure IR is legal prior to lowering")
-
-        # lower
-        pm.add_pass(NoPythonBackend, "nopython mode backend")
-        pm.add_pass(DumpParforDiagnostics, "dump parfor diagnostics")
         pm.finalize()
         return pm
 

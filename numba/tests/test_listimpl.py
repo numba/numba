@@ -55,6 +55,15 @@ class List(object):
     def __delitem__(self, i):
         self.list_delitem(i)
 
+    def handle_index(self, i):
+        # handling negative indices is done at the compiler level, so we only
+        # support -1 to be last element of the list here
+        if i < -1 or len(self) == 0:
+            IndexError("list index out of range")
+        elif i == -1:
+            i = len(self) - 1
+        return i
+
     @property
     def allocated(self):
         return self.list_allocated()
@@ -107,6 +116,7 @@ class List(object):
             self.tc.assertEqual(status, LIST_OK)
 
     def list_getitem(self, i):
+        i = self.handle_index(i)
         item_out_buffer = ctypes.create_string_buffer(self.item_size)
         status = self.tc.numba_list_getitem(self.lp, i, item_out_buffer)
         if status == LIST_ERR_INDEX:
@@ -122,21 +132,11 @@ class List(object):
         self.tc.assertEqual(status, LIST_OK)
 
     def list_pop(self, i):
-        # handling negative indices is done at the compiler level, so we only
-        # support -1 to be last element of the list here
-        if i < -1 or len(self) == 0:
-            IndexError("list index out of range")
-        elif i == -1:
-            i = len(self) - 1
-        item_out_buffer = ctypes.create_string_buffer(self.item_size)
-        status = self.tc.numba_list_pop(self.lp, i, item_out_buffer)
-        if status == LIST_ERR_INDEX:
-            raise IndexError("list index out of range")
-        elif status == LIST_ERR_IMMUTABLE:
-            raise ValueError("list is immutable")
-        else:
-            self.tc.assertEqual(status, LIST_OK)
-            return item_out_buffer.raw
+        # pop is getitem and delitem
+        i = self.handle_index(i)
+        item = self.list_getitem(i)
+        self.list_delitem(i)
+        return item
 
     def list_delitem(self, i):
         # special case slice
@@ -148,9 +148,15 @@ class List(object):
             if status == LIST_ERR_IMMUTABLE:
                 raise ValueError("list is immutable")
             self.tc.assertEqual(status, LIST_OK)
-        # must be an integer, defer to pop
+        # must be an integer, defer to delitem
         else:
-            self.list_pop(i)
+            i = self.handle_index(i)
+            status = self.tc.numba_list_delitem(self.lp, i)
+            if status == LIST_ERR_INDEX:
+                raise IndexError("list index out of range")
+            elif status == LIST_ERR_IMMUTABLE:
+                raise ValueError("list is immutable")
+            self.tc.assertEqual(status, LIST_OK)
 
     def list_iter(self, itptr):
         self.tc.numba_list_iter(itptr, self.lp)
@@ -260,11 +266,11 @@ class TestListImpl(TestCase):
             ctypes.c_int,
             [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
         )
-        # numba_list_pop(NB_List *l,  Py_ssize_t i, char *out)
-        self.numba_list_pop = wrap(
-            'list_pop',
+        # numba_list_delitem(NB_List *l,  Py_ssize_t i)
+        self.numba_list_delitem = wrap(
+            'list_delitem',
             ctypes.c_int,
-            [list_t, ctypes.c_ssize_t, ctypes.c_char_p],
+            [list_t, ctypes.c_ssize_t],
         )
         # numba_list_delete_slice(NB_List *l,
         #                         Py_ssize_t start,
@@ -409,6 +415,26 @@ class TestListImpl(TestCase):
         expected = [b'bbbb', b'cccc', b'eeee', b'ffff', b'gggg']
         received = [j for j in l]
         self.assertEqual(received, expected)
+
+    def test_delitem(self):
+        l = List(self, 1, 0)
+        values = [b'a', b'b', b'c', b'd', b'e', b'f', b'g', b'h']
+        for i in values:
+            l.append(i)
+        self.assertEqual(len(l), 8)
+
+        # delete first item
+        del l[0]
+        self.assertEqual(len(l), 7)
+        self.assertEqual(list(l), values[1:])
+        # delete last item
+        del l[-1]
+        self.assertEqual(len(l), 6)
+        self.assertEqual(list(l), values[1:-1])
+        # delete item from middle
+        del l[2]
+        self.assertEqual(len(l), 5)
+        self.assertEqual(list(l), [b'b', b'c', b'e', b'f', b'g'])
 
     def test_delete_slice(self):
         l = List(self, 1, 0)

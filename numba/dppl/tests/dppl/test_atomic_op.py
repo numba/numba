@@ -6,8 +6,7 @@ import numba
 from numba import dppl
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
-import dppl.ocldrv as ocldrv
-
+import dpctl
 
 def atomic_add_int32(ary):
     tid = dppl.get_local_id(0)
@@ -113,17 +112,18 @@ def call_fn_for_datatypes(fn, result, input, global_size):
     for dtype in dtypes:
         a = np.array(input, dtype=dtype)
 
-        with ocldrv.igpu_context(0) as device_env:
-            if dtype == np.double and not device_env.device_support_float64_atomics():
-                continue
-            if dtype == np.int64 and not device_env.device_support_int64_atomics():
-                continue
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
+            # TODO: dpctl needs to expose this functions
+            #if dtype == np.double and not device_env.device_support_float64_atomics():
+            #    continue
+            #if dtype == np.int64 and not device_env.device_support_int64_atomics():
+            #    continue
             fn[global_size, dppl.DEFAULT_LOCAL_SIZE](a)
 
         assert(a[0] == result)
 
 
-@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+@unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestAtomicOp(DPPLTestCase):
     def test_atomic_add_global(self):
         @dppl.kernel
@@ -151,8 +151,9 @@ class TestAtomicOp(DPPLTestCase):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
         orig = ary.copy()
 
-        dppl_atomic_add = dppl.kernel('void(uint32[:])')(atomic_add_int32)
-        with ocldrv.igpu_context(0) as device_env:
+        #dppl_atomic_add = dppl.kernel('void(uint32[:])')(atomic_add_int32)
+        dppl_atomic_add = dppl.kernel(atomic_add_int32)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dppl_atomic_add[32, dppl.DEFAULT_LOCAL_SIZE](ary)
 
         gold = np.zeros(32, dtype=np.uint32)
@@ -166,8 +167,9 @@ class TestAtomicOp(DPPLTestCase):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
         orig = ary.copy()
 
-        dppl_atomic_sub = dppl.kernel('void(uint32[:])')(atomic_sub_int32)
-        with ocldrv.igpu_context(0) as device_env:
+        #dppl_atomic_sub = dppl.kernel('void(uint32[:])')(atomic_sub_int32)
+        dppl_atomic_sub = dppl.kernel(atomic_sub_int32)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dppl_atomic_sub[32, dppl.DEFAULT_LOCAL_SIZE](ary)
 
         gold = np.zeros(32, dtype=np.uint32)
@@ -180,8 +182,9 @@ class TestAtomicOp(DPPLTestCase):
     def test_atomic_add_local_float32(self):
         ary = np.array([0], dtype=np.float32)
 
-        dppl_atomic_add = dppl.kernel('void(float32[:])')(atomic_add_float32)
-        with ocldrv.igpu_context(0) as device_env:
+        #dppl_atomic_add = dppl.kernel('void(float32[:])')(atomic_add_float32)
+        dppl_atomic_add = dppl.kernel(atomic_add_float32)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dppl_atomic_add[32, dppl.DEFAULT_LOCAL_SIZE](ary)
 
         self.assertTrue(ary[0] == 32)
@@ -190,8 +193,9 @@ class TestAtomicOp(DPPLTestCase):
     def test_atomic_sub_local_float32(self):
         ary = np.array([32], dtype=np.float32)
 
-        dppl_atomic_sub = dppl.kernel('void(float32[:])')(atomic_sub_float32)
-        with ocldrv.igpu_context(0) as device_env:
+        #dppl_atomic_sub = dppl.kernel('void(float32[:])')(atomic_sub_float32)
+        dppl_atomic_sub = dppl.kernel(atomic_sub_float32)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
 
             dppl_atomic_sub[32, dppl.DEFAULT_LOCAL_SIZE](ary)
 
@@ -201,56 +205,65 @@ class TestAtomicOp(DPPLTestCase):
     def test_atomic_add_local_int64(self):
         ary = np.array([0], dtype=np.int64)
 
-        dppl_atomic_add = dppl.kernel('void(int64[:])')(atomic_add_int64)
-        with ocldrv.igpu_context(0) as device_env:
-            if device_env.device_support_int64_atomics():
-                dppl_atomic_add[32, dppl.DEFAULT_LOCAL_SIZE](ary)
-                self.assertTrue(ary[0] == 32)
-            else:
-                return
+        #dppl_atomic_add = dppl.kernel('void(int64[:])')(atomic_add_int64)
+        dppl_atomic_add = dppl.kernel(atomic_add_int64)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
+            # TODO: dpctl needs to expose this functions
+            #if device_env.device_support_int64_atomics():
+            dppl_atomic_add[32, dppl.DEFAULT_LOCAL_SIZE](ary)
+            self.assertTrue(ary[0] == 32)
+            #else:
+            #    return
 
 
     def test_atomic_sub_local_int64(self):
         ary = np.array([32], dtype=np.int64)
 
-        fn = dppl.kernel('void(int64[:])')(atomic_sub_int64)
-        with ocldrv.igpu_context(0) as device_env:
-            if device_env.device_support_int64_atomics():
-                fn[32, dppl.DEFAULT_LOCAL_SIZE](ary)
-                self.assertTrue(ary[0] == 0)
-            else:
-                return
+        #fn = dppl.kernel('void(int64[:])')(atomic_sub_int64)
+        fn = dppl.kernel(atomic_sub_int64)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
+            # TODO: dpctl needs to expose this functions
+            #if device_env.device_support_int64_atomics():
+            fn[32, dppl.DEFAULT_LOCAL_SIZE](ary)
+            self.assertTrue(ary[0] == 0)
+            #else:
+            #    return
 
 
     def test_atomic_add_local_float64(self):
         ary = np.array([0], dtype=np.double)
 
-        fn = dppl.kernel('void(float64[:])')(atomic_add_float64)
-        with ocldrv.igpu_context(0) as device_env:
-            if device_env.device_support_float64_atomics():
-                fn[32, dppl.DEFAULT_LOCAL_SIZE](ary)
-                self.assertTrue(ary[0] == 32)
-            else:
-                return
+        #fn = dppl.kernel('void(float64[:])')(atomic_add_float64)
+        fn = dppl.kernel(atomic_add_float64)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
+            # TODO: dpctl needs to expose this functions
+            #if device_env.device_support_float64_atomics():
+            fn[32, dppl.DEFAULT_LOCAL_SIZE](ary)
+            self.assertTrue(ary[0] == 32)
+            #else:
+            #    return
 
 
     def test_atomic_sub_local_float64(self):
         ary = np.array([32], dtype=np.double)
 
-        fn = dppl.kernel('void(float64[:])')(atomic_sub_int64)
-        with ocldrv.igpu_context(0) as device_env:
-            if device_env.device_support_float64_atomics():
-                fn[32, dppl.DEFAULT_LOCAL_SIZE](ary)
-                self.assertTrue(ary[0] == 0)
-            else:
-                return
+        #fn = dppl.kernel('void(float64[:])')(atomic_sub_int64)
+        fn = dppl.kernel(atomic_sub_int64)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
+            # TODO: dpctl needs to expose this functions
+            #if device_env.device_support_float64_atomics():
+            fn[32, dppl.DEFAULT_LOCAL_SIZE](ary)
+            self.assertTrue(ary[0] == 0)
+            #else:
+            #    return
 
 
     def test_atomic_add2(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
-        dppl_atomic_add2 = dppl.kernel('void(uint32[:,:])')(atomic_add2)
-        with ocldrv.igpu_context(0) as device_env:
+        #dppl_atomic_add2 = dppl.kernel('void(uint32[:,:])')(atomic_add2)
+        dppl_atomic_add2 = dppl.kernel(atomic_add2)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dppl_atomic_add2[(4, 8), dppl.DEFAULT_LOCAL_SIZE](ary)
         self.assertTrue(np.all(ary == orig + 1))
 
@@ -258,8 +271,9 @@ class TestAtomicOp(DPPLTestCase):
     def test_atomic_add3(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
-        dppl_atomic_add3 = dppl.kernel('void(uint32[:,:])')(atomic_add3)
-        with ocldrv.igpu_context(0) as device_env:
+        #dppl_atomic_add3 = dppl.kernel('void(uint32[:,:])')(atomic_add3)
+        dppl_atomic_add3 = dppl.kernel(atomic_add3)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dppl_atomic_add3[(4, 8), dppl.DEFAULT_LOCAL_SIZE](ary)
 
         self.assertTrue(np.all(ary == orig + 1))
