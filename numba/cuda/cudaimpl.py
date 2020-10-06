@@ -469,7 +469,8 @@ def ptx_round(context, builder, sig, args):
 
 
 # This rounding implementation follows the algorithm used in the "fallback
-# version" of double_round in CPython 3.7.5's Objects/floatobject.c.
+# version" of double_round in CPython.
+# https://github.com/python/cpython/blob/a755410e054e1e2390de5830befc08fe80706c66/Objects/floatobject.c#L964-L1007
 
 @lower(round, types.f4, types.Integer)
 @lower(round, types.f8, types.Integer)
