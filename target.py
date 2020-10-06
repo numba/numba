@@ -11,6 +11,7 @@ from numba.core import typing, types, utils, cgutils
 from numba.core.utils import cached_property
 from numba.core import datamodel
 from numba.core.base import BaseContext
+from numba.core.registry import cpu_target
 from numba.core.callconv import MinimalCallConv
 from . import codegen
 
@@ -108,6 +109,12 @@ class DPPLTargetContext(BaseContext):
         _lazy_init_db()
         from numba.np.ufunc_db import _ufunc_db as ufunc_db
         self.ufunc_db = copy.deepcopy(ufunc_db)
+
+        from numba.core.cpu import CPUContext
+        from numba.core.typing import Context as TypingContext
+
+        self.cpu_context = cpu_target.target_context
+
 
 
     def replace_numpy_ufunc_with_opencl_supported_functions(self):

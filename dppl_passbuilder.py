@@ -22,6 +22,8 @@ from .dppl_passes import (
         DPPLPreParforPass,
         DPPLParforPass,
         SpirvFriendlyLowering,
+        DPPLAddNumpyOverloadPass,
+        DPPLAddNumpyRemoveOverloadPass,
         DPPLNoPythonBackend
         )
 
@@ -41,6 +43,10 @@ class DPPLPassBuilder(object):
             pm.add_pass(FixupArgs, "fix up args")
         pm.add_pass(IRProcessing, "processing IR")
         pm.add_pass(WithLifting, "Handle with contexts")
+
+        # this pass adds required logic to overload default implementation of
+        # Numpy functions
+        pm.add_pass(DPPLAddNumpyOverloadPass, "dppl add typing template for Numpy functions")
 
         # Add pass to ensure when users are allocating static
         # constant memory the size is a constant and can not
@@ -102,5 +108,6 @@ class DPPLPassBuilder(object):
         # lower
         pm.add_pass(SpirvFriendlyLowering, "SPIRV-friendly lowering pass")
         pm.add_pass(DPPLNoPythonBackend, "nopython mode backend")
+        pm.add_pass(DPPLAddNumpyRemoveOverloadPass, "dppl remove typing template for Numpy functions")
         pm.finalize()
         return pm

@@ -3,11 +3,12 @@ import numpy as np
 from numba import dppl, int32
 import math
 
-import dppl.ocldrv as ocldrv
+import dpctl
+import dpctl._memory as dpctl_mem
 
 
 def recursive_reduction(size, group_size,
-                        Dinp, Dpartial_sums, device_env):
+                        Dinp, Dpartial_sums):
 
     @dppl.kernel
     def sum_reduction_kernel(inp, input_size,
@@ -56,11 +57,10 @@ def recursive_reduction(size, group_size,
 
     if nb_work_groups <= group_size:
         sum_reduction_kernel[group_size, group_size](Dpartial_sums, nb_work_groups, Dinp)
-        device_env.copy_array_from_device(Dinp)
-        result = Dinp._ndarray[0]
+        result = Dinp[0]
     else:
         result = recursive_reduction(nb_work_groups, group_size,
-                                     Dpartial_sums, Dinp, device_env)
+                                     Dpartial_sums, Dinp)
 
     return result
 
@@ -76,14 +76,19 @@ def sum_reduction_recursive():
     partial_sums = np.zeros(nb_work_groups).astype(np.int32)
 
 
-    if ocldrv.has_gpu_device:
-        with ocldrv.igpu_context(0) as device_env:
-            Dinp = device_env.copy_array_to_device(inp)
-            Dpartial_sums = device_env.copy_array_to_device(partial_sums)
+    if dpctl.has_gpu_queues():
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
+            inp_buf = dpctl_mem.MemoryUSMShared(inp.size * inp.dtype.itemsize)
+            inp_ndarray = np.ndarray(inp.shape, buffer=inp_buf, dtype=inp.dtype)
+            np.copyto(inp_ndarray, inp)
+
+            partial_sums_buf = dpctl_mem.MemoryUSMShared(partial_sums.size * partial_sums.dtype.itemsize)
+            partial_sums_ndarray = np.ndarray(partial_sums.shape, buffer=partial_sums_buf, dtype=partial_sums.dtype)
+            np.copyto(partial_sums_ndarray, partial_sums)
 
             print("Running recursive reduction")
             result = recursive_reduction(global_size, work_group_size,
-                                         Dinp, Dpartial_sums, device_env)
+                                         inp_ndarray, partial_sums_ndarray)
     else:
         print("No device found")
         exit()
