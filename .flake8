@@ -91,7 +91,6 @@ exclude =
     numba/misc/mergesort.py
     numba/core/base.py
     numba/np/npdatetime.py
-    numba/cuda/decorators.py
     numba/cuda/tests/cudadrv/test_reset_device.py
     numba/cuda/tests/cudadrv/test_linker.py
     numba/cuda/tests/cudadrv/test_cuda_driver.py
