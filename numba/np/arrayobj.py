@@ -5037,17 +5037,13 @@ def np_split(ary, indices_or_sections, axis=0):
 
     if isinstance(indices_or_sections, types.Integer):
         def impl(ary, indices_or_sections, axis=0):
-            l, rem = divmod(ary.shape[axis], indices_or_sections)
+            _, rem = divmod(ary.shape[axis], indices_or_sections)
             if rem != 0:
                 raise ValueError(
                     "array split does not result in an equal division"
                 )
-            indices = np.cumsum(np.array(
-                [l + 1] * rem +
-                [l] * (indices_or_sections - rem - 1)
-            ))
             return np.array_split(
-                ary, indices, axis=axis
+                ary, indices_or_sections, axis=axis
             )
 
         return impl
