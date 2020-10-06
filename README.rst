@@ -34,6 +34,7 @@ Supported Platforms
     ARMv8 (64-bit)
   - Windows: x86, x86_64
   - macOS: x86_64
+  - \*BSD: (unofficial support only)
 
 * (Optional) Accelerators and GPUs:
 
