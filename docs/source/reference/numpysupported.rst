@@ -355,6 +355,7 @@ The following top-level functions are supported:
 * :func:`numpy.argwhere`
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.array_equal`
+* :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
@@ -426,6 +427,7 @@ The following top-level functions are supported:
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.split`
 * :func:`numpy.stack`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.transpose`
