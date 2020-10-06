@@ -1,5 +1,3 @@
-import numpy as np
-
 from numba import cuda
 from numba.cuda.testing import captured_cuda_stdout, CUDATestCase
 import unittest

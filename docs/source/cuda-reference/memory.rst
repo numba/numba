@@ -5,7 +5,9 @@ Memory Management
 .. autofunction:: numba.cuda.device_array
 .. autofunction:: numba.cuda.device_array_like
 .. autofunction:: numba.cuda.pinned_array
+.. autofunction:: numba.cuda.pinned_array_like
 .. autofunction:: numba.cuda.mapped_array
+.. autofunction:: numba.cuda.mapped_array_like
 .. autofunction:: numba.cuda.pinned
 .. autofunction:: numba.cuda.mapped
 

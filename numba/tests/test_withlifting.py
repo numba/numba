@@ -522,15 +522,21 @@ class TestLiftObj(MemoryLeak, TestCase):
         def foo(x):
             with objmode_context():
                 t = {'a': x}
-            return x, t
+                u = 3
+            return x, t, u
         x = np.array([1, 2, 3])
         cfoo = njit(foo)
+
         with self.assertRaises(errors.TypingError) as raises:
             cfoo(x)
-        self.assertIn(
-            "missing type annotation on outgoing variables",
-            str(raises.exception),
-            )
+
+        exstr = str(raises.exception)
+        self.assertIn("Missing type annotation on outgoing variable(s): "
+                      "['t', 'u']",
+                      exstr)
+        self.assertIn("Example code: with objmode"
+                      "(t='<add_type_as_string_here>')",
+                      exstr)
 
     def test_case08_raise_from_external(self):
         # this segfaults, expect its because the dict needs to raise as '2' is

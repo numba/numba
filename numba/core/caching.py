@@ -16,7 +16,6 @@ import tempfile
 import warnings
 
 from numba.misc.appdirs import AppDirs
-from numba.core.utils import add_metaclass, file_replace
 
 import numba
 from numba.core.errors import NumbaWarning
@@ -24,6 +23,7 @@ from numba.core.base import BaseContext
 from numba.core.codegen import CodeLibrary
 from numba.core.compiler import CompileResult
 from numba.core import config, compiler
+from numba.core.serialize import dumps
 
 
 def _get_codegen(obj):
@@ -46,8 +46,7 @@ def _cache_log(msg, *args):
         print(msg)
 
 
-@add_metaclass(ABCMeta)
-class _Cache(object):
+class _Cache(metaclass=ABCMeta):
 
     @abstractproperty
     def cache_path(self):
@@ -109,8 +108,7 @@ class NullCache(_Cache):
         pass
 
 
-@add_metaclass(ABCMeta)
-class _CacheLocator(object):
+class _CacheLocator(metaclass=ABCMeta):
     """
     A filesystem locator for caching a given function.
     """
@@ -324,8 +322,7 @@ class _IPythonCacheLocator(_CacheLocator):
         return self
 
 
-@add_metaclass(ABCMeta)
-class _CacheImpl(object):
+class _CacheImpl(metaclass=ABCMeta):
     """
     Provides the core machinery for caching.
     - implement how to serialize and deserialize the data in the cache.
@@ -578,7 +575,7 @@ class IndexDataCacheFile(object):
         try:
             with open(tmpname, "wb") as f:
                 yield f
-            file_replace(tmpname, filepath)
+            os.replace(tmpname, filepath)
         except Exception:
             # In case of error, remove dangling tmp file
             try:
@@ -615,6 +612,7 @@ class Cache(_Cache):
 
     def __init__(self, py_func):
         self._name = repr(py_func)
+        self._py_func = py_func
         self._impl = self._impl_class(py_func)
         self._cache_path = self._impl.locator.get_cache_path()
         # This may be a bit strict but avoids us maintaining a magic number
@@ -695,9 +693,20 @@ class Cache(_Cache):
     def _index_key(self, sig, codegen):
         """
         Compute index key for the given signature and codegen.
-        It includes a description of the OS and target architecture.
+        It includes a description of the OS, target architecture and hashes of
+        the bytecode for the function and, if the function has a __closure__,
+        a hash of the cell_contents.
         """
-        return (sig, codegen.magic_tuple())
+        codebytes = self._py_func.__code__.co_code
+        if self._py_func.__closure__ is not None:
+            cvars = tuple([x.cell_contents for x in self._py_func.__closure__])
+            cvarbytes = dumps(cvars)
+        else:
+            cvarbytes = b''
+
+        hasher = lambda x: hashlib.sha256(x).hexdigest()
+        return (sig, codegen.magic_tuple(), (hasher(codebytes),
+                                             hasher(cvarbytes),))
 
 
 class FunctionCache(Cache):

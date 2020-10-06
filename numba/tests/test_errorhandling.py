@@ -8,6 +8,7 @@ import os
 from numba import jit, njit, typed, int64, types
 from numba.core import errors
 import numba.core.typing.cffi_utils as cffi_support
+from numba.experimental import structref
 from numba.extending import (overload, intrinsic, overload_method,
                              overload_attribute)
 from numba.core.compiler import CompilerBase
@@ -422,6 +423,25 @@ class TestErrorMessages(unittest.TestCase):
 
         excstr = str(raises.exception)
         self.assertIn("Type Restricted Function in function 'unknown'", excstr)
+
+    def test_missing_source(self):
+
+        @structref.register
+        class ParticleType(types.StructRef):
+            pass
+
+        class Particle(structref.StructRefProxy):
+            def __new__(cls, pos, mass):
+                return structref.StructRefProxy.__new__(cls, pos)
+                # didn't provide the required mass argument ----^
+
+        structref.define_proxy(Particle, ParticleType, ["pos", "mass"])
+
+        with self.assertRaises(errors.TypingError) as raises:
+            Particle(pos=1, mass=2)
+
+        excstr = str(raises.exception)
+        self.assertIn("required positional argument: 'mass'", excstr)
 
 
 class TestDeveloperSpecificErrorMessages(SerialMixin, unittest.TestCase):

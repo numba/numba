@@ -394,7 +394,6 @@ class TestRandom(BaseTest):
             ints.append(func2(5, 500000000))
             if func3 is not None:
                 ints.append(func3(5, 500000000, 3))
-        self.assertEqual(len(ints), len(set(ints)), ints)
         if is_numpy:
             rr = self._follow_numpy(ptr).randint
         else:

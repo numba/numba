@@ -228,7 +228,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
     def __init__(self, py_func, identity=None, cache=False, targetoptions={}):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(target='npyufunc',
+        self.nb_func = jit(_target='npyufunc',
                            cache=cache,
                            **targetoptions)(py_func)
         self._sigs = []
@@ -254,7 +254,7 @@ class UFuncBuilder(_BaseUFuncBuilder):
                 cres = self._cres[sig]
                 dtypenums, ptr, env = self.build(cres, sig)
                 dtypelist.append(dtypenums)
-                ptrlist.append(utils.longint(ptr))
+                ptrlist.append(int(ptr))
                 keepalive.append((cres.library, env))
 
             datlist = [None] * len(ptrlist)
@@ -293,7 +293,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
                  targetoptions={}):
         self.py_func = py_func
         self.identity = parse_identity(identity)
-        self.nb_func = jit(target='npyufunc', cache=cache)(py_func)
+        self.nb_func = jit(_target='npyufunc', cache=cache)(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
@@ -323,7 +323,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
             cres = self._cres[sig]
             dtypenums, ptr, env = self.build(cres)
             dtypelist.append(dtypenums)
-            ptrlist.append(utils.longint(ptr))
+            ptrlist.append(int(ptr))
             keepalive.append((cres.library, env))
 
         datlist = [None] * len(ptrlist)

@@ -23,7 +23,7 @@ class BaseLower(object):
     def __init__(self, context, library, fndesc, func_ir, metadata=None):
         self.library = library
         self.fndesc = fndesc
-        self.blocks = utils.SortedMap(utils.iteritems(func_ir.blocks))
+        self.blocks = utils.SortedMap(func_ir.blocks.items())
         self.func_ir = func_ir
         self.call_conv = context.call_conv
         self.generator_info = func_ir.generator_info
@@ -465,7 +465,8 @@ class Lower(BaseLower):
             target = self.context.cast(self.builder, target, targetty,
                                        targetty.type)
         else:
-            assert targetty == signature.args[0]
+            ul = types.unliteral
+            assert ul(targetty) == ul(signature.args[0])
 
         index = self.context.cast(self.builder, index, indexty,
                                   signature.args[1])
@@ -738,10 +739,7 @@ class Lower(BaseLower):
         if isinstance(signature.return_type, types.Phantom):
             return self.context.get_dummy_value()
 
-        if isinstance(expr.func, ir.Intrinsic):
-            fnty = expr.func.name
-        else:
-            fnty = self.typeof(expr.func.name)
+        fnty = self.typeof(expr.func.name)
 
         if isinstance(fnty, types.ObjModeDispatcher):
             res = self._lower_call_ObjModeDispatcher(fnty, expr, signature)
@@ -979,8 +977,7 @@ class Lower(BaseLower):
         # Normal function resolution
         self.debug_print("# calling normal function: {0}".format(fnty))
         self.debug_print("# signature: {0}".format(signature))
-        if (isinstance(expr.func, ir.Intrinsic) or
-                isinstance(fnty, types.ObjModeDispatcher)):
+        if isinstance(fnty, types.ObjModeDispatcher):
             argvals = expr.func.args
         else:
             argvals = self.fold_call_args(

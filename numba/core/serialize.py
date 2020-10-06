@@ -133,6 +133,32 @@ def _rebuild_code(marshal_version, bytecode_magic, marshalled):
     return marshal.loads(marshalled)
 
 
+# Keep unpickled object via `numba_unpickle` alive.
+_unpickled_memo = {}
+
+
+def _numba_unpickle(address, bytedata, hashed):
+    """Used by `numba_unpickle` from _helperlib.c
+
+    Parameters
+    ----------
+    address : int
+    bytedata : bytes
+    hashed : bytes
+
+    Returns
+    -------
+    obj : object
+        unpickled object
+    """
+    key = (address, hashed)
+    try:
+        obj = _unpickled_memo[key]
+    except KeyError:
+        _unpickled_memo[key] = obj = pickle.loads(bytedata)
+    return obj
+
+
 def dumps(obj):
     """Similar to `pickle.dumps()`. Returns the serialized object in bytes.
     """

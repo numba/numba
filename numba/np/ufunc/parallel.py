@@ -287,28 +287,36 @@ class _nop(object):
         pass
 
 
-try:
-    # Force the use of an RLock in the case a fork was used to start the
-    # process and thereby the init sequence, some of the threading backend
-    # init sequences are not fork safe. Also, windows global mp locks seem
-    # to be fine.
-    if "fork" in multiprocessing.get_start_method() or _windows:
-        _backend_init_process_lock = multiprocessing.get_context().RLock()
-    else:
+_backend_init_process_lock = None
+
+
+def _set_init_process_lock():
+    global _backend_init_process_lock
+    try:
+        # Force the use of an RLock in the case a fork was used to start the
+        # process and thereby the init sequence, some of the threading backend
+        # init sequences are not fork safe. Also, windows global mp locks seem
+        # to be fine.
+        if "fork" in multiprocessing.get_start_method() or _windows:
+            _backend_init_process_lock = multiprocessing.get_context().RLock()
+        else:
+            _backend_init_process_lock = _nop()
+
+    except OSError as e:
+
+        # probably lack of /dev/shm for semaphore writes, warn the user
+        msg = (
+            "Could not obtain multiprocessing lock due to OS level error: %s\n"
+            "A likely cause of this problem is '/dev/shm' is missing or"
+            "read-only such that necessary semaphores cannot be written.\n"
+            "*** The responsibility of ensuring multiprocessing safe access to "
+            "this initialization sequence/module import is deferred to the "
+            "user! ***\n"
+        )
+        warnings.warn(msg % str(e))
+
         _backend_init_process_lock = _nop()
 
-except OSError as e:
-
-    # probably lack of /dev/shm for semaphore writes, warn the user
-    msg = ("Could not obtain multiprocessing lock due to OS level error: %s\n"
-           "A likely cause of this problem is '/dev/shm' is missing or"
-           "read-only such that necessary semaphores cannot be written.\n"
-           "*** The responsibility of ensuring multiprocessing safe access to "
-           "this initialization sequence/module import is deferred to the "
-           "user! ***\n")
-    warnings.warn(msg % str(e))
-
-    _backend_init_process_lock = _nop()
 
 _is_initialized = False
 
@@ -361,6 +369,9 @@ def _check_tbb_version_compatible():
 
 
 def _launch_threads():
+    if not _backend_init_process_lock:
+        _set_init_process_lock()
+
     with _backend_init_process_lock:
         with _backend_init_thread_lock:
             global _is_initialized

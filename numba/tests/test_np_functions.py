@@ -15,9 +15,9 @@ from numba.np.numpy_support import numpy_version
 from numba.core.errors import TypingError
 from numba.core.config import IS_WIN32, IS_32BITS
 from numba.core.utils import pysignature
-from numba.np.arraymath import cross2d
+from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas, skip_ppc64le_issue4026)
+                                 needs_blas)
 import unittest
 
 
@@ -245,6 +245,10 @@ def asarray_kws(a, dtype):
     return np.asarray(a, dtype=dtype)
 
 
+def asfarray(a, dtype=np.float64):
+    return np.asfarray(a, dtype=dtype)
+
+
 def extract(condition, arr):
     return np.extract(condition, arr)
 
@@ -315,6 +319,10 @@ def flip_lr(a):
 
 def flip_ud(a):
     return np.flipud(a)
+
+
+def array_contains(a, key):
+    return key in a
 
 
 class TestNPFunctions(MemoryLeakMixin, TestCase):
@@ -431,6 +439,62 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = [np.array(x_values, dtype=np.complex128)]
         x_types = [typeof(v) for v in x_values]
         check(x_types, x_values, ulps=2)
+
+    def test_contains(self):
+        def arrs():
+            a_0 = np.arange(10, 50)
+            k_0 = 20
+
+            yield a_0, k_0
+
+            a_1 = np.arange(6)
+            k_1 = 10
+
+            yield a_1, k_1
+
+            single_val_a = np.asarray([20])
+            k_in = 20
+            k_out = 13
+
+            yield single_val_a, k_in
+            yield single_val_a, k_out
+
+            empty_arr = np.asarray([])
+            yield empty_arr, k_out
+
+            # np scalars
+
+            bool_arr = np.array([True, False])
+            yield bool_arr, True
+            yield bool_arr, k_0
+
+            np.random.seed(2)
+            float_arr = np.random.rand(10)
+            np.random.seed(2)
+            rand_k = np.random.rand()
+            present_k = float_arr[0]
+
+            yield float_arr, rand_k
+            yield float_arr, present_k
+
+            complx_arr = float_arr.view(np.complex128)
+            yield complx_arr, complx_arr[0]
+            yield complx_arr, rand_k
+
+            np.random.seed(2)
+            uint_arr = np.random.randint(10, size=15, dtype=np.uint8)
+            yield uint_arr, 5
+            yield uint_arr, 25
+
+        pyfunc = array_contains
+
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, key in arrs():
+            expected = pyfunc(arr, key)
+            received = cfunc(arr, key)
+
+            self.assertPreciseEqual(expected, received)
 
     def test_angle(self, flags=no_pyobj_flags):
         """
@@ -575,8 +639,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
-    # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
-    @skip_ppc64le_issue4026
     def test_delete(self):
 
         def arrays():
@@ -3208,6 +3270,28 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         test_reject(make_nested_list_with_dict())
         test_reject(make_unicode_list())
 
+    def test_asfarray(self):
+        def inputs():
+            yield np.array([1, 2, 3]), None
+            yield np.array([2, 3], dtype=np.float32), np.float32
+            yield np.array([2, 3], dtype=np.int8), np.int8
+            yield np.array([2, 3], dtype=np.int8), np.complex64
+            yield np.array([2, 3], dtype=np.int8), np.complex128
+
+        pyfunc = asfarray
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, dt in inputs():
+            if dt is None:
+                expected = pyfunc(arr)
+                got = cfunc(arr)
+            else:
+                expected = pyfunc(arr, dtype=dt)
+                got = cfunc(arr, dtype=dt)
+
+            self.assertPreciseEqual(expected, got)
+            self.assertTrue(np.issubdtype(got.dtype, np.inexact), got.dtype)
+
     def test_repeat(self):
         # np.repeat(a, repeats)
         np_pyfunc = np_repeat
@@ -3561,7 +3645,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array((3, 4))
             )
         self.assertIn(
-            'Dimensions for both inputs is 2',
+            'Dimensions for both inputs is 2.',
+            str(raises.exception)
+        )
+
+        self.assertIn(
+            '`cross2d(a, b)` from `numba.np.extensions`.',
             str(raises.exception)
         )
 
