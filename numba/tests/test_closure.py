@@ -3,7 +3,7 @@ import numpy as np
 import numpy
 
 import unittest
-from numba import njit, jit, testing
+from numba import njit, jit
 from numba.core.errors import TypingError, UnsupportedError
 from numba.tests.support import TestCase
 
@@ -91,19 +91,6 @@ class TestClosure(TestCase):
 
     def test_jit_inner_function_npm(self):
         self.run_jit_inner_function(nopython=True)
-
-    @testing.allow_interpreter_mode
-    def test_return_closure(self):
-
-        def outer(x):
-
-            def inner():
-                return x + 1
-
-            return inner
-
-        cfunc = jit(outer)
-        self.assertEqual(cfunc(10)(), outer(10)())
 
 
 class TestInlinedClosure(TestCase):

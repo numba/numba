@@ -1,3 +1,4 @@
+import numpy as np
 from collections import namedtuple
 
 _MemoryInfo = namedtuple("_MemoryInfo", "free,total")
@@ -36,6 +37,18 @@ class FakeCUDAContext(object):
         e.g. `psutil` - so return infinite memory to maintain API type compatibility
         """
         return _MemoryInfo(float('inf'), float('inf'))
+
+    def memalloc(self, sz):
+        """
+        Allocates memory on the simulated device
+        At present, there is no division between simulated
+        host memory and simulated device memory.
+        """
+        return np.ndarray(sz, dtype='u1')
+
+    def memhostalloc(self, sz, mapped=False, portable=False, wc=False):
+        '''Allocates memory on the host'''
+        return self.memalloc(sz)
 
 
 class FakeDeviceList(object):
