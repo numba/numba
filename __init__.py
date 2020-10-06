@@ -1,7 +1,5 @@
 """
 
-TODO: UPDATE DOCUMENTATION WITH DPCTL
-
 Module to interact with Intel based devices
 
 
@@ -167,7 +165,7 @@ Complete Example using @dppl.kernel:
     ---------------------------------------------------------------------------
     import numpy as np
     from numba import dppl
-    import dppl.ocldrv as ocldrv
+    import dpctl
 
     @dppl.kernel
     def data_parallel_sum(a, b, c):
@@ -196,11 +194,11 @@ Complete Example using @dppl.kernel:
         b = np.array(np.random.random(N), dtype=np.float32)
         c = np.ones_like(a)
 
-        if ocldrv.has_gpu_device:
-            with ocldrv.igpu_context(0) as device_env:
+        if dpctl.has_gpu_queues():
+            with dpctl.device_context("opencl:gpu") as gpu_queue:
                 driver(device_env, a, b, c, global_size)
-        elif ocldrv.has_cpu_device:
-            with ocldrv.cpu_context(0) as device_env:
+        elif dpctl.has_cpu_queues():
+            with dpctl.device_context("opencl:cpu") as cpu_queue:
                 driver(device_env, a, b, c, global_size)
         else:
             print("No device found")
