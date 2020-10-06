@@ -59,7 +59,6 @@ def _declare_function(context, builder, name, sig, cargs,
     fn.calling_convention = target.CC_SPIR_FUNC
     return fn
 
-
 @lower(stubs.get_global_id, types.uint32)
 def get_global_id_impl(context, builder, sig, args):
     [dim] = args

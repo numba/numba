@@ -3,8 +3,7 @@ import numpy as np
 from numba import dppl, int32
 import math
 
-import dpctl.ocldrv as ocldrv
-
+import dpctl
 
 def sum_reduction_device_plus_host():
     @dppl.kernel
@@ -42,8 +41,8 @@ def sum_reduction_device_plus_host():
     inp = np.ones(global_size).astype(np.int32)
     partial_sums = np.zeros(nb_work_groups).astype(np.int32)
 
-    if ocldrv.has_gpu_device:
-        with ocldrv.igpu_context(0) as device_env:
+    if dpctl.has_gpu_queues():
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             print("Running Device + Host reduction")
             sum_reduction_kernel[global_size, work_group_size](inp, partial_sums)
     else:

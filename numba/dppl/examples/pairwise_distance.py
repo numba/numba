@@ -7,11 +7,12 @@ import argparse
 import timeit
 
 from numba import dppl
-import dpctl.ocldrv as ocldrv
+import dpctl
+import dpctl._memory as dpctl_mem
 
 parser = argparse.ArgumentParser(description='Program to compute pairwise distance')
 
-parser.add_argument('-n', type=int, default=10, required=True, help='Number of points')
+parser.add_argument('-n', type=int, default=10, help='Number of points')
 parser.add_argument('-d', type=int, default=3, help='Dimensions')
 parser.add_argument('-r', type=int, default=1, help='repeat')
 parser.add_argument('-l', type=int, default=1, help='local_work_size')
@@ -40,24 +41,28 @@ def pairwise_distance(X, D, xshape0, xshape1):
         D[idx, j] = sqrt(d)
 
 
-def driver(device_env):
+def driver():
     #measure running time
     times = list()
 
-    # Copy the data to the device
-    dX = device_env.copy_array_to_device(X)
-    dD = ocldrv.DeviceArray(device_env.get_env_ptr(), D)
+    xbuf = dpctl_mem.MemoryUSMShared(X.size * X.dtype.itemsize)
+    x_ndarray = np.ndarray(X.shape, buffer=xbuf, dtype=X.dtype)
+    np.copyto(x_ndarray, X)
+
+    dbuf = dpctl_mem.MemoryUSMShared(D.size * D.dtype.itemsize)
+    d_ndarray = np.ndarray(D.shape, buffer=dbuf, dtype=D.dtype)
+    np.copyto(d_ndarray, D)
 
     for repeat in range(args.r):
         start = time()
-        pairwise_distance[global_size, local_size](dX, dD, X.shape[0], X.shape[1])
+        pairwise_distance[global_size, local_size](x_ndarray, d_ndarray, X.shape[0], X.shape[1])
         end = time()
 
         total_time = end - start
         times.append(total_time)
 
-    # Get the data back from device to host
-    device_env.copy_array_from_device(dD)
+    np.copyto(X, x_ndarray)
+    np.copyto(D, d_ndarray)
 
     return times
 
@@ -65,12 +70,12 @@ def driver(device_env):
 def main():
     times = None
 
-    if ocldrv.has_gpu_device:
-        with ocldrv.igpu_context(0) as device_env:
-            times = driver(device_env)
-    elif ocldrv.has_cpu_device:
-        with ocldrv.cpu_context(0) as device_env:
-            times = driver(device_env)
+    if dpctl.has_gpu_queues():
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
+            times = driver()
+    elif dpctl.has_cpu_queues():
+        with dpctl.device_context("opencl:cpu") as cpu_queue:
+            times = driver()
     else:
         print("No device found")
         exit()

@@ -6,8 +6,7 @@ import numba
 from numba import dppl
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
-import dpctl.ocldrv as ocldrv
-
+import dpctl
 
 def atomic_add(ary):
     tid = dppl.get_local_id(0)
@@ -43,7 +42,7 @@ def atomic_add3(ary):
 
 
 
-@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+@unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestAtomicOp(DPPLTestCase):
     def test_atomic_add(self):
         @dppl.kernel
@@ -54,7 +53,7 @@ class TestAtomicOp(DPPLTestCase):
         N = 100
         B = np.array([0])
 
-        with ocldrv.igpu_context(0) as device_env:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             atomic_add[N, dppl.DEFAULT_LOCAL_SIZE](B)
 
         self.assertTrue(B[0] == N)
@@ -69,7 +68,7 @@ class TestAtomicOp(DPPLTestCase):
         N = 100
         B = np.array([100])
 
-        with ocldrv.igpu_context(0) as device_env:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             atomic_sub[N, dppl.DEFAULT_LOCAL_SIZE](B)
 
         self.assertTrue(B[0] == 0)
@@ -77,8 +76,9 @@ class TestAtomicOp(DPPLTestCase):
     def test_atomic_add1(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
         orig = ary.copy()
-        dppl_atomic_add = dppl.kernel('void(uint32[:])')(atomic_add)
-        with ocldrv.igpu_context(0) as device_env:
+        #dppl_atomic_add = dppl.kernel('void(uint32[:])')(atomic_add)
+        dppl_atomic_add = dppl.kernel(atomic_add)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dppl_atomic_add[32, dppl.DEFAULT_LOCAL_SIZE](ary)
 
         gold = np.zeros(32, dtype=np.uint32)
@@ -90,16 +90,18 @@ class TestAtomicOp(DPPLTestCase):
     def test_atomic_add2(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
-        dppl_atomic_add2 = dppl.kernel('void(uint32[:,:])')(atomic_add2)
-        with ocldrv.igpu_context(0) as device_env:
+        #dppl_atomic_add2 = dppl.kernel('void(uint32[:,:])')(atomic_add2)
+        dppl_atomic_add2 = dppl.kernel(atomic_add2)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dppl_atomic_add2[(4, 8), dppl.DEFAULT_LOCAL_SIZE](ary)
         self.assertTrue(np.all(ary == orig + 1))
 
     def test_atomic_add3(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
-        dppl_atomic_add3 = dppl.kernel('void(uint32[:,:])')(atomic_add3)
-        with ocldrv.igpu_context(0) as device_env:
+        #dppl_atomic_add3 = dppl.kernel('void(uint32[:,:])')(atomic_add3)
+        dppl_atomic_add3 = dppl.kernel(atomic_add3)
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             dppl_atomic_add3[(4, 8), dppl.DEFAULT_LOCAL_SIZE](ary)
 
         self.assertTrue(np.all(ary == orig + 1))

@@ -7,7 +7,7 @@ import time
 from numba import dppl
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
-import dpctl.ocldrv as ocldrv
+import dpctl
 
 
 RISKFREE = 0.02
@@ -48,7 +48,7 @@ def randfloat(rand_var, low, high):
     return (1.0 - rand_var) * low + rand_var * high
 
 
-@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+@unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestDPPLBlackScholes(DPPLTestCase):
     def test_black_scholes(self):
         OPT_N = 400
@@ -100,23 +100,13 @@ class TestDPPLBlackScholes(DPPLTestCase):
         blockdim = 512, 1
         griddim = int(math.ceil(float(OPT_N) / blockdim[0])), 1
 
-        with ocldrv.igpu_context(0) as device_env:
-            # Get data to device
-            d_callResult = device_env.copy_array_to_device(callResultNumbapro)
-            d_putResult = device_env.copy_array_to_device(putResultNumbapro)
-            d_stockPrice = device_env.copy_array_to_device(stockPrice)
-            d_optionStrike = device_env.copy_array_to_device(optionStrike)
-            d_optionYears = device_env.copy_array_to_device(optionYears)
-
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             time1 = time.time()
             for i in range(iterations):
                 black_scholes_dppl[blockdim, griddim](
-                    d_callResult, d_putResult, d_stockPrice, d_optionStrike,
-                    d_optionYears, RISKFREE, VOLATILITY)
+                    callResultNumbapro, putResultNumbapro, stockPrice, optionStrike,
+                    optionYears, RISKFREE, VOLATILITY)
 
-            # Get data from device
-            device_env.copy_array_from_device(d_callResult)
-            device_env.copy_array_from_device(d_putResult)
 
         dt = (time1 - time0)
 

@@ -28,5 +28,5 @@ done
 set -x
 
 python setup.py clean --all
-python setup.py build --inplace
+python setup.py build_ext --inplace
 python setup.py develop

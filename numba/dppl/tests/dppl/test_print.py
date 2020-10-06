@@ -8,29 +8,11 @@ from numba import dppl, njit, prange
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
 
-import dpctl.ocldrv as ocldrv
+import dpctl
 
 
-@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+@unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestPrint(DPPLTestCase):
-    def test_print_prange(self):
-        @njit(parallel={'offload':True})
-        def f(a, b):
-            for i in prange(4):
-                print("before at:", i, b[i, 0])
-                b[i, 0] = a[i, 0] * 10
-                print("after at:", i, b[i, 0])
-
-        m = 8
-        n = 8
-        a = np.ones((m, n))
-        b = np.ones((m, n))
-
-        f(a, b)
-
-        for i in range(4):
-            self.assertTrue(b[i, 0] == a[i, 0] * 10)
-
     def test_print_dppl_kernel(self):
         @dppl.func
         def g(a):
@@ -48,7 +30,7 @@ class TestPrint(DPPLTestCase):
         a = np.ones(N)
         b = np.ones(N)
 
-        with ocldrv.igpu_context(0) as device_env:
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             f[N, dppl.DEFAULT_LOCAL_SIZE](a, b)
 
 

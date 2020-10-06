@@ -7,7 +7,7 @@ import time
 from numba import dppl
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
-import dpctl.ocldrv as ocldrv
+import dpctl
 
 @dppl.kernel
 def reduction_kernel(A, R, stride):
@@ -18,7 +18,7 @@ def reduction_kernel(A, R, stride):
     A[i] = R[i]
 
 
-@unittest.skipUnless(ocldrv.has_gpu_device, 'test only on GPU system')
+@unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestDPPLSumReduction(DPPLTestCase):
     def test_sum_reduction(self):
         # This test will only work for even case
@@ -26,24 +26,20 @@ class TestDPPLSumReduction(DPPLTestCase):
         self.assertTrue(N%2 == 0)
 
         A = np.array(np.random.random(N), dtype=np.float32)
+        A_copy = A.copy()
         # at max we will require half the size of A to store sum
         R = np.array(np.random.random(math.ceil(N/2)), dtype=np.float32)
 
-        with ocldrv.igpu_context(0) as device_env:
-            # create device array
-            dA = device_env.copy_array_to_device(A)
-            dR = device_env.copy_array_to_device(R)
-
+        with dpctl.device_context("opencl:gpu") as gpu_queue:
             total = N
 
             while (total > 1):
                 # call kernel
                 global_size = total // 2
-                reduction_kernel[global_size, dppl.DEFAULT_LOCAL_SIZE](dA, dR, global_size)
+                reduction_kernel[global_size, dppl.DEFAULT_LOCAL_SIZE](A, R, global_size)
                 total = total // 2
 
-            device_env.copy_array_from_device(dR)
-            result = A.sum()
+            result = A_copy.sum()
             max_abs_err = result - R[0]
             self.assertTrue(max_abs_err < 1e-4)
 
