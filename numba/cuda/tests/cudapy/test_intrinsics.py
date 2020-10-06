@@ -421,6 +421,19 @@ class TestCudaIntrinsic(CUDATestCase):
                 self.assertPreciseEqual(ary[0], round(val, ndigits),
                                         prec='single')
 
+    def test_round_to_f4_overflow(self):
+        # Test that the input value is returned when y in round_ndigits
+        # overflows.
+        compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float32)
+        vals = np.asarray([np.finfo(np.float32).max], dtype=np.float32)
+        # An unusually large number of digits is required to hit the "y
+        # overflows" branch of the implementation because the typing results in
+        # the computation of y as float64.
+        ndigits = 300
+        compiled[1, 1](ary, vals, ndigits)
+        print(ary)
+
     def test_round_to_f4_halfway(self):
         compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
         ary = np.zeros(1, dtype=np.float32)
@@ -451,6 +464,18 @@ class TestCudaIntrinsic(CUDATestCase):
             compiled[1, 1](ary, val, ndigits)
             self.assertPreciseEqual(ary[0], round(val, ndigits),
                                     prec='double')
+
+    def test_round_to_f8_overflow(self):
+        # Test that the input value is returned when y in round_ndigits
+        # overflows.
+        compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float64)
+        vals = np.asarray([np.finfo(np.float64).max], dtype=np.float64)
+        # Unlike test_round_to_f4_overflow, a reasonalble number of digits can
+        # be used for this test to overflow y in round_ndigits.
+        ndigits = 12
+        compiled[1, 1](ary, vals, ndigits)
+        self.assertEqual(ary[0], vals[0])
 
     def test_round_to_f8_halfway(self):
         compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
