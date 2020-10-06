@@ -12,6 +12,18 @@ def initialize_all():
     from numba.core.registry import dispatcher_registry
     dispatcher_registry.ondemand['dppl'] = init_jit
 
-    #ll.load_library_permanently(find_library('DPPLOpenCLInterface'))
-    ll.load_library_permanently(find_library('DPPLSyclInterface'))
+    import dpctl
+    import glob
+    import platform as plt
+    platform = plt.system()
+    if platform == 'Windows':
+        paths = glob.glob(os.path.join(os.path.dirname(dpctl.__file__), '*DPPLSyclInterface.dll'))
+    else:
+        paths = glob.glob(os.path.join(os.path.dirname(dpctl.__file__), '*DPPLSyclInterface*'))
+
+    if len(paths) == 1:
+        ll.load_library_permanently(find_library(paths[0]))
+    else:
+        raise ImportError
+
     ll.load_library_permanently(find_library('OpenCL'))
