@@ -29,11 +29,11 @@ class TestWithDPPLContext(DPPLTestCase):
             with dpctl.device_context("opencl:gpu"):
                 func(got_gpu)
 
+        numba.dppl.compiler.DEBUG = 0
         func(expected)
 
         np.testing.assert_array_equal(expected, got_gpu)
         self.assertTrue('Parfor lowered on DPPL-device' in got_gpu_message.getvalue())
-        numba.dppl.compiler.DEBUG = 0
 
     @unittest.skipIf(not dpctl.has_cpu_queues(), "No CPU platforms available")
     def test_with_dppl_context_cpu(self):
@@ -55,11 +55,11 @@ class TestWithDPPLContext(DPPLTestCase):
             with dpctl.device_context("opencl:cpu"):
                 func(got_cpu)
 
+        numba.dppl.compiler.DEBUG = 0
         func(expected)
 
         np.testing.assert_array_equal(expected, got_cpu)
         self.assertTrue('Parfor lowered on DPPL-device' in got_cpu_message.getvalue())
-        numba.dppl.compiler.DEBUG = 0
 
 
     @unittest.skipIf(not dpctl.has_gpu_queues(), "No GPU platforms available")
