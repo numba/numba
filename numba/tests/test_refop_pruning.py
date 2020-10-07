@@ -27,8 +27,10 @@ class TestRefOpPruning(TestCase):
     def check(self, func, *argtys, **prune_types):
         """
         Asserts the the func compiled with argument types "argtys" reports
-        refop pruning statistics that match those supplied as kwargs in
-        **prune_types.
+        refop pruning statistics. The **prune_types** kwargs list each kind
+        of pruning and whether the stat should be zero (False) or >0 (True).
+
+        Note: The exact statistic varies across platform.
         """
 
         with override_config('EXPERIMENTAL_REFPRUNE_PASS', '1'):
@@ -40,7 +42,10 @@ class TestRefOpPruning(TestCase):
         for k, v in prune_types.items():
             stat = getattr(pstats, k, None)
             self.assertIsNotNone(stat)
-            self.assertEqual(stat, v)
+            if v:
+                self.assertGreater(stat, 0)
+            else:
+                self.assertEqual(stat, 0)
 
     def test_basic_block_1(self):
         # some nominally involved control flow and ops, there's only basic_block
@@ -56,7 +61,7 @@ class TestRefOpPruning(TestCase):
                 acc += c[0]
             return acc
 
-        self.check(func, (types.intp), basicblock=16)
+        self.check(func, (types.intp), basicblock=True)
 
     def test_diamond_1(self):
         # most basic?! diamond
@@ -69,8 +74,8 @@ class TestRefOpPruning(TestCase):
 
         # disable fanout pruning
         with set_refprune_flags('per_bb,diamond'):
-            self.check(func, (types.intp), basicblock=41, diamond=2,
-                       fanout=0, fanout_raise=0)
+            self.check(func, (types.intp), basicblock=True, diamond=True,
+                       fanout=False, fanout_raise=False)
 
     def test_diamond_2(self):
         # more complex diamonds
@@ -85,8 +90,8 @@ class TestRefOpPruning(TestCase):
 
         # disable fanout pruning
         with set_refprune_flags('per_bb,diamond'):
-            self.check(func, (types.intp), basicblock=54, diamond=6,
-                       fanout=0, fanout_raise=0)
+            self.check(func, (types.intp), basicblock=True, diamond=True,
+                       fanout=False, fanout_raise=False)
 
     def test_fanout_1(self):
         # most basic?! fan-out
@@ -99,7 +104,19 @@ class TestRefOpPruning(TestCase):
                 acc += i[0]
             return acc
 
-        self.check(func, (types.intp), basicblock=44, fanout=3)
+        self.check(func, (types.intp), basicblock=True, fanout=True)
+
+    def test_fanout_2(self):
+        # most basic?! fan-out
+        def func(n):
+            a = np.zeros(n)
+            x = (a,)
+            if n:
+                raise ValueError
+            return x
+
+        self.check(func, (types.intp), basicblock=True, fanout=False,
+                   fanout_raise=True)
 
 
 class TestRefPruneFlags(TestCase):
