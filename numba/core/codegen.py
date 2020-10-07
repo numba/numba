@@ -25,6 +25,22 @@ def _is_x86(triple):
     return arch in _x86arch
 
 
+def _parse_refprune_flags():
+    """Parse refprune flags from the `config`
+    """
+    flags = config.EXPERIMENTAL_REFPRUNE_FLAGS.split(',')
+    if not flags:
+        return 0
+    val = 0
+    for item in flags:
+        item = item.strip()
+        try:
+            val |= getattr(ll.RefPruneSubpasses, item.upper())
+        except AttributeError:
+            warnings.warn(f"invalid refprune flags {item!r}")
+    return val
+
+
 def dump(header, body, lang):
     if config.HIGHLIGHT_DUMPS:
         try:
@@ -696,7 +712,7 @@ class BaseCPUCodegen(object):
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
         if config.EXPERIMENTAL_REFPRUNE_PASS:
-            pm.add_refprune_pass()
+            pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 
     def _function_pass_manager(self, llvm_module):
@@ -705,7 +721,7 @@ class BaseCPUCodegen(object):
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
         if config.EXPERIMENTAL_REFPRUNE_PASS:
-            pm.add_refprune_pass()
+            pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 
     def _pass_manager_builder(self):

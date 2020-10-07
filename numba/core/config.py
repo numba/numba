@@ -381,9 +381,13 @@ class _EnvReloader(object):
         CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,
                                        'default')
 
-        # Experimental
+        # Experimental refprune pass
         EXPERIMENTAL_REFPRUNE_PASS = _readenv(
             "NUMBA_EXPERIMENTAL_REFPRUNE_PASS", int, 1,
+        )
+        EXPERIMENTAL_REFPRUNE_FLAGS = _readenv(
+            "NUMBA_EXPERIMENTAL_REFPRUNE_FLAGS", str,
+            "all" if EXPERIMENTAL_REFPRUNE_PASS else "",
         )
 
         # Inject the configuration values into the module globals

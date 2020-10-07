@@ -1,6 +1,9 @@
 import unittest
 from unittest import TestCase
+from contextlib import contextmanager
+
 import numpy as np
+
 from numba import types
 from numba.core.compiler import compile_isolated
 from numba.tests.support import override_config
@@ -28,6 +31,11 @@ class TestRefOpPruning(TestCase):
             self.assertIsNotNone(stat)
             self.assertEqual(stat, v)
 
+    @contextmanager
+    def set_refprune_flags(self, flags):
+        with override_config('EXPERIMENTAL_REFPRUNE_FLAGS', flags):
+            yield
+
     def test_basic_block_1(self):
         # some nominally involved control flow and ops, there's only basic_block
         # opportunities present here.
@@ -53,7 +61,10 @@ class TestRefOpPruning(TestCase):
                 x = a.sum()
             return x + 1
 
-        self.check(func, (types.intp), basicblock=41, diamond=2)
+        # disable fanout pruning
+        with self.set_refprune_flags('per_bb,diamond'):
+            self.check(func, (types.intp), basicblock=41, diamond=2,
+                       fanout=0, fanout_raise=0)
 
     def test_diamond_2(self):
         # more complex diamonds
@@ -66,7 +77,10 @@ class TestRefOpPruning(TestCase):
                 c += arr.sum() / (1 + arr.size)
             return c
 
-        self.check(func, (types.intp), basicblock=54, diamond=6)
+        # disable fanout pruning
+        with self.set_refprune_flags('per_bb,diamond'):
+            self.check(func, (types.intp), basicblock=54, diamond=6,
+                       fanout=0, fanout_raise=0)
 
     def test_fanout_1(self):
         # most basic?! fan-out
