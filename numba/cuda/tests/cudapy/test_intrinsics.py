@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 import re
 from numba import cuda
@@ -80,6 +81,10 @@ def simple_ffs(ary, c):
 
 def simple_round(ary, c):
     ary[0] = round(c)
+
+
+def simple_round_to(ary, c, ndigits):
+    ary[0] = round(c, ndigits)
 
 
 def branching_with_ifs(a, b, c):
@@ -395,6 +400,101 @@ class TestCudaIntrinsic(CUDATestCase):
         for i in [-3.0, -2.5, -2.25, -1.5, 1.5, 2.25, 2.5, 2.75]:
             compiled[1, 1](ary, i)
             self.assertEquals(ary[0], round(i))
+
+    def test_round_to_f4(self):
+        compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float32)
+        vals = np.random.random(32).astype(np.float32)
+        np.concatenate((vals, np.array([np.inf, -np.inf, np.nan])))
+        digits = (
+            # Common case branch of round_to_impl
+            -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5,
+            # The algorithm currently implemented can only round to 13 digits
+            # with single precision. Note that this doesn't trigger the
+            # "overflow safe" branch of the implementation, which can only be
+            # hit when using double precision.
+            13
+        )
+        for val, ndigits in itertools.product(vals, digits):
+            with self.subTest(val=val, ndigits=ndigits):
+                compiled[1, 1](ary, val, ndigits)
+                self.assertPreciseEqual(ary[0], round(val, ndigits),
+                                        prec='single')
+
+    # CPython on most platforms uses rounding based on dtoa.c, whereas the CUDA
+    # round-to implementation uses CPython's fallback implementation, which has
+    # slightly different behavior at the edges of the domain. Since the CUDA
+    # simulator executes using CPython, we need to skip this test when the
+    # simulator is active.
+    @skip_on_cudasim('Overflow behavior differs on CPython')
+    def test_round_to_f4_overflow(self):
+        # Test that the input value is returned when y in round_ndigits
+        # overflows.
+        compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float32)
+        val = np.finfo(np.float32).max
+        # An unusually large number of digits is required to hit the "y
+        # overflows" branch of the implementation because the typing results in
+        # the computation of y as float64.
+        ndigits = 300
+        compiled[1, 1](ary, val, ndigits)
+        self.assertEqual(ary[0], val)
+
+    def test_round_to_f4_halfway(self):
+        compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float32)
+        # Value chosen to trigger the "round to even" branch of the
+        # implementation
+        val = 0.3425
+        ndigits = 3
+        compiled[1, 1](ary, val, ndigits)
+        self.assertPreciseEqual(ary[0], round(val, ndigits), prec='single')
+
+    def test_round_to_f8(self):
+        compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float64)
+        vals = np.random.random(32)
+        np.concatenate((vals, np.array([np.inf, -np.inf, np.nan])))
+        digits = (-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5)
+
+        for val, ndigits in itertools.product(vals, digits):
+            with self.subTest(val=val, ndigits=ndigits):
+                compiled[1, 1](ary, val, ndigits)
+                self.assertPreciseEqual(ary[0], round(val, ndigits),
+                                        prec='exact')
+
+        # Trigger the "overflow safe" branch of the implementation
+        val = 0.12345678987654321 * 10e-15
+        ndigits = 23
+        with self.subTest(val=val, ndigits=ndigits):
+            compiled[1, 1](ary, val, ndigits)
+            self.assertPreciseEqual(ary[0], round(val, ndigits),
+                                    prec='double')
+
+    # Skipped on cudasim for the same reasons as test_round_to_f4 above.
+    @skip_on_cudasim('Overflow behavior differs on CPython')
+    def test_round_to_f8_overflow(self):
+        # Test that the input value is returned when y in round_ndigits
+        # overflows.
+        compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float64)
+        val = np.finfo(np.float64).max
+        # Unlike test_round_to_f4_overflow, a reasonable number of digits can
+        # be used for this test to overflow y in round_ndigits.
+        ndigits = 12
+        compiled[1, 1](ary, val, ndigits)
+        self.assertEqual(ary[0], val)
+
+    def test_round_to_f8_halfway(self):
+        compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
+        ary = np.zeros(1, dtype=np.float64)
+        # Value chosen to trigger the "round to even" branch of the
+        # implementation, with a value that is not exactly representable with a
+        # float32, but only a float64.
+        val = 0.5425
+        ndigits = 3
+        compiled[1, 1](ary, val, ndigits)
+        self.assertPreciseEqual(ary[0], round(val, ndigits), prec='double')
 
 
 if __name__ == '__main__':

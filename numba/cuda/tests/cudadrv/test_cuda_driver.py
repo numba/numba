@@ -168,13 +168,18 @@ class TestCudaDriver(CUDATestCase):
         module = self.context.create_module_ptx(self.ptx)
         function = module.get_function('_Z10helloworldPi')
 
-        value = self.context.get_active_blocks_per_multiprocessor(function, 128, 128)
+        value = self.context.get_active_blocks_per_multiprocessor(function,
+                                                                  128, 128)
         self.assertTrue(value > 0)
-        def b2d(bs): return bs
-        grid, block = self.context.get_max_potential_block_size(function, b2d, 128, 128)
+
+        def b2d(bs):
+            return bs
+
+        grid, block = self.context.get_max_potential_block_size(function, b2d,
+                                                                128, 128)
         self.assertTrue(grid > 0)
         self.assertTrue(block > 0)
 
+
 if __name__ == '__main__':
     unittest.main()
-
