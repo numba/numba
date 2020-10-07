@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import warnings
 
+import numpy as np
 from numba.core import ir
 import weakref
 from collections import namedtuple, deque
@@ -25,10 +26,127 @@ from numba.core.compiler_machinery import FunctionPass, LoweringPass, register_p
 
 from .dppl_lowerer import DPPLLower
 
-from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass
+from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass, replace_functions_map
 from numba.parfors.parfor import ParforPass as _parfor_ParforPass
 from numba.parfors.parfor import Parfor
 
+def dpnp_available():
+    try:
+       # import dpnp
+        from numba.dppl.dpnp_glue import dpnp_fptr_interface as dpnp_glue
+        return True
+    except:
+        return False
+
+
+@register_pass(mutates_CFG=False, analysis_only=True)
+class DPPLAddNumpyOverloadPass(FunctionPass):
+    _name = "dppl_add_numpy_overload_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        if dpnp_available():
+            typingctx = state.typingctx
+            from numba.core.typing.templates import builtin_registry as reg, infer_global
+            from numba.core.typing.templates import (AbstractTemplate, CallableTemplate, signature)
+            from numba.core.typing.npydecl import MatMulTyperMixin
+
+            @infer_global(np.cov)
+            class NPCov(AbstractTemplate):
+                def generic(self, args, kws):
+                    assert not kws
+                    if args[0].ndim > 2:
+                        return
+
+                    nb_dtype = types.float64
+                    return_type = types.Array(dtype=nb_dtype, ndim=args[0].ndim, layout='C')
+                    return signature(return_type, *args)
+
+            @infer_global(np.matmul, typing_key="np.matmul")
+            class matmul(MatMulTyperMixin, AbstractTemplate):
+                key = np.matmul
+                func_name = "np.matmul()"
+
+                def generic(self, args, kws):
+                    assert not kws
+                    restype = self.matmul_typer(*args)
+                    if restype is not None:
+                        return signature(restype, *args)
+
+            @infer_global(np.median)
+            class NPMedian(AbstractTemplate):
+                def generic(self, args, kws):
+                    assert not kws
+
+                    retty = args[0].dtype
+                    return signature(retty, *args)
+
+            @infer_global(np.mean)
+            #@infer_global("array.mean")
+            class NPMean(AbstractTemplate):
+                def generic(self, args, kws):
+                    assert not kws
+
+                    if args[0].dtype == types.float32:
+                        retty = types.float32
+                    else:
+                        retty = types.float64
+                    return signature(retty, *args)
+
+
+            prev_cov = None
+            prev_median = None
+            prev_mean = None
+            for idx, g in enumerate(reg.globals):
+                if g[0] == np.cov:
+                    if not prev_cov:
+                        prev_cov = g[1]
+                    else:
+                        prev_cov.templates = g[1].templates
+
+                if g[0] == np.median:
+                    if not prev_median:
+                        prev_median = g[1]
+                    else:
+                        prev_median.templates = g[1].templates
+
+                if g[0] == np.mean:
+                    if not prev_mean:
+                        prev_mean = g[1]
+                    else:
+                        prev_mean.templates = g[1].templates
+
+            typingctx.refresh()
+        return True
+
+@register_pass(mutates_CFG=False, analysis_only=True)
+class DPPLAddNumpyRemoveOverloadPass(FunctionPass):
+    _name = "dppl_remove_numpy_overload_pass"
+
+    def __init__(self):
+        FunctionPass.__init__(self)
+
+    def run_pass(self, state):
+        if dpnp_available():
+            typingctx = state.typingctx
+            targetctx = state.targetctx
+
+            from importlib import reload
+            from numba.np import npyimpl, arrayobj, arraymath
+            reload(npyimpl)
+            reload(arrayobj)
+            reload(arraymath)
+            targetctx.refresh()
+
+
+            import numba
+            from numba.core import lowering
+            from numba.parfors import parfor
+            lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
+
+        return True
 
 @register_pass(mutates_CFG=True, analysis_only=False)
 class DPPLConstantSizeStaticLocalMemoryPass(FunctionPass):
@@ -117,15 +235,26 @@ class DPPLPreParforPass(FunctionPass):
         """
         Preprocessing for data-parallel computations.
         """
+
         # Ensure we have an IR and type information.
         assert state.func_ir
+        functions_map = replace_functions_map.copy()
+        functions_map.pop(('dot', 'numpy'), None)
+        functions_map.pop(('sum', 'numpy'), None)
+        functions_map.pop(('prod', 'numpy'), None)
+        functions_map.pop(('argmax', 'numpy'), None)
+        functions_map.pop(('max', 'numpy'), None)
+        functions_map.pop(('argmin', 'numpy'), None)
+        functions_map.pop(('min', 'numpy'), None)
+        functions_map.pop(('mean', 'numpy'), None)
 
         preparfor_pass = _parfor_PreParforPass(
             state.func_ir,
             state.type_annotation.typemap,
             state.type_annotation.calltypes, state.typingctx,
             state.flags.auto_parallel,
-            state.parfor_diagnostics.replaced_fns
+            state.parfor_diagnostics.replaced_fns,
+            replace_functions_map=functions_map
         )
 
         preparfor_pass.run()
@@ -216,7 +345,21 @@ class SpirvFriendlyLowering(LoweringPass):
             # be later serialized.
             state.library.enable_object_caching()
 
+
         targetctx = state.targetctx
+
+        # This should not happen here, after we have the notion of context in Numba
+        # we should have specialized dispatcher for dppl context and that dispatcher
+        # should be a cpu dispatcher that will overload the lowering functions for
+        # linalg for dppl.cpu_dispatcher and the dppl.gpu_dipatcher should be the
+        # current target context we have to launch kernels.
+        # This is broken as this essentially adds the new lowering in a list which
+        # means it does not get replaced with the new lowering_buitins
+
+        if dpnp_available():
+            from . import experimental_numpy_lowering_overload
+            targetctx.refresh()
+
         library   = state.library
         interp    = state.func_ir  # why is it called this?!
         typemap   = state.typemap
@@ -258,6 +401,7 @@ class SpirvFriendlyLowering(LoweringPass):
                 targetctx.insert_user_function(cfunc, fndesc, [library])
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=cfunc, env=env)
+
         return True
 
 
@@ -273,6 +417,7 @@ class DPPLNoPythonBackend(FunctionPass):
         """
         Back-end: Generate LLVM IR from Numba IR, compile to machine code
         """
+
         lowered = state['cr']
         signature = typing.signature(state.return_type, *state.args)
 

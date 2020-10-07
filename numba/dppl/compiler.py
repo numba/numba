@@ -50,6 +50,7 @@ def get_ordered_arg_access_types(pyfunc, access_types):
 
     return ordered_arg_access_types
 
+
 class DPPLCompiler(CompilerBase):
     """ DPPL Compiler """
 
