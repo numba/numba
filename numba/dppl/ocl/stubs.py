@@ -2,6 +2,8 @@ from __future__ import print_function, absolute_import
 from numba.core import types, ir, typing
 from numba.core.rewrites.macros import Macro
 
+from numba.dppl.target import SPIR_LOCAL_ADDRSPACE
+
 _stub_error = NotImplementedError("This is a stub.")
 
 # mem fence
@@ -99,7 +101,7 @@ def local_alloc(shape, dtype):
     shape = _legalize_shape(shape)
     ndim = len(shape)
     fname = "dppl.lmem.alloc"
-    restype = types.Array(dtype, ndim, 'C')
+    restype = types.Array(dtype, ndim, 'C', addrspace=SPIR_LOCAL_ADDRSPACE)
     sig = typing.signature(restype, types.UniTuple(types.intp, ndim), types.Any)
     return ir.Intrinsic(fname, sig, args=(shape, dtype))
 

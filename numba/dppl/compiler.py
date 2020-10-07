@@ -123,7 +123,13 @@ def compile_kernel(sycl_queue, pyfunc, args, access_types, debug=False):
     cres = compile_with_dppl(pyfunc, None, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
-    oclkern = DPPLKernel(sycl_queue=sycl_queue,
+    # The kernel objet should have a reference to the target context it is compiled for.
+    # This is needed as we intend to shape the behavior of the kernel down the line
+    # depending on the target context. For example, we want to link our kernel object
+    # with implementation containing atomic operations only when atomic operations
+    # are being used in the kernel.
+    oclkern = DPPLKernel(context=cres.target_context,
+                         sycl_queue=sycl_queue,
                          llvm_module=kernel.module,
                          name=kernel.name,
                          argtypes=cres.signature.args,
@@ -153,7 +159,8 @@ def compile_kernel_parfor(sycl_queue, func_ir, args, args_with_addrspaces,
 
     kernel = cres.target_context.prepare_ocl_kernel(func, cres.signature.args)
     #kernel = cres.target_context.prepare_ocl_kernel(func, args_with_addrspaces)
-    oclkern = DPPLKernel(sycl_queue=sycl_queue,
+    oclkern = DPPLKernel(context=cres.target_context,
+                         sycl_queue=sycl_queue,
                          llvm_module=kernel.module,
                          name=kernel.name,
                          argtypes=args_with_addrspaces)
@@ -329,7 +336,7 @@ class DPPLKernel(DPPLKernelBase):
     A OCL kernel object
     """
 
-    def __init__(self, sycl_queue, llvm_module, name, argtypes,
+    def __init__(self, context, sycl_queue, llvm_module, name, argtypes,
                  ordered_arg_access_types=None):
         super(DPPLKernel, self).__init__()
         self._llvm_module = llvm_module
@@ -339,11 +346,13 @@ class DPPLKernel(DPPLKernelBase):
         self.ordered_arg_access_types = ordered_arg_access_types
         self._argloc = []
         self.sycl_queue = sycl_queue
+        self.context = context
         # First-time compilation using SPIRV-Tools
         if DEBUG:
             with open("llvm_kernel.ll", "w") as f:
                 f.write(self.binary)
-        self.spirv_bc = spirv_generator.llvm_to_spirv(self.binary)
+
+        self.spirv_bc = spirv_generator.llvm_to_spirv(self.context, self.binary)
 
         # create a program
         self.program = dpctl.create_program_from_spirv(self.sycl_queue, self.spirv_bc)

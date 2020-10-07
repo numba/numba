@@ -36,6 +36,7 @@ requirements:
     # TBB devel version is to match TBB libs
     - tbb-devel >=2019.5     # [not ((armv6l or armv7l or aarch64) or (win and py27))]
     - dpctl
+    - llvm-spirv
   run:
     - python >=3.6
     - numpy >=1.17

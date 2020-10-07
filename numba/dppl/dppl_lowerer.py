@@ -37,7 +37,6 @@ from numba.core.typing import signature
 import warnings
 from numba.core.errors import NumbaParallelSafetyWarning, NumbaPerformanceWarning
 
-from .target import SPIR_GENERIC_ADDRSPACE
 from .dufunc_inliner import dufunc_inliner
 from . import dppl_host_fn_call_gen as dppl_call_gen
 import dpctl

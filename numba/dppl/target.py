@@ -52,6 +52,9 @@ SPIR_GENERIC_ADDRSPACE  = 4
 SPIR_VERSION = (2, 0)
 
 
+LINK_ATOMIC = 111
+
+
 class GenericPointerModel(datamodel.PrimitiveModel):
     def __init__(self, dmm, fe_type):
         #print("GenericPointerModel:", dmm, fe_type, fe_type.addrspace)
@@ -99,6 +102,7 @@ class DPPLTargetContext(BaseContext):
                                 .SPIR_DATA_LAYOUT[utils.MACHINE_BITS]))
         # Override data model manager to SPIR model
         self.data_model_manager = spirv_data_model_manager
+        self.link_binaries = dict()
 
         from numba.np.ufunc_db import _lazy_init_db
         import copy
@@ -190,6 +194,8 @@ class DPPLTargetContext(BaseContext):
 
         def sub_gen_with_global(lty):
             if isinstance(lty, llvmir.PointerType):
+                if lty.addrspace == SPIR_LOCAL_ADDRSPACE:
+                    return lty, None
                 # DRD : Cast all pointer types to global address space.
                 if  lty.addrspace != SPIR_GLOBAL_ADDRSPACE: # jcaraban
                     return (lty.pointee.as_pointer(SPIR_GLOBAL_ADDRSPACE),
