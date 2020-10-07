@@ -30,6 +30,14 @@ from numba.parfors.parfor import PreParforPass as _parfor_PreParforPass, replace
 from numba.parfors.parfor import ParforPass as _parfor_ParforPass
 from numba.parfors.parfor import Parfor
 
+def dpnp_available():
+    try:
+       # import dpnp
+        from numba.dppl.dpnp_glue import dpnp_fptr_interface as dpnp_glue
+        return True
+    except:
+        return False
+
 
 @register_pass(mutates_CFG=False, analysis_only=True)
 class DPPLAddNumpyOverloadPass(FunctionPass):
@@ -39,77 +47,78 @@ class DPPLAddNumpyOverloadPass(FunctionPass):
         FunctionPass.__init__(self)
 
     def run_pass(self, state):
-        typingctx = state.typingctx
-        from numba.core.typing.templates import builtin_registry as reg, infer_global
-        from numba.core.typing.templates import (AbstractTemplate, CallableTemplate, signature)
-        from numba.core.typing.npydecl import MatMulTyperMixin
+        if dpnp_available():
+            typingctx = state.typingctx
+            from numba.core.typing.templates import builtin_registry as reg, infer_global
+            from numba.core.typing.templates import (AbstractTemplate, CallableTemplate, signature)
+            from numba.core.typing.npydecl import MatMulTyperMixin
 
-        @infer_global(np.cov)
-        class NPCov(AbstractTemplate):
-            def generic(self, args, kws):
-                assert not kws
-                if args[0].ndim > 2:
-                    return
+            @infer_global(np.cov)
+            class NPCov(AbstractTemplate):
+                def generic(self, args, kws):
+                    assert not kws
+                    if args[0].ndim > 2:
+                        return
 
-                nb_dtype = types.float64
-                return_type = types.Array(dtype=nb_dtype, ndim=args[0].ndim, layout='C')
-                return signature(return_type, *args)
+                    nb_dtype = types.float64
+                    return_type = types.Array(dtype=nb_dtype, ndim=args[0].ndim, layout='C')
+                    return signature(return_type, *args)
 
-        @infer_global(np.matmul, typing_key="np.matmul")
-        class matmul(MatMulTyperMixin, AbstractTemplate):
-            key = np.matmul
-            func_name = "np.matmul()"
+            @infer_global(np.matmul, typing_key="np.matmul")
+            class matmul(MatMulTyperMixin, AbstractTemplate):
+                key = np.matmul
+                func_name = "np.matmul()"
 
-            def generic(self, args, kws):
-                assert not kws
-                restype = self.matmul_typer(*args)
-                if restype is not None:
-                    return signature(restype, *args)
+                def generic(self, args, kws):
+                    assert not kws
+                    restype = self.matmul_typer(*args)
+                    if restype is not None:
+                        return signature(restype, *args)
 
-        @infer_global(np.median)
-        class NPMedian(AbstractTemplate):
-            def generic(self, args, kws):
-                assert not kws
+            @infer_global(np.median)
+            class NPMedian(AbstractTemplate):
+                def generic(self, args, kws):
+                    assert not kws
 
-                retty = args[0].dtype
-                return signature(retty, *args)
+                    retty = args[0].dtype
+                    return signature(retty, *args)
 
-        @infer_global(np.mean)
-        #@infer_global("array.mean")
-        class NPMean(AbstractTemplate):
-            def generic(self, args, kws):
-                assert not kws
+            @infer_global(np.mean)
+            #@infer_global("array.mean")
+            class NPMean(AbstractTemplate):
+                def generic(self, args, kws):
+                    assert not kws
 
-                if args[0].dtype == types.float32:
-                    retty = types.float32
-                else:
-                    retty = types.float64
-                return signature(retty, *args)
+                    if args[0].dtype == types.float32:
+                        retty = types.float32
+                    else:
+                        retty = types.float64
+                    return signature(retty, *args)
 
 
-        prev_cov = None
-        prev_median = None
-        prev_mean = None
-        for idx, g in enumerate(reg.globals):
-            if g[0] == np.cov:
-                if not prev_cov:
-                    prev_cov = g[1]
-                else:
-                    prev_cov.templates = g[1].templates
+            prev_cov = None
+            prev_median = None
+            prev_mean = None
+            for idx, g in enumerate(reg.globals):
+                if g[0] == np.cov:
+                    if not prev_cov:
+                        prev_cov = g[1]
+                    else:
+                        prev_cov.templates = g[1].templates
 
-            if g[0] == np.median:
-                if not prev_median:
-                    prev_median = g[1]
-                else:
-                    prev_median.templates = g[1].templates
+                if g[0] == np.median:
+                    if not prev_median:
+                        prev_median = g[1]
+                    else:
+                        prev_median.templates = g[1].templates
 
-            if g[0] == np.mean:
-                if not prev_mean:
-                    prev_mean = g[1]
-                else:
-                    prev_mean.templates = g[1].templates
+                if g[0] == np.mean:
+                    if not prev_mean:
+                        prev_mean = g[1]
+                    else:
+                        prev_mean.templates = g[1].templates
 
-        typingctx.refresh()
+            typingctx.refresh()
         return True
 
 @register_pass(mutates_CFG=False, analysis_only=True)
@@ -120,21 +129,22 @@ class DPPLAddNumpyRemoveOverloadPass(FunctionPass):
         FunctionPass.__init__(self)
 
     def run_pass(self, state):
-        typingctx = state.typingctx
-        targetctx = state.targetctx
+        if dpnp_available():
+            typingctx = state.typingctx
+            targetctx = state.targetctx
 
-        from importlib import reload
-        from numba.np import npyimpl, arrayobj, arraymath
-        reload(npyimpl)
-        reload(arrayobj)
-        reload(arraymath)
-        targetctx.refresh()
+            from importlib import reload
+            from numba.np import npyimpl, arrayobj, arraymath
+            reload(npyimpl)
+            reload(arrayobj)
+            reload(arraymath)
+            targetctx.refresh()
 
 
-        import numba
-        from numba.core import lowering
-        from numba.parfors import parfor
-        lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
+            import numba
+            from numba.core import lowering
+            from numba.parfors import parfor
+            lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
 
         return True
 
@@ -345,8 +355,10 @@ class SpirvFriendlyLowering(LoweringPass):
         # current target context we have to launch kernels.
         # This is broken as this essentially adds the new lowering in a list which
         # means it does not get replaced with the new lowering_buitins
-        from . import experimental_numpy_lowering_overload
-        targetctx.refresh()
+
+        if dpnp_available():
+            from . import experimental_numpy_lowering_overload
+            targetctx.refresh()
 
         library   = state.library
         interp    = state.func_ir  # why is it called this?!
