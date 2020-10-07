@@ -121,6 +121,33 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 
 
 @require_context
+def managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+                  attach_global=True):
+    """managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
+                     attach_global=True)
+
+    Allocate a np.ndarray with a buffer that is managed.
+    Similar to np.empty().
+
+    :param attach_global: A flag indicating whether to attach globally. Global
+                          attachment implies that the memory is accessible from
+                          any stream on any device. If ``False``, attachment is
+                          *host*, and memory is only accessible by devices
+                          with Compute Capability 6.0 and later.
+    """
+    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
+                                                         order)
+    bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
+    buffer = current_context().memallocmanaged(bytesize,
+                                               attach_global=attach_global)
+    npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
+                       buffer=buffer)
+    managedview = np.ndarray.view(npary, type=devicearray.ManagedNDArray)
+    managedview.device_setup(buffer, stream=stream)
+    return managedview
+
+
+@require_context
 def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     """pinned_array(shape, dtype=np.float, strides=None, order='C')
 
