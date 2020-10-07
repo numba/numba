@@ -111,14 +111,16 @@ class TestRefOpPruning(TestCase):
         # fanout with raise
         def func(n):
             a = np.zeros(n)
-            x = (a,)
-            if n:
-                raise ValueError
+            b = np.zeros(n)
+            x = (a, b)
+            for i in x:
+                if n:
+                    raise ValueError
             return x
 
         with set_refprune_flags('per_bb,fanout_raise'):
-            self.check(func, (types.intp), basicblock=True, fanout=False,
-                       fanout_raise=True)
+            self.check(func, (types.intp), basicblock=True, diamond=False,
+                       fanout=False, fanout_raise=True)
 
 
 class TestRefPruneFlags(TestCase):
