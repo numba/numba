@@ -42,10 +42,11 @@ class TestRefOpPruning(TestCase):
         for k, v in prune_types.items():
             stat = getattr(pstats, k, None)
             self.assertIsNotNone(stat)
+            msg = f'failed checking {k}'
             if v:
-                self.assertGreater(stat, 0)
+                self.assertGreater(stat, 0, msg=msg)
             else:
-                self.assertEqual(stat, 0)
+                self.assertEqual(stat, 0, msg=msg)
 
     def test_basic_block_1(self):
         # some nominally involved control flow and ops, there's only basic_block
@@ -107,7 +108,7 @@ class TestRefOpPruning(TestCase):
         self.check(func, (types.intp), basicblock=True, fanout=True)
 
     def test_fanout_2(self):
-        # most basic?! fan-out
+        # fanout with raise
         def func(n):
             a = np.zeros(n)
             x = (a,)
@@ -115,8 +116,9 @@ class TestRefOpPruning(TestCase):
                 raise ValueError
             return x
 
-        self.check(func, (types.intp), basicblock=True, fanout=False,
-                   fanout_raise=True)
+        with set_refprune_flags('per_bb,fanout_raise'):
+            self.check(func, (types.intp), basicblock=True, fanout=False,
+                       fanout_raise=True)
 
 
 class TestRefPruneFlags(TestCase):
