@@ -288,7 +288,8 @@ def get_supported_ccs():
     try:
         from numba.cuda.cudadrv.runtime import runtime
         cudart_version_major, cudart_version_minor = runtime.get_version()
-    except: # noqa: E722
+    except Exception:
+        raise
         # The CUDA Runtime may not be present
         cudart_version_major = 0
 
