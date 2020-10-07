@@ -65,7 +65,16 @@ def test_for_dimensions(fn, test_fn, dims, tys, np_all=False):
 
     return True
 
+def ensure_dpnp():
+    try:
+       # import dpnp
+        from numba.dppl.dpnp_glue import dpnp_fptr_interface as dpnp_glue
+        return True
+    except:
+        return False
 
+
+@unittest.skipUnless(ensure_dpnp(), 'test only when dpNP is available')
 class Testdpnp_functions(DPPLTestCase):
     N = 10
 
