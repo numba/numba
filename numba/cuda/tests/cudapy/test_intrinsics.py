@@ -404,6 +404,7 @@ class TestCudaIntrinsic(CUDATestCase):
     def test_round_to_f4(self):
         compiled = cuda.jit("void(float32[:], float32, int32)")(simple_round_to)
         ary = np.zeros(1, dtype=np.float32)
+        np.random.seed(123)
         vals = np.random.random(32).astype(np.float32)
         np.concatenate((vals, np.array([np.inf, -np.inf, np.nan])))
         digits = (
@@ -453,6 +454,7 @@ class TestCudaIntrinsic(CUDATestCase):
     def test_round_to_f8(self):
         compiled = cuda.jit("void(float64[:], float64, int32)")(simple_round_to)
         ary = np.zeros(1, dtype=np.float64)
+        np.random.seed(123)
         vals = np.random.random(32)
         np.concatenate((vals, np.array([np.inf, -np.inf, np.nan])))
         digits = (-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5)
