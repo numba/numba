@@ -347,7 +347,7 @@ class _CFG(object):
                                         # error messages where the decorator
                                         # is scanned for, its not always +1!
                                         lidx = int(line) - (firstlineno + 1)
-                                        source_line = src_code[lidx]
+                                        source_line = src_code[lidx + 1]
                                         ln = fmt.format(cs['python'], col_span,
                                                         clean(source_line))
                                         new_lines.append(ln)
