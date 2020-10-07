@@ -254,35 +254,39 @@ def insert_and_call_atomic_fn(context, builder, sig, fn_type,
 @lower(stubs.atomic.add, types.Array, types.Tuple,
            types.Any)
 def atomic_add_tuple(context, builder, sig, args):
-    context.link_binaries[target.LINK_ATOMIC] = True
-    aryty, indty, valty = sig.args
-    ary, inds, val = args
-    dtype = aryty.dtype
+    from .atomics import atomic_support_present
+    if atomic_support_present():
+        context.link_binaries[target.LINK_ATOMIC] = True
+        aryty, indty, valty = sig.args
+        ary, inds, val = args
+        dtype = aryty.dtype
 
-    if indty == types.intp:
-        indices = [inds]  # just a single integer
-        indty = [indty]
+        if indty == types.intp:
+            indices = [inds]  # just a single integer
+            indty = [indty]
+        else:
+            indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
+            indices = [context.cast(builder, i, t, types.intp)
+                       for t, i in zip(indty, indices)]
+
+        if dtype != valty:
+            raise TypeError("expecting %s but got %s" % (dtype, valty))
+
+        if aryty.ndim != len(indty):
+            raise TypeError("indexing %d-D array with %d-D index" %
+                            (aryty.ndim, len(indty)))
+
+        lary = context.make_array(aryty)(context, builder, ary)
+        ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
+
+        if aryty.addrspace == target.SPIR_LOCAL_ADDRSPACE:
+            return insert_and_call_atomic_fn(context, builder, sig, "add", dtype,
+                    ptr, val, target.SPIR_LOCAL_ADDRSPACE)
+        else:
+            return insert_and_call_atomic_fn(context, builder, sig, "add", dtype,
+                    ptr, val, target.SPIR_GLOBAL_ADDRSPACE)
     else:
-        indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
-        indices = [context.cast(builder, i, t, types.intp)
-                   for t, i in zip(indty, indices)]
-
-    if dtype != valty:
-        raise TypeError("expecting %s but got %s" % (dtype, valty))
-
-    if aryty.ndim != len(indty):
-        raise TypeError("indexing %d-D array with %d-D index" %
-                        (aryty.ndim, len(indty)))
-
-    lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
-
-    if aryty.addrspace == target.SPIR_LOCAL_ADDRSPACE:
-        return insert_and_call_atomic_fn(context, builder, sig, "add", dtype,
-                ptr, val, target.SPIR_LOCAL_ADDRSPACE)
-    else:
-        return insert_and_call_atomic_fn(context, builder, sig, "add", dtype,
-                ptr, val, target.SPIR_GLOBAL_ADDRSPACE)
+        raise ImportError("Atomic support is not present, can not perform atomic_add")
 
 
 @lower(stubs.atomic.sub, types.Array, types.intp, types.Any)
@@ -291,36 +295,40 @@ def atomic_add_tuple(context, builder, sig, args):
 @lower(stubs.atomic.sub, types.Array, types.Tuple,
            types.Any)
 def atomic_sub_tuple(context, builder, sig, args):
-    context.link_binaries[target.LINK_ATOMIC] = True
-    aryty, indty, valty = sig.args
-    ary, inds, val = args
-    dtype = aryty.dtype
+    from .atomics import atomic_support_present
+    if atomic_support_present():
+        context.link_binaries[target.LINK_ATOMIC] = True
+        aryty, indty, valty = sig.args
+        ary, inds, val = args
+        dtype = aryty.dtype
 
-    if indty == types.intp:
-        indices = [inds]  # just a single integer
-        indty = [indty]
+        if indty == types.intp:
+            indices = [inds]  # just a single integer
+            indty = [indty]
+        else:
+            indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
+            indices = [context.cast(builder, i, t, types.intp)
+                       for t, i in zip(indty, indices)]
+
+        if dtype != valty:
+            raise TypeError("expecting %s but got %s" % (dtype, valty))
+
+        if aryty.ndim != len(indty):
+            raise TypeError("indexing %d-D array with %d-D index" %
+                            (aryty.ndim, len(indty)))
+
+        lary = context.make_array(aryty)(context, builder, ary)
+        ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
+
+
+        if aryty.addrspace == target.SPIR_LOCAL_ADDRSPACE:
+            return insert_and_call_atomic_fn(context, builder, sig, "sub", dtype,
+                    ptr, val, target.SPIR_LOCAL_ADDRSPACE)
+        else:
+            return insert_and_call_atomic_fn(context, builder, sig, "sub", dtype,
+                    ptr, val, target.SPIR_GLOBAL_ADDRSPACE)
     else:
-        indices = cgutils.unpack_tuple(builder, inds, count=len(indty))
-        indices = [context.cast(builder, i, t, types.intp)
-                   for t, i in zip(indty, indices)]
-
-    if dtype != valty:
-        raise TypeError("expecting %s but got %s" % (dtype, valty))
-
-    if aryty.ndim != len(indty):
-        raise TypeError("indexing %d-D array with %d-D index" %
-                        (aryty.ndim, len(indty)))
-
-    lary = context.make_array(aryty)(context, builder, ary)
-    ptr = cgutils.get_item_pointer(context, builder, aryty, lary, indices)
-
-
-    if aryty.addrspace == target.SPIR_LOCAL_ADDRSPACE:
-        return insert_and_call_atomic_fn(context, builder, sig, "sub", dtype,
-                ptr, val, target.SPIR_LOCAL_ADDRSPACE)
-    else:
-        return insert_and_call_atomic_fn(context, builder, sig, "sub", dtype,
-                ptr, val, target.SPIR_GLOBAL_ADDRSPACE)
+        raise ImportError("Atomic support is not present, can not perform atomic_add")
 
 
 @lower('dppl.lmem.alloc', types.UniTuple, types.Any)

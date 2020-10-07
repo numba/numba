@@ -128,8 +128,8 @@ class Module(object):
         for key in list(self.context.link_binaries.keys()):
             del self.context.link_binaries[key]
             if key == LINK_ATOMIC:
-                from .ocl.atomics import atomic_spirv_path
-                binary_paths.append(atomic_spirv_path)
+                from .ocl.atomics import get_atomic_spirv_path
+                binary_paths.append(get_atomic_spirv_path())
 
         if len(binary_paths) > 1:
             spirv_path = self._track_temp_file("linked-spirv")

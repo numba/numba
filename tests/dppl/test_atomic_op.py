@@ -124,6 +124,7 @@ def call_fn_for_datatypes(fn, result, input, global_size):
 
 
 @unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
+@unittest.skipUnless(numba.dppl.ocl.atomic_support_present(), 'test only when atomic support is present')
 class TestAtomicOp(DPPLTestCase):
     def test_atomic_add_global(self):
         @dppl.kernel
