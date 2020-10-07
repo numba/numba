@@ -43,15 +43,18 @@ class TargetOptions(object):
         if kws.pop('looplift', True):
             flags.set("enable_looplift")
 
-        if kws.pop('boundscheck', False):
-            flags.set("boundscheck")
-
         if kws.pop('_nrt', True):
             flags.set("nrt")
 
         if kws.pop('debug', config.DEBUGINFO_DEFAULT):
             flags.set("debuginfo")
             flags.set("boundscheck")
+
+        # This is checked for logically after 'debug' as it's possible to want
+        # to have debuginfo on from the kwarg debug=True but to have boundscheck
+        # off.
+        if 'boundscheck' in kws:
+            flags.set("boundscheck", kws.pop('boundscheck'))
 
         if kws.pop('nogil', False):
             flags.set("release_gil")
