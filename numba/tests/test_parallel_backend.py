@@ -873,6 +873,15 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             from numba import njit, prange, objmode
             import os
 
+            e_running = threading.Event()
+            e_proceed = threading.Event()
+
+            def indirect():
+                e_running.set()
+                # wait for forker() to have forked
+                while not e_proceed.isSet():
+                    pass
+
             def runner():
                 @njit(parallel=True, nogil=True)
                 def work():
@@ -880,11 +889,10 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
                     for x in prange(10):
                         acc += x
                     with objmode():
-                        e_running.set()
-                        # wait for forker() to have forked
-                        while not e_proceed.isSet():
-                            pass
+                        indirect()
+
                     return acc
+
                 work()
 
             def forker():
@@ -896,8 +904,6 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
                 # now fork is done signal the runner to proceed to exit
                 e_proceed.set()
 
-            e_running = threading.Event()
-            e_proceed = threading.Event()
             numba_runner = threading.Thread(target=runner,)
             fork_runner =  threading.Thread(target=forker,)
 
