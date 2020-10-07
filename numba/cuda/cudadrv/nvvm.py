@@ -323,8 +323,6 @@ def find_closest_arch(mycc):
     :return: Closest supported CC as a tuple ``(MAJOR, MINOR)``
     """
     supported_cc = get_supported_ccs()
-    if not supported_cc:
-        raise NvvmSupportError("No supported CUDA Toolkit found")
 
     if not supported_cc:
         msg = "No supported GPU compute capabilities found. " \
