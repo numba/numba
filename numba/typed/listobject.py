@@ -415,14 +415,12 @@ def _list_length(typingctx, l):
     Returns the length of the list.
     """
     sig = types.intp(l)
-    ll_list_type = cgutils.voidptr_t
-    ll_intp_type = cgutils.intp_t
 
     def codegen(context, builder, sig, args):
         [tl] = sig.args
         [l] = args
         fnty = ir.FunctionType(
-            ll_intp_type,
+            ll_ssize_t,
             [ll_list_type],
         )
         fname = 'numba_list_size_address'
@@ -1505,9 +1503,10 @@ def iternext_listiter(context, builder, sig, args, result):
     inst = ListIterInstance(context, builder, sig.args[0], args[0])
     index = inst.index
 
-    # if the current count is different to the initial count, bail, list is
     nitems = inst.size # this is current size
     init_size = inst._iter.size # this is initial size
+
+    # if the current count is different to the initial count, bail, list is
     # being mutated whilst iterated.
     is_mutated = builder.icmp_signed('!=', init_size, nitems)
     with builder.if_then(is_mutated, likely=False):
