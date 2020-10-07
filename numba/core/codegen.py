@@ -180,20 +180,18 @@ class _CFG(object):
         port_match = re.compile('.*{(.*)}.*')
         # DOT syntax, matches the "port" value from a found "port_match"
         port_jmp_match = re.compile('.*<(.*)>(.*)')
-        # DOT syntax, matches the DOT object (node), captures the entire node
-        node = re.compile(r'.*Node0x.*=".*', re.DOTALL|re.MULTILINE)
         # LLVM syntax, matches a LLVM debug marker
         metadata_marker = re.compile(r'.*!dbg\s+(![0-9]+).*')
         # LLVM syntax, matches a location entry
         location_expr = (r'.*!DILocation\(line:\s+([0-9]+),'
-                         '\s+column:\s+([0-9]),.*')
+                         r'\s+column:\s+([0-9]),.*')
         location_entry = re.compile(location_expr)
         # LLVM syntax, matches LLVMs internal debug value calls
         dbg_value = re.compile(r'.*call void @llvm.dbg.value.*')
         # LLVM syntax, matches tokens for highlighting
-        nrt_incref = re.compile("NRT_incref")
-        nrt_decref = re.compile("NRT_decref")
-        nrt_meminfo = re.compile("NRT_MemInfo")
+        nrt_incref = re.compile(r"@NRT_incref\b")
+        nrt_decref = re.compile(r"@NRT_decref\b")
+        nrt_meminfo = re.compile("@NRT_MemInfo")
         ll_raise = re.compile("ret i32 1,")
         ll_return = re.compile("ret i32 [^1],")
 
@@ -242,7 +240,7 @@ class _CFG(object):
             # Label is DOT format, it needs the head and tail removing and then
             # splitting for walking.
             label = label[1:-1]
-            lines =  label.split('\\l')
+            lines = label.split('\\l')
 
             # Holds the new lines
             new_lines = []
@@ -306,16 +304,13 @@ class _CFG(object):
             # process rest of block creating the table row at a time.
             fmt = ('<tr><td BGCOLOR="{}" BORDER="0" ALIGN="left" '
                    'COLSPAN="{}">{}</td></tr>')
-            for l in sliced_lines[1:]:
 
-                # Drop LLVM debug call entries
-                if dbg_value.match(l):
-                    continue
-                # find the debug marker but only if interleaving of some form
-                # is requested
-                matched = None
-                if _interleave.lineinfo or _interleave.python:
-                    matched = metadata_marker.match(l)
+            def metadata_interleave(l, new_lines):
+                """
+                Search line `l` for metadata associated with python or line info
+                and inject it into `new_lines` if requested.
+                """
+                matched = metadata_marker.match(l)
                 if matched is not None:
                     # there's a metadata marker
                     g = matched.groups()
@@ -336,7 +331,7 @@ class _CFG(object):
                                 if line != cur_line or col != cur_col:
                                     if _interleave.lineinfo:
                                         mfmt = 'Marker %s, Line %s, column %s'
-                                        mark_line =  mfmt % (marker, line, col)
+                                        mark_line = mfmt % (marker, line, col)
                                         ln = fmt.format(cs['marker'], col_span,
                                                         clean(mark_line))
                                         new_lines.append(ln)
@@ -351,7 +346,21 @@ class _CFG(object):
                                         ln = fmt.format(cs['python'], col_span,
                                                         clean(source_line))
                                         new_lines.append(ln)
-                                    cur_line, cur_col = line, col
+                                    return line, col
+
+            for l in sliced_lines[1:]:
+
+                # Drop LLVM debug call entries
+                if dbg_value.match(l):
+                    continue
+
+                # if requested generate interleaving of markers or python from
+                # metadata
+                if _interleave.lineinfo or _interleave.python:
+                    updated_lineinfo = metadata_interleave(l, new_lines)
+                    if updated_lineinfo is not None:
+                        cur_line, cur_col = updated_lineinfo
+
                 # Highlight other LLVM features if requested, HTML BGCOLOR
                 # property is set by this.
                 if _highlight.incref and nrt_incref.search(l):
