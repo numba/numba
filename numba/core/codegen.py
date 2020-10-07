@@ -383,8 +383,9 @@ class _CFG(object):
             # If there was data, create a table, else don't!
             dat = ''.join(new_lines)
             if dat:
-                tab = ('<table id="%s" BORDER="1" CELLBORDER="0" CELLPADDING="0" '
-                       'CELLSPACING="0">%s</table>') % (idc, dat)
+                tab = (('<table id="%s" BORDER="1" CELLBORDER="0" '
+                       'CELLPADDING="0" CELLSPACING="0">%s</table>') % (idc,
+                                                                        dat))
                 label = '<{}>'.format(tab)
             else:
                 label = ''
@@ -394,10 +395,11 @@ class _CFG(object):
             f.node(name, label=label)
 
         # Parse the edge data
-        for edge in jzon['edges']:
-            gvid = edge['_gvid']
-            tp = edge.get('tailport', None)
-            edge_ids[gvid] = (edge['head'], edge['tail'], tp)
+        if 'edges' in jzon: # might be a single block, no edges
+            for edge in jzon['edges']:
+                gvid = edge['_gvid']
+                tp = edge.get('tailport', None)
+                edge_ids[gvid] = (edge['head'], edge['tail'], tp)
 
         # Write in the edge wiring with respect to the new nodes:ports.
         for gvid, edge in edge_ids.items():
