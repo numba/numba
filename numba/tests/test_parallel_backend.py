@@ -873,7 +873,7 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
             from numba import njit, prange, objmode
             import os
 
-            def runner(e_running, e_proceed):
+            def runner():
                 @njit(parallel=True, nogil=True)
                 def work():
                     acc = 0
@@ -887,7 +887,7 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
                     return acc
                 work()
 
-            def forker(e_running, e_proceed):
+            def forker():
                 # wait for the jit function to say it's running
                 while not e_running.isSet():
                     pass
@@ -898,10 +898,8 @@ class TestTBBSpecificIssues(ThreadLayerTestHelper):
 
             e_running = threading.Event()
             e_proceed = threading.Event()
-            numba_runner = threading.Thread(target=runner,
-                                            args=(e_running, e_proceed,))
-            fork_runner =  threading.Thread(target=forker,
-                                            args=(e_running, e_proceed,))
+            numba_runner = threading.Thread(target=runner,)
+            fork_runner =  threading.Thread(target=forker,)
 
             threads = (numba_runner, fork_runner)
             for t in threads:
