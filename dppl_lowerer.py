@@ -1095,7 +1095,7 @@ def lower_parfor_rollback(lowerer, parfor):
             msg = "Parfor lowered on DPPL-device"
             print(msg, parfor.loc)
     except Exception as e:
-        msg = "Failed to lower parfor on DPPL-device.\nTo see details set environment variable NUMBA_DEBUG=1"
+        msg = "Failed to lower parfor on DPPL-device.\nTo see details set environment variable NUMBA_DPPL_DEBUG=1"
         warnings.warn(NumbaPerformanceWarning(msg, parfor.loc))
         raise e
     finally:

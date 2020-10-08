@@ -2,31 +2,28 @@ import numpy as np
 from numba import dppl, njit, prange
 import dpctl
 
-
 @njit
-def g(a):
-    return a + 1
+def add_two_arrays(b, c):
+    a = np.empty_like(b)
+    for i in prange(len(b)):
+        a[i] = b[i] + c[i]
 
-
-#@njit(parallel={'offload':True})
-@njit
-def f(a, b, c, N):
-    for i in prange(N):
-        a[i] = b[i] + g(c[i])
+    return a
 
 
 def main():
     N = 10
-    a = np.ones(N)
     b = np.ones(N)
     c = np.ones(N)
 
     if dpctl.has_gpu_queues():
         with dpctl.device_context("opencl:gpu"):
-            f(a, b, c, N)
+            gpu_result = add_two_arrays(b, c)
+        print('GPU device found. Result on GPU:', gpu_result)
     elif dpctl.has_cpu_queues():
         with dpctl.device_context("opencl:cpu"):
-            f(a, b, c, N)
+            cpu_result = add_two_arrays(b, c)
+        print('CPU device found. Result on CPU:', cpu_result)
     else:
         print("No device found")
 
