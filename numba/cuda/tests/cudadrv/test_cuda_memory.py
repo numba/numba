@@ -41,6 +41,10 @@ class TestCudaMemory(ContextResettingTestCase):
                                      mapped=True)
         self._template(devmem)
 
+    def test_managed_memory(self):
+        devmem = self.context.memallocmanaged(1024)
+        self._template(devmem)
+
     def test_derived_pointer(self):
         # Use MemoryPointer.view to create derived pointer
         def check(m, offset):
