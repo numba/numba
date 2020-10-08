@@ -1,5 +1,5 @@
 import sys
-
+import warnings
 import numpy as np
 import ctypes
 from numba import jit, literal_unroll, njit, typeof
@@ -7,7 +7,7 @@ from numba.core import types
 from numba.core.compiler import compile_isolated
 from numba.core.itanium_mangler import mangle_type
 from numba.core.config import IS_WIN32
-from numba.core.errors import TypingError
+from numba.core.errors import TypingError, NumbaExperimentalFeatureWarning
 from numba.np.numpy_support import numpy_version
 import unittest
 from numba.np import numpy_support
@@ -1180,6 +1180,11 @@ class TestSubtyping(TestCase):
         self.ab_rec1 = np.array([(self.value, 3)], dtype=ab_dtype)[0]
         self.ab_rec2 = np.array([(self.value + 1, 3)], dtype=ab_dtype)[0]
         self.func = lambda rec: rec['a']
+        # Each experimental feature warning should be marked
+        warnings.simplefilter("error", NumbaExperimentalFeatureWarning)
+
+    def tearDown(self):
+        warnings.resetwarnings()
 
     def test_common_field(self):
         """
