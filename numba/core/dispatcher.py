@@ -906,6 +906,9 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase, metaclass=D
             cres = tuple(self.overloads.values())[0]
             return types.FunctionType(cres.signature)
 
+    def get_compiled(self):
+        return self
+
 
 class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
     """

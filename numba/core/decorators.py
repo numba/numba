@@ -221,8 +221,10 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
                 f"{type(func)})."
             )
 
+        from numba import dppl_config
         if (target == 'npyufunc' or targetoptions.get('no_cpython_wrapper')
-            or sigs or config.DISABLE_JIT or not targetoptions.get('nopython')):
+            or sigs or config.DISABLE_JIT or not targetoptions.get('nopython')
+            or dppl_config.dppl_present is not True):
             target_ = target
             if target_ is None:
                 target_ = 'cpu'
