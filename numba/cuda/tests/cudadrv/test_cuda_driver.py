@@ -1,6 +1,6 @@
 from ctypes import byref, c_int, sizeof
 from numba.cuda.cudadrv.driver import (host_to_device, device_to_host, driver,
-                                      launch_kernel)
+                                       launch_kernel)
 from numba.cuda.cudadrv import devices, drvapi
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.cuda.testing import skip_on_cudasim
