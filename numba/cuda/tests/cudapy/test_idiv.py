@@ -18,7 +18,6 @@ class TestCudaIDiv(CUDATestCase):
         y = grid.copy_to_host()
         self.assertTrue(np.all(y == 0.5))
 
-
     def test_inplace_div_double(self):
 
         @cuda.jit(argtypes=[float64[:, :], int32, int32])
