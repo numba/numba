@@ -738,7 +738,7 @@ alias_analysis_extensions = {}
 alias_func_extensions = {}
 
 def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
-                                                            arg_aliases=None):
+                                                           arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
     if alias_map is None:
         alias_map = {}
@@ -773,6 +773,7 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                 # a = b.c.  a should alias b
                 if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
+                        and expr.attr not in ['shape']
                         and expr.value.name in arg_aliases):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                 # calls that can create aliases such as B = A.ravel()
