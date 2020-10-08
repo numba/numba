@@ -699,21 +699,22 @@ def _lower_parfor_gufunc(lowerer, parfor):
     numba.parfors.parfor.sequential_parfor_lowering = True
     loop_ranges = [(l.start, l.stop, l.step) for l in parfor.loop_nests]
 
-    func, func_args, func_sig, func_arg_types, modified_arrays =(
-    _create_gufunc_for_parfor_body(
-        lowerer,
-        parfor,
-        typemap,
-        typingctx,
-        targetctx,
-        flags,
-        loop_ranges,
-        {},
-        bool(alias_map),
-        index_var_typ,
-        parfor.races))
-
-    numba.parfors.parfor.sequential_parfor_lowering = False
+    try:
+        func, func_args, func_sig, func_arg_types, modified_arrays =(
+        _create_gufunc_for_parfor_body(
+            lowerer,
+            parfor,
+            typemap,
+            typingctx,
+            targetctx,
+            flags,
+            loop_ranges,
+            {},
+            bool(alias_map),
+            index_var_typ,
+            parfor.races))
+    finally:
+        numba.parfors.parfor.sequential_parfor_lowering = False
 
     # get the shape signature
     get_shape_classes = parfor.get_shape_classes
@@ -956,10 +957,14 @@ def generate_dppl_host_wrapper(lowerer,
 from numba.core.lowering import Lower
 
 
+class CopyIRException(RuntimeError):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
 class DPPLLower(Lower):
     def __init__(self, context, library, fndesc, func_ir, metadata=None):
         Lower.__init__(self, context, library, fndesc, func_ir, metadata)
-
         fndesc_cpu = copy.copy(fndesc)
         fndesc_cpu.calltypes = fndesc.calltypes.copy()
         fndesc_cpu.typemap = fndesc.typemap.copy()
@@ -984,6 +989,7 @@ class DPPLLower(Lower):
         # WARNING: this approach only works in case no device specific modifications were added to
         # parent function (function with parfor). In case parent function was patched with device specific
         # different solution should be used.
+
         try:
             #lowering.lower_extensions[parfor.Parfor] = lower_parfor_rollback
             lowering.lower_extensions[parfor.Parfor].append(lower_parfor_rollback)
@@ -991,10 +997,15 @@ class DPPLLower(Lower):
             self.base_lower = self.gpu_lower
             #lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
             lowering.lower_extensions[parfor.Parfor].pop()
-        except:
-            lowering.lower_extensions[parfor.Parfor].append(numba.parfors.parfor_lowering._lower_parfor_parallel)
-            self.cpu_lower.lower()
-            self.base_lower = self.cpu_lower
+        except Exception as e:
+            if numba.dppl.compiler.DEBUG:
+                print("Failed to lower parfor on DPPL-device. Due to:\n", e)
+            lowering.lower_extensions[parfor.Parfor].pop()
+            if (lowering.lower_extensions[parfor.Parfor][-1] == numba.parfors.parfor_lowering._lower_parfor_parallel):
+                self.cpu_lower.lower()
+                self.base_lower = self.cpu_lower
+            else:
+                raise e
 
         self.env = self.base_lower.env
         self.call_helper = self.base_lower.call_helper
@@ -1003,12 +1014,80 @@ class DPPLLower(Lower):
         return self.base_lower.create_cpython_wrapper(release_gil)
 
 
+def copy_block(block):
+    def relatively_deep_copy(obj, memo):
+        obj_id = id(obj)
+        if obj_id in memo:
+            return memo[obj_id]
+
+        from numba.core.dispatcher import Dispatcher
+        from numba.core.types.functions import Function
+        from types import ModuleType
+
+        if isinstance(obj, (Dispatcher, Function, ModuleType)):
+            return obj
+
+        if isinstance(obj, list):
+            cpy = copy.copy(obj)
+            cpy.clear()
+            for item in obj:
+                cpy.append(relatively_deep_copy(item, memo))
+            memo[obj_id] = cpy
+            return cpy
+        elif isinstance(obj, dict):
+            cpy = copy.copy(obj)
+            cpy.clear()
+            # do we need to copy keys?
+            for key, item in obj.items():
+                cpy[relatively_deep_copy(key, memo)] = relatively_deep_copy(item, memo)
+            memo[obj_id] = cpy
+            return cpy
+        elif isinstance(obj, tuple):
+            cpy = type(obj)([relatively_deep_copy(item, memo) for item in obj])
+            memo[obj_id] = cpy
+            return cpy
+        elif isinstance(obj, set):
+            cpy = copy.copy(obj)
+            cpy.clear()
+            for item in obj:
+                cpy.add(relatively_deep_copy(item, memo))
+            memo[obj_id] = cpy
+            return cpy
+
+        cpy = copy.copy(obj)
+
+        memo[obj_id] = cpy
+        keys = []
+        try:
+            keys = obj.__dict__.keys()
+        except:
+            try:
+                keys = obj.__slots__
+            except:
+                return cpy
+
+        for key in keys:
+            attr = getattr(obj, key)
+            attr_cpy = relatively_deep_copy(attr, memo)
+            setattr(cpy, key, attr_cpy)
+
+        return cpy
+
+    memo = {}
+    new_block = ir.Block(block.scope, block.loc)
+    new_block.body = [relatively_deep_copy(stmt, memo) for stmt in block.body]
+    return new_block
+
+
 def lower_parfor_rollback(lowerer, parfor):
-    cache_parfor_races = copy.copy(parfor.races)
-    cache_parfor_params = copy.copy(parfor.params)
-    cache_parfor_loop_body = copy.deepcopy(parfor.loop_body)
-    cache_parfor_init_block = parfor.init_block.copy()
-    cache_parfor_loop_nests = parfor.loop_nests.copy()
+    try:
+        cache_parfor_races = copy.copy(parfor.races)
+        cache_parfor_params = copy.copy(parfor.params)
+        cache_parfor_loop_body = {key: copy_block(block) for key, block in parfor.loop_body.items()}
+        cache_parfor_init_block = parfor.init_block.copy()
+        cache_parfor_loop_nests = parfor.loop_nests.copy()
+    except Exception as e:
+        raise CopyIRException("Failed to copy IR") from e
 
     try:
         _lower_parfor_gufunc(lowerer, parfor)
@@ -1016,7 +1095,7 @@ def lower_parfor_rollback(lowerer, parfor):
             msg = "Parfor lowered on DPPL-device"
             print(msg, parfor.loc)
     except Exception as e:
-        msg = "Failed to lower parfor on DPPL-device"
+        msg = "Failed to lower parfor on DPPL-device.\nTo see details set environment variable NUMBA_DEBUG=1"
         warnings.warn(NumbaPerformanceWarning(msg, parfor.loc))
         raise e
     finally:
