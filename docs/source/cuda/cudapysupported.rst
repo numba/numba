@@ -77,6 +77,7 @@ The following built-in functions are supported:
 * :func:`len`
 * :func:`min`: only the multiple-argument form
 * :func:`max`: only the multiple-argument form
+* :func:`pow`
 * :class:`range`
 * :func:`round`
 * :func:`zip`

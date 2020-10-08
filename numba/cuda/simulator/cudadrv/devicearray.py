@@ -314,6 +314,10 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
 
 
+def managed_array(shape, dtype=np.float, strides=None, order='C'):
+    return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
+
+
 def device_array(*args, **kwargs):
     stream = kwargs.pop('stream') if 'stream' in kwargs else 0
     return FakeCUDAArray(np.ndarray(*args, **kwargs), stream=stream)
