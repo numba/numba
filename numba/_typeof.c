@@ -290,18 +290,22 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
                 return -1;
 
             name = PyObject_GetAttrString(clazz, "__name__");
+            Py_DECREF(clazz);
             if (name == NULL)
                 return -1;
 
             ascii_str = PyUnicode_AsEncodedString(name, "ascii", "ignore");
+            Py_DECREF(name);
             if (ascii_str == NULL)
                 return -1;
             ret = PyBytes_AsStringAndSize(ascii_str, &buf, &flen);
+
             if (ret == -1)
                 return -1;
             for(j = 0; j < flen; j++) {
                 TRY(string_writer_put_char, w, buf[j]);
             }
+            Py_DECREF(ascii_str);
 
             if (_fields == NULL)
                 return -1;
@@ -324,6 +328,7 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
                 for(j = 0; j < flen; j++) {
                     TRY(string_writer_put_char, w, buf[j]);
                 }
+                Py_DECREF(ascii_str);
                 TRY(compute_fingerprint, w, PyTuple_GET_ITEM(val, i));
             }
             TRY(string_writer_put_char, w, OP_END_TUPLE);
