@@ -307,6 +307,7 @@ Cuda_atomic_min = _gen(cuda.atomic.min, all_numba_types)
 Cuda_atomic_nanmax = _gen(cuda.atomic.nanmax, all_numba_types)
 Cuda_atomic_nanmin = _gen(cuda.atomic.nanmin, all_numba_types)
 
+
 @register
 class Cuda_atomic_compare_and_swap(AbstractTemplate):
     key = cuda.atomic.compare_and_swap
