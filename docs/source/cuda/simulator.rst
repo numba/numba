@@ -11,6 +11,11 @@ be used to debug CUDA Python code, either by adding print statements to your
 code, or by using the debugger to step through the execution of an individual
 thread.
 
+The simulator deliberately allows running non-CUDA code like starting a debugger 
+and printing arbitrary expressions for debugging purposes. Therefore, it is
+best to start from code that compiles for the CUDA target, and then move over to
+the simulator to investigate issues.
+
 Execution of kernels is performed by the simulator one block at a time. One
 thread is spawned for each thread in the block, and scheduling of the execution
 of these threads is left up to the operating system.
@@ -49,6 +54,8 @@ GPU as possible - in particular, the following are supported:
 * Shared memory: declarations of shared memory arrays must be on separate source
   lines, since the simulator uses source line information to keep track of
   allocations of shared memory across threads.
+* Mapped arrays.
+* Host and device memory operations: copying and setting memory.
 * :func:`.syncthreads` is supported - however, in the case where divergent
   threads enter different :func:`.syncthreads` calls, the launch will not fail,
   but unexpected behaviour will occur. A future version of the simulator may
@@ -79,6 +86,13 @@ Some limitations of the simulator include:
 * Most of the driver API is unimplemented.
 * It is not possible to link PTX code with CUDA Python functions.
 * Warps and warp-level operations are not yet implemented.
+* Because the simulator executes kernels using the Python interpreter,
+  structured array access by attribute that works with the hardware target may
+  fail in the simulator - see :ref:`structured-array-access`.
+* Operations directly against device arrays are only partially supported, that
+  is, testing equality, less than, greater than, and basic mathematical 
+  operations are supported, but many other operations, such as the in-place 
+  operators and bit operators are not.
 
 Obviously, the speed of the simulator is also much lower than that of a real
 device. It may be necessary to reduce the size of input data and the size of the

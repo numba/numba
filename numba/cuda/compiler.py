@@ -680,13 +680,16 @@ class _Kernel(serialize.ReduceMixin):
         for t, v in zip(self.argument_types, args):
             self._prepare_args(t, v, stream, retr, kernelargs)
 
-        # Configure kernel
-        cu_func = cufunc.configure(griddim, blockdim,
-                                   stream=stream,
-                                   sharedmem=sharedmem,
-                                   cooperative=self.cooperative)
+        stream_handle = stream and stream.handle or None
+
         # Invoke kernel
-        cu_func(*kernelargs)
+        driver.launch_kernel(cufunc.handle,
+                             *griddim,
+                             *blockdim,
+                             sharedmem,
+                             stream_handle,
+                             kernelargs,
+                             cooperative=self.cooperative)
 
         if self.debug:
             driver.device_to_host(ctypes.addressof(excval), excmem, excsz)

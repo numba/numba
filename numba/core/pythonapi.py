@@ -2,6 +2,7 @@ from collections import namedtuple
 import contextlib
 import pickle
 import hashlib
+import sys
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
@@ -118,7 +119,7 @@ class EnvironmentManager(object):
         """
         # All constants are frozen inside the environment
         if isinstance(const, str):
-            const = utils.intern(const)
+            const = sys.intern(const)
         for index, val in enumerate(self.env.consts):
             if val is const:
                 break
