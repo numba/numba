@@ -3906,7 +3906,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             # 3x2 (with higher order broadcasting)
             (
                 np.arange(36).reshape(6, 2, 3),
-            )
+            ),
+            # (
+            #     [1, 2, 3, 4],
+            #     'float32'
+            # )
         ]
 
         for pair in pairs:
@@ -3933,6 +3937,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as e:
             cfunc(np.array([1, 2, np.inf, 4]))
         self.assertIn("array must not contain infs or NaNs", str(e.exception))
+
+        #test for dtype
+        with self.assertRaises(TypingError) as e:
+            cfunc(np.array([1, 2, 3, 4]), 'float32')
+        self.assertIn("dtype must be a valid Numpy dtype", str(e.exception))
 
 
 class TestNPMachineParameters(TestCase):

@@ -4186,7 +4186,10 @@ def np_asarray_chkfinite(a, dtype=None):
     if is_nonelike(dtype):
         dt = a.dtype
     else:
-        dt = as_dtype(dtype)
+        try:
+            dt = as_dtype(dtype)
+        except NotImplementedError:
+            raise TypingError('dtype must be a valid Numpy dtype')
 
     def impl(a, dtype=None):
         a = np.asarray(a, dtype=dt)
