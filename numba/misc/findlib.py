@@ -22,6 +22,7 @@ DLLNAMEMAP = {
     'linux2': r'lib%(name)s\.so\.%(ver)s$',
     'darwin': r'lib%(name)s\.%(ver)s\.dylib$',
     'win32': r'%(name)s%(ver)s\.dll$',
+    'bsd': r'lib%(name)s\.so\.%(ver)s$',
 }
 
 RE_VER = r'[0-9]*([_\.][0-9]+)*'
@@ -29,6 +30,7 @@ RE_VER = r'[0-9]*([_\.][0-9]+)*'
 
 def find_lib(libname, libdir=None, platform=None):
     platform = platform or sys.platform
+    platform = 'bsd' if 'bsd' in platform else platform
     pat = DLLNAMEMAP[platform] % {"name": libname, "ver": RE_VER}
     regex = re.compile(pat)
     return find_file(regex, libdir)
