@@ -15,9 +15,9 @@ from numba.np.numpy_support import numpy_version
 from numba.core.errors import TypingError
 from numba.core.config import IS_WIN32, IS_32BITS
 from numba.core.utils import pysignature
-from numba.np.arraymath import cross2d
+from numba.np.extensions import cross2d
 from numba.tests.support import (TestCase, CompilationCache, MemoryLeakMixin,
-                                 needs_blas, skip_ppc64le_issue4026)
+                                 needs_blas)
 import unittest
 
 
@@ -123,6 +123,14 @@ def flipud(a):
 
 def flip(a):
     return np.flip(a)
+
+
+def array_split(a, indices, axis=0):
+    return np.array_split(a, indices, axis=axis)
+
+
+def split(a, indices, axis=0):
+    return np.split(a, indices, axis=axis)
 
 
 def correlate(a, v):
@@ -321,6 +329,10 @@ def flip_ud(a):
     return np.flipud(a)
 
 
+def array_contains(a, key):
+    return key in a
+
+
 class TestNPFunctions(MemoryLeakMixin, TestCase):
     """
     Tests for various Numpy functions.
@@ -435,6 +447,62 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         x_values = [np.array(x_values, dtype=np.complex128)]
         x_types = [typeof(v) for v in x_values]
         check(x_types, x_values, ulps=2)
+
+    def test_contains(self):
+        def arrs():
+            a_0 = np.arange(10, 50)
+            k_0 = 20
+
+            yield a_0, k_0
+
+            a_1 = np.arange(6)
+            k_1 = 10
+
+            yield a_1, k_1
+
+            single_val_a = np.asarray([20])
+            k_in = 20
+            k_out = 13
+
+            yield single_val_a, k_in
+            yield single_val_a, k_out
+
+            empty_arr = np.asarray([])
+            yield empty_arr, k_out
+
+            # np scalars
+
+            bool_arr = np.array([True, False])
+            yield bool_arr, True
+            yield bool_arr, k_0
+
+            np.random.seed(2)
+            float_arr = np.random.rand(10)
+            np.random.seed(2)
+            rand_k = np.random.rand()
+            present_k = float_arr[0]
+
+            yield float_arr, rand_k
+            yield float_arr, present_k
+
+            complx_arr = float_arr.view(np.complex128)
+            yield complx_arr, complx_arr[0]
+            yield complx_arr, rand_k
+
+            np.random.seed(2)
+            uint_arr = np.random.randint(10, size=15, dtype=np.uint8)
+            yield uint_arr, 5
+            yield uint_arr, 25
+
+        pyfunc = array_contains
+
+        cfunc = jit(nopython=True)(pyfunc)
+
+        for arr, key in arrs():
+            expected = pyfunc(arr, key)
+            received = cfunc(arr, key)
+
+            self.assertPreciseEqual(expected, received)
 
     def test_angle(self, flags=no_pyobj_flags):
         """
@@ -579,8 +647,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             str(raises.exception)
         )
 
-    # hits "Invalid PPC CTR loop!" issue on power systems, see e.g. #4026
-    @skip_ppc64le_issue4026
     def test_delete(self):
 
         def arrays():
@@ -2032,6 +2098,8 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     params = {'ary': ary, 'to_begin': a, 'to_end': b}
                     _check(params)
 
+    @unittest.skipIf(numpy_version >= (1, 19), ("Unstable bevahiour, see:"
+                     "https://github.com/numpy/numpy/pull/17457"))
     def test_ediff1d_edge_cases(self):
         # NOTE: NumPy 1.16 has a variety of behaviours for type conversion, see
         # https://github.com/numpy/numpy/issues/13103, as this is not resolved
@@ -2213,6 +2281,92 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             cfunc((1, 2, 3))
 
         self.assertIn("Cannot np.flip on UniTuple", str(raises.exception))
+
+    def _check_split(self, func):
+        # Since np.split and np.array_split are very similar
+        pyfunc = func
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def args_variations():
+            a = np.arange(100)
+            yield a, 2
+            yield a, 2, 0
+            yield a, [1, 4, 72]
+            yield list(a), [1, 4, 72]
+            yield tuple(a), [1, 4, 72]
+            yield a, [1, 4, 72], 0
+            yield list(a), [1, 4, 72], 0
+            yield tuple(a), [1, 4, 72], 0
+
+            a = np.arange(64).reshape(4, 4, 4)
+            yield a, 2
+            yield a, 2, 0
+            yield a, 2, 1
+            yield a, [2, 1, 5]
+            yield a, [2, 1, 5], 1
+            yield a, [2, 1, 5], 2
+            yield a, [1, 3]
+            yield a, [1, 3], 1
+            yield a, [1, 3], 2
+
+            a = np.arange(100).reshape(2, -1)
+            yield a, 1
+            yield a, 1, 0
+            yield a, [1], 0
+            yield a, 50, 1
+            yield a, np.arange(10, 50, 10), 1
+            yield a, (1,)
+            yield a, (np.int32(4), 10)
+
+            a = np.array([])
+            yield a, 1
+            yield a, 2
+            yield a, (2, 3), 0
+            yield a, 1, 0
+
+            a = np.array([[]])
+            yield a, 1
+            yield a, (2, 3), 1
+            yield a, 1, 0
+            yield a, 1, 1
+
+        for args in args_variations():
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+
+            np.testing.assert_equal(expected, list(got))
+
+    def _check_array_split(self, func):
+        # array_split specific checks, mainly dealing with `int`s
+        pyfunc = func
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def args_variations():
+            yield np.arange(8), 3
+            yield list(np.arange(8)), 3
+            yield tuple(np.arange(8)), 3
+            yield np.arange(24).reshape(12, 2), 5
+
+        for args in args_variations():
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+
+            np.testing.assert_equal(expected, list(got))
+
+    def test_array_split_basic(self):
+        self._check_split(array_split)
+        self._check_array_split(array_split)
+
+    def test_split_basic(self):
+        self._check_split(split)
+
+        self.disable_leak_check()  # The exception leaks
+        with self.assertRaises(ValueError) as raises:
+            njit(split)(np.ones(5), 2)
+        self.assertIn(
+            "array split does not result in an equal division",
+            str(raises.exception)
+        )
 
     def test_roll_basic(self):
         pyfunc = roll
@@ -3587,7 +3741,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 np.array((3, 4))
             )
         self.assertIn(
-            'Dimensions for both inputs is 2',
+            'Dimensions for both inputs is 2.',
+            str(raises.exception)
+        )
+
+        self.assertIn(
+            '`cross2d(a, b)` from `numba.np.extensions`.',
             str(raises.exception)
         )
 

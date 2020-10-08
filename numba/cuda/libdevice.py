@@ -1,5 +1,5 @@
-import sys
 import math
+import operator
 from llvmlite.llvmpy.core import Type
 from numba.core import types, cgutils
 from numba.core.imputils import Registry
@@ -21,7 +21,6 @@ def bool_implement(nvname, ty):
         return context.cast(builder, result, types.int32, types.boolean)
 
     return core
-
 
 
 def unary_implement(nvname, ty):
@@ -56,7 +55,6 @@ def powi_implement(nvname):
         fnty = Type.function(fty, [fty, ity])
         fn = lmod.get_or_insert_function(fnty, name=nvname)
         return builder.call(fn, [base, pow])
-
 
     return core
 
@@ -147,6 +145,7 @@ for name64, name32, key in binarys:
     impl32 = binary_implement(name32, types.float32)
     lower(key, types.float32, types.float32)(impl32)
 
+
 def modf_implement(nvname, ty):
     def core(context, builder, sig, args):
         arg, = args
@@ -162,6 +161,45 @@ def modf_implement(nvname, ty):
         return ret
     return core
 
+
 for (ty, intrin) in ((types.float64, '__nv_modf',),
                      (types.float32, '__nv_modff',)):
     lower(math.modf, ty)(modf_implement(intrin, ty))
+
+
+# Complex power implementations - translations of _Py_c_pow from CPython
+# https://github.com/python/cpython/blob/a755410e054e1e2390de5830befc08fe80706c66/Objects/complexobject.c#L123-L151
+#
+# The complex64 variant casts all constants and some variables to ensure that
+# as much computation is done in single precision as possible. A small number
+# of operations are still done in 64-bit, but these come from libdevice code.
+
+def cpow_implement(fty, cty):
+    def core(context, builder, sig, args):
+        def cpow_internal(a, b):
+
+            if b.real == fty(0.0) and b.imag == fty(0.0):
+                return cty(1.0) + cty(0.0j)
+            elif a.real == fty(0.0) and b.real == fty(0.0):
+                return cty(0.0) + cty(0.0j)
+
+            vabs = math.hypot(a.real, a.imag)
+            len = math.pow(vabs, b.real)
+            at = math.atan2(a.imag, a.real)
+            phase = at * b.real
+            if b.imag != fty(0.0):
+                len /= math.exp(at * b.imag)
+                phase += b.imag * math.log(vabs)
+
+            return len * (cty(math.cos(phase)) +
+                          cty(math.sin(phase) * cty(1.0j)))
+
+        return context.compile_internal(builder, cpow_internal, sig, args)
+
+    lower(operator.pow, cty, cty)(core)
+    lower(operator.ipow, cty, cty)(core)
+    lower(pow, cty, cty)(core)
+
+
+cpow_implement(types.float32, types.complex64)
+cpow_implement(types.float64, types.complex128)

@@ -1644,8 +1644,11 @@ def unicode_getitem(s, idx):
         if isinstance(idx, types.Integer):
             def getitem_char(s, idx):
                 idx = normalize_str_idx(idx, len(s))
-                ret = _empty_string(s._kind, 1, s._is_ascii)
-                _set_code_point(ret, 0, _get_code_point(s, idx))
+                cp = _get_code_point(s, idx)
+                kind = _codepoint_to_kind(cp)
+                is_ascii = _codepoint_is_ascii(cp)
+                ret = _empty_string(kind, 1, is_ascii)
+                _set_code_point(ret, 0, cp)
                 return ret
             return getitem_char
         elif isinstance(idx, types.SliceType):
@@ -1653,15 +1656,38 @@ def unicode_getitem(s, idx):
                 slice_idx = _normalize_slice(idx, len(s))
                 span = _slice_span(slice_idx)
 
-                if slice_idx.step == 1:
+                cp = _get_code_point(s, slice_idx.start)
+                kind = _codepoint_to_kind(cp)
+                is_ascii = _codepoint_is_ascii(cp)
+
+                # Check slice to see if it's homogeneous in kind
+                for i in range(slice_idx.start + slice_idx.step,
+                               slice_idx.stop, slice_idx.step):
+                    cp = _get_code_point(s, i)
+                    is_ascii |= _codepoint_is_ascii(cp)
+                    new_kind = _codepoint_to_kind(cp)
+                    if kind != new_kind:
+                        kind = _pick_kind(kind, new_kind)
+                    # TODO: it might be possible to break here if the kind
+                    # is PY_UNICODE_4BYTE_KIND but there are potentially
+                    # strings coming from other internal functions that are
+                    # this wide and also actually ASCII (i.e. kind is larger
+                    # than actually required for storing the code point), so
+                    # it's necessary to continue.
+
+                if slice_idx.step == 1 and kind == s._kind:
+                    # Can return a view, the slice has the same kind as the
+                    # string itself and it's a stride slice 1.
                     return _get_str_slice_view(s, slice_idx.start, span)
                 else:
-                    ret = _empty_string(s._kind, span, s._is_ascii)
+                    # It's heterogeneous in kind OR stride != 1
+                    ret = _empty_string(kind, span, is_ascii)
                     cur = slice_idx.start
                     for i in range(span):
                         _set_code_point(ret, i, _get_code_point(s, cur))
                         cur += slice_idx.step
                     return ret
+
             return getitem_slice
 
 
@@ -2352,6 +2378,7 @@ def ol_chr(i):
 @overload(str)
 def integer_str(n):
     if isinstance(n, types.Integer):
+
         ten = n(10)
 
         def impl(n):
@@ -2361,15 +2388,21 @@ def integer_str(n):
                 flag = True
             if n == 0:
                 return '0'
-            l = []
-            while n > 0:
-                c = chr(ord('0') + (n % ten))
-                n = n // ten
-                l.append(c)
+            length = flag + 1 + int(np.floor(np.log10(n)))
+            kind = PY_UNICODE_1BYTE_KIND
+            char_width = _kind_to_byte_width(kind)
+            s = _malloc_string(kind, char_width, length, True)
             if flag:
-                l.append('-')
-            return ''.join(l[::-1])
+                _set_code_point(s, 0, ord('-'))
+            idx = length - 1
+            while n > 0:
+                n, digit = divmod(n, ten)
+                c = ord('0') + digit
+                _set_code_point(s, idx, c)
+                idx -= 1
+            return s
         return impl
+
 
 # ------------------------------------------------------------------------------
 # iteration

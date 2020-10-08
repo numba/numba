@@ -11,7 +11,6 @@ class TestCudaArrayArg(CUDATestCase):
         def device_function(a, c):
             return a[c]
 
-
         @cuda.jit('void(double[:],double[:])')
         def kernel(x, y):
             i = cuda.grid(1)

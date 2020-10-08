@@ -488,7 +488,7 @@ class InlineWorker(object):
         state.typemap = None
         state.calltypes = None
         state.type_annotation = None
-        state.status = _CompileStatus(False, False)
+        state.status = _CompileStatus(False)
         state.return_type = None
         state.parfor_diagnostics = ParforDiagnostics()
         state.metadata = {}
@@ -688,6 +688,8 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
         args = list(call_expr.args)
     elif call_expr.op == 'getattr':
         args = [call_expr.value]
+    elif ir_utils.is_operator_or_getitem(call_expr):
+        args = call_expr.list_vars()
     else:
         raise TypeError("Unsupported ir.Expr.{}".format(call_expr.op))
 
@@ -1269,6 +1271,7 @@ def _fix_nested_array(func_ir):
         size_tuple_def.items += extra_dims
         # In-place modify rhs_def to be getitem
         rhs_def.op = 'getitem'
+        rhs_def.fn = operator.getitem
         rhs_def.value = get_definition(func_ir, lhs, lhs_only=True)
         rhs_def.index = stmt.index
         del rhs_def._kws['func']

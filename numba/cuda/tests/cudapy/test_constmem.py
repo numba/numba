@@ -139,7 +139,7 @@ class TestCudaConstantMemory(CUDATestCase):
                 description = 'Load the complex as a vector of 2x f32'
             else:
                 complex_load = 'ld.const.f32'
-                description =  'load each half of the complex as f32'
+                description = 'load each half of the complex as f32'
 
             self.assertIn(complex_load, jcuconst3d.ptx, description)
 

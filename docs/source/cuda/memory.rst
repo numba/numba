@@ -68,6 +68,13 @@ Mapped memory
 
 
 
+Managed memory
+==============
+
+.. autofunction:: numba.cuda.managed_array
+   :noindex:
+
+
 Streams
 =======
 
