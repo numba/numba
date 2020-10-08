@@ -92,7 +92,7 @@ class TestDynamicGUFunc(TestCase):
         C = np.arange(matrix_ct * 2 * 5, dtype=np.float32).reshape(matrix_ct, 2, 5)
         check_matmul_gufunc(gufunc, A, B, C)  # trigger compilation
 
-        assert len(gufunc.types) == 2  # ensure two versions of gufunc
+        self.assertEqual(len(gufunc.types), 2)  # ensure two versions of gufunc
 
 
     def test_dynamic_ufunc_like(self):
@@ -133,7 +133,7 @@ class TestDynamicGUFunc(TestCase):
 
         # verify result
         for i in range(inp.shape[0]):
-            assert out[i] == inp[i].sum()
+            self.assertEqual(out[i], inp[i].sum())
 
 
 class TestGUVectorizeScalar(TestCase):
@@ -165,7 +165,7 @@ class TestGUVectorizeScalar(TestCase):
 
         # verify result
         for i in range(inp.shape[0]):
-            assert out[i] == inp[i].sum()
+            self.assertEqual(out[i], inp[i].sum())
 
     def test_scalar_input(self):
 
