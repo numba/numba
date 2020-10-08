@@ -284,7 +284,7 @@ class Lower(BaseLower):
         from numba.parfors.parfor_lowering import _lower_parfor_parallel
         from numba.parfors import parfor
         if parfor.Parfor not in lower_extensions:
-            lower_extensions[parfor.Parfor] = _lower_parfor_parallel
+            lower_extensions[parfor.Parfor] = [_lower_parfor_parallel]
 
     def pre_block(self, block):
         from numba.core.unsafe import eh
@@ -452,7 +452,7 @@ class Lower(BaseLower):
         else:
             for _class, func in lower_extensions.items():
                 if isinstance(inst, _class):
-                    func(self, inst)
+                    func[-1](self, inst)
                     return
             raise NotImplementedError(type(inst))
 

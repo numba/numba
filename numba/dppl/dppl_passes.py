@@ -140,12 +140,6 @@ class DPPLAddNumpyRemoveOverloadPass(FunctionPass):
             reload(arraymath)
             targetctx.refresh()
 
-
-            import numba
-            from numba.core import lowering
-            from numba.parfors import parfor
-            lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
-
         return True
 
 @register_pass(mutates_CFG=True, analysis_only=False)

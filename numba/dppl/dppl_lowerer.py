@@ -985,12 +985,14 @@ class DPPLLower(Lower):
         # parent function (function with parfor). In case parent function was patched with device specific
         # different solution should be used.
         try:
-            lowering.lower_extensions[parfor.Parfor] = lower_parfor_rollback
+            #lowering.lower_extensions[parfor.Parfor] = lower_parfor_rollback
+            lowering.lower_extensions[parfor.Parfor].append(lower_parfor_rollback)
             self.gpu_lower.lower()
             self.base_lower = self.gpu_lower
             #lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
+            lowering.lower_extensions[parfor.Parfor].pop()
         except:
-            lowering.lower_extensions[parfor.Parfor] = numba.parfors.parfor_lowering._lower_parfor_parallel
+            lowering.lower_extensions[parfor.Parfor].append(numba.parfors.parfor_lowering._lower_parfor_parallel)
             self.cpu_lower.lower()
             self.base_lower = self.cpu_lower
 
