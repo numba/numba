@@ -59,7 +59,7 @@ and typing *operations* (or *functions*) on known value types.
    existing default (e.g. to treat ``float`` as ``numba.float32`` instead of
    ``numba.float64``).
 
-.. decorator:: as_numba_type.register  :noindex:
+.. decorator:: as_numba_type.register
 
    Register the decorated function as a type inference function used by
    ``as_numba_type`` when trying to infer the Numba type of a Python type.

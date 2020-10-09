@@ -1,11 +1,8 @@
 import inspect
-import typing as pt
-import typing_extensions as pt_ext
-import numpy as np
+import typing as py_typing
 
 from numba.core.typing.typeof import typeof
 from numba.core import errors, types, utils
-from numba.np import numpy_support
 
 
 def _py_version_switch(py_version, new_result, old_result):
@@ -36,79 +33,28 @@ class AsNumbaTypeRegistry:
             ]
         }
 
-        self.functions = [
-            self._builtin_infer, self._numba_type_infer, self._numpy_type_infer,
-        ]
+        self.functions = [self._builtin_infer, self._numba_type_infer]
 
     def _numba_type_infer(self, py_type):
         if isinstance(py_type, types.Type):
             return py_type
 
-    def _numpy_type_infer(self, py_type):
-        if inspect.isclass(py_type) and issubclass(py_type, np.generic):
-            return numpy_support.from_dtype(py_type)
-
     def _builtin_infer(self, py_type):
         # The type hierarchy of python typing library changes in 3.7.
         generic_type_check = _py_version_switch(
             (3, 7),
-            lambda x: isinstance(x, pt._GenericAlias),
+            lambda x: isinstance(x, py_typing._GenericAlias),
             lambda _: True,
         )
         if not generic_type_check(py_type):
             return
 
-        annotated_type_check = _py_version_switch(
-            (3, 7),
-            lambda x: hasattr(x, "__metadata__"),
-            lambda x: getattr(x, "__origin__", None) is pt_ext.Annotated
-        )
+        list_origin = _py_version_switch((3, 7), list, py_typing.List)
+        dict_origin = _py_version_switch((3, 7), dict, py_typing.Dict)
+        set_origin = _py_version_switch((3, 7), set, py_typing.Set)
+        tuple_origin = _py_version_switch((3, 7), tuple, py_typing.Tuple)
 
-        list_origin = _py_version_switch((3, 7), list, pt.List)
-        dict_origin = _py_version_switch((3, 7), dict, pt.Dict)
-        set_origin = _py_version_switch((3, 7), set, pt.Set)
-        tuple_origin = _py_version_switch((3, 7), tuple, pt.Tuple)
-
-        if annotated_type_check(py_type):
-            inner_py_type = py_type.__args__[0]
-            annotations = _py_version_switch(
-                (3, 7),
-                lambda: py_type.__metadata__,
-                lambda: py_type.__args__[1]
-            )()
-
-            if len(annotations) == 1:
-                # Annotated[py_type, nb_type]
-                return self.infer(annotations[0])
-            elif (
-                len(annotations) in (2, 3)
-                and inner_py_type is np.ndarray
-                and isinstance(annotations[1], int)
-            ):
-                # Annotated[np.ndarray, dtype, ndim]
-                # Annotated[np.ndarray, dtype, ndim, layout]
-                layout = annotations[2] if len(annotations) == 3 else "A"
-                return types.Array(
-                    dtype=self.infer(annotations[0]),
-                    ndim=annotations[1],
-                    layout=layout,
-                )
-
-            raise errors.TypingError("""
-Invalid Annotated syntax.  Valid cases are:
-  * Annotated[py_type, nb_type]
-        as_numba_type returns as_numba_type(nb_type)
-  * Annotated[np.ndarray, dtype, ndim]
-        as_numba_type returns
-            Array(dtype=as_numba_type(dtype), ndim=ndim, layout="A")
-  * Annotated[np.ndarray, dtype, ndim, layout]
-        as_numba_type returns
-            Array(dtype=as_numba_type(dtype), ndim=ndim, layout=layout)
-        """)
-
-        py_type_origin = getattr(py_type, "__origin__", None)
-
-        if py_type_origin is pt.Union:
+        if getattr(py_type, "__origin__", None) is py_typing.Union:
             if len(py_type.__args__) != 2:
                 raise errors.TypingError(
                     "Cannot type Union of more than two types")
@@ -124,19 +70,19 @@ Invalid Annotated syntax.  Valid cases are:
                     "Cannot type Union that is not an Optional "
                     f"(neither type type {arg_2_py} is not NoneType")
 
-        if py_type_origin is list_origin:
+        if getattr(py_type, "__origin__", None) is list_origin:
             (element_py,) = py_type.__args__
             return types.ListType(self.infer(element_py))
 
-        if py_type_origin is dict_origin:
+        if getattr(py_type, "__origin__", None) is dict_origin:
             key_py, value_py = py_type.__args__
             return types.DictType(self.infer(key_py), self.infer(value_py))
 
-        if py_type_origin is set_origin:
+        if getattr(py_type, "__origin__", None) is set_origin:
             (element_py,) = py_type.__args__
             return types.Set(self.infer(element_py))
 
-        if py_type_origin is tuple_origin:
+        if getattr(py_type, "__origin__", None) is tuple_origin:
             tys = tuple(map(self.infer, py_type.__args__))
             return types.BaseTuple.from_types(tys)
 

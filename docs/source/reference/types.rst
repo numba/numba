@@ -334,7 +334,7 @@ Optional types
 Type annotations
 -----------------
 
-.. function:: numba.core.typing.as_numba_type(py_type)
+.. function:: numba.extending.as_numba_type(py_type)
 
    Create a Numba type corresponding to the given Python *type annotation*.
    ``TypingError`` is raised if the type annotation can't be mapped to a Numba
@@ -342,18 +342,15 @@ Type annotations
    evaluate Python type annotations.  For runtime checking of Python objects
    see ``typeof`` above.
 
-   For any Numba type, ``as_numba_type(nb_type) == nb_type``. For any Numpy
-   type, ``as_numba_type(np_type) == numpy_support.from_dtype(np_type)``.
+   For any numba type, ``as_numba_type(nb_type) == nb_type``.
 
-      >>> numba.core.typing.as_numba_type(int)
+      >>> numba.extending.as_numba_type(int)
       int64
       >>> import typing  # the Python library, not the Numba one
-      >>> numba.core.typing.as_numba_type(typing.List[float])
+      >>> numba.extending.as_numba_type(typing.List[float])
       ListType[float64]
-      >>> numba.core.typing.as_numba_type(numba.int32)
+      >>> numba.extending.as_numba_type(numba.int32)
       int32
-      >>> numba.core.typing.as_numba_type(np.float32)
-      float32
 
    ``as_numba_type`` is automatically updated to include any ``@jitclass``.
 
@@ -369,30 +366,7 @@ Type annotations
       ...         self.x += 1
       ...         return old_val
       ...
-      >>> numba.core.typing.as_numba_type(Counter)
+      >>> numba.extending.as_numba_type(Counter)
       instance.jitclass.Counter#11bad4278<x:int64>
-
-   For cases where Numba requires more type information than what Python type
-   annotations support (e.g. Numpy arrays), or where a different Numba type is
-   desired for the same Python type (e.g. int32 vs int64),
-   ``typing_extensions.Annotated`` can be used.
-   Valid patterns are:
-
-      * ``Annotated[py_type, nb_type]``: ``as_numba_type`` will return ``as_numba_type(nb_type)``
-      * ``Annotated[np.ndarray, dtype, ndim]``: ``as_numba_type`` will return ``Array(dtype=as_numba_type(dtype), ndim=ndim, layout="A")``
-      * ``Annotated[np.ndarray, dtype, ndim, layout]``: ``as_numba_type`` will return ``Array(dtype=as_numba_type(dtype), ndim=ndim, layout=layout)``
-
-   For example:
-
-      >>> as_numba_type(Annotated[int, nb.int16])
-      int16
-      >>> as_numba_type(Annotated[int, int])
-      int64
-      >>> as_numba_type(Annotated[np.ndarray, float64[:]])
-      array(float64, 1d, A)
-      >>> as_numba_type(Annotated[np.ndarray, float, 2])
-      array(float64, 2d, A)
-      >>> as_numba_type(Annotated[np.ndarray, np.int32, 2, "C"])
-      array(int32, 2d, C)
 
    Currently ``as_numba_type`` is only used to infer fields for ``@jitclass``.

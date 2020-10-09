@@ -193,9 +193,9 @@ class Type(object):
 
         if isinstance(args, (tuple, list)) and all(map(validate_slice, args)):
             ndim = len(args)
-            if ndim > 0 and args[0].step == 1:
+            if args[0].step == 1:
                 layout = 'F'
-            elif ndim > 0 and args[-1].step == 1:
+            elif args[-1].step == 1:
                 layout = 'C'
             else:
                 layout = 'A'
