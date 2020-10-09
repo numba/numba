@@ -1,10 +1,11 @@
 import re
-from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
-                       Constant, ICMP_EQ)
+from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL, Constant,
+                                  ICMP_EQ)
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba.core import typing, types, dispatcher, debuginfo, itanium_mangler, cgutils
+from numba.core import (typing, types, dispatcher, debuginfo, itanium_mangler,
+                        cgutils)
 from numba.core.utils import cached_property
 from numba.core.base import BaseContext
 from numba.core.callconv import MinimalCallConv
@@ -38,7 +39,9 @@ class CUDATypingContext(typing.BaseContext):
                 if not val._can_compile:
                     raise ValueError('using cpu function on device '
                                      'but its compilation is disabled')
-                jd = jitdevice(val, debug=val.targetoptions.get('debug'))
+                opt = val.targetoptions.get('opt', True)
+                jd = jitdevice(val, debug=val.targetoptions.get('debug'),
+                               opt=opt)
                 # cache the device function for future use and to avoid
                 # duplicated copy of the same function.
                 val.__cudajitdevice = jd
@@ -49,6 +52,7 @@ class CUDATypingContext(typing.BaseContext):
 
 # -----------------------------------------------------------------------------
 # Implementation
+
 
 VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 
@@ -95,8 +99,8 @@ class CUDATargetContext(BaseContext):
         from numba import cuda
         nonconsts = ('threadIdx', 'blockDim', 'blockIdx', 'gridDim', 'laneid',
                      'warpsize')
-        nonconsts_with_mod = tuple([ (types.Module(cuda), nc)
-                                    for nc in nonconsts ])
+        nonconsts_with_mod = tuple([(types.Module(cuda), nc)
+                                    for nc in nonconsts])
         return nonconsts_with_mod
 
     @cached_property
@@ -133,7 +137,8 @@ class CUDATargetContext(BaseContext):
         wrapfnty = Type.function(Type.void(), argtys)
         wrapper_module = self.create_module("cuda.kernel.wrapper")
         fnty = Type.function(Type.int(),
-                             [self.call_conv.get_return_type(types.pyobject)] + argtys)
+                             [self.call_conv.get_return_type(types.pyobject)]
+                             + argtys)
         func = wrapper_module.add_function(fnty, name=fname)
 
         prefixed = itanium_mangler.prepend_namespace(func.name, ns='cudapy')
@@ -158,7 +163,6 @@ class CUDATargetContext(BaseContext):
         status, _ = self.call_conv.call_function(
             builder, func, types.void, argtypes, callargs)
 
-
         if debug:
             # Check error status
             with cgutils.if_likely(builder, status.is_ok):
@@ -172,7 +176,7 @@ class CUDATargetContext(BaseContext):
                 # Only the first error is recorded
 
                 casfnty = lc.Type.function(old.type, [gv_exc.type, old.type,
-                                                    old.type])
+                                                      old.type])
 
                 casfn = wrapper_module.add_function(casfnty,
                                                     name="___numba_cas_hack")
@@ -234,8 +238,8 @@ class CUDATargetContext(BaseContext):
         kshape = [self.get_constant(types.intp, s) for s in arr.shape]
         kstrides = [self.get_constant(types.intp, s) for s in arr.strides]
         self.populate_array(ary, data=builder.bitcast(genptr, ary.data.type),
-                            shape=cgutils.pack_array(builder, kshape),
-                            strides=cgutils.pack_array(builder, kstrides),
+                            shape=kshape,
+                            strides=kstrides,
                             itemsize=ary.itemsize, parent=ary.parent,
                             meminfo=None)
 

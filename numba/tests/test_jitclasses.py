@@ -3,11 +3,9 @@ import pickle
 import random
 import typing as pt
 import unittest
-import warnings
 
 from collections import OrderedDict
 
-import numba
 import numpy as np
 from numba import (boolean, deferred_type, float32, float64, int16, int32,
                    njit, optional, typeof)
@@ -1048,20 +1046,6 @@ class TestJitClass(TestCase, MemoryLeakMixin):
 
         self.assertIn("Unknown attribute 'a_static_method'",
                       str(raises.exception))
-
-    def test_import_warnings(self):
-        class Test:
-            def __init__(self):
-                pass
-
-        with warnings.catch_warnings(record=True) as ws:
-            numba.experimental.jitclass(Test)
-            self.assertEqual(len(ws), 0)
-
-            numba.jitclass(Test)
-            self.assertEqual(len(ws), 1)
-            self.assertIs(ws[0].category, errors.NumbaDeprecationWarning)
-            self.assertIn("numba.experimental.jitclass", ws[0].message.msg)
 
     def test_jitclass_decorator_usecases(self):
         spec = OrderedDict(x=float64)

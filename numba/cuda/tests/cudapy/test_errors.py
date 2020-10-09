@@ -1,7 +1,6 @@
-import numpy as np
-
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.core.errors import TypingError
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 
 
 def noop(x):
@@ -18,12 +17,14 @@ class TestJitErrors(CUDATestCase):
 
         with self.assertRaises(ValueError) as raises:
             kernfunc[(1, 2, 3, 4), (5, 6)]
-        self.assertIn("griddim must be a sequence of 1, 2 or 3 integers, got [1, 2, 3, 4]",
+        self.assertIn("griddim must be a sequence of 1, 2 or 3 integers, "
+                      "got [1, 2, 3, 4]",
                       str(raises.exception))
 
         with self.assertRaises(ValueError) as raises:
             kernfunc[(1, 2,), (3, 4, 5, 6)]
-        self.assertIn("blockdim must be a sequence of 1, 2 or 3 integers, got [3, 4, 5, 6]",
+        self.assertIn("blockdim must be a sequence of 1, 2 or 3 integers, "
+                      "got [3, 4, 5, 6]",
                       str(raises.exception))
 
     def test_non_integral_dims(self):
@@ -52,6 +53,27 @@ class TestJitErrors(CUDATestCase):
     def test_unconfigured_untyped_cudakernel(self):
         kernfunc = cuda.jit(noop)
         self._test_unconfigured(kernfunc)
+
+    @skip_on_cudasim('TypingError does not occur on simulator')
+    def test_typing_error(self):
+        # see #5860, this is present to catch changes to error reporting
+        # accidentally breaking the CUDA target
+
+        @cuda.jit(device=True)
+        def dev_func(x):
+            # floor is deliberately not imported for the purpose of this test.
+            return floor(x)  # noqa: F821
+
+        @cuda.jit
+        def kernel_func():
+            dev_func(1.5)
+
+        with self.assertRaises(TypingError) as raises:
+            kernel_func[1, 1]()
+        excstr = str(raises.exception)
+        self.assertIn("Overload in function 'dev_func <CUDA device function>'",
+                      excstr)
+        self.assertIn("NameError: name 'floor' is not defined", excstr)
 
 
 if __name__ == '__main__':

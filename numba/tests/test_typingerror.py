@@ -82,7 +82,7 @@ class TestTypingError(unittest.TestCase):
         # This used to print "'object' object has no attribute 'int32'"
         with self.assertRaises(TypingError) as raises:
             compile_isolated(unknown_module, ())
-        self.assertIn("Untyped global name 'numpyz'", str(raises.exception))
+        self.assertIn("name 'numpyz' is not defined", str(raises.exception))
 
     def test_issue_868(self):
         '''

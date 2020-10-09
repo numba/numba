@@ -118,6 +118,7 @@ def _typeof_complex(val, c):
     return types.complex128
 
 
+@typeof_impl.register(int)
 def _typeof_int(val, c):
     # As in _typeof.c
     nbits = utils.bit_length(val)
@@ -130,10 +131,6 @@ def _typeof_int(val, c):
     else:
         raise ValueError("Int value is too large: %s" % val)
     return typ
-
-
-for cls in utils.INT_TYPES:
-    typeof_impl.register(cls, _typeof_int)
 
 
 @typeof_impl.register(np.generic)

@@ -488,7 +488,7 @@ class InlineWorker(object):
         state.typemap = None
         state.calltypes = None
         state.type_annotation = None
-        state.status = _CompileStatus(False, False)
+        state.status = _CompileStatus(False)
         state.return_type = None
         state.parfor_diagnostics = ParforDiagnostics()
         state.metadata = {}
@@ -688,6 +688,8 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
         args = list(call_expr.args)
     elif call_expr.op == 'getattr':
         args = [call_expr.value]
+    elif ir_utils.is_operator_or_getitem(call_expr):
+        args = call_expr.list_vars()
     else:
         raise TypeError("Unsupported ir.Expr.{}".format(call_expr.op))
 
@@ -939,6 +941,8 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         list_var_def = get_definition(func_ir, list_var_def.value)
     # Check if the definition is a build_list
     require(isinstance(list_var_def, ir.Expr) and list_var_def.op ==  'build_list')
+    # The build_list must be empty
+    require(len(list_var_def.items) == 0)
 
     # Look for list_append in "last" block in loop body, which should be a block that is
     # a post-dominator of the loop header.
@@ -1267,6 +1271,7 @@ def _fix_nested_array(func_ir):
         size_tuple_def.items += extra_dims
         # In-place modify rhs_def to be getitem
         rhs_def.op = 'getitem'
+        rhs_def.fn = operator.getitem
         rhs_def.value = get_definition(func_ir, lhs, lhs_only=True)
         rhs_def.index = stmt.index
         del rhs_def._kws['func']

@@ -1503,7 +1503,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
         if isinstance(callee_def, (ir.Global, ir.FreeVar)):
             # require(callee_def.value == numpy)
             # these checks support modules like numpy, numpy.random as well as
-            # calls like len() and intrinsitcs like assertEquiv
+            # calls like len() and intrinsics like assertEquiv
             keys = ['name', '_name', '__name__']
             value = None
             for key in keys:
@@ -1521,15 +1521,25 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
                 def_val = def_val._defn
             if hasattr(def_val, '__module__'):
                 mod_name = def_val.__module__
+                # The reason for first checking if the function is in NumPy's
+                # top level name space by module is that some functions are
+                # deprecated in NumPy but the functions' names are aliased with
+                # other common names. This prevents deprecation warnings on
+                # e.g. getattr(numpy, 'bool') were a bool the target.
+                # For context see #6175, impacts NumPy>=1.20.
+                mod_not_none = mod_name is not None
+                numpy_toplevel = (mod_not_none and
+                                  (mod_name == 'numpy'
+                                   or mod_name.startswith('numpy.')))
                 # it might be a numpy function imported directly
-                if (hasattr(numpy, value)
+                if (numpy_toplevel and hasattr(numpy, value)
                         and def_val == getattr(numpy, value)):
                     attrs += ['numpy']
                 # it might be a np.random function imported directly
                 elif (hasattr(numpy.random, value)
                         and def_val == getattr(numpy.random, value)):
                     attrs += ['random', 'numpy']
-                elif mod_name is not None:
+                elif mod_not_none:
                     attrs.append(mod_name)
             else:
                 class_name = def_val.__class__.__name__
@@ -1669,12 +1679,30 @@ def get_ir_of_code(glbls, fcode):
             self.state.typemap = None
             self.state.return_type = None
             self.state.calltypes = None
-    rewrites.rewrite_registry.apply('before-inference', DummyPipeline(ir).state)
+    state = DummyPipeline(ir).state
+    rewrites.rewrite_registry.apply('before-inference', state)
     # call inline pass to handle cases like stencils and comprehensions
     swapped = {} # TODO: get this from diagnostics store
     inline_pass = numba.core.inline_closurecall.InlineClosureCallPass(
         ir, numba.core.cpu.ParallelOptions(False), swapped)
     inline_pass.run()
+
+    # TODO: DO NOT ADD MORE THINGS HERE!
+    # If adding more things here is being contemplated, it really is time to
+    # retire this function and work on getting the InlineWorker class from
+    # numba.core.inline_closurecall into sufficient shape as a replacement.
+    # The issue with `get_ir_of_code` is that it doesn't run a full compilation
+    # pipeline and as a result various additional things keep needing to be
+    # added to create valid IR.
+
+    # rebuild IR in SSA form
+    from numba.core.untyped_passes import ReconstructSSA
+    from numba.core.typed_passes import PreLowerStripPhis
+    reconstruct_ssa = ReconstructSSA()
+    phistrip = PreLowerStripPhis()
+    reconstruct_ssa.run_pass(state)
+    phistrip.run_pass(state)
+
     post_proc = postproc.PostProcessor(ir)
     post_proc.run(True)
     return ir
@@ -1736,6 +1764,12 @@ def dump_blocks(blocks):
         print(label, ":")
         for stmt in block.body:
             print("    ", stmt)
+
+def is_operator_or_getitem(expr):
+    """true if expr is unary or binary operator or getitem"""
+    return (isinstance(expr, ir.Expr)
+            and getattr(expr, 'op', False)
+            and expr.op in ['unary', 'binop', 'inplace_binop', 'getitem', 'static_getitem'])
 
 def is_get_setitem(stmt):
     """stmt is getitem assignment or setitem (and static cases)"""
@@ -2003,7 +2037,7 @@ def raise_on_unsupported_feature(func_ir, typemap):
                "in a function is unsupported (strange things happen!), use "
                "numba.gdb_breakpoint() to create additional breakpoints "
                "instead.\n\nRelevant documentation is available here:\n"
-               "http://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
+               "https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html"
                "/troubleshoot.html#using-numba-s-direct-gdb-bindings-in-"
                "nopython-mode\n\nConflicting calls found at:\n %s")
         buf = '\n'.join([x.strformat() for x in gdb_calls])
@@ -2021,7 +2055,7 @@ def warn_deprecated(func_ir, typemap):
                 arg = name.split('.')[1]
                 fname = func_ir.func_id.func_qualname
                 tyname = 'list' if isinstance(ty, types.List) else 'set'
-                url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+                url = ("https://numba.pydata.org/numba-doc/latest/reference/"
                        "deprecation.html#deprecation-of-reflection-for-list-and"
                        "-set-types")
                 msg = ("\nEncountered the use of a type that is scheduled for "

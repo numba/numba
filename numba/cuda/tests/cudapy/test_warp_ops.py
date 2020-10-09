@@ -91,13 +91,6 @@ def use_independent_scheduling(arr):
     arr[i] = ballot
 
 
-def _safe_skip():
-    if config.ENABLE_CUDASIM:
-        return False
-    else:
-        return cuda.cudadrv.nvvm.NVVM_VERSION >= (1, 4)
-
-
 def _safe_cc_check(cc):
     if config.ENABLE_CUDASIM:
         return True
@@ -105,9 +98,7 @@ def _safe_cc_check(cc):
         return cuda.get_current_device().compute_capability >= cc
 
 
-@unittest.skipUnless(_safe_skip(),
-                     "Warp Operations require at least CUDA 9"
-                     "and are not yet implemented for the CudaSim")
+@skip_on_cudasim("Warp Operations are not yet implemented on cudasim")
 class TestCudaWarpOperations(CUDATestCase):
     def test_useful_syncwarp(self):
         compiled = cuda.jit("void(int32[:])")(useful_syncwarp)
@@ -155,7 +146,8 @@ class TestCudaWarpOperations(CUDATestCase):
 
     def test_shfl_sync_types(self):
         types = int32, int64, float32, float64
-        values = np.int32(-1), np.int64(1 << 42), np.float32(np.pi), np.float64(np.pi)
+        values = (np.int32(-1), np.int64(1 << 42),
+                  np.float32(np.pi), np.float64(np.pi))
         for typ, val in zip(types, values):
             compiled = cuda.jit((typ[:], typ))(use_shfl_sync_with_val)
             nelem = 32
@@ -232,7 +224,8 @@ class TestCudaWarpOperations(CUDATestCase):
         self.assertTrue(np.all(ary_out == 0))
 
     @unittest.skipUnless(_safe_cc_check((7, 0)),
-                         "Independent scheduling requires at least Volta Architecture")
+                         "Independent scheduling requires at least Volta "
+                         "Architecture")
     def test_independent_scheduling(self):
         compiled = cuda.jit("void(uint32[:])")(use_independent_scheduling)
         arr = np.empty(32, dtype=np.uint32)

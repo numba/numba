@@ -6,6 +6,10 @@ Numba
    :target: https://gitter.im/numba/numba?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge
    :alt: Gitter
 
+.. image:: https://img.shields.io/badge/discuss-on%20discourse-blue
+   :target: https://numba.discourse.group/
+   :alt: Discourse
+
 A Just-In-Time Compiler for Numerical Functions in Python
 #########################################################
 
@@ -30,6 +34,7 @@ Supported Platforms
     ARMv8 (64-bit)
   - Windows: x86, x86_64
   - macOS: x86_64
+  - \*BSD: (unofficial support only)
 
 * (Optional) Accelerators and GPUs:
 

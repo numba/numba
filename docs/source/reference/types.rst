@@ -115,6 +115,7 @@ as items in sequences, in addition to being callable.
 
 First-class function support is enabled for all Numba :term:`JIT`
 compiled functions and Numba ``cfunc`` compiled functions except when:
+
 - using a non-CPU compiler,
 - the compiled function is a Python generator,
 - the compiled function has Omitted arguments,

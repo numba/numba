@@ -1569,7 +1569,7 @@ TestLoopTypesIntRightShiftNoPython.autogenerate()
 
 class TestLoopTypesFloorDivideNoPython(_LoopTypesTester):
     _compile_flags = no_pyobj_flags
-    _ufuncs = [np.floor_divide, np.remainder]
+    _ufuncs = [np.floor_divide, np.remainder, np.divmod]
     _required_types = 'bBhHiIlLqQfdFD'
     _skip_types = 'mMO' + _LoopTypesTester._skip_types
 
@@ -1593,6 +1593,7 @@ class TestLoopTypesFloatNoPython(_LoopTypesTester):
         _ufuncs.remove(np.signbit) # TODO: fix issue #758
     _ufuncs.remove(np.floor_divide) # has its own test class
     _ufuncs.remove(np.remainder) # has its own test class
+    _ufuncs.remove(np.divmod) # has its own test class
     _ufuncs.remove(np.mod) # same as np.remainder
     _required_types = 'fd'
     _skip_types = 'FDmMO' + _LoopTypesTester._skip_types
@@ -1615,6 +1616,8 @@ TestLoopTypesComplexNoPython.autogenerate()
 class TestLoopTypesDatetimeNoPython(_LoopTypesTester):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
+
+    _ufuncs.remove(np.divmod)  # not implemented yet
 
     # NOTE: the full list of ufuncs supporting datetime64 and timedelta64
     # types in Numpy is:
