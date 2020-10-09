@@ -237,7 +237,7 @@ class syncthreads_or(Stub):
 
 class syncwarp(Stub):
     '''
-    syncwarp(mask)
+    syncwarp(mask=0xFFFFFFFF)
 
     Synchronizes a masked subset of threads in a warp.
     '''

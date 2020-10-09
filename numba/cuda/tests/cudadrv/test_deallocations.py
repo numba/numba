@@ -180,6 +180,12 @@ class TestDel(CUDATestCase):
         with self.check_ignored_exception(ctx):
             del mem
 
+    def test_managed_memory(self):
+        ctx = cuda.current_context()
+        mem = ctx.memallocmanaged(32)
+        with self.check_ignored_exception(ctx):
+            del mem
+
     def test_pinned_contextmanager(self):
         # Check that temporarily pinned memory is unregistered immediately,
         # such that it can be re-pinned at any time

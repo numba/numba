@@ -7,7 +7,7 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
 from numba.core.imputils import Registry
-from numba.core.typing.npydecl import parse_dtype
+from numba.core.typing.npydecl import parse_dtype, signature
 from numba.core import types, cgutils
 from .cudadrv import nvvm
 from numba import cuda
@@ -245,8 +245,15 @@ def ptx_threadfence_device(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+@lower(stubs.syncwarp)
+def ptx_syncwarp(context, builder, sig, args):
+    mask = context.get_constant(types.int32, 0xFFFFFFFF)
+    mask_sig = signature(types.none, types.int32)
+    return ptx_syncwarp_mask(context, builder, mask_sig, [mask])
+
+
 @lower(stubs.syncwarp, types.i4)
-def ptx_warp_sync(context, builder, sig, args):
+def ptx_syncwarp_mask(context, builder, sig, args):
     fname = 'llvm.nvvm.bar.warp.sync'
     lmod = builder.module
     fnty = Type.function(Type.void(), (Type.int(32),))

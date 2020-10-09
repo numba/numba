@@ -1689,6 +1689,39 @@ class TestParfors(TestParforsBase):
                                     (types.Array(types.float64, 1, 'C'),
                                      types.Array(types.float64, 1, 'C'))) == 1)
 
+    @skip_parfors_unsupported
+    def test_tuple_concat(self):
+        # issue5383
+        def test_impl(a):
+            n = len(a)
+            array_shape = n, n
+            indices = np.zeros(((1,) + array_shape + (1,)), dtype=np.uint64)
+            k_list = indices[0, :]
+
+            for i, g in enumerate(a):
+                k_list[i, i] = i
+            return k_list
+
+        x = np.array([1, 1])
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_tuple_concat_with_reverse_slice(self):
+        # issue5383
+        def test_impl(a):
+            n = len(a)
+            array_shape = n, n
+            indices = np.zeros(((1,) + array_shape + (1,))[:-1],
+                               dtype=np.uint64)
+            k_list = indices[0, :]
+
+            for i, g in enumerate(a):
+                k_list[i, i] = i
+            return k_list
+
+        x = np.array([1, 1])
+        self.check(test_impl, x)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -2600,6 +2633,21 @@ class TestPrange(TestPrangeBase):
 
         image = np.zeros((3, 3), dtype=np.int32)
         self.prange_tester(test_impl, image, 0, 0)
+
+    @skip_parfors_unsupported
+    def test_list_setitem_hoisting(self):
+        # issue5979
+        # Don't hoist list initialization if list item set.
+        def test_impl():
+            n = 5
+            a = np.empty(n, dtype=np.int64)
+            for k in range(5):
+                X = [0]
+                X[0] = 1
+                a[k] = X[0]
+            return a
+
+        self.prange_tester(test_impl)
 
 
 @skip_parfors_unsupported
