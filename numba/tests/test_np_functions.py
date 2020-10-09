@@ -3907,10 +3907,6 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             (
                 np.arange(36).reshape(6, 2, 3),
             ),
-            # (
-            #     [1, 2, 3, 4],
-            #     'float32'
-            # )
         ]
 
         for pair in pairs:
