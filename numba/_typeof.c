@@ -311,8 +311,6 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
                 return -1;
 
             n = PyTuple_GET_SIZE(val);
-            if (n > 10)
-                return -1;
 
             TRY(string_writer_put_char, w, OP_START_TUPLE);
             for (i = 0; i < n; i++) {
