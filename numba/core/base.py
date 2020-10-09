@@ -587,7 +587,7 @@ class BaseContext(object):
         assert self.get_value_type(ty) == obj.type
         return obj
 
-    def get_getattr(self, typ, attr):
+    def get_getattr(self, builder, typ, attr):
         """
         Get the getattr() implementation for the given type and attribute name.
         The return value is a callable with the signature
@@ -606,7 +606,7 @@ class BaseContext(object):
                 return None
             else:
                 pyval = getattr(typ.pymod, attr)
-                llval = self.get_constant(attrty, pyval)
+                llval = self.get_constant_generic(builder, attrty, pyval)
                 def imp(context, builder, typ, val, attr):
                     return impl_ret_borrowed(context, builder, attrty, llval)
                 return imp
