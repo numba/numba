@@ -22,7 +22,7 @@ class TestRuntime(unittest.TestCase):
         if config.ENABLE_CUDASIM:
             supported_versions = (-1, -1),
         else:
-            supported_versions = ((8, 0), (9, 0), (9, 1), (9, 2), (10, 0),
+            supported_versions = ((9, 0), (9, 1), (9, 2), (10, 0),
                                   (10, 1), (10, 2), (11, 0))
         self.assertIn(runtime.get_version(), supported_versions)
 

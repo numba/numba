@@ -24,6 +24,7 @@ DLLNAMEMAP = {
     'darwin': r'lib%(name)s\.%(ver)s\.dylib$',
     'win32': r'%(name)s%(ver)s\.dll$',
     'win32-static': r'%(name)s\.lib$',
+    'bsd': r'lib%(name)s\.so\.%(ver)s$',
 }
 
 RE_VER = r'[0-9]*([_\.][0-9]+)*'
@@ -31,6 +32,7 @@ RE_VER = r'[0-9]*([_\.][0-9]+)*'
 
 def find_lib(libname, libdir=None, platform=None, static=False):
     platform = platform or sys.platform
+    platform = 'bsd' if 'bsd' in platform else platform
     if static:
         platform = f"{platform}-static"
     pat = DLLNAMEMAP[platform] % {"name": libname, "ver": RE_VER}

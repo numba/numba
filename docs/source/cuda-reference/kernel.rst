@@ -272,10 +272,10 @@ are guaranteed to not move across the memory fences by optimization passes.
 Warp Intrinsics
 ~~~~~~~~~~~~~~~
 
-All warp level operations require at least CUDA 9. The argument ``membermask`` is
-a 32 bit integer mask with each bit corresponding to a thread in the warp, with 1
-meaning the thread is in the subset of threads within the function call. The
-``membermask`` must be all 1 if the GPU compute capability is below 7.x.
+The argument ``membermask`` is a 32 bit integer mask with each bit
+corresponding to a thread in the warp, with 1 meaning the thread is in the
+subset of threads within the function call. The ``membermask`` must be all 1 if
+the GPU compute capability is below 7.x.
 
 .. function:: numba.cuda.syncwarp(membermask)
 

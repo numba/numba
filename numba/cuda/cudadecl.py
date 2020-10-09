@@ -129,7 +129,7 @@ class Cuda_threadfence_system(ConcreteTemplate):
 @register
 class Cuda_syncwarp(ConcreteTemplate):
     key = cuda.syncwarp
-    cases = [signature(types.none, types.i4)]
+    cases = [signature(types.none), signature(types.none, types.i4)]
 
 
 @register
