@@ -1207,8 +1207,6 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
 
         try:
             retty = self.get_return_type(typdict)
-            typdict = utils.UniqueDict(
-                typdict, **{v.name: retty for v in self._get_return_vars()})
         except Exception as e:
             # partial type inference may raise e.g. attribute error if a
             # constraint has no computable signature, ignore this as needed
@@ -1216,6 +1214,9 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
                 raise e
             else:
                 retty = None
+        else:
+            typdict = utils.UniqueDict(
+                typdict, **{v.name: retty for v in self._get_return_vars()})
 
         try:
             fntys = self.get_function_types(typdict)
