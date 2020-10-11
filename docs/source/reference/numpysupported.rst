@@ -384,6 +384,7 @@ Other functions
 
 The following top-level functions are supported:
 
+* :func:`numpy.allclose`
 * :func:`numpy.append`
 * :func:`numpy.arange`
 * :func:`numpy.argsort` (``kind`` key word argument supported for values
@@ -442,6 +443,7 @@ The following top-level functions are supported:
 * :func:`numpy.identity`
 * :func:`numpy.kaiser`
 * :func:`numpy.interp` (only the 3 first arguments; requires NumPy >= 1.10)
+* :func:`numpy.isclose` (will return 1d array for 0d array input)
 * :func:`numpy.linspace` (only the 3-argument form)
 * :class:`numpy.ndenumerate`
 * :class:`numpy.ndindex`
