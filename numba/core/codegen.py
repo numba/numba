@@ -1043,7 +1043,7 @@ class BaseCPUCodegen(object):
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
         self._mpm_cheap = self._module_pass_manager(loop_vectorize=False,
-                                                    opt=2)
+                                                    opt=1)
         self._mpm_full = self._module_pass_manager()
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
