@@ -66,11 +66,6 @@ private:
     TypeTable overloads;
 };
 
-
-#ifdef __cplusplus
-    extern "C" {
-#endif
-
 /*
  * The following call_trace and call_trace_protected functions
  * as well as the C_TRACE macro are taken from ceval.c
@@ -753,7 +748,3 @@ MOD_INIT(_dispatcher) {
 
     return MOD_SUCCESS_VAL(m);
 }
-
-#ifdef __cplusplus
-    }
-#endif
