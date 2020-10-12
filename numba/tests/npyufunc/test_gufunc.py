@@ -128,6 +128,11 @@ class TestDynamicGUFunc(TestCase):
         # The outter (leftmost) dimension must match or numpy broadcasting is performed.
 
         inp = np.arange(30000, dtype=np.int32).reshape(10000, 3)
+
+        msg = "Too few arguments for function 'sum_row'."
+        with self.assertRaisesRegex(TypeError, msg):
+            sum_row(inp)
+
         out = np.zeros(10000, dtype=np.int32)
         sum_row(inp, out)
 
