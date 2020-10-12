@@ -36,7 +36,7 @@ def _parse_refprune_flags():
     -------
     flags : llvmlite.binding.RefPruneSubpasses
     """
-    flags = config.EXPERIMENTAL_REFPRUNE_FLAGS.split(',')
+    flags = config.LLVM_REFPRUNE_FLAGS.split(',')
     if not flags:
         return 0
     val = 0
@@ -168,7 +168,7 @@ class CodeLibrary(object):
         Internal: optimize this library's final module.
         """
         self._codegen._mpm.run(self._final_module)
-        if not config.EXPERIMENTAL_REFPRUNE_PASS:
+        if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
 
     def _get_module_for_linking(self):
@@ -237,7 +237,7 @@ class CodeLibrary(object):
     def add_llvm_module(self, ll_module):
         self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
-        if not config.EXPERIMENTAL_REFPRUNE_PASS:
+        if not config.LLVM_REFPRUNE_PASS:
             ll_module = remove_redundant_nrt_refct(ll_module)
         self._final_module.link_in(ll_module)
 
@@ -722,7 +722,7 @@ class BaseCPUCodegen(object):
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
-        if config.EXPERIMENTAL_REFPRUNE_PASS:
+        if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 
@@ -731,7 +731,7 @@ class BaseCPUCodegen(object):
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder() as pmb:
             pmb.populate(pm)
-        if config.EXPERIMENTAL_REFPRUNE_PASS:
+        if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 

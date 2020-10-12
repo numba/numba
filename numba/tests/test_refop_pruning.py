@@ -16,7 +16,7 @@ from numba.tests.support import override_config
 
 @contextmanager
 def set_refprune_flags(flags):
-    with override_config('EXPERIMENTAL_REFPRUNE_FLAGS', flags):
+    with override_config('LLVM_REFPRUNE_FLAGS', flags):
         yield
 
 
@@ -33,7 +33,7 @@ class TestRefOpPruning(TestCase):
         Note: The exact statistic varies across platform.
         """
 
-        with override_config('EXPERIMENTAL_REFPRUNE_PASS', '1'):
+        with override_config('LLVM_REFPRUNE_PASS', '1'):
             cres = compile_isolated(func, (*argtys,))
 
         pstats = cres.metadata.get('prune_stats', None)

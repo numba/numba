@@ -986,7 +986,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(d)
 
         c = foo()
-        if config.EXPERIMENTAL_REFPRUNE_PASS:
+        if config.LLVM_REFPRUNE_PASS:
             # Because the pruner cleared all other increfs
             self.assertEqual(1, c)
         else:
@@ -1004,7 +1004,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(d)
 
         c = foo()
-        if config.EXPERIMENTAL_REFPRUNE_PASS:
+        if config.LLVM_REFPRUNE_PASS:
             # Because the pruner cleared all other increfs
             self.assertEqual(1, c)
         else:
@@ -1021,7 +1021,7 @@ class TestListRefctTypes(MemoryLeakMixin, TestCase):
             return get_refcount(l)
 
         c = foo()
-        if config.EXPERIMENTAL_REFPRUNE_PASS:
+        if config.LLVM_REFPRUNE_PASS:
             # Because the pruner cleared all other increfs
             self.assertEqual(1, c)
         else:

@@ -382,12 +382,12 @@ class _EnvReloader(object):
                                        'default')
 
         # Experimental refprune pass
-        EXPERIMENTAL_REFPRUNE_PASS = _readenv(
-            "NUMBA_EXPERIMENTAL_REFPRUNE_PASS", int, 1,
+        LLVM_REFPRUNE_PASS = _readenv(
+            "NUMBA_LLVM_REFPRUNE_PASS", int, 1,
         )
-        EXPERIMENTAL_REFPRUNE_FLAGS = _readenv(
-            "NUMBA_EXPERIMENTAL_REFPRUNE_FLAGS", str,
-            "all" if EXPERIMENTAL_REFPRUNE_PASS else "",
+        LLVM_REFPRUNE_FLAGS = _readenv(
+            "NUMBA_LLVM_REFPRUNE_FLAGS", str,
+            "all" if LLVM_REFPRUNE_PASS else "",
         )
 
         # Inject the configuration values into the module globals

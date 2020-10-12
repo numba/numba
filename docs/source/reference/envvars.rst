@@ -311,16 +311,16 @@ Compilation options
 
     *Default value:* 128
 
-.. envvar:: NUMBA_EXPERIMENTAL_REFPRUNE_PASS
+.. envvar:: NUMBA_LLVM_REFPRUNE_PASS
 
     Turns on the LLVM pass level reference-count pruning pass and disables the
     regex based implementation in Numba.
 
     *Default value:* 1 (On)
 
-.. envvar:: NUMBA_EXPERIMENTAL_REFPRUNE_FLAGS
+.. envvar:: NUMBA_LLVM_REFPRUNE_FLAGS
 
-    When ``NUMBA_EXPERIMENTAL_REFPRUNE_PASS`` is on, this allows configuration
+    When ``NUMBA_LLVM_REFPRUNE_PASS`` is on, this allows configuration
     of subpasses in the reference-count pruning LLVM pass.
 
     Valid values are any combinations of the below separated by `,`
