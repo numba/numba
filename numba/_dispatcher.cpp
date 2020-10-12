@@ -12,10 +12,7 @@
 typedef std::vector<Type> TypeTable;
 typedef std::vector<PyObject*> Functions;
 
-struct _opaque_dispatcher {};
-typedef struct _opaque_dispatcher dispatcher_t;
-
-class Dispatcher: public _opaque_dispatcher {
+class Dispatcher {
 public:
     Dispatcher(TypeManager *tm, int argct): argct(argct), tm(tm) { }
 
@@ -69,48 +66,6 @@ private:
     TypeTable overloads;
 };
 
-static dispatcher_t *
-dispatcher_new(void *tm, int argct){
-    return new Dispatcher(static_cast<TypeManager*>(tm), argct);
-}
-
-static void
-dispatcher_clear(dispatcher_t *obj) {
-    Dispatcher *disp = static_cast<Dispatcher*>(obj);
-    disp->clear();
-}
-
-static void
-dispatcher_del(dispatcher_t *obj) {
-    Dispatcher *disp = static_cast<Dispatcher*>(obj);
-    delete disp;
-}
-
-static void
-dispatcher_add_defn(dispatcher_t *obj, int tys[], PyObject* callable) {
-    assert(sizeof(int) == sizeof(Type) &&
-            "Type should be representable by an int");
-
-    Dispatcher *disp = static_cast<Dispatcher*>(obj);
-    Type *args = reinterpret_cast<Type*>(tys);
-    disp->addDefinition(args, callable);
-}
-
-static PyObject*
-dispatcher_resolve(dispatcher_t *obj, int sig[], int *count, int allow_unsafe,
-                   int exact_match_required) {
-    Dispatcher *disp = static_cast<Dispatcher*>(obj);
-    Type *args = reinterpret_cast<Type*>(sig);
-    PyObject* callable = disp->resolve(args, *count, (bool) allow_unsafe,
-                                      (bool) exact_match_required);
-    return callable;
-}
-
-static int
-dispatcher_count(dispatcher_t *obj) {
-    Dispatcher *disp = static_cast<Dispatcher*>(obj);
-    return disp->count();
-}
 
 #ifdef __cplusplus
     extern "C" {
@@ -209,7 +164,7 @@ else                                                            \
 typedef struct DispatcherObject{
     PyObject_HEAD
     /* Holds borrowed references to PyCFunction objects */
-    dispatcher_t *dispatcher;
+    Dispatcher *dispatcher;
     char can_compile;        /* Can auto compile */
     char can_fallback;       /* Can fallback */
     char exact_match_required;
@@ -238,7 +193,7 @@ Dispatcher_dealloc(DispatcherObject *self)
 {
     Py_XDECREF(self->argnames);
     Py_XDECREF(self->defargs);
-    dispatcher_del(self->dispatcher);
+    delete self->dispatcher;
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -266,7 +221,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     Py_INCREF(self->argnames);
     Py_INCREF(self->defargs);
     tmaddr = PyLong_AsVoidPtr(tmaddrobj);
-    self->dispatcher = dispatcher_new(tmaddr, argct);
+    self->dispatcher = new Dispatcher(static_cast<TypeManager*>(tmaddr), argct);
     self->can_compile = 1;
     self->can_fallback = can_fallback;
     self->fallbackdef = NULL;
@@ -278,7 +233,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
 static PyObject *
 Dispatcher_clear(DispatcherObject *self, PyObject *args)
 {
-    dispatcher_clear(self->dispatcher);
+    self->dispatcher->clear();
     Py_RETURN_NONE;
 }
 
@@ -310,7 +265,7 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 
     /* The reference to cfunc is borrowed; this only works because the
        derived Python class also stores an (owned) reference to cfunc. */
-    dispatcher_add_defn(self->dispatcher, sig, cfunc);
+    self->dispatcher->addDefinition(sig, cfunc);
 
     /* Add pure python fallback */
     if (!self->fallbackdef && objectmode){
@@ -644,8 +599,8 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
     /* We only allow unsafe conversions if compilation of new specializations
        has been disabled. */
-    cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
-                               !self->can_compile, self->exact_match_required);
+    cfunc = self->dispatcher->resolve(tys, matches, !self->can_compile,
+                                      self->exact_match_required);
 
     if (matches == 0 && !self->can_compile) {
         /*
@@ -660,9 +615,8 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         }
         if (res > 0) {
             /* Retry with the newly registered conversions */
-            cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
-                                       !self->can_compile,
-                                       self->exact_match_required);
+            cfunc = self->dispatcher->resolve(tys, matches, !self->can_compile,
+                                              self->exact_match_required);
         }
     }
 
