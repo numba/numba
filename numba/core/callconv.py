@@ -5,7 +5,7 @@ Calling conventions for Numba-compiled functions.
 from collections import namedtuple
 import itertools
 
-from llvmlite import ir as ir
+from llvmlite import ir
 
 from numba.core import types, cgutils
 from numba.core.base import PYOBJECT, GENERIC_POINTER
@@ -447,7 +447,6 @@ class CPUCallConv(BaseCallConv):
         ret = builder.ret(code)
 
         if mark_exc:
-            from llvmlite import ir
             md = builder.module.add_metadata([ir.IntType(1)(1)])
             ret.set_metadata("ret_is_raise", md)
 
