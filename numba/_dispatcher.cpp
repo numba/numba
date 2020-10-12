@@ -4,9 +4,13 @@
 #include <time.h>
 #include <assert.h>
 
-#include "_dispatcher.h"
+#include "_dispatcher.hpp"
 #include "_typeof.h"
 #include "frameobject.h"
+
+#ifdef __cplusplus
+    extern "C" {
+#endif
 
 /*
  * The following call_trace and call_trace_protected functions
@@ -194,7 +198,7 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     }
 
     sigsz = PySequence_Fast_GET_SIZE(sigtup);
-    sig = malloc(sigsz * sizeof(int));
+    sig = (int*)malloc(sigsz * sizeof(int));
 
     for (i = 0; i < sigsz; ++i) {
         sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
@@ -202,7 +206,7 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 
     /* The reference to cfunc is borrowed; this only works because the
        derived Python class also stores an (owned) reference to cfunc. */
-    dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
+    dispatcher_add_defn(self->dispatcher, sig, cfunc);
 
     /* Add pure python fallback */
     if (!self->fallbackdef && objectmode){
@@ -515,7 +519,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     if (argct < (Py_ssize_t) (sizeof(prealloc) / sizeof(int)))
         tys = prealloc;
     else
-        tys = malloc(argct * sizeof(int));
+        tys = (int*)malloc(argct * sizeof(int));
 
     for (i = 0; i < argct; ++i) {
         tmptype = PySequence_Fast_GET_ITEM(args, i);
@@ -691,3 +695,7 @@ MOD_INIT(_dispatcher) {
 
     return MOD_SUCCESS_VAL(m);
 }
+
+#ifdef __cplusplus
+    }
+#endif

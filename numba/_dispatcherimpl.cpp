@@ -1,9 +1,10 @@
 #include "core/typeconv/typeconv.hpp"
 #include <cassert>
 #include <vector>
+#include <Python.h>
 
 typedef std::vector<Type> TypeTable;
-typedef std::vector<void*> Functions;
+typedef std::vector<PyObject*> Functions;
 
 struct _opaque_dispatcher {};
 
@@ -11,7 +12,7 @@ class Dispatcher: public _opaque_dispatcher {
 public:
     Dispatcher(TypeManager *tm, int argct): argct(argct), tm(tm) { }
 
-    void addDefinition(Type args[], void *callable) {
+    void addDefinition(Type args[], PyObject *callable) {
         overloads.reserve(argct + overloads.size());
         for (int i=0; i<argct; ++i) {
             overloads.push_back(args[i]);
@@ -19,8 +20,8 @@ public:
         functions.push_back(callable);
     }
 
-    void* resolve(Type sig[], int &matches, bool allow_unsafe,
-                  bool exact_match_required) {
+    PyObject* resolve(Type sig[], int &matches, bool allow_unsafe,
+                      bool exact_match_required) {
         const int ovct = functions.size();
         int selected;
         matches = 0;
@@ -62,7 +63,11 @@ private:
 };
 
 
-#include "_dispatcher.h"
+#include "_dispatcher.hpp"
+
+#ifdef __cplusplus
+    extern "C" {
+#endif
 
 dispatcher_t *
 dispatcher_new(void *tm, int argct){
@@ -82,7 +87,7 @@ dispatcher_del(dispatcher_t *obj) {
 }
 
 void
-dispatcher_add_defn(dispatcher_t *obj, int tys[], void* callable) {
+dispatcher_add_defn(dispatcher_t *obj, int tys[], PyObject* callable) {
     assert(sizeof(int) == sizeof(Type) &&
             "Type should be representable by an int");
 
@@ -91,13 +96,13 @@ dispatcher_add_defn(dispatcher_t *obj, int tys[], void* callable) {
     disp->addDefinition(args, callable);
 }
 
-void*
+PyObject*
 dispatcher_resolve(dispatcher_t *obj, int sig[], int *count, int allow_unsafe,
                    int exact_match_required) {
     Dispatcher *disp = static_cast<Dispatcher*>(obj);
     Type *args = reinterpret_cast<Type*>(sig);
-    void *callable = disp->resolve(args, *count, (bool) allow_unsafe,
-                                   (bool) exact_match_required);
+    PyObject* callable = disp->resolve(args, *count, (bool) allow_unsafe,
+                                      (bool) exact_match_required);
     return callable;
 }
 
@@ -106,3 +111,7 @@ dispatcher_count(dispatcher_t *obj) {
     Dispatcher *disp = static_cast<Dispatcher*>(obj);
     return disp->count();
 }
+
+#ifdef __cplusplus
+    }
+#endif

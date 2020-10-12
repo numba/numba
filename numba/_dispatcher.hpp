@@ -1,6 +1,8 @@
 #ifndef NUMBA_DISPATCHER_H_
 #define NUMBA_DISPATCHER_H_
 
+#include <Python.h>
+
 #ifdef __cplusplus
     extern "C" {
 #endif
@@ -17,9 +19,9 @@ void
 dispatcher_del(dispatcher_t *obj);
 
 void
-dispatcher_add_defn(dispatcher_t *obj, int tys[], void* callable);
+dispatcher_add_defn(dispatcher_t *obj, int tys[], PyObject* callable);
 
-void*
+PyObject*
 dispatcher_resolve(dispatcher_t *obj, int sig[], int *matches,
                    int allow_unsafe, int exact_match_required);
 
