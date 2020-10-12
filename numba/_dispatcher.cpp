@@ -122,6 +122,11 @@ public:
     int argct;
     /* Used for selecting overloaded function implementations */
     TypeManager *tm;
+    /* An array of overloads */
+    Functions functions;
+    /* A flattened array of argument types to all overloads
+     * (invariant: sizeof(overloads) == argct * sizeof(functions)) */
+    TypeTable overloads;
 
     void addDefinition(Type args[], PyObject *callable) {
         overloads.reserve(argct + overloads.size());
@@ -163,12 +168,6 @@ public:
         overloads.clear();
     }
 
-private:
-    /* An array of overloads */
-    Functions functions;
-    /* A flattened array of argument types to all overloads
-     * (invariant: sizeof(overloads) == argct * sizeof(functions)) */
-    TypeTable overloads;
 };
 
 
