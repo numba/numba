@@ -1,5 +1,4 @@
 #include "_pymodule.h"
-#include "core/typeconv/typeconv.hpp"
 
 #include <cstring>
 #include <ctime>
@@ -8,7 +7,7 @@
 
 #include "_typeof.h"
 #include "frameobject.h"
-
+#include "core/typeconv/typeconv.hpp"
 
 /*
  * The following call_trace and call_trace_protected functions
@@ -137,7 +136,7 @@ public:
     }
 
     PyObject* resolve(Type sig[], int &matches, bool allow_unsafe,
-                      bool exact_match_required) {
+                      bool exact_match_required) const {
         const int ovct = functions.size();
         int selected;
         matches = 0;
@@ -160,8 +159,6 @@ public:
         }
         return NULL;
     }
-
-    int count() const { return functions.size(); }
 
     void clear() {
         functions.clear();
