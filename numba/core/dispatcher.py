@@ -983,13 +983,6 @@ class LiftedCode(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             flags = self.flags
             args, return_type = sigutils.normalize_signature(sig)
 
-            # for objmode we should have ffi_forced_objects as args
-            # and no_rewrites flag can be set to avoid recompilation with and
-            # without rewrites in compile_ir
-            if isinstance(self, ObjModeLiftedWith):
-                args = [types.ffi_forced_object] * len(args)
-                flags.no_rewrites = True
-
             # Don't recompile if signature already exists
             # (e.g. if another thread compiled it before we got the lock)
             existing = self.overloads.get(tuple(args))
@@ -1063,6 +1056,8 @@ class ObjModeLiftedWith(LiftedWith):
             raise ValueError("expecting `flags.force_pyobject`")
         if self.output_types is None:
             raise TypeError('`output_types` must be provided')
+        # switch off rewrites, they have no effect
+        self.flags.no_rewrites = True
 
     @property
     def _numba_type_(self):
@@ -1106,6 +1101,12 @@ class ObjModeLiftedWith(LiftedWith):
                     'with-context for arg {}'
                 )
                 raise errors.TypingError(msg.format(i))
+
+    @global_compiler_lock
+    def compile(self, sig):
+        args, _ = sigutils.normalize_signature(sig)
+        sig = (types.ffi_forced_object,) * len(args)
+        return super().compile(sig)
 
 
 # Initialize typeof machinery
