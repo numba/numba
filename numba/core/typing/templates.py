@@ -737,9 +737,21 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         disp = jitdecor(pyfunc)
         # Make sure that the implementation can be fully compiled
         disp_type = types.Dispatcher(disp)
-        disp_type.get_call_type(self.context, args, kws)
+        sig = disp_type.get_call_type(self.context, args, kws)
+
+        if sig is None:
+            return None, None
+
         if cache_key is not None:
             self._impl_cache[cache_key] = disp, args
+
+            # in some cases (e.g. when omitted args are used) compiled sig
+            # may differ from args in the cache_key, so add another cache entry
+            context, args, kwargs = cache_key
+            if sig.args != args:
+                upd_cache_key = (context, sig.args, kwargs)
+                self._impl_cache[upd_cache_key] = disp, args
+
         return disp, args
 
     def get_impl_key(self, sig):
