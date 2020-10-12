@@ -56,7 +56,6 @@ def sequential_rows(M):
         g.sync()
 
 
-@skip_on_cudasim("Cooperative groups not supported on simulator")
 class TestCudaCooperativeGroups(CUDATestCase):
     @skip_unless_cc_60
     def test_this_grid(self):
@@ -65,6 +64,13 @@ class TestCudaCooperativeGroups(CUDATestCase):
 
         # Ensure the kernel executed beyond the call to cuda.this_grid()
         self.assertFalse(np.isnan(A[0]), 'set it to something!')
+
+    @skip_unless_cc_60
+    @skip_on_cudasim("Simulator doesn't differentiate between normal and "
+                     "cooperative kernels")
+    def test_this_grid_is_cooperative(self):
+        A = np.full(1, fill_value=np.nan)
+        this_grid[1, 1](A)
 
         # this_grid should have been determinted to be cooperative
         for key, defn in this_grid.definitions.items():
@@ -78,10 +84,17 @@ class TestCudaCooperativeGroups(CUDATestCase):
         # Ensure the kernel executed beyond the call to cuda.sync_group()
         self.assertFalse(np.isnan(A[0]), 'set it to something!')
 
+    @skip_unless_cc_60
+    @skip_on_cudasim("Simulator doesn't differentiate between normal and "
+                     "cooperative kernels")
+    def test_sync_group_is_cooperative(self):
+        A = np.full(1, fill_value=np.nan)
+        sync_group[1, 1](A)
         # this_grid should have been determinted to be cooperative
         for key, defn in this_grid.definitions.items():
             self.assertTrue(defn.cooperative)
 
+    @skip_on_cudasim("Simulator does not implement linking")
     def test_false_cooperative_doesnt_link_cudadevrt(self):
         """
         We should only mark a kernel as cooperative and link cudadevrt if the
@@ -98,14 +111,25 @@ class TestCudaCooperativeGroups(CUDATestCase):
 
     @skip_unless_cc_60
     def test_sync_at_matrix_row(self):
-        A = np.zeros((1024, 1024), dtype=np.int32)
+        if config.ENABLE_CUDASIM:
+            # Use a small matrix to compute using a single block in a
+            # reasonable amount of time
+            shape = (32, 32)
+        else:
+            shape = (1024, 1024)
+        A = np.zeros(shape, dtype=np.int32)
         blockdim = 32
         griddim = A.shape[1] // blockdim
 
         c_sequential_rows = cuda.jit(void(int32[:,::1]))(sequential_rows)
+
+        mb = c_sequential_rows.definition.max_cooperative_grid_blocks(blockdim)
+        if griddim > mb:
+            unittest.skip("GPU cannot support enough cooperative grid blocks")
+
         c_sequential_rows[griddim, blockdim](A)
 
-        reference = np.tile(np.arange(1024), (1024, 1)).T
+        reference = np.tile(np.arange(shape[0]), (shape[1], 1)).T
         np.testing.assert_equal(A, reference)
 
     @skip_unless_cc_60
