@@ -9,62 +9,6 @@
 #include "_typeof.h"
 #include "frameobject.h"
 
-typedef std::vector<Type> TypeTable;
-typedef std::vector<PyObject*> Functions;
-
-class Dispatcher {
-public:
-    Dispatcher(TypeManager *tm, int argct): argct(argct), tm(tm) { }
-
-    void addDefinition(Type args[], PyObject *callable) {
-        overloads.reserve(argct + overloads.size());
-        for (int i=0; i<argct; ++i) {
-            overloads.push_back(args[i]);
-        }
-        functions.push_back(callable);
-    }
-
-    PyObject* resolve(Type sig[], int &matches, bool allow_unsafe,
-                      bool exact_match_required) {
-        const int ovct = functions.size();
-        int selected;
-        matches = 0;
-        if (0 == ovct) {
-            // No overloads registered
-            return NULL;
-        }
-        if (argct == 0) {
-            // Nullary function: trivial match on first overload
-            matches = 1;
-            selected = 0;
-        }
-        else {
-            matches = tm->selectOverload(sig, &overloads[0], selected, argct,
-                                         ovct, allow_unsafe,
-                                         exact_match_required);
-        }
-        if (matches == 1) {
-            return functions[selected];
-        }
-        return NULL;
-    }
-
-    int count() const { return functions.size(); }
-
-    void clear() {
-        functions.clear();
-        overloads.clear();
-    }
-
-private:
-    const int argct;
-    TypeManager *tm;
-    // An array of overloads
-    Functions functions;
-    // A flattened array of argument types to all overloads
-    // (invariant: sizeof(overloads) == argct * sizeof(functions))
-    TypeTable overloads;
-};
 
 /*
  * The following call_trace and call_trace_protected functions
@@ -155,11 +99,12 @@ else                                                            \
     }                                                           \
 }
 
+typedef std::vector<Type> TypeTable;
+typedef std::vector<PyObject*> Functions;
 
-typedef struct DispatcherObject{
+class Dispatcher {
+public:
     PyObject_HEAD
-    /* Holds borrowed references to PyCFunction objects */
-    Dispatcher *dispatcher;
     char can_compile;        /* Can auto compile */
     char can_fallback;       /* Can fallback */
     char exact_match_required;
@@ -173,28 +118,79 @@ typedef struct DispatcherObject{
     PyObject *argnames;
     /* Tuple of default values */
     PyObject *defargs;
-} DispatcherObject;
+    /* Number of arguments to function */
+    int argct;
+    /* Used for selecting overloaded function implementations */
+    TypeManager *tm;
+
+    void addDefinition(Type args[], PyObject *callable) {
+        overloads.reserve(argct + overloads.size());
+        for (int i=0; i<argct; ++i) {
+            overloads.push_back(args[i]);
+        }
+        functions.push_back(callable);
+    }
+
+    PyObject* resolve(Type sig[], int &matches, bool allow_unsafe,
+                      bool exact_match_required) {
+        const int ovct = functions.size();
+        int selected;
+        matches = 0;
+        if (0 == ovct) {
+            // No overloads registered
+            return NULL;
+        }
+        if (argct == 0) {
+            // Nullary function: trivial match on first overload
+            matches = 1;
+            selected = 0;
+        }
+        else {
+            matches = tm->selectOverload(sig, &overloads[0], selected, argct,
+                                         ovct, allow_unsafe,
+                                         exact_match_required);
+        }
+        if (matches == 1) {
+            return functions[selected];
+        }
+        return NULL;
+    }
+
+    int count() const { return functions.size(); }
+
+    void clear() {
+        functions.clear();
+        overloads.clear();
+    }
+
+private:
+    /* An array of overloads */
+    Functions functions;
+    /* A flattened array of argument types to all overloads
+     * (invariant: sizeof(overloads) == argct * sizeof(functions)) */
+    TypeTable overloads;
+};
 
 
 static int
-Dispatcher_traverse(DispatcherObject *self, visitproc visit, void *arg)
+Dispatcher_traverse(Dispatcher *self, visitproc visit, void *arg)
 {
     Py_VISIT(self->defargs);
     return 0;
 }
 
 static void
-Dispatcher_dealloc(DispatcherObject *self)
+Dispatcher_dealloc(Dispatcher *self)
 {
     Py_XDECREF(self->argnames);
     Py_XDECREF(self->defargs);
-    delete self->dispatcher;
+    self->clear();
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
 
 static int
-Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
+Dispatcher_init(Dispatcher *self, PyObject *args, PyObject *kwds)
 {
     PyObject *tmaddrobj;
     void *tmaddr;
@@ -216,7 +212,8 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     Py_INCREF(self->argnames);
     Py_INCREF(self->defargs);
     tmaddr = PyLong_AsVoidPtr(tmaddrobj);
-    self->dispatcher = new Dispatcher(static_cast<TypeManager*>(tmaddr), argct);
+    self->tm = static_cast<TypeManager*>(tmaddr);
+    self->argct = argct;
     self->can_compile = 1;
     self->can_fallback = can_fallback;
     self->fallbackdef = NULL;
@@ -226,15 +223,15 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
 }
 
 static PyObject *
-Dispatcher_clear(DispatcherObject *self, PyObject *args)
+Dispatcher_clear(Dispatcher *self, PyObject *args)
 {
-    self->dispatcher->clear();
+    self->clear();
     Py_RETURN_NONE;
 }
 
 static
 PyObject*
-Dispatcher_Insert(DispatcherObject *self, PyObject *args)
+Dispatcher_Insert(Dispatcher *self, PyObject *args)
 {
     PyObject *sigtup, *cfunc;
     int i, sigsz;
@@ -260,7 +257,7 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 
     /* The reference to cfunc is borrowed; this only works because the
        derived Python class also stores an (owned) reference to cfunc. */
-    self->dispatcher->addDefinition(sig, cfunc);
+    self->addDefinition(sig, cfunc);
 
     /* Add pure python fallback */
     if (!self->fallbackdef && objectmode){
@@ -335,7 +332,7 @@ int search_new_conversions(PyObject *dispatcher, PyObject *args, PyObject *kws)
 
 /* A custom, fast, inlinable version of PyCFunction_Call() */
 static PyObject *
-call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
+call_cfunc(Dispatcher *self, PyObject *cfunc, PyObject *args, PyObject *kws, PyObject *locals)
 {
     PyCFunctionWithKeywords fn;
     PyThreadState *tstate;
@@ -400,7 +397,7 @@ call_cfunc(DispatcherObject *self, PyObject *cfunc, PyObject *args, PyObject *kw
 
 static
 PyObject*
-compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws, PyObject *locals)
+compile_and_invoke(Dispatcher *self, PyObject *args, PyObject *kws, PyObject *locals)
 {
     /* Compile a new one */
     PyObject *cfa, *cfunc, *retval;
@@ -429,7 +426,7 @@ compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws, PyObje
 }
 
 static int
-find_named_args(DispatcherObject *self, PyObject **pargs, PyObject **pkws)
+find_named_args(Dispatcher *self, PyObject **pargs, PyObject **pkws)
 {
     PyObject *oldargs = *pargs, *newargs;
     PyObject *kws = *pkws;
@@ -543,7 +540,7 @@ find_named_args(DispatcherObject *self, PyObject **pargs, PyObject **pkws)
 }
 
 static PyObject*
-Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
+Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
 {
     PyObject *tmptype, *retval = NULL;
     int *tys = NULL;
@@ -594,8 +591,8 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
     /* We only allow unsafe conversions if compilation of new specializations
        has been disabled. */
-    cfunc = self->dispatcher->resolve(tys, matches, !self->can_compile,
-                                      self->exact_match_required);
+    cfunc = self->resolve(tys, matches, !self->can_compile,
+                          self->exact_match_required);
 
     if (matches == 0 && !self->can_compile) {
         /*
@@ -610,8 +607,8 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         }
         if (res > 0) {
             /* Retry with the newly registered conversions */
-            cfunc = self->dispatcher->resolve(tys, matches, !self->can_compile,
-                                              self->exact_match_required);
+            cfunc = self->resolve(tys, matches, !self->can_compile,
+                                  self->exact_match_required);
         }
     }
 
@@ -655,7 +652,7 @@ static PyMethodDef Dispatcher_methods[] = {
 };
 
 static PyMemberDef Dispatcher_members[] = {
-    {"_can_compile", T_BOOL, offsetof(DispatcherObject, can_compile), 0, NULL },
+    {"_can_compile", T_BOOL, offsetof(Dispatcher, can_compile), 0, NULL },
     {NULL}  /* Sentinel */
 };
 
@@ -663,7 +660,7 @@ static PyMemberDef Dispatcher_members[] = {
 static PyTypeObject DispatcherType = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "_dispatcher.Dispatcher",                    /* tp_name */
-    sizeof(DispatcherObject),                    /* tp_basicsize */
+    sizeof(Dispatcher),                          /* tp_basicsize */
     0,                                           /* tp_itemsize */
     (destructor)Dispatcher_dealloc,              /* tp_dealloc */
     0,                                           /* tp_print */
