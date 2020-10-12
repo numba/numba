@@ -651,7 +651,7 @@ static PyMethodDef Dispatcher_methods[] = {
 };
 
 static PyMemberDef Dispatcher_members[] = {
-    {"_can_compile", T_BOOL, offsetof(Dispatcher, can_compile), 0, NULL },
+    {(char*)"_can_compile", T_BOOL, offsetof(Dispatcher, can_compile), 0, NULL },
     {NULL}  /* Sentinel */
 };
 
