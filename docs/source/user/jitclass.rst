@@ -162,11 +162,11 @@ instance of the type specified.
     dict_ty = types.DictType(types.int64, types.unicode_type)
 
     @jitclass([('d', dict_ty)])
-    class NotInitilisingContainer(object):
+    class NotInitialisingContainer(object):
         def __init__(self):
             self.d[10] = "apple" # this is invalid, `d` is not initialized
 
-    NotInitilisingContainer() # segmentation fault/memory access violation
+    NotInitialisingContainer() # segmentation fault/memory access violation
 
 
 Support operations
