@@ -327,16 +327,16 @@ Compilation options
     (case-insensitive):
 
     - ``all``: enable all subpasses.
-    - ``per_bb``: enable per-basicblock level pruning, which is same as the
+    - ``per_bb``: enable per-basic-block level pruning, which is same as the
       old regex based implementation.
-    - ``diamond``: enable inter-basicblock pruning that is a diamond shape
-      pattern, i.e. a single-entry single-exit CFG subgraph that has an incref
+    - ``diamond``: enable inter-basic-block pruning that is a diamond shape
+      pattern, i.e. a single-entry single-exit CFG subgraph where has an incref
       in the entry and a corresponding decref in the exit.
-    - ``fanout``: enable inter-basicblock pruning that has a fanout pattern,
+    - ``fanout``: enable inter-basic-block pruning that has a fanout pattern,
       i.e. a single-entry multiple-exit CFG subgraph that the entry has an
-      incref and the every exit has a corresponding decref.
+      incref and every exit has a corresponding decref.
     - ``fanout_raise``: same as ``fanout`` but allow subgraph exit nodes to be
-      raising an exception and do not have a corresponding decref.
+      raising an exception and not have a corresponding decref.
 
     For example, ``all`` is the same as
     ``per_bb, diamond, fanout, fanout_raise``
