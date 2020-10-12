@@ -168,7 +168,8 @@ class CodeLibrary(object):
         Internal: optimize this library's final module.
         """
         self._codegen._mpm.run(self._final_module)
-        self._final_module = remove_redundant_nrt_refct(self._final_module)
+        if not config.EXPERIMENTAL_REFPRUNE_PASS:
+            self._final_module = remove_redundant_nrt_refct(self._final_module)
 
     def _get_module_for_linking(self):
         """
@@ -236,7 +237,8 @@ class CodeLibrary(object):
     def add_llvm_module(self, ll_module):
         self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
-        ll_module = remove_redundant_nrt_refct(ll_module)
+        if not config.EXPERIMENTAL_REFPRUNE_PASS:
+            ll_module = remove_redundant_nrt_refct(ll_module)
         self._final_module.link_in(ll_module)
 
     def finalize(self):
