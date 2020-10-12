@@ -252,7 +252,7 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     }
 
     sigsz = PySequence_Fast_GET_SIZE(sigtup);
-    sig = (int*)malloc(sigsz * sizeof(int));
+    sig = new int[sigsz];
 
     for (i = 0; i < sigsz; ++i) {
         sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
@@ -267,7 +267,7 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
         self->fallbackdef = cfunc;
     }
 
-    free(sig);
+    delete[] sig;
 
     Py_RETURN_NONE;
 }
@@ -573,7 +573,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     if (argct < (Py_ssize_t) (sizeof(prealloc) / sizeof(int)))
         tys = prealloc;
     else
-        tys = (int*)malloc(argct * sizeof(int));
+        tys = new int[argct];
 
     for (i = 0; i < argct; ++i) {
         tmptype = PySequence_Fast_GET_ITEM(args, i);
@@ -641,7 +641,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
 CLEANUP:
     if (tys != prealloc)
-        free(tys);
+        delete[] tys;
     Py_DECREF(args);
 
     return retval;
