@@ -1127,15 +1127,8 @@ class BaseCPUCodegen(object):
         or function pass manager.  Otherwise some optimizations will be
         missed...
         """
-        if 'opt' in kwargs:
-            opt_level = kwargs.pop('opt')
-        else:
-            opt_level = config.OPT
-
-        if 'loop_vectorize' in kwargs:
-            loop_vectorize = kwargs.pop('loop_vectorize')
-        else:
-            loop_vectorize = config.LOOP_VECTORIZE
+        opt_level = kwargs.pop('opt', config.OPT)
+        loop_vectorize = kwargs.pop('loop_vectorize', config.LOOP_VECTORIZE)
 
         pmb = lp.create_pass_manager_builder(
             opt=opt_level, loop_vectorize=loop_vectorize, **kwargs)
