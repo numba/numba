@@ -303,6 +303,38 @@ Compilation options
 
     *Default value:* 128
 
+.. envvar:: NUMBA_LLVM_REFPRUNE_PASS
+
+    Turns on the LLVM pass level reference-count pruning pass and disables the
+    regex based implementation in Numba.
+
+    *Default value:* 1 (On)
+
+.. envvar:: NUMBA_LLVM_REFPRUNE_FLAGS
+
+    When ``NUMBA_LLVM_REFPRUNE_PASS`` is on, this allows configuration
+    of subpasses in the reference-count pruning LLVM pass.
+
+    Valid values are any combinations of the below separated by `,`
+    (case-insensitive):
+
+    - ``all``: enable all subpasses.
+    - ``per_bb``: enable per-basic-block level pruning, which is same as the
+      old regex based implementation.
+    - ``diamond``: enable inter-basic-block pruning that is a diamond shape
+      pattern, i.e. a single-entry single-exit CFG subgraph where has an incref
+      in the entry and a corresponding decref in the exit.
+    - ``fanout``: enable inter-basic-block pruning that has a fanout pattern,
+      i.e. a single-entry multiple-exit CFG subgraph where the entry has an
+      incref and every exit has a corresponding decref.
+    - ``fanout_raise``: same as ``fanout`` but allow subgraph exit nodes to be
+      raising an exception and not have a corresponding decref.
+
+    For example, ``all`` is the same as
+    ``per_bb, diamond, fanout, fanout_raise``
+
+    *Default value:* "all"
+
 
 .. _numba-envvars-caching:
 
