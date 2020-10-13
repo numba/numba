@@ -47,17 +47,23 @@ class TargetOptions(object):
             flags.set("nrt")
 
         debug_mode = kws.pop('debug', config.DEBUGINFO_DEFAULT)
-        bounds_check_explicit = 'boundscheck' in kws
-        # if debug mode is requested, switch on debug info
+
+        # boundscheck is supplied
+        if 'boundscheck' in kws:
+            boundscheck = kws.pop("boundscheck")
+            if boundscheck is None and debug_mode:
+                # if it's None and debug is on then set it
+                flags.set("boundscheck")
+            else:
+                # irrespective of debug set it to the requested value
+                flags.set("boundscheck", boundscheck)
+        else:
+            # no boundscheck given, if debug mode, set it
+            if debug_mode:
+                flags.set("boundscheck")
+
         if debug_mode:
             flags.set("debuginfo")
-        # if bounds check is explicitly requested, the set the value for it
-        if bounds_check_explicit:
-            flags.set("boundscheck", kws.pop('boundscheck'))
-        elif debug_mode:
-            # debug mode is requested with no boundscheck option explicitly set
-            # so turn it on
-            flags.set("boundscheck")
 
 
         if kws.pop('nogil', False):
