@@ -247,6 +247,12 @@ Compilation options
 
    *Default value:* 1 (except on 32-bit Windows)
 
+.. envvar:: NUMBA_SLP_VECTORIZE
+
+   If set to non-zero, enable LLVM superword-level parallelism vectorization.
+
+   *Default value:* 1
+
 .. envvar:: NUMBA_ENABLE_AVX
 
    If set to non-zero, enable AVX optimizations in LLVM.  This is disabled
