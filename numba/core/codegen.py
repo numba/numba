@@ -545,9 +545,14 @@ class CodeLibrary(object):
         """
         Internal: optimize this library's final module.
         """
-        self._codegen._mpm.run(self._final_module)
+        # A cheaper optimisation pass is run first to try and get as many
+        # refops into the same function as possible via inlining
+        self._codegen._mpm_cheap.run(self._final_module)
+        # Refop pruning is then run on the heavily inlined function
         if not config.LLVM_REFPRUNE_PASS:
             self._final_module = remove_redundant_nrt_refct(self._final_module)
+        # The full optimisation suite is then run on the refop pruned IR
+        self._codegen._mpm_full.run(self._final_module)
 
     def _get_module_for_linking(self):
         """
@@ -1064,7 +1069,9 @@ class BaseCPUCodegen(object):
         self._engine = JitEngine(engine)
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
-        self._mpm = self._module_pass_manager()
+        self._mpm_cheap = self._module_pass_manager(loop_vectorize=False,
+                                                    opt=1)
+        self._mpm_full = self._module_pass_manager()
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
                                       self._library_class._object_getbuffer_hook)
@@ -1093,25 +1100,25 @@ class BaseCPUCodegen(object):
     def unserialize_library(self, serialized):
         return self._library_class._unserialize(self, serialized)
 
-    def _module_pass_manager(self):
+    def _module_pass_manager(self, **kwargs):
         pm = ll.create_module_pass_manager()
         self._tm.add_analysis_passes(pm)
-        with self._pass_manager_builder() as pmb:
+        with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 
-    def _function_pass_manager(self, llvm_module):
+    def _function_pass_manager(self, llvm_module, **kwargs):
         pm = ll.create_function_pass_manager(llvm_module)
         self._tm.add_analysis_passes(pm)
-        with self._pass_manager_builder() as pmb:
+        with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 
-    def _pass_manager_builder(self):
+    def _pass_manager_builder(self, **kwargs):
         """
         Create a PassManagerBuilder.
 
@@ -1120,8 +1127,11 @@ class BaseCPUCodegen(object):
         or function pass manager.  Otherwise some optimizations will be
         missed...
         """
+        opt_level = kwargs.pop('opt', config.OPT)
+        loop_vectorize = kwargs.pop('loop_vectorize', config.LOOP_VECTORIZE)
+
         pmb = lp.create_pass_manager_builder(
-            opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
+            opt=opt_level, loop_vectorize=loop_vectorize, **kwargs)
         return pmb
 
     def _check_llvm_bugs(self):
