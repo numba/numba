@@ -4175,6 +4175,31 @@ def np_select(condlist, choicelist, default=0):
 
     return np_select_arr_impl
 
+
+@overload(np.asarray_chkfinite)
+def np_asarray_chkfinite(a, dtype=None):
+
+    msg = "The argument to np.asarray_chkfinite must be array-like"
+    if not isinstance(a, (types.Array, types.Sequence, types.Tuple)):
+        raise TypingError(msg)
+
+    if is_nonelike(dtype):
+        dt = a.dtype
+    else:
+        try:
+            dt = as_dtype(dtype)
+        except NotImplementedError:
+            raise TypingError('dtype must be a valid Numpy dtype')
+
+    def impl(a, dtype=None):
+        a = np.asarray(a, dtype=dt)
+        for i in np.nditer(a):
+            if not np.isfinite(i):
+                raise ValueError("array must not contain infs or NaNs")
+        return a
+
+    return impl
+
 #----------------------------------------------------------------------------
 # Windowing functions
 #   - translated from the numpy implementations found in:

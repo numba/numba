@@ -870,9 +870,12 @@ class Dispatcher(serialize.ReduceMixin):
         '''
         Compile if necessary and invoke this kernel with *args*.
         '''
-        argtypes = tuple(
-            [self.typingctx.resolve_argument_type(a) for a in args])
-        kernel = self.compile(argtypes)
+        if self.specialized:
+            kernel = self.definition
+        else:
+            argtypes = tuple([self.typingctx.resolve_argument_type(a)
+                              for a in args])
+            kernel = self.compile(argtypes)
         kernel.launch(args, griddim, blockdim, stream, sharedmem)
 
     def specialize(self, *args):

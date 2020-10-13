@@ -1095,6 +1095,8 @@ class ObjModeLiftedWith(LiftedWith):
             raise ValueError("expecting `flags.force_pyobject`")
         if self.output_types is None:
             raise TypeError('`output_types` must be provided')
+        # switch off rewrites, they have no effect
+        self.flags.no_rewrites = True
 
     @property
     def _numba_type_(self):
@@ -1138,6 +1140,12 @@ class ObjModeLiftedWith(LiftedWith):
                     'with-context for arg {}'
                 )
                 raise errors.TypingError(msg.format(i))
+
+    @global_compiler_lock
+    def compile(self, sig):
+        args, _ = sigutils.normalize_signature(sig)
+        sig = (types.ffi_forced_object,) * len(args)
+        return super().compile(sig)
 
 
 # Initialize typeof machinery

@@ -116,6 +116,35 @@ It is also possible to use local or global tuples together with ``literal_unroll
    :dedent: 8
 
 
+Record subtyping
+----------------
+.. warning::
+   This is an experimental feature.
+
+Numba allows `width subtyping <https://en.wikipedia.org/wiki/Subtyping#Record_types>`_ of structured scalars.
+For example, ``dtype([('a', 'f8'), ('b', 'i8')])`` will be considered a subtype of ``dtype([('a', 'f8')]``, because
+the second is a strict subset of the first, i.e. field ``a`` is of the same type and is in the same position in both
+types. The subtyping relationship will matter in cases where compilation for a certain input is not allowed, but the
+input is a subtype of another, allowed type.
+
+.. code-block:: python
+
+    import numpy as np
+    from numba import njit, typeof
+    from numba.core import types
+    record1 = np.array([1], dtype=[('a', 'f8')])[0]
+    record2 = np.array([(2,3)], dtype=[('a', 'f8'), ('b', 'f8')])[0]
+
+    @njit(types.float64(typeof(record1)))
+    def foo(rec):
+        return rec['a']
+
+    foo(record1)
+    foo(record2)
+
+Without subtyping the last line would fail. With subtyping, no new compilation will be triggered, but the
+compiled function for ``record1`` will be used for ``record2``.
+
 .. seealso::
    `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
    reference.
@@ -393,6 +422,7 @@ The following top-level functions are supported:
 * :func:`numpy.array_equal`
 * :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
+* :func:`numpy.asarray_chkfinite` (only the 2 first arguments)
 * :func:`numpy.asfarray` 
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`

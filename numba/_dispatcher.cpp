@@ -547,6 +547,11 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
     PyObject *cfunc;
     PyThreadState *ts = PyThreadState_Get();
     PyObject *locals = NULL;
+
+    /* If compilation is enabled, ensure that an exact match is found and if
+     * not compile one */
+    int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
+
     if (ts->use_tracing && ts->c_profilefunc) {
         locals = PyEval_GetLocals();
         if (locals == NULL) {
@@ -581,14 +586,10 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
         }
     }
 
-    /* If compilation is enabled, ensure that an exact match is found and if
-     * not compile one */
-    self->exact_match_required |= self->can_compile;
-
     /* We only allow unsafe conversions if compilation of new specializations
        has been disabled. */
     cfunc = self->resolve(tys, matches, !self->can_compile,
-                          self->exact_match_required);
+                          exact_match_required);
 
     if (matches == 0 && !self->can_compile) {
         /*
@@ -604,7 +605,7 @@ Dispatcher_call(Dispatcher *self, PyObject *args, PyObject *kws)
         if (res > 0) {
             /* Retry with the newly registered conversions */
             cfunc = self->resolve(tys, matches, !self->can_compile,
-                                  self->exact_match_required);
+                                  exact_match_required);
         }
     }
 
