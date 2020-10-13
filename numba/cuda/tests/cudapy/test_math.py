@@ -110,6 +110,11 @@ def math_log(A, B):
     B[i] = math.log(A[i])
 
 
+def math_log2(A, B):
+    i = cuda.grid(1)
+    B[i] = math.log2(A[i])
+
+
 def math_log10(A, B):
     i = cuda.grid(1)
     B[i] = math.log10(A[i])
@@ -118,6 +123,11 @@ def math_log10(A, B):
 def math_log1p(A, B):
     i = cuda.grid(1)
     B[i] = math.log1p(A[i])
+
+
+def math_remainder(A, B, C):
+    i = cuda.grid(1)
+    C[i] = math.remainder(A[i], B[i])
 
 
 def math_sqrt(A, B):
@@ -497,6 +507,13 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_int64(math_log, np.log, start=1)
         self.unary_template_uint64(math_log, np.log, start=1)
 
+    #------------------------------------------------------------------------------
+    # test_math_log2
+
+    def test_math_log2(self):
+        self.unary_template_float32(math_log2, np.log2, start=1)
+        self.unary_template_float64(math_log2, np.log2, start=1)
+
     #---------------------------------------------------------------------------
     # test_math_log10
 
@@ -514,6 +531,13 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_float64(math_log1p, np.log1p)
         self.unary_template_int64(math_log1p, np.log1p)
         self.unary_template_uint64(math_log1p, np.log1p)
+    
+    #------------------------------------------------------------------------------
+    # test_math_remainder
+
+    def test_math_remainder(self):
+        self.binary_template_float32(math_remainder, np.remainder, start=1e-11)
+        self.binary_template_float64(math_remainder, np.remainder, start=1e-11)
 
     #---------------------------------------------------------------------------
     # test_math_sqrt
