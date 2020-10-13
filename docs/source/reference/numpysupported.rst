@@ -99,40 +99,51 @@ Structured scalars support attribute getting and setting, as well as
 member lookup using constant strings. Strings stored in a local or global tuple
 are considered constant strings and can be used for member lookup.
 
-.. code:: pycon
 
 
-
-    >>> import numpy as np
-    >>> from numba import njit
-    >>> arr = np.array([1, 2], dtype=[('a1', 'f8'), ('a2', 'f8')])
-    >>> fields_gl = ('a1', 'a2')
-    >>> @njit
-    ... def get_field_sum(rec):
-    ...     fields_lc = ('a1', 'a2')
-    ...     field_name1 = fields_lc[0]
-    ...     field_name2 = fields_gl[1]
-    ...     return rec[field_name1] + rec[field_name2]
-    ...
-    >>> get_field_sum(arr[0])
-    3
+.. literalinclude:: ../../../numba/tests/doc_examples/test_rec_array.py
+   :language: python
+   :start-after: magictoken.ex_rec_arr_const_index.begin
+   :end-before: magictoken.ex_rec_arr_const_index.end
+   :dedent: 8
 
 It is also possible to use local or global tuples together with ``literal_unroll``:
 
+.. literalinclude:: ../../../numba/tests/doc_examples/test_rec_array.py
+   :language: python
+   :start-after: magictoken.ex_rec_arr_lit_unroll_index.begin
+   :end-before: magictoken.ex_rec_arr_lit_unroll_index.end
+   :dedent: 8
 
-    >>> import numpy as np
-    >>> from numba import njit
-    >>> arr = np.array([1, 2], dtype=[('a1', 'f8'), ('a2', 'f8')])
-    >>> fields_gl = ('a1', 'a2')
-    >>> @njit
-    ... def get_field_sum(rec):
-    ...     out = 0
-    ...     for f in literal_unroll(fields_gl):
-    ...        out += rec[f]
-    ...     return out
-    ...
-    >>> get_field_sum(arr[0])
-    3
+
+Record subtyping
+----------------
+.. warning::
+   This is an experimental feature.
+
+Numba allows `width subtyping <https://en.wikipedia.org/wiki/Subtyping#Record_types>`_ of structured scalars.
+For example, ``dtype([('a', 'f8'), ('b', 'i8')])`` will be considered a subtype of ``dtype([('a', 'f8')]``, because
+the second is a strict subset of the first, i.e. field ``a`` is of the same type and is in the same position in both
+types. The subtyping relationship will matter in cases where compilation for a certain input is not allowed, but the
+input is a subtype of another, allowed type.
+
+.. code-block:: python
+
+    import numpy as np
+    from numba import njit, typeof
+    from numba.core import types
+    record1 = np.array([1], dtype=[('a', 'f8')])[0]
+    record2 = np.array([(2,3)], dtype=[('a', 'f8'), ('b', 'f8')])[0]
+
+    @njit(types.float64(typeof(record1)))
+    def foo(rec):
+        return rec['a']
+
+    foo(record1)
+    foo(record2)
+
+Without subtyping the last line would fail. With subtyping, no new compilation will be triggered, but the
+compiled function for ``record1`` will be used for ``record2``.
 
 .. seealso::
    `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
@@ -157,6 +168,58 @@ advanced index is allowed, and it has to be a one-dimensional array
 .. seealso::
    `Numpy indexing <http://docs.scipy.org/doc/numpy/reference/arrays.indexing.html>`_
    reference.
+
+
+.. _structured-array-access:
+
+Structured array access
+-----------------------
+
+Numba presently supports accessing fields of individual elements in structured
+arrays by attribute as well as by getting and setting. This goes slightly
+beyond the NumPy API, which only allows accessing fields by getting and
+setting. For example:
+
+.. code:: python
+
+   from numba import njit
+   import numpy as np
+
+   record_type = np.dtype([("ival", np.int32), ("fval", np.float64)], align=True)
+
+   def f(rec):
+       value = 2.5
+       rec[0].ival = int(value)
+       rec[0].fval = value
+       return rec
+
+   arr = np.ones(1, dtype=record_type)
+
+   cfunc = njit(f)
+
+   # Works
+   print(cfunc(arr))
+
+   # Does not work
+   print(f(arr))
+
+The above code results in the output:
+
+.. code:: none
+
+   [(2, 2.5)]
+   Traceback (most recent call last):
+     File "repro.py", line 22, in <module>
+       print(f(arr))
+     File "repro.py", line 9, in f
+       rec[0].ival = int(value)
+   AttributeError: 'numpy.void' object has no attribute 'ival'
+
+The Numba-compiled version of the function executes, but the pure Python
+version raises an error because of the unsupported use of attribute access.
+
+.. note::
+   This behavior will eventually be deprecated and removed.
 
 Attributes
 ----------
@@ -242,6 +305,7 @@ The following methods of Numpy arrays are supported:
 * :meth:`~numpy.ndarray.flatten` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.item` (without arguments)
 * :meth:`~numpy.ndarray.itemset` (only the 1-argument form)
+* :meth:`~numpy.ndarray.ptp` (without arguments)
 * :meth:`~numpy.ndarray.ravel` (no order argument; 'C' order only)
 * :meth:`~numpy.ndarray.repeat` (no axis argument)
 * :meth:`~numpy.ndarray.reshape` (only the 1-argument form)
@@ -269,6 +333,7 @@ The following methods of Numpy arrays are supported:
 
 * :meth:`~numpy.ndarray.transpose`
 * :meth:`~numpy.ndarray.view` (only the 1-argument form)
+* :meth:`~numpy.ndarray.__contains__` 
 
 
 .. warning::
@@ -355,13 +420,16 @@ The following top-level functions are supported:
 * :func:`numpy.argwhere`
 * :func:`numpy.array` (only the 2 first arguments)
 * :func:`numpy.array_equal`
+* :func:`numpy.array_split`
 * :func:`numpy.asarray` (only the 2 first arguments)
+* :func:`numpy.asarray_chkfinite` (only the 2 first arguments)
+* :func:`numpy.asfarray` 
 * :func:`numpy.asfortranarray` (only the first argument)
 * :func:`numpy.atleast_1d`
 * :func:`numpy.atleast_2d`
 * :func:`numpy.atleast_3d`
 * :func:`numpy.bartlett`
-* :func:`numpy.bincount` (only the 2 first arguments)
+* :func:`numpy.bincount`
 * :func:`numpy.blackman`
 * :func:`numpy.column_stack`
 * :func:`numpy.concatenate`
@@ -426,6 +494,7 @@ The following top-level functions are supported:
 * :func:`numpy.shape`
 * :func:`numpy.sinc`
 * :func:`numpy.sort` (no optional arguments)
+* :func:`numpy.split`
 * :func:`numpy.stack`
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.transpose`
@@ -626,6 +695,7 @@ Math operations
  remainder           Yes          Yes
  mod                 Yes          Yes
  fmod                Yes          Yes
+ divmod (*)          Yes          Yes
  abs                 Yes          Yes
  absolute            Yes          Yes
  fabs                Yes          Yes
@@ -647,6 +717,7 @@ Math operations
  lcm                 Yes          Yes
 ==============  =============  ===============
 
+(\*) not supported on timedelta types
 
 Trigonometric functions
 -----------------------

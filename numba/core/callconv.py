@@ -5,7 +5,7 @@ Calling conventions for Numba-compiled functions.
 from collections import namedtuple
 import itertools
 
-from llvmlite import ir as ir
+from llvmlite import ir
 
 from numba.core import types, cgutils
 from numba.core.base import PYOBJECT, GENERIC_POINTER
@@ -89,7 +89,7 @@ class BaseCallConv(object):
         self._return_errcode_raw(builder, RETCODE_NONE)
 
     def return_exc(self, builder):
-        self._return_errcode_raw(builder, RETCODE_EXC)
+        self._return_errcode_raw(builder, RETCODE_EXC, mark_exc=True)
 
     def return_stop_iteration(self, builder):
         self._return_errcode_raw(builder, RETCODE_STOPIT)
@@ -206,12 +206,12 @@ class MinimalCallConv(BaseCallConv):
 
         call_helper = self._get_call_helper(builder)
         exc_id = call_helper._add_exception(exc, exc_args, locinfo)
-        self._return_errcode_raw(builder, _const_int(exc_id))
+        self._return_errcode_raw(builder, _const_int(exc_id), mark_exc=True)
 
     def return_status_propagate(self, builder, status):
         self._return_errcode_raw(builder, status.code)
 
-    def _return_errcode_raw(self, builder, code):
+    def _return_errcode_raw(self, builder, code, mark_exc=False):
         if isinstance(code, int):
             code = _const_int(code)
         builder.ret(code)
@@ -316,8 +316,9 @@ class _MinimalCallHelper(object):
             msg = "unknown error %d in native function" % exc_id
             return SystemError, (msg,)
 
-
-excinfo_t = ir.LiteralStructType([GENERIC_POINTER, int32_t])
+# The structure type constructed by PythonAPI.serialize_uncached()
+# i.e a {i8* pickle_buf, i32 pickle_bufsz, i8* hash_buf}
+excinfo_t = ir.LiteralStructType([GENERIC_POINTER, int32_t, GENERIC_POINTER])
 excinfo_ptr_t = ir.PointerType(excinfo_t)
 
 
@@ -392,7 +393,7 @@ class CPUCallConv(BaseCallConv):
             builder.branch(try_info['target'])
         else:
             # Return from the current function
-            self._return_errcode_raw(builder, RETCODE_USEREXC)
+            self._return_errcode_raw(builder, RETCODE_USEREXC, mark_exc=True)
 
     def _get_try_state(self, builder):
         try:
@@ -440,10 +441,14 @@ class CPUCallConv(BaseCallConv):
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(status.excinfoptr, excptr)
         with builder.if_then(builder.not_(trystatus.in_try)):
-            self._return_errcode_raw(builder, status.code)
+            self._return_errcode_raw(builder, status.code, mark_exc=True)
 
-    def _return_errcode_raw(self, builder, code):
-        builder.ret(code)
+    def _return_errcode_raw(self, builder, code, mark_exc=False):
+        ret = builder.ret(code)
+
+        if mark_exc:
+            md = builder.module.add_metadata([ir.IntType(1)(1)])
+            ret.set_metadata("ret_is_raise", md)
 
     def _get_return_status(self, builder, code, excinfoptr):
         """
@@ -503,6 +508,27 @@ class CPUCallConv(BaseCallConv):
                 if isinstance(a.type, ir.PointerType):
                     a.add_attribute("nocapture")
                     a.add_attribute("noalias")
+
+        # Add metadata to mark functions that may need NRT
+        # thus disabling aggressive refct pruning in removerefctpass.py
+        def type_may_always_need_nrt(ty):
+            # Returns True if it's a non-Array type that is contains MemInfo
+            if not isinstance(ty, types.Array):
+                dmm = self.context.data_model_manager
+                if dmm[ty].contains_nrt_meminfo():
+                    return True
+            return False
+
+        args_may_always_need_nrt = any(
+            map(type_may_always_need_nrt, fe_argtypes)
+        )
+
+        if args_may_always_need_nrt:
+            nmd = fn.module.add_named_metadata(
+                'numba_args_may_always_need_nrt',
+            )
+            nmd.add(fn.module.add_metadata([fn]))
+
         return fn
 
     def get_arguments(self, func):

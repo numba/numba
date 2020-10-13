@@ -8,7 +8,9 @@ class TestCudaPy2Div(CUDATestCase):
         @cuda.jit(argtypes=[float32[:], float32[:], float32[:], int32])
         def preCalc(y, yA, yB, numDataPoints):
             i = cuda.grid(1)
-            k = i % numDataPoints
+            # k is unused, but may be part of the trigger for the bug this
+            # tests for.
+            k = i % numDataPoints  # noqa: F841
 
             ans = float32(1.001 * float32(i))
 
@@ -21,7 +23,6 @@ class TestCudaPy2Div(CUDATestCase):
         y = np.zeros(numDataPoints, dtype=np.float32)
         yA = np.zeros(numDataPoints, dtype=np.float32)
         yB = np.zeros(numDataPoints, dtype=np.float32)
-        z = 1.0
         preCalc[1, 15](y, yA, yB, numDataPoints)
 
         self.assertTrue(np.all(y == yA))

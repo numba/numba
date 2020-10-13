@@ -22,34 +22,13 @@ to the underlying data, bypassing the interpreter.
 Basic usage
 ===========
 
-Here's an example of a jitclass::
+Here's an example of a jitclass:
 
-  import numpy as np
-  from numba import jitclass          # import the decorator
-  from numba import int32, float32    # import the types
-
-  spec = [
-      ('value', int32),               # a simple scalar field
-      ('array', float32[:]),          # an array field
-  ]
-
-  @jitclass(spec)
-  class Bag(object):
-      def __init__(self, value):
-          self.value = value
-          self.array = np.zeros(value, dtype=np.float32)
-
-      @property
-      def size(self):
-          return self.array.size
-
-      def increment(self, val):
-          for i in range(self.size):
-              self.array[i] = val
-          return self.array
-
-
-(see full example at `examples/jitclass.py` from the source tree)
+.. literalinclude:: ../../../numba/tests/doc_examples/test_jitclass.py
+   :language: python
+   :start-after: magictoken.ex_jitclass.begin
+   :end-before: magictoken.ex_jitclass.end
+   :dedent: 8
 
 In the above example, a ``spec`` is provided as a list of 2-tuples.  The tuples
 contain the name of the field and the Numba type of the field.  Alternatively,
@@ -61,11 +40,59 @@ initializing each defined fields.  Uninitialized fields contains garbage data.
 Methods and properties (getters and setters only) can be defined.  They will be
 automatically compiled.
 
-Specifying ``numba.typed`` containers as class members
-======================================================
-It is often desirable to use a ``numba.typed.Dict`` or a ``numba.typed.List`` as
-a class member in a ``jitclass``. Methods for using these types and various
-common patterns are presented in the following:
+
+Inferred class member types from type annotations with ``as_numba_type``
+========================================================================
+
+Fields of a ``jitclass`` can also be inferred from Python type annotations.
+
+.. literalinclude:: ../../../numba/tests/doc_examples/test_jitclass.py
+   :language: python
+   :start-after: magictoken.ex_jitclass_type_hints.begin
+   :end-before: magictoken.ex_jitclass_type_hints.end
+   :dedent: 8
+
+Any type annotations on the class will be used to extend the spec if that field
+is not already present.  The Numba type corresponding to the given Python type
+is inferred using ``as_numba_type``.  For example, if we have the class
+
+.. code-block:: python
+
+    @jitclass([("w", int32), ("y", float64[:])])
+    class Foo:
+        w: int
+        x: float
+        y: np.ndarray
+        z: SomeOtherType
+
+        def __init__(self, w: int, x: float, y: np.ndarray, z: SomeOtherType):
+            ...
+
+then the full spec used for ``Foo`` will be:
+
+* ``"w": int32`` (specified in the ``spec``)
+* ``"x": float64`` (added from type annotation)
+* ``"y": array(float64, 1d, A)`` (specified in the ``spec``)
+* ``"z": numba.as_numba_type(SomeOtherType)`` (added from type annotation)
+
+Here ``SomeOtherType`` could be any supported Python type (e.g.
+``bool``, ``typing.Dict[int, typing.Tuple[float, float]]``, or another
+``jitclass``).
+
+Note that only type annotations on the class will be used to infer spec
+elements.  Method type annotations (e.g. those of ``__init__`` above) are
+ignored.
+
+Numba requires knowing the dtype and rank of numpy arrays, which cannot
+currently be expressed with type annotations. Because of this, numpy arrays need
+to be included in the ``spec`` explicitly.
+
+
+Specifying ``numba.typed`` containers as class members explicitly
+=================================================================
+
+The following patterns demonstrate how to specify a ``numba.typed.Dict`` or
+``numba.typed.List`` explicitly as part of the ``spec`` passed to ``jitclass``.
 
 First, using explicit Numba types and explicit construction.
 
@@ -135,11 +162,11 @@ instance of the type specified.
     dict_ty = types.DictType(types.int64, types.unicode_type)
 
     @jitclass([('d', dict_ty)])
-    class NotInitilisingContainer(object):
+    class NotInitialisingContainer(object):
         def __init__(self):
             self.d[10] = "apple" # this is invalid, `d` is not initialized
 
-    NotInitilisingContainer() # segmentation fault/memory access violation
+    NotInitialisingContainer() # segmentation fault/memory access violation
 
 
 Support operations
@@ -152,6 +179,8 @@ compiled functions:
   (e.g. ``mybag = Bag(123)``);
 * read/write access to attributes and properties (e.g. ``mybag.value``);
 * calling methods (e.g. ``mybag.increment(3)``);
+* calling static methods as instance attributes (e.g. ``mybag.add(1, 1)``);
+* calling static methods as class attributes (e.g. ``Bag.add(1, 2)``);
 
 Using jitclasses in Numba compiled function is more efficient.
 Short methods can be inlined (at the discretion of LLVM inliner).
@@ -162,6 +191,9 @@ must be unboxed or boxed between Python objects and native representation.
 Values encapsulated by a jitclass does not get boxed into Python object when
 the jitclass instance is handed to the interpreter.  It is during attribute
 access to the field values that they are boxed.
+Calling static methods as class attributes is only supported outside of the
+class definition (i.e. code cannot call ``Bag.add()`` from within another method
+of ``Bag``).
 
 
 Limitations

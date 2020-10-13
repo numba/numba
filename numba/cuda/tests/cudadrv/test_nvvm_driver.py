@@ -1,7 +1,7 @@
 from llvmlite.llvmpy.core import Module, Type, Builder
-from numba.cuda.cudadrv.nvvm import (NVVM, CompilationUnit, llvm_to_ptx,
-                                     set_cuda_kernel, fix_data_layout,
-                                     get_arch_option, SUPPORTED_CC)
+from numba.cuda.cudadrv.nvvm import (llvm_to_ptx, set_cuda_kernel,
+                                     fix_data_layout, get_arch_option,
+                                     get_supported_ccs)
 from ctypes import c_size_t, c_uint64, sizeof
 from numba.cuda.testing import unittest
 from numba.cuda.cudadrv.nvvm import LibDevice, NvvmError
@@ -13,8 +13,6 @@ is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 @skip_on_cudasim('NVVM Driver unsupported in the simulator')
 class TestNvvmDriver(unittest.TestCase):
     def get_ptx(self):
-        nvvm = NVVM()
-
         if is64bit:
             return gpu64
         else:
@@ -54,7 +52,7 @@ class TestNvvmDriver(unittest.TestCase):
     def test_nvvm_support(self):
         """Test supported CC by NVVM
         """
-        for arch in SUPPORTED_CC:
+        for arch in get_supported_ccs():
             self._test_nvvm_support(arch=arch)
 
     @unittest.skipIf(True, "No new CC unknown to NVVM yet")
@@ -76,14 +74,15 @@ class TestNvvmDriver(unittest.TestCase):
 class TestArchOption(unittest.TestCase):
     def test_get_arch_option(self):
         # Test returning the nearest lowest arch.
-        self.assertEqual(get_arch_option(3, 0), 'compute_30')
-        self.assertEqual(get_arch_option(3, 3), 'compute_30')
-        self.assertEqual(get_arch_option(3, 4), 'compute_30')
+        self.assertEqual(get_arch_option(5, 0), 'compute_50')
+        self.assertEqual(get_arch_option(5, 1), 'compute_50')
+        self.assertEqual(get_arch_option(3, 7), 'compute_35')
         # Test known arch.
-        for arch in SUPPORTED_CC:
+        supported_cc = get_supported_ccs()
+        for arch in supported_cc:
             self.assertEqual(get_arch_option(*arch), 'compute_%d%d' % arch)
         self.assertEqual(get_arch_option(1000, 0),
-                         'compute_%d%d' % SUPPORTED_CC[-1])
+                         'compute_%d%d' % supported_cc[-1])
 
 
 @skip_on_cudasim('NVVM Driver unsupported in the simulator')
@@ -133,7 +132,7 @@ declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
 
 !nvvm.annotations = !{!1}
 !1 = metadata !{void (i32*)* @simple, metadata !"kernel", i32 1}
-'''
+'''  # noqa: E501
 
 gpu32 = '''
 target triple="nvptx-"
@@ -169,7 +168,7 @@ declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
 !nvvm.annotations = !{!1}
 !1 = metadata !{void (i32*)* @simple, metadata !"kernel", i32 1}
 
-'''
+'''  # noqa: E501
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,4 +1,6 @@
 import contextlib
+import os
+import shutil
 import sys
 
 from numba.tests.support import (
@@ -54,6 +56,20 @@ def skip_if_external_memmgr(reason):
     return unittest.skipIf(config.CUDA_MEMORY_MANAGER != 'default', reason)
 
 
+def skip_under_cuda_memcheck(reason):
+    return unittest.skipIf(os.environ.get('CUDA_MEMCHECK') is not None, reason)
+
+
+def skip_without_nvdisasm(reason):
+    nvdisasm_path = shutil.which('nvdisasm')
+    return unittest.skipIf(nvdisasm_path is None, reason)
+
+
+def skip_with_nvdisasm(reason):
+    nvdisasm_path = shutil.which('nvdisasm')
+    return unittest.skipIf(nvdisasm_path is not None, reason)
+
+
 class CUDATextCapture(object):
 
     def __init__(self, stream):
@@ -91,3 +107,15 @@ def captured_cuda_stdout():
         with redirect_c_stdout() as stream:
             yield CUDATextCapture(stream)
             cuda.synchronize()
+
+
+class ForeignArray(object):
+    """
+    Class for emulating an array coming from another library through the CUDA
+    Array interface. This just hides a DeviceNDArray so that it doesn't look
+    like a DeviceNDArray.
+    """
+
+    def __init__(self, arr):
+        self._arr = arr
+        self.__cuda_array_interface__ = arr.__cuda_array_interface__

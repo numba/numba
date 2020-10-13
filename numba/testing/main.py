@@ -158,11 +158,6 @@ class NumbaTestProgram(unittest.main):
     random_seed = 42
 
     def __init__(self, *args, **kwargs):
-        # Disable interpreter fallback if we are running the test suite
-        if config.COMPATIBILITY_MODE:
-            warnings.warn("Unset INTERPRETER_FALLBACK")
-            config.COMPATIBILITY_MODE = False
-
         topleveldir = kwargs.pop('topleveldir', None)
         kwargs['testLoader'] = TestLoader(topleveldir)
 
@@ -205,7 +200,7 @@ class NumbaTestProgram(unittest.main):
                             help='Slice the test sequence')
         parser.add_argument('-g', '--gitdiff', dest='gitdiff',
                             action='store_true',
-                            help=('Run tests from changes made against'
+                            help=('Run tests from changes made against '
                                   'origin/master as identified by `git diff`'))
         return parser
 

@@ -4,6 +4,7 @@
 #include <time.h>
 #include <assert.h>
 
+#include "_numba_common.h"
 #include "_typeof.h"
 #include "_hashtable.h"
 
@@ -134,20 +135,19 @@ string_writer_put_int32(string_writer_t *w, unsigned int v)
 static int
 string_writer_put_intp(string_writer_t *w, npy_intp v)
 {
-    const int N = sizeof(npy_intp);
-    if (string_writer_ensure(w, N))
+    if (string_writer_ensure(w, NPY_SIZEOF_PY_INTPTR_T))
         return -1;
     w->buf[w->n] = v & 0xff;
     w->buf[w->n + 1] = (v >> 8) & 0xff;
     w->buf[w->n + 2] = (v >> 16) & 0xff;
     w->buf[w->n + 3] = (v >> 24) & 0xff;
-    if (N > 4) {
-        w->buf[w->n + 4] = (v >> 32) & 0xff;
-        w->buf[w->n + 5] = (v >> 40) & 0xff;
-        w->buf[w->n + 6] = (v >> 48) & 0xff;
-        w->buf[w->n + 7] = (v >> 56) & 0xff;
-    }
-    w->n += N;
+#if NPY_SIZEOF_PY_INTPTR_T == 8
+    w->buf[w->n + 4] = (v >> 32) & 0xff;
+    w->buf[w->n + 5] = (v >> 40) & 0xff;
+    w->buf[w->n + 6] = (v >> 48) & 0xff;
+    w->buf[w->n + 7] = (v >> 56) & 0xff;
+#endif
+    w->n += NPY_SIZEOF_PY_INTPTR_T;
     return 0;
 }
 
@@ -195,7 +195,7 @@ enum opcode {
 
 
 static int
-fingerprint_unrecognized(PyObject *val)
+fingerprint_unrecognized(void)
 {
     PyErr_SetString(PyExc_NotImplementedError,
                     "cannot compute type fingerprint for value");
@@ -235,7 +235,7 @@ compute_dtype_fingerprint(string_writer_t *w, PyArray_Descr *descr)
     }
 #endif
 
-    return fingerprint_unrecognized((PyObject *) descr);
+    return fingerprint_unrecognized();
 }
 
 static int
@@ -256,14 +256,82 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         return string_writer_put_char(w, OP_FLOAT);
     if (PyComplex_CheckExact(val))
         return string_writer_put_char(w, OP_COMPLEX);
-    if (PyTuple_CheckExact(val)) {
-        Py_ssize_t i, n;
-        n = PyTuple_GET_SIZE(val);
-        TRY(string_writer_put_char, w, OP_START_TUPLE);
-        for (i = 0; i < n; i++)
-            TRY(compute_fingerprint, w, PyTuple_GET_ITEM(val, i));
-        TRY(string_writer_put_char, w, OP_END_TUPLE);
-        return 0;
+    if (PyTuple_Check(val)) {
+        if(PyTuple_CheckExact(val)) {
+            Py_ssize_t i, n;
+            n = PyTuple_GET_SIZE(val);
+            TRY(string_writer_put_char, w, OP_START_TUPLE);
+            for (i = 0; i < n; i++)
+                TRY(compute_fingerprint, w, PyTuple_GET_ITEM(val, i));
+            TRY(string_writer_put_char, w, OP_END_TUPLE);
+            return 0;
+        }
+        /* as per typeof.py, check "_asdict" for namedtuple. */
+        else if(PyObject_HasAttrString(val, "_asdict"))
+        {
+            /*
+             * This encodes the class name and field names of a namedtuple into
+             * the fingerprint on the condition that the number of fields is
+             * small (<10) and that the class name and field names are encodable
+             * as ASCII.
+             */
+            PyObject * clazz = NULL;
+            PyObject * name = NULL;
+            PyObject * _fields =  PyObject_GetAttrString(val, "_fields");
+            PyObject * field = NULL;
+            PyObject * ascii_str = NULL;
+            Py_ssize_t i, n, j, flen;
+            char * buf = NULL;
+            int ret;
+
+            clazz = PyObject_GetAttrString(val, "__class__");
+            if (clazz == NULL)
+                return -1;
+
+            name = PyObject_GetAttrString(clazz, "__name__");
+            Py_DECREF(clazz);
+            if (name == NULL)
+                return -1;
+
+            ascii_str = PyUnicode_AsEncodedString(name, "ascii", "ignore");
+            Py_DECREF(name);
+            if (ascii_str == NULL)
+                return -1;
+            ret = PyBytes_AsStringAndSize(ascii_str, &buf, &flen);
+
+            if (ret == -1)
+                return -1;
+            for(j = 0; j < flen; j++) {
+                TRY(string_writer_put_char, w, buf[j]);
+            }
+            Py_DECREF(ascii_str);
+
+            if (_fields == NULL)
+                return -1;
+
+            n = PyTuple_GET_SIZE(val);
+
+            TRY(string_writer_put_char, w, OP_START_TUPLE);
+            for (i = 0; i < n; i++) {
+                field = PyTuple_GET_ITEM(_fields, i);
+                if (field == NULL)
+                    return -1;
+                ascii_str = PyUnicode_AsEncodedString(field, "ascii", "ignore");
+                if (ascii_str == NULL)
+                    return -1;
+                ret = PyBytes_AsStringAndSize(ascii_str, &buf, &flen);
+                if (ret == -1)
+                    return -1;
+                for(j = 0; j < flen; j++) {
+                    TRY(string_writer_put_char, w, buf[j]);
+                }
+                Py_DECREF(ascii_str);
+                TRY(compute_fingerprint, w, PyTuple_GET_ITEM(val, i));
+            }
+            TRY(string_writer_put_char, w, OP_END_TUPLE);
+            Py_DECREF(_fields);
+            return 0;
+        }
     }
     if (PyBytes_Check(val))
         return string_writer_put_char(w, OP_BYTES);
@@ -372,14 +440,14 @@ compute_fingerprint(string_writer_t *w, PyObject *val)
         PyBuffer_Release(&buf);
         return 0;
     }
-    if (PyArray_DescrCheck(val)) {
+    if (NUMBA_PyArray_DescrCheck(val)) {
         TRY(string_writer_put_char, w, OP_NP_DTYPE);
         return compute_dtype_fingerprint(w, (PyArray_Descr *) val);
     }
 
 _unrecognized:
     /* Type not recognized */
-    return fingerprint_unrecognized(val);
+    return fingerprint_unrecognized();
 }
 
 PyObject *
