@@ -61,7 +61,7 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
     if link and config.ENABLE_CUDASIM:
         raise NotImplementedError('Cannot link PTX in the simulator')
 
-    if kws.get('boundscheck') == True:
+    if kws.get('boundscheck'):
         raise NotImplementedError("bounds checking is not supported for CUDA")
 
     if argtypes is not None:
@@ -72,15 +72,15 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
         msg = _msg_deprecated_signature_arg.format('bind')
         warn(msg, category=NumbaDeprecationWarning)
     else:
-        bind=True
+        bind = True
 
     fastmath = kws.get('fastmath', False)
     if argtypes is None and not sigutils.is_signature(func_or_sig):
         if func_or_sig is None:
             if config.ENABLE_CUDASIM:
                 def autojitwrapper(func):
-                    return FakeCUDAKernel(func, device=device, fastmath=fastmath,
-                                          debug=debug)
+                    return FakeCUDAKernel(func, device=device,
+                                          fastmath=fastmath, debug=debug)
             else:
                 def autojitwrapper(func):
                     return jit(func, device=device, debug=debug, opt=opt, **kws)
@@ -89,8 +89,8 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
         # func_or_sig is a function
         else:
             if config.ENABLE_CUDASIM:
-                return FakeCUDAKernel(func_or_sig, device=device, fastmath=fastmath,
-                                      debug=debug)
+                return FakeCUDAKernel(func_or_sig, device=device,
+                                      fastmath=fastmath, debug=debug)
             elif device:
                 return jitdevice(func_or_sig, debug=debug, opt=opt, **kws)
             else:
@@ -108,7 +108,6 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
                 return FakeCUDAKernel(func, device=device, fastmath=fastmath,
                                       debug=debug)
             return jitwrapper
-
 
         if isinstance(func_or_sig, list):
             msg = 'Lists of signatures are not yet supported in CUDA'
@@ -133,7 +132,8 @@ def jit(func_or_sig=None, argtypes=None, device=False, inline=False,
             targetoptions['debug'] = debug
             targetoptions['link'] = link
             targetoptions['opt'] = opt
-            return Dispatcher(func, sigs, bind=bind, targetoptions=targetoptions)
+            return Dispatcher(func, sigs, bind=bind,
+                              targetoptions=targetoptions)
 
         def device_jit(func):
             return compile_device(func, restype, argtypes, inline=inline,

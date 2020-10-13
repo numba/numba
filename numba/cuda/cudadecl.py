@@ -50,7 +50,8 @@ class Cuda_array_decl(CallableTemplate):
                 if not isinstance(shape, types.IntegerLiteral):
                     return None
             elif isinstance(shape, (types.Tuple, types.UniTuple)):
-                if any([not isinstance(s, types.IntegerLiteral) for s in shape]):
+                if any([not isinstance(s, types.IntegerLiteral)
+                        for s in shape]):
                     return None
             else:
                 return None
@@ -128,24 +129,29 @@ class Cuda_threadfence_system(ConcreteTemplate):
 @register
 class Cuda_syncwarp(ConcreteTemplate):
     key = cuda.syncwarp
-    cases = [signature(types.none, types.i4)]
+    cases = [signature(types.none), signature(types.none, types.i4)]
 
 
 @register
 class Cuda_shfl_sync_intrinsic(ConcreteTemplate):
     key = cuda.shfl_sync_intrinsic
     cases = [
-        signature(types.Tuple((types.i4, types.b1)), types.i4, types.i4, types.i4, types.i4, types.i4),
-        signature(types.Tuple((types.i8, types.b1)), types.i4, types.i4, types.i8, types.i4, types.i4),
-        signature(types.Tuple((types.f4, types.b1)), types.i4, types.i4, types.f4, types.i4, types.i4),
-        signature(types.Tuple((types.f8, types.b1)), types.i4, types.i4, types.f8, types.i4, types.i4),
+        signature(types.Tuple((types.i4, types.b1)),
+                  types.i4, types.i4, types.i4, types.i4, types.i4),
+        signature(types.Tuple((types.i8, types.b1)),
+                  types.i4, types.i4, types.i8, types.i4, types.i4),
+        signature(types.Tuple((types.f4, types.b1)),
+                  types.i4, types.i4, types.f4, types.i4, types.i4),
+        signature(types.Tuple((types.f8, types.b1)),
+                  types.i4, types.i4, types.f8, types.i4, types.i4),
     ]
 
 
 @register
 class Cuda_vote_sync_intrinsic(ConcreteTemplate):
     key = cuda.vote_sync_intrinsic
-    cases = [signature(types.Tuple((types.i4, types.b1)), types.i4, types.i4, types.b1)]
+    cases = [signature(types.Tuple((types.i4, types.b1)),
+                       types.i4, types.i4, types.b1)]
 
 
 @register
@@ -187,6 +193,7 @@ class Cuda_popc(ConcreteTemplate):
         signature(types.uint32, types.uint32),
         signature(types.uint64, types.uint64),
     ]
+
 
 @register
 class Cuda_fma(ConcreteTemplate):
@@ -256,7 +263,6 @@ class Cuda_selp(AbstractTemplate):
         assert not kws
         test, a, b = args
 
-
         # per docs
         # http://docs.nvidia.com/cuda/parallel-thread-execution/index.html#comparison-and-selection-instructions-selp
         supported_types = (types.float64, types.float32,
@@ -270,57 +276,36 @@ class Cuda_selp(AbstractTemplate):
         return signature(a, test, a, a)
 
 
-@register
-class Cuda_atomic_add(AbstractTemplate):
-    key = cuda.atomic.add
+# generate atomic operations
+def _gen(l_key, supported_types):
+    @register
+    class Cuda_atomic(AbstractTemplate):
+        key = l_key
 
-    def generic(self, args, kws):
-        assert not kws
-        ary, idx, val = args
+        def generic(self, args, kws):
+            assert not kws
+            ary, idx, val = args
 
-        if ary.ndim == 1:
-            return signature(ary.dtype, ary, types.intp, ary.dtype)
-        elif ary.ndim > 1:
-            return signature(ary.dtype, ary, idx, ary.dtype)
+            if ary.dtype not in supported_types:
+                return
 
-
-class Cuda_atomic_maxmin(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        ary, idx, val = args
-        # Implementation presently supports:
-        # float64, float32, int32, int64, uint32, uint64 only,
-        # so fail typing otherwise
-        supported_types = (types.float64, types.float32,
-                           types.int32, types.uint32,
-                           types.int64, types.uint64)
-        if ary.dtype not in supported_types:
-            return
-
-        if ary.ndim == 1:
-            return signature(ary.dtype, ary, types.intp, ary.dtype)
-        elif ary.ndim > 1:
-            return signature(ary.dtype, ary, idx, ary.dtype)
+            if ary.ndim == 1:
+                return signature(ary.dtype, ary, types.intp, ary.dtype)
+            elif ary.ndim > 1:
+                return signature(ary.dtype, ary, idx, ary.dtype)
+    return Cuda_atomic
 
 
-@register
-class Cuda_atomic_max(Cuda_atomic_maxmin):
-    key = cuda.atomic.max
+all_numba_types = (types.float64, types.float32,
+                   types.int32, types.uint32,
+                   types.int64, types.uint64)
 
-
-@register
-class Cuda_atomic_min(Cuda_atomic_maxmin):
-    key = cuda.atomic.min
-
-
-@register
-class Cuda_atomic_nanmax(Cuda_atomic_maxmin):
-    key = cuda.atomic.nanmax
-
-
-@register
-class Cuda_atomic_nanmin(Cuda_atomic_maxmin):
-    key = cuda.atomic.nanmin
+Cuda_atomic_add = _gen(cuda.atomic.add, all_numba_types)
+Cuda_atomic_sub = _gen(cuda.atomic.sub, all_numba_types)
+Cuda_atomic_max = _gen(cuda.atomic.max, all_numba_types)
+Cuda_atomic_min = _gen(cuda.atomic.min, all_numba_types)
+Cuda_atomic_nanmax = _gen(cuda.atomic.nanmax, all_numba_types)
+Cuda_atomic_nanmin = _gen(cuda.atomic.nanmin, all_numba_types)
 
 
 @register
@@ -380,6 +365,9 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_add(self, mod):
         return types.Function(Cuda_atomic_add)
+
+    def resolve_sub(self, mod):
+        return types.Function(Cuda_atomic_sub)
 
     def resolve_max(self, mod):
         return types.Function(Cuda_atomic_max)

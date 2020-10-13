@@ -105,8 +105,8 @@ typedef struct DispatcherObject{
     char can_compile;        /* Can auto compile */
     char can_fallback;       /* Can fallback */
     char exact_match_required;
-    /* Borrowed references */
-    PyObject *firstdef, *fallbackdef, *interpdef;
+    /* Borrowed reference */
+    PyObject *fallbackdef;
     /* Whether to fold named arguments and default values (false for lifted loops)*/
     int fold_args;
     /* Whether the last positional argument is a stararg */
@@ -161,9 +161,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     self->dispatcher = dispatcher_new(tmaddr, argct);
     self->can_compile = 1;
     self->can_fallback = can_fallback;
-    self->firstdef = NULL;
     self->fallbackdef = NULL;
-    self->interpdef = NULL;
     self->has_stararg = has_stararg;
     self->exact_match_required = exact_match_required;
     return 0;
@@ -184,14 +182,13 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     int i, sigsz;
     int *sig;
     int objectmode = 0;
-    int interpmode = 0;
 
-    if (!PyArg_ParseTuple(args, "OO|ii", &sigtup,
-                          &cfunc, &objectmode, &interpmode)) {
+    if (!PyArg_ParseTuple(args, "OO|i", &sigtup,
+                          &cfunc, &objectmode)) {
         return NULL;
     }
 
-    if (!interpmode && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
+    if (!PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
         PyErr_SetString(PyExc_TypeError, "must be builtin_function_or_method");
         return NULL;
     }
@@ -203,23 +200,13 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
         sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
     }
 
-    if (!interpmode) {
-        /* The reference to cfunc is borrowed; this only works because the
-           derived Python class also stores an (owned) reference to cfunc. */
-        dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
+    /* The reference to cfunc is borrowed; this only works because the
+       derived Python class also stores an (owned) reference to cfunc. */
+    dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
 
-        /* Add first definition */
-        if (!self->firstdef) {
-            self->firstdef = cfunc;
-        }
-    }
     /* Add pure python fallback */
     if (!self->fallbackdef && objectmode){
         self->fallbackdef = cfunc;
-    }
-    /* Add interpreter fallback */
-    if (!self->interpdef && interpmode) {
-        self->interpdef = cfunc;
     }
 
     free(sig);
@@ -545,12 +532,12 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
     /* If compilation is enabled, ensure that an exact match is found and if
      * not compile one */
-    self->exact_match_required |= self->can_compile;
+    int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
 
     /* We only allow unsafe conversions if compilation of new specializations
        has been disabled. */
     cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
-                               !self->can_compile, self->exact_match_required);
+                               !self->can_compile, exact_match_required);
 
     if (matches == 0 && !self->can_compile) {
         /*
@@ -567,7 +554,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
             /* Retry with the newly registered conversions */
             cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
                                        !self->can_compile,
-                                       self->exact_match_required);
+                                       exact_match_required);
         }
     }
 
@@ -611,7 +598,7 @@ static PyMethodDef Dispatcher_methods[] = {
 };
 
 static PyMemberDef Dispatcher_members[] = {
-    {"_can_compile", T_BOOL, offsetof(DispatcherObject, can_compile), 0},
+    {"_can_compile", T_BOOL, offsetof(DispatcherObject, can_compile), 0, NULL },
     {NULL}  /* Sentinel */
 };
 
@@ -655,6 +642,20 @@ static PyTypeObject DispatcherType = {
     (initproc)Dispatcher_init,                   /* tp_init */
     0,                                           /* tp_alloc */
     0,                                           /* tp_new */
+    0,                                           /* tp_free */
+    0,                                           /* tp_is_gc */
+    0,                                           /* tp_bases */
+    0,                                           /* tp_mro */
+    0,                                           /* tp_cache */
+    0,                                           /* tp_subclasses */
+    0,                                           /* tp_weaklist */
+    0,                                           /* tp_del */
+    0,                                           /* tp_version_tag */
+    0,                                           /* tp_finalize */
+#if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION > 7
+    0,                                           /* tp_vectorcall */
+    0,                                           /* tp_print */
+#endif
 };
 
 

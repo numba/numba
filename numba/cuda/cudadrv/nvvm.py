@@ -4,6 +4,7 @@ This is a direct translation of nvvm.h
 import logging
 import re
 import sys
+import warnings
 from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
                     c_char)
 
@@ -286,21 +287,24 @@ def get_supported_ccs():
 
     try:
         from numba.cuda.cudadrv.runtime import runtime
-        cudart_version_major = runtime.get_version()[0]
+        cudart_version_major, cudart_version_minor = runtime.get_version()
     except: # noqa: E722
         # The CUDA Runtime may not be present
         cudart_version_major = 0
 
     # List of supported compute capability in sorted order
     if cudart_version_major == 0:
-        _supported_cc = (),
+        _supported_cc = ()
     elif cudart_version_major < 9:
-        # CUDA 8.x
-        _supported_cc = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2) # noqa: E501
-    elif cudart_version_major < 10:
+        _supported_cc = ()
+        ctk_ver = f"{cudart_version_major}.{cudart_version_minor}"
+        msg = f"CUDA Toolkit {ctk_ver} is unsupported by Numba - 9.0 is the " \
+              + "minimum required version."
+        warnings.warn(msg)
+    elif cudart_version_major == 9:
         # CUDA 9.x
         _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0) # noqa: E501
-    elif cudart_version_major < 11:
+    elif cudart_version_major == 10:
         # CUDA 10.x
         _supported_cc = (3, 0), (3, 5), (5, 0), (5, 2), (5, 3), (6, 0), (6, 1), (6, 2), (7, 0), (7, 2), (7, 5) # noqa: E501
     else:
@@ -319,6 +323,11 @@ def find_closest_arch(mycc):
     :return: Closest supported CC as a tuple ``(MAJOR, MINOR)``
     """
     supported_cc = get_supported_ccs()
+
+    if not supported_cc:
+        msg = "No supported GPU compute capabilities found. " \
+              "Please check your cudatoolkit version matches your CUDA version."
+        raise NvvmSupportError(msg)
 
     for i, cc in enumerate(supported_cc):
         if cc == mycc:
@@ -350,7 +359,7 @@ def get_arch_option(major, minor):
 
 
 MISSING_LIBDEVICE_FILE_MSG = '''Missing libdevice file for {arch}.
-Please ensure you have package cudatoolkit >= 8.
+Please ensure you have package cudatoolkit >= 9.
 Install package by:
 
     conda install cudatoolkit
@@ -398,28 +407,27 @@ define internal i32 @___numba_cas_hack(i32* %ptr, i32 %cmp, i32 %val) alwaysinli
 """ # noqa: E501
 
 # Translation of code from CUDA Programming Guide v6.5, section B.12
-ir_numba_atomic_double_add = """
-define internal double @___numba_atomic_double_add(double* %ptr, double %val) alwaysinline {
+ir_numba_atomic_binary = """
+define internal {T} @___numba_atomic_{T}_{FUNC}({T}* %ptr, {T} %val) alwaysinline {{
 entry:
-    %iptr = bitcast double* %ptr to i64*
-    %old2 = load volatile i64, i64* %iptr
+    %iptr = bitcast {T}* %ptr to {Ti}*
+    %old2 = load volatile {Ti}, {Ti}* %iptr
     br label %attempt
 
 attempt:
-    %old = phi i64 [ %old2, %entry ], [ %cas, %attempt ]
-    %dold = bitcast i64 %old to double
-    %dnew = fadd double %dold, %val
-    %new = bitcast double %dnew to i64
-    %cas = cmpxchg volatile i64* %iptr, i64 %old, i64 %new monotonic
-    %repeat = icmp ne i64 %cas, %old
+    %old = phi {Ti} [ %old2, %entry ], [ %cas, %attempt ]
+    %dold = bitcast {Ti} %old to {T}
+    %dnew = {OP} {T} %dold, %val
+    %new = bitcast {T} %dnew to {Ti}
+    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %old, {Ti} %new monotonic
+    %repeat = icmp ne {Ti} %cas, %old
     br i1 %repeat, label %attempt, label %done
 
 done:
-    %result = bitcast i64 %old to double
-    ret double %result
-}
+    %result = bitcast {Ti} %old to {T}
+    ret {T} %result
+}}
 """ # noqa: E501
-
 
 ir_numba_atomic_minmax = """
 define internal {T} @___numba_atomic_{T}_{NAN}{FUNC}({T}* %ptr, {T} %val) alwaysinline {{
@@ -485,7 +493,14 @@ def llvm_to_ptx(llvmir, **opts):
         ('declare i32 @___numba_cas_hack(i32*, i32, i32)',
          ir_numba_cas_hack),
         ('declare double @___numba_atomic_double_add(double*, double)',
-         ir_numba_atomic_double_add),
+         ir_numba_atomic_binary.format(T='double', Ti='i64', OP='fadd',
+                                       FUNC='add')),
+        ('declare float @___numba_atomic_float_sub(float*, float)',
+         ir_numba_atomic_binary.format(T='float', Ti='i32', OP='fsub',
+                                       FUNC='sub')),
+        ('declare double @___numba_atomic_double_sub(double*, double)',
+         ir_numba_atomic_binary.format(T='double', Ti='i64', OP='fsub',
+                                       FUNC='sub')),
         ('declare float @___numba_atomic_float_max(float*, float)',
          ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='',
                                        OP='nnan olt', PTR_OR_VAL='ptr',

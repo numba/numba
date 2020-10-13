@@ -17,6 +17,7 @@ import numpy as np
 from numpy.random import randn
 import operator
 from collections import defaultdict, namedtuple
+import copy
 
 import numba.parfors.parfor
 from numba import njit, prange, set_num_threads, get_num_threads
@@ -49,6 +50,14 @@ _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
+
+def null_comparer(a, b):
+    """
+    Used with check_arq_equality to indicate that we do not care
+    whether the value of the parameter at the end of the function
+    has a particular value.
+    """
+    pass
 
 class TestParforsBase(TestCase):
     """
@@ -114,12 +123,27 @@ class TestParforsBase(TestCase):
                            scheduler is to be asserted.
             fastmath_pcres - a fastmath parallel compile result, if supplied
                              will be run to make sure the result is correct
+            check_arg_equality - some functions need to check that a
+                                 parameter is modified rather than a certain
+                                 value returned.  If this keyword argument
+                                 is supplied, it should be a list of
+                                 comparison functions such that the i'th
+                                 function in the list is used to compare the
+                                 i'th parameter of the njit and parallel=True
+                                 functions against the i'th parameter of the
+                                 standard Python function, asserting if they
+                                 differ.  The length of this list must be equal
+                                 to the number of parameters to the function.
+                                 The null comparator is available for use
+                                 when you do not desire to test if some
+                                 particular parameter is changed.
             Remaining kwargs are passed to np.testing.assert_almost_equal
         """
         scheduler_type = kwargs.pop('scheduler_type', None)
         check_fastmath = kwargs.pop('check_fastmath', None)
         fastmath_pcres = kwargs.pop('fastmath_pcres', None)
         check_scheduling = kwargs.pop('check_scheduling', True)
+        check_args_for_equality = kwargs.pop('check_arg_equality', None)
 
         def copy_args(*args):
             if not args:
@@ -133,7 +157,7 @@ class TestParforsBase(TestCase):
                 elif isinstance(x, numbers.Number):
                     new_args.append(x)
                 elif isinstance(x, tuple):
-                    new_args.append(x)
+                    new_args.append(copy.deepcopy(x))
                 elif isinstance(x, list):
                     new_args.append(x[:])
                 else:
@@ -141,18 +165,27 @@ class TestParforsBase(TestCase):
             return tuple(new_args)
 
         # python result
-        py_expected = pyfunc(*copy_args(*args))
+        py_args = copy_args(*args)
+        py_expected = pyfunc(*py_args)
 
         # njit result
-        njit_output = cfunc.entry_point(*copy_args(*args))
+        njit_args = copy_args(*args)
+        njit_output = cfunc.entry_point(*njit_args)
 
         # parfor result
-        parfor_output = cpfunc.entry_point(*copy_args(*args))
+        parfor_args = copy_args(*args)
+        parfor_output = cpfunc.entry_point(*parfor_args)
 
-        np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
-        np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
-
-        self.assertEqual(type(njit_output), type(parfor_output))
+        if check_args_for_equality is None:
+            np.testing.assert_almost_equal(njit_output, py_expected, **kwargs)
+            np.testing.assert_almost_equal(parfor_output, py_expected, **kwargs)
+            self.assertEqual(type(njit_output), type(parfor_output))
+        else:
+            assert(len(py_args) == len(check_args_for_equality))
+            for pyarg, njitarg, parforarg, argcomp in zip(
+                py_args, njit_args, parfor_args, check_args_for_equality):
+                argcomp(njitarg, pyarg, **kwargs)
+                argcomp(parforarg, pyarg, **kwargs)
 
         if check_scheduling:
             self.check_scheduling(cpfunc, scheduler_type)
@@ -1629,6 +1662,21 @@ class TestParfors(TestParforsBase):
         self.check(test_impl, x)
 
     @skip_parfors_unsupported
+    def test_namedtuple3(self):
+        # issue5872: test that a.y[:] = 5 is not removed as
+        # deadcode.
+        TestNamedTuple3 = namedtuple(f'TestNamedTuple3',['y'])
+
+        def test_impl(a):
+            a.y[:] = 5
+
+        def comparer(a, b):
+            np.testing.assert_almost_equal(a.y, b.y)
+
+        x = TestNamedTuple3(y=np.zeros(10))
+        self.check(test_impl, x, check_arg_equality=[comparer])
+
+    @skip_parfors_unsupported
     def test_inplace_binop(self):
         def test_impl(a, b):
             b += a
@@ -1640,6 +1688,40 @@ class TestParfors(TestParforsBase):
         self.assertTrue(countParfors(test_impl,
                                     (types.Array(types.float64, 1, 'C'),
                                      types.Array(types.float64, 1, 'C'))) == 1)
+
+    @skip_parfors_unsupported
+    def test_tuple_concat(self):
+        # issue5383
+        def test_impl(a):
+            n = len(a)
+            array_shape = n, n
+            indices = np.zeros(((1,) + array_shape + (1,)), dtype=np.uint64)
+            k_list = indices[0, :]
+
+            for i, g in enumerate(a):
+                k_list[i, i] = i
+            return k_list
+
+        x = np.array([1, 1])
+        self.check(test_impl, x)
+
+    @skip_parfors_unsupported
+    def test_tuple_concat_with_reverse_slice(self):
+        # issue5383
+        def test_impl(a):
+            n = len(a)
+            array_shape = n, n
+            indices = np.zeros(((1,) + array_shape + (1,))[:-1],
+                               dtype=np.uint64)
+            k_list = indices[0, :]
+
+            for i, g in enumerate(a):
+                k_list[i, i] = i
+            return k_list
+
+        x = np.array([1, 1])
+        self.check(test_impl, x)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
@@ -2551,6 +2633,21 @@ class TestPrange(TestPrangeBase):
 
         image = np.zeros((3, 3), dtype=np.int32)
         self.prange_tester(test_impl, image, 0, 0)
+
+    @skip_parfors_unsupported
+    def test_list_setitem_hoisting(self):
+        # issue5979
+        # Don't hoist list initialization if list item set.
+        def test_impl():
+            n = 5
+            a = np.empty(n, dtype=np.int64)
+            for k in range(5):
+                X = [0]
+                X[0] = 1
+                a[k] = X[0]
+            return a
+
+        self.prange_tester(test_impl)
 
 
 @skip_parfors_unsupported

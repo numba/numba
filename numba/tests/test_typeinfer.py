@@ -5,7 +5,7 @@ import numpy as np
 
 from numba.core.compiler import compile_isolated
 from numba import jit
-from numba.core import types, typing, errors, typeinfer, utils
+from numba.core import errors, ir, types, typing, typeinfer, utils
 from numba.core.typeconv import Conversion
 
 from numba.tests.support import TestCase, tag
@@ -677,6 +677,31 @@ class TestMiscIssues(TestCase):
         for v in (0, 1, 2):
             res = cfunc(v)
             self.assertEqual(res, pyfunc(v))
+
+    def test_issue_6293(self):
+        """https://github.com/numba/numba/issues/6293
+
+        Typer does not propagate return type to all return variables
+        """
+        @jit(nopython=True)
+        def confuse_typer(x):
+            if x == x:
+                return int(x)
+            else:
+                return x
+
+        confuse_typer.compile((types.float64,))
+        cres = confuse_typer.overloads[(types.float64,)]
+        typemap = cres.type_annotation.typemap
+        return_vars = {}
+
+        for block in cres.type_annotation.blocks.values():
+            for inst in block.body:
+                if isinstance(inst, ir.Return):
+                    varname = inst.value.name
+                    return_vars[varname] = typemap[varname]
+
+        self.assertTrue(all(vt == types.float64 for vt in return_vars.values()))
 
 
 class TestFoldArguments(unittest.TestCase):

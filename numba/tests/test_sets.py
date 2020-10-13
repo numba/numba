@@ -9,7 +9,7 @@ import sys
 
 import numpy as np
 
-from numba.core.compiler import compile_isolated, Flags
+from numba.core.compiler import compile_isolated, Flags, errors
 from numba import jit
 from numba.core import types
 import unittest
@@ -399,7 +399,7 @@ class TestSets(BaseTest):
         b = self.duplicates_array(50)
         c = self.sparse_array(50)
         check(a, b, c)
-    
+
     def test_bool(self):
         pyfunc = bool_usecase
         check = self.unordered_checker(pyfunc)
@@ -425,6 +425,19 @@ class TestSets(BaseTest):
         cfunc = jit(nopython=True)(pyfunc)
         with self.assertRaises(KeyError) as raises:
             cfunc((1, 2, 3), (5, ))
+
+    def test_refcounted_types_forbidden(self):
+        # References are leaked on exception
+        self.disable_leak_check()
+
+        pyfunc = constructor_usecase
+        cfunc = jit(nopython=True)(pyfunc)
+        with self.assertRaises(errors.LoweringError) as raises:
+            cfunc("abc")
+
+        excstr = str(raises.exception)
+        self.assertIn("Use of reference counted items in 'set()'", excstr)
+        self.assertIn("offending type is: 'unicode_type'", excstr)
 
     def test_discard(self):
         pyfunc = discard_usecase

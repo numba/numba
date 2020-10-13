@@ -6,3 +6,4 @@ CUDA Python Reference
    host.rst
    kernel.rst
    memory.rst
+   libdevice.rst

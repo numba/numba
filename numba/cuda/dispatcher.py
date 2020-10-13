@@ -1,11 +1,7 @@
 import numpy as np
 
-from numba.core.descriptors import TargetDescriptor
-from numba.core.options import TargetOptions
 from numba import cuda
-from numba.cuda import jit
 from numba.cuda.cudadrv import devicearray
-from .descriptor import CUDATargetDesc
 from numba.np.ufunc.deviceufunc import (UFuncMechanism, GenerializedUFunc,
                                         GUFuncCallSteps)
 

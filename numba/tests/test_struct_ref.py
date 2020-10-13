@@ -317,3 +317,112 @@ class TestStructRefCaching(MemoryLeakMixin, TestCase):
 
         check(cached=False)
         check(cached=True)
+
+
+@structref.register
+class PolygonStructType(types.StructRef):
+
+    def preprocess_fields(self, fields):
+        # temp name to allow Optional instantiation
+        self.name = f"numba.PolygonStructType#{id(self)}"
+        fields = tuple([
+            ('value', types.Optional(types.int64)),
+            ('parent', types.Optional(self)),
+        ])
+
+        return fields
+
+
+polygon_struct_type = PolygonStructType(fields=(
+    ('value', types.Any),
+    ('parent', types.Any)
+))
+
+
+class PolygonStruct(structref.StructRefProxy):
+    def __new__(cls, value, parent):
+        return structref.StructRefProxy.__new__(cls, value, parent)
+
+    @property
+    def value(self):
+        return PolygonStruct_get_value(self)
+
+    @property
+    def parent(self):
+        return PolygonStruct_get_parent(self)
+
+
+@njit
+def PolygonStruct_get_value(self):
+    return self.value
+
+
+@njit
+def PolygonStruct_get_parent(self):
+    return self.parent
+
+
+structref.define_proxy(
+    PolygonStruct,
+    PolygonStructType,
+    ["value", "parent"]
+)
+
+
+@overload_method(PolygonStructType, "flip")
+def _ol_polygon_struct_flip(self):
+    def impl(self):
+        if self.value is not None:
+            self.value = -self.value
+    return impl
+
+
+@overload_attribute(PolygonStructType, "prop")
+def _ol_polygon_struct_prop(self):
+    def get(self):
+        return self.value, self.parent
+    return get
+
+
+class TestStructRefForwardTyping(MemoryLeakMixin, TestCase):
+    def test_same_type_assignment(self):
+        @njit
+        def check(x):
+            poly = PolygonStruct(None, None)
+            p_poly = PolygonStruct(None, None)
+            poly.value = x
+            poly.parent = p_poly
+            p_poly.value = x
+            return poly.parent.value
+
+        x = 11
+        got = check(x)
+        expect = x
+        self.assertPreciseEqual(got, expect)
+
+    def test_overload_method(self):
+        @njit
+        def check(x):
+            poly = PolygonStruct(None, None)
+            p_poly = PolygonStruct(None, None)
+            poly.value = x
+            poly.parent = p_poly
+            p_poly.value = x
+            poly.flip()
+            poly.parent.flip()
+            return poly.parent.value
+
+        x = 3
+        got = check(x)
+        expect = -x
+        self.assertPreciseEqual(got, expect)
+
+    def test_overload_attribute(self):
+        @njit
+        def check():
+            obj = PolygonStruct(5, None)
+            return obj.prop[0]
+
+        got = check()
+        expect = 5
+        self.assertPreciseEqual(got, expect)

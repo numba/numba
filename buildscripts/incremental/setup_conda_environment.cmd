@@ -6,6 +6,7 @@ set CONDA_CONFIG=cmd /C conda config
 %CONDA_CONFIG% --set remote_max_retries 10
 %CONDA_CONFIG% --set remote_read_timeout_secs 120.2
 %CONDA_CONFIG% --set restore_free_channel true
+%CONDA_CONFIG% --set show_channel_urls true
 cmd /C conda info
 %CONDA_CONFIG% --show
 

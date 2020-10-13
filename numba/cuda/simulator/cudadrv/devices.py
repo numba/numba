@@ -3,6 +3,7 @@ from collections import namedtuple
 
 _MemoryInfo = namedtuple("_MemoryInfo", "free,total")
 
+
 class FakeCUDAContext(object):
     '''
     This stub implements functionality only for simulating a single GPU
@@ -15,7 +16,7 @@ class FakeCUDAContext(object):
         pass
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-       pass
+        pass
 
     def __str__(self):
         return "<Managed Device {self.id}>".format(self=self)
@@ -33,8 +34,9 @@ class FakeCUDAContext(object):
 
     def get_memory_info(self):
         """
-        Cross-platform free / total host memory is hard without external dependencies,
-        e.g. `psutil` - so return infinite memory to maintain API type compatibility
+        Cross-platform free / total host memory is hard without external
+        dependencies, e.g. `psutil` - so return infinite memory to maintain API
+        type compatibility
         """
         return _MemoryInfo(float('inf'), float('inf'))
 
