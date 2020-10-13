@@ -163,7 +163,7 @@ impl_pow_int(types.float64, libdevice.powi)
 
 
 def impl_modf(ty, libfunc):
-    retty = types.Tuple((ty, ty))
+    retty = types.UniTuple(ty, 2)
 
     def lower_modf_impl(context, builder, sig, args):
         modf_sig = typing.signature(retty, ty)
