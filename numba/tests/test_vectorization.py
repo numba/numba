@@ -34,3 +34,17 @@ class TestVectorization(TestCase):
         llvm_ir = self.gen_ir(do_sum, (types.float64[::1],), fastmath=True)
         self.assertIn("vector.body", llvm_ir)
         self.assertIn("llvm.loop.isvectorized", llvm_ir)
+
+    def test_slp(self):
+        # Sample translated from:
+        # https://www.llvm.org/docs/Vectorizers.html#the-slp-vectorizer
+
+        def foo(a1, a2, b1, b2, A):
+            A[0] = a1 * (a1 + b1)
+            A[1] = a2 * (a2 + b2)
+            A[2] = a1 * (a1 + b1)
+            A[3] = a2 * (a2 + b2)
+
+        ty = types.float64
+        llvm_ir = self.gen_ir(foo, ((ty,) * 4 + (ty[::1],)), fastmath=True)
+        self.assertIn("2 x double", llvm_ir)
