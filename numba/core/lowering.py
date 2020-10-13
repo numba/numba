@@ -89,6 +89,14 @@ class BaseLower(object):
                                        name=self.fndesc.qualname,
                                        loc=self.func_ir.loc)
 
+        loc = self.func_ir.loc
+        # if config.LINE_TRACE:
+        self._call_line_trace(
+            self.fndesc.qualname,
+            loc.filename,
+            loc.line,
+        )
+
     def post_lower(self):
         """
         Called after all blocks are lowered

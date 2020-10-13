@@ -889,6 +889,28 @@ numba_line_trace(const char *funcname, const char *filename, int lineno) {
             goto error;
 
         ////
+    } else if (tstate->use_tracing && tstate->c_profilefunc){
+        ////
+        /* Reference: https://github.com/cython/cython/blob/a87f498d964f4b63a93aba79ed8c5f082fedaa4f/Cython/Utility/Profile.c#L194-L224
+        */
+       /*
+        XXX: there are many common functions in _dispatcher.c that can be refactored to reuse
+
+        NOTE: line-tracing (coverage) would work if the dispatcher calling C_TRACE with PyTrace_CALL
+       */
+        // printf("IS TRACING %s %s %d\n", filename, funcname, lineno);
+        tstate->tracing++;
+        // printf("tstate->tracing=%d  tstate->use_tracing=%d\n",
+        //         tstate->tracing, tstate->use_tracing);
+        tstate->use_tracing = 0;
+        ret = tstate->c_profilefunc(tstate->c_profileobj, frame, PyTrace_CALL, NULL);
+        tstate->use_tracing = 1;
+        tstate->tracing--;
+        // printf("ret=%d\n", ret);
+        if (ret)
+            goto error;
+
+        ////
     }
     PyErr_Restore(exc, val, tb);
     Py_DECREF(frame);
