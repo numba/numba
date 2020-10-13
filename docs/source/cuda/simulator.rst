@@ -24,11 +24,11 @@ Using the simulator
 ===================
 
 The simulator is enabled by setting the environment variable
-:envvar:`NUMBA_ENABLE_CUDASIM` to 1. CUDA Python code may then be executed as
-normal. The easiest way to use the debugger inside a kernel is to only stop a
-single thread, otherwise the interaction with the debugger is difficult to
-handle. For example, the kernel below will  stop in the thread ``<<<(3,0,0), (1,
-0, 0)>>>``::
+:envvar:`NUMBA_ENABLE_CUDASIM` to 1 prior to importing Numba. CUDA Python code 
+may then be executed as normal. The easiest way to use the debugger inside a
+kernel is to only stop a single thread, otherwise the interaction with the
+debugger is difficult to handle. For example, the kernel below will stop in
+the thread ``<<<(3,0,0), (1, 0, 0)>>>``::
 
     @cuda.jit
     def vec_add(A, B, out):

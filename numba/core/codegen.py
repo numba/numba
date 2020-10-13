@@ -15,6 +15,7 @@ from numba.core import utils, config, cgutils
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
 from numba.core.runtime import rtsys
 from numba.core.compiler_lock import require_global_compiler_lock
+from numba.core.errors import NumbaInvalidConfigWarning
 from numba.misc.inspection import disassemble_elf_to_cfg
 
 
@@ -25,6 +26,30 @@ _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
 def _is_x86(triple):
     arch = triple.split('-')[0]
     return arch in _x86arch
+
+
+def _parse_refprune_flags():
+    """Parse refprune flags from the `config`.
+
+    Invalid values are ignored an warn via a `NumbaInvalidConfigWarning`
+    category.
+
+    Returns
+    -------
+    flags : llvmlite.binding.RefPruneSubpasses
+    """
+    flags = config.LLVM_REFPRUNE_FLAGS.split(',')
+    if not flags:
+        return 0
+    val = 0
+    for item in flags:
+        item = item.strip()
+        try:
+            val |= getattr(ll.RefPruneSubpasses, item.upper())
+        except AttributeError:
+            warnings.warn(f"invalid refprune flags {item!r}",
+                          NumbaInvalidConfigWarning)
+    return val
 
 
 def dump(header, body, lang):
@@ -524,7 +549,8 @@ class CodeLibrary(object):
         # refops into the same function as possible via inlining
         self._codegen._mpm_cheap.run(self._final_module)
         # Refop pruning is then run on the heavily inlined function
-        self._final_module = remove_redundant_nrt_refct(self._final_module)
+        if not config.LLVM_REFPRUNE_PASS:
+            self._final_module = remove_redundant_nrt_refct(self._final_module)
         # The full optimisation suite is then run on the refop pruned IR
         self._codegen._mpm_full.run(self._final_module)
 
@@ -594,7 +620,8 @@ class CodeLibrary(object):
     def add_llvm_module(self, ll_module):
         self._optimize_functions(ll_module)
         # TODO: we shouldn't need to recreate the LLVM module object
-        ll_module = remove_redundant_nrt_refct(ll_module)
+        if not config.LLVM_REFPRUNE_PASS:
+            ll_module = remove_redundant_nrt_refct(ll_module)
         self._final_module.link_in(ll_module)
 
     def finalize(self):
@@ -1078,6 +1105,8 @@ class BaseCPUCodegen(object):
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
+        if config.LLVM_REFPRUNE_PASS:
+            pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 
     def _function_pass_manager(self, llvm_module, **kwargs):
@@ -1085,6 +1114,8 @@ class BaseCPUCodegen(object):
         self._tm.add_analysis_passes(pm)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
+        if config.LLVM_REFPRUNE_PASS:
+            pm.add_refprune_pass(_parse_refprune_flags())
         return pm
 
     def _pass_manager_builder(self, **kwargs):

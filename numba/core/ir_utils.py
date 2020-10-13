@@ -535,7 +535,9 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
                                                         func_ir)
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("remove_dead alias map:", alias_map)
+        print("args:", args)
+        print("alias map:", alias_map)
+        print("arg_aliases:", arg_aliases)
         print("live_map:", live_map)
         print("usemap:", usedefs.usemap)
         print("defmap:", usedefs.defmap)
@@ -736,7 +738,7 @@ alias_analysis_extensions = {}
 alias_func_extensions = {}
 
 def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
-                                                            arg_aliases=None):
+                                                           arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
     if alias_map is None:
         alias_map = {}
@@ -771,6 +773,7 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                 # a = b.c.  a should alias b
                 if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
+                        and expr.attr not in ['shape']
                         and expr.value.name in arg_aliases):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                 # calls that can create aliases such as B = A.ravel()
@@ -821,12 +824,11 @@ def is_immutable_type(var, typemap):
     typ = typemap[var]
     # TODO: add more immutable types
     if isinstance(typ, (types.Number, types.scalars._NPDatetimeBase,
-                        types.containers.BaseTuple,
                         types.iterators.RangeType)):
         return True
     if typ==types.string:
         return True
-    # consevatively, assume mutable
+    # conservatively, assume mutable
     return False
 
 def copy_propagate(blocks, typemap):
