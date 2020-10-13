@@ -143,7 +143,8 @@ class FakeCUDAKernel(object):
 
     @property
     def definitions(self):
-        return None
+        msg = 'Multiple definitions are unsupported in the simulator'
+        raise NotImplementedError(msg)
 
     @property
     def ptx(self):
