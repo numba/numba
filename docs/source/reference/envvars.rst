@@ -333,7 +333,7 @@ Compilation options
       pattern, i.e. a single-entry single-exit CFG subgraph where has an incref
       in the entry and a corresponding decref in the exit.
     - ``fanout``: enable inter-basic-block pruning that has a fanout pattern,
-      i.e. a single-entry multiple-exit CFG subgraph that the entry has an
+      i.e. a single-entry multiple-exit CFG subgraph where the entry has an
       incref and every exit has a corresponding decref.
     - ``fanout_raise``: same as ``fanout`` but allow subgraph exit nodes to be
       raising an exception and not have a corresponding decref.
