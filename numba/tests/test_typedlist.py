@@ -530,6 +530,27 @@ class TestTypedList(MemoryLeakMixin, TestCase):
         expected = "ListType[int32]([1, 2, 3])"
         self.assertEqual(expected, repr(l))
 
+    def test_iter_mutates_self(self):
+        self.disable_leak_check()
+
+        @njit
+        def foo(x):
+            count = 0
+            for i in x:
+                if count > 1:
+                    x.append(2.)
+                count += 1
+
+        l = List()
+        l.append(1.)
+        l.append(1.)
+        l.append(1.)
+        with self.assertRaises(RuntimeError) as raises:
+            foo(l)
+
+        msg = "list was mutated during iteration"
+        self.assertIn(msg, str(raises.exception))
+
 
 class TestNoneType(MemoryLeakMixin, TestCase):
 
