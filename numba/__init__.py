@@ -23,7 +23,7 @@ from numba.core import types, errors
 # Re-export typeof
 from numba.misc.special import (
     typeof, prange, pndindex, gdb, gdb_breakpoint, gdb_init,
-    literally, literal_unroll
+    literally, literal_unroll,
 )
 
 # Re-export error classes
@@ -48,9 +48,6 @@ from numba.np.numpy_support import carray, farray, from_dtype
 
 # Re-export experimental
 from numba import experimental
-
-# Re-export experimental.jitclass as jitclass, this is deprecated
-from numba.experimental.jitclass.decorators import _warning_jitclass as jitclass
 
 # Initialize withcontexts
 import numba.core.withcontexts

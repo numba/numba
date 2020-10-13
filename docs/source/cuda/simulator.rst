@@ -24,11 +24,11 @@ Using the simulator
 ===================
 
 The simulator is enabled by setting the environment variable
-:envvar:`NUMBA_ENABLE_CUDASIM` to 1. CUDA Python code may then be executed as
-normal. The easiest way to use the debugger inside a kernel is to only stop a
-single thread, otherwise the interaction with the debugger is difficult to
-handle. For example, the kernel below will  stop in the thread ``<<<(3,0,0), (1,
-0, 0)>>>``::
+:envvar:`NUMBA_ENABLE_CUDASIM` to 1 prior to importing Numba. CUDA Python code 
+may then be executed as normal. The easiest way to use the debugger inside a
+kernel is to only stop a single thread, otherwise the interaction with the
+debugger is difficult to handle. For example, the kernel below will stop in
+the thread ``<<<(3,0,0), (1, 0, 0)>>>``::
 
     @cuda.jit
     def vec_add(A, B, out):
@@ -54,6 +54,8 @@ GPU as possible - in particular, the following are supported:
 * Shared memory: declarations of shared memory arrays must be on separate source
   lines, since the simulator uses source line information to keep track of
   allocations of shared memory across threads.
+* Mapped arrays.
+* Host and device memory operations: copying and setting memory.
 * :func:`.syncthreads` is supported - however, in the case where divergent
   threads enter different :func:`.syncthreads` calls, the launch will not fail,
   but unexpected behaviour will occur. A future version of the simulator may
@@ -84,6 +86,13 @@ Some limitations of the simulator include:
 * Most of the driver API is unimplemented.
 * It is not possible to link PTX code with CUDA Python functions.
 * Warps and warp-level operations are not yet implemented.
+* Because the simulator executes kernels using the Python interpreter,
+  structured array access by attribute that works with the hardware target may
+  fail in the simulator - see :ref:`structured-array-access`.
+* Operations directly against device arrays are only partially supported, that
+  is, testing equality, less than, greater than, and basic mathematical 
+  operations are supported, but many other operations, such as the in-place 
+  operators and bit operators are not.
 
 Obviously, the speed of the simulator is also much lower than that of a real
 device. It may be necessary to reduce the size of input data and the size of the

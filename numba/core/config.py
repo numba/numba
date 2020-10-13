@@ -273,11 +273,6 @@ class _EnvReloader(object):
 
         HTML = _readenv("NUMBA_DUMP_HTML", fmt_html_path, None)
 
-        # Allow interpreter fallback so that Numba @jit decorator will never
-        # fail. Use for migrating from old numba (<0.12) which supported
-        # closure, and other yet-to-be-supported features.
-        COMPATIBILITY_MODE = _readenv("NUMBA_COMPATIBILITY_MODE", int, 0)
-
         # x86-64 specific
         # Enable AVX on supported platforms where it won't degrade performance.
         def avx_default():
@@ -383,6 +378,15 @@ class _EnvReloader(object):
         # CUDA Memory management
         CUDA_MEMORY_MANAGER = _readenv("NUMBA_CUDA_MEMORY_MANAGER", str,
                                        'default')
+
+        # Experimental refprune pass
+        LLVM_REFPRUNE_PASS = _readenv(
+            "NUMBA_LLVM_REFPRUNE_PASS", int, 1,
+        )
+        LLVM_REFPRUNE_FLAGS = _readenv(
+            "NUMBA_LLVM_REFPRUNE_FLAGS", str,
+            "all" if LLVM_REFPRUNE_PASS else "",
+        )
 
         # Inject the configuration values into the module globals
         for name, value in locals().copy().items():

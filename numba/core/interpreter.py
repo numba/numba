@@ -12,7 +12,6 @@ from numba.core.utils import (
     INPLACE_BINOPS_TO_OPERATORS,
     UNARY_BUITINS_TO_OPERATORS,
     OPERATORS_TO_BUILTINS,
-    get_function_globals
     )
 from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
 from numba.core.unsafe import eh
@@ -328,7 +327,7 @@ class Interpreter(object):
         as a builtins (second).  If both failed, return a ir.UNDEFINED.
         """
         try:
-            return get_function_globals(self.func_id.func)[name]
+            return self.func_id.func.__globals__[name]
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
 

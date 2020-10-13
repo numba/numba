@@ -1884,12 +1884,13 @@ class ConvertNumpyPass:
                         # only translate C order since we can't allocate F
                         if guard(self._is_supported_npycall, expr):
                             new_instr = self._numpy_to_parfor(equiv_set, lhs, expr)
-                            self.rewritten.append(dict(
-                                old=instr,
-                                new=new_instr,
-                                reason='numpy_allocator',
-                            ))
-                            instr = new_instr
+                            if new_instr is not None:
+                                self.rewritten.append(dict(
+                                    old=instr,
+                                    new=new_instr,
+                                    reason='numpy_allocator',
+                                ))
+                                instr = new_instr
                         elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
                             new_instr = self._arrayexpr_to_parfor(
                                 equiv_set, lhs, expr, avail_vars)
@@ -1998,6 +1999,11 @@ class ConvertNumpyPass:
 
         # generate loopnests and size variables from lhs correlations
         size_vars = equiv_set.get_shape(lhs)
+        if size_vars is None:
+            if config.DEBUG_ARRAY_OPT >= 1:
+                print("Could not convert numpy map to parfor, unknown size")
+            return None
+
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
 
         # generate init block and body
@@ -2027,7 +2033,7 @@ class ConvertNumpyPass:
                 typing.Context(), new_arg_typs, new_kw_types)
             value = expr
         else:
-            NotImplementedError(
+            raise NotImplementedError(
                 "Map of numpy.{} to parfor is not implemented".format(call_name))
 
         value_assign = ir.Assign(value, expr_out_var, loc)
@@ -2109,6 +2115,9 @@ class ConvertReducePass:
 
         init_val = args[2]
         size_vars = equiv_set.get_shape(in_arr if mask_indices is None else mask_var)
+        if size_vars is None:
+            return None
+
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
         mask_index = index_vars
         if mask_indices:

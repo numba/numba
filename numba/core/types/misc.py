@@ -1,4 +1,4 @@
-from numba.core.types.abstract import Callable, Literal, Type
+from numba.core.types.abstract import Callable, Literal, Type, Hashable
 from numba.core.types.common import (Dummy, IterableType, Opaque,
                                      SimpleIteratorType)
 from numba.core.typeconv import Conversion
@@ -498,7 +498,7 @@ class ContextManager(Callable, Phantom):
         return typing.signature(self, *posargs)
 
 
-class UnicodeType(IterableType):
+class UnicodeType(IterableType, Hashable):
 
     def __init__(self, name):
         super(UnicodeType, self).__init__(name)

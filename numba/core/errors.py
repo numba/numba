@@ -76,6 +76,12 @@ class NumbaExperimentalFeatureWarning(NumbaWarning):
     Warning category for using an experimental feature.
     """
 
+
+class NumbaInvalidConfigWarning(NumbaWarning):
+    """
+    Warning category for using an invalid configuration.
+    """
+
 # These are needed in the color formatting of errors setup
 
 

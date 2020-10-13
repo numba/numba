@@ -7,7 +7,6 @@ import pickle
 import numpy as np
 
 from numba import cuda
-from numba.cuda.cudadrv import drvapi, devicearray
 from numba.cuda.testing import (skip_on_cudasim, skip_under_cuda_memcheck,
                                 ContextResettingTestCase, ForeignArray)
 from numba.tests.support import linux_only
@@ -20,7 +19,8 @@ has_mp_get_context = hasattr(mp, 'get_context')
 def core_ipc_handle_test(the_work, result_queue):
     try:
         arr = the_work()
-    except:
+    # Catch anything going wrong in the worker function
+    except:  # noqa: E722
         # FAILED. propagate the exception as a string
         succ = False
         out = traceback.format_exc()
@@ -69,8 +69,8 @@ def ipc_array_test(ipcarr, result_queue):
                     raise AssertionError('invalid exception message')
             else:
                 raise AssertionError('did not raise on reopen')
-
-    except:
+    # Catch any exception so we can propagate it
+    except:  # noqa: E722
         # FAILED. propagate the exception as a string
         succ = False
         out = traceback.format_exc()
@@ -210,8 +210,8 @@ def staged_ipc_handle_test(handle, device_num, result_queue):
             arrsize = handle.size // np.dtype(np.intp).itemsize
             hostarray = np.zeros(arrsize, dtype=np.intp)
             cuda.driver.device_to_host(
-                hostarray, deviceptr,  size=handle.size,
-                )
+                hostarray, deviceptr, size=handle.size,
+            )
             handle.close()
         return hostarray
 
@@ -221,7 +221,6 @@ def staged_ipc_handle_test(handle, device_num, result_queue):
 def staged_ipc_array_test(ipcarr, device_num, result_queue):
     try:
         with cuda.gpus[device_num]:
-            this_ctx = cuda.devices.get_context()
             with ipcarr as darr:
                 arr = darr.copy_to_host()
                 try:
@@ -233,7 +232,8 @@ def staged_ipc_array_test(ipcarr, device_num, result_queue):
                         raise AssertionError('invalid exception message')
                 else:
                     raise AssertionError('did not raise on reopen')
-    except:
+    # Catch any exception so we can propagate it
+    except:  # noqa: E722
         # FAILED. propagate the exception as a string
         succ = False
         out = traceback.format_exc()
