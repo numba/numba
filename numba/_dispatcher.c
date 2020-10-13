@@ -532,12 +532,12 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
     /* If compilation is enabled, ensure that an exact match is found and if
      * not compile one */
-    self->exact_match_required |= self->can_compile;
+    int exact_match_required = self->can_compile ? 1 : self->exact_match_required;
 
     /* We only allow unsafe conversions if compilation of new specializations
        has been disabled. */
     cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
-                               !self->can_compile, self->exact_match_required);
+                               !self->can_compile, exact_match_required);
 
     if (matches == 0 && !self->can_compile) {
         /*
@@ -554,7 +554,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
             /* Retry with the newly registered conversions */
             cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
                                        !self->can_compile,
-                                       self->exact_match_required);
+                                       exact_match_required);
         }
     }
 

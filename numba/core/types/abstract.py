@@ -464,6 +464,10 @@ class TypeRef(Dummy):
         self.instance_type = instance_type
         super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
 
+    @property
+    def key(self):
+        return self.instance_type
+
 
 class InitialValue(object):
     """
