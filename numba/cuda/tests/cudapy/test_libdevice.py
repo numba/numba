@@ -102,7 +102,7 @@ def make_test_call(libname):
     def _test_call_functions(self):
         # Strip off '__nv_' from libdevice name to get Python name
         apiname = libname[5:]
-        apifunc = getattr(libdevice, libname[5:])
+        apifunc = getattr(libdevice, apiname)
         retty, args = functions[libname]
         sig = create_signature(retty, args)
 
