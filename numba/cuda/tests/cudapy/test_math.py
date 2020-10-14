@@ -1,5 +1,5 @@
 import numpy as np
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
 from numba.np import numpy_support
 from numba import cuda, float32, float64, int32, vectorize, void, int64
 import math
@@ -543,6 +543,7 @@ class TestCudaMath(CUDATestCase):
         self.binary_template_int64(math_remainder, np.remainder, start=1)
         self.binary_template_uint64(math_remainder, np.remainder, start=1)
 
+    @skip_on_cudasim('math.remainder(0, 0) raises a ValueError on CUDASim')
     def test_math_remainder_0_0(self):
         @cuda.jit(void(float64[::1], int64, int64))
         def test_0_0(r, x, y):
