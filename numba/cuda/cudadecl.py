@@ -373,6 +373,9 @@ class CudaAtomicTemplate(AttributeTemplate):
     def resolve_sub(self, mod):
         return types.Function(Cuda_atomic_sub)
 
+    def resolve_and(self, mod):
+        return types.Function(Cuda_atomic_and)
+
     def resolve_max(self, mod):
         return types.Function(Cuda_atomic_max)
 
