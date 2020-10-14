@@ -832,40 +832,194 @@ error:
 }
 
 
-NUMBA_EXPORT_FUNC(void)
-numba_line_trace(const char *funcname, const char *filename, int lineno) {
 
+NUMBA_EXPORT_FUNC(int)
+trace_make_frame(const char *funcname, const char *filename, int lineno) {
+    PyObject *globals = NULL;
+    PyCodeObject *code = NULL;
+    PyFrameObject *frame = NULL;
+    PyThreadState *tstate = NULL;
+    int ret = -1; // error
+
+    PyGILState_STATE gil = PyGILState_Ensure();
+
+    static PyObject *cache_code = NULL;
+    PyObject* cache_key = NULL;
+    if (cache_code == NULL) {
+        cache_code = PyDict_New();
+    }
+    cache_key = Py_BuildValue("(ssi)", funcname, filename, lineno);
+    if (cache_key == NULL) goto cleanup;
+
+    code = PyDict_GetItem(cache_code, cache_key);
+    if ( code == NULL ) {
+        code = PyCode_NewEmpty(filename, funcname, lineno);
+        if (!code) goto cleanup;
+        PyDict_SetItem(cache_code, cache_key, code);
+    } else {
+        Py_INCREF(code);
+    }
+
+    globals = PyDict_New();
+    if (!globals) goto cleanup;
+    tstate = PyThreadState_Get();
+    frame = PyFrame_New(tstate, code, globals, NULL);
+    if (!frame) goto cleanup;
+    frame->f_lineno = lineno;
+    // Set frame to thread state
+    tstate->frame = frame;
+
+    ret = 0;
+
+cleanup:
+    Py_XDECREF(cache_key);
+    Py_XDECREF(globals);
+    Py_XDECREF(code);
+    PyGILState_Release(gil);
+    return ret;
+}
+
+
+NUMBA_EXPORT_FUNC(void)
+numba_profile_call(const char *funcname, const char *filename, int lineno) {
+    PyThreadState *tstate = NULL;
+    PyGILState_STATE gil = PyGILState_Ensure();
+
+    tstate = PyThreadState_Get();
+
+    if (!tstate->use_tracing || !tstate->c_profilefunc) goto cleanup;
+
+    if (trace_make_frame(funcname, filename, lineno)) goto cleanup;
+
+    ////
+    /* Reference: https://github.com/cython/cython/blob/a87f498d964f4b63a93aba79ed8c5f082fedaa4f/Cython/Utility/Profile.c#L194-L224
+    */
+    /*
+    XXX: there are many common functions in _dispatcher.c that can be refactored to reuse
+
+    NOTE: line-tracing (coverage) would work if the dispatcher calling C_TRACE with PyTrace_CALL
+    */
+    // printf("IS TRACING %s %s %d\n", filename, funcname, lineno);
+    tstate->tracing++;
+    // printf("tstate->tracing=%d  tstate->use_tracing=%d\n",
+    //         tstate->tracing, tstate->use_tracing);
+    tstate->use_tracing = 0;
+    tstate->c_profilefunc(tstate->c_profileobj, tstate->frame, PyTrace_CALL, NULL);
+    tstate->use_tracing = 1;
+    tstate->tracing--;
+    ////
+
+cleanup:
+
+    PyGILState_Release(gil);
+}
+
+
+NUMBA_EXPORT_FUNC(void)
+numba_profile_return(int lineno) {
+    PyThreadState *tstate = NULL;
+    PyObject *old_frame = NULL;
+    PyGILState_STATE gil = PyGILState_Ensure();
+
+    tstate = PyThreadState_Get();
+
+    if (!tstate->use_tracing || !tstate->c_profilefunc) goto cleanup;
+
+    tstate->frame->f_lineno = lineno;
+    ////
+    /* Reference: https://github.com/cython/cython/blob/a87f498d964f4b63a93aba79ed8c5f082fedaa4f/Cython/Utility/Profile.c#L194-L224
+    */
+    /*
+    XXX: there are many common functions in _dispatcher.c that can be refactored to reuse
+
+    NOTE: line-tracing (coverage) would work if the dispatcher calling C_TRACE with PyTrace_CALL
+    */
+    // printf("IS TRACING %s %s %d\n", filename, funcname, lineno);
+    tstate->tracing++;
+    // printf("tstate->tracing=%d  tstate->use_tracing=%d\n",
+    //         tstate->tracing, tstate->use_tracing);
+    tstate->use_tracing = 0;
+    tstate->c_profilefunc(tstate->c_profileobj, tstate->frame, PyTrace_RETURN, Py_None);
+    tstate->use_tracing = 1;
+    tstate->tracing--;
+
+    // pop frame
+    old_frame = tstate->frame;
+    tstate->frame = tstate->frame->f_back;
+    Py_XDECREF(old_frame);
+    ////
+
+cleanup:
+
+    PyGILState_Release(gil);
+}
+
+
+NUMBA_EXPORT_FUNC(void)
+call_trace(int action, const char *funcname, const char *filename, int lineno) {
+
+   static PyObject* cache = NULL;
    int ret;
 
     PyObject *globals = NULL;
     PyCodeObject *code = NULL;
     PyFrameObject *frame = NULL;
     PyThreadState *tstate = NULL;
-    PyObject *exc, *val, *tb;
+    PyObject *exc = NULL, *val = NULL, *tb = NULL;
+    PyObject *cache_key = NULL, *cache_entry=NULL;
 
     PyGILState_STATE gil = PyGILState_Ensure();
     /* Save and clear the current exception. Python functions must not be
        called with an exception set. Calling Python functions happens when
        the codec of the filesystem encoding is implemented in pure Python. */
-    PyErr_Fetch(&exc, &val, &tb);
-
-    globals = PyDict_New();
-    if (!globals)
-        goto error;
-    code = PyCode_NewEmpty(filename, funcname, lineno);
-    if (!code) {
-        goto error;
-    }
     tstate = PyThreadState_Get();
     if (!tstate) {
         goto error;
     }
-    frame = PyFrame_New(tstate, code, globals, NULL);
-    Py_DECREF(globals);
-    Py_DECREF(code);
-    if (!frame)
-        goto error;
-    frame->f_lineno = lineno;
+    if (!tstate->use_tracing) {
+        PyGILState_Release(gil);
+        return;
+    }
+    PyErr_Fetch(&exc, &val, &tb);
+
+    if (cache == NULL) {
+        cache = PyDict_New();
+    }
+
+    cache_key = Py_BuildValue("(ssi)", funcname, filename, lineno);
+    if ( cache_key == NULL ) {
+        return;
+    }
+
+    cache_entry = PyDict_GetItem(cache, cache_key);
+
+
+    if ( cache_entry == NULL ) {
+        globals = PyDict_New();
+        if (!globals)
+            goto error;
+        code = PyCode_NewEmpty(filename, funcname, lineno);
+        if (!code) {
+            goto error;
+        }
+        frame = PyFrame_New(tstate, code, globals, NULL);
+        Py_DECREF(globals);
+        Py_DECREF(code);
+        if (!frame)
+            goto error;
+        frame->f_lineno = lineno;
+        PyDict_SetItem(cache, cache_key, frame);
+
+        Py_DECREF(cache_key);
+    } else {
+        frame = cache_entry;
+        Py_INCREF(frame);
+    }
+
+    // if (action == PyTrace_CALL) {
+    //     tstate->frame = frame;
+    // }
+
 
     if (tstate->use_tracing && tstate->c_tracefunc){
         ////
@@ -881,7 +1035,7 @@ numba_line_trace(const char *funcname, const char *filename, int lineno) {
         // printf("tstate->tracing=%d  tstate->use_tracing=%d\n",
         //         tstate->tracing, tstate->use_tracing);
         tstate->use_tracing = 0;
-        ret = tstate->c_tracefunc(tstate->c_traceobj, frame, PyTrace_LINE, NULL);
+        ret = tstate->c_tracefunc(tstate->c_traceobj, frame, action, Py_None);
         tstate->use_tracing = 1;
         tstate->tracing--;
         // printf("ret=%d\n", ret);
@@ -903,7 +1057,7 @@ numba_line_trace(const char *funcname, const char *filename, int lineno) {
         // printf("tstate->tracing=%d  tstate->use_tracing=%d\n",
         //         tstate->tracing, tstate->use_tracing);
         tstate->use_tracing = 0;
-        ret = tstate->c_profilefunc(tstate->c_profileobj, frame, PyTrace_CALL, NULL);
+        ret = tstate->c_profilefunc(tstate->c_profileobj, frame, action, NULL);
         tstate->use_tracing = 1;
         tstate->tracing--;
         // printf("ret=%d\n", ret);
@@ -912,6 +1066,11 @@ numba_line_trace(const char *funcname, const char *filename, int lineno) {
 
         ////
     }
+
+    // if (action == PyTrace_RETURN) {
+    //     tstate->frame = frame->f_back;
+    // }
+
     PyErr_Restore(exc, val, tb);
     Py_DECREF(frame);
 
@@ -924,6 +1083,24 @@ error:
 
     PyGILState_Release(gil);
 }
+
+NUMBA_EXPORT_FUNC(void)
+numba_line_trace(const char *funcname, const char *filename, int lineno) {
+    call_trace(PyTrace_LINE, funcname, filename, lineno);
+}
+
+
+NUMBA_EXPORT_FUNC(void)
+numba_call_trace(const char *funcname, const char *filename, int lineno) {
+    call_trace(PyTrace_CALL, funcname, filename, lineno);
+}
+
+
+NUMBA_EXPORT_FUNC(void)
+numba_return_trace(const char *funcname, const char *filename, int lineno) {
+    call_trace(PyTrace_RETURN, funcname, filename, lineno);
+}
+
 
 
 /*

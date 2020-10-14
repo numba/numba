@@ -91,6 +91,10 @@ build_c_helpers_dict(void)
     declmethod(unpack_slice);
     declmethod(do_raise);
     declmethod(line_trace);
+    declmethod(call_trace);
+    declmethod(return_trace);
+    declmethod(profile_call);
+    declmethod(profile_return);
     declmethod(unpickle);
     declmethod(attempt_nocopy_reshape);
     declmethod(get_pyobject_private_data);

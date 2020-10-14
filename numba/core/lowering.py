@@ -89,12 +89,10 @@ class BaseLower(object):
                                        name=self.fndesc.qualname,
                                        loc=self.func_ir.loc)
 
-        loc = self.func_ir.loc
-        # if config.LINE_TRACE:
-        self._call_line_trace(
+        self._profile_call(
             self.fndesc.qualname,
-            loc.filename,
-            loc.line,
+            self.func_ir.loc.filename,
+            self.func_ir.loc.line,
         )
 
     def post_lower(self):
@@ -326,27 +324,53 @@ class Lower(BaseLower):
         except AttributeError:
             pass
 
-    def _call_line_trace(self, funcname, filename, lineno):
+    def _profile_call(self, funcname, filename, lineno):
         from llvmlite import ir
         fnty = ir.FunctionType(
             ir.VoidType(),
-            # []
             [cgutils.voidptr_t, cgutils.voidptr_t, cgutils.int32_t],
         )
-        fn = self.module.get_or_insert_function(fnty, name="numba_line_trace")
+        fn = self.module.get_or_insert_function(fnty, name="numba_profile_call")
 
         ll_funcname = self.context.insert_const_string(self.module, funcname)
         ll_filename = self.context.insert_const_string(self.module, filename)
-        self.builder.call(fn, [ll_filename, ll_funcname,
-                               cgutils.int32_t(lineno)])
+        self.builder.call(fn, [ll_funcname, ll_filename, cgutils.int32_t(lineno)])
+
+    def _profile_return(self, lineno):
+        from llvmlite import ir
+        fnty = ir.FunctionType(
+            ir.VoidType(), [cgutils.int32_t],
+        )
+        fn = self.module.get_or_insert_function(fnty, name="numba_profile_return")
+        self.builder.call(fn, [cgutils.int32_t(lineno)])
+
+    def _call_trace(self, tracename, funcname, filename, lineno):
+        from llvmlite import ir
+        fnty = ir.FunctionType(
+            ir.VoidType(),
+            [cgutils.voidptr_t, cgutils.voidptr_t, cgutils.int32_t],
+        )
+        fn = self.module.get_or_insert_function(fnty, name=tracename)
+
+        ll_funcname = self.context.insert_const_string(self.module, funcname)
+        ll_filename = self.context.insert_const_string(self.module, filename)
+        self.builder.call(fn, [ll_funcname, ll_filename, cgutils.int32_t(lineno)])
+
+    def _call_line_trace(self, funcname, filename, lineno):
+        self._call_trace("numba_line_trace", funcname, filename, lineno)
+
+    def _call_call_trace(self, funcname, filename, lineno):
+        self._call_trace("numba_call_trace", funcname, filename, lineno)
+
+    def _call_return_trace(self, funcname, filename, lineno):
+        self._call_trace("numba_return_trace", funcname, filename, lineno)
 
     def lower_inst(self, inst):
         # Set debug location for all subsequent LL instructions
         self.debuginfo.mark_location(self.builder, self.loc)
         if config.LINE_TRACE:
             self._call_line_trace(
-                # self.fndesc.mangled_name,
-                "foo",
+                self.fndesc.qualname,
                 self.loc.filename,
                 self.loc.line,
             )
@@ -372,6 +396,8 @@ class Lower(BaseLower):
             self.builder.branch(target)
 
         elif isinstance(inst, ir.Return):
+            self._profile_return(self.loc.line)
+
             if self.generator_info:
                 # StopIteration
                 self.genlower.return_from_generator(self)
