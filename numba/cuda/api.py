@@ -143,7 +143,7 @@ def managed_array(shape, dtype=np.float, strides=None, order='C', stream=0,
     npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
                        buffer=buffer)
     managedview = np.ndarray.view(npary, type=devicearray.ManagedNDArray)
-    managedview.device_setup(buffer, stream=stream)
+    managedview.device_setup(buffer, strides, stream=stream)
     return managedview
 
 
@@ -185,7 +185,7 @@ def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
     npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
                        buffer=buffer)
     mappedview = np.ndarray.view(npary, type=devicearray.MappedNDArray)
-    mappedview.device_setup(buffer, stream=stream)
+    mappedview.device_setup(buffer, strides, stream=stream)
     return mappedview
 
 

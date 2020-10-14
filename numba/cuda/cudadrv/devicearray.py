@@ -391,6 +391,28 @@ class DeviceNDArrayBase(object):
         # https://docs.scipy.org/doc/numpy/reference/generated/numpy.ndarray.nbytes.html
         return self.dtype.itemsize * self.size
 
+    def is_f_contiguous(self):
+        '''
+        Return true if the array is Fortran-contiguous.
+        '''
+        return self._dummy.is_f_contig
+
+    @property
+    def flags(self):
+        """
+        For `numpy.ndarray` compatibility. Ideally this would return a
+        `np.core.multiarray.flagsobj`, but that needs to be constructed
+        with an existing `numpy.ndarray` (as the C- and F- contiguous flags
+        aren't writeable).
+        """
+        return dict(self._dummy.flags)  # defensive copy
+
+    def is_c_contiguous(self):
+        '''
+        Return true if the array is C-contiguous.
+        '''
+        return self._dummy.is_c_contig
+
 
 class DeviceRecord(DeviceNDArrayBase):
     '''
@@ -469,27 +491,6 @@ class DeviceNDArray(DeviceNDArrayBase):
     '''
     An on-GPU array type
     '''
-    def is_f_contiguous(self):
-        '''
-        Return true if the array is Fortran-contiguous.
-        '''
-        return self._dummy.is_f_contig
-
-    @property
-    def flags(self):
-        """
-        For `numpy.ndarray` compatibility. Ideally this would return a
-        `np.core.multiarray.flagsobj`, but that needs to be constructed
-        with an existing `numpy.ndarray` (as the C- and F- contiguous flags
-        aren't writeable).
-        """
-        return dict(self._dummy.flags) # defensive copy
-
-    def is_c_contiguous(self):
-        '''
-        Return true if the array is C-contiguous.
-        '''
-        return self._dummy.is_c_contig
 
     def __array__(self, dtype=None):
         """
@@ -678,8 +679,10 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
     A host array that uses CUDA mapped memory.
     """
 
-    def device_setup(self, gpu_data, stream=0):
+    def device_setup(self, gpu_data, strides, stream=0):
         self.gpu_data = gpu_data
+        self.stream = stream
+        self._dummy = dummyarray.Array.from_desc(0, self.shape, strides, self.dtype.itemsize)
 
 
 class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
@@ -687,8 +690,10 @@ class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
     A host array that uses CUDA managed memory.
     """
 
-    def device_setup(self, gpu_data, stream=0):
+    def device_setup(self, gpu_data, strides, stream=0):
         self.gpu_data = gpu_data
+        self.stream = stream
+        self._dummy = dummyarray.Array.from_desc(0, self.shape, strides, self.dtype.itemsize)
 
 
 def from_array_like(ary, stream=0, gpu_data=None):
