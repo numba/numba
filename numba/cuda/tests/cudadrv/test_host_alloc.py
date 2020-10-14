@@ -45,6 +45,14 @@ class TestHostAlloc(ContextResettingTestCase):
         self.assertTrue(all(ary == 0))
         self.assertTrue(sum(ary != 0) == 0)
 
+    def test_views_mapped_managed(self):
+        for ary_samp in [x(2, dtype=np.int) for x in (cuda.mapped_array, cuda.pinned_array, cuda.device_array)]:
+            ary_samp[:] = 0
+            ary_v = ary_samp.view('u1')
+            ary_v[1] = 1
+            ary_v[5] = 1
+            self.assertTrue(sum(ary_samp) == 512)
+
     def test_host_operators(self):
         for ary in [cuda.mapped_array(10, dtype=np.uint32),
                     cuda.pinned_array(10, dtype=np.uint32)]:
