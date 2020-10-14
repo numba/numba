@@ -644,12 +644,15 @@ class _Kernel(serialize.ReduceMixin):
         for t, v in zip(self.argument_types, args):
             self._prepare_args(t, v, stream, retr, kernelargs)
 
-        # Configure kernel
-        cu_func = cufunc.configure(griddim, blockdim,
-                                   stream=stream,
-                                   sharedmem=sharedmem)
+        stream_handle = stream and stream.handle or None
+
         # Invoke kernel
-        cu_func(*kernelargs)
+        driver.launch_kernel(cufunc.handle,
+                             *griddim,
+                             *blockdim,
+                             sharedmem,
+                             stream_handle,
+                             kernelargs)
 
         if self.debug:
             driver.device_to_host(ctypes.addressof(excval), excmem, excsz)
@@ -867,9 +870,12 @@ class Dispatcher(serialize.ReduceMixin):
         '''
         Compile if necessary and invoke this kernel with *args*.
         '''
-        argtypes = tuple(
-            [self.typingctx.resolve_argument_type(a) for a in args])
-        kernel = self.compile(argtypes)
+        if self.specialized:
+            kernel = self.definition
+        else:
+            argtypes = tuple([self.typingctx.resolve_argument_type(a)
+                              for a in args])
+            kernel = self.compile(argtypes)
         kernel.launch(args, griddim, blockdim, stream, sharedmem)
 
     def specialize(self, *args):

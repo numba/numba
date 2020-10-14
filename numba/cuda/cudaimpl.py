@@ -7,7 +7,7 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
 from numba.core.imputils import Registry
-from numba.core.typing.npydecl import parse_dtype
+from numba.core.typing.npydecl import parse_dtype, signature
 from numba.core import types, cgutils
 from .cudadrv import nvvm
 from numba import cuda
@@ -245,8 +245,15 @@ def ptx_threadfence_device(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+@lower(stubs.syncwarp)
+def ptx_syncwarp(context, builder, sig, args):
+    mask = context.get_constant(types.int32, 0xFFFFFFFF)
+    mask_sig = signature(types.none, types.int32)
+    return ptx_syncwarp_mask(context, builder, mask_sig, [mask])
+
+
 @lower(stubs.syncwarp, types.i4)
-def ptx_warp_sync(context, builder, sig, args):
+def ptx_syncwarp_mask(context, builder, sig, args):
     fname = 'llvm.nvvm.bar.warp.sync'
     lmod = builder.module
     fnty = Type.function(Type.void(), (Type.int(32),))
@@ -468,15 +475,47 @@ def ptx_round(context, builder, sig, args):
     ])
 
 
-@lower(math.isinf, types.Integer)
-@lower(math.isnan, types.Integer)
-def math_isinf_isnan_int(context, builder, sig, args):
-    return lc.Constant.int(lc.Type.int(1), 0)
+# This rounding implementation follows the algorithm used in the "fallback
+# version" of double_round in CPython.
+# https://github.com/python/cpython/blob/a755410e054e1e2390de5830befc08fe80706c66/Objects/floatobject.c#L964-L1007
 
+@lower(round, types.f4, types.Integer)
+@lower(round, types.f8, types.Integer)
+def round_to_impl(context, builder, sig, args):
+    def round_ndigits(x, ndigits):
+        if math.isinf(x) or math.isnan(x):
+            return x
 
-@lower(math.isfinite, types.Integer)
-def math_isfinite_int(context, builder, sig, args):
-    return lc.Constant.int(lc.Type.int(1), 1)
+        if ndigits >= 0:
+            if ndigits > 22:
+                # pow1 and pow2 are each safe from overflow, but
+                # pow1*pow2 ~= pow(10.0, ndigits) might overflow.
+                pow1 = 10.0 ** (ndigits - 22)
+                pow2 = 1e22
+            else:
+                pow1 = 10.0 ** ndigits
+                pow2 = 1.0
+            y = (x * pow1) * pow2
+            if math.isinf(y):
+                return x
+
+        else:
+            pow1 = 10.0 ** (-ndigits)
+            y = x / pow1
+
+        z = round(y)
+        if (math.fabs(y - z) == 0.5):
+            # halfway between two integers; use round-half-even
+            z = 2.0 * round(y / 2.0)
+
+        if ndigits >= 0:
+            z = (z / pow2) / pow1
+        else:
+            z *= pow1
+
+        return z
+
+    return context.compile_internal(builder, round_ndigits, sig, args, )
 
 
 def gen_deg_rad(const):

@@ -353,8 +353,8 @@ class Lower(BaseLower):
                 # If returning an optional type
                 self.call_conv.return_optional_value(self.builder, ty, oty, val)
                 return
-            if ty != oty:
-                val = self.context.cast(self.builder, val, oty, ty)
+            assert ty == oty, (
+                "type '{}' does not match return type '{}'".format(oty, ty))
             retval = self.context.get_return_value(self.builder, ty, val)
             self.call_conv.return_value(self.builder, retval)
 

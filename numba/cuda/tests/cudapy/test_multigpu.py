@@ -17,7 +17,6 @@ class TestMultiGPUContext(CUDATestCase):
         def check(inp, out):
             np.testing.assert_equal(inp + 1, out)
 
-
         N = 32
         A = np.arange(N, dtype=np.float64)
         B = np.arange(N, dtype=np.float64)
@@ -61,7 +60,6 @@ class TestMultiGPUContext(CUDATestCase):
             else:
                 results[ridx] = np.all(arr == np.arange(10))
 
-
         dA = cuda.to_device(np.arange(10))
 
         nthreads = 10
@@ -81,7 +79,6 @@ class TestMultiGPUContext(CUDATestCase):
             else:
                 self.assertTrue(r)
 
-
     @unittest.skipIf(len(cuda.gpus) < 2, "need more than 1 gpus")
     def test_with_context(self):
 
@@ -90,7 +87,6 @@ class TestMultiGPUContext(CUDATestCase):
             i = cuda.grid(1)
             if i < arr.size:
                 arr[i] += val
-
 
         hostarr = np.arange(10, dtype=np.float32)
         with cuda.gpus[0]:

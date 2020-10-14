@@ -1,5 +1,6 @@
 import collections
 import typing as pt
+import warnings
 
 from llvmlite import ir
 from numba.core import utils
@@ -208,6 +209,26 @@ class Record(Type):
         from numba.np.numpy_support import as_struct_dtype
 
         return as_struct_dtype(self)
+
+    def can_convert_to(self, typingctx, other):
+        """
+        Convert this Record to the *other*.
+
+        This method only implements width subtyping for records.
+        """
+        from numba.core.errors import NumbaExperimentalFeatureWarning
+
+        if isinstance(other, Record):
+            if len(other.fields) > len(self.fields):
+                return
+            for other_fd, self_fd in zip(other.fields.items(),
+                                         self.fields.items()):
+                if not other_fd == self_fd:
+                    return
+            warnings.warn(f"{self} has been considered a subtype of {other} "
+                          f" This is an experimental feature.",
+                          category=NumbaExperimentalFeatureWarning)
+            return Conversion.safe
 
 
 class DType(DTypeSpec, Opaque):
@@ -514,6 +535,7 @@ class ArrayCTypes(Type):
         pointer.
         """
         from . import CPointer, voidptr
+
         # XXX what about readonly
         if isinstance(other, CPointer) and other.dtype == self.dtype:
             return Conversion.safe

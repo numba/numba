@@ -1,18 +1,18 @@
-from collections import OrderedDict
-from collections.abc import Sequence
-import types as pytypes
 import inspect
 import operator
+import types as pytypes
+import typing as pt
+from collections import OrderedDict
+from collections.abc import Sequence
 
 from llvmlite import ir as llvmir
-
-from numba.core import types, utils, errors, cgutils, imputils
-from numba.core.registry import cpu_target
 from numba import njit
-from numba.core.typing import templates
+from numba.core import cgutils, errors, imputils, types, utils
 from numba.core.datamodel import default_manager, models
+from numba.core.registry import cpu_target
+from numba.core.typing import templates
+from numba.core.typing.asnumbatype import as_numba_type
 from numba.experimental.jitclass import _box
-
 
 ##############################################################################
 # Data model
@@ -167,8 +167,16 @@ def register_class_type(cls, spec, class_ctor, builder):
     builder: the internal jitclass builder
     """
     # Normalize spec
-    if isinstance(spec, Sequence):
+    if spec is None:
+        spec = OrderedDict()
+    elif isinstance(spec, Sequence):
         spec = OrderedDict(spec)
+
+    # Extend spec with class annotations.
+    for attr, py_type in pt.get_type_hints(cls).items():
+        if attr not in spec:
+            spec[attr] = as_numba_type(py_type)
+
     _validate_spec(spec)
 
     # Fix up private attribute names
@@ -240,6 +248,7 @@ def register_class_type(cls, spec, class_ctor, builder):
     # Register class
     targetctx = cpu_target.target_context
     builder(class_type, typingctx, targetctx).register()
+    as_numba_type.register(cls, class_type.instance_type)
 
     return cls
 

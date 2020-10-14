@@ -25,7 +25,6 @@ class TestCUDAGufunc(CUDATestCase):
                     for k in range(n):
                         C[i, j] += A[i, k] * B[k, j]
 
-
         gufunc = matmulcore
         gufunc.max_blocksize = 512
 
@@ -293,8 +292,9 @@ class TestCUDAGufunc(CUDATestCase):
         inp = out = np.zeros(10, dtype=np.float32)
         with self.assertRaises(ValueError) as raises:
             foo(inp, out, out=out)
-        self.assertEqual(str(raises.exception),
-            "cannot specify 'out' as both a positional and keyword argument")
+
+        msg = "cannot specify 'out' as both a positional and keyword argument"
+        self.assertEqual(str(raises.exception), msg)
 
 
 if __name__ == '__main__':

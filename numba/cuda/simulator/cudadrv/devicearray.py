@@ -7,15 +7,9 @@ from warnings import warn
 
 import numpy as np
 
-from numba.core import types
-from numba.np import numpy_support
 
 DeviceRecord = None
 from_record_like = None
-
-
-def is_cuda_ndarray(obj):
-    return getattr(obj, '__cuda_ndarray__', False)
 
 
 errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
@@ -186,6 +180,47 @@ class FakeCUDAArray(object):
     def __len__(self):
         return len(self._ary)
 
+    # TODO: Add inplace, bitwise, unary magic methods
+    #  (or maybe inherit this class from numpy)?
+    def __eq__(self, other):
+        return FakeCUDAArray(self._ary == other)
+
+    def __ne__(self, other):
+        return FakeCUDAArray(self._ary != other)
+
+    def __lt__(self, other):
+        return FakeCUDAArray(self._ary < other)
+
+    def __le__(self, other):
+        return FakeCUDAArray(self._ary <= other)
+
+    def __gt__(self, other):
+        return FakeCUDAArray(self._ary > other)
+
+    def __ge__(self, other):
+        return FakeCUDAArray(self._ary >= other)
+
+    def __add__(self, other):
+        return FakeCUDAArray(self._ary + other)
+
+    def __sub__(self, other):
+        return FakeCUDAArray(self._ary - other)
+
+    def __mul__(self, other):
+        return FakeCUDAArray(self._ary * other)
+
+    def __floordiv__(self, other):
+        return FakeCUDAArray(self._ary // other)
+
+    def __truediv__(self, other):
+        return FakeCUDAArray(self._ary / other)
+
+    def __mod__(self, other):
+        return FakeCUDAArray(self._ary % other)
+
+    def __pow__(self, other):
+        return FakeCUDAArray(self._ary ** other)
+
     def split(self, section, stream=0):
         return [
             FakeCUDAArray(a)
@@ -268,7 +303,18 @@ def pinned(arg):
     yield
 
 
+def mapped_array(*args, **kwargs):
+    for unused_arg in ('portable', 'wc'):
+        if unused_arg in kwargs:
+            kwargs.pop(unused_arg)
+    return device_array(*args, **kwargs)
+
+
 def pinned_array(shape, dtype=np.float, strides=None, order='C'):
+    return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
+
+
+def managed_array(shape, dtype=np.float, strides=None, order='C'):
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order)
 
 
@@ -295,7 +341,7 @@ def _contiguous_strides_like_array(ary):
     # Stride permutation. E.g. a stride array (4, -2, 12) becomes
     # [(1, -2), (0, 4), (2, 12)]
     strideperm = [ x for x in enumerate(ary.strides) ]
-    strideperm.sort(key = lambda x: x[1])
+    strideperm.sort(key=lambda x: x[1])
 
     # Compute new strides using permutation
     strides = [0] * len(ary.strides)
@@ -319,11 +365,13 @@ def device_array_like(ary, stream=0):
     return device_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
                         order=order)
 
+
 def pinned_array_like(ary):
     strides = _contiguous_strides_like_array(ary)
     order = _order_like_array(ary)
     return pinned_array(shape=ary.shape, dtype=ary.dtype, strides=strides,
                         order=order)
+
 
 def auto_device(ary, stream=0, copy=True):
     if isinstance(ary, FakeCUDAArray):
