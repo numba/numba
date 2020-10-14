@@ -13,7 +13,7 @@ import versioneer
 min_python_version = "3.6"
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
-min_llvmlite_version = "0.35.0.dev0"
+min_llvmlite_version = "0.34"
 max_llvmlite_version = "0.36"
 
 if sys.platform.startswith('linux'):
