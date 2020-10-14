@@ -88,6 +88,7 @@ Performance Enhancements:
 * PR #6202: Speed up str(int) (Stuart Archibald)
 * PR #6261: Add np.ndarray.ptp() support. (Stuart Archibald)
 * PR #6266: Use custom LLVM refcount pruning pass (Siu Kwan Lam)
+* PR #6275: Switch on SLP vectorize. (Stuart Archibald)
 * PR #6278: Improve typed list performance. (Stuart Archibald)
 * PR #6335: Split optimisation passes. (Stuart Archibald)
 
@@ -130,6 +131,7 @@ Fixes:
   (Stuart Archibald)
 * PR #6316: Make IR inliner tests not self mutating. (Stuart Archibald)
 * PR #6318: PR #5892 continued (Todd A. Anderson, via Stuart Archibald)
+* PR #6319: Permit switching off boundschecking when debug is on. (Stuart Archibald)
 * PR #6324: PR 6208 continued (Ivan Butygin and Stuart Archibald)
 * PR #6337: Implements ``key`` on ``types.TypeRef`` (Andreas Sodeur)
 * PR #6354: Bump llvmlite to 0.35. series. (Stuart Archibald)
