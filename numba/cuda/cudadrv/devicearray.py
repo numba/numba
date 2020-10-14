@@ -63,7 +63,7 @@ class DeviceNDArrayBase(object):
     __cuda_ndarray__ = True     # There must be gpu_data attribute
 
     def __init__(self, shape, strides, dtype, stream=0, writeback=None,
-                 gpu_data=None, *, alloc=True):
+                 gpu_data=None):
         """
         Args
         ----
@@ -86,55 +86,33 @@ class DeviceNDArrayBase(object):
         if isinstance(strides, int):
             strides = (strides,)
         dtype = np.dtype(dtype)
+        self.ndim = len(shape)
+        if len(strides) != self.ndim:
+            raise ValueError('strides not match ndim')
         self._dummy = dummyarray.Array.from_desc(0, shape, strides,
                                                  dtype.itemsize)
         self.shape = tuple(shape)
         self.strides = tuple(strides)
         self.dtype = dtype
+        self.size = int(functools.reduce(operator.mul, self.shape, 1))
         # prepare gpu memory
-        if alloc:
-            self.size = int(functools.reduce(operator.mul, self.shape, 1))
-            self.ndim = len(shape)
-            if len(strides) != self.ndim:
-                raise ValueError('strides not match ndim')
-            if self.size > 0:
-                if gpu_data is None:
-                    self.alloc_size = _driver.memory_size_from_info(
-                        self.shape, self.strides, self.dtype.itemsize)
-                    gpu_data = devices.get_context().memalloc(self.alloc_size)
-                else:
-                    self.alloc_size = _driver.device_memory_size(gpu_data)
+        if self.size > 0:
+            if gpu_data is None:
+                self.alloc_size = _driver.memory_size_from_info(
+                    self.shape, self.strides, self.dtype.itemsize)
+                gpu_data = devices.get_context().memalloc(self.alloc_size)
             else:
-                # Make NULL pointer for empty allocation
-                gpu_data = _driver.MemoryPointer(context=devices.get_context(),
-                                                 pointer=c_void_p(0), size=0)
-                self.alloc_size = 0
-            self.__writeback = writeback    # should deprecate the use of this
+                self.alloc_size = _driver.device_memory_size(gpu_data)
+        else:
+            # Make NULL pointer for empty allocation
+            gpu_data = _driver.MemoryPointer(context=devices.get_context(),
+                                             pointer=c_void_p(0), size=0)
+            self.alloc_size = 0
 
         self.gpu_data = gpu_data
+
+        self.__writeback = writeback    # should deprecate the use of this
         self.stream = stream
-
-    def is_f_contiguous(self):
-        '''
-        Return true if the array is Fortran-contiguous.
-        '''
-        return self._dummy.is_f_contig
-
-    @property
-    def flags(self):
-        """
-        For `numpy.ndarray` compatibility. Ideally this would return a
-        `np.core.multiarray.flagsobj`, but that needs to be constructed
-        with an existing `numpy.ndarray` (as the C- and F- contiguous flags
-        aren't writeable).
-        """
-        return dict(self._dummy.flags) # defensive copy
-
-    def is_c_contiguous(self):
-        '''
-        Return true if the array is C-contiguous.
-        '''
-        return self._dummy.is_c_contig
 
     @property
     def __cuda_array_interface__(self):
@@ -491,6 +469,27 @@ class DeviceNDArray(DeviceNDArrayBase):
     '''
     An on-GPU array type
     '''
+    def is_f_contiguous(self):
+        '''
+        Return true if the array is Fortran-contiguous.
+        '''
+        return self._dummy.is_f_contig
+
+    @property
+    def flags(self):
+        """
+        For `numpy.ndarray` compatibility. Ideally this would return a
+        `np.core.multiarray.flagsobj`, but that needs to be constructed
+        with an existing `numpy.ndarray` (as the C- and F- contiguous flags
+        aren't writeable).
+        """
+        return dict(self._dummy.flags) # defensive copy
+
+    def is_c_contiguous(self):
+        '''
+        Return true if the array is C-contiguous.
+        '''
+        return self._dummy.is_c_contig
 
     def __array__(self, dtype=None):
         """
@@ -679,8 +678,8 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
     A host array that uses CUDA mapped memory.
     """
 
-    def device_setup(self, shape, strides, dtype, stream, gpu_data):
-        super(DeviceNDArrayBase, self).__init__(shape, strides, dtype, stream, gpu_data)
+    def device_setup(self, gpu_data, stream=0):
+        self.gpu_data = gpu_data
 
 
 class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
@@ -688,8 +687,9 @@ class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
     A host array that uses CUDA managed memory.
     """
 
-    def device_setup(self, shape, strides, dtype, stream, gpu_data):
-        super(DeviceNDArrayBase, self).__init__(shape, strides, dtype, stream, gpu_data)
+    def device_setup(self, gpu_data, stream=0):
+        self.gpu_data = gpu_data
+
 
 def from_array_like(ary, stream=0, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
