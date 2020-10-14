@@ -80,7 +80,7 @@ def jit(func_or_sig=None, device=False, debug=False, argtypes=None,
         boundscheck=None,
         ):
     # Here for API compatibility
-    if boundscheck or (debug and boundscheck is None):
+    if boundscheck:
         raise NotImplementedError("bounds checking is not supported for CUDA")
 
     if link is not None:
