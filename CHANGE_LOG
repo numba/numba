@@ -60,7 +60,7 @@ Deprecations to note:
 
 There are no new deprecations. However, note that "compatibility" mode, which
 was added some 40 releases ago to help transition from 0.11 to 0.12+, has been
-removed! Also the shim to permit the import of ``jitclass`` from Numba's top
+removed! Also, the shim to permit the import of ``jitclass`` from Numba's top
 level namespace has now been removed as per the deprecation schedule.
 
 General Enhancements:
