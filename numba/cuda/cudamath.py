@@ -85,6 +85,7 @@ class Math_remainder(ConcreteTemplate):
         signature(types.float64, types.float64, types.float64),
     ]
 
+
 @infer_global(math.pow)
 class Math_pow(ConcreteTemplate):
     cases = [

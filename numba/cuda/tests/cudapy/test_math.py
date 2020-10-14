@@ -507,7 +507,7 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_int64(math_log, np.log, start=1)
         self.unary_template_uint64(math_log, np.log, start=1)
 
-    #------------------------------------------------------------------------------
+    #---------------------------------------------------------------------------
     # test_math_log2
 
     def test_math_log2(self):
@@ -531,8 +531,8 @@ class TestCudaMath(CUDATestCase):
         self.unary_template_float64(math_log1p, np.log1p)
         self.unary_template_int64(math_log1p, np.log1p)
         self.unary_template_uint64(math_log1p, np.log1p)
-    
-    #------------------------------------------------------------------------------
+
+    #---------------------------------------------------------------------------
     # test_math_remainder
 
     def test_math_remainder(self):
