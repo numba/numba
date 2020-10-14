@@ -682,7 +682,10 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
     def device_setup(self, gpu_data, strides, stream=0):
         self.gpu_data = gpu_data
         self.stream = stream
-        self._dummy = dummyarray.Array.from_desc(0, self.shape, strides, self.dtype.itemsize)
+        self._dummy = dummyarray.Array.from_desc(0,
+                                                 self.shape,
+                                                 strides,
+                                                 self.dtype.itemsize)
 
 
 class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
@@ -693,7 +696,10 @@ class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
     def device_setup(self, gpu_data, strides, stream=0):
         self.gpu_data = gpu_data
         self.stream = stream
-        self._dummy = dummyarray.Array.from_desc(0, self.shape, strides, self.dtype.itemsize)
+        self._dummy = dummyarray.Array.from_desc(0,
+                                                 self.shape,
+                                                 strides,
+                                                 self.dtype.itemsize)
 
 
 def from_array_like(ary, stream=0, gpu_data=None):
