@@ -79,8 +79,6 @@ class Math_binary(ConcreteTemplate):
 @infer_global(math.remainder)
 class Math_remainder(ConcreteTemplate):
     cases = [
-        signature(types.float32, types.int32, types.int32),
-        signature(types.float64, types.int64, types.int64),
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
     ]

@@ -1,7 +1,7 @@
 import numpy as np
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.np import numpy_support
-from numba import cuda, float32, float64, int32, vectorize
+from numba import cuda, float32, float64, int32, vectorize, void, int64
 import math
 
 
@@ -513,6 +513,8 @@ class TestCudaMath(CUDATestCase):
     def test_math_log2(self):
         self.unary_template_float32(math_log2, np.log2, start=1)
         self.unary_template_float64(math_log2, np.log2, start=1)
+        self.unary_template_int64(math_log2, np.log2, start=1)
+        self.unary_template_uint64(math_log2, np.log2, start=1)
 
     #---------------------------------------------------------------------------
     # test_math_log10
@@ -538,6 +540,16 @@ class TestCudaMath(CUDATestCase):
     def test_math_remainder(self):
         self.binary_template_float32(math_remainder, np.remainder, start=1e-11)
         self.binary_template_float64(math_remainder, np.remainder, start=1e-11)
+        self.binary_template_int64(math_remainder, np.remainder, start=1)
+        self.binary_template_uint64(math_remainder, np.remainder, start=1)
+
+    def test_math_remainder_0_0(self):
+        @cuda.jit(void(float64[::1], int64, int64))
+        def test_0_0(r, x, y):
+            r[0] = math.remainder(x, y)
+        r = np.zeros(1, np.float64)
+        test_0_0[1, 1](r, 0, 0)
+        self.assertTrue(np.isnan(r[0]))
 
     #---------------------------------------------------------------------------
     # test_math_sqrt
