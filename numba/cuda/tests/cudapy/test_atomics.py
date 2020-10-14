@@ -192,6 +192,9 @@ def atomic_sub_double_global_3(ary):
     atomic_binary_2dim_shared(ary, 1.0, float64, (4, 8),
                               cuda.atomic.sub, atomic_cast_to_uint64)
 
+def atomic_and(ary):
+    atomic_binary_1dim_shared(ary, ary, 1, uint32, 32,
+                              cuda.atomic.atomic_and, atomic_cast_none, 0)
 
 def gen_atomic_extreme_funcs(func):
 
@@ -486,6 +489,18 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func = cuda.jit('void(float64[:,:])')(atomic_sub_double_global_3)
         cuda_func[1, (4, 8)](ary)
         np.testing.assert_equal(ary, orig - 1)
+
+    def test_atomic_and(self):
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32)
+        orig = ary.copy()
+        cuda_func = cuda.jit('void(uint32[:])')(atomic_and)
+        cuda_func[1, 32](ary)
+
+        gold = np.zeros(32, dtype=np.uint32)
+        for i in range(orig.size):
+            gold[orig[i]] &= 1
+
+        self.assertTrue(np.all(ary == gold))
 
     def check_atomic_max(self, dtype, lo, hi):
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)

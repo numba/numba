@@ -300,12 +300,16 @@ all_numba_types = (types.float64, types.float32,
                    types.int32, types.uint32,
                    types.int64, types.uint64)
 
+integer_numba_types = (types.int32, types.uint32,
+                       types.int64, types.uint64)
+
 Cuda_atomic_add = _gen(cuda.atomic.add, all_numba_types)
 Cuda_atomic_sub = _gen(cuda.atomic.sub, all_numba_types)
 Cuda_atomic_max = _gen(cuda.atomic.max, all_numba_types)
 Cuda_atomic_min = _gen(cuda.atomic.min, all_numba_types)
 Cuda_atomic_nanmax = _gen(cuda.atomic.nanmax, all_numba_types)
 Cuda_atomic_nanmin = _gen(cuda.atomic.nanmin, all_numba_types)
+Cuda_atomic_and = _gen(cuda.atomic.atomic_and, integer_numba_types)
 
 
 @register
