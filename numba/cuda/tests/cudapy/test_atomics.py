@@ -6,8 +6,11 @@ from numba import cuda, uint32, uint64, float32, float64
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.core import config
 
-random.seed(0)
-numpy.seed(0)
+ATOMICS_TEST_PY_RANDOM_SEED = 0
+ATOMICS_TEST_NUMPY_RANDOM_SEED = 0
+
+random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
+numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
 
 def cc_X_or_above(major, minor):
     if not config.ENABLE_CUDASIM:
