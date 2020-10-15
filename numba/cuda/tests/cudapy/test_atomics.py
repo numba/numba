@@ -253,7 +253,7 @@ def atomic_compare_and_swap(res, old, ary):
 class TestCudaAtomics(CUDATestCase):
     def test_atomic_add(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
         orig = ary.copy()
@@ -268,7 +268,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_add2(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
@@ -968,7 +968,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_nanmin_double_oneindex(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(0, 128, size=32).astype(np.float64)
         vals[1::2] = np.nan
