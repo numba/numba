@@ -170,7 +170,7 @@ def first_class_function_mul(x):
 
 @jit(cache=True)
 def first_class_function_add(x):
-    return x * x
+    return x + x
 
 
 @jit(cache=True)
