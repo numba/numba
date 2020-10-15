@@ -175,6 +175,16 @@ Synchronization and Atomic Operations
     Returns the value of ``array[idx]`` before the storing the new value.
     Behaves like an atomic load.
 
+.. function:: numba.cuda.atomic.sub(array, idx, value)
+
+    Perform ``array[idx] -= value``. Supports int32, int64, float32 and
+    float64 only. The ``idx`` argument can be an integer or a tuple of integer
+    indices for indexing into multi-dimensional arrays. The number of elements
+    in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
 .. function:: numba.cuda.atomic.max(array, idx, value)
 
     Perform ``array[idx] = max(array[idx], value)``. Support int32, int64,
@@ -241,10 +251,10 @@ are guaranteed to not move across the memory fences by optimization passes.
 Warp Intrinsics
 ~~~~~~~~~~~~~~~~~~
 
-All warp level operations require at least CUDA 9. The argument ``membermask`` is
-a 32 bit integer mask with each bit corresponding to a thread in the warp, with 1
-meaning the thread is in the subset of threads within the function call. The
-``membermask`` must be all 1 if the GPU compute capability is below 7.x.
+The argument ``membermask`` is a 32 bit integer mask with each bit
+corresponding to a thread in the warp, with 1 meaning the thread is in the
+subset of threads within the function call. The ``membermask`` must be all 1 if
+the GPU compute capability is below 7.x.
 
 .. function:: numba.cuda.syncwarp(membermask)
 

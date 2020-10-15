@@ -6,9 +6,11 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 from llvmlite import ir
 
+from numba import roc
 from numba.core.imputils import Registry
 from numba.core import types, cgutils
 from numba.core.itanium_mangler import mangle_c, mangle, mangle_type
+from numba.core.typing.npydecl import parse_dtype
 from numba.roc import target
 from numba.roc import stubs
 from numba.roc import hlc
@@ -234,9 +236,20 @@ def hsail_atomic_add_tuple(context, builder, sig, args):
     return builder.atomic_rmw("add", ptr, val, ordering='monotonic')
 
 
-@lower('hsail.smem.alloc', types.UniTuple, types.Any)
-def hsail_smem_alloc_array(context, builder, sig, args):
-    shape, dtype = args
+@lower(roc.shared.array, types.IntegerLiteral, types.Any)
+def hsail_smem_alloc_array_integer(context, builder, sig, args):
+    length = sig.args[0].literal_value
+    dtype = parse_dtype(sig.args[1])
+    return _generic_array(context, builder, shape=(length,), dtype=dtype,
+                          symbol_name='_hsapy_smem',
+                          addrspace=target.SPIR_LOCAL_ADDRSPACE)
+
+
+@lower(roc.shared.array, types.Tuple, types.Any)
+@lower(roc.shared.array, types.UniTuple, types.Any)
+def hsail_smem_alloc_array_tuple(context, builder, sig, args):
+    shape = [ s.literal_value for s in sig.args[0] ]
+    dtype = parse_dtype(sig.args[1])
     return _generic_array(context, builder, shape=shape, dtype=dtype,
                           symbol_name='_hsapy_smem',
                           addrspace=target.SPIR_LOCAL_ADDRSPACE)

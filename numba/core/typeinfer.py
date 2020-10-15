@@ -1214,6 +1214,9 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
                 raise e
             else:
                 retty = None
+        else:
+            typdict = utils.UniqueDict(
+                typdict, **{v.name: retty for v in self._get_return_vars()})
 
         try:
             fntys = self.get_function_types(typdict)
@@ -1481,8 +1484,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         """
         Ensure that builtins are not modified.
         """
-        if (gvar.name in ('range', 'xrange') and
-                gvar.value not in utils.RANGE_ITER_OBJECTS):
+        if gvar.name == 'range' and gvar.value is not range:
             bad = True
         elif gvar.name == 'slice' and gvar.value is not slice:
             bad = True
@@ -1604,12 +1606,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
-            if isinstance(expr.func, ir.Intrinsic):
-                sig = expr.func.type
-                self.add_type(target.name, sig.return_type, loc=inst.loc)
-                self.add_calltype(expr, sig)
-            else:
-                self.typeof_call(inst, target, expr)
+            self.typeof_call(inst, target, expr)
         elif expr.op in ('getiter', 'iternext'):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'exhaust_iter':

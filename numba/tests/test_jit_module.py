@@ -156,7 +156,7 @@ jit_module({jit_options})
             # Test that manual jit-wrapping overrides jit_module options
             self.assertEqual(test_module.inc.targetoptions,
                              {'nogil': True, 'forceobj': True,
-                              'boundscheck': False})
+                              'boundscheck': None})
 
     def test_jit_module_logging_output(self):
         logger = logging.getLogger('numba.core.decorators')

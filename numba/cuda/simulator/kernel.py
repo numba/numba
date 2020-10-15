@@ -5,8 +5,7 @@ import threading
 
 import numpy as np
 
-from .cudadrv.devicearray import to_device, auto_device, \
-    FakeCUDAArray, FakeWithinKernelCUDAArray
+from .cudadrv.devicearray import FakeCUDAArray, FakeWithinKernelCUDAArray
 from .kernelapi import Dim3, FakeCUDAModule, swapped_cuda_module
 from ..errors import normalize_kernel_dimensions
 from ..args import wrap_arg, ArgHint
@@ -119,7 +118,6 @@ class FakeCUDAKernel(object):
     def bind(self):
         pass
 
-
     def specialize(self, *args):
         return self
 
@@ -132,8 +130,8 @@ class FakeCUDAKernel(object):
     @property
     def ptx(self):
         '''
-        Required in order to proceed through some tests, but serves no functional
-        purpose.
+        Required in order to proceed through some tests, but serves no
+        functional purpose.
         '''
         res = '.const'
         res += '\n.local'
@@ -142,10 +140,7 @@ class FakeCUDAKernel(object):
         return res
 
 
-
-
 # Thread emulation
-
 
 class BlockThread(threading.Thread):
     '''
@@ -162,7 +157,9 @@ class BlockThread(threading.Thread):
         self.daemon = True
         self.abort = False
         blockDim = Dim3(*self._manager._block_dim)
-        self.thread_id = self.threadIdx.x + blockDim.x * (self.threadIdx.y + blockDim.y * self.threadIdx.z)
+        self.thread_id = self.threadIdx.x + (blockDim.x * (self.threadIdx.y +
+                                                           blockDim.y *
+                                                           self.threadIdx.z))
 
     def run(self):
         try:
@@ -192,21 +189,24 @@ class BlockThread(threading.Thread):
             raise RuntimeError("abort flag set on syncthreads clear")
 
     def syncthreads_count(self, value):
-        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        idx = self.threadIdx.x, self.threadIdx.y, self.threadIdx.z
+        self._manager.block_state[idx] = value
         self.syncthreads()
         count = np.count_nonzero(self._manager.block_state)
         self.syncthreads()
         return count
 
     def syncthreads_and(self, value):
-        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        idx = self.threadIdx.x, self.threadIdx.y, self.threadIdx.z
+        self._manager.block_state[idx] = value
         self.syncthreads()
         test = np.all(self._manager.block_state)
         self.syncthreads()
         return 1 if test else 0
 
     def syncthreads_or(self, value):
-        self._manager.block_state[self.threadIdx.x, self.threadIdx.y, self.threadIdx.z] = value
+        idx = self.threadIdx.x, self.threadIdx.y, self.threadIdx.z
+        self._manager.block_state[idx] = value
         self.syncthreads()
         test = np.any(self._manager.block_state)
         self.syncthreads()
