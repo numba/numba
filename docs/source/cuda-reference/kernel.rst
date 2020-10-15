@@ -185,12 +185,12 @@ Synchronization and Atomic Operations
     Returns the value of ``array[idx]`` before the storing the new value.
     Behaves like an atomic load.
 
-.. function:: numba.cuda.atomic.atomic_and(array, idx, value)
+.. function:: numba.cuda.atomic.and_(array, idx, value)
 
-    Perform ``array[idx] &= value``. Supports int32, uint32, int64,  and uint64 only.
-    The ``idx`` argument can be an integer or a tuple of integer
-    indices for indexing into multi-dimensional arrays. The number of elements
-    in ``idx`` must match the number of dimensions of ``array``.
+    Perform ``array[idx] &= value``. Supports int32, uint32, int64,
+    and uint64 only. The ``idx`` argument can be an integer or a tuple of
+    integer indices for indexing into multi-dimensional arrays. The number
+    of elements in ``idx`` must match the number of dimensions of ``array``.
 
     Returns the value of ``array[idx]`` before the storing the new value.
     Behaves like an atomic load.

@@ -5,10 +5,6 @@ from textwrap import dedent
 from numba import cuda, uint32, uint64, float32, float64
 from numba.cuda.testing import unittest, CUDATestCase
 from numba.core import config
-from random import seed
-from random import randint
-
-seed()
 
 
 def cc_X_or_above(major, minor):
@@ -199,25 +195,25 @@ def atomic_sub_double_global_3(ary):
 
 def atomic_and(ary, op2):
     atomic_binary_1dim_shared(ary, ary, op2, uint32, 32,
-                              cuda.atomic.atomic_and, atomic_cast_none, 0)
+                              cuda.atomic.and_, atomic_cast_none, 0)
 
 
 def atomic_and2(ary, op2):
     atomic_binary_2dim_shared(ary, op2, uint32, (4, 8),
-                              cuda.atomic.atomic_and, atomic_cast_none)
+                              cuda.atomic.and_, atomic_cast_none)
 
 
 def atomic_and3(ary, op2):
     atomic_binary_2dim_shared(ary, op2, uint32, (4, 8),
-                              cuda.atomic.atomic_and, atomic_cast_to_uint64)
+                              cuda.atomic.and_, atomic_cast_to_uint64)
 
 
 def atomic_and_global(idx, ary, op2):
-    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.atomic_and)
+    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.and_)
 
 
 def atomic_and_global_2(ary, op2):
-    atomic_binary_2dim_global(ary, op2, cuda.atomic.atomic_and,
+    atomic_binary_2dim_global(ary, op2, cuda.atomic.and_,
                               atomic_cast_none)
 
 
@@ -277,6 +273,9 @@ def atomic_compare_and_swap(res, old, ary):
 
 
 class TestCudaAtomics(CUDATestCase):
+    def setUp(self):
+        np.random.seed(0)
+
     def test_atomic_add(self):
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
         orig = ary.copy()
@@ -516,10 +515,9 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_equal(ary, orig - 1)
 
     def test_atomic_and(self):
-        rand_const = randint(0, 500)
+        rand_const = np.random.randint(500)
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
         orig = ary.copy()
-        #cuda_func = cuda.jit('void(uint32[:])')(atomic_and)
         cuda_func = cuda.jit('void(uint32[:], uint32)')(atomic_and)
         cuda_func[1, 32](ary, rand_const)
 
@@ -530,7 +528,7 @@ class TestCudaAtomics(CUDATestCase):
         self.assertTrue(np.all(ary == gold))
 
     def test_atomic_and2(self):
-        rand_const = randint(0, 500)
+        rand_const = np.random.randint(500)
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
         cuda_atomic_and2 = cuda.jit('void(uint32[:,:], uint32)')(atomic_and2)
@@ -538,7 +536,7 @@ class TestCudaAtomics(CUDATestCase):
         self.assertTrue(np.all(ary == orig & rand_const))
 
     def test_atomic_and3(self):
-        rand_const = randint(0, 500)
+        rand_const = np.random.randint(500)
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
         cuda_atomic_and3 = cuda.jit('void(uint32[:,:], uint32)')(atomic_and3)
@@ -546,7 +544,7 @@ class TestCudaAtomics(CUDATestCase):
         self.assertTrue(np.all(ary == orig & rand_const))
 
     def test_atomic_and_global(self):
-        rand_const = randint(0, 500)
+        rand_const = np.random.randint(500)
         idx = np.random.randint(0, 32, size=32, dtype=np.int32)
         ary = np.zeros(32, np.int32)
         sig = 'void(int32[:], int32[:], int32)'
@@ -560,7 +558,7 @@ class TestCudaAtomics(CUDATestCase):
         np.testing.assert_equal(ary, gold)
 
     def test_atomic_and_global_2(self):
-        rand_const = randint(0, 500)
+        rand_const = np.random.randint(500)
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
         cuda_func = cuda.jit('void(uint32[:,:], uint32)')(atomic_and_global_2)
