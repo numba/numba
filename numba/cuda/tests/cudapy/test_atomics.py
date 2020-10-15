@@ -594,7 +594,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_max_double_normalizedindex(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(0, 65535, size=(32, 32)).astype(np.float64)
         res = np.zeros(1, np.float64)
@@ -906,7 +906,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_nanmax_double_oneindex(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(0, 128, size=32).astype(np.float64)
         vals[1::2] = np.nan
