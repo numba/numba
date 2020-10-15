@@ -2700,6 +2700,7 @@ class TestParforsVectorizer(TestPrangeBase):
     match_vsqrtpd_on_zmm = re.compile('\n\s+vsqrtpd\s+.*zmm.*\n')
 
     @linux_only
+    @unittest.skipIf(config.USING_SVML, "SVML uses 256bit registers")
     def test_vectorizer_fastmath_asm(self):
         """ This checks that if fastmath is set and the underlying hardware
         is suitable, and the function supplied is amenable to fastmath based
@@ -2743,6 +2744,7 @@ class TestParforsVectorizer(TestPrangeBase):
             self.assertTrue('zmm' not in v)
 
     @linux_only
+    @unittest.skipIf(config.USING_SVML, "SVML uses 256bit registers")
     def test_unsigned_refusal_to_vectorize(self):
         """ This checks that if fastmath is set and the underlying hardware
         is suitable, and the function supplied is amenable to fastmath based
