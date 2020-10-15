@@ -1552,14 +1552,14 @@ def numpy_swapaxes(a, axis1, axis2):
     if isinstance(axis1, types.LiteralInteger):
         axis1_val = axis1.literal_value
     elif not isinstance(axis1, types.Integer):
-        raise TypingError('axis1 must be an integer')
+        raise errors.TypingError('axis1 must be an integer')
     else:
         return force_literal
 
     if isinstance(axis2, types.LiteralInteger):
         axis2_val = axis2.literal_value
     elif not isinstance(axis2, types.Integer):
-        raise TypingError('axis2 must be an integer')
+        raise errors.TypingError('axis2 must be an integer')
     else:
         return force_literal
 
