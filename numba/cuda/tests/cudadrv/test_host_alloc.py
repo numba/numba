@@ -48,7 +48,9 @@ class TestHostAlloc(ContextResettingTestCase):
     def test_views_arrays(self):
         for ary_samp in [x(2, dtype=np.uint32)
                          for x in
-                         (cuda.mapped_array, cuda.pinned_array)]:
+                         (cuda.mapped_array,
+                          cuda.pinned_array,
+                          cuda.device_array)]:
             ary_samp[:] = 0
             ary_v = ary_samp.view('u1')
             ary_v[1] = 1
