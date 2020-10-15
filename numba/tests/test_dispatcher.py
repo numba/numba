@@ -1266,6 +1266,13 @@ class TestCache(BaseCacheUsecasesTest):
             self.assertPreciseEqual(f(3), 12) # 3 + 9 = 12
             self.check_pycache(5) # 1 nbi, 4 nbc
 
+    def test_first_class_function(self):
+        mod = self.import_module()
+        f = mod.first_class_function_usecase
+        assert f(mod.first_class_function_mul, 10) == 100
+        assert f(mod.first_class_function_add, 10) == 20
+        self.check_pycache(2)
+
     def test_cache_reuse(self):
         mod = self.import_module()
         mod.add_usecase(2, 3)
