@@ -43,7 +43,7 @@ class TestManagedAlloc(ContextResettingTestCase):
     def test_managed_alloc_driver_undersubscribe(self):
         msg = "Managed memory unsupported prior to CC 3.0"
         self.skip_if_cc_major_lt(3, msg)
-        self._test_managed_alloc_driver(0.5)
+        self._test_managed_alloc_driver(0.1)
 
     # This test is skipped by default because it is easy to hang the machine
     # for a very long time or get OOM killed if the GPU memory size is >50% of
