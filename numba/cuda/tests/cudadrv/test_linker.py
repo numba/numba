@@ -78,8 +78,8 @@ class TestLinker(CUDATestCase):
             i = cuda.grid(1)
             x[i] += bar(y[i])
 
-        A = np.array([123])
-        B = np.array([321])
+        A = np.array([123]).astype(np.int32)
+        B = np.array([321]).astype(np.int32)
 
         foo[1, 1](A, B)
 
