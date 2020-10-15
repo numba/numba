@@ -136,7 +136,7 @@ def check_access_is_preventable():
             f.write('check2')
         # access prevention is not possible
         return False
-    except PermissionError as e:
+    except PermissionError:
         # Check that the cause of the exception is due to access/permission
         # as per
         # https://github.com/conda/conda/blob/4.5.0/conda/gateways/disk/permissions.py#L35-L37  # noqa: E501
