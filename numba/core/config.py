@@ -381,7 +381,7 @@ class _EnvReloader(object):
 
         # Experimental refprune pass
         LLVM_REFPRUNE_PASS = _readenv(
-            "NUMBA_LLVM_REFPRUNE_PASS", int, 1,
+            "NUMBA_LLVM_REFPRUNE_PASS", int, 0,
         )
         LLVM_REFPRUNE_FLAGS = _readenv(
             "NUMBA_LLVM_REFPRUNE_FLAGS", str,
