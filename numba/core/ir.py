@@ -499,7 +499,8 @@ class Expr(Inst):
         assert isinstance(index, Var)
         assert isinstance(loc, Loc)
         op = 'getitem'
-        return cls(op=op, loc=loc, value=value, index=index)
+        fn = operator.getitem
+        return cls(op=op, loc=loc, value=value, index=index, fn=fn)
 
     @classmethod
     def typed_getitem(cls, value, dtype, index, loc):
@@ -515,8 +516,9 @@ class Expr(Inst):
         assert index_var is None or isinstance(index_var, Var)
         assert isinstance(loc, Loc)
         op = 'static_getitem'
+        fn = operator.getitem
         return cls(op=op, loc=loc, value=value, index=index,
-                   index_var=index_var)
+                   index_var=index_var, fn=fn)
 
     @classmethod
     def cast(cls, value, loc):

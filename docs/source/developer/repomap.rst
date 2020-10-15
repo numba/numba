@@ -358,6 +358,8 @@ that must be matched during type inference.
 - :ghfile:`numba/core/typing/cffi_utils.py` - Typing of CFFI objects
 - :ghfile:`numba/core/typing/typeof.py` - Implementation of typeof operations
   (maps Python object to Numba type)
+- :ghfile:`numba/core/typing/asnumbatype.py` - Implementation of
+  ``as_numba_type`` operations (maps Python types to Numba type)
 - :ghfile:`numba/core/typing/npdatetime.py` - Datetime dtype support for NumPy
   arrays
 

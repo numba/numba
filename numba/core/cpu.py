@@ -239,7 +239,7 @@ class CPUTargetOptions(TargetOptions):
         "nogil": bool,
         "forceobj": bool,
         "looplift": bool,
-        "boundscheck": bool,
+        "boundscheck": lambda X: bool(X) if X is not None else None,
         "debug": bool,
         "_nrt": bool,
         "no_rewrites": bool,

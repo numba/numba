@@ -368,7 +368,7 @@ def alloca_once(builder, ty, size=None, name='', zfill=False):
     use-site location.  Note that the memory is always zero-filled after the
     ``alloca`` at init-site (the entry block).
     """
-    if isinstance(size, utils.INT_TYPES):
+    if isinstance(size, int):
         size = ir.Constant(intp_t, size)
     with builder.goto_entry_block():
         ptr = builder.alloca(ty, size=size, name=name)
@@ -872,7 +872,7 @@ def gep(builder, ptr, *inds, **kws):
     assert not kws
     idx = []
     for i in inds:
-        if isinstance(i, utils.INT_TYPES):
+        if isinstance(i, int):
             # NOTE: llvm only accepts int32 inside structs, not int64
             ind = int32_t(i)
         else:
@@ -890,7 +890,7 @@ def pointer_add(builder, ptr, offset, return_type=None):
     the pointed item type.
     """
     intptr = builder.ptrtoint(ptr, intp_t)
-    if isinstance(offset, utils.INT_TYPES):
+    if isinstance(offset, int):
         offset = intp_t(offset)
     intptr = builder.add(intptr, offset)
     return builder.inttoptr(intptr, return_type or ptr.type)
@@ -989,7 +989,7 @@ def memcpy(builder, dst, src, count):
 
 def _raw_memcpy(builder, func_name, dst, src, count, itemsize, align):
     size_t = count.type
-    if isinstance(itemsize, utils.INT_TYPES):
+    if isinstance(itemsize, int):
         itemsize = ir.Constant(size_t, itemsize)
 
     memcpy = builder.module.declare_intrinsic(func_name,

@@ -198,8 +198,15 @@ class _SetPayload(object):
 
         mask = self.mask
         dtype = self._ty.dtype
-        eqfn = context.get_function(operator.eq,
-                                    typing.signature(types.boolean, dtype, dtype))
+        tyctx = context.typing_context
+        fnty = tyctx.resolve_value_type(operator.eq)
+        sig = fnty.get_call_type(tyctx, (dtype, dtype), {})
+        for arg in sig.args:
+            if context.data_model_manager[arg].contains_nrt_meminfo():
+                msg = ("Use of reference counted items in 'set()' is "
+                       "unsupported, offending type is: '{}'.")
+                raise ValueError(msg.format(arg))
+        eqfn = context.get_function(fnty, sig)
 
         one = ir.Constant(intp_t, 1)
         five = ir.Constant(intp_t, 5)
