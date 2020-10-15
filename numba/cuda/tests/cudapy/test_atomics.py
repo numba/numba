@@ -278,7 +278,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_add3(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
@@ -289,7 +289,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_add_float(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float32)
         orig = ary.copy().astype(np.intp)
@@ -304,7 +304,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_add_float_2(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float32).reshape(4, 8)
         orig = ary.copy()
@@ -314,7 +314,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_add_float_3(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float32).reshape(4, 8)
         orig = ary.copy()
@@ -342,7 +342,7 @@ class TestCudaAtomics(CUDATestCase):
     @skip_unless_cc_50
     def test_atomic_add_double(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
@@ -358,7 +358,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_add_double_2(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
         orig = ary.copy()
@@ -369,7 +369,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_add_double_3(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
         orig = ary.copy()
@@ -382,7 +382,7 @@ class TestCudaAtomics(CUDATestCase):
     @skip_unless_cc_50
     def test_atomic_add_double_global(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
@@ -399,7 +399,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_add_double_global_2(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
         orig = ary.copy()
@@ -410,7 +410,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_add_double_global_3(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
         orig = ary.copy()
@@ -422,7 +422,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.uint32)
         orig = ary.copy()
@@ -437,7 +437,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub2(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
@@ -447,7 +447,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub3(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
         orig = ary.copy()
@@ -457,7 +457,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub_float(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float32)
         orig = ary.copy().astype(np.intp)
@@ -472,7 +472,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub_float_2(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float32).reshape(4, 8)
         orig = ary.copy()
@@ -482,7 +482,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub_float_3(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float32).reshape(4, 8)
         orig = ary.copy()
@@ -492,7 +492,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub_double(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
@@ -507,7 +507,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub_double_2(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
         orig = ary.copy()
@@ -517,7 +517,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub_double_3(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
         orig = ary.copy()
@@ -527,7 +527,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub_double_global(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         idx = np.random.randint(0, 32, size=32, dtype=np.int64)
         ary = np.zeros(32, np.float64)
@@ -543,7 +543,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub_double_global_2(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
         orig = ary.copy()
@@ -553,7 +553,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_sub_double_global_3(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         ary = np.random.randint(0, 32, size=32).astype(np.float64).reshape(4, 8)
         orig = ary.copy()
@@ -563,7 +563,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def check_atomic_max(self, dtype, lo, hi):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
         res = np.zeros(1, dtype=vals.dtype)
@@ -607,7 +607,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_max_double_oneindex(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(0, 128, size=32).astype(np.float64)
         res = np.zeros(1, np.float64)
@@ -620,7 +620,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def check_atomic_min(self, dtype, lo, hi):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
         res = np.array([65535], dtype=vals.dtype)
@@ -652,7 +652,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_min_double_normalizedindex(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(0, 65535, size=(32, 32)).astype(np.float64)
         res = np.ones(1, np.float64) * 65535
@@ -665,7 +665,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_min_double_oneindex(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(0, 128, size=32).astype(np.float64)
         res = np.ones(1, np.float64) * 128
@@ -692,7 +692,7 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func = cuda.jit('void(float64[:], float64[:,:])')(func)
         
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(0, 128, size=(1,1)).astype(np.float64)
         res = np.zeros(1, np.float64) + np.nan
@@ -703,7 +703,7 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func = cuda.jit('void(float64[:], float64[:,:])')(func)
         
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         res = np.random.randint(0, 128, size=1).astype(np.float64)
         gold = res.copy()
@@ -726,7 +726,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_max_double_shared(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
         res = np.zeros(1, np.float64)
@@ -739,7 +739,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_min_double_shared(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
         res = np.ones(1, np.float64) * 32
@@ -752,7 +752,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_compare_and_swap(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         n = 100
         res = [-99] * (n // 2) + [-1] * (n // 2)
@@ -860,7 +860,7 @@ class TestCudaAtomics(CUDATestCase):
     # nanmax tests
     def check_atomic_nanmax(self, dtype, lo, hi):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
         vals[1::2] = np.nan
@@ -892,7 +892,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_nanmax_double_shared(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
         vals[1::2] = np.nan
@@ -921,7 +921,7 @@ class TestCudaAtomics(CUDATestCase):
     # nanmin tests
     def check_atomic_nanmin(self, dtype, lo, hi):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
         vals[1::2] = np.nan
@@ -954,7 +954,7 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_nanmin_double_shared(self):
         random.seed(ATOMICS_TEST_PY_RANDOM_SEED)
-        numpy.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
+        np.seed(ATOMICS_TEST_NUMPY_RANDOM_SEED)
         
         vals = np.random.randint(0, 32, size=32).astype(np.float64)
         vals[1::2] = np.nan
