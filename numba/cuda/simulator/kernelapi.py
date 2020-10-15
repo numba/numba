@@ -117,6 +117,12 @@ class FakeCUDAAtomic(object):
             array[index] -= val
         return old
 
+    def atomic_and(self, array, index, val):
+        with sublock:
+            old = array[index]
+            array[index] &= val
+        return old
+
     def max(self, array, index, val):
         with maxlock:
             old = array[index]

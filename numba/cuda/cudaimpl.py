@@ -604,6 +604,7 @@ def ptx_atomic_sub(context, builder, dtype, ptr, val):
     else:
         return builder.atomic_rmw('sub', ptr, val, 'monotonic')
 
+
 @lower(stubs.atomic.atomic_and, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.atomic_and, types.Array, types.UniTuple, types.Any)
 @lower(stubs.atomic.atomic_and, types.Array, types.Tuple, types.Any)
