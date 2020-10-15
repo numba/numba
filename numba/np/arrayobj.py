@@ -1545,14 +1545,21 @@ def numpy_transpose(a, axes=None):
 
 @overload(np.swapaxes)
 def numpy_swapaxes(a, axis1, axis2):
+    # Get the literal values if they are not literal already
     force_literal = lambda a, axis1, axis2: (
         a, literally(axis1), literally(axis2))
-    if isinstance(axis1, types.Literal):
+
+    if isinstance(axis1, types.LiteralInteger):
         axis1_val = axis1.literal_value
+    elif not isinstance(axis1, types.Integer):
+        raise TypingError('axis1 must be an integer')
     else:
         return force_literal
-    if isinstance(axis2, types.Literal):
+
+    if isinstance(axis2, types.LiteralInteger):
         axis2_val = axis2.literal_value
+    elif not isinstance(axis2, types.Integer):
+        raise TypingError('axis2 must be an integer')
     else:
         return force_literal
 

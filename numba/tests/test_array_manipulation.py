@@ -590,16 +590,35 @@ class TestArrayManipulation(MemoryLeakMixin, TestCase):
 
     def test_swapaxes_array(self, flags=enable_pyobj_flags):
         a = np.arange(24).reshape(4, 3, 2)
+
+        # swap first and last
         axis1 = 0
         axis2 = -1
         pyfunc = numpy_swapaxes_array
-
         cr = compile_isolated(pyfunc, (typeof(a), typeof(axis1), typeof(axis2)), flags=flags)
         cfunc = cr.entry_point
-
         expected = pyfunc(a, axis1, axis2)
         got = cfunc(a, axis1, axis2)
         np.testing.assert_equal(expected, got)
+
+        # swap first and middle
+        axis1 = -3
+        axis2 = 1
+        pyfunc = numpy_swapaxes_array
+        cr = compile_isolated(pyfunc, (typeof(a), typeof(axis1), typeof(axis2)), flags=flags)
+        cfunc = cr.entry_point
+        expected = pyfunc(a, axis1, axis2)
+        got = cfunc(a, axis1, axis2)
+        np.testing.assert_equal(expected, got)
+
+        # check non-int axis raise an error
+        axis1 = 0
+        axis2 = 1.5
+        pyfunc = numpy_swapaxes_array
+        cr = compile_isolated(pyfunc, (typeof(a), typeof(axis1), typeof(axis2)), flags=flags)
+        cfunc = cr.entry_point
+        with self.assertRaises(TypeError):
+            cfunc(a, axis1, axis2)
 
     def test_squeeze_array(self, flags=enable_pyobj_flags):
         a = np.arange(2 * 1 * 3 * 1 * 4).reshape(2, 1, 3, 1, 4)
