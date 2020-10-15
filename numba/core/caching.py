@@ -498,7 +498,7 @@ class IndexDataCacheFile(object):
             return
         try:
             return self._load_data(data_name)
-        except OsError:
+        except OSError:
             # File could have been removed while the index still refers it.
             return
 
@@ -677,7 +677,7 @@ class Cache(_Cache):
             # from several processes (see #2028)
             try:
                 yield
-            except OsError as e:
+            except OSError as e:
                 if e.errno != errno.EACCES:
                     raise
         else:
