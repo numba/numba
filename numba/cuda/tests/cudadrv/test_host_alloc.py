@@ -53,6 +53,7 @@ class TestHostAlloc(ContextResettingTestCase):
             ary_v = ary_samp.view('u1')
             ary_v[1] = 1
             ary_v[5] = 1
+            print(ary_samp)
             self.assertTrue(sum(ary_samp) == 512)
 
     def test_host_operators(self):
