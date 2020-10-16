@@ -39,7 +39,6 @@ class GUFunc(object):
     @property
     def is_dynamic(self):
         return self._is_dynamic
-    
 
     @property
     def __doc__(self):
@@ -111,18 +110,18 @@ class GUFunc(object):
 
     def __call__(self, *args):
 
-        # a gufunc is dynamic if no calls to `.add()` were made prior to this point
+        # a gufunc is dynamic if no calls to `.add()` were made prior to this point  # noqa: E501
         # if no calls were made, then, self.gufunc_builder._cres is empty
         if len(self.gufunc_builder._cres) == 0:
             self._is_dynamic = True
 
-        # If compilation is disabled OR it is NOT a dynamic gufunc, call the underlying gufunc
+        # If compilation is disabled OR it is NOT a dynamic gufunc, call the underlying gufunc  # noqa: E501
         if self._frozen or not self.is_dynamic:
             return self.ufunc(*args)
 
-        if self._num_args_match(*args) == False:
-            # It is not allowed to call a dynamic gufunc without providing all the arguments
-            # see: https://github.com/numba/numba/pull/5938#discussion_r506429392
+        if self._num_args_match(*args) is False:
+            # It is not allowed to call a dynamic gufunc without providing all the arguments  # noqa: E501
+            # see: https://github.com/numba/numba/pull/5938#discussion_r506429392  # noqa: E501
             msg = (
                 f"Too few arguments for function '{self.__name__}'. "
                 "Note that the pattern `out = gufunc(Arg1, Arg2, ..., ArgN)` "
