@@ -17,6 +17,7 @@ class GUFunc(object):
                  targetoptions={}):
         self.ufunc = None
         self._frozen = False
+        self._is_dynamic = False
 
         # GUFunc cannot inherit from GUFuncBuilder because "identity"
         # is a property of GUFunc. Thus, we hold a reference to a GUFuncBuilder
@@ -36,12 +37,17 @@ class GUFunc(object):
         self._frozen = True
 
     @property
+    def is_dynamic(self):
+        return self._is_dynamic
+    
+
+    @property
     def __doc__(self):
         return self.ufunc.__doc__
 
     @property
     def __name__(self):
-        return self.ufunc.__name__
+        return self.gufunc_builder.py_func.__name__
 
     @property
     def nin(self):
@@ -77,28 +83,14 @@ class GUFunc(object):
                 tys.append(argty)
         return tys
 
+    def _num_args_match(self, *args):
+        parsed_sig = parse_signature(self.gufunc_builder.signature)
+        # parsed_sig[1] has always length 1
+        return len(args) == len(parsed_sig[0]) + 1
+
     def _get_signature(self, *args):
         parsed_sig = parse_signature(self.gufunc_builder.signature)
         ewise_types = self._get_ewise_dtypes(args)  # [int32, int32, int32, ...]  # noqa: E501
-
-        # Two cases here can happen here
-        # 1. args contains the output array:
-        #      gufunc(A, B, C)
-        # 2. args doesn't contains the output array:
-        #      C = gufunc(A, B)
-        #
-        # In the latter case, one would have to guess the type
-        # and format (scalar or array). This behavior will be
-        # forbidden for now.
-        # See: https://github.com/numba/numba/pull/5938#issuecomment-661978921
-
-        # parsed_sig[1] has always length 1
-        if len(ewise_types) < len(parsed_sig[0]) + 1:
-            msg = (
-                f"Too few arguments for function '{self.__name__}'. "
-                "Note that the pattern `out = gufunc(Arg1, Arg2, ..., ArgN)` "
-                "is not allowed. Use `gufunc(Arg1, Arg2, ..., ArgN, out) instead.")  # noqa: E501
-            raise TypeError(msg)
 
         # first time calling the gufunc
         # generate a signature based on input arguments
@@ -119,11 +111,28 @@ class GUFunc(object):
 
     def __call__(self, *args):
 
-        if self._frozen:
+        # a gufunc is dynamic if no calls to `.add()` were made prior to this point
+        # if no calls were made, then, self.gufunc_builder._cres is empty
+        if len(self.gufunc_builder._cres) == 0:
+            self._is_dynamic = True
+
+        # If compilation is disabled OR it is NOT a dynamic gufunc, call the underlying gufunc
+        if self._frozen or not self.is_dynamic:
             return self.ufunc(*args)
 
+        if self._num_args_match(*args) == False:
+            # It is not allowed to call a dynamic gufunc without providing all the arguments
+            # see: https://github.com/numba/numba/pull/5938#discussion_r506429392
+            msg = (
+                f"Too few arguments for function '{self.__name__}'. "
+                "Note that the pattern `out = gufunc(Arg1, Arg2, ..., ArgN)` "
+                "is not allowed. Use `gufunc(Arg1, Arg2, ..., ArgN, out) instead.")  # noqa: E501
+            raise TypeError(msg)
+
+        # at this point we know the gufunc is a dynamic one
         ewise = self._get_ewise_dtypes(args)
         if not (self.ufunc and ufunc_find_matching_loop(self.ufunc, ewise)):
+            self._is_dynamic = True
             sig = self._get_signature(*args)
             self.add(sig)
             self.build_ufunc()

@@ -135,6 +135,10 @@ class TestDynamicGUFunc(TestCase):
         for i in range(inp.shape[0]):
             self.assertEqual(out[i], inp[i].sum())
 
+        msg = "Too few arguments for function 'sum_row'."
+        with self.assertRaisesRegex(TypeError, msg):
+            sum_row(inp)
+
 
 class TestGUVectorizeScalar(TestCase):
     """
