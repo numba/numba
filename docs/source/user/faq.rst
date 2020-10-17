@@ -263,6 +263,7 @@ value, for example::
 
    import locale
    locale.setlocale(locale.LC_NUMERIC, 'C')
+
 How do I get Numba development builds?
 --------------------------------------
 
