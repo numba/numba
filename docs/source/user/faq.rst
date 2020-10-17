@@ -271,7 +271,6 @@ Pre-release versions of Numba can be installed with conda::
     $ conda install -c numba/label/dev numba
 
 
-
 Miscellaneous
 =============
 
