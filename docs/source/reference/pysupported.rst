@@ -700,6 +700,7 @@ All methods and operations on sets are supported in JIT-compiled functions.
 Sets must be strictly homogeneous: Numba will reject any set containing
 objects of different types, even if the types are compatible (for example,
 ``{1, 2.5}`` is rejected as it contains a :class:`int` and a :class:`float`).
+The use of reference counted types, e.g. strings, in sets is unsupported.
 
 .. note::
    When passing a set into a JIT-compiled function, any modifications

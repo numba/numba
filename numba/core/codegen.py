@@ -1070,6 +1070,7 @@ class BaseCPUCodegen(object):
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
         self._mpm_cheap = self._module_pass_manager(loop_vectorize=False,
+                                                    slp_vectorize=False,
                                                     opt=1)
         self._mpm_full = self._module_pass_manager()
 
@@ -1129,9 +1130,13 @@ class BaseCPUCodegen(object):
         """
         opt_level = kwargs.pop('opt', config.OPT)
         loop_vectorize = kwargs.pop('loop_vectorize', config.LOOP_VECTORIZE)
+        slp_vectorize = kwargs.pop('slp_vectorize', config.SLP_VECTORIZE)
 
-        pmb = lp.create_pass_manager_builder(
-            opt=opt_level, loop_vectorize=loop_vectorize, **kwargs)
+        pmb = lp.create_pass_manager_builder(opt=opt_level,
+                                             loop_vectorize=loop_vectorize,
+                                             slp_vectorize=slp_vectorize,
+                                             **kwargs)
+
         return pmb
 
     def _check_llvm_bugs(self):
