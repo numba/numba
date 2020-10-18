@@ -5,7 +5,7 @@ parameters:
 
 jobs:
 - job: ${{ parameters.name }}
-  pool: 
+  pool:
     vmImage: ${{ parameters.vmImage }}
   strategy:
     matrix:
@@ -26,16 +26,17 @@ jobs:
         buildscripts/incremental/build.sh
       displayName: 'Build'
 
+    # Versions specified here should be kept in sync with .pre-commit-config.yaml.
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH
-        conda install -y flake8
+        conda install -y flake8==3.8.4
         flake8 numba
       displayName: 'Flake8'
       condition: eq(variables['RUN_FLAKE8'], 'yes')
 
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH
-        conda install -y mypy
+        conda install -y mypy==0.790
         mypy
       displayName: 'Mypy'
       condition: eq(variables['RUN_MYPY'], 'yes')
