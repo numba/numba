@@ -9,8 +9,6 @@ from numba.np import npdatetime_helpers
 
 from .abstract import Dummy, Hashable, Literal, NumbaTypeInst, Number, Type
 
-_ComparisonOrNotImplemented = pt.Union[bool, "NotImplemented"]
-
 
 class Boolean(Hashable):
 
@@ -60,11 +58,12 @@ class Integer(Number):
     def cast_python_value(self, value: pt.Any) -> int:
         return getattr(np, self.name)(value)  # type: ignore[no-any-return]
 
-    def __lt__(self, other: pt.Any) -> _ComparisonOrNotImplemented:
+    def __lt__(self, other: pt.Any) -> bool:
         if self.__class__ is not other.__class__:
             return NotImplemented
         if self.signed != other.signed:
             return NotImplemented
+        assert isinstance(other, Integer)
         return self.bitwidth < other.bitwidth
 
     @property
@@ -137,9 +136,10 @@ class Float(Number):
     def cast_python_value(self, value: pt.Any) -> float:
         return getattr(np, self.name)(value)  # type: ignore[no-any-return]
 
-    def __lt__(self, other: pt.Any) -> _ComparisonOrNotImplemented:
+    def __lt__(self, other: pt.Any) -> bool:
         if self.__class__ is not other.__class__:
             return NotImplemented
+        assert isinstance(other, Float)
         return self.bitwidth < other.bitwidth
 
 
@@ -153,9 +153,10 @@ class Complex(Number):
     def cast_python_value(self, value: pt.Any) -> complex:
         return getattr(np, self.name)(value)  # type: ignore[no-any-return]
 
-    def __lt__(self, other: pt.Any) -> _ComparisonOrNotImplemented:
+    def __lt__(self, other: pt.Any) -> bool:
         if self.__class__ is not other.__class__:
             return NotImplemented
+        assert isinstance(other, Complex)
         return self.bitwidth < other.bitwidth
 
 
@@ -172,9 +173,10 @@ class _NPDatetimeBase(Type):
         self.unit_code = npdatetime_helpers.DATETIME_UNITS[self.unit]
         super(_NPDatetimeBase, self).__init__(name)
 
-    def __lt__(self, other: pt.Any) -> _ComparisonOrNotImplemented:
+    def __lt__(self, other: pt.Any) -> bool:
         if self.__class__ is not other.__class__:
             return NotImplemented
+        assert isinstance(other, _NPDatetimeBase)
         # A coarser-grained unit is "smaller", i.e. less precise values
         # can be represented (but the magnitude of representable values is
         # also greater...).
