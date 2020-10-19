@@ -2,6 +2,7 @@ import contextlib
 import sys
 import numpy as np
 import random
+import re
 import threading
 import gc
 
@@ -636,8 +637,9 @@ class TestNdZeros(ConstructorBaseTest, TestCase):
 
         excstr = str(raises.exception)
         self.assertIn('No match', excstr)
-        self.assertIn('{}({}, unicode_type)'.format(pyfunc.__name__,
-                                                    np.intp.__name__), excstr)
+        restr = r'\b{}\(int.*?, unicode_type\)\B'
+        regex = re.compile(restr.format(pyfunc.__name__))
+        self.assertRegex(excstr, regex)
 
     def test_2d(self):
         pyfunc = self.pyfunc
@@ -732,8 +734,9 @@ class TestNdFull(ConstructorBaseTest, TestCase):
 
         excstr = str(raises.exception)
         self.assertIn('No match', excstr)
-        self.assertIn('full(UniTuple({} x 1), float64, unicode_type)'.format(
-            np.intp.__name__), excstr)
+        restr = r'\bfull\(UniTuple\(int.*? x 1\), float64, unicode_type\)\B'
+        regex = re.compile(restr)
+        self.assertRegex(excstr, regex)
 
     def test_2d(self):
         def func(m, n):
@@ -1025,8 +1028,8 @@ class TestNdIdentity(BaseTest):
 
         excstr = str(raises.exception)
         self.assertIn('No match', excstr)
-        self.assertIn('identity({}, unicode_type)'.format(np.intp.__name__),
-                      excstr)
+        regex = re.compile(r'\bidentity\(int.*?, unicode_type\)\B')
+        self.assertRegex(excstr, regex)
 
 
 class TestNdEye(BaseTest):
@@ -1272,8 +1275,9 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
 
         excstr = str(raises.exception)
         self.assertIn('No match', excstr)
-        self.assertIn('array(UniTuple({} x 2), dtype=unicode_type)'.format(
-            np.intp.__name__), excstr)
+        restr = r'\barray\(UniTuple\(int.*? x 2\), dtype=unicode_type\)\B'
+        regex = re.compile(restr)
+        self.assertRegex(excstr, regex)
 
     def test_2d(self):
         def pyfunc(arg):
