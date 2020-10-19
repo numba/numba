@@ -1,6 +1,6 @@
 import numpy as np
 from numba.cuda.testing import (unittest, CUDATestCase,
-    skip_on_cudasim, skip_unless_py37_or_later)
+                                skip_on_cudasim, skip_unless_py37_or_later)
 from numba.np import numpy_support
 from numba import cuda, float32, float64, int32, vectorize, void, int64
 import math
