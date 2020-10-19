@@ -1269,7 +1269,9 @@ class TestCache(BaseCacheUsecasesTest):
     def test_first_class_function(self):
         mod = self.import_module()
         f = mod.first_class_function_usecase
+        assert f(mod.first_class_function_mul, 1) == 1
         assert f(mod.first_class_function_mul, 10) == 100
+        assert f(mod.first_class_function_add, 1) == 2
         assert f(mod.first_class_function_add, 10) == 20
         self.check_pycache(7)  # 3 nbi, 4 nbc - a separate cache for each call to f
 
