@@ -9,7 +9,7 @@ from numba.tests.support import (
     redirect_c_stdout,
 )
 from numba.cuda.cuda_paths import get_conda_ctk
-from numba.core import config
+from numba.core import config, utils
 from numba.tests.support import TestCase
 import unittest
 
@@ -35,9 +35,11 @@ class ContextResettingTestCase(CUDATestCase):
         from numba.cuda.cudadrv.devices import reset
         reset()
 
+
 def skip_unless_py37_or_later(reason):
     """Skip this test if running on Python < 3.7"""
     return unittest.skipIf(utils.PYVERSION < (3, 7), reason)
+
 
 def skip_on_cudasim(reason):
     """Skip this test if running on the CUDA simulator"""
