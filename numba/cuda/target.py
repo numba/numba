@@ -61,7 +61,10 @@ VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
     strict_alignment = True
-    DIBuilder = debuginfo.NvvmDIBuilder
+    if nvvm.NVVM().is_nvvm70:
+        DIBuilder = debuginfo.DIBuilder
+    else:
+        DIBuilder = debuginfo.NvvmDIBuilder
 
     @property
     def enable_boundscheck(self):
@@ -177,13 +180,18 @@ class CUDATargetContext(BaseContext):
                 # Use atomic cmpxchg to prevent rewriting the error status
                 # Only the first error is recorded
 
-                casfnty = lc.Type.function(old.type, [gv_exc.type, old.type,
-                                                      old.type])
+                if nvvm.NVVM().is_nvvm70:
+                    xchg = builder.cmpxchg(gv_exc, old, status.code,
+                                           'monotonic', 'monotonic')
+                    changed = builder.extract_value(xchg, 1)
+                else:
+                    casfnty = lc.Type.function(old.type, [gv_exc.type, old.type,
+                                                          old.type])
 
-                cas_hack = "___numba_atomic_i32_cas_hack"
-                casfn = wrapper_module.add_function(casfnty, name=cas_hack)
-                xchg = builder.call(casfn, [gv_exc, old, status.code])
-                changed = builder.icmp(ICMP_EQ, xchg, old)
+                    cas_hack = "___numba_atomic_i32_cas_hack"
+                    casfn = wrapper_module.add_function(casfnty, name=cas_hack)
+                    xchg = builder.call(casfn, [gv_exc, old, status.code])
+                    changed = builder.icmp(ICMP_EQ, xchg, old)
 
                 # If the xchange is successful, save the thread ID.
                 sreg = nvvmutils.SRegBuilder(builder)

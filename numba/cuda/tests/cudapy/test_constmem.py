@@ -134,7 +134,7 @@ class TestCudaConstantMemory(CUDATestCase):
         self.assertTrue(np.all(A == CONST3D))
 
         if not ENABLE_CUDASIM:
-            if cuda.runtime.get_version() in ((8, 0), (9, 0), (9, 1)):
+            if cuda.runtime.get_version() in ((8, 0), (9, 0), (9, 1), (11, 2)):
                 complex_load = 'ld.const.v2.f32'
                 description = 'Load the complex as a vector of 2x f32'
             else:
@@ -164,7 +164,9 @@ class TestCudaConstantMemory(CUDATestCase):
         B = np.zeros(2, dtype=int)
         jcuconst = cuda.jit(cuconstRec).specialize(A, B)
 
-        old_runtime = cuda.runtime.get_version() in ((8, 0), (9, 0), (9, 1))
+        rtver = cuda.runtime.get_version()
+        old_runtime = rtver in ((8, 0), (9, 0), (9, 1))
+        nvvm70_runtime = rtver >= (11, 2)
         windows = sys.platform.startswith('win')
 
         if old_runtime:
@@ -179,6 +181,10 @@ class TestCudaConstantMemory(CUDATestCase):
                 # Load of the x and y fields fused into a single instruction
                 self.assertIn('ld.const.v2.f64', jcuconst.ptx,
                               'load record fields as vector of 2x f64')
+        elif nvvm70_runtime:
+            # Load of the x and y fields fused into a single instruction
+            self.assertIn('ld.const.v2.u64', jcuconst.ptx,
+                          'load record fields as vector of 2x u64')
         else:
             # In newer toolkits, constant values are all loaded 8 bits at a
             # time. Check that there are enough 8-bit loads for everything to
@@ -224,8 +230,8 @@ class TestCudaConstantMemory(CUDATestCase):
         E = np.zeros(2, dtype=np.float64)
         jcuconst = cuda.jit(cuconstRecAlign).specialize(A, B, C, D, E)
 
-        if rtver >= (10, 2):
-            # Code generation differs slightly in 10.2 onwards - the first
+        if rtver >= (10, 2) and rtver <= (11, 1):
+            # Code generation differs slightly in 10.2 - 11.1 - the first
             # bytes are loaded as individual bytes, so we'll check that
             # ld.const.u8 occurs at least four times (the first three bytes,
             # then the last byte by itself)
