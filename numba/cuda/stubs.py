@@ -400,7 +400,7 @@ class atomic(Stub):
         """
 
     class and_(Stub):
-        """atomic_and(ary, idx, val)
+        """and_(ary, idx, val)
 
         Perform atomic ary[idx] &= val. Supported on int32, int64, uint32 and
         uint64 operands only.

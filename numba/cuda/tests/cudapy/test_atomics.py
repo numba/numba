@@ -553,7 +553,7 @@ class TestCudaAtomics(CUDATestCase):
 
         gold = np.zeros(32, dtype=np.int32)
         for i in range(idx.size):
-            gold[idx[i]] &= 1
+            gold[idx[i]] &= rand_const
 
         np.testing.assert_equal(ary, gold)
 
