@@ -17,6 +17,9 @@ build:
     # optional dependency: required only when omp is chosen as the backend for
     # the threading layer
     - lib/libiomp5.dylib # [osx]
+  ignore_run_exports:
+    # tbb-devel triggers hard dependency on tbb, this is not the case.
+    - tbb     # [not (armv6l or armv7l or aarch64 or linux32)]
 
 requirements:
   # build and run dependencies are duplicated to avoid setuptools issues
