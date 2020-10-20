@@ -6,6 +6,7 @@ import numba
 from numba import dppl
 from numba.dppl.testing import unittest
 from numba.dppl.testing import DPPLTestCase
+from numba.tests.support import captured_stderr
 import dpctl
 import sys
 import io
@@ -13,24 +14,12 @@ import io
 
 @unittest.skipUnless(dpctl.has_gpu_queues(), 'test only on GPU system')
 class TestDPPLFallback(DPPLTestCase):
-
-    def capture_stderr(self, func):
-        backup = sys.stderr
-        sys.stderr = io.StringIO()
-        result = func()
-        out = sys.stderr.getvalue()
-        sys.stderr.close()
-        sys.stderr = backup
-
-        return out, result
-
-    def test_dppl_fallback(self):
-
+    def test_dppl_fallback_inner_call(self):
         @numba.jit
         def fill_value(i):
             return i
 
-        def np_rand_fallback():
+        def inner_call_fallback():
             x = 10
             a = np.empty(shape=x, dtype=np.float32)
 
@@ -39,17 +28,28 @@ class TestDPPLFallback(DPPLTestCase):
 
             return a
 
-        def run_dppl():
-            dppl = numba.njit(parallel={'offload':True})(np_rand_fallback)
-            return dppl()
+        with captured_stderr() as msg:
+            dppl = numba.njit(parallel={'offload':True})(inner_call_fallback)
+            dppl_result = dppl()
 
-        ref = np_rand_fallback
-
-        err, dppl_result = self.capture_stderr(run_dppl)
-        ref_result = ref()
+        ref_result = inner_call_fallback()
 
         np.testing.assert_array_equal(dppl_result, ref_result)
-        self.assertTrue('Failed to lower parfor on DPPL-device' in err)
+        self.assertTrue('Failed to lower parfor on DPPL-device' in msg.getvalue())
+
+    def test_dppl_fallback_reductions(self):
+        def reduction(a):
+            return np.amax(a)
+
+        a = np.ones(10)
+        with captured_stderr() as msg:
+            dppl = numba.njit(parallel={'offload':True})(reduction)
+            dppl_result = dppl(a)
+
+        ref_result = reduction(a)
+
+        np.testing.assert_array_equal(dppl_result, ref_result)
+        self.assertTrue('Failed to lower parfor on DPPL-device' in msg.getvalue())
 
 
 if __name__ == '__main__':
