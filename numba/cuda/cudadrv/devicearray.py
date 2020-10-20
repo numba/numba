@@ -453,7 +453,7 @@ def _assign_kernel(ndim):
         # [0, :] is the to-index (into `lhs`)
         # [1, :] is the from-index (into `rhs`)
         idx = cuda.local.array(
-            shape=(2, ndim),
+            shape=(2, ndim)
             dtype=types.int64)
 
         for i in range(ndim - 1, -1, -1):
