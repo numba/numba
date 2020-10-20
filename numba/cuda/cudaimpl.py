@@ -615,6 +615,7 @@ def ptx_atomic_and(context, builder, dtype, ptr, val):
     else:
         raise TypeError('Unimplemented atomic and with %s array' % dtype)
 
+
 @lower(stubs.atomic.or_, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.or_, types.Array, types.UniTuple, types.Any)
 @lower(stubs.atomic.or_, types.Array, types.Tuple, types.Any)
@@ -624,6 +625,7 @@ def ptx_atomic_or(context, builder, dtype, ptr, val):
         return builder.atomic_rmw('or', ptr, val, 'monotonic')
     else:
         raise TypeError('Unimplemented atomic or with %s array' % dtype)
+
 
 @lower(stubs.atomic.max, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.max, types.Array, types.Tuple, types.Any)

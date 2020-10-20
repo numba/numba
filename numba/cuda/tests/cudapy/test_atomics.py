@@ -216,6 +216,7 @@ def atomic_and_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.and_,
                               atomic_cast_none)
 
+
 def atomic_or(ary, op2):
     atomic_binary_1dim_shared(ary, ary, op2, uint32, 32,
                               cuda.atomic.or_, atomic_cast_none, 0)
@@ -238,6 +239,7 @@ def atomic_or_global(idx, ary, op2):
 def atomic_or_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.or_,
                               atomic_cast_none)
+
 
 def gen_atomic_extreme_funcs(func):
 
@@ -619,12 +621,12 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_or_global(self):
         rand_const = np.random.randint(500)
         idx = np.random.randint(0, 32, size=32, dtype=np.int32)
-        ary = np.zeros(32, np.int32)
+        ary = np.random.randint(0, 32, size=32, dtype=np.int32)
         sig = 'void(int32[:], int32[:], int32)'
         cuda_func = cuda.jit(sig)(atomic_or_global)
         cuda_func[1, 32](idx, ary, rand_const)
 
-        gold = np.zeros(32, dtype=np.int32)
+        gold = ary.copy()
         for i in range(idx.size):
             gold[idx[i]] |= rand_const
 

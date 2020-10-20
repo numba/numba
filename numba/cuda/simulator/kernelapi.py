@@ -126,7 +126,7 @@ class FakeCUDAAtomic(object):
         return old
 
     def or_(self, array, index, val):
-        with andlock:
+        with orlock:
             old = array[index]
             array[index] |= val
         return old
