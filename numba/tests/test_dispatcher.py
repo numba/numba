@@ -1275,7 +1275,7 @@ class TestCache(BaseCacheUsecasesTest):
         assert f(mod.first_class_function_add, 10) == 20
         # 1 + 1 + 1 nbi, 1 + 1 + 2 nbc - a separate cache for each call to `f`
         # with a different callback.
-        self.check_pycache(7)  
+        self.check_pycache(7)
 
     def test_cache_reuse(self):
         mod = self.import_module()
