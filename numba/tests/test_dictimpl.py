@@ -226,6 +226,7 @@ def unbox_parametrized(typ, obj, context):
 @generated_jit
 def dict_vs_cache_vs_parametrized(v):
     typ = v
+
     def objmode_vs_cache_vs_parametrized_impl(v):
         # typed.List shows same behaviour after fix for #6397
         d = typed.Dict.empty(types.unicode_type, typ)
