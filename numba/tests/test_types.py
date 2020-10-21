@@ -891,7 +891,9 @@ class TestIssues(TestCase):
         for ty1 in (no_unique_name_type_1, no_unique_name_type_2):
             for ty2 in (no_unique_name_type_1, no_unique_name_type_2):
                 self.assertIs(
-                    types.ListType(ty1) == types.ListType(ty2), ty1 == ty2)
+                    types.ListType(ty1) == types.ListType(ty2),  # noqa: E721
+                    ty1 == ty2
+                )
 
 
 if __name__ == '__main__':
