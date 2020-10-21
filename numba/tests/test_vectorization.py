@@ -1,7 +1,10 @@
+import platform
 import numpy as np
-from numba import njit, types
-from unittest import TestCase
+from numba import types
+from unittest import TestCase, skipIf
 from numba.tests.support import override_env_config
+from numba.core.compiler import compile_isolated, Flags
+from numba.core.cpu_options import FastMathOptions
 
 _DEBUG = False
 if _DEBUG:
@@ -10,18 +13,19 @@ if _DEBUG:
     llvm.set_option("", "--debug-only=loop-vectorize")
 
 
+@skipIf(platform.machine() != 'x86_64', 'x86_64 only test')
 class TestVectorization(TestCase):
     """
     Tests to assert that code which should vectorize does indeed vectorize
     """
-    def gen_ir(self, func, args_tuple, **flags):
+    def gen_ir(self, func, args_tuple, fastmath=False):
         with override_env_config(
             "NUMBA_CPU_NAME", "skylake-avx512"
         ), override_env_config("NUMBA_CPU_FEATURES", ""):
-            jobj = njit(**flags)(func)
-            jobj.compile(args_tuple)
-            ol = jobj.overloads[jobj.signatures[0]]
-            return ol.library.get_llvm_str()
+            _flags = Flags()
+            _flags.set('fastmath', FastMathOptions(fastmath))
+            jitted = compile_isolated(func, args_tuple, flags=_flags)
+            return jitted.library.get_llvm_str()
 
     def test_nditer_loop(self):
         # see https://github.com/numba/numba/issues/5033
