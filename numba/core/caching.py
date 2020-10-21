@@ -322,6 +322,42 @@ class _IPythonCacheLocator(_CacheLocator):
         return self
 
 
+class _StringSrcCacheLocator(_UserWideCacheLocator):
+
+    def __init__(self, py_func, py_file):
+        self._identifier = self._hash(py_func)
+        super().__init__(py_func, py_file)
+
+    def get_source_stamp(self):
+        return self._identifier
+
+    def get_disambiguator(self):
+        # have to be quite fussy about this as there's very little aliasing
+        # protection with strings (no module or source to check).
+        return self._identifier
+
+    @classmethod
+    def _hash(cls, py_func):
+        buf = []
+        for x in py_func.__code__.co_consts:
+            buf.append(str(x))
+        const_bytes = (''.join(buf)).encode('UTF-8')
+        data = py_func.__code__.co_code + const_bytes
+        return hashlib.sha256(data).hexdigest()
+
+    @classmethod
+    def from_function(cls, py_func, py_file):
+        if not py_file == "<string>":
+            return
+        fname = '<string>-' + str(cls._hash(py_func))
+        self = cls(py_func, fname)
+        try:
+            self.ensure_cache_path()
+        except OSError:
+            # Cannot ensure the cache directory exists or is writable
+            return
+        return self
+
 class _CacheImpl(metaclass=ABCMeta):
     """
     Provides the core machinery for caching.
@@ -332,7 +368,8 @@ class _CacheImpl(metaclass=ABCMeta):
     _locator_classes = [_UserProvidedCacheLocator,
                         _InTreeCacheLocator,
                         _UserWideCacheLocator,
-                        _IPythonCacheLocator]
+                        _IPythonCacheLocator,
+                        _StringSrcCacheLocator]
 
     def __init__(self, py_func):
         self._lineno = py_func.__code__.co_firstlineno
