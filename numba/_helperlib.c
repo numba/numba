@@ -196,19 +196,6 @@ numba_signbit(npy_double a)
     return npy_signbit(a);
 }
 
-NUMBA_EXPORT_FUNC(float)
-numba_cbrtf(float x)
-{
-    return npy_cbrtf(x);
-}
-
-NUMBA_EXPORT_FUNC(double)
-numba_cbrt(double x)
-{
-    return npy_cbrt(x);
-}
-
-
 /* Unpack any Python complex-like object into a Py_complex structure */
 NUMBA_EXPORT_FUNC(int)
 numba_complex_adaptor(PyObject* obj, Py_complex *out) {
