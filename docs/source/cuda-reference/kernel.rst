@@ -197,7 +197,7 @@ Synchronization and Atomic Operations
 
 .. function:: numba.cuda.atomic.or_(array, idx, value)
 
-    Perform ``array[idx] |= value``. Supports int32, uint32, int64,
+    Perform ``array[idx] \|= value``. Supports int32, uint32, int64,
     and uint64 only. The ``idx`` argument can be an integer or a tuple of
     integer indices for indexing into multi-dimensional arrays. The number
     of elements in ``idx`` must match the number of dimensions of ``array``.
