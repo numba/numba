@@ -268,6 +268,7 @@ How do I get Numba development builds?
 --------------------------------------
 
 Pre-release versions of Numba can be installed with conda::
+
     $ conda install -c numba/label/dev numba
 
 
