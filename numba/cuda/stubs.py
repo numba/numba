@@ -412,7 +412,7 @@ class atomic(Stub):
     class or_(Stub):
         """or_(ary, idx, val)
 
-        Perform atomic ary[idx] |= val. Supported on int32, int64, uint32 and
+        Perform atomic ary[idx] \|= val. Supported on int32, int64, uint32 and
         uint64 operands only.
 
         Returns the old value at the index location as if it is loaded
