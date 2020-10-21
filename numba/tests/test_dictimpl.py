@@ -3,11 +3,16 @@ Testing C implementation of the numba dictionary
 """
 
 import ctypes
+import os
 import random
+import subprocess
+import sys
 
 from numba.tests.support import TestCase
-from numba import _helperlib
+from numba import generated_jit, _helperlib, jit, typed, types
 from numba.core.config import IS_32BITS
+from numba.core.datamodel.models import UniTupleModel
+from numba.extending import register_model, typeof_impl, unbox
 
 
 DKIX_EMPTY = -1
@@ -179,6 +184,79 @@ class DictIter(object):
             return k.decode(), v.decode()
 
     next = __next__    # needed for py2 only
+
+
+############################################################
+# Supporting code for TestDictImpl.test_parametrized_types
+############################################################
+class Parametrized(tuple):
+    def __init__(self, tup):
+        assert all(isinstance(v, str) for v in tup)
+
+
+class ParametrisedType(types.Type):
+    """this is essentially UniTuple(unicode_type, n)
+    BUT type name is the same for all n"""
+    def __init__(self, value):
+        super(ParametrisedType, self).__init__('ParametrisedType')
+        self.dtype = types.unicode_type
+        self.n = len(value)
+
+    @property
+    def key(self):
+        return self.n
+
+    def __len__(self):
+        return self.n
+
+
+register_model(ParametrisedType)(UniTupleModel)
+
+
+@typeof_impl.register(Parametrized)
+def typeof_unit(val, c):
+    return ParametrisedType(val)
+
+
+@unbox(ParametrisedType)
+def unbox_parametrized(typ, obj, context):
+    return context.unbox(types.UniTuple(typ.dtype, len(typ)), obj)
+
+
+@generated_jit
+def dict_vs_cache_vs_parametrized(v):
+    typ = v
+    def objmode_vs_cache_vs_parametrized_impl(v):
+        # typed.List shows same behaviour after fix for #6397
+        d = typed.Dict.empty(types.unicode_type, typ)
+        d['data'] = v
+
+    return objmode_vs_cache_vs_parametrized_impl
+
+
+def dict_vs_cache_vs_parametrized_worker():
+    """crashes when run more than once
+    (ie when compiled function is loaded from cache)"""
+    @jit(nopython=True, cache=True)
+    def get_unit_system_data(x, y):
+        dict_vs_cache_vs_parametrized(x)
+        dict_vs_cache_vs_parametrized(y)
+
+    x, y = Parametrized(('horst', 'hanz')), Parametrized(('horst',))
+
+    for ii in range(50):  # <- somtimes works a few times
+        assert get_unit_system_data(x, y) is None
+
+
+def run_test_parametrized_types_in_subprocess():
+    env = os.environ.copy()
+    subproc = subprocess.Popen(
+        [sys.executable, '-c',
+         'import numba.tests.test_dictimpl as test_mod\n' +
+         'test_mod.dict_vs_cache_vs_parametrized_worker()'],
+        env=env)
+    subproc.wait()
+    return subproc.returncode
 
 
 class TestDictImpl(TestCase):
@@ -577,3 +655,14 @@ class TestDictImpl(TestCase):
         # Check different sizes of the key & value.
         for i in range(1, 8):
             self.check_sizing(key_size=i, val_size=i, nmax=2**i)
+
+    def test_parametrized_types(self):
+        """https://github.com/numba/numba/issues/6401"""
+        self.assertEqual(
+            run_test_parametrized_types_in_subprocess(),
+            0,
+            'Child process died')
+        self.assertEqual(
+            run_test_parametrized_types_in_subprocess(),
+            0,
+            'Child process died')
