@@ -9,7 +9,7 @@ from numba.tests.support import (
     redirect_c_stdout,
 )
 from numba.cuda.cuda_paths import get_conda_ctk
-from numba.core import config, utils
+from numba.core import config
 from numba.tests.support import TestCase
 import unittest
 
