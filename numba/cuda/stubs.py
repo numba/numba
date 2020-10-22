@@ -417,7 +417,7 @@ class atomic(Stub):
 
         Returns the old value at the index location as if it is loaded
         atomically.
-        """
+        """  # noqa: W605
 
     class max(Stub):
         """max(ary, idx, val)
