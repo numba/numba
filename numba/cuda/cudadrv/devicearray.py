@@ -98,9 +98,8 @@ class DeviceNDArrayBase(object):
         # prepare gpu memory
         if self.size > 0:
             if gpu_data is None:
-                self.alloc_size = _driver.memory_size_from_info(self.shape,
-                                                                self.strides,
-                                                                self.dtype.itemsize)
+                self.alloc_size = _driver.memory_size_from_info(
+                    self.shape, self.strides, self.dtype.itemsize)
                 gpu_data = devices.get_context().memalloc(self.alloc_size)
             else:
                 self.alloc_size = _driver.device_memory_size(gpu_data)
@@ -147,7 +146,8 @@ class DeviceNDArrayBase(object):
         if axes and tuple(axes) == tuple(range(self.ndim)):
             return self
         elif self.ndim != 2:
-            raise NotImplementedError("transposing a non-2D DeviceNDArray isn't supported")
+            msg = "transposing a non-2D DeviceNDArray isn't supported"
+            raise NotImplementedError(msg)
         elif axes is not None and set(axes) != set(range(self.ndim)):
             raise ValueError("invalid axes list %r" % (axes,))
         else:
@@ -225,7 +225,8 @@ class DeviceNDArrayBase(object):
                 subok=True,
                 copy=not ary_core.flags['WRITEABLE'])
             check_array_compatibility(self_core, ary_core)
-            _driver.host_to_device(self, ary_core, self.alloc_size, stream=stream)
+            _driver.host_to_device(self, ary_core, self.alloc_size,
+                                   stream=stream)
 
     @devices.require_context
     def copy_to_host(self, ary=None, stream=0):
@@ -262,7 +263,8 @@ class DeviceNDArrayBase(object):
             hostary = ary
 
         if self.alloc_size != 0:
-            _driver.device_to_host(hostary, self, self.alloc_size, stream=stream)
+            _driver.device_to_host(hostary, self, self.alloc_size,
+                                   stream=stream)
 
         if ary is None:
             if self.size == 0:
@@ -325,9 +327,9 @@ class DeviceNDArrayBase(object):
         Parameters
         ----------
         axis : None or int or tuple of ints, optional
-            Subset of dimensions to remove. A `ValueError` is raised if an axis with
-            size greater than one is selected. If `None`, all axes with size one are
-            removed.
+            Subset of dimensions to remove. A `ValueError` is raised if an axis
+            with size greater than one is selected. If `None`, all axes with
+            size one are removed.
         stream : cuda stream or 0, optional
             Default stream for the returned view of the array.
 
@@ -429,6 +431,13 @@ def _assign_kernel(ndim):
         bake in the number of dimensions into the kernel
     """
     from numba import cuda  # circular!
+
+    if ndim == 0:
+        # the (2, ndim) allocation below is not yet supported, so avoid it
+        @cuda.jit
+        def kernel(lhs, rhs):
+            lhs[()] = rhs[()]
+        return kernel
 
     @cuda.jit
     def kernel(lhs, rhs):
@@ -585,9 +594,9 @@ class DeviceNDArray(DeviceNDArrayBase):
         newdata = self.gpu_data.view(*arr.extent)
 
         if isinstance(arr, dummyarray.Element):
-            # convert to a 1d array
-            shape = (1,)
-            strides = (self.dtype.itemsize,)
+            # convert to a 0d array
+            shape = ()
+            strides = ()
         else:
             shape = arr.shape
             strides = arr.strides
@@ -607,14 +616,13 @@ class DeviceNDArray(DeviceNDArrayBase):
                 rhs.ndim,
                 lhs.ndim))
         rhs_shape = np.ones(lhs.ndim, dtype=np.int64)
-        rhs_shape[-rhs.ndim:] = rhs.shape
+        # negative indices would not work if rhs.ndim == 0
+        rhs_shape[lhs.ndim - rhs.ndim:] = rhs.shape
         rhs = rhs.reshape(*rhs_shape)
         for i, (l, r) in enumerate(zip(lhs.shape, rhs.shape)):
             if r != 1 and l != r:
-                raise ValueError("Can't copy sequence with size %d to array axis %d with dimension %d" % (
-                    r,
-                    i,
-                    l))
+                raise ValueError("Can't copy sequence with size %d to array "
+                                 "axis %d with dimension %d" % ( r, i, l))
 
         # (3) do the copy
 
@@ -675,10 +683,17 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
         self.gpu_data = gpu_data
 
 
+class ManagedNDArray(DeviceNDArrayBase, np.ndarray):
+    """
+    A host array that uses CUDA managed memory.
+    """
+
+    def device_setup(self, gpu_data, stream=0):
+        self.gpu_data = gpu_data
+
+
 def from_array_like(ary, stream=0, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
-    if ary.ndim == 0:
-        ary = ary.reshape(1)
     return DeviceNDArray(ary.shape, ary.strides, ary.dtype,
                          writeback=ary, stream=stream, gpu_data=gpu_data)
 
@@ -748,9 +763,9 @@ def auto_device(obj, stream=0, copy=True):
         if isinstance(obj, np.void):
             devobj = from_record_like(obj, stream=stream)
         else:
-            # This allows you to pass non-array objects like constants
-            # and objects implementing the
-            # [array interface](https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.interface.html)
+            # This allows you to pass non-array objects like constants and
+            # objects implementing the array interface
+            # https://docs.scipy.org/doc/numpy-1.13.0/reference/arrays.interface.html
             # into this function (with no overhead -- copies -- for `obj`s
             # that are already `ndarray`s.
             obj = np.array(

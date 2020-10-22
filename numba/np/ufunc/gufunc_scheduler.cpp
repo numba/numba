@@ -279,26 +279,32 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
             return ret;
         } else {
             // There are more iterations than threads.
-            // Compute the modal number of iterations to assign to each thread.
-            intp ilen = ra_len / num_sched;
-
             std::vector<RangeActual> ret;
+            // cur holds the next unallocated iteration.
+            intp cur = 0;
             // For each thread...
             for(uintp i = 0; i < num_sched; ++i) {
+                // Compute the number of items to do in this thread as
+                // the floor of the amount of work left (ra_len-cur) divided
+                // by the number of threads left to which to allocate work.
+                intp ilen = ((ra_len-cur-1) / (num_sched-i)) + 1;
+
                 // Compute the start iteration number for that thread as the start iteration
                 // plus the modal number of iterations times the thread number.
-                intp start = full_space.start[0] + (ilen * i);
+                intp start = full_space.start[0] + cur;
                 intp end;
                 // If this isn't the last thread then the end iteration number is one less
                 // than the start iteration number of the next thread.  If it is the last
                 // thread then assign all remaining iterations to it.
                 if(i < num_sched-1) {
-                    end = full_space.start[0] + (ilen * (i+1)) - 1;
+                    end = full_space.start[0] + (cur + ilen) - 1;
                 } else {
                     end = full_space.end[0];
                 }
                 // Record the iteration start and end in the schedule.
                 ret.push_back(RangeActual(start, end));
+                // Update the next unallocated iteration.
+                cur += ilen;
             }
             return ret;
         }
@@ -327,6 +333,7 @@ std::vector<RangeActual> create_schedule(const RangeActual &full_space, uintp nu
 */
 extern "C" void do_scheduling_signed(uintp num_dim, intp *starts, intp *ends, uintp num_threads, intp *sched, intp debug) {
     if (debug) {
+        printf("do_scheduling_signed\n");
         printf("num_dim = %d\n", (int)num_dim);
         printf("ranges = (");
         for (unsigned i = 0; i < num_dim; i++) {
@@ -345,6 +352,7 @@ extern "C" void do_scheduling_signed(uintp num_dim, intp *starts, intp *ends, ui
 
 extern "C" void do_scheduling_unsigned(uintp num_dim, intp *starts, intp *ends, uintp num_threads, uintp *sched, intp debug) {
     if (debug) {
+        printf("do_scheduling_unsigned\n");
         printf("num_dim = %d\n", (int)num_dim);
         printf("ranges = (");
         for (unsigned i = 0; i < num_dim; i++) {

@@ -82,7 +82,7 @@ class TestTypingError(unittest.TestCase):
         # This used to print "'object' object has no attribute 'int32'"
         with self.assertRaises(TypingError) as raises:
             compile_isolated(unknown_module, ())
-        self.assertIn("Untyped global name 'numpyz'", str(raises.exception))
+        self.assertIn("name 'numpyz' is not defined", str(raises.exception))
 
     def test_issue_868(self):
         '''
@@ -211,7 +211,7 @@ class TestArgumentTypingError(unittest.TestCase):
             cfunc(1, foo, 1)
 
         expected=re.compile(("This error may have been caused by the following "
-                             "argument\(s\):\\n- argument 1:.*cannot determine "
+                             "argument\(s\):\\n- argument 1:.*Cannot determine "
                              "Numba type of "
                              "<class \'numba.tests.test_typingerror.Foo\'>"))
         self.assertTrue(expected.search(str(raises.exception)) is not None)

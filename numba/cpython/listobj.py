@@ -16,6 +16,7 @@ from numba.core.extending import overload_method, overload
 from numba.core.utils import cached_property
 from numba.misc import quicksort
 from numba.cpython import slicing
+from numba import literal_unroll
 
 
 def get_list_payload(context, builder, list_type, value):
@@ -1119,3 +1120,125 @@ def list_to_list(context, builder, fromty, toty, val):
     # Casting from non-reflected to reflected
     assert fromty.dtype == toty.dtype
     return val
+
+# -----------------------------------------------------------------------------
+# Implementations for types.LiteralList
+# -----------------------------------------------------------------------------
+
+_banned_error = errors.TypingError("Cannot mutate a literal list")
+
+
+# Things that mutate literal lists are banned
+@overload_method(types.LiteralList, 'append')
+def literal_list_banned_append(lst, obj):
+    raise _banned_error
+
+
+@overload_method(types.LiteralList, 'extend')
+def literal_list_banned_extend(lst, iterable):
+    raise _banned_error
+
+
+@overload_method(types.LiteralList, 'insert')
+def literal_list_banned_insert(lst, index, obj):
+    raise _banned_error
+
+
+@overload_method(types.LiteralList, 'remove')
+def literal_list_banned_remove(lst, value):
+    raise _banned_error
+
+
+@overload_method(types.LiteralList, 'pop')
+def literal_list_banned_pop(lst, index=-1):
+    raise _banned_error
+
+
+@overload_method(types.LiteralList, 'clear')
+def literal_list_banned_clear(lst):
+    raise _banned_error
+
+
+@overload_method(types.LiteralList, 'sort')
+def literal_list_banned_sort(lst, key=None, reverse=False):
+    raise _banned_error
+
+
+@overload_method(types.LiteralList, 'reverse')
+def literal_list_banned_reverse(lst):
+    raise _banned_error
+
+
+_index_end = types.intp.maxval
+@overload_method(types.LiteralList, 'index')
+def literal_list_index(lst, x, start=0, end=_index_end):
+    # TODO: To make this work, need consts as slice for start/end so as to
+    # be able to statically analyse the bounds, then its a just loop body
+    # versioning based iteration along with enumerate to find the item
+    if isinstance(lst, types.LiteralList):
+        msg = "list.index is unsupported for literal lists"
+        raise errors.TypingError(msg)
+
+@overload_method(types.LiteralList, 'count')
+def literal_list_count(lst, x):
+    if isinstance(lst, types.LiteralList):
+        def impl(lst, x):
+            count = 0
+            for val in literal_unroll(lst):
+                if val == x:
+                    count += 1
+            return count
+        return impl
+
+@overload_method(types.LiteralList, 'copy')
+def literal_list_count(lst):
+    if isinstance(lst, types.LiteralList):
+        def impl(lst):
+            return lst # tuples are immutable, as is this, so just return it
+        return impl
+
+@overload(operator.delitem)
+def literal_list_delitem(lst, index):
+    if isinstance(lst, types.LiteralList):
+        raise _banned_error
+
+@overload(operator.setitem)
+def literal_list_setitem(lst, index, value):
+    if isinstance(lst, types.LiteralList):
+        raise errors.TypingError("Cannot mutate a literal list")
+
+@overload(operator.getitem)
+def literal_list_getitem(lst, *args):
+    if not isinstance(lst, types.LiteralList):
+        return
+    msg = ("Cannot __getitem__ on a literal list, return type cannot be "
+           "statically determined.")
+    raise errors.TypingError(msg)
+
+@overload(len)
+def literal_list_len(lst):
+    if not isinstance(lst, types.LiteralList):
+        return
+    l = lst.count
+    return lambda lst: l
+
+@overload(operator.contains)
+def literal_list_contains(lst, item):
+    if isinstance(lst, types.LiteralList):
+        def impl(lst, item):
+            for val in literal_unroll(lst):
+                if val == item:
+                    return True
+            return False
+        return impl
+
+@lower_cast(types.LiteralList, types.LiteralList)
+def literallist_to_literallist(context, builder, fromty, toty, val):
+    if len(fromty) != len(toty):
+        # Disallowed by typing layer
+        raise NotImplementedError
+
+    olditems = cgutils.unpack_tuple(builder, val, len(fromty))
+    items = [context.cast(builder, v, f, t)
+             for v, f, t in zip(olditems, fromty, toty)]
+    return context.make_tuple(builder, toty, items)

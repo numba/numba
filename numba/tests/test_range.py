@@ -31,12 +31,6 @@ def loop3(a, b, c):
     return s
 
 
-def xrange_usecase(n):
-    s = 0
-    for i in xrange(n):
-        s += i
-    return s
-
 def range_len1(n):
     return len(range(n))
 

@@ -7,7 +7,6 @@ from numba.core import types, errors
 from numba import prange
 from numba.parfors.parfor import internal_prange
 
-from numba.core.utils import RANGE_ITER_OBJECTS
 from numba.core.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                          AbstractTemplate, infer_global, infer,
                                          infer_getattr, signature,
@@ -69,6 +68,9 @@ class Slice(ConcreteTemplate):
     ]
 
 
+@infer_global(range, typing_key=range)
+@infer_global(prange, typing_key=prange)
+@infer_global(internal_prange, typing_key=internal_prange)
 class Range(ConcreteTemplate):
     cases = [
         signature(types.range_state32_type, types.int32),
@@ -85,11 +87,6 @@ class Range(ConcreteTemplate):
                   types.uint64),
     ]
 
-for func in RANGE_ITER_OBJECTS:
-    infer_global(func, typing_key=range)(Range)
-
-infer_global(prange, typing_key=prange)(Range)
-infer_global(internal_prange, typing_key=internal_prange)(Range)
 
 @infer
 class GetIter(AbstractTemplate):
@@ -434,11 +431,7 @@ class CmpOpGe(OrderedCmpOp):
     pass
 
 
-@infer_global(operator.eq)
-class CmpOpEq(UnorderedCmpOp):
-    pass
-
-
+# more specific overloads should be registered first
 @infer_global(operator.eq)
 class ConstOpEq(AbstractTemplate):
     def generic(self, args, kws):
@@ -450,6 +443,11 @@ class ConstOpEq(AbstractTemplate):
 
 @infer_global(operator.ne)
 class ConstOpNotEq(ConstOpEq):
+    pass
+
+
+@infer_global(operator.eq)
+class CmpOpEq(UnorderedCmpOp):
     pass
 
 
@@ -606,14 +604,49 @@ class StaticGetItemTuple(AbstractTemplate):
 
     def generic(self, args, kws):
         tup, idx = args
+        ret = None
         if not isinstance(tup, types.BaseTuple):
             return
         if isinstance(idx, int):
             ret = tup.types[idx]
         elif isinstance(idx, slice):
             ret = types.BaseTuple.from_types(tup.types[idx])
-        return signature(ret, *args)
+        if ret is not None:
+            sig = signature(ret, *args)
+            return sig
 
+
+@infer
+class StaticGetItemLiteralList(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        tup, idx = args
+        ret = None
+        if not isinstance(tup, types.LiteralList):
+            return
+        if isinstance(idx, int):
+            ret = tup.types[idx]
+        if ret is not None:
+            sig = signature(ret, *args)
+            return sig
+
+
+@infer
+class StaticGetItemLiteralStrKeyDict(AbstractTemplate):
+    key = "static_getitem"
+
+    def generic(self, args, kws):
+        tup, idx = args
+        ret = None
+        if not isinstance(tup, types.LiteralStrKeyDict):
+            return
+        if isinstance(idx, str):
+            lookup = tup.fields.index(idx)
+            ret = tup.types[lookup]
+        if ret is not None:
+            sig = signature(ret, *args)
+            return sig
 
 # Generic implementation for "not in"
 

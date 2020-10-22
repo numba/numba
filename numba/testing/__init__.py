@@ -33,19 +33,6 @@ def load_testsuite(loader, dir):
         sys.exit(-1)
 
 
-def allow_interpreter_mode(fn):
-    """Temporarily re-enable interpreter mode
-    """
-    @functools.wraps(fn)
-    def _core(*args, **kws):
-        config.COMPATIBILITY_MODE = True
-        try:
-            fn(*args, **kws)
-        finally:
-            config.COMPATIBILITY_MODE = False
-    return _core
-
-
 def run_tests(argv=None, defaultTest=None, topleveldir=None,
               xmloutput=None, verbosity=1, nomultiproc=False):
     """
