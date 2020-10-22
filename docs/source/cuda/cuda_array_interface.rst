@@ -158,6 +158,19 @@ requirements:
    aware of any particulars of the CAI - in other words, exchanging data between
    Producers and Consumers that operate on data asynchronously should be correct
    by default.
+
+   - An exception to this requirement is made for Producers and Consumers that
+     explicitly document that the User is required to take additional steps to
+     ensure correctness with respect to synchronization. In this case, Users
+     are required to understand the details of the CUDA Array Interface, and
+     the Producer/Consumer library documentation must specify the steps that
+     Users are required to take.
+
+     Use of this exception should be avoided where possible, as it is provided
+     for libraries that cannot implement the synchronization semantics without
+     the involvement of the User - for example, those interfacing with
+     third-party libraries oblivious to the CUDA Array Interface. 
+
 3. Where the User is aware of the particulars of the CAI and implementation
    details of the Producer and Consumer, they should be able to, at their
    discretion, override some of the synchronization semantics of the interface
