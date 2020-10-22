@@ -131,7 +131,7 @@ In the following example:
 
 When the ``add`` kernel is launched:
 
-- ``a``, ``b``, ``c`` are Producers.
+- ``a``, ``b``, ``out`` are Producers.
 - The ``add`` kernel is the Consumer.
 - The User Code is specifically ``add[1, 32](a, b, out)``.
 - The author of the code is the User.
@@ -140,7 +140,7 @@ When the ``add`` kernel is launched:
 Design Motivations
 ~~~~~~~~~~~~~~~~~~
 
-Elements of the CAI design related to synchronization seek to fulfil these
+Elements of the CAI design related to synchronization seek to fulfill these
 requirements:
 
 1. Producers and Consumers that exchange data through the CAI must be able to do
