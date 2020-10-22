@@ -209,10 +209,21 @@ exchanging data. Expected behaviour of the Consumer is as follows:
 
 When exporting an array through the CAI, Producers must ensure that:
 
-* There is work on the data enqueued on at most one stream.
-* If there is work on the data enqueued on a stream, then ``stream`` is the
-  stream on which pending operations on the data are enqueued. There must not be
-  any work enqueued on the data in any other streams.
+* If there is work on the data enqueued in one or more streams, then
+  synchronization on the provided ``stream`` is sufficient to ensure
+  synchronization with all pending work.
+
+  - If the Producer has no enqueued work, or work only enqueued on the stream
+    identified by ``stream``, then this condition is met.
+  - If the Producer has enqueued work on the data on multiple streams, then it
+    must enqueue events on those streams that follow the enqueued work, and
+    then wait on those events in the provided ``stream``. For example:
+
+    1. Work is enqueued by the Producer on streams ``7``, ``9``, and ``15``.
+    2. Events are then enqueued on each of streams ``7``, ``9``, and ``15``.
+    3. Waits on the events from Step 2 are enqueued into stream ``3``, and the
+       ``stream`` entry is set to ``3``.
+
 * If there is no work enqueued on the data, then the ``stream`` entry may be
   either ``None``, or not provided.
 
