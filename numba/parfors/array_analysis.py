@@ -2069,8 +2069,10 @@ class ArrayAnalysis(object):
         # None to say we won't track this tuple if a part of it
         # is an array.
         for x in expr.items:
-            if (isinstance(x, ir.Var) and
-                isinstance(self.typemap[x.name], types.ArrayCompatible)):
+            if (
+                isinstance(x, ir.Var)
+                and isinstance(self.typemap[x.name], types.ArrayCompatible)
+            ):
                 return None
 
         consts = []
