@@ -76,17 +76,12 @@ The following are optional entries:
             and will raise a `NotImplementedError` exception if one is passed
             to a GPU function.
 
-- **stream**: ``integer``
+- **stream**: ``None`` or ``integer``
 
-  An optional stream upon which synchronization may take place. See the
-  :ref:`cuda-array-interface-synchronization` section below.
-
-- **sync**: ``bool``
-
-  Generally, if **sync** is given and is ``True``, then the consumer must either
-  synchronize on the provided **stream** at the point of consumption, or enqueue
-  operations on the data on the given **stream**. See
-  :ref:`cuda-array-interface-synchronization` for further details.
+  An optional stream upon which synchronization must take place at the point of
+  consumption, either by synchronizing on the stream or enqueuing operations on
+  the data on the given stream. See the
+  :ref:`cuda-array-interface-synchronization` section below for further details.
 
 
 .. _cuda-array-interface-synchronization:
@@ -170,67 +165,66 @@ requirements:
 Interface Requirements
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The ``sync`` and ``stream`` items of the interface indicate whether and how
-synchronization is expected so that producers and consumers that operate
-asynchronously can avoid hazards when exchanging data through the CUDA Array
-Interface.
+The ``stream`` entry enables Producers and Consumers to avoid hazards when
+exchanging data. Expected behaviour of the Consumer is as follows:
 
-From the Consumer's perspective:
+* When ``stream`` is not present or is ``None``:
 
-* ``stream`` indicates the stream on which the Producer may have in-progress
-  operations on the data, and which the Consumer may be expected to either:
+  - No synchronization is required on the part of the Consumer.
+  - The Consumer may enqueue operations on the underlying data immediately on
+    any stream.
 
-  - synchronize on before accessing the data, or,
-  - enqueue operations in when accessing the data.
+* When ``stream`` is an integer, its value indicates the stream on which the
+  Producer may have in-progress operations on the data, and which the Consumer
+  is be expected to either:
 
-  Whether one of these requirements applies depends partly on the ``sync``
-  parameter, and partly on the User's choice.
+  - Synchronize on before accessing the data, or
+  - Enqueue operations in when accessing the data.
 
-* ``sync`` indicates the requirement for synchronization on the given
-  ``stream``.
+  The Consumer can choose which mechanism to use, with the following
+  considerations:
 
-  - When ``sync`` is ``False``, or the User has set the Consumer to ignore CAI
-    synchronization semantics, the Consumer may assume that operating
-    on the data is immediately permitted, with no further synchronization.
-  - When ``sync`` is ``True``, and the User has not overridden CAI
-    synchronization semantics, then the Consumer must either:
+  - If the Consumer synchronizes on the provided stream prior to accessing the
+    data, then it must ensure that no computation can take place in the provided
+    stream until its operations in its own choice of stream have taken place.
+    This could be achieved by either:
 
-    - Synchronize on the provided stream prior to accessing the data. If after
-      synchronization the Consumer operates on the data in another stream, it
-      must ensure that no computation can take place in the provided stream
-      until its operations in its own choice of stream have taken place. This
-      could be achieved by either:
+    - Placing a wait on an event in the provided stream that occurs once all
+      of the Consumer's operations on the data are completed, or
+    - Avoiding returning control to the user code until after its operations
+      on its own stream have completed.
 
-      - Placing a wait on an event in the provided stream that occurs once all
-        of the Consumer's operations on the data are completed, or
-      - Avoiding returning control to the user code until after its operations
-        on its own stream have completed.
+  - If the consumer chooses to only enqueue operations on the data in the
+    provided stream, then it may return control to the User code immediately
+    after enqueueing its work, as the work will all be serialized on the
+    exported array's stream. This is sufficient to ensure correctness even if
+    the User code were to induce the Producer to subsequently start enqueueing
+    more work on the same stream.
 
-    - Only enqueuing operations on the data in the provided stream. The Consumer
-      may return control to the User code immediately after enqueueing its work,
-      as the work will all be serialized on the exported array's stream, ensuring
-      correctness even if the User code were to induce the Producer to
-      subsequently start enqueueing more work on the same stream.
+* If the User has set the Consumer to ignore CAI synchronization semantics, the
+  Consumer may assume it can operate on the data immediately in any stream with
+  no further synchronization, even if the ``stream`` member has an integer
+  value.
+
 
 When exporting an array through the CAI, Producers must ensure that:
 
 * There is work on the data enqueued on at most one stream.
-* If there is work on the data enqueued on a stream, then ``sync`` should be
-  ``True``, and ``stream`` is the stream on which pending operations on the data
-  are enqueued. There must not be any work enqueued on the data in any other
-  streams.
-* If there is no work enqueued on the data, then ``sync`` should be ``False``,
-  and ``stream`` may be either ``None``, or a stream on which it is suggested
-  that work on the data is enqueued.
+* If there is work on the data enqueued on a stream, then ``stream`` is the
+  stream on which pending operations on the data are enqueued. There must not be
+  any work enqueued on the data in any other streams.
+* If there is no work enqueued on the data, then the ``stream`` entry may be
+  either ``None``, or not provided.
 
 Optionally, to facilitate the User to relax the conformance to synchronization
 semantics:
 
-* Producers may provide a configuration option to always set ``sync`` to
-  ``False``.
-* Consumers may provide a configuration option to ignore the value of ``sync``,
-  therefore eliding synchronizations on the Producer-provided streams, and/or
-  enqueuing work on streams other than that provided by the Producer.
+* Producers may provide a configuration option to always set ``stream`` to
+  ``None``.
+* Consumers may provide a configuration option to ignore the value of ``stream``
+  and act as if it were ``None`` or not provided.  This elides synchronization
+  on the Producer-provided streams, and allows enqueuing work on streams other
+  than that provided by the Producer.
 
 These options should be not be set by default in either a Producer or a
 Consumer. The exact mechanism by which these options are set, and related
@@ -248,17 +242,20 @@ synchronization semantics, Numba exhibits the following behaviors related to
 synchronization of the interface:
 
 - When Numba acts as a Consumer (for example when an array-like object is passed
-  to a kernel launch), if the ``sync`` item is ``True``, then Numba will
-  immediately synchronize on the provided ``stream``.
+  to a kernel launch): If ``stream`` is an integer, then Numba will immediately
+  synchronize on the provided ``stream``.
 - When Numba acts as a Producer (when the ``__cuda_array_interface__`` property
-  of a Numba Device Array is accessed), the default stream for the Device Array
-  is given as the ``stream``, and ``sync`` is always set to ``True``.
+  of a Numba Device Array is accessed): If the exported Device Array has a
+  *default stream*, then it is given as the ``stream`` entry. Otherwise,
+  ``stream`` is set to ``None``.
 
-.. note:: In Numba's terminology, the default stream for a Device Array is a
+.. note:: In Numba's terminology, the *default stream* for a Device Array is a
           property of the Device Array specifying the stream in which Numba will
           enqueue asynchronous transfers on if no other stream is provided as an
           argument to the function invoking the transfer. It is not the same as
-          the *Default Stream* in normal CUDA terminology.
+          the `Default Stream
+          <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#default-stream>`_
+          in normal CUDA terminology.
 
 Resulting from these properties, these consequences are intended:
 
@@ -269,12 +266,12 @@ Resulting from these properties, these consequences are intended:
   are not the default stream for their parameters, because doing so would
   violate the requirements for a Producer.
 
-  - Warning the user when they do this could be added, the present
+  - Warning the user when they do this could be added. The present
     implementation is a minimal prototype to help illustrate the interface
     specification.
 
 - There is presently no option in Numba for the User to override synchronization
-  semantics. This may be added to the implementation at a later stage.
+  semantics. This may be added to the implementation in future.
 
 
 Lifetime management
