@@ -610,7 +610,7 @@ def ptx_atomic_sub(context, builder, dtype, ptr, val):
 @lower(stubs.atomic.and_, types.Array, types.Tuple, types.Any)
 @_atomic_dispatcher
 def ptx_atomic_and(context, builder, dtype, ptr, val):
-    if dtype in (types.int32, types.int64, types.uint32, types.uint64):
+    if dtype in (cuda.cudadecl.integer_numba_types):
         return builder.atomic_rmw('and', ptr, val, 'monotonic')
     else:
         raise TypeError('Unimplemented atomic and with %s array' % dtype)
