@@ -48,10 +48,12 @@ def from_cuda_array_interface(desc, owner=None):
     devptr = driver.get_devptr_for_active_ctx(desc['data'][0])
     data = driver.MemoryPointer(
         current_context(), devptr, size=size, owner=owner)
-    stream_ptr = desc.get('stream', 0)
-    stream = external_stream(stream_ptr) if stream_ptr else legacy_default_stream()
-    if desc.get('sync', False):
+    stream_ptr = desc.get('stream', None)
+    if stream is not None:
+        stream = external_stream(stream_ptr)
         stream.synchronize()
+    else:
+        stream = 0 # No "Numba default stream", not the CUDA default stream
     da = devicearray.DeviceNDArray(shape=shape, strides=strides,
                                    dtype=dtype, gpu_data=data,
                                    stream=stream)

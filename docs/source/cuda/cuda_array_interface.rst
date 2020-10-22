@@ -281,7 +281,8 @@ synchronization of the interface:
 
 - When Numba acts as a Consumer (for example when an array-like object is passed
   to a kernel launch): If ``stream`` is an integer, then Numba will immediately
-  synchronize on the provided ``stream``.
+  synchronize on the provided ``stream``, and set the *default stream* of the
+  array to the provided stream.
 - When Numba acts as a Producer (when the ``__cuda_array_interface__`` property
   of a Numba Device Array is accessed): If the exported Device Array has a
   *default stream*, then it is given as the ``stream`` entry. Otherwise,
