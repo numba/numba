@@ -83,6 +83,10 @@ The following are optional entries:
   the data on the given stream. See the
   :ref:`cuda-array-interface-synchronization` section below for further details.
 
+  In a future revision of the interface, this entry may be expanded (or another
+  entry added) so that an event to synchronize on can be specified instead of a
+  stream.
+
 
 .. _cuda-array-interface-synchronization:
 
