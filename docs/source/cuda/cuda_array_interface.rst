@@ -80,7 +80,17 @@ The following are optional entries:
 
   An optional stream upon which synchronization must take place at the point of
   consumption, either by synchronizing on the stream or enqueuing operations on
-  the data on the given stream. See the
+  the data on the given stream. Integer values this entry are as follows:
+
+  - ``0``: This is disallowed as it would be ambiguous between ``None`` and the
+    default stream, and also between the legacy and per-thread default streams.
+    Any use case where ``0`` might be given should either use ``None``, ``1``,
+    or ``2`` instead for clarity.
+  - ``1``: The legacy default stream.
+  - ``2``: The per-thread default stream.
+  - Any other integer: a non-default stream.
+
+  See the
   :ref:`cuda-array-interface-synchronization` section below for further details.
 
   In a future revision of the interface, this entry may be expanded (or another
