@@ -616,6 +616,17 @@ def ptx_atomic_and(context, builder, dtype, ptr, val):
         raise TypeError('Unimplemented atomic and with %s array' % dtype)
 
 
+@lower(stubs.atomic.xor, types.Array, types.intp, types.Any)
+@lower(stubs.atomic.xor, types.Array, types.UniTuple, types.Any)
+@lower(stubs.atomic.xor, types.Array, types.Tuple, types.Any)
+@_atomic_dispatcher
+def ptx_atomic_xor(context, builder, dtype, ptr, val):
+    if dtype in (cuda.cudadecl.integer_numba_types):
+        return builder.atomic_rmw('xor', ptr, val, 'monotonic')
+    else:
+        raise TypeError('Unimplemented atomic xor with %s array' % dtype)
+
+
 @lower(stubs.atomic.max, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.max, types.Array, types.Tuple, types.Any)
 @lower(stubs.atomic.max, types.Array, types.UniTuple, types.Any)

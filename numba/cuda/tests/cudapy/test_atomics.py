@@ -217,6 +217,30 @@ def atomic_and_global_2(ary, op2):
                               atomic_cast_none)
 
 
+def atomic_xor(ary, op2):
+    atomic_binary_1dim_shared(ary, ary, op2, uint32, 32,
+                              cuda.atomic.xor, atomic_cast_none, 0)
+
+
+def atomic_xor2(ary, op2):
+    atomic_binary_2dim_shared(ary, op2, uint32, (4, 8),
+                              cuda.atomic.xor, atomic_cast_none)
+
+
+def atomic_xor3(ary, op2):
+    atomic_binary_2dim_shared(ary, op2, uint32, (4, 8),
+                              cuda.atomic.xor, atomic_cast_to_uint64)
+
+
+def atomic_xor_global(idx, ary, op2):
+    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.xor)
+
+
+def atomic_xor_global_2(ary, op2):
+    atomic_binary_2dim_global(ary, op2, cuda.atomic.xor,
+                              atomic_cast_none)
+
+
 def gen_atomic_extreme_funcs(func):
 
     fns = dedent("""
@@ -564,6 +588,57 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func = cuda.jit('void(uint32[:,:], uint32)')(atomic_and_global_2)
         cuda_func[1, (4, 8)](ary, rand_const)
         np.testing.assert_equal(ary, orig & rand_const)
+
+    def test_atomic_xor(self):
+        rand_const = np.random.randint(500)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32)
+        orig = ary.copy()
+        cuda_func = cuda.jit('void(uint32[:], uint32)')(atomic_xor)
+        cuda_func[1, 32](ary, rand_const)
+
+        gold = np.zeros(32, dtype=np.uint32)
+        for i in range(orig.size):
+            gold[orig[i]] ^= rand_const
+
+        self.assertTrue(np.all(ary == gold))
+
+    def test_atomic_xor2(self):
+        rand_const = np.random.randint(500)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+        orig = ary.copy()
+        cuda_atomic_xor2 = cuda.jit('void(uint32[:,:], uint32)')(atomic_xor2)
+        cuda_atomic_xor2[1, (4, 8)](ary, rand_const)
+        self.assertTrue(np.all(ary == orig ^ rand_const))
+
+    def test_atomic_xor3(self):
+        rand_const = np.random.randint(500)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+        orig = ary.copy()
+        cuda_atomic_xor3 = cuda.jit('void(uint32[:,:], uint32)')(atomic_xor3)
+        cuda_atomic_xor3[1, (4, 8)](ary, rand_const)
+        self.assertTrue(np.all(ary == orig ^ rand_const))
+
+    def test_atomic_xor_global(self):
+        rand_const = np.random.randint(500)
+        idx = np.random.randint(0, 32, size=32, dtype=np.int32)
+        ary = np.random.randint(0, 32, size=32, dtype=np.int32)
+        gold = ary.copy()
+        sig = 'void(int32[:], int32[:], int32)'
+        cuda_func = cuda.jit(sig)(atomic_xor_global)
+        cuda_func[1, 32](idx, ary, rand_const)
+
+        for i in range(idx.size):
+            gold[idx[i]] ^= rand_const
+
+        np.testing.assert_equal(ary, gold)
+
+    def test_atomic_xor_global_2(self):
+        rand_const = np.random.randint(500)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+        orig = ary.copy()
+        cuda_func = cuda.jit('void(uint32[:,:], uint32)')(atomic_xor_global_2)
+        cuda_func[1, (4, 8)](ary, rand_const)
+        np.testing.assert_equal(ary, orig ^ rand_const)
 
     def check_atomic_max(self, dtype, lo, hi):
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
