@@ -43,7 +43,7 @@ def from_cuda_array_interface(desc, owner=None):
     data = driver.MemoryPointer(
         current_context(), devptr, size=size, owner=owner)
     stream_ptr = desc.get('stream', None)
-    if stream is not None:
+    if stream_ptr is not None:
         stream = external_stream(stream_ptr)
         stream.synchronize()
     else:
