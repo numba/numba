@@ -75,7 +75,7 @@ class BaseTest(TestCase):
         cfunc = self.cfunc
         for val in list(values):
             nb_hash = cfunc(val)
-            self.assertIsInstance(nb_hash, utils.INT_TYPES)
+            self.assertIsInstance(nb_hash, int)
             try:
                 self.assertEqual(nb_hash, hash(val))
             except AssertionError as e:

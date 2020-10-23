@@ -1,5 +1,3 @@
-import sys
-
 import numpy as np
 from numba import cuda
 from numba.core import types
@@ -186,7 +184,7 @@ class TestRecordDtype(CUDATestCase):
         self._test_rec_set(np.int32(2), record_set_b, 'b')
 
     def test_rec_set_c(self):
-        self._test_rec_set(np.complex64(4.0+5.0j), record_set_c, 'c')
+        self._test_rec_set(np.complex64(4.0 + 5.0j), record_set_c, 'c')
 
     def _test_rec_read(self, v, pyfunc, f):
         rec = self.sample1d.copy()[0]
@@ -204,7 +202,7 @@ class TestRecordDtype(CUDATestCase):
         self._test_rec_read(np.int32(2), record_read_b, 'b')
 
     def test_rec_read_c(self):
-        self._test_rec_read(np.complex64(4.0+5.0j), record_read_c, 'c')
+        self._test_rec_read(np.complex64(4.0 + 5.0j), record_read_c, 'c')
 
     def test_record_write_1d_array(self):
         '''
@@ -234,7 +232,7 @@ class TestRecordDtype(CUDATestCase):
         expected = self.samplerec2darr.copy()
         expected['i'] = 3
         expected['j'][:] = np.asarray([5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
-                                       np.float32).reshape(3, 2)
+                                      np.float32).reshape(3, 2)
         np.testing.assert_equal(expected, rec)
 
     def test_record_read_1d_array(self):
@@ -252,7 +250,6 @@ class TestRecordDtype(CUDATestCase):
 
         np.testing.assert_equal(rec['h'], arr)
 
-
     def test_record_read_2d_array(self):
         '''
         Test reading from a 2D array within a structured type
@@ -269,7 +266,7 @@ class TestRecordDtype(CUDATestCase):
         np.testing.assert_equal(rec['j'], arr)
 
 
-@skip_on_cudasim('Attribute access of structured arrays not supported in simulator')
+@skip_on_cudasim('Structured array attr access not supported in simulator')
 class TestRecordDtypeWithStructArrays(TestRecordDtype):
     '''
     Same as TestRecordDtype, but using structured arrays instead of recarrays.

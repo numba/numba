@@ -1183,8 +1183,7 @@ def number_not_impl(context, builder, sig, args):
     res = builder.not_(istrue)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
-
-@lower_builtin(bool, types.boolean)
+@lower_builtin(bool, types.Boolean)
 def bool_as_bool(context, builder, sig, args):
     [val] = args
     return val
@@ -1310,8 +1309,8 @@ def boolean_to_any(context, builder, fromty, toty, val):
     asint = builder.zext(val, Type.int())
     return context.cast(builder, asint, types.int32, toty)
 
-
 @lower_cast(types.IntegerLiteral, types.Boolean)
+@lower_cast(types.BooleanLiteral, types.Boolean)
 def literal_int_to_boolean(context, builder, fromty, toty, val):
     lit = context.get_constant_generic(
         builder,

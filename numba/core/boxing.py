@@ -27,6 +27,7 @@ def unbox_boolean(typ, obj, c):
 
 
 @box(types.IntegerLiteral)
+@box(types.BooleanLiteral)
 def box_literal_integer(typ, val, c):
     val = c.context.cast(c.builder, val, typ, typ.literal_type)
     return c.box(typ.literal_type, val)
@@ -1095,3 +1096,7 @@ def unbox_meminfo_pointer(typ, obj, c):
 def unbox_typeref(typ, val, c):
     return NativeValue(c.context.get_dummy_value(), is_error=cgutils.false_bit)
 
+
+@box(types.LiteralStrKeyDict)
+def box_LiteralStrKeyDict(typ, val, c):
+    return box_unsupported(typ, val, c)

@@ -1,31 +1,9 @@
-from contextlib import contextmanager
 import warnings
 from numba.core import (errors, types, typing, funcdesc, config, pylowering,
                         transforms)
 from numba.core.compiler_machinery import (FunctionPass, LoweringPass,
                                            register_pass)
 from collections import defaultdict
-
-
-@contextmanager
-def giveup_context(state, msg):
-    """
-    Wraps code that would signal a fallback to interpreter mode
-    """
-    try:
-        yield
-    except Exception as e:
-        if not state.status.can_giveup:
-            raise
-        else:
-            # Clear all references attached to the traceback
-            e = e.with_traceback(None)
-            warnings.warn_explicit('%s: %s' % (msg, e),
-                                   errors.NumbaWarning,
-                                   state.func_id.filename,
-                                   state.func_id.firstlineno)
-
-            raise
 
 
 @register_pass(mutates_CFG=True, analysis_only=False)
@@ -127,20 +105,17 @@ class ObjectModeBackEnd(LoweringPass):
             """
             Object mode compilation
             """
-            with giveup_context(state,
-                                "Function %s failed at object mode lowering"
-                                % (state.func_id.func_name,)):
-                if len(state.args) != state.nargs:
-                    # append missing
-                    # BUG?: What's going on with nargs here?
-                    # check state.nargs vs self.nargs on original code
-                    state.args = (tuple(state.args) + (types.pyobject,) *
-                                  (state.nargs - len(state.args)))
+            if len(state.args) != state.nargs:
+                # append missing
+                # BUG?: What's going on with nargs here?
+                # check state.nargs vs self.nargs on original code
+                state.args = (tuple(state.args) + (types.pyobject,) *
+                              (state.nargs - len(state.args)))
 
-                return self._py_lowering_stage(state.targetctx,
-                                               state.library,
-                                               state.func_ir,
-                                               state.flags)
+            return self._py_lowering_stage(state.targetctx,
+                                           state.library,
+                                           state.func_ir,
+                                           state.flags)
 
         lowered = backend_object_mode()
         signature = typing.signature(state.return_type, *state.args)
@@ -155,7 +130,6 @@ class ObjectModeBackEnd(LoweringPass):
             call_helper=lowered.call_helper,
             signature=signature,
             objectmode=True,
-            interpmode=False,
             lifted=state.lifted,
             fndesc=lowered.fndesc,
             environment=lowered.env,
@@ -177,7 +151,7 @@ class ObjectModeBackEnd(LoweringPass):
             warnings.warn(errors.NumbaWarning(warn_msg,
                                               state.func_ir.loc))
 
-            url = ("http://numba.pydata.org/numba-doc/latest/reference/"
+            url = ("https://numba.pydata.org/numba-doc/latest/reference/"
                    "deprecation.html#deprecation-of-object-mode-fall-"
                    "back-behaviour-when-using-jit")
             msg = ("\nFall-back from the nopython compilation path to the "
@@ -192,32 +166,4 @@ class ObjectModeBackEnd(LoweringPass):
                 warnings.warn_explicit(warn_msg, errors.NumbaWarning,
                                        state.func_id.filename,
                                        state.func_id.firstlineno)
-        return True
-
-
-@register_pass(mutates_CFG=True, analysis_only=False)
-class CompileInterpMode(LoweringPass):
-
-    _name = "compile_interp_mode"
-
-    def __init__(self):
-        LoweringPass.__init__(self)
-
-    def run_pass(self, state):
-        """
-        Just create a compile result for interpreter mode
-        """
-        args = [types.pyobject] * len(state.args)
-        signature = typing.signature(types.pyobject, *args)
-        from numba.core.compiler import compile_result
-        state.cr = compile_result(typing_context=state.typingctx,
-                                  target_context=state.targetctx,
-                                  entry_point=state.func_id.func,
-                                  typing_error=state.status.fail_reason,
-                                  type_annotation="<Interpreter mode function>",
-                                  signature=signature,
-                                  objectmode=False,
-                                  interpmode=True,
-                                  lifted=(),
-                                  fndesc=None,)
         return True
