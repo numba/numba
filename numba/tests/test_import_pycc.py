@@ -1,10 +1,11 @@
 from numba.pycc import CC
 from numba import i8
 from numba.core.types import DictType, unicode_type
-from numba.typed import List, Dict
+from numba.typed import Dict
 from numba.tests.support import TestCase
 import unittest
-import os, glob
+import os
+import glob
 
 
 class TestImportStringHashing(TestCase):
@@ -16,23 +17,21 @@ class TestImportStringHashing(TestCase):
     def setUp(self):
         cc = CC('str_dict_module')
 
-        nb_nt = DictType(unicode_type,i8)
-
         @cc.export('in_str_dict',(DictType(unicode_type,i8),unicode_type))
         def in_str_dict(d,x):
-           if(x not in d):
-              d[x] = len(d)
+            if(x not in d):
+                d[x] = len(d)
 
         @cc.export('out_str_dict',DictType(unicode_type,i8)(unicode_type,))
         def out_str_dict(x):
-           d = Dict.empty(unicode_type,i8)
-           if(x not in d):
-              d[x] = len(d)
-           return d
+            d = Dict.empty(unicode_type,i8)
+            if(x not in d):
+                d[x] = len(d)
+            return d
 
         @cc.export('hash_str',(unicode_type,))
         def hash_str(x):
-           return hash(x)
+            return hash(x)
 
         cc.compile()
 
@@ -48,6 +47,6 @@ class TestImportStringHashing(TestCase):
     def tearDown(self):
         os.remove(glob.glob("str_dict_module.*[dll|so]")[0])
 
+
 if __name__ == "__main__":
     unittest.main()
-        
