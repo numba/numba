@@ -30,14 +30,20 @@ class TestImportStringHashing(TestCase):
               d[x] = len(d)
            return d
 
+        @cc.export('hash_str',(unicode_type,))
+        def hash_str(x):
+           return hash(x)
+
         cc.compile()
 
     def test_import_str_dicts(self):
         from str_dict_module import in_str_dict as _in_str_dict
         from str_dict_module import out_str_dict as _out_str_dict
+        from str_dict_module import hash_str as _hash_str
         d = _out_str_dict('boop')
         _in_str_dict(d,'beep')
         self.assertEqual(d['beep'], 1)
+        self.assertEqual(_hash_str('beep'), hash('beep'))
 
     def tearDown(self):
         os.remove(glob.glob("str_dict_module.*[dll|so]")[0])
