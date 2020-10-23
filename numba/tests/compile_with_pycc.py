@@ -117,6 +117,7 @@ def dict_usecase(arr):
         out[k] = k * v
     return out
 
+# checks for issue #6386
 @cc_nrt.export('internal_str_dict', i8(unicode_type))
 def internal_str_dict(x):
     d = typed.Dict.empty(unicode_type,i8)
