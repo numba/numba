@@ -37,9 +37,9 @@ class TestImportStringHashing(TestCase):
         cc.compile()
 
     def test_import_str_dicts(self):
-        from str_dict_module import in_str_dict as _in_str_dict
-        from str_dict_module import out_str_dict as _out_str_dict
-        from str_dict_module import hash_str as _hash_str
+        from numba.tests.str_dict_module import in_str_dict as _in_str_dict
+        from numba.tests.str_dict_module import out_str_dict as _out_str_dict
+        from numba.tests.str_dict_module import hash_str as _hash_str
         d = _out_str_dict('boop')
         _in_str_dict(d,'beep')
         self.assertEqual(d['beep'], 1)
@@ -51,5 +51,3 @@ class TestImportStringHashing(TestCase):
 if __name__ == "__main__":
     unittest.main()
         
-
-
