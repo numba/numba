@@ -655,7 +655,7 @@ def _inject_hashsecret_read(tyctx, name):
             # Inject the symbol if not already exist.
             gv = ir.GlobalVariable(mod, ir.IntType(64), name=sym)
             #Makes symbol non-external, prevents undefined error when import AOT
-            gv.linkage = "linkonce"
+            gv.linkage = "extern_weak"
         v = builder.load(gv)
         return v
 
