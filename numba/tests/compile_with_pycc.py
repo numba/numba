@@ -115,3 +115,10 @@ def dict_usecase(arr):
     for k, v in d.items():
         out[k] = k * v
     return out
+
+@cc_nrt.export('internal_str_dict', i8(unicode_type))
+def internal_str_dict(x):
+    d = typed.Dict.empty(unicode_type,i8)
+    if(x not in d):
+        d[x] = len(d)
+    return len(d)
