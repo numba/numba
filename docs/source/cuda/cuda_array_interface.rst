@@ -317,20 +317,53 @@ Resulting from these properties, these consequences are intended:
 Lifetime management
 -------------------
 
+Data
+~~~~
+
 Obtaining the value of the ``__cuda_array_interface__`` property of any object
 has no effect on the lifetime of the object from which it was created. In
 particular, note that the interface has no slot for the owner of the data.
 
-It is therefore imperative for a consumer to retain a reference to the object
-owning the data for as long as they make use of the data.
+The User code must preserve the lifetime of the object owning the data for as
+long as the Consumer might user it.
+
+
+Streams
+~~~~~~~
+
+Like data, CUDA streams also have a finite lifetime. It is therefore required
+that a Producer exporting data on the interface with an associated stream
+ensures that the exported stream's lifetime is equal to or surpasses the
+lifetime of the object from which the interface was exported.
 
 
 Lifetime management in Numba
 ----------------------------
 
-Numba provides two mechanisms for creating device arrays. Which to use depends
-on whether the created device array should maintain the life of the object from
-which it is created:
+Producing Arrays
+~~~~~~~~~~~~~~~~
+
+Numba takes no steps to maintain the lifetime of an object from which the
+interface is exported - it is the user's responsibility to ensure that the
+underlying object is kept alive for the duration that the exported interface
+might be used.
+
+The lifetime of any Numba-managed stream exported on the interface is guaranteed
+to equal or surpass the lifetime of the underlying object, because the
+underlying object holds a reference to the stream.
+
+.. note:: Numba-managed streams are those created with
+          ``cuda.default_stream()``, ``cuda.legacy_default_stream()``, or
+          ``cuda.per_thread_default_stream()``. Streams not managed by Numba
+          are created from an external stream with ``cuda.external_stream()``.
+
+
+Consuming Arrays
+~~~~~~~~~~~~~~~~
+
+Numba provides two mechanisms for creating device arrays from objects exporting
+the CUDA Array Interface. Which to use depends on whether the created device
+array should maintain the life of the object from which it is created:
 
 - ``as_cuda_array``: This creates a device array that holds a reference to the
   owning object. As long as a reference to the device array is held, its
