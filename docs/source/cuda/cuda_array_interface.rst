@@ -4,7 +4,7 @@
 CUDA Array Interface (Version 3)
 ================================
 
-The *Cuda Array Interface* (or CAI) is created for interoperability between
+The *CUDA Array Interface* (or CAI) is created for interoperability between
 different implementation of GPU array-like objects in various projects.  The
 idea is borrowed from the `NumPy array interface`_.
 
@@ -76,11 +76,11 @@ The following are optional entries:
             and will raise a `NotImplementedError` exception if one is passed
             to a GPU function.
 
-- **stream**: ``None`` or ``integer``
+- **stream**: ``None`` or a positive ``integer``
 
   An optional stream upon which synchronization must take place at the point of
   consumption, either by synchronizing on the stream or enqueuing operations on
-  the data on the given stream. Integer values this entry are as follows:
+  the data on the given stream. Integer values in this entry are as follows:
 
   - ``0``: This is disallowed as it would be ambiguous between ``None`` and the
     default stream, and also between the legacy and per-thread default streams.
@@ -182,6 +182,7 @@ requirements:
      races.
    - Instead, the User is responsible for ensuring correctness with respect to
      data races.
+
 4. All operations and exchange of data are orchestrated from a single host
    thread. Use of multiple threads on the host is outside of the scope of this
    version of the CAI. A future revision to the interface specification may
