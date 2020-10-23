@@ -169,7 +169,7 @@ requirements:
      Use of this exception should be avoided where possible, as it is provided
      for libraries that cannot implement the synchronization semantics without
      the involvement of the User - for example, those interfacing with
-     third-party libraries oblivious to the CUDA Array Interface. 
+     third-party libraries oblivious to the CUDA Array Interface.
 
 3. Where the User is aware of the particulars of the CAI and implementation
    details of the Producer and Consumer, they should be able to, at their
