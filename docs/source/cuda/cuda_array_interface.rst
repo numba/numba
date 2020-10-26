@@ -304,8 +304,20 @@ Resulting from these properties, these consequences are intended:
     implementation is a minimal prototype to help illustrate the interface
     specification.
 
-- There is presently no option in Numba for the User to override synchronization
-  semantics. This may be added to the implementation in future.
+The user may override synchronization behaviour in Numba by setting the
+environment variable ``NUMBA_CUDA_ARRAY_INTERFACE_SYNC`` or the config variable
+``CUDA_ARRAY_INTERFACE_SYNC`` to ``0`` (see :ref:`GPU Support Environment
+Variables <numba-envvars-gpu-support>`).  When set, Numba will not synchronize
+on the streams of imported arrays, and it is the responsibility of the user to
+ensure correctness with respect to stream synchronization. Synchronization when
+creating a Numba Device Array from an object exporting the CUDA Array Interface
+may also be elided by passing ``sync=False`` when creating the Numba Device
+Array with :func:`numba.cuda.as_cuda_array` or
+:func:`numba.cuda.from_cuda_array_interface`.
+
+There is scope for Numba's synchronization implementation to be optimized in
+future, by eliding synchronizations when a kernel or driver API operation (e.g.
+a memcopy or memset) is launched on the same stream as an imported array.
 
 
 Lifetime management
