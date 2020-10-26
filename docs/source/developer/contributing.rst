@@ -358,7 +358,7 @@ The Numba documentation is split over two repositories:
 * This documentation is in the ``docs`` directory inside the
   `Numba repository <https://github.com/numba/numba>`_.
 
-* The `Numba homepage <http://numba.pydata.org>`_ has its sources in a
+* The `Numba homepage <https://numba.pydata.org>`_ has its sources in a
   separate repository at https://github.com/numba/numba-webpage
 
 
@@ -381,7 +381,7 @@ build and check the documentation::
    $ open _build/html/index.html
 
 Core developers can upload this documentation to the Numba website
-at http://numba.pydata.org by using the ``gh-pages.py`` script under ``docs``::
+at https://numba.pydata.org by using the ``gh-pages.py`` script under ``docs``::
 
    $ python gh-pages.py version  # version can be 'dev' or '0.16' etc
 
@@ -391,7 +391,7 @@ then verify the repository under the ``gh-pages`` directory and use
 Web site homepage
 '''''''''''''''''
 
-The Numba homepage on http://numba.pydata.org can be fetched from here:
+The Numba homepage on https://numba.pydata.org can be fetched from here:
 https://github.com/numba/numba-webpage
 
 After pushing documentation to a new version, core developers will want to
