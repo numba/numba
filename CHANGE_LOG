@@ -131,12 +131,22 @@ Fixes:
   (Stuart Archibald)
 * PR #6316: Make IR inliner tests not self mutating. (Stuart Archibald)
 * PR #6318: PR #5892 continued (Todd A. Anderson, via Stuart Archibald)
-* PR #6319: Permit switching off boundschecking when debug is on. (Stuart Archibald)
+* PR #6319: Permit switching off boundschecking when debug is on. (Stuart
+  Archibald)
 * PR #6324: PR 6208 continued (Ivan Butygin and Stuart Archibald)
 * PR #6337: Implements ``key`` on ``types.TypeRef`` (Andreas Sodeur)
 * PR #6354: Bump llvmlite to 0.35. series. (Stuart Archibald)
 * PR #6357: Fix enumerate invalid decref (Siu Kwan Lam)
 * PR #6359: Fixes typed list indexing on 32bit (Stuart Archibald)
+* PR #6378: Fix incorrect CPU override in vectorization test. (Stuart Archibald)
+* PR #6379: Use O0 to enable inline and not affect loop-vectorization by later
+  O3... (Siu Kwan Lam)
+* PR #6384: Fix failing tests to match on platform invariant int spelling.
+  (Stuart Archibald)
+* PR #6390: Updates inspect_cfg (Stuart Archibald)
+* PR #6396: Remove hard dependency on tbb package. (Stuart Archibald)
+* PR #6408: Don't do array analysis for tuples that contain arrays. (Todd A.
+  Anderson)
 
 CUDA Enhancements/Fixes:
 
@@ -176,6 +186,7 @@ CUDA Enhancements/Fixes:
   import (Graham Markall)
 * PR #6340: CUDA: Fix #6339, performance regression launching specialized
   kernels (Graham Markall)
+* PR #6380: Only test managed allocations on Linux (Graham Markall)
 
 Documentation Updates:
 
