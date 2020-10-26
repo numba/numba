@@ -76,7 +76,7 @@ The following are optional entries:
             and will raise a `NotImplementedError` exception if one is passed
             to a GPU function.
 
-- **stream**: ``None`` or a positive ``integer``
+- **stream**: ``None`` or ``integer``
 
   An optional stream upon which synchronization must take place at the point of
   consumption, either by synchronizing on the stream or enqueuing operations on
@@ -88,7 +88,7 @@ The following are optional entries:
     or ``2`` instead for clarity.
   - ``1``: The legacy default stream.
   - ``2``: The per-thread default stream.
-  - Any other integer: a non-default stream.
+  - Any other integer: a ``cudaStream_t`` represented as a Python integer.
 
   See the
   :ref:`cuda-array-interface-synchronization` section below for further details.
@@ -183,12 +183,6 @@ requirements:
    - Instead, the User is responsible for ensuring correctness with respect to
      data races.
 
-4. All operations and exchange of data are orchestrated from a single host
-   thread. Use of multiple threads on the host is outside of the scope of this
-   version of the CAI. A future revision to the interface specification may
-   consider the use of multiple host threads once the current version and its
-   implementations have matured and become well-understood.
-
 
 Interface Requirements
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -204,7 +198,7 @@ exchanging data. Expected behaviour of the Consumer is as follows:
 
 * When ``stream`` is an integer, its value indicates the stream on which the
   Producer may have in-progress operations on the data, and which the Consumer
-  is be expected to either:
+  is expected to either:
 
   - Synchronize on before accessing the data, or
   - Enqueue operations in when accessing the data.
