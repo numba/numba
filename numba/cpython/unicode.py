@@ -1358,7 +1358,7 @@ def unicode_join(sep, parts):
     elif isinstance(parts, types.IterableType):
         def join_iter_impl(sep, parts):
             parts_list = [p for p in parts]
-            return join_list(sep, parts_list)
+            return sep.join(parts_list)
         return join_iter_impl
     elif isinstance(parts, types.UnicodeType):
         # Temporary workaround until UnicodeType is iterable
