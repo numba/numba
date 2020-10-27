@@ -310,8 +310,8 @@ Cuda_atomic_min = _gen(cuda.atomic.min, all_numba_types)
 Cuda_atomic_nanmax = _gen(cuda.atomic.nanmax, all_numba_types)
 Cuda_atomic_nanmin = _gen(cuda.atomic.nanmin, all_numba_types)
 Cuda_atomic_and = _gen(cuda.atomic.and_, integer_numba_types)
+Cuda_atomic_or = _gen(cuda.atomic.or_, integer_numba_types)
 Cuda_atomic_xor = _gen(cuda.atomic.xor, integer_numba_types)
-
 
 @register
 class Cuda_atomic_compare_and_swap(AbstractTemplate):
@@ -376,6 +376,9 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_and_(self, mod):
         return types.Function(Cuda_atomic_and)
+
+    def resolve_or_(self, mod):
+        return types.Function(Cuda_atomic_or)
 
     def resolve_xor(self, mod):
         return types.Function(Cuda_atomic_xor)

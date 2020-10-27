@@ -100,6 +100,7 @@ class FakeCUDAShared(object):
 addlock = threading.Lock()
 sublock = threading.Lock()
 andlock = threading.Lock()
+orlock = threading.Lock()
 xorlock = threading.Lock()
 maxlock = threading.Lock()
 minlock = threading.Lock()
@@ -123,6 +124,12 @@ class FakeCUDAAtomic(object):
         with andlock:
             old = array[index]
             array[index] &= val
+        return old
+
+    def or_(self, array, index, val):
+        with orlock:
+            old = array[index]
+            array[index] |= val
         return old
 
     def xor(self, array, index, val):
