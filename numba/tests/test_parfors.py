@@ -1722,6 +1722,16 @@ class TestParfors(TestParforsBase):
         x = np.array([1, 1])
         self.check(test_impl, x)
 
+    @skip_parfors_unsupported
+    def test_array_tuple_concat(self):
+        # issue6399
+        def test_impl(a):
+            S = (a,) + (a, a)
+            return S[0].sum()
+
+        x = np.ones((3,3))
+        self.check(test_impl, x)
+
 
 class TestParforsLeaks(MemoryLeakMixin, TestParforsBase):
     def check(self, pyfunc, *args, **kwargs):
