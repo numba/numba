@@ -631,9 +631,18 @@ def fix_index(tyctx, list_ty, index_ty):
         fast_len_sig, length_fn = _list_length._defn(context.typing_context,
                                                      list_ty)
         length = length_fn(context, builder, fast_len_sig, (ll_list,))
-        zextd_idx = builder.zext(ll_idx, length.type)
-        wrapped_index = builder.add(zextd_idx, length)
-        return builder.select(is_negative, wrapped_index, zextd_idx)
+        # length is an intp
+        # index can be any sort of int
+        # indexing in general is done with a ssize_t which correlates to an
+        # intp. In llvmlite sext and trunc are guarded to return the value
+        # itself if the types are the same, so there's no need to handle the
+        # "equal widths" case separately. This sexts/truncs the index to the
+        # length type such that `add` works for the wraparound case.
+        st = 'sext' if ll_idx.type.width < length.type.width else 'trunc'
+        op = getattr(builder, st)
+        fixedup_idx = op(ll_idx, length.type)
+        wrapped_index = builder.add(fixedup_idx, length)
+        return builder.select(is_negative, wrapped_index, fixedup_idx)
     return sig, codegen
 
 
