@@ -313,6 +313,7 @@ Cuda_atomic_and = _gen(cuda.atomic.and_, integer_numba_types)
 Cuda_atomic_or = _gen(cuda.atomic.or_, integer_numba_types)
 Cuda_atomic_xor = _gen(cuda.atomic.xor, integer_numba_types)
 
+
 @register
 class Cuda_atomic_compare_and_swap(AbstractTemplate):
     key = cuda.atomic.compare_and_swap

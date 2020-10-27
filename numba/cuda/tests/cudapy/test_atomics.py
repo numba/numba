@@ -216,6 +216,7 @@ def atomic_and_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.and_,
                               atomic_cast_none)
 
+
 def atomic_or(ary, op2):
     atomic_binary_1dim_shared(ary, ary, op2, uint32, 32,
                               cuda.atomic.or_, atomic_cast_none, 0)
@@ -238,7 +239,8 @@ def atomic_or_global(idx, ary, op2):
 def atomic_or_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.or_,
                               atomic_cast_none)
-                              
+
+
 def atomic_xor(ary, op2):
     atomic_binary_1dim_shared(ary, ary, op2, uint32, 32,
                               cuda.atomic.xor, atomic_cast_none, 0)
@@ -261,6 +263,7 @@ def atomic_xor_global(idx, ary, op2):
 def atomic_xor_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.xor,
                               atomic_cast_none)
+
 
 def gen_atomic_extreme_funcs(func):
 
