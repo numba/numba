@@ -2,11 +2,6 @@
 This scripts specifies all PTX special objects.
 """
 import functools
-import llvmlite.llvmpy.core as lc
-import operator
-from numba.core.rewrites.macros import Macro
-from numba.core import types, typing, ir
-from .cudadrv import nvvm
 
 
 class Stub(object):
@@ -115,9 +110,9 @@ class grid(Stub):
     instantiating the kernel. If *ndim* is 1, a single integer is returned.
     If *ndim* is 2 or 3, a tuple of the given number of integers is returned.
 
-	Computation of the first integer is as follows::
+    Computation of the first integer is as follows::
 
-		cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
+        cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
 
     and is similar for the other two indices, but using the ``y`` and ``z``
     attributes.
@@ -242,7 +237,7 @@ class syncthreads_or(Stub):
 
 class syncwarp(Stub):
     '''
-    syncwarp(mask)
+    syncwarp(mask=0xFFFFFFFF)
 
     Synchronizes a masked subset of threads in a warp.
     '''
@@ -274,7 +269,8 @@ class match_any_sync(Stub):
     match_any_sync(mask, value)
 
     Nvvm intrinsic for performing a compare and broadcast across a warp.
-    Returns a mask of threads that have same value as the given value from within the masked warp.
+    Returns a mask of threads that have same value as the given value from
+    within the masked warp.
     '''
     _description_ = '<match_any_sync()>'
 
@@ -351,6 +347,7 @@ class ffs(Stub):
     Find the position of the least significant bit set to 1 in an integer.
     """
 
+
 #-------------------------------------------------------------------------------
 # comparison and selection instructions
 
@@ -358,8 +355,10 @@ class selp(Stub):
     """
     selp(a, b, c)
 
-    Select between source operands, based on the value of the predicate source operand.
+    Select between source operands, based on the value of the predicate source
+    operand.
     """
+
 
 #-------------------------------------------------------------------------------
 # single / double precision arithmetic
@@ -370,6 +369,7 @@ class fma(Stub):
 
     Perform the fused multiply-add operation.
     """
+
 
 #-------------------------------------------------------------------------------
 # atomic
@@ -389,12 +389,23 @@ class atomic(Stub):
         atomically.
         """
 
+    class sub(Stub):
+        """sub(ary, idx, val)
+
+        Perform atomic ary[idx] -= val. Supported on int32, float32, and
+        float64 operands only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
     class max(Stub):
         """max(ary, idx, val)
 
         Perform atomic ary[idx] = max(ary[idx], val).
 
-        Supported on int32, int64, uint32, uint64, float32, float64 operands only.
+        Supported on int32, int64, uint32, uint64, float32, float64 operands
+        only.
 
         Returns the old value at the index location as if it is loaded
         atomically.
@@ -405,7 +416,38 @@ class atomic(Stub):
 
         Perform atomic ary[idx] = min(ary[idx], val).
 
-        Supported on int32, int64, uint32, uint64, float32, float64 operands only.
+        Supported on int32, int64, uint32, uint64, float32, float64 operands
+        only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class nanmax(Stub):
+        """nanmax(ary, idx, val)
+
+        Perform atomic ary[idx] = max(ary[idx], val).
+
+        NOTE: NaN is treated as a missing value such that:
+        nanmax(NaN, n) == n, nanmax(n, NaN) == n
+
+        Supported on int32, int64, uint32, uint64, float32, float64 operands
+        only.
+
+        Returns the old value at the index location as if it is loaded
+        atomically.
+        """
+
+    class nanmin(Stub):
+        """nanmin(ary, idx, val)
+
+        Perform atomic ary[idx] = min(ary[idx], val).
+
+        NOTE: NaN is treated as a missing value, such that:
+        nanmin(NaN, n) == n, nanmin(n, NaN) == n
+
+        Supported on int32, int64, uint32, uint64, float32, float64 operands
+        only.
 
         Returns the old value at the index location as if it is loaded
         atomically.

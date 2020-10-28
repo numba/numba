@@ -15,7 +15,7 @@ from io import StringIO
 
 import numpy as np
 
-from numba import jit, generated_jit, typeof
+from numba import njit, jit, generated_jit, typeof
 from numba.core import types, errors, codegen
 from numba import _dispatcher
 from numba.core.compiler import compile_isolated
@@ -26,11 +26,16 @@ from numba.tests.support import (TestCase, temp_directory, import_dynamic,
 from numba.np.numpy_support import as_dtype
 from numba.core.caching import _UserWideCacheLocator
 from numba.core.dispatcher import Dispatcher
-from numba.tests.support import skip_parfors_unsupported, needs_lapack
-
+from numba.tests.support import (skip_parfors_unsupported, needs_lapack,
+                                 SerialMixin)
+from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 import llvmlite.binding as ll
 import unittest
 from numba.parfors import parfor
+
+
+_TEST_TIMEOUT = _RUNNER_TIMEOUT - 60.
+
 
 try:
     import jinja2
@@ -594,6 +599,27 @@ class TestDispatcher(BaseTest):
         expected_sigs = [(types.complex128,)]
         self.assertEqual(jitfoo.signatures, expected_sigs)
 
+    def test_dispatcher_raises_for_invalid_decoration(self):
+        # For context see https://github.com/numba/numba/issues/4750.
+
+        @jit(nopython=True)
+        def foo(x):
+            return x
+
+        with self.assertRaises(TypeError) as raises:
+            jit(foo)
+        err_msg = str(raises.exception)
+        self.assertIn(
+            "A jit decorator was called on an already jitted function", err_msg)
+        self.assertIn("foo", err_msg)
+        self.assertIn(".py_func", err_msg)
+
+        with self.assertRaises(TypeError) as raises:
+            jit(BaseTest)
+        err_msg = str(raises.exception)
+        self.assertIn("The decorated object is not a function", err_msg)
+        self.assertIn(f"{type(BaseTest)}", err_msg)
+
 
 class TestSignatureHandling(BaseTest):
     """
@@ -1056,9 +1082,12 @@ class BaseCacheUsecasesTest(BaseCacheTest):
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         out, err = popen.communicate()
         if popen.returncode != 0:
-            raise AssertionError("process failed with code %s: "
-                                 "stderr follows\n%s\n"
-                                 % (popen.returncode, err.decode()))
+            raise AssertionError(
+                "process failed with code %s: \n"
+                "stdout follows\n%s\n"
+                "stderr follows\n%s\n"
+                % (popen.returncode, out.decode(), err.decode()),
+            )
 
     def check_module(self, mod):
         self.check_pycache(0)
@@ -1187,7 +1216,7 @@ class TestCache(BaseCacheUsecasesTest):
 
         self.assertEqual(len(w), 1)
         self.assertIn('Cannot cache compiled function "looplifted" '
-                      'as it uses lifted loops', str(w[0].message))
+                      'as it uses lifted code', str(w[0].message))
 
     def test_big_array(self):
         # Code references big array globals cannot be cached
@@ -1224,19 +1253,18 @@ class TestCache(BaseCacheUsecasesTest):
     def test_closure(self):
         mod = self.import_module()
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always', NumbaWarning)
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', NumbaWarning)
 
             f = mod.closure1
-            self.assertPreciseEqual(f(3), 6)
+            self.assertPreciseEqual(f(3), 6) # 3 + 3 = 6
             f = mod.closure2
-            self.assertPreciseEqual(f(3), 8)
-            self.check_pycache(0)
-
-        self.assertEqual(len(w), 2)
-        for item in w:
-            self.assertIn('Cannot cache compiled function "closure"',
-                          str(item.message))
+            self.assertPreciseEqual(f(3), 8) # 3 + 5 = 8
+            f = mod.closure3
+            self.assertPreciseEqual(f(3), 10) # 3 + 7 = 8
+            f = mod.closure4
+            self.assertPreciseEqual(f(3), 12) # 3 + 9 = 12
+            self.check_pycache(5) # 1 nbi, 4 nbc
 
     def test_cache_reuse(self):
         mod = self.import_module()
@@ -1736,14 +1764,16 @@ def function2(x):
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
         out, err = popen.communicate()
-        self.assertEqual(popen.returncode, 0)
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
+        self.assertEqual(popen.returncode, 0, msg=msg)
 
         # Execute file2.py
         popen = subprocess.Popen([sys.executable, self.file2],
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
         out, err = popen.communicate()
-        self.assertEqual(popen.returncode, 0)
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
+        self.assertEqual(popen.returncode, 0, msg)
 
 
 class TestDispatcherFunctionBoundaries(TestCase):
@@ -1942,6 +1972,64 @@ class TestNoRetryFailedSignature(unittest.TestCase):
         # compilation.
         self.assertEqual(ct_ok, 1)
         self.assertEqual(ct_bad, 1)
+
+
+@njit
+def add_y1(x, y=1):
+    return x + y
+
+
+@njit
+def add_ynone(x, y=None):
+    return x + (1 if y else 2)
+
+
+@njit
+def mult(x, y):
+    return x * y
+
+
+@njit
+def add_func(x, func=mult):
+    return x + func(x, x)
+
+
+def _checker(f1, arg):
+    assert f1(arg) == f1.py_func(arg)
+
+
+class TestMultiprocessingDefaultParameters(SerialMixin, unittest.TestCase):
+    def run_fc_multiproc(self, fc):
+        try:
+            ctx = multiprocessing.get_context('spawn')
+        except AttributeError:
+            ctx = multiprocessing
+
+        # RE: issue #5973, this doesn't use multiprocessing.Pool.map as doing so
+        # causes the TBB library to segfault under certain conditions. It's not
+        # clear whether the cause is something in the complexity of the Pool
+        # itself, e.g. watcher threads etc, or if it's a problem synonymous with
+        # a "timing attack".
+        for a in [1, 2, 3]:
+            p = ctx.Process(target=_checker, args=(fc, a,))
+            p.start()
+            p.join(_TEST_TIMEOUT)
+            self.assertEqual(p.exitcode, 0)
+
+    def test_int_def_param(self):
+        """ Tests issue #4888"""
+
+        self.run_fc_multiproc(add_y1)
+
+    def test_none_def_param(self):
+        """ Tests None as a default parameter"""
+
+        self.run_fc_multiproc(add_func)
+
+    def test_function_def_param(self):
+        """ Tests a function as a default parameter"""
+
+        self.run_fc_multiproc(add_func)
 
 
 if __name__ == '__main__':

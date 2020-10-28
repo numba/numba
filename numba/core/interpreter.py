@@ -12,11 +12,19 @@ from numba.core.utils import (
     INPLACE_BINOPS_TO_OPERATORS,
     UNARY_BUITINS_TO_OPERATORS,
     OPERATORS_TO_BUILTINS,
-    get_function_globals
     )
 from numba.core.byteflow import Flow, AdaptDFA, AdaptCFA
 from numba.core.unsafe import eh
 
+class _UNKNOWN_VALUE(object):
+    """Represents an unknown value, this is for ease of debugging purposes only.
+    """
+
+    def __init__(self, varname):
+        self._varname = varname
+
+    def __repr__(self):
+        return "_UNKNOWN_VALUE({})".format(self._varname)
 
 _logger = logging.getLogger(__name__)
 
@@ -319,7 +327,7 @@ class Interpreter(object):
         as a builtins (second).  If both failed, return a ir.UNDEFINED.
         """
         try:
-            return get_function_globals(self.func_id.func)[name]
+            return self.func_id.func.__globals__[name]
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
 
@@ -908,7 +916,47 @@ class Interpreter(object):
         for kval, tmp in zip(keyconsts, keytmps):
             self.store(kval, tmp)
         items = list(zip(map(self.get, keytmps), map(self.get, values)))
-        expr = ir.Expr.build_map(items=items, size=2, loc=self.loc)
+
+        # sort out literal values
+        literal_items = []
+        for v in values:
+            defns = self.definitions[v]
+            if len(defns) != 1:
+                break
+            defn = defns[0]
+            if not isinstance(defn, ir.Const):
+                break
+            literal_items.append(defn.value)
+
+        def resolve_const(v):
+            defns = self.definitions[v]
+            if len(defns) != 1:
+                return _UNKNOWN_VALUE(self.get(v).name)
+            defn = defns[0]
+            if not isinstance(defn, ir.Const):
+                return _UNKNOWN_VALUE(self.get(v).name)
+            return defn.value
+
+        if len(literal_items) != len(values):
+            literal_dict = {x: resolve_const(y) for x, y in
+                            zip(keytup, values)}
+        else:
+            literal_dict = {x:y for x, y in zip(keytup, literal_items)}
+
+        # to deal with things like {'a': 1, 'a': 'cat', 'b': 2, 'a': 2j}
+        # store the index of the actual used value for a given key, this is
+        # used when lowering to pull the right value out into the tuple repr
+        # of a mixed value type dictionary.
+        value_indexes = {}
+        for i, k in enumerate(keytup):
+            value_indexes[k] = i
+
+        expr = ir.Expr.build_map(items=items,
+                                 size=2,
+                                 literal_value=literal_dict,
+                                 value_indexes=value_indexes,
+                                 loc=self.loc)
+
         self.store(expr, res)
 
     def op_GET_ITER(self, inst, value, res):
@@ -975,8 +1023,48 @@ class Interpreter(object):
         self.store(expr, res)
 
     def op_BUILD_MAP(self, inst, items, size, res):
-        items = [(self.get(k), self.get(v)) for k, v in items]
-        expr = ir.Expr.build_map(items=items, size=size, loc=self.loc)
+        got_items = [(self.get(k), self.get(v)) for k, v in items]
+
+        # sort out literal values, this is a bit contrived but is to handle
+        # situations like `{1: 10, 1: 10}` where the size of the literal dict
+        # is smaller than the definition
+        def get_literals(target):
+            literal_items = []
+            values = [self.get(v.name) for v in target]
+            for v in values:
+                defns = self.definitions[v.name]
+                if len(defns) != 1:
+                    break
+                defn = defns[0]
+                if not isinstance(defn, ir.Const):
+                    break
+                literal_items.append(defn.value)
+            return literal_items
+
+        literal_keys = get_literals(x[0] for x in got_items)
+        literal_values = get_literals(x[1] for x in got_items)
+
+
+        has_literal_keys = len(literal_keys) == len(got_items)
+        has_literal_values = len(literal_values) == len(got_items)
+
+        value_indexes = {}
+        if not has_literal_keys and not has_literal_values:
+            literal_dict = None
+        elif has_literal_keys and not has_literal_values:
+            literal_dict = {x: _UNKNOWN_VALUE(y[1]) for x, y in
+                            zip(literal_keys, got_items)}
+            for i, k in enumerate(literal_keys):
+                value_indexes[k] = i
+        else:
+            literal_dict = {x: y for x, y in zip(literal_keys, literal_values)}
+            for i, k in enumerate(literal_keys):
+                value_indexes[k] = i
+
+        expr = ir.Expr.build_map(items=got_items, size=size,
+                                 literal_value=literal_dict,
+                                 value_indexes=value_indexes,
+                                 loc=self.loc)
         self.store(expr, res)
 
     def op_STORE_MAP(self, inst, dct, key, value):

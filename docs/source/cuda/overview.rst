@@ -37,14 +37,15 @@ Requirements
 Supported GPUs
 --------------
 
-Numba supports CUDA-enabled GPU with compute capability 2.0 or above with an
+Numba supports CUDA-enabled GPU with compute capability 3.0 or above with an
 up-to-data Nvidia driver.
 
 Software
 --------
 
-You will need the CUDA toolkit version 8.0 or later installed.  If you are
-using Conda, just type::
+Numba aims to support CUDA Toolkit versions released within the last 3 years. At
+the present time, you will need the CUDA toolkit version 9.0 or later installed.
+If you are using Conda, just type::
 
    $ conda install cudatoolkit
 

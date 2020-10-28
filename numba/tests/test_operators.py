@@ -193,6 +193,10 @@ class LiteralOperatorImpl(object):
     def not_in_usecase(x, y):
         return x not in y
 
+    @staticmethod
+    def is_usecase(x, y):
+        return x is y
+
 
 class FunctionalOperatorImpl(object):
 
@@ -352,6 +356,10 @@ class FunctionalOperatorImpl(object):
     def not_in_usecase(x, y):
         return not operator.contains(y, x)
 
+    @staticmethod
+    def is_usecase(x, y):
+        return operator.is_(x, y)
+
 
 class TestOperators(TestCase):
     """
@@ -491,6 +499,24 @@ class TestOperators(TestCase):
     def test_ne_scalar_npm(self):
         self.test_ne_scalar(flags=Noflags)
 
+    def test_is_ellipsis(self):
+        cres = compile_isolated(self.op.is_usecase, (types.ellipsis, types.ellipsis))
+        cfunc = cres.entry_point
+        self.assertTrue(cfunc(Ellipsis, Ellipsis))
+
+    def test_is_void_ptr(self):
+        # can't call this directly from python, as void cannot be unboxed
+        cfunc_void = jit(
+            (types.voidptr, types.voidptr), nopython=True
+        )(self.op.is_usecase)
+
+        # this wrapper performs the casts from int to voidptr for us
+        @jit(nopython=True)
+        def cfunc(x, y):
+            return cfunc_void(x, y)
+
+        self.assertTrue(cfunc(1, 1))
+        self.assertFalse(cfunc(1, 2))
 
     #
     # Arithmetic operators
@@ -1222,7 +1248,7 @@ class TestMixedInts(TestCase):
         return control_unsigned
 
     def run_binary(self, pyfunc, control_func, operands, types,
-                   expected_type=utils.INT_TYPES, **assertPreciseEqualArgs):
+                   expected_type=int, **assertPreciseEqualArgs):
         for xt, yt in types:
             cr = compile_isolated(pyfunc, (xt, yt), flags=Noflags)
             cfunc = cr.entry_point
@@ -1239,7 +1265,7 @@ class TestMixedInts(TestCase):
                                         **assertPreciseEqualArgs)
 
     def run_unary(self, pyfunc, control_func, operands, types,
-                  expected_type=utils.INT_TYPES):
+                  expected_type=int):
         for xt in types:
             cr = compile_isolated(pyfunc, (xt,), flags=Noflags)
             cfunc = cr.entry_point
@@ -1254,7 +1280,7 @@ class TestMixedInts(TestCase):
                         % (x, xt, got, expected))
 
     def run_arith_binop(self, pyfunc, opname, samples,
-                        expected_type=utils.INT_TYPES):
+                        expected_type=int):
         self.run_binary(pyfunc, self.get_control_signed(opname),
                         samples, self.signed_pairs, expected_type)
         self.run_binary(pyfunc, self.get_control_unsigned(opname),
@@ -1478,6 +1504,100 @@ class TestStringConstComparison(TestCase):
         cfunc2 = jit(nopython=True)(test_impl2)
         self.assertEqual(test_impl1(), cfunc1())
         self.assertEqual(test_impl2(), cfunc2())
+
+class TestBooleanLiteralOperators(TestCase):
+    """
+    Test operators with Boolean constants
+    """
+    def test_eq(self):
+
+        def test_impl1(b):
+            return a_val == b
+
+        def test_impl2(a):
+            return a == b_val
+
+        def test_impl3():
+            r1 = True == True
+            r2 = True == False
+            r3 = False == True
+            r4 = False == False
+            return (r1, r2, r3, r4)
+
+        for a_val, b in itertools.product([True, False], repeat=2):
+            cfunc1 = jit(nopython=True)(test_impl1)
+            self.assertEqual(test_impl1(b), cfunc1(b))
+
+        for a, b_val in itertools.product([True, False], repeat=2):
+            cfunc2 = jit(nopython=True)(test_impl2)
+            self.assertEqual(test_impl2(a), cfunc2(a))
+
+        cfunc3 = jit(nopython=True)(test_impl3)
+        self.assertEqual(test_impl3(), cfunc3())
+
+    def test_ne(self):
+
+        def test_impl1(b):
+            return a_val != b
+
+        def test_impl2(a):
+            return a != b_val
+
+        def test_impl3():
+            r1 = True != True
+            r2 = True != False
+            r3 = False != True
+            r4 = False != False
+            return (r1, r2, r3, r4)
+
+        for a_val, b in itertools.product([True, False], repeat=2):
+            cfunc1 = jit(nopython=True)(test_impl1)
+            self.assertEqual(test_impl1(b), cfunc1(b))
+
+        for a, b_val in itertools.product([True, False], repeat=2):
+            cfunc2 = jit(nopython=True)(test_impl2)
+            self.assertEqual(test_impl2(a), cfunc2(a))
+
+        cfunc3 = jit(nopython=True)(test_impl3)
+        self.assertEqual(test_impl3(), cfunc3())
+
+    def test_is(self):
+
+        def test_impl1(b):
+            return a_val is b
+
+        def test_impl2():
+            r1 = True is True
+            r2 = True is False
+            r3 = False is True
+            r4 = False is False
+            return (r1, r2, r3, r4)
+
+        for a_val, b in itertools.product([True, False], repeat=2):
+            cfunc1 = jit(nopython=True)(test_impl1)
+            self.assertEqual(test_impl1(b), cfunc1(b))
+
+        cfunc2 = jit(nopython=True)(test_impl2)
+        self.assertEqual(test_impl2(), cfunc2())
+
+    def test_not(self):
+
+        def test_impl():
+            a, b = False, True
+            return (not a, not b)
+
+        cfunc = jit(nopython=True)(test_impl)
+        self.assertEqual(test_impl(), cfunc())
+
+    def test_bool(self):
+
+        def test_impl():
+            a, b = False, True
+            return (bool(a), bool(b))
+
+        cfunc = jit(nopython=True)(test_impl)
+        self.assertEqual(test_impl(), cfunc())
+
 
 if __name__ == '__main__':
     unittest.main()

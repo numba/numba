@@ -90,6 +90,9 @@ def _lower_parfor_parallel(lowerer, parfor):
         parfor, parfor.params)
     parfor_redvars, parfor_reddict = numba.parfors.parfor.get_parfor_reductions(
         lowerer.func_ir, parfor, parfor.params, lowerer.fndesc.calltypes)
+    if config.DEBUG_ARRAY_OPT:
+        print("parfor_redvars:", parfor_redvars)
+        print("parfor_reddict:", parfor_reddict)
 
     # init reduction array allocation here.
     nredvars = len(parfor_redvars)
@@ -135,7 +138,6 @@ def _lower_parfor_parallel(lowerer, parfor):
                 typ=types.intp,
                 name='num_threads',
             )
-
 
             size_var_list = [num_threads_var]
 
@@ -212,6 +214,25 @@ def _lower_parfor_parallel(lowerer, parfor):
                     )
             else:
                 redtoset = redvar
+
+                if config.DEBUG_ARRAY_OPT_RUNTIME:
+                    res_print_str = "res_print1 for redvar " + str(redvar) + ":"
+                    strconsttyp = types.StringLiteral(res_print_str)
+
+                    lhs = pfbdr.make_const_variable(
+                        cval=res_print_str,
+                        typ=strconsttyp,
+                        name="str_const",
+                    )
+
+                    res_print = ir.Print(args=[lhs, redvar],
+                                         vararg=None, loc=loc)
+                    lowerer.fndesc.calltypes[res_print] = signature(types.none,
+                                                             typemap[lhs.name],
+                                                             typemap[redvar.name])
+                    print("res_print_redvar", res_print)
+                    lowerer.lower_inst(res_print)
+
 
             # For each thread, initialize the per-worker reduction array to the current reduction array value.
             for j in range(thread_count):
@@ -304,7 +325,7 @@ def _lower_parfor_parallel(lowerer, parfor):
                 res_print_str = "res_print"
                 strconsttyp = types.StringLiteral(res_print_str)
 
-                lhs = pfbldr.make_const_variable(
+                lhs = pfbdr.make_const_variable(
                     cval=res_print_str,
                     typ=strconsttyp,
                     name="str_const",
@@ -656,7 +677,7 @@ def compute_def_once(loop_body, typemap):
     getattr_taken = {}
     module_assigns = {}
     compute_def_once_internal(loop_body, def_once, def_more, getattr_taken, typemap, module_assigns)
-    return def_once
+    return def_once, def_more
 
 def find_vars(var, varset):
     assert isinstance(var, ir.Var)
@@ -717,13 +738,25 @@ def find_setitems_body(setitems, itemsset, loop_body, typemap):
     for label, block in loop_body.items():
         find_setitems_block(setitems, itemsset, block, typemap)
 
+def empty_container_allocator_hoist(inst, dep_on_param, call_table, hoisted,
+                                    not_hoisted, typemap, stored_arrays):
+    if (isinstance(inst, ir.Assign) and
+        isinstance(inst.value, ir.Expr) and
+        inst.value.op == 'call' and
+        inst.value.func.name in call_table):
+        call_list = call_table[inst.value.func.name]
+        if call_list == ['empty', np]:
+            return _hoist_internal(inst, dep_on_param, call_table, hoisted,
+                                   not_hoisted, typemap, stored_arrays)
+    return False
+
 def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = copy.copy(parfor_params)
     hoisted = []
     not_hoisted = []
 
     # Compute the set of variable defined exactly once in the loop body.
-    def_once = compute_def_once(loop_body, typemap)
+    def_once, def_more = compute_def_once(loop_body, typemap)
     (call_table, reverse_call_table) = get_call_table(wrapped_blocks)
 
     setitems = set()
@@ -732,11 +765,16 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
     dep_on_param = list(set(dep_on_param).difference(setitems))
     if config.DEBUG_ARRAY_OPT >= 1:
         print("hoist - def_once:", def_once, "setitems:", setitems, "itemsset:", itemsset, "dep_on_param:", dep_on_param, "parfor_params:", parfor_params)
+    for si in setitems:
+        add_to_def_once_sets(si, def_once, def_more)
 
     for label, block in loop_body.items():
         new_block = []
         for inst in block.body:
-            if isinstance(inst, ir.Assign) and inst.target.name in def_once:
+            if empty_container_allocator_hoist(inst, dep_on_param, call_table,
+                                   hoisted, not_hoisted, typemap, itemsset):
+                continue
+            elif isinstance(inst, ir.Assign) and inst.target.name in def_once:
                 if _hoist_internal(inst, dep_on_param, call_table,
                                    hoisted, not_hoisted, typemap, itemsset):
                     # don't add this instruction to the block since it is
@@ -748,11 +786,14 @@ def hoist(parfor_params, loop_body, typemap, wrapped_blocks):
                     print("parfor")
                     inst.dump()
                 for ib_inst in inst.init_block.body:
-                    if (isinstance(ib_inst, ir.Assign) and
+                    if empty_container_allocator_hoist(ib_inst, dep_on_param,
+                        call_table, hoisted, not_hoisted, typemap, itemsset):
+                        continue
+                    elif (isinstance(ib_inst, ir.Assign) and
                         ib_inst.target.name in def_once):
                         if _hoist_internal(ib_inst, dep_on_param, call_table,
                                            hoisted, not_hoisted, typemap, itemsset):
-                            # don't add this instuction to the block since it is hoisted
+                            # don't add this instruction to the block since it is hoisted
                             continue
                     new_init_block.append(ib_inst)
                 inst.init_block.body = new_init_block
@@ -1236,7 +1277,7 @@ def _create_gufunc_for_parfor_body(
                     # Make print node
                     print_node = ir.Print(args=[lhs, inst.target], vararg=None, loc=loc)
                     new_block.append(print_node)
-                    sig = numba.typing.signature(types.none,
+                    sig = numba.core.typing.signature(types.none,
                                            typemap[lhs.name],
                                            typemap[inst.target.name])
                     lowerer.fndesc.calltypes[print_node] = sig
@@ -1603,13 +1644,13 @@ def call_parallel_gufunc(lowerer, cres, gu_signature, outer_sig, expr_args, expr
             if i < num_inps:
                 # Scalar input, need to store the value in an array of size 1
                 typ = context.get_data_type(
-                    aty) if aty != types.boolean else lc.Type.int(1)
+                    aty) if not isinstance(aty, types.Boolean) else lc.Type.int(1)
                 ptr = cgutils.alloca_once(builder, typ)
                 builder.store(arg, ptr)
             else:
                 # Scalar output, must allocate
                 typ = context.get_data_type(
-                    aty) if aty != types.boolean else lc.Type.int(1)
+                    aty) if not isinstance(aty, types.Boolean) else lc.Type.int(1)
                 ptr = cgutils.alloca_once(builder, typ)
             builder.store(builder.bitcast(ptr, byte_ptr_t), dst)
 
