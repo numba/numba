@@ -30,8 +30,8 @@ random numbers.
     :members: create_xoroshiro128p_states, init_xoroshiro128p_states, xoroshiro128p_uniform_float32, xoroshiro128p_uniform_float64, xoroshiro128p_normal_float32, xoroshiro128p_normal_float64
     :noindex:
 
-Example
-'''''''
+A simple example
+''''''''''''''''
 
 Here is a sample program that uses the random number generator::
 
@@ -64,3 +64,59 @@ Here is a sample program that uses the random number generator::
 
     compute_pi[blocks, threads_per_block](rng_states, 10000, out)
     print('pi:', out.mean())
+
+An example managing RNG state size and using a 3D grid
+''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+The size of the RNG states scales with the number of threads using the RNG, so
+it is often better to use strided loops in conjunction with the RNG in order to
+keep the state size manageable.
+
+In the following example that initializes a large 3D array with random numbers,
+using one thread per output element would result in 453,617,100 RNG states.
+This would take a long time to initialize and poorly utilize the GPU. Instead,
+it uses a fixed size 3D grid with a total of 2,097,152 (``(16 ** 3) * (8 **
+3)``) threads striding over the output array. The 3D thread indices ``startx``,
+``starty``, and ``startz``  are linearized into a 1D index, ``tid``, to index
+into the RNG states.
+
+.. code-block:: python
+
+   from numba import cuda
+   from numba.cuda.random import (create_xoroshiro128p_states,
+                                  xoroshiro128p_uniform_float32)
+   import numpy as np
+
+
+   @cuda.jit
+   def random_3d(arr, rng_states):
+       # Per-dimension thread indices and strides
+       startx, starty, startz = cuda.grid(3)
+       stridex, stridey, stridez = cuda.gridsize(3)
+
+       # Linearized thread index
+       tid = (startz * stridey * stridez) + (starty * stridex) + startx
+
+       # Use strided loops over the array to assign a random value to each entry
+       for i in range(startz, arr.shape[0], stridez):
+           for j in range(starty, arr.shape[1], stridey):
+               for k in range(startx, arr.shape[2], stridex):
+                   arr[i, j, k] = xoroshiro128p_uniform_float32(rng_states, tid)
+
+
+   # Array dimensions
+   X, Y, Z = 701, 900, 719
+
+   # Block and grid dimensions
+   bx, by, bz = 8, 8, 8
+   gx, gy, gz = 16, 16, 16
+
+   # Total number of threads
+   nthreads = bx * by * bz * gx * gy * gz
+
+   # Initialize a state for each thread
+   rng_states = create_xoroshiro128p_states(nthreads, seed=1)
+
+   # Generate random numbers
+   arr = cuda.device_array((X, Y, Z), dtype=np.float32)
+   random_3d[(gx, gy, gz), (bx, by, bz)](arr, rng_states)
