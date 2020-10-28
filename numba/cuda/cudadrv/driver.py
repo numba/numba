@@ -482,15 +482,6 @@ class Device(object):
             'pci_device_id': self.PCI_DEVICE_ID,
         }
 
-    @property
-    def COMPUTE_CAPABILITY(self):
-        """
-        For backward compatibility
-        """
-        warnings.warn("Deprecated attribute 'COMPUTE_CAPABILITY'; use lower "
-                      "case version", DeprecationWarning)
-        return self.compute_capability
-
     def __repr__(self):
         return "<CUDA device %d '%s'>" % (self.id, self.name)
 
@@ -1889,8 +1880,8 @@ class Stream(object):
         callback will block later work in the stream and may block other
         callbacks from being executed.
 
-        Note: This function is marked as deprecated and may be replaced in a
-        future CUDA release.
+        Note: This driver function underlying this method is marked for
+        eventual deprecation and may be replaced in a future CUDA release.
 
         :param callback: Callback function with arguments (stream, status, arg).
         :param arg: User data to be passed to the callback function.
