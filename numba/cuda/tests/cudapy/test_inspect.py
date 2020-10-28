@@ -55,23 +55,23 @@ class TestInspect(CUDATestCase):
         # Signature in LLVM dict
         llvmirs = foo.inspect_llvm()
         self.assertEqual(2, len(llvmirs), )
-        self.assertIn((self.cc, (intp, intp)), llvmirs)
-        self.assertIn((self.cc, (float64, float64)), llvmirs)
+        self.assertIn((intp, intp), llvmirs)
+        self.assertIn((float64, float64), llvmirs)
 
         # Function name in LLVM
-        self.assertIn("foo", llvmirs[self.cc, (intp, intp)])
-        self.assertIn("foo", llvmirs[self.cc, (float64, float64)])
+        self.assertIn("foo", llvmirs[intp, intp])
+        self.assertIn("foo", llvmirs[float64, float64])
 
         asmdict = foo.inspect_asm()
 
         # Signature in LLVM dict
         self.assertEqual(2, len(asmdict), )
-        self.assertIn((self.cc, (intp, intp)), asmdict)
-        self.assertIn((self.cc, (float64, float64)), asmdict)
+        self.assertIn((intp, intp), asmdict)
+        self.assertIn((float64, float64), asmdict)
 
         # NNVM inserted in PTX
-        self.assertIn("foo", asmdict[self.cc, (intp, intp)])
-        self.assertIn("foo", asmdict[self.cc, (float64, float64)])
+        self.assertIn("foo", asmdict[intp, intp])
+        self.assertIn("foo", asmdict[float64, float64])
 
     def _test_inspect_sass(self, kernel, name, sass):
         # Ensure function appears in output
