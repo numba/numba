@@ -95,9 +95,10 @@ class _CFG(object):
         self.dot = ll.get_function_cfg(fn)
         self.kwargs = kwargs
 
-    def pretty_printer(self, filename=None, view=None, highlight=True,
-                      interleave=False, strip_ir=False, show_key=True,
-                      fontsize=10):
+    def pretty_printer(self, filename=None, view=None, render_format=None,
+                       highlight=True,
+                       interleave=False, strip_ir=False, show_key=True,
+                       fontsize=10):
         """
         "Pretty" prints the DOT graph of the CFG.
         For explanation of the parameters see the docstring for
@@ -118,7 +119,9 @@ class _CFG(object):
                                     returns=_default,
                                     raises=_default,
                                     meminfo=_default,
-                                    branches=_default)
+                                    branches=_default,
+                                    llvm_intrin_calls=_default,
+                                    function_calls=_default,)
         _interleave = SimpleNamespace(python=_default, lineinfo=_default)
 
         def parse_config(_config, kwarg):
@@ -163,6 +166,8 @@ class _CFG(object):
         cs['raise'] = 'lightpink'
         cs['meminfo'] = 'lightseagreen'
         cs['return'] = 'purple'
+        cs['llvm_intrin_calls'] = 'rosybrown'
+        cs['function_calls'] = 'tomato'
 
         # Get the raw dot format information from LLVM and the LLVM IR
         fn = self.cres.get_function(self.name)
@@ -191,7 +196,16 @@ class _CFG(object):
             # name and fname are arbitrary graph and file names, they appear in
             # some rendering formats, the fontsize determines the output
             # fontsize.
-            f = gv.Digraph(name, fname)
+
+            # truncate massive mangled names as file names as it causes OSError
+            # when trying to render to pdf
+            cmax = 200
+            if len(fname) > cmax:
+                wstr = (f'CFG output filname "{fname}" exceeds maximum '
+                        f'supported length, it will be truncated.')
+                warnings.warn(wstr, NumbaInvalidConfigWarning)
+                fname = fname[:cmax]
+            f = gv.Digraph(name, filename=fname)
             f.attr(rankdir='TB')
             f.attr('node', shape='none', fontsize='%s' % str(fontsize))
             return f
@@ -217,8 +231,10 @@ class _CFG(object):
         nrt_incref = re.compile(r"@NRT_incref\b")
         nrt_decref = re.compile(r"@NRT_decref\b")
         nrt_meminfo = re.compile("@NRT_MemInfo")
-        ll_raise = re.compile("ret i32 1,")
-        ll_return = re.compile("ret i32 [^1],")
+        ll_intrin_calls = re.compile(r".*call.*@llvm\..*")
+        ll_function_call = re.compile(r".*call.*@.*")
+        ll_raise = re.compile("ret i32.*\!ret_is_raise.*")
+        ll_return = re.compile("ret i32 [^1],?.*")
 
         # wrapper function for line wrapping LLVM lines
         def wrap(s):
@@ -227,12 +243,23 @@ class _CFG(object):
         # function to fix (sometimes escaped for DOT!) LLVM IR etc that needs to
         # be HTML escaped
         def clean(s):
+            # Grab first 300 chars only, 1. this should be enough to identify
+            # the token and it keeps names short. 2. graphviz/dot has a maximum
+            # buffer size near 585?!, with additional transforms it's hard to
+            # know if this would be exceeded. 3. hash of the token string is
+            # written into the rendering to permit exact identification against
+            # e.g. LLVM IR dump if necessary.
+            n = 300
+            if len(s) > n:
+                hs = str(hash(s))
+                s = '{}...<hash={}>'.format(s[:n], hs)
             s = html.escape(s) # deals with  &, < and >
             s = s.replace('\\{', "&#123;")
             s = s.replace('\\}', "&#125;")
             s = s.replace('\\', "&#92;")
             s = s.replace('%', "&#37;")
-            return s.replace('!', "&#33;")
+            s = s.replace('!', "&#33;")
+            return s
 
         # These hold the node and edge ids from the raw dot information. They
         # are used later to wire up a new DiGraph that has the same structure
@@ -399,6 +426,10 @@ class _CFG(object):
                     colour = cs['raise']
                 elif _highlight.returns and ll_return.search(l):
                     colour = cs['return']
+                elif _highlight.llvm_intrin_calls and ll_intrin_calls.search(l):
+                    colour = cs['llvm_intrin_calls']
+                elif _highlight.function_calls and ll_function_call.search(l):
+                    colour = cs['function_calls']
                 else:
                     colour = cs['default']
 
@@ -457,21 +488,23 @@ class _CFG(object):
 
         # Render if required
         if filename is not None or view is not None:
-            f.render(filename=filename, view=view, format='pdf')
+            f.render(filename=filename, view=view, format=render_format)
 
         # Else pipe out a SVG
         return f.pipe(format='svg')
 
-    def display(self, filename=None, view=False):
+    def display(self, filename=None, format='pdf', view=False):
         """
         Plot the CFG.  In IPython notebook, the return image object can be
         inlined.
 
         The *filename* option can be set to a specific path for the rendered
         output to write to.  If *view* option is True, the plot is opened by
-        the system default application for the image format (PDF).
+        the system default application for the image format (PDF). *format* can
+        be any valid format string accepted by graphviz, default is 'pdf'.
         """
-        rawbyt = self.pretty_printer(filename=filename, view=view, **self.kwargs)
+        rawbyt = self.pretty_printer(filename=filename, view=view,
+                                     render_format=format, **self.kwargs)
         return rawbyt.decode('utf-8')
 
     def _repr_svg_(self):
@@ -1071,7 +1104,7 @@ class BaseCPUCodegen(object):
         self._data_layout = str(self._target_data)
         self._mpm_cheap = self._module_pass_manager(loop_vectorize=False,
                                                     slp_vectorize=False,
-                                                    opt=1)
+                                                    opt=0)
         self._mpm_full = self._module_pass_manager()
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
