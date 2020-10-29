@@ -88,7 +88,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_new_axis(self):
 
-        gufunc = _get_matmulcore_gufunc()
+        gufunc = _get_matmulcore_gufunc(dtype=float64)
 
         X = np.random.randn(10, 3, 3)
         Y = np.random.randn(3, 3)
@@ -118,7 +118,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_stream(self):
 
-        gufunc = _get_matmulcore_gufunc(dtype=float64, max_blocksize=512)
+        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
 
         #cuda.driver.flush_pending_free()
         matrix_ct = 1001 # an odd number to test thread/block division in CUDA
