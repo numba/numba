@@ -1,15 +1,15 @@
 import numpy as np
 import numpy.core.umath_tests as ut
 
-from numba import void, float32
+from numba import void, float32, float64
 from numba import guvectorize
 from numba import cuda
 from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 import unittest
 
 
-def _get_matmulcore_gufunc(max_blocksize=None):
-    @guvectorize([void(float32[:, :], float32[:, :], float32[:, :])],
+def _get_matmulcore_gufunc(dtype=float32, max_blocksize=None):
+    @guvectorize([void(dtype[:, :], dtype[:, :], dtype[:, :])],
                  '(m,n),(n,p)->(m,p)',
                  target='cuda')
     def matmulcore(A, B, C):
@@ -118,7 +118,7 @@ class TestCUDAGufunc(CUDATestCase):
 
     def test_gufunc_stream(self):
 
-        gufunc = _get_matmulcore_gufunc(max_blocksize=512)
+        gufunc = _get_matmulcore_gufunc(dtype=float64, max_blocksize=512)
 
         #cuda.driver.flush_pending_free()
         matrix_ct = 1001 # an odd number to test thread/block division in CUDA
