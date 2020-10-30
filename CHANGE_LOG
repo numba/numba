@@ -3892,7 +3892,7 @@ Version 0.17.0
 The major focus in this release has been a rewrite of the documentation.
 The new documentation is better structured and has more detailed coverage
 of Numba features and APIs.  It can be found online at
-http://numba.pydata.org/numba-doc/dev/index.html
+https://numba.pydata.org/numba-doc/dev/index.html
 
 Features:
 

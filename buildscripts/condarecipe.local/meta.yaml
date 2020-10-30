@@ -74,7 +74,7 @@ test:
     - {{ compiler('cxx') }}    # [not (win or armv6l or armv7l or aarch64)]
 
 about:
-  home: http://numba.pydata.org/
+  home: https://numba.pydata.org/
   license: BSD
   license_file: LICENSE
   summary: a just-in-time Python function compiler based on LLVM
