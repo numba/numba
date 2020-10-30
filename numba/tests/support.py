@@ -5,7 +5,6 @@ Assorted utilities for use in tests.
 import cmath
 import contextlib
 import enum
-import errno
 import gc
 import math
 import platform
@@ -581,9 +580,8 @@ _trashcan_timeout = 24 * 3600  # 1 day
 def _create_trashcan_dir():
     try:
         os.mkdir(_trashcan_dir)
-    except OSError as e:
-        if e.errno != errno.EEXIST:
-            raise
+    except FileExistsError:
+        pass
 
 def _purge_trashcan_dir():
     freshness_threshold = time.time() - _trashcan_timeout
