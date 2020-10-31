@@ -119,8 +119,11 @@ def class_contains(x, y):
 def class_float(x):
     options = [try_call_method(x, "__float__")]
 
-    if (sys.version_info.major, sys.version_info.minor) >= (3, 8):
-        options.append(try_call_method(x, "__index__"))
+    if (
+        (sys.version_info.major, sys.version_info.minor) >= (3, 8)
+        and "__index__" in x.jit_methods
+    ):
+        options.append(lambda x: float(x.__index__()))
 
     return take_first(*options)
 
