@@ -181,6 +181,7 @@ compiled functions:
 * calling methods (e.g. ``mybag.increment(3)``);
 * calling static methods as instance attributes (e.g. ``mybag.add(1, 1)``);
 * calling static methods as class attributes (e.g. ``Bag.add(1, 2)``);
+* using select dunder methods (e.g. ``__add__`` with ``mybag + otherbag``);
 
 Using jitclasses in Numba compiled function is more efficient.
 Short methods can be inlined (at the discretion of LLVM inliner).
@@ -195,6 +196,8 @@ Calling static methods as class attributes is only supported outside of the
 class definition (i.e. code cannot call ``Bag.add()`` from within another method
 of ``Bag``).
 
+See :ghfile:`numba/experimental/jitclass/boxing.py` for the list of supported
+dunder methods.
 
 Limitations
 ===========
