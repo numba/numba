@@ -146,12 +146,25 @@ def class_str(x):
     )
 
 
+@class_instance_overload(operator.eq)
+def class_eq(x, y):
+    # TODO: Fallback to x is y.
+    return try_call_method(x, "__eq__", 2)
+
+
+@class_instance_overload(operator.ne)
+def class_ne(x, y):
+    return take_first(
+        try_call_method(x, "__ne__", 2),
+        lambda x, y: not (x == y),
+    )
+
+
 register_simple_overload(abs, "abs")
 register_simple_overload(len, "len")
 
 # Comparison operators.
-# register_simple_overload(operator.eq, "eq", 2)
-# register_simple_overload(operator.ne, "ne", 2)
+register_simple_overload(hash, "hash")
 register_simple_overload(operator.ge, "ge", n_args=2)
 register_simple_overload(operator.gt, "gt", n_args=2)
 register_simple_overload(operator.le, "le", n_args=2)
