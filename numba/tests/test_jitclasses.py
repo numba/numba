@@ -1193,13 +1193,6 @@ class TestJitClassOverloads(TestCase, MemoryLeakMixin):
             def __init__(self, value):
                 self.x = value
 
-            # def __eq__(self, other):
-            #     print("Eq", self, other, self.x, other.x)
-            #     return self.x == other.x
-
-            # def __ne__(self, other):
-            #     return self.x != other.x
-
             def __ge__(self, other):
                 return self.x >= other.x
 
