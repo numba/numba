@@ -1297,8 +1297,8 @@ class TestUnicode(BaseTest):
 
     def test_slice_ascii_flag(self):
         """
-        Make sure ascii flag is False when ascii and non-ascii characters are mixed
-        in output of Unicode slicing.
+        Make sure ascii flag is False when ascii and non-ascii characters are
+        mixed in output of Unicode slicing.
         """
         @njit
         def f(s):
