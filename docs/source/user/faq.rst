@@ -102,8 +102,8 @@ Does Numba vectorize array computations (SIMD)?
 Numba doesn't implement such optimizations by itself, but it lets LLVM
 apply them.
 
-Why my loop is not vectorized?
-------------------------------
+Why has my loop not vectorized?
+-------------------------------
 
 Numba enables the loop-vectorize optimization in LLVM by default.
 While it is a powerful optimization, not all loops are applicable.
@@ -150,6 +150,17 @@ In this case, vectorization is rejected because the vectorized code may behave
 differently.  This is a case to try turning on ``fastmath=True`` to allow
 fastmath instructions.
 
+Why are the ``typed`` containers slower when used from the interpreter?
+-----------------------------------------------------------------------
+
+The Numba ``typed`` containers found in ``numba.typed`` e.g.
+``numba.typed.List`` store their data in an efficient form for access from JIT
+compiled code. When these containers are used from the CPython interpreter, the
+data involved has to be converted to/from a form that the interpreter
+understands from/to the container format, this process is relatively costly and
+as a result impacts performance. In JIT compiled code no such penalty exists and
+so operations on the containers are much quicker and often faster than the pure
+python equivalent.
 
 Does Numba automatically parallelize code?
 ------------------------------------------
