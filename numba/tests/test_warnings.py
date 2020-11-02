@@ -8,6 +8,7 @@ import unittest
 from numba import jit
 from numba.core.errors import NumbaWarning, deprecated, NumbaDeprecationWarning
 from numba.core import errors
+from numba import vectorize
 
 
 class TestBuiltins(unittest.TestCase):
@@ -203,6 +204,23 @@ class TestBuiltins(unittest.TestCase):
         popen = subprocess.Popen([sys.executable, "-c", parallel_code], env=env)
         out, err = popen.communicate()
         self.assertEqual(popen.returncode, not_found_ret_code)
+
+    def test_warning_vectorize_with_nogil(self):
+        @vectorize(nogil=True)
+        def f(a, b):
+            return np.sqrt(a) + np.cos(b) * np.sin(b) - a
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+
+            nelem = 10 ** 2
+            x = np.arange(nelem)
+            f(x, x)
+
+            self.assertEqual(w[0].category, UserWarning)
+            self.assertIn('nogil option is not required', str(w[0].message))
+            self.assertIn('ufuncs and gufuncs always releases GIL',
+                          str(w[0].message))
 
 
 if __name__ == '__main__':

@@ -2,6 +2,7 @@
 
 import inspect
 from contextlib import contextmanager
+import warnings
 
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
@@ -82,6 +83,10 @@ class UFuncDispatcher(serialize.ReduceMixin):
         topt.update(targetoptions)
 
         flags = compiler.Flags()
+        if 'nogil' in topt:
+            warnings.warn("nogil option is not required, ufuncs and gufuncs "
+                          "always releases GIL")
+            topt.pop('nogil')
         self.targetdescr.options.parse_as_flags(flags, topt)
 
         flags.set("no_cpython_wrapper")
