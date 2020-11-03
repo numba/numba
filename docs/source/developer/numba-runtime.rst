@@ -48,17 +48,34 @@ Optimizations
 -------------
 
 The compiler is allowed to emit incref/decref operations naively.  It relies
-on an optimization pass that to remove the redundant reference count
-operations.
+on an optimization pass that remove the redundant reference count operations.
 
-The optimization pass runs on block level to avoid control flow analysis.
+A new optimization pass is implemented in version 0.52.0 to remove reference
+count operations that falls into the following four categories of control-flow
+structure---per basic-block, diamond, fanout, fanout+raise. See documentation
+of :envvar:`NUMBA_LLVM_REFPRUNE_FLAGS` for their descriptions.
+
+The old optimization pass runs on block level to avoid control flow analysis.
 It depends on LLVM function optimization pass to simplify the control flow,
 stack-to-register, and simplify instructions.  It works by matching and
-removing incref and decref pairs within each block.
+removing incref and decref pairs within each block.  The old pass can be
+enabled by setting :envvar:`NUMBA_LLVM_REFPRUNE_PASS` to `0`.
+
+Important assumptions
+---------------------
+
+Both old and new optimization passes assume that the only function that can
+consume a reference is via ``NRT_decref``. It is important that there are no
+other functions that will consume references. Since the passes operate on
+LLVM IR, the "functions" here are referring to any callee in a LLVM call
+instruction.
+
+To summarize, all functions exposed to the refcount optimization pass
+**must not** consume reference count unless it is a ``NRT_decref``.
 
 
-Quirks
-------
+Quirks of old optimization pass
+-------------------------------
 
 Since the `refcount optimization pass <nrt-refct-opt-pass_>`_ requires LLVM
 function optimization pass, the pass works on the LLVM IR as text.  The
