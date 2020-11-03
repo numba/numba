@@ -579,6 +579,10 @@ class _Kernel(serialize.ReduceMixin):
         """
         return get_current_device()
 
+    @property
+    def regs_per_thread(self):
+        return self._func.get().attrs.regs
+
     def inspect_llvm(self):
         '''
         Returns the LLVM IR for this kernel.
@@ -918,6 +922,25 @@ class Dispatcher(serialize.ReduceMixin):
             return self.definition._func
         else:
             return {sig: defn._func for sig, defn in self.definitions.items()}
+
+    def get_regs_per_thread(self, signature=None):
+        '''
+        Returns the number of registers used by each thread in this kernel for
+        the device in the current context.
+
+        :param sig: The signature of the compiled kernel to get register usage
+                    for. This may be omitted for a specialized kernel.
+        :return: The number of registers used by the compiled variant of the
+                 kernel for the given signature and current device.
+        '''
+        cc = get_current_device().compute_capability
+        if signature is not None:
+            return self.definitions[(cc, signature.args)].regs_per_thread
+        if self.specialized:
+            return self.definition.regs_per_thread
+        else:
+            return {sig: defn.regs_per_thread
+                    for sig, defn in self.definitions.items()}
 
     def compile(self, sig):
         '''
