@@ -2360,7 +2360,6 @@ class TestPrange(TestPrangeBase):
 
     @skip_parfors_unsupported
     def test_prange_nested_reduction1(self):
-        # issue6414
         def test_impl():
             A = 0
             for k in range(1):
