@@ -85,7 +85,7 @@ class UFuncDispatcher(serialize.ReduceMixin):
         flags = compiler.Flags()
         if 'nogil' in topt:
             warnings.warn("nogil option is not required, ufuncs and gufuncs "
-                          "always releases GIL")
+                          "always releases GIL for CPU target")
             topt.pop('nogil')
         self.targetdescr.options.parse_as_flags(flags, topt)
 

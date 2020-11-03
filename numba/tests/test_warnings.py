@@ -219,8 +219,8 @@ class TestBuiltins(unittest.TestCase):
 
             self.assertEqual(w[0].category, UserWarning)
             self.assertIn('nogil option is not required', str(w[0].message))
-            self.assertIn('ufuncs and gufuncs always releases GIL',
-                          str(w[0].message))
+            self.assertIn('ufuncs and gufuncs always releases GIL for CPU '
+                          'target', str(w[0].message))
 
 
 if __name__ == '__main__':
