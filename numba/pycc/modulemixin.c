@@ -23,7 +23,7 @@
 #include "../core/runtime/nrt.h"
 #endif
 
-/* Defines hashsecret variables, see issue #6386 */
+/* Defines hashsecret variables (see issue #6386) */
 int64_t _numba_hashsecret_siphash_k0;
 int64_t _numba_hashsecret_siphash_k1;
 int64_t _numba_hashsecret_djbx33a_suffix;
