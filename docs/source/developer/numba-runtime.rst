@@ -64,22 +64,23 @@ enabled by setting :envvar:`NUMBA_LLVM_REFPRUNE_PASS` to `0`.
 Important assumptions
 ---------------------
 
-Both the old and the new optimization passes assume that the only function that can
-consume a reference is ``NRT_decref``. It is important that there are no
-other functions that will consume references. Since the passes operate on
-LLVM IR, the "functions" here are referring to any callee in a LLVM call
-instruction.
+Both the old (pre-0.52.0) and the new (post-0.52.0) optimization passes assume
+that the only function that can consume a reference is ``NRT_decref``.
+It is important that there are no other functions that will consume references.
+Since the passes operate on LLVM IR, the "functions" here are referring to any
+callee in a LLVM call instruction.
 
 To summarize, all functions exposed to the refcount optimization pass
 **must not** consume counted references unless done so via ``NRT_decref``.
 
 
-Quirks of old optimization pass
--------------------------------
+Quirks of legacy optimization pass
+----------------------------------
 
-Since the `refcount optimization pass <nrt-refct-opt-pass_>`_ requires LLVM
-function optimization pass, the pass works on the LLVM IR as text.  The
-optimized IR is then materialized again as a new LLVM in-memory bitcode object.
+Since the pre-0.52.0 `refcount optimization pass <nrt-refct-opt-pass_>`_
+requires LLVM function optimization pass, the pass works on the LLVM IR as
+text. The optimized IR is then materialized again as a new LLVM in-memory
+bitcode object.
 
 
 Debugging Leaks
