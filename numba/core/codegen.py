@@ -233,7 +233,7 @@ class _CFG(object):
         nrt_meminfo = re.compile("@NRT_MemInfo")
         ll_intrin_calls = re.compile(r".*call.*@llvm\..*")
         ll_function_call = re.compile(r".*call.*@.*")
-        ll_raise = re.compile("ret i32.*\!ret_is_raise.*")
+        ll_raise = re.compile(r"ret i32.*\!ret_is_raise.*")
         ll_return = re.compile("ret i32 [^1],?.*")
 
         # wrapper function for line wrapping LLVM lines

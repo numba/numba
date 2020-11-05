@@ -26,7 +26,7 @@ class Loc(object):
     """Source location
 
     """
-    _defmatcher = re.compile('def\s+(\w+)\(.*')
+    _defmatcher = re.compile(r'def\s+(\w+)\(.*')
 
     def __init__(self, filename, line, col=None, maybe_decorator=False):
         """ Arguments:
@@ -1570,12 +1570,12 @@ class FunctionIR(object):
                 label = sb.getvalue()
             if include_ir:
                 label = ''.join(
-                    ['  {}\l'.format(x) for x in label.splitlines()],
+                    [r'  {}\l'.format(x) for x in label.splitlines()],
                 )
-                label = "block {}\l".format(k) + label
+                label = r"block {}\l".format(k) + label
                 g.node(str(k), label=label, shape='rect')
             else:
-                label = "{}\l".format(k)
+                label = r"{}\l".format(k)
                 g.node(str(k), label=label, shape='circle')
         # Populate the edges
         for src, blk in self.blocks.items():
