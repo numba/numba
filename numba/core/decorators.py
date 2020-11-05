@@ -10,7 +10,8 @@ import logging
 
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
-from numba.core import config, extending, sigutils, registry, cpu_dispatcher
+from numba.core import config, extending, sigutils, registry
+
 
 _logger = logging.getLogger(__name__)
 

@@ -15,7 +15,6 @@ from numba.core.utils import add_metaclass, reraise, chain_exception
 from functools import wraps
 from abc import abstractmethod
 
-
 # Filled at the end
 __all__ = []
 

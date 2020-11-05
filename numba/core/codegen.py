@@ -16,8 +16,6 @@ from numba.core.compiler_lock import require_global_compiler_lock
 from numba.misc.inspection import disassemble_elf_to_cfg
 
 
-import sys
-
 _x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
                       'i886', 'i986'])
 

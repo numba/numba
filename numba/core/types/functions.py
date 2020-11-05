@@ -96,7 +96,6 @@ class _ResolutionFailures(object):
         argstr = argsnkwargs_to_str(self._args, self._kwargs)
         ncandidates = sum([len(x) for x in self._failures.values()])
 
-
         # sort out a display name for the function
         tykey = self._function_type.typing_key
         # most things have __name__

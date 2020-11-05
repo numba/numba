@@ -44,6 +44,7 @@ class ParallelOptions(object):
     """
     Options for controlling auto parallelization.
     """
+
     def __init__(self, value):
         self.gen_spirv = False
         if isinstance(value, bool):

@@ -36,6 +36,7 @@ versioneer.parentdir_prefix = 'numba-'
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
 
+
 GCCFLAGS = ["-std=c89", "-Wdeclaration-after-statement", "-Werror"]
 
 if os.environ.get("NUMBA_GCC_FLAGS"):
