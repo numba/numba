@@ -3794,6 +3794,28 @@ class TestParforsDiagnostics(TestParforsBase):
         diagnostics = cpfunc.metadata['parfor_diagnostics']
         self.assert_diagnostics(diagnostics, parfors_count=1)
 
+    def test_user_varname(self):
+        """make sure original user variable name is used in fusion info
+        """
+        def test_impl():
+            n = 10
+            x = np.ones(n)
+            a = np.sin(x)
+            b = np.cos(a * a)
+            acc = 0
+            for i in prange(n - 2):
+                for j in prange(n - 1):
+                    acc += b[i] + b[j + 1]
+            return acc
+
+        self.check(test_impl,)
+        cpfunc = self.compile_parallel(test_impl, ())
+        diagnostics = cpfunc.metadata['parfor_diagnostics']
+        # make sure original 'n' variable name is used in fusion report for loop
+        # dimension mismatch
+        self.assertTrue(
+            any("slice(0, n, 1)" in r.message for r in diagnostics.fusion_reports))
+
     def test_nested_prange(self):
         def test_impl():
             n = 10
