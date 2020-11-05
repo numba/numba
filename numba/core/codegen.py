@@ -1104,7 +1104,8 @@ class BaseCPUCodegen(object):
         self._data_layout = str(self._target_data)
         self._mpm_cheap = self._module_pass_manager(loop_vectorize=False,
                                                     slp_vectorize=False,
-                                                    opt=0)
+                                                    opt=0,
+                                                    cost="cheap")
         self._mpm_full = self._module_pass_manager()
 
         self._engine.set_object_cache(self._library_class._object_compiled_hook,
@@ -1137,8 +1138,16 @@ class BaseCPUCodegen(object):
     def _module_pass_manager(self, **kwargs):
         pm = ll.create_module_pass_manager()
         self._tm.add_analysis_passes(pm)
+        cost = kwargs.pop("cost", None)
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
+        if cost is not None and cost == "cheap":
+            # This helps the refprune pass which can only deal with arguments to
+            # NRT function pairs that are literally the same i.e. it doesn't
+            # attempt to resolve arguments by tracing through the IR etc.
+            # Instcombine resolves a lot of this, it only runs as part of the
+            # cheap pass as the full opt pass will likely include it anyway.
+            pm.add_instruction_combining_pass()
         if config.LLVM_REFPRUNE_PASS:
             pm.add_refprune_pass(_parse_refprune_flags())
         return pm
