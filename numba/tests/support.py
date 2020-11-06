@@ -85,6 +85,10 @@ skip_ppc64le_issue4563 = unittest.skipIf(platform.machine() == 'ppc64le',
                                          ("Hits: 'Parameter area must exist "
                                           "to pass an argument in memory'"))
 
+skip_unless_py37_or_later = lambda reason: \
+    unittest.skipIf(utils.PYVERSION < (3, 7),
+    reason)
+
 try:
     import scipy.linalg.cython_lapack
     has_lapack = True
