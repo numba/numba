@@ -3,19 +3,8 @@ from __future__ import print_function
 import numpy as np
 
 from numba import config, cuda, int32, void
-from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
-
-
-def cc_X_or_above(major, minor):
-    if not config.ENABLE_CUDASIM:
-        cc = cuda.current_context().device.compute_capability
-        return cc >= (major, minor)
-    else:
-        return True
-
-
-def skip_unless_cc_60(fn):
-    return unittest.skipUnless(cc_X_or_above(6, 0), "requires cc >= 6.0")(fn)
+from numba.cuda.testing import (unittest, CUDATestCase, skip_on_cudasim,
+                                skip_unless_cc_60)
 
 
 @cuda.jit
