@@ -288,7 +288,7 @@ RETURN_ARRAY_COPY:
 /**
  * This function was renamed in 0.52.0 to specify that it acquires references.
  * It used to steal the reference of the arystruct.
- * Refers to https://github.com/numba/numba/pull/6446
+ * Refer to https://github.com/numba/numba/pull/6446
  */
 NUMBA_EXPORT_FUNC(PyObject *)
 NRT_adapt_ndarray_to_python_acqref(arystruct_t* arystruct, int ndim,
