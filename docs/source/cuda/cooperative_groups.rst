@@ -36,11 +36,12 @@ Unlike the CUDA C/C++ API, a cooperative launch is invoked using the same syntax
 as a normal kernel launch - Numba automatically determines whether a cooperative
 launch is required based on whether a grid group is synchronized in the kernel.
 
-The grid size for a cooperative launch is more than for a normal launch - the
-grid must be no larger than the maximum number of active blocks on the device on
-which it is launched. To get maximum grid size for a cooperative launch of a
-kernel with a given block size and dynamic shared memory requirement, use the
-``max_cooperative_grid_blocks()`` method of kernel definitions:
+The grid size limit for a cooperative launch is more restrictive than for a
+normal launch - the grid must be no larger than the maximum number of active
+blocks on the device on which it is launched. To get maximum grid size for a
+cooperative launch of a kernel with a given block size and dynamic shared
+memory requirement, use the ``max_cooperative_grid_blocks()`` method of kernel
+definitions:
 
 .. automethod:: numba.cuda.compiler._Kernel.max_cooperative_grid_blocks
 
