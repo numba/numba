@@ -78,5 +78,8 @@ if [ "$RUN_COVERAGE" == "yes" ]; then
     coverage erase
     $SEGVCATCH coverage run runtests.py -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 else
+    if [ "$RUN_TYPEGUARD" == "yes" ]; then
+        export NUMBA_USE_TYPEGUARD=1
+    fi
     NUMBA_ENABLE_CUDASIM=1 $SEGVCATCH python -m numba.runtests -b -j "$TEST_START_INDEX,None,$TEST_COUNT" --exclude-tags='long_running' -m $TEST_NPROCS -- numba.tests
 fi
