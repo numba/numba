@@ -568,7 +568,7 @@ class CPUCallConv(BaseCallConv):
         arginfo = self._get_arg_packer(argtys)
         args = list(arginfo.as_arguments(builder, args))
         realargs = [retvaltmp, excinfoptr] + args
-        # deal with attrs, it's find to specify a load in a string like
+        # deal with attrs, it's fine to specify a load in a string like
         # "noinline fast" as per LLVM or equally as an iterable of individual
         # attributes.
         if attrs is None:
