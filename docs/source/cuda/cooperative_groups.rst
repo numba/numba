@@ -69,52 +69,36 @@ in the grid reads a value from the previous row written by it's *opposite*
 thread. A grid sync is needed to ensure that threads in the grid don't run ahead
 of threads in other blocks, or fail to see updates from their opposite thread.
 
-.. code-block:: python
+First we'll define our kernel:
 
-   from numba import cuda, int32, void
-   import numpy as np
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_cg.py
+   :language: python
+   :caption: from ``test_grid_sync`` of ``numba/cuda/tests/doc_example/test_cg.py``
+   :start-after: magictoken.ex_grid_sync_kernel.begin
+   :end-before: magictoken.ex_grid_sync_kernel.end
+   :dedent: 8
+   :linenos:
 
-   @cuda.jit(void(int32[:,::1]))
-   def sequential_rows(M):
-       col = cuda.grid(1)
-       g = cuda.cg.this_grid()
+Then create some empty input data and determine the grid and block sizes:
 
-       rows = M.shape[0]
-       cols = M.shape[1]
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_cg.py
+   :language: python
+   :caption: from ``test_grid_sync`` of ``numba/cuda/tests/doc_example/test_cg.py``
+   :start-after: magictoken.ex_grid_sync_data.begin
+   :end-before: magictoken.ex_grid_sync_data.end
+   :dedent: 8
+   :linenos:
 
-       for row in range(1, rows):
-           opposite = cols - col - 1
-           # Each row's elements are one greater than the previous row
-           M[row, col] = M[row - 1, opposite] + 1
-           # Wait until all threads have written their column element,
-           # and that the write is visible to all other threads
-           g.sync()
+Finally we launch the kernel and print the result:
 
-   # Empty input data
-   A = np.zeros((1024, 1024), dtype=np.int32)
-   # A somewhat arbitrary choice (one warp), but generally smaller block sizes
-   # allow more blocks to be launched (noting that other limitations on
-   # occupancy apply such as shared memory size)
-   blockdim = 32
-   griddim = A.shape[1] // blockdim
+.. literalinclude:: ../../../numba/cuda/tests/doc_examples/test_cg.py
+   :language: python
+   :caption: from ``test_grid_sync`` of ``numba/cuda/tests/doc_example/test_cg.py``
+   :start-after: magictoken.ex_grid_sync_launch.begin
+   :end-before: magictoken.ex_grid_sync_launch.end
+   :dedent: 8
+   :linenos:
 
-   # Kernel launch - this is implicitly a cooperative launch
-   sequential_rows[griddim, blockdim](A)
-
-   # Sanity check - are the results what we expect?
-   reference = np.tile(np.arange(1024), (1024, 1)).T
-   np.testing.assert_equal(A, reference)
-
-   # What do the results look like?
-   print(A)
-
-   # [[   0    0    0 ...    0    0    0]
-   #  [   1    1    1 ...    1    1    1]
-   #  [   2    2    2 ...    2    2    2]
-   #  ...
-   #  [1021 1021 1021 ... 1021 1021 1021]
-   #  [1022 1022 1022 ... 1022 1022 1022]
-   #  [1023 1023 1023 ... 1023 1023 1023]]
 
 The maximum grid size for ``sequential_rows`` can be enquired using:
 
