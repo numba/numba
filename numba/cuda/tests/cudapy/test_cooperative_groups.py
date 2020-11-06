@@ -63,7 +63,7 @@ class TestCudaCooperativeGroups(CUDATestCase):
         this_grid[1, 1](A)
 
         # Ensure the kernel executed beyond the call to cuda.this_grid()
-        self.assertFalse(np.isnan(A[0]), 'set it to something!')
+        self.assertFalse(np.isnan(A[0]), 'Value was not set')
 
     @skip_unless_cc_60
     @skip_on_cudasim("Simulator doesn't differentiate between normal and "
@@ -82,7 +82,7 @@ class TestCudaCooperativeGroups(CUDATestCase):
         sync_group[1, 1](A)
 
         # Ensure the kernel executed beyond the call to cuda.sync_group()
-        self.assertFalse(np.isnan(A[0]), 'set it to something!')
+        self.assertFalse(np.isnan(A[0]), 'Value was not set')
 
     @skip_unless_cc_60
     @skip_on_cudasim("Simulator doesn't differentiate between normal and "
@@ -90,7 +90,7 @@ class TestCudaCooperativeGroups(CUDATestCase):
     def test_sync_group_is_cooperative(self):
         A = np.full(1, fill_value=np.nan)
         sync_group[1, 1](A)
-        # this_grid should have been determinted to be cooperative
+        # this_grid should have been determined to be cooperative
         for key, defn in this_grid.definitions.items():
             self.assertTrue(defn.cooperative)
 
