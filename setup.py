@@ -196,7 +196,6 @@ def get_ext_modules():
     else:
         cpp11flags = ['-std=c++11']
         ompcompileflags = ['-fopenmp']
-        openclliteflags = ['-Wall', '-Wextra', '-Winit-self', '-Wuninitialized', '-Wmissing-declarations', '-std=c99', '-fdiagnostics-color=auto', '-shared', '-fPIC']
         if platform.machine() == 'ppc64le':
             omplinkflags = ['-fopenmp']
         else:
