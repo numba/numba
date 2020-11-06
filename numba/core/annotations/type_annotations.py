@@ -18,7 +18,7 @@ class SourceLines(Mapping):
 
         try:
             lines, startno = inspect.getsourcelines(func)
-        except IOError:
+        except OSError:
             self.lines = ()
             self.startno = 0
         else:
