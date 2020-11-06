@@ -334,10 +334,13 @@ class NumbaTestProgram(unittest.main):
 # it's important for doing the CI "slice tests" that these are run at the end
 # See notes in `_flatten_suite` for why. Simple substring matching is used to
 # determine a match.
-_GENERATED = ("numba.tests.test_num_threads",
-              "numba.tests.test_parallel_backend",
-              "numba.tests.test_svml",
-              "numba.tests.test_ufuncs",)
+_GENERATED = (
+    "numba.cuda.tests.cudapy.test_libdevice.TestLibdeviceCompilation",
+    "numba.tests.test_num_threads",
+    "numba.tests.test_parallel_backend",
+    "numba.tests.test_svml",
+    "numba.tests.test_ufuncs",
+)
 
 
 def _flatten_suite_inner(test):

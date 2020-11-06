@@ -573,16 +573,6 @@ class _Kernel(serialize.ReduceMixin):
                     link=self.linking, debug=self.debug,
                     call_helper=self.call_helper, extensions=self.extensions)
 
-    def __call__(self, *args, **kwargs):
-        assert not kwargs
-        griddim, blockdim = normalize_kernel_dimensions(self.griddim,
-                                                        self.blockdim)
-        self._kernel_call(args=args,
-                          griddim=griddim,
-                          blockdim=blockdim,
-                          stream=self.stream,
-                          sharedmem=self.sharedmem)
-
     def bind(self):
         """
         Force binding to current CUDA context
@@ -907,9 +897,12 @@ class Dispatcher(serialize.ReduceMixin):
         '''
         Compile if necessary and invoke this kernel with *args*.
         '''
-        argtypes = tuple(
-            [self.typingctx.resolve_argument_type(a) for a in args])
-        kernel = self.compile(argtypes)
+        if self.specialized:
+            kernel = self.definition
+        else:
+            argtypes = tuple([self.typingctx.resolve_argument_type(a)
+                              for a in args])
+            kernel = self.compile(argtypes)
         kernel.launch(args, griddim, blockdim, stream, sharedmem)
 
     def specialize(self, *args):

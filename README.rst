@@ -23,7 +23,7 @@ parallelization of loops, generation of GPU-accelerated code, and creation of
 ufuncs and C callbacks.
 
 For more information about Numba, see the Numba homepage:
-http://numba.pydata.org
+https://numba.pydata.org
 
 Supported Platforms
 ===================
@@ -46,7 +46,7 @@ Dependencies
 ============
 
 * Python versions: 3.6-3.8
-* llvmlite 0.33.*
+* llvmlite 0.35.*
 * NumPy >=1.15 (can build with 1.11 for ABI compatibility)
 
 Optionally:
@@ -64,12 +64,12 @@ Distribution: https://www.anaconda.com/download
 
    $ conda install numba
 
-For more options, see the Installation Guide: http://numba.pydata.org/numba-doc/latest/user/installing.html
+For more options, see the Installation Guide: https://numba.pydata.org/numba-doc/latest/user/installing.html
 
 Documentation
 =============
 
-http://numba.pydata.org/numba-doc/latest/index.html
+https://numba.pydata.org/numba-doc/latest/index.html
 
 
 Mailing Lists

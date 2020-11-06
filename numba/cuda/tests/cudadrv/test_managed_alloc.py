@@ -1,5 +1,4 @@
 import numpy as np
-import platform
 from ctypes import byref, c_size_t
 from numba.cuda.cudadrv.driver import device_memset, driver
 from numba import cuda
@@ -9,6 +8,7 @@ from numba.tests.support import linux_only
 
 
 @skip_on_cudasim('CUDA Driver API unsupported in the simulator')
+@linux_only
 class TestManagedAlloc(ContextResettingTestCase):
 
     def get_total_gpu_memory(self):
@@ -57,12 +57,8 @@ class TestManagedAlloc(ContextResettingTestCase):
     def test_managed_alloc_driver_oversubscribe(self):
         msg = "Oversubscription of managed memory unsupported prior to CC 6.0"
         self.skip_if_cc_major_lt(6, msg)
-        if platform.system() != "Linux":
-            msg = "Oversubscription of managed memory only supported on Linux"
-            self.skipTest(msg)
         self._test_managed_alloc_driver(2.0)
 
-    @linux_only
     def test_managed_alloc_driver_host_attach(self):
         msg = "Host attached managed memory is not accessible prior to CC 6.0"
         self.skip_if_cc_major_lt(6, msg)
@@ -115,7 +111,6 @@ class TestManagedAlloc(ContextResettingTestCase):
     def test_managed_array_attach_global(self):
         self._test_managed_array()
 
-    @linux_only
     def test_managed_array_attach_host(self):
         self._test_managed_array()
         msg = "Host attached managed memory is not accessible prior to CC 6.0"

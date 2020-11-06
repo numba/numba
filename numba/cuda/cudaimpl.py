@@ -538,17 +538,6 @@ def round_to_impl(context, builder, sig, args):
     return context.compile_internal(builder, round_ndigits, sig, args, )
 
 
-@lower(math.isinf, types.Integer)
-@lower(math.isnan, types.Integer)
-def math_isinf_isnan_int(context, builder, sig, args):
-    return lc.Constant.int(lc.Type.int(1), 0)
-
-
-@lower(math.isfinite, types.Integer)
-def math_isfinite_int(context, builder, sig, args):
-    return lc.Constant.int(lc.Type.int(1), 1)
-
-
 def gen_deg_rad(const):
     def impl(context, builder, sig, args):
         argty, = sig.args
@@ -634,6 +623,23 @@ def ptx_atomic_sub(context, builder, dtype, ptr, val):
                             (ptr, val))
     else:
         return builder.atomic_rmw('sub', ptr, val, 'monotonic')
+
+
+def ptx_atomic_bitwise(stub, op):
+    @_atomic_dispatcher
+    def impl_ptx_atomic(context, builder, dtype, ptr, val):
+        if dtype in (cuda.cudadecl.integer_numba_types):
+            return builder.atomic_rmw(op, ptr, val, 'monotonic')
+        else:
+            raise TypeError(f'Unimplemented atomic {op} with {dtype} array')
+
+    for ty in (types.intp, types.UniTuple, types.Tuple):
+        lower(stub, types.Array, ty, types.Any)(impl_ptx_atomic)
+
+
+ptx_atomic_bitwise(stubs.atomic.and_, 'and')
+ptx_atomic_bitwise(stubs.atomic.or_, 'or')
+ptx_atomic_bitwise(stubs.atomic.xor, 'xor')
 
 
 @lower(stubs.atomic.max, types.Array, types.intp, types.Any)
