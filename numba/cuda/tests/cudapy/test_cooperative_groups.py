@@ -72,7 +72,7 @@ class TestCudaCooperativeGroups(CUDATestCase):
         A = np.full(1, fill_value=np.nan)
         this_grid[1, 1](A)
 
-        # this_grid should have been determinted to be cooperative
+        # this_grid should have been determined to be cooperative
         for key, defn in this_grid.definitions.items():
             self.assertTrue(defn.cooperative)
 
