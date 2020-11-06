@@ -379,8 +379,8 @@ def get_optimized_numba_ir(test_func, args, **kws):
         flags = compiler.Flags()
         parfor_pass = numba.parfors.parfor.ParforPass(
             tp.state.func_ir, tp.state.typemap, tp.state.calltypes,
-            tp.state.return_type, tp.state.typingctx, options, flags,
-            diagnostics=diagnostics)
+            tp.state.return_type, tp.state.typingctx, options,
+            flags, tp.state.metadata, diagnostics=diagnostics)
         parfor_pass.run()
         test_ir._definitions = build_definitions(test_ir.blocks)
 
@@ -514,6 +514,7 @@ class TestPipeline(object):
         self.state.typemap = None
         self.state.return_type = None
         self.state.calltypes = None
+        self.state.metadata = {}
 
 
 class TestParfors(TestParforsBase):
