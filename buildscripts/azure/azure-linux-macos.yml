@@ -42,11 +42,5 @@ jobs:
 
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH
-        conda install -y conda-forge::typeguard
-      displayName: 'Typeguard'
-      condition: eq(variables['RUN_TYPEGUARD'], 'yes')
-
-    - script: |
-        export PATH=$HOME/miniconda3/bin:$PATH
         buildscripts/incremental/test.sh
       displayName: 'Test'
