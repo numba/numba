@@ -8,7 +8,8 @@ Supported features
 Numba's Cooperative Groups support presently provides grid groups and grid
 synchronization, along with cooperative kernel launches.
 
-Cooperative groups are supported on Linux, and Windows for devices in TCC mode.
+Cooperative groups are supported on Linux, and Windows for devices in `TCC
+mode <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#tesla-compute-cluster-mode-for-windows>`_.
 
 Using Grid Groups
 -----------------
