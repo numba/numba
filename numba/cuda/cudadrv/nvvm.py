@@ -11,6 +11,7 @@ from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
 import threading
 
 from llvmlite import ir
+from t2bc.binding import assemble
 
 from .error import NvvmError, NvvmSupportError
 from .libs import get_libdevice, open_libdevice, open_cudalib
@@ -191,8 +192,13 @@ class CompilationUnit(object):
          - The buffer should contain an NVVM module IR either in the bitcode
            representation (LLVM3.0) or in the text representation.
         """
-        err = self.driver.nvvmAddModuleToProgram(self._handle, buffer,
-                                                 len(buffer), None)
+        if buffer[:4] != b'BC\xC0\xDE':
+            bitcode = assemble(buffer)
+        else:
+            bitcode = buffer
+
+        err = self.driver.nvvmAddModuleToProgram(self._handle, bitcode,
+                                                 len(bitcode), None)
         self.driver.check_error(err, 'Failed to add module')
 
     def compile(self, **options):
