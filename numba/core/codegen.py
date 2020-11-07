@@ -525,7 +525,7 @@ class CodeLibrary(object):
     _object_caching_enabled = False
     _disable_inspection = False
 
-    def __init__(self, codegen: "CodeLibrary", name: str):
+    def __init__(self, codegen: "BaseCPUCodegen", name: str):
         self._codegen = codegen
         self._name = name
         self._linking_libraries = []   # maintain insertion order
