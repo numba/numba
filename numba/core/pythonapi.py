@@ -1147,6 +1147,12 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string, size])
 
+    def bytearray_from_string_and_size(self, string, size):
+        fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
+        fname = "PyByteArray_FromStringAndSize"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [string, size])
+
     def object_hash(self, obj):
         fnty = Type.function(self.py_hash_t, [self.pyobj,])
         fname = "PyObject_Hash"

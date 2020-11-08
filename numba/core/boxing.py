@@ -265,6 +265,12 @@ def box_bytes(typ, val, c):
     return c.pyapi.bytes_from_string_and_size(obj.data, obj.nitems)
 
 
+@box(types.ByteArray)
+def box_bytearray(typ, val, c):
+    obj = c.context.make_helper(c.builder, typ, val)
+    return c.pyapi.bytearray_from_string_and_size(obj.data, obj.nitems)
+
+
 @box(types.CharSeq)
 def box_charseq(typ, val, c):
     rawptr = cgutils.alloca_once_value(c.builder, value=val)
