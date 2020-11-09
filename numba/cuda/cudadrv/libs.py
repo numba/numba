@@ -60,6 +60,12 @@ def open_cudalib(lib):
     return ctypes.CDLL(path)
 
 
+def check_static_lib(lib):
+    path = get_cudalib(lib, static=True)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f'{path} not found')
+
+
 def _get_source_variable(lib):
     if lib == 'nvvm':
         return get_cuda_paths()['nvvm'].by
@@ -73,6 +79,8 @@ def test(_platform=None, print_paths=True):
     """Test library lookup.  Path info is printed to stdout.
     """
     failed = False
+
+    # Checks for dynamic libraries
     libs = 'cublas cusparse cufft curand nvvm cudart'.split()
     for lib in libs:
         path = get_cudalib(lib, _platform)
@@ -91,6 +99,22 @@ def test(_platform=None, print_paths=True):
                 print('\tERROR: failed to open %s:\n%s' % (lib, e))
                 failed = True
 
+    # Check for cudadevrt (the only static library)
+    lib = 'cudadevrt'
+    path = get_cudalib(lib, _platform, static=True)
+    print('Finding {} from {}'.format(lib, _get_source_variable(lib)))
+    if print_paths:
+        print('\tlocated at', path)
+    else:
+        print('\tnamed ', os.path.basename(path))
+
+    try:
+        check_static_lib(lib)
+    except FileNotFoundError as e:
+        print('\tERROR: failed to find %s:\n%s' % (lib, e))
+        failed = True
+
+    # Check for libdevice
     archs = 'compute_20', 'compute_30', 'compute_35', 'compute_50'
     where = _get_source_variable('libdevice')
     print('Finding libdevice from', where)
