@@ -9,7 +9,7 @@ from numba.tests.support import (
     redirect_c_stdout,
 )
 from numba.cuda.cuda_paths import get_conda_ctk
-from numba.cuda.cudadrv import devices
+from numba.cuda.cudadrv import devices, libs
 from numba.core import config
 from numba.tests.support import TestCase
 import unittest
@@ -89,6 +89,18 @@ def skip_unless_cc_50(fn):
 
 def skip_unless_cc_60(fn):
     return unittest.skipUnless(cc_X_or_above(6, 0), "requires cc >= 6.0")(fn)
+
+
+def cudadevrt_missing():
+    try:
+        libs.check_static_lib('cudadevrt')
+    except FileNotFoundError:
+        return True
+    return False
+
+
+def skip_if_cudadevrt_missing(fn):
+    return unittest.skipIf(cudadevrt_missing(), 'cudadevrt missing')(fn)
 
 
 class CUDATextCapture(object):
