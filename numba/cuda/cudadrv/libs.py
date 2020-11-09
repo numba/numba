@@ -18,10 +18,13 @@ from numba.cuda.cuda_paths import get_cuda_paths
 
 if sys.platform == 'win32':
     _dllnamepattern = '%s.dll'
+    _staticnamepattern = '%s.lib'
 elif sys.platform == 'darwin':
     _dllnamepattern = 'lib%s.dylib'
+    _staticnamepattern = 'lib%s.a'
 else:
     _dllnamepattern = 'lib%s.so'
+    _staticnamepattern = 'lib%s.a'
 
 
 def get_libdevice(arch):
@@ -48,7 +51,8 @@ def get_cudalib(lib, platform=None, static=False):
         libdir = get_cuda_paths()['cudalib_dir'].info
 
     candidates = find_lib(lib, libdir, platform=platform, static=static)
-    return max(candidates) if candidates else _dllnamepattern % lib
+    namepattern = _staticnamepattern if static else _dllnamepattern
+    return max(candidates) if candidates else namepattern % lib
 
 
 def open_cudalib(lib):
