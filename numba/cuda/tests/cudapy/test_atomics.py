@@ -1,4 +1,3 @@
-import random
 import numpy as np
 from textwrap import dedent
 
@@ -877,7 +876,7 @@ class TestCudaAtomics(CUDATestCase):
     def test_atomic_compare_and_swap(self):
         n = 100
         res = [-99] * (n // 2) + [-1] * (n // 2)
-        random.shuffle(res)
+        np.random.shuffle(res)
         res = np.asarray(res, dtype=np.int32)
         out = np.zeros_like(res)
         ary = np.random.randint(1, 10, size=res.size).astype(res.dtype)
