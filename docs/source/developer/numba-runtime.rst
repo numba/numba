@@ -55,7 +55,7 @@ count operations that fall into the following four categories of control-flow
 structure---per basic-block, diamond, fanout, fanout+raise. See the documentation
 for :envvar:`NUMBA_LLVM_REFPRUNE_FLAGS` for their descriptions.
 
-The old optimization pass runs on block level to avoid control flow analysis.
+The old optimization pass runs at block level to avoid control flow analysis.
 It depends on LLVM function optimization pass to simplify the control flow,
 stack-to-register, and simplify instructions.  It works by matching and
 removing incref and decref pairs within each block.  The old pass can be
@@ -74,11 +74,11 @@ To summarize, all functions exposed to the refcount optimization pass
 **must not** consume counted references unless done so via ``NRT_decref``.
 
 
-Quirks of legacy optimization pass
-----------------------------------
+Quirks of old optimization pass
+-------------------------------
 
 Since the pre-0.52.0 `refcount optimization pass <nrt-refct-opt-pass_>`_
-requires LLVM function optimization pass, the pass works on the LLVM IR as
+requires the LLVM function optimization pass, the pass works on the LLVM IR as
 text. The optimized IR is then materialized again as a new LLVM in-memory
 bitcode object.
 
