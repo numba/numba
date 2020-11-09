@@ -1664,7 +1664,7 @@ def unicode_getitem(s, idx):
                 for i in range(slice_idx.start + slice_idx.step,
                                slice_idx.stop, slice_idx.step):
                     cp = _get_code_point(s, i)
-                    is_ascii |= _codepoint_is_ascii(cp)
+                    is_ascii &= _codepoint_is_ascii(cp)
                     new_kind = _codepoint_to_kind(cp)
                     if kind != new_kind:
                         kind = _pick_kind(kind, new_kind)
