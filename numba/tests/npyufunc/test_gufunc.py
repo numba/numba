@@ -127,6 +127,7 @@ class TestDynamicGUFunc(TestCase):
         # out is (10000)
         # The outter (leftmost) dimension must match or numpy broadcasting is performed.
 
+        self.assertTrue(sum_row.is_dynamic)
         inp = np.arange(30000, dtype=np.int32).reshape(10000, 3)
         out = np.zeros(10000, dtype=np.int32)
         sum_row(inp, out)

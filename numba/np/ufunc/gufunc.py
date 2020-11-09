@@ -33,12 +33,20 @@ class GUFunc(object):
         return self
 
     def disable_compile(self):
+        """
+        Disable the compilation of new signatures at call time.
+        """
+        # If disabling compilation then there must be at least one signature
         assert len(self.gufunc_builder._sigs) > 0
         self._frozen = True
 
     @property
     def is_dynamic(self):
         return self._is_dynamic
+
+    @is_dynamic.setter
+    def is_dynamic(self, value):
+        self._is_dynamic = value
 
     @property
     def __doc__(self):

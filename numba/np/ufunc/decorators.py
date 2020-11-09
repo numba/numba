@@ -188,6 +188,8 @@ def guvectorize(*args, **kwargs):
             guvec.add(fty)
         if len(ftylist) > 0:
             guvec.disable_compile()
+        else:
+            guvec.is_dynamic = True
         return guvec.build_ufunc()
 
     return wrap
