@@ -2178,7 +2178,11 @@ class Linker(object):
         try:
             driver.cuLinkAddFile(self.handle, kind, pathbuf, 0, None, None)
         except CudaAPIError as e:
-            raise LinkerError("%s\n%s" % (e, self.error_log))
+            if e.code == enums.CUDA_ERROR_FILE_NOT_FOUND:
+                msg = f'{path} not found'
+            else:
+                msg = "%s\n%s" % (e, self.error_log)
+            raise LinkerError(msg)
 
     def add_file_guess_ext(self, path):
         ext = path.rsplit('.', 1)[1]
