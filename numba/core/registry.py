@@ -75,6 +75,10 @@ class CPUTarget(TargetDescriptor):
 cpu_target = CPUTarget()
 
 
+class CPUDispatcher(dispatcher.Dispatcher):
+    targetdescr = cpu_target
+
+
 class TargetRegistry(utils.UniqueDict):
     """
     A registry of API implementations for various backends.
@@ -99,3 +103,4 @@ class TargetRegistry(utils.UniqueDict):
 
 
 dispatcher_registry = TargetRegistry()
+dispatcher_registry['cpu'] = CPUDispatcher
