@@ -74,8 +74,8 @@ To summarize, all functions exposed to the refcount optimization pass
 **must not** consume counted references unless done so via ``NRT_decref``.
 
 
-Quirks of old optimization pass
--------------------------------
+Quirks of the old optimization pass
+-----------------------------------
 
 Since the pre-0.52.0 `refcount optimization pass <nrt-refct-opt-pass_>`_
 requires the LLVM function optimization pass, the pass works on the LLVM IR as
