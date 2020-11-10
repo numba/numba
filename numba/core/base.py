@@ -172,15 +172,6 @@ def _load_global_helpers():
             ll.add_symbol("PyExc_%s" % (obj.__name__), id(obj))
 
 
-def print_overloads(overloads):
-    for o in overloads:
-        print(type(o), o)
-
-def print_defns(defns):
-    for k,v in defns.items():
-        print("Key:", k, v, type(k), type(v))
-        print_overloads(v.versions)
-
 class BaseContext(object):
     """
 
@@ -435,9 +426,7 @@ class BaseContext(object):
         return fnty
 
     def declare_function(self, module, fndesc):
-        #print("base.py: declare_function", module, "\n\targs:", fndesc.args, "\n\trestype:", fndesc.restype, "\n\targtypes:", fndesc.argtypes, fndesc.mangled_name, fndesc.noalias)
         fnty = self.call_conv.get_function_type(fndesc.restype, fndesc.argtypes)
-        #print("fnty:", fnty)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
         self.call_conv.decorate_function(fn, fndesc.args, fndesc.argtypes, noalias=fndesc.noalias)
         if fndesc.inline:
@@ -553,21 +542,14 @@ class BaseContext(object):
         The return value is a callable with the signature (builder, args).
         """
         assert sig is not None
-#        print("get_function", fn, sig, type(fn), type(sig))
         sig = sig.as_function()
-#        print("get_function", sig, type(sig))
         if isinstance(fn, (types.Function, types.BoundFunction,
                            types.Dispatcher)):
             key = fn.get_impl_key(sig)
             overloads = self._defns[key]
-#            print("function or boundfunction or dispatcher")
         else:
             key = fn
             overloads = self._defns[key]
-#            print("other")
-#        print("overloads", overloads)
-#        print_overloads(overloads.versions)
-#        print_defns(self._defns)
 
         try:
             return _wrap_impl(overloads.find(sig.args), self, sig)
