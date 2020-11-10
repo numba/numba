@@ -11,7 +11,7 @@ but is likely to change in the future to rely on Sycl/DPC++ or Intel Level-0
 driver API.
 
 ===============
-2. Prequisites?
+2. Perquisites?
 ===============
 
 - Bash                 : In the system and not as default Shell
@@ -36,7 +36,7 @@ The following requisites will need to be present in the system. Refer to next se
 
 - LLVMDEV              : To support LLVM IR generation.
 
-- Others               : All existing dependecies for NUMBA, such as llvmlite, also apply to DPPL.
+- Others               : All existing dependencies for NUMBA, such as llvmlite, also apply to DPPL.
 
 ==================
 3. How to install?
@@ -86,9 +86,9 @@ To run the test suite execute the following:
 Refer the HowTo.rst guide for an overview of the programming semantics,
 examples, supported functionalities, and known issues.
 
-* Installing while Intel OneAPI basekit is actvated have shown to throw error
+* Installing while Intel oneAPI Base Toolkit is activated have shown to throw error
 while installation of NUMBA-PyDPPL because of incompatible TBB interface,
-one way around that is to temporaily move env variable TBBROOT to something else*
+one way around that is to temporarily move env variable TBBROOT to something else*
 
 ===================
 6. Reporting issues
