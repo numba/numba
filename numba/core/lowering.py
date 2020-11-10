@@ -250,7 +250,7 @@ class BaseLower(object):
         if self.genlower:
             raise UnsupportedError('generator as a first-class function type')
         self.context.create_cfunc_wrapper(self.library, self.fndesc,
-                                          self.env, self.call_helper)
+                                        self.env, self.call_helper)
 
     def setup_function(self, fndesc):
         # Setup function
@@ -983,7 +983,14 @@ class Lower(BaseLower):
             argvals = self.fold_call_args(
                 fnty, signature, expr.args, expr.vararg, expr.kws,
             )
-        impl = self.context.get_function(fnty, signature)
+        tname = expr.hardware
+        if tname is not None:
+            from numba.core import registry
+            disp = registry.dispatcher_registry[tname]
+            hw_ctx = disp.targetdescr.target_context
+            impl = hw_ctx.get_function(fnty, signature)
+        else:
+            impl = self.context.get_function(fnty, signature)
         if signature.recvr:
             # The "self" object is passed as the function object
             # for bounded function

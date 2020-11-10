@@ -282,8 +282,47 @@ class BaseFunction(Callable):
         prefer_not = [False, True]    # new behavior preferring non-literal
         failures = _ResolutionFailures(context, self, args, kws,
                                        depth=self._depth)
+
+        from numba.core.extending_hardware import hardware_registry, current_target
+        if len(context.callstack._stack) > 0:
+            target = context.callstack[0].target
+        else:
+            target = hardware_registry.get(current_target(), None)
+
+        for k, v in hardware_registry.items():
+            if v == target:
+                target_hw = v
+                break
+        else:
+            msg =("InternalError: The hardware target for TOS is not "
+                    "registered. Given target was {}.")
+            raise ValueError(msg.format(target))
+
+
+
+        # fish out templates that are specific to the target if a target is
+        # specified
+        DEFAULT_HARDWARE = 'cpu'
+        usable = []
+        for ix, temp_cls in enumerate(self.templates):
+            try:
+                hw = temp_cls.metadata.get('hardware', DEFAULT_HARDWARE) # ? Need to do something about this
+            except Exception as e:
+                import pdb; pdb.set_trace()
+                pass
+            if hw is not None:
+                hw_clazz = hardware_registry[hw]
+                if hw_clazz in target_hw.__mro__:
+                    usable.append((temp_cls, hw_clazz, ix))
+
+        # sort templates based on hardware specificity
+        def key(x):
+            return target_hw.__mro__.index(x[1])
+        order = [x[0] for x in sorted(usable, key=key)]
+
         self._depth += 1
-        for temp_cls in self.templates:
+
+        for temp_cls in order:
             temp = temp_cls(context)
             # The template can override the default and prefer literal args
             choice = prefer_lit if temp.prefer_literal else prefer_not
@@ -315,9 +354,10 @@ class BaseFunction(Callable):
                         failures.add_error(temp, True, msg, uselit)
 
         if len(failures) == 0:
-            raise AssertionError("Internal Error. "
-                                 "Function resolution ended with no failures "
-                                 "or successful signature")
+            msg = ("Function resolution ended with no failures or successful "
+                   "signature, this implies that type inference accepted the "
+                   "function but it is missing for the current hardware: {}")
+            raise errors.UnsupportedError(msg.format(target_hw))
         failures.raise_error()
 
     def get_call_signatures(self):

@@ -59,13 +59,13 @@ class CallStack(Sequence):
         return len(self._stack)
 
     @contextlib.contextmanager
-    def register(self, typeinfer, func_id, args):
+    def register(self, target, typeinfer, func_id, args):
         # guard compiling the same function with the same signature
         if self.match(func_id.func, args):
             msg = "compiler re-entrant to the same function signature"
             raise RuntimeError(msg)
         self._lock.acquire()
-        self._stack.append(CallFrame(typeinfer, func_id, args))
+        self._stack.append(CallFrame(target, typeinfer, func_id, args))
         try:
             yield
         finally:
@@ -104,10 +104,11 @@ class CallFrame(object):
     """
     A compile-time call frame
     """
-    def __init__(self, typeinfer, func_id, args):
+    def __init__(self, target, typeinfer, func_id, args):
         self.typeinfer = typeinfer
         self.func_id = func_id
         self.args = args
+        self.target = target
         self._inferred_retty = set()
 
     def __repr__(self):

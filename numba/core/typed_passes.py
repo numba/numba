@@ -49,13 +49,14 @@ def fallback_context(state, msg):
             raise
 
 
-def type_inference_stage(typingctx, interp, args, return_type, locals={},
-                         raise_errors=True):
+def type_inference_stage(typingctx, targetctx, interp, args, return_type,
+                         locals={}, raise_errors=True):
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
     warnings = errors.WarningsFixer(errors.NumbaWarning)
     infer = typeinfer.TypeInferer(typingctx, interp, warnings)
-    with typingctx.callstack.register(infer, interp.func_id, args):
+    with typingctx.callstack.register(targetctx.target, infer, interp.func_id,
+                                      args):
         # Seed argument types
         for index, (name, ty) in enumerate(zip(interp.arg_names, args)):
             infer.seed_argument(name, index, ty)
@@ -93,6 +94,7 @@ class BaseTypeInference(FunctionPass):
             # Type inference
             typemap, return_type, calltypes = type_inference_stage(
                 state.typingctx,
+                state.targetctx,
                 state.func_ir,
                 state.args,
                 state.return_type,
@@ -396,9 +398,9 @@ class NativeLowering(LoweringPass):
                                            cfunc=None, env=env)
             else:
                 # Prepare for execution
-                cfunc = targetctx.get_executable(library, fndesc, env)
                 # Insert native function for use by other jitted-functions.
                 # We also register its library to allow for inlining.
+                cfunc = targetctx.get_executable(library, fndesc, env)
                 targetctx.insert_user_function(cfunc, fndesc, [library])
                 state['cr'] = _LowerResult(fndesc, call_helper,
                                            cfunc=cfunc, env=env)

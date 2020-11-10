@@ -1,3 +1,4 @@
+import inspect
 import os
 import uuid
 import weakref
@@ -53,11 +54,11 @@ def type_callable(func):
 
 # By default, an *overload* does not have a cpython wrapper because it is not
 # callable from python.
-_overload_default_jit_options = {'no_cpython_wrapper': True}
+#_overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
 def overload(func, jit_options={}, strict=True, inline='never',
-             prefer_literal=False):
+             prefer_literal=False, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -113,12 +114,12 @@ def overload(func, jit_options={}, strict=True, inline='never',
     from numba.core.typing.templates import make_overload_template, infer_global
 
     # set default options
-    opts = _overload_default_jit_options.copy()
+    opts = {}#_overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
     def decorate(overload_func):
         template = make_overload_template(func, overload_func, opts, strict,
-                                          inline, prefer_literal)
+                                          inline, prefer_literal, **kwargs)
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))
@@ -277,7 +278,8 @@ class _Intrinsic(ReduceMixin):
 
     __uuid = None
 
-    def __init__(self, name, defn):
+    def __init__(self, name, defn, ctor_kwargs):
+        self._ctor_kwargs = ctor_kwargs
         self._name = name
         self._defn = defn
 
@@ -302,10 +304,11 @@ class _Intrinsic(ReduceMixin):
         self._recent.append(self)
 
     def _register(self):
+        # _ctor_kwargs
         from numba.core.typing.templates import (make_intrinsic_template,
                                                  infer_global)
 
-        template = make_intrinsic_template(self, self._defn, self._name)
+        template = make_intrinsic_template(self, self._defn, self._name, self._ctor_kwargs)
         infer(template)
         infer_global(self, types.Function(template))
 
@@ -344,7 +347,7 @@ class _Intrinsic(ReduceMixin):
             return llc
 
 
-def intrinsic(*args, **kwargs):
+class intrinsic(object):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode using the llvmlite IRBuilder API.  This is an escape
@@ -380,22 +383,50 @@ def intrinsic(*args, **kwargs):
                     return builder.inttoptr(src, llrtype)
                 return sig, codegen
     """
-    # Make inner function for the actual work
-    def _intrinsic(func):
-        name = getattr(func, '__name__', str(func))
-        llc = _Intrinsic(name, func, **kwargs)
-        llc._register()
-        return llc
 
-    if not kwargs:
-        # No option is given
-        return _intrinsic(*args)
-    else:
-        # options are given, create a new callable to recv the
-        # definition function
-        def wrapper(func):
-            return _intrinsic(func)
-        return wrapper
+    def __init__(self, *args, **kwargs):
+        # If written like
+        # intrinsic(1, 2, a=3, b=4)(foo) then *args, **kwargs are (1,2), {'a':3, 'b':4}
+        # If written like
+        # intrinsic(foo) then *args is (foo), kwargs is {}
+        self._ctor_args = args
+        self._ctor_kwargs = kwargs
+    def __call__(self, *args, **kwargs):
+        # If written like:
+        # intrinsic(1, 2, a=3, b=4)(foo) then *args is (foo), **kwargs is {}
+        # If written like
+        # intrinsic(foo) then *args is (), kwargs is {}
+        #
+        # Logic here is like in @jit... horrible
+        # 
+        assert len(args) < 2
+        if args:
+            func_arg = args[0]
+        else:
+            func_arg = self._ctor_args[0]
+
+        if not inspect.isfunction(func_arg):
+            raise TypeError(
+                "The decorated object is not a function (got type "
+                f"{type(func_arg)})."
+            )
+
+        # Make inner function for the actual work
+        def _intrinsic(func):
+            name = getattr(func, '__name__', str(func))
+            llc = _Intrinsic(name, func, self._ctor_kwargs, **kwargs)
+            llc._register()
+            return llc
+
+        if not kwargs:
+            # No option is given
+            return _intrinsic(func_arg)
+        else:
+            # options are given, create a new callable to recv the
+            # definition function
+            def wrapper(func):
+                return _intrinsic(func)
+            return wrapper
 
 
 def get_cython_function_address(module_name, function_name):
@@ -534,3 +565,4 @@ def is_jitted(function):
     # don't want to export this so import locally
     from numba.core.dispatcher import Dispatcher
     return isinstance(function, Dispatcher)
+

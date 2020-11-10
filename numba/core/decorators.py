@@ -11,7 +11,10 @@ import logging
 from numba.core.errors import DeprecationError, NumbaDeprecationWarning
 from numba.stencils.stencil import stencil
 from numba.core import config, extending, sigutils, registry
+from numba.core.extending_hardware import JitDecorator, hardware_registry
+from numba.core.registry import TargetRegistry
 
+jit_registry = TargetRegistry()
 
 _logger = logging.getLogger(__name__)
 
@@ -23,7 +26,8 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "Signatures should be passed as the first "
                                  "positional argument.")
 
-def jit(signature_or_function=None, locals={}, cache=False,
+
+def func_jit(signature_or_function=None, locals={}, cache=False,
         pipeline_class=None, boundscheck=None, **options):
     """
     This decorator is used to compile a Python function into native code.
@@ -185,9 +189,35 @@ def jit(signature_or_function=None, locals={}, cache=False,
         return wrapper
 
 
-def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
-    dispatcher = registry.dispatcher_registry[target]
+class jit(JitDecorator):
+    def __init__(self, *args, **kwargs):
+        self._args = args
+        self._kwargs = kwargs
 
+    def __call__(self, *args):
+        assert len(args) < 2
+        if args:
+            func = args[0]
+        else:
+            func = self._args[0]
+        self.py_func = func
+        # wrap in dispatcher
+        return self.dispatcher_wrapper()
+
+    def get_dispatcher(self):
+        """
+        Returns the dispatcher
+        """
+        return registry.dispatcher_registry[target]
+
+    def dispatcher_wrapper(self):
+        return func_jit(self.py_func, **self._kwargs)
+
+
+jit_registry[hardware_registry['cpu']] = jit
+
+def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
+    dispatcher = registry.dispatcher_registry[hardware_registry[target]]
     def wrapper(func):
         if extending.is_jitted(func):
             raise TypeError(

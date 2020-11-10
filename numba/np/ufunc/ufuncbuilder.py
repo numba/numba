@@ -29,6 +29,9 @@ class UFuncTargetOptions(TargetOptions):
 class UFuncTarget(TargetDescriptor):
     options = UFuncTargetOptions
 
+    def __init__(self):
+        super().__init__('ufunc')
+
     @property
     def typing_context(self):
         return cpu_target.typing_context

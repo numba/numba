@@ -259,6 +259,8 @@ class FunctionTemplate(ABC):
     # non-literals.
     # subclass overide-able
     prefer_literal = False
+    # metadata
+    metadata = {}
 
     def __init__(self, context):
         self.context = context
@@ -663,6 +665,11 @@ class _OverloadFunctionTemplate(AbstractTemplate):
                                                 'iinfo': iinfo}
         else:
             sig = disp_type.get_call_type(self.context, new_args, kws)
+            if sig is None:
+                hw = self.metadata.get('hardware', 'unknown')
+                raise TypingError("Whilst typeable, there's no compilable "
+                                  "definition of {} available for the "
+                                  "hardware: {} ".format(self.key, hw))
             self._compiled_overloads[sig.args] = disp_type.get_overload(sig)
         return sig
 
@@ -676,6 +683,8 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         try:
             impl, args = self._impl_cache[cache_key]
         except KeyError:
+            #import pdb; pdb.set_trace()
+            #pass
             impl, args = self._build_impl(cache_key, args, kws)
         return impl, args
 
@@ -704,7 +713,51 @@ class _OverloadFunctionTemplate(AbstractTemplate):
             On failure, returns `(None, None)`.
 
         """
+        from numba.core import decorators
         from numba import jit
+        jitter_str = self.metadata.get('hardware', None)
+        if jitter_str is None:
+            # There is no hardware requested, use default, this preserves
+            # original behaviour
+            jitter = jit
+        else:
+            # Hardware has been requested, see what it is...
+            jitter = decorators.jit_registry.get(jitter_str, None)
+            from numba.core.extending_hardware import hardware_registry, Generic
+            def report_unknown_hardware(msg):
+                raise ValueError(msg.format(jitter_str))
+
+            if jitter is None:
+                # No JIT known for hardware string
+                hardware_class = hardware_registry.get(jitter_str, None)
+                if hardware_class is None:
+                    msg = ("Unknown hardware target '{}', has it been ",
+                           "registered?")
+                    report_unknown_hardware(msg)
+
+                # scan for the the current hardware target it's stuffed into the
+                # call stack at present, get that.
+                tos = self.context.callstack[0]
+                for k, v in hardware_registry.items():
+                    if v == tos.target:
+                        target_hw = v
+                        target_hw_str = k
+                        break
+                else:
+                    msg =("InternalError: The hardware target for TOS is not ",
+                          "registered. Given target was {}.")
+                    report_unknown_hardware(msg)
+
+
+                # check that the requested hardware is in the hierarchy for the
+                # current frame's target.
+                if not issubclass(target_hw, hardware_class):
+                    msg =("No overloads exist for the requested hardware: {}.")
+
+                jitter = decorators.jit_registry[target_hw_str.lower()]
+
+        if jitter is None:
+            raise ValueError("Cannot find a suitable jit decorator")
 
         # Get the overload implementation for the given types
         ovf_result = self._overload_func(*args, **kws)
@@ -733,7 +786,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
         if self._strict:
             self._validate_sigs(self._overload_func, pyfunc)
         # Make dispatcher
-        jitdecor = jit(nopython=True, **self._jit_options)
+        jitdecor = jitter(**self._jit_options)
         disp = jitdecor(pyfunc)
         # Make sure that the implementation can be fully compiled
         disp_type = types.Dispatcher(disp)
@@ -801,7 +854,7 @@ class _OverloadFunctionTemplate(AbstractTemplate):
 
 
 def make_overload_template(func, overload_func, jit_options, strict,
-                           inline, prefer_literal=False):
+                           inline, prefer_literal=False, **kwargs):
     """
     Make a template class for function *func* overloaded by *overload_func*.
     Compiler options are passed as a dictionary to *jit_options*.
@@ -812,7 +865,8 @@ def make_overload_template(func, overload_func, jit_options, strict,
     dct = dict(key=func, _overload_func=staticmethod(overload_func),
                _impl_cache={}, _compiled_overloads={}, _jit_options=jit_options,
                _strict=strict, _inline=staticmethod(InlineOptions(inline)),
-               _inline_overloads={}, prefer_literal=prefer_literal)
+               _inline_overloads={}, prefer_literal=prefer_literal,
+               metadata=kwargs)
     return type(base)(name, (base,), dct)
 
 
@@ -868,7 +922,7 @@ class _IntrinsicTemplate(AbstractTemplate):
         return info
 
 
-def make_intrinsic_template(handle, defn, name):
+def make_intrinsic_template(handle, defn, name, kwargs):
     """
     Make a template class for a intrinsic handle *handle* defined by the
     function *defn*.  The *name* is used for naming the new template class.
@@ -876,7 +930,7 @@ def make_intrinsic_template(handle, defn, name):
     base = _IntrinsicTemplate
     name = "_IntrinsicTemplate_%s" % (name)
     dct = dict(key=handle, _definition_func=staticmethod(defn),
-               _impl_cache={}, _overload_cache={})
+               _impl_cache={}, _overload_cache={}, metadata=kwargs)
     return type(base)(name, (base,), dct)
 
 

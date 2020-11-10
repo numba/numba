@@ -28,7 +28,7 @@ class CPUTarget(TargetDescriptor):
     @utils.cached_property
     def _toplevel_target_context(self):
         # Lazily-initialized top-level target context, for all threads
-        return cpu.CPUContext(self.typing_context)
+        return cpu.CPUContext(self.typing_context, self._target_name)
 
     @utils.cached_property
     def _toplevel_typing_context(self):
@@ -66,7 +66,7 @@ class CPUTarget(TargetDescriptor):
 
 
 # The global CPU target
-cpu_target = CPUTarget()
+cpu_target = CPUTarget('cpu')
 
 
 class CPUDispatcher(dispatcher.Dispatcher):
@@ -95,6 +95,6 @@ class TargetRegistry(utils.UniqueDict):
             del self.ondemand[item]
         return super(TargetRegistry, self).__getitem__(item)
 
-
 dispatcher_registry = TargetRegistry()
-dispatcher_registry['cpu'] = CPUDispatcher
+from numba.core.extending_hardware import hardware_registry
+dispatcher_registry[hardware_registry['cpu']] = CPUDispatcher
