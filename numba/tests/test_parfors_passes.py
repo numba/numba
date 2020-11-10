@@ -80,6 +80,7 @@ class BaseTest(TestCase):
                 tp.state.typemap,
                 tp.state.calltypes,
                 tp.state.typingctx,
+                tp.state.targetctx,
                 options,
                 swapped=diagnostics.replaced_fns,
                 replace_functions_map=swap_map,

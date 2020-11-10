@@ -8,7 +8,7 @@ from numba.core.errors import TypingError
 from numba.tests.support import TestCase, tag
 from .serialize_usecases import *
 import unittest
-from numba.core import registry
+from numba.core import extending_hardware
 
 
 class TestDispatcherPickling(TestCase):
@@ -19,10 +19,11 @@ class TestDispatcherPickling(TestCase):
 
     @contextlib.contextmanager
     def simulate_fresh_target(self):
-        dispatcher_cls = registry.dispatcher_registry['cpu']
+        hw = extending_hardware.hardware_registry['cpu']
+        dispatcher_cls = extending_hardware.dispatcher_registry[hw]
         old_descr = dispatcher_cls.targetdescr
         # Simulate fresh targetdescr
-        dispatcher_cls.targetdescr = type(dispatcher_cls.targetdescr)()
+        dispatcher_cls.targetdescr = type(dispatcher_cls.targetdescr)('cpu')
         try:
             yield
         finally:

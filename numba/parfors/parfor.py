@@ -1386,12 +1386,13 @@ class PreParforPass(object):
     """Preprocessing for the Parfor pass. It mostly inlines parallel
     implementations of numpy functions if available.
     """
-    def __init__(self, func_ir, typemap, calltypes, typingctx, options,
-                 swapped={}, replace_functions_map=None):
+    def __init__(self, func_ir, typemap, calltypes, typingctx, targetctx,
+                 options, swapped={}, replace_functions_map=None):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
         self.typingctx = typingctx
+        self.targetctx = targetctx
         self.options = options
         # diagnostics
         self.swapped = swapped
@@ -1465,8 +1466,8 @@ class PreParforPass(object):
                                 g[check.name] = check.func
                             # inline the parallel implementation
                             new_blocks, _ = inline_closure_call(self.func_ir, g,
-                                            block, i, new_func, self.typingctx, typs,
-                                            self.typemap, self.calltypes, work_list)
+                                            block, i, new_func, self.typingctx, self.targetctx,
+                                            typs, self.typemap, self.calltypes, work_list)
                             call_table = get_call_table(new_blocks, topological_ordering=False)
 
                             # find the prange in the new blocks and record it for use in diagnostics

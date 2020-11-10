@@ -1,3 +1,4 @@
+import inspect
 import os
 import uuid
 import weakref
@@ -53,11 +54,11 @@ def type_callable(func):
 
 # By default, an *overload* does not have a cpython wrapper because it is not
 # callable from python.
-_overload_default_jit_options = {'no_cpython_wrapper': True}
+#_overload_default_jit_options = {'no_cpython_wrapper': True}
 
 
 def overload(func, jit_options={}, strict=True, inline='never',
-             prefer_literal=False):
+             prefer_literal=False, **kwargs):
     """
     A decorator marking the decorated function as typing and implementing
     *func* in nopython mode.
@@ -113,12 +114,12 @@ def overload(func, jit_options={}, strict=True, inline='never',
     from numba.core.typing.templates import make_overload_template, infer_global
 
     # set default options
-    opts = _overload_default_jit_options.copy()
+    opts = {}#_overload_default_jit_options.copy()
     opts.update(jit_options)  # let user options override
 
     def decorate(overload_func):
         template = make_overload_template(func, overload_func, opts, strict,
-                                          inline, prefer_literal)
+                                          inline, prefer_literal, **kwargs)
         infer(template)
         if callable(func):
             infer_global(func, types.Function(template))
@@ -277,7 +278,8 @@ class _Intrinsic(ReduceMixin):
 
     __uuid = None
 
-    def __init__(self, name, defn):
+    def __init__(self, name, defn, **kwargs):
+        self._ctor_kwargs = kwargs
         self._name = name
         self._defn = defn
 
@@ -302,10 +304,11 @@ class _Intrinsic(ReduceMixin):
         self._recent.append(self)
 
     def _register(self):
+        # _ctor_kwargs
         from numba.core.typing.templates import (make_intrinsic_template,
                                                  infer_global)
 
-        template = make_intrinsic_template(self, self._defn, self._name)
+        template = make_intrinsic_template(self, self._defn, self._name, self._ctor_kwargs)
         infer(template)
         infer_global(self, types.Function(template))
 
@@ -534,3 +537,4 @@ def is_jitted(function):
     # don't want to export this so import locally
     from numba.core.dispatcher import Dispatcher
     return isinstance(function, Dispatcher)
+
