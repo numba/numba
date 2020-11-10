@@ -4088,7 +4088,6 @@ def np_asarray(a, dtype=None):
 
 @overload(np.asfarray)
 def np_asfarray(a, dtype=np.float64):
-
     # convert numba dtype types into NumPy dtype
     if isinstance(dtype, types.Type):
         dtype = as_dtype(dtype)
