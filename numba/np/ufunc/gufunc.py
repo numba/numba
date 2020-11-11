@@ -117,12 +117,6 @@ class GUFunc(object):
         return types.none(*l)
 
     def __call__(self, *args):
-
-        # a gufunc is dynamic if no calls to `.add()` were made prior to this point  # noqa: E501
-        # if no calls were made, then, self.gufunc_builder._cres is empty
-        if len(self.gufunc_builder._cres) == 0:
-            self._is_dynamic = True
-
         # If compilation is disabled OR it is NOT a dynamic gufunc, call the underlying gufunc  # noqa: E501
         if self._frozen or not self.is_dynamic:
             return self.ufunc(*args)
