@@ -46,8 +46,13 @@ class GUVectorize(_BaseVectorize):
         identity = cls.get_identity(kws)
         cache = cls.get_cache(kws)
         imp = cls.get_target_implementation(kws)
-        return imp(func, signature, identity=identity, cache=cache,
-                   targetoptions=kws)
+        if imp is gufunc.GUFunc:
+            is_dyn = kws.pop('is_dynamic', False)
+            return imp(func, signature, identity=identity, cache=cache,
+                       is_dynamic=is_dyn, targetoptions=kws)
+        else:
+            return imp(func, signature, identity=identity, cache=cache,
+                       targetoptions=kws)
 
 
 def vectorize(ftylist_or_function=(), **kws):
@@ -172,6 +177,7 @@ def guvectorize(*args, **kwargs):
     if len(args) == 1:
         ftylist = []
         signature = args[0]
+        kwargs.setdefault('is_dynamic', True)
     elif len(args) == 2:
         ftylist = args[0]
         signature = args[1]
@@ -188,8 +194,6 @@ def guvectorize(*args, **kwargs):
             guvec.add(fty)
         if len(ftylist) > 0:
             guvec.disable_compile()
-        else:
-            guvec.is_dynamic = True
         return guvec.build_ufunc()
 
     return wrap

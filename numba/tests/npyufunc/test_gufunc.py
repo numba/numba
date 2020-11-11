@@ -79,8 +79,7 @@ class TestDynamicGUFunc(TestCase):
             np.testing.assert_allclose(C, Gold, rtol=1e-5, atol=1e-8)
 
         gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)',
-                             target=self.target)
-        gufunc.is_dynamic = True
+                             target=self.target, is_dynamic=True)
         matrix_ct = 10
         Ai64 = np.arange(matrix_ct * 2 * 4, dtype=np.int64).reshape(matrix_ct, 2, 4)
         Bi64 = np.arange(matrix_ct * 4 * 5, dtype=np.int64).reshape(matrix_ct, 4, 5)
@@ -105,8 +104,8 @@ class TestDynamicGUFunc(TestCase):
         # Test problem that the stride of "scalar" gufunc argument not properly
         # handled when the actual argument is an array,
         # causing the same value (first value) being repeated.
-        gufunc = GUVectorize(axpy, '(), (), () -> ()', target=self.target)
-        gufunc.is_dynamic = True
+        gufunc = GUVectorize(axpy, '(), (), () -> ()', target=self.target,
+                             is_dynamic=True)
         x = np.arange(10, dtype=np.intp)
         check_ufunc_output(gufunc, x)
 

@@ -14,10 +14,10 @@ class GUFunc(object):
     """
 
     def __init__(self, py_func, signature, identity=None, cache=None,
-                 targetoptions={}):
+                 is_dynamic=False, targetoptions={}):
         self.ufunc = None
         self._frozen = False
-        self._is_dynamic = False
+        self._is_dynamic = is_dynamic
 
         # GUFunc cannot inherit from GUFuncBuilder because "identity"
         # is a property of GUFunc. Thus, we hold a reference to a GUFuncBuilder
@@ -43,10 +43,6 @@ class GUFunc(object):
     @property
     def is_dynamic(self):
         return self._is_dynamic
-
-    @is_dynamic.setter
-    def is_dynamic(self, value):
-        self._is_dynamic = value
 
     @property
     def __doc__(self):
