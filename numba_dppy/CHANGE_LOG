@@ -1,0 +1,7 @@
+NUMBA Version 0.48.0 + DPPL Version 0.3.0 (June 29, 2020)
+--------------------------------------------------------
+
+This release includes:
+
+* Caching of dppl.kernels which will improve performance.
+* Addition of support for Intel Advisor which will help in profiling applications.
