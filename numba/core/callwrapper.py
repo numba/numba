@@ -171,7 +171,7 @@ class PyCallWrapper(object):
         # present in the user function.
         status, retval = self.context.call_conv.call_function(
             builder, self.func, self.fndesc.restype, self.fndesc.argtypes,
-            innerargs, attrs='noinline')
+            innerargs, attrs=('noinline',))
         # Do clean up
         self.debug_print(builder, "# callwrapper: emit_cleanup")
         cleanup_manager.emit_cleanup()

@@ -573,12 +573,10 @@ class CPUCallConv(BaseCallConv):
         # attributes.
         if attrs is None:
             _attrs = ()
-        elif isinstance(attrs, str):
-            _attrs = tuple(attrs.split(' '))
-        elif isinstance(attrs, Iterable):
+        elif isinstance(attrs, Iterable) and not isinstance(attrs, str):
             _attrs = tuple(attrs)
         else:
-            raise TypeError("attrs must be a string or an iterable of strings")
+            raise TypeError("attrs must be an iterable of strings or None")
         code = builder.call(callee, realargs, attrs=_attrs)
         status = self._get_return_status(builder, code,
                                          builder.load(excinfoptr))

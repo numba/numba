@@ -177,7 +177,7 @@ class CPUContext(BaseContext):
 
         status, out = self.call_conv.call_function(
             builder, wrapper_callee, fndesc.restype, fndesc.argtypes,
-            wrapfn.args, attrs='noinline')
+            wrapfn.args, attrs=('noinline',))
 
         with builder.if_then(status.is_error, likely=False):
             # If (and only if) an error occurred, acquire the GIL
