@@ -1142,6 +1142,9 @@ class BaseCPUCodegen(object):
         with self._pass_manager_builder(**kwargs) as pmb:
             pmb.populate(pm)
         if cost is not None and cost == "cheap":
+            # This knocks loops into rotated form early to reduce the likelihood
+            # of vectorization failing due to unknown PHI nodes.
+            pm.add_loop_rotate_pass()
             # This helps the refprune pass which can only deal with arguments to
             # NRT function pairs that are literally the same i.e. it doesn't
             # attempt to resolve arguments by tracing through the IR etc.
