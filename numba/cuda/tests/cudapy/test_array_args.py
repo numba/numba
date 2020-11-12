@@ -99,6 +99,103 @@ class TestCudaArrayArg(CUDATestCase):
 
         self.assertEqual(r[0], 0)
 
+    def test_tuple_of_empty_tuples(self):
+        @cuda.jit
+        def f(r, x):
+            r[0] = len(x)
+            r[1] = len(x[0])
+
+        x = ((), (), ())
+        r = np.ones(2, dtype=np.int64)
+        f[1, 1](r, x)
+
+        self.assertEqual(r[0], 3)
+        self.assertEqual(r[1], 0)
+
+    def test_tuple_of_tuples(self):
+        @cuda.jit
+        def f(r, x):
+            r[0] = len(x)
+            r[1] = len(x[0])
+            r[2] = len(x[1])
+            r[3] = len(x[2])
+            r[4] = x[1][0]
+            r[5] = x[1][1]
+            r[6] = x[2][0]
+            r[7] = x[2][1]
+            r[8] = x[2][2]
+
+        x = ((), (5, 6), (8, 9, 10))
+        r = np.ones(9, dtype=np.int64)
+        f[1, 1](r, x)
+
+        self.assertEqual(r[0], 3)
+        self.assertEqual(r[1], 0)
+        self.assertEqual(r[2], 2)
+        self.assertEqual(r[3], 3)
+        self.assertEqual(r[4], 5)
+        self.assertEqual(r[5], 6)
+        self.assertEqual(r[6], 8)
+        self.assertEqual(r[7], 9)
+        self.assertEqual(r[8], 10)
+
+    def test_tuple_of_tuples_and_scalars(self):
+        @cuda.jit
+        def f(r, x):
+            r[0] = len(x)
+            r[1] = len(x[0])
+            r[2] = x[0][0]
+            r[3] = x[0][1]
+            r[4] = x[0][2]
+            r[5] = x[1]
+
+        x = ((6, 5, 4), 7)
+        r = np.ones(9, dtype=np.int64)
+        f[1, 1](r, x)
+
+        self.assertEqual(r[0], 2)
+        self.assertEqual(r[1], 3)
+        self.assertEqual(r[2], 6)
+        self.assertEqual(r[3], 5)
+        self.assertEqual(r[4], 4)
+        self.assertEqual(r[5], 7)
+
+    def test_tuple_of_arrays(self):
+        @cuda.jit
+        def f(x):
+            i = cuda.grid(1)
+            if i < len(x[0]):
+                x[0][i] = x[1][i] + x[2][i]
+
+        N = 10
+        x0 = np.zeros(N)
+        x1 = np.ones_like(x0)
+        x2 = x1 * 3
+        x = (x0, x1, x2)
+        f[1, N](x)
+
+        np.testing.assert_equal(x0, x1 + x2)
+
+    def test_tuple_of_array_scalar_tuple(self):
+        @cuda.jit
+        def f(r, x):
+            r[0] = x[0][0]
+            r[1] = x[0][1]
+            r[2] = x[1]
+            r[3] = x[2][0]
+            r[4] = x[2][1]
+
+        z = np.arange(2, dtype=np.int64)
+        x = (2 * z, 10, (4, 3))
+        r = np.zeros(5, dtype=np.int64)
+        f[1, 1](r, x)
+
+        self.assertEqual(r[0], 0)
+        self.assertEqual(r[1], 2)
+        self.assertEqual(r[2], 10)
+        self.assertEqual(r[3], 4)
+        self.assertEqual(r[4], 3)
+
 
 if __name__ == '__main__':
     unittest.main()
