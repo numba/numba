@@ -690,7 +690,7 @@ class CodeLibrary(object):
         self._final_module.verify()
         self._finalize_final_module()
 
-    def _finalize_dyanmic_globals(self):
+    def _finalize_dynamic_globals(self):
         # Scan for dynamic globals
         for gv in self._final_module.global_variables:
             if gv.name.startswith('numba.dynamic.globals'):
@@ -708,7 +708,7 @@ class CodeLibrary(object):
         """
         Make the underlying LLVM module ready to use.
         """
-        self._finalize_dyanmic_globals()
+        self._finalize_dynamic_globals()
         self._verify_declare_only_symbols()
 
         # Remember this on the module, for the object cache hooks
