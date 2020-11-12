@@ -153,7 +153,7 @@ Elements of the CAI design related to synchronization seek to fulfill these
 requirements:
 
 1. Producers and Consumers that exchange data through the CAI must be able to do
-   so avoiding data races.
+   so without data races.
 2. Requirement 1 should be met without requiring the user to be
    aware of any particulars of the CAI - in other words, exchanging data between
    Producers and Consumers that operate on data asynchronously should be correct
@@ -243,8 +243,8 @@ When exporting an array through the CAI, Producers must ensure that:
 
     1. Work is enqueued by the Producer on streams ``7``, ``9``, and ``15``.
     2. Events are then enqueued on each of streams ``7``, ``9``, and ``15``.
-    3. Waits on the events from Step 2 are enqueued into stream ``3``, and the
-       ``stream`` entry is set to ``3``.
+    3. Producer then tells stream ``3`` to wait on the events from Step 2, and
+       the ``stream`` entry is set to ``3``.
 
 * If there is no work enqueued on the data, then the ``stream`` entry may be
   either ``None``, or not provided.
@@ -259,11 +259,10 @@ semantics:
   on the Producer-provided streams, and allows enqueuing work on streams other
   than that provided by the Producer.
 
-These options should be not be set by default in either a Producer or a
-Consumer. The exact mechanism by which these options are set, and related
-options that Producers or Consumers might provide to allow the user further
-control over synchronization behavior are not prescribed by the CAI
-specification.
+These options should not be set by default in either a Producer or a Consumer.
+The exact mechanism by which these options are set, and related options that
+Producers or Consumers might provide to allow the user further control over
+synchronization behavior are not prescribed by the CAI specification.
 
 
 Synchronization in Numba
@@ -285,26 +284,27 @@ synchronization of the interface:
 
 .. note:: In Numba's terminology, the *default stream* for a Device Array is a
           property of the Device Array specifying the stream in which Numba will
-          enqueue asynchronous transfers on if no other stream is provided as an
+          enqueue asynchronous transfers if no other stream is provided as an
           argument to the function invoking the transfer. It is not the same as
           the `Default Stream
           <https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#default-stream>`_
           in normal CUDA terminology.
 
-Resulting from these properties, these consequences are intended:
+Numba's synchronization behavior results in the following intended
+consequences:
 
-- Exchanging data either as a Producer or a Consumer should generally be
-  correct, provided the other side of the interaction also follows the CAI
-  synchronization semantics.
+- Exchanging data either as a Producer or a Consumer will be correct without
+  the need for any further action from the User, provided that the other side
+  of the interaction also follows the CAI synchronization semantics.
 - The User is expected not to launch kernels or other operations on streams that
   are not the default stream for their parameters, because doing so would
   violate the requirements for a Producer.
 
-  - Warning the user when they do this could be added. The present
+  - Warning the User when they do this could be added. The present
     implementation is a minimal prototype to help illustrate the interface
     specification.
 
-The user may override synchronization behaviour in Numba by setting the
+The User may override synchronization behavior in Numba by setting the
 environment variable ``NUMBA_CUDA_ARRAY_INTERFACE_SYNC`` or the config variable
 ``CUDA_ARRAY_INTERFACE_SYNC`` to ``0`` (see :ref:`GPU Support Environment
 Variables <numba-envvars-gpu-support>`).  When set, Numba will not synchronize
@@ -316,8 +316,9 @@ Array with :func:`numba.cuda.as_cuda_array` or
 :func:`numba.cuda.from_cuda_array_interface`.
 
 There is scope for Numba's synchronization implementation to be optimized in
-future, by eliding synchronizations when a kernel or driver API operation (e.g.
-a memcopy or memset) is launched on the same stream as an imported array.
+the future, by eliding synchronizations when a kernel or driver API operation
+(e.g.  a memcopy or memset) is launched on the same stream as an imported
+array.
 
 
 Lifetime management
