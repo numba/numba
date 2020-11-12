@@ -1350,7 +1350,7 @@ class PreParforPass(object):
     implementations of numpy functions if available.
     """
     def __init__(self, func_ir, typemap, calltypes, typingctx, options,
-                 swapped={}):
+                 swapped={}, replace_functions_map=replace_functions_map):
         self.func_ir = func_ir
         self.typemap = typemap
         self.calltypes = calltypes
@@ -1358,6 +1358,7 @@ class PreParforPass(object):
         self.options = options
         # diagnostics
         self.swapped = swapped
+        self.replace_functions_map = replace_functions_map
         self.stats = {
             'replaced_func': 0,
             'replaced_dtype': 0,
@@ -1394,7 +1395,7 @@ class PreParforPass(object):
                         def replace_func():
                             func_def = get_definition(self.func_ir, expr.func)
                             callname = find_callname(self.func_ir, expr)
-                            repl_func = replace_functions_map.get(callname, None)
+                            repl_func = self.replace_functions_map.get(callname, None)
                             # Handle method on array type
                             if (repl_func is None and
                                 len(callname) == 2 and
