@@ -416,7 +416,7 @@ class Array(Buffer):
     """
 
     def __init__(self, dtype, ndim, layout, readonly=False, name=None,
-                 aligned=True):
+                 aligned=True, addrspace=None):
         if readonly:
             self.mutable = False
         if (not aligned or
@@ -429,7 +429,7 @@ class Array(Buffer):
             if not self.aligned:
                 type_name = "unaligned " + type_name
             name = "%s(%s, %sd, %s)" % (type_name, dtype, ndim, layout)
-        super(Array, self).__init__(dtype, ndim, layout, name=name)
+        super(Array, self).__init__(dtype, ndim, layout, name=name, addrspace=addrspace)
 
     @property
     def mangling_args(self):
@@ -438,7 +438,7 @@ class Array(Buffer):
                 'aligned' if self.aligned else 'unaligned']
         return self.__class__.__name__, args
 
-    def copy(self, dtype=None, ndim=None, layout=None, readonly=None):
+    def copy(self, dtype=None, ndim=None, layout=None, readonly=None, addrspace=None):
         if dtype is None:
             dtype = self.dtype
         if ndim is None:
@@ -447,12 +447,14 @@ class Array(Buffer):
             layout = self.layout
         if readonly is None:
             readonly = not self.mutable
+        if addrspace is None:
+            addrspace = self.addrspace
         return Array(dtype=dtype, ndim=ndim, layout=layout, readonly=readonly,
-                     aligned=self.aligned)
+                     aligned=self.aligned, addrspace=addrspace)
 
     @property
     def key(self):
-        return self.dtype, self.ndim, self.layout, self.mutable, self.aligned
+        return self.dtype, self.ndim, self.layout, self.mutable, self.aligned, self.addrspace
 
     def unify(self, typingctx, other):
         """

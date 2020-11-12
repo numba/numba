@@ -873,7 +873,7 @@ class ArrayModel(StructModel):
             ('parent', types.pyobject),
             ('nitems', types.intp),
             ('itemsize', types.intp),
-            ('data', types.CPointer(fe_type.dtype)),
+            ('data', types.CPointer(fe_type.dtype, addrspace=fe_type.addrspace)),
             ('shape', types.UniTuple(types.intp, ndim)),
             ('strides', types.UniTuple(types.intp, ndim)),
 
