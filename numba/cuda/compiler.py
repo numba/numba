@@ -756,8 +756,7 @@ class _Kernel(serialize.ReduceMixin):
             devrec = wrap_arg(val).to_device(retr, stream)
             kernelargs.append(devrec)
 
-        elif isinstance(ty, (types.UniTuple, types.Tuple, types.NamedUniTuple,
-                             types.NamedTuple)):
+        elif isinstance(ty, types.BaseTuple):
             assert len(ty) == len(val)
             for t, v in zip(ty, val):
                 self._prepare_args(t, v, stream, retr, kernelargs)
