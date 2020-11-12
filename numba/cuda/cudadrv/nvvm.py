@@ -398,12 +398,11 @@ class LibDevice(object):
     def get(self):
         return self.bc
 
-
-ir_numba_cas_hack = """
-define internal i32 @___numba_cas_hack(i32* %ptr, i32 %cmp, i32 %val) alwaysinline {
-    %out = cmpxchg volatile i32* %ptr, i32 %cmp, i32 %val monotonic
-    ret i32 %out
-}
+ir_numba_atomic_cas = """
+define internal {T} @___numba_atomic_{T}_cas_hack({T}* %ptr, {T} %cmp, {T} %val) alwaysinline {{
+    %out = cmpxchg volatile {T}* %ptr, {T} %cmp, {T} %val monotonic
+    ret {T} %out
+}}
 """ # noqa: E501
 
 # Translation of code from CUDA Programming Guide v6.5, section B.12
@@ -426,6 +425,67 @@ attempt:
 done:
     %result = bitcast {Ti} %old to {T}
     ret {T} %result
+}}
+""" # noqa: E501
+
+ir_numba_atomic_inc = """
+define internal {T} @___numba_atomic_{T}_inc({T}* %ptr, {T} %val) alwaysinline {{
+entry:
+    %old2 = load volatile {T}, {T}* %ptr
+    br label %attempt
+
+attempt:
+    %old = phi {T} [ %old2, %entry ], [ %cas, %attempt ]
+    %bndchk = icmp ult {T} %old, %val
+    %inc = add {T} %old, 1
+    %new = select i1 %bndchk, {T} %inc, {T} 0
+    %cas = cmpxchg volatile {T}* %ptr, {T} %old, {T} %new monotonic
+    %repeat = icmp ne {T} %cas, %old
+    br i1 %repeat, label %attempt, label %done
+
+done:
+    ret {T} %old
+}}
+""" # noqa: E501
+
+ir_numba_atomic_dec = """
+define internal {T} @___numba_atomic_{T}_dec({T}* %ptr, {T} %val) alwaysinline {{
+entry:
+    %old2 = load volatile {T}, {T}* %ptr
+    br label %attempt
+
+attempt:
+    %old = phi {T} [ %old2, %entry ], [ %cas, %attempt ]
+    %dec = add {T} %old, -1
+    %bndchk = icmp ult {T} %dec, %val
+    %new = select i1 %bndchk, {T} %dec, {T} %val
+    %cas = cmpxchg volatile {T}* %ptr, {T} %old, {T} %new monotonic
+    %repeat = icmp ne {T} %cas, %old
+    br i1 %repeat, label %attempt, label %done
+
+done:
+    ret {T} %old
+}}
+""" # noqa: E501
+
+ir_numba_atomic_exch = """
+define internal {T} @___numba_atomic_{T}_exch({T}* %ptr, {T} %val) alwaysinline {{
+entry:
+    %old2 = load volatile {T}, {T}* %ptr
+    %ival = bitcast {T} %val to {Ti}
+    %iptr = bitcast {T}* %ptr to {Ti}*
+    br label %attempt
+
+attempt:
+    %old = phi {T} [ %old2, %entry ], [ %dcas, %attempt ]
+    %iold = bitcast {T} %old to {Ti}
+    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %iold, {Ti} %ival monotonic
+    %dcas = bitcast {Ti} %cas to {T}
+    %repeat = icmp ne {Ti} %cas, %old
+    br i1 %repeat, label %attempt, label %done
+
+done:
+    ret {T} %old2
 }}
 """ # noqa: E501
 
@@ -490,8 +550,6 @@ def llvm_to_ptx(llvmir, **opts):
     # Replace with our cmpxchg and atomic implementations because LLVM 3.5 has
     # a new semantic for cmpxchg.
     replacements = [
-        ('declare i32 @___numba_cas_hack(i32*, i32, i32)',
-         ir_numba_cas_hack),
         ('declare double @___numba_atomic_double_add(double*, double)',
          ir_numba_atomic_binary.format(T='double', Ti='i64', OP='fadd',
                                        FUNC='add')),
@@ -501,6 +559,22 @@ def llvm_to_ptx(llvmir, **opts):
         ('declare double @___numba_atomic_double_sub(double*, double)',
          ir_numba_atomic_binary.format(T='double', Ti='i64', OP='fsub',
                                        FUNC='sub')),
+        ('declare i32 @___numba_atomic_i32_inc(i32*, i32)',
+         ir_numba_atomic_inc.format(T='i32')),
+        ('declare i64 @___numba_atomic_i64_inc(i64*, i64)',
+         ir_numba_atomic_inc.format(T='i64')),
+        ('declare i32 @___numba_atomic_i32_dec(i32*, i32)',
+         ir_numba_atomic_dec.format(T='i32')),
+        ('declare i64 @___numba_atomic_i64_dec(i64*, i64)',
+         ir_numba_atomic_dec.format(T='i64')),
+        ('declare float @___numba_atomic_float_exch(float*, float)',
+         ir_numba_atomic_exch.format(T='float', Ti='i32')),
+        ('declare double @___numba_atomic_double_exch(double*, double)',
+         ir_numba_atomic_exch.format(T='double', Ti='i64')),
+        ('declare i32 @___numba_atomic_i32_cas_hack(i32*, i32, i32)',
+         ir_numba_atomic_cas.format(T='i32')),
+        ('declare i64 @___numba_atomic_i64_cas_hack(i64*, i64, i64)',
+         ir_numba_atomic_cas.format(T='i64')),
         ('declare float @___numba_atomic_float_max(float*, float)',
          ir_numba_atomic_minmax.format(T='float', Ti='i32', NAN='',
                                        OP='nnan olt', PTR_OR_VAL='ptr',
@@ -542,6 +616,7 @@ def llvm_to_ptx(llvmir, **opts):
     llvmir = llvmir.replace('llvm.numba_nvvm.atomic', 'llvm.nvvm.atomic')
 
     llvmir = llvm39_to_34_ir(llvmir)
+    print(llvmir)
     cu.add_module(llvmir.encode('utf8'))
     cu.add_module(libdevice.get())
 

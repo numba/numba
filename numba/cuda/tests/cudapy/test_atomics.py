@@ -52,6 +52,19 @@ def atomic_binary_1dim_shared(ary, idx, op2, ary_dtype, ary_nelements,
 
 
 @cuda.jit(device=True)
+def atomic_binary_1dim_shared2(ary, idx, op2, ary_dtype, ary_nelements,
+                               binop_func, cast_func):
+    tid = cuda.threadIdx.x
+    sm = cuda.shared.array(ary_nelements, ary_dtype)
+    sm[tid] = ary[tid]
+    cuda.syncthreads()
+    bin = cast_func(idx[tid] % ary_nelements)
+    binop_func(sm, bin, op2)
+    cuda.syncthreads()
+    ary[tid] = sm[tid]
+
+
+@cuda.jit(device=True)
 def atomic_binary_2dim_shared(ary, op2, ary_dtype, ary_shape,
                               binop_func, y_cast_func):
     tx = cuda.threadIdx.x
@@ -265,6 +278,65 @@ def atomic_xor_global_2(ary, op2):
                               atomic_cast_none)
 
 
+def atomic_inc(ary, idx, op2):
+    atomic_binary_1dim_shared2(ary, idx, op2, uint32, 32,
+                               cuda.atomic.inc, atomic_cast_none)
+
+
+def atomic_inc2(ary, op2):
+    atomic_binary_2dim_shared(ary, op2, uint32, (4, 8),
+                              cuda.atomic.inc, atomic_cast_none)
+
+
+def atomic_inc3(ary, op2):
+    atomic_binary_2dim_shared(ary, op2, uint32, (4, 8),
+                              cuda.atomic.inc, atomic_cast_to_uint64)
+
+
+def atomic_inc_global(idx, ary, op2):
+    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.inc)
+
+
+def atomic_inc_global_2(ary, op2):
+    atomic_binary_2dim_global(ary, op2, cuda.atomic.inc,
+                              atomic_cast_none)
+
+
+def atomic_dec(ary, idx, op2):
+    atomic_binary_1dim_shared2(ary, idx, op2, uint32, 32,
+                               cuda.atomic.dec, atomic_cast_none)
+
+
+def atomic_dec2(ary, op2):
+    atomic_binary_2dim_shared(ary, op2, uint32, (4, 8),
+                              cuda.atomic.dec, atomic_cast_none)
+
+
+def atomic_dec3(ary, op2):
+    atomic_binary_2dim_shared(ary, op2, uint32, (4, 8),
+                              cuda.atomic.dec, atomic_cast_to_uint64)
+
+
+def atomic_dec_global(idx, ary, op2):
+    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.dec)
+
+
+def atomic_dec_global_2(ary, op2):
+    atomic_binary_2dim_global(ary, op2, cuda.atomic.dec,
+                              atomic_cast_none)
+
+def atomic_exch(res, ary):
+        tx = cuda.threadIdx.x
+        cuda.atomic.exch(res, 0, ary[tx])
+
+def atomic_exch2(ary, op2):
+    atomic_binary_2dim_shared(ary, op2, uint32, (4, 8),
+                              cuda.atomic.exch, atomic_cast_none)
+
+def atomic_exch3(ary, op2):
+    atomic_binary_2dim_shared(ary, op2, float32, (4, 8),
+                              cuda.atomic.exch, atomic_cast_none)
+
 def gen_atomic_extreme_funcs(func):
 
     fns = dedent("""
@@ -313,12 +385,11 @@ def gen_atomic_extreme_funcs(func):
     gen_atomic_extreme_funcs('cuda.atomic.nanmin')
 
 
-def atomic_compare_and_swap(res, old, ary):
+def atomic_compare_and_swap(res, old, ary, fill_val):
     gid = cuda.grid(1)
     if gid < res.size:
-        out = cuda.atomic.compare_and_swap(res[gid:], -99, ary[gid])
+        out = cuda.atomic.compare_and_swap(res[gid:], fill_val, ary[gid])
         old[gid] = out
-
 
 class TestCudaAtomics(CUDATestCase):
     def setUp(self):
@@ -715,6 +786,155 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func[1, (4, 8)](ary, rand_const)
         np.testing.assert_equal(ary, orig ^ rand_const)
 
+    def test_atomic_inc(self):
+        rand_const = np.random.randint(32)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32)
+        idx = np.arange(32, dtype=np.uint32)
+        orig = ary.copy()
+        cuda_func = cuda.jit('void(uint32[:], uint32[:], uint32)')(atomic_inc)
+        cuda_func[1, 32](ary, idx, rand_const)
+
+        self.assertTrue(np.all(ary == np.where(orig >= rand_const, 0,
+                                               orig + 1)))
+
+    def test_atomic_inc2(self):
+        rand_const = np.random.randint(32)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+        orig = ary.copy()
+
+        cuda_atomic_inc2 = cuda.jit('void(uint32[:,:], uint32)')(atomic_inc2)
+        cuda_atomic_inc2[1, (4, 8)](ary, rand_const)
+
+        self.assertTrue(np.all(ary == np.where(orig >= rand_const, 0,
+                                               orig + 1)))
+
+    def test_atomic_inc3(self):
+        rand_const = np.random.randint(32)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+        orig = ary.copy()
+
+        cuda_atomic_inc2 = cuda.jit('void(uint32[:,:], uint32)')(atomic_inc3)
+        cuda_atomic_inc2[1, (4, 8)](ary, rand_const)
+
+        self.assertTrue(np.all(ary == np.where(orig >= rand_const, 0,
+                                               orig + 1)))
+
+    def test_atomic_inc_global(self):
+        rand_const = np.random.randint(32)
+        idx = np.arange(32, dtype=np.uint32)
+        ary = np.random.randint(0, 32, size=32, dtype=np.uint32)
+        orig = ary.copy()
+        sig = 'void(uint32[:], uint32[:], uint32)'
+        cuda_func = cuda.jit(sig)(atomic_inc_global)
+        cuda_func[1, 32](idx, ary, rand_const)
+
+        self.assertTrue(np.all(ary == np.where(orig >= rand_const, 0,
+                                               orig + 1)))
+
+    def test_atomic_inc_global_2(self):
+        rand_const = np.random.randint(32)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+        orig = ary.copy()
+        cuda_func = cuda.jit('void(uint32[:,:], uint32)')(atomic_inc_global_2)
+        cuda_func[1, (4, 8)](ary, rand_const)
+        self.assertTrue(np.all(ary == np.where(orig >= rand_const, 0,
+                                               orig + 1)))
+
+    def test_atomic_dec(self):
+        rand_const = np.random.randint(32)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32)
+        idx = np.arange(32, dtype=np.uint32)
+        orig = ary.copy()
+        cuda_func = cuda.jit('void(uint32[:], uint32[:], uint32)')(atomic_dec)
+        cuda_func[1, 32](ary, idx, rand_const)
+
+        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const, 
+                                               np.where(orig > rand_const, rand_const,
+                                               orig - 1))))
+    
+
+    def test_atomic_dec2(self):
+        rand_const = np.random.randint(32)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+        orig = ary.copy()
+
+        cuda_func = cuda.jit('void(uint32[:,:], uint32)')(atomic_dec2)
+        cuda_func[1, (4, 8)](ary, rand_const)
+
+        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const, 
+                                               np.where(orig > rand_const, rand_const,
+                                               orig - 1))))
+    
+
+    def test_atomic_dec3(self):
+        rand_const = np.random.randint(32)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+        orig = ary.copy()
+
+        cuda_func = cuda.jit('void(uint32[:,:], uint32)')(atomic_dec3)
+        cuda_func[1, (4, 8)](ary, rand_const)
+
+        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const, 
+                                               np.where(orig > rand_const, rand_const,
+                                               orig - 1))))
+    
+
+    def test_atomic_dec_global(self):
+        rand_const = np.random.randint(32)
+        idx = np.arange(32, dtype=np.uint32)
+        ary = np.random.randint(0, 32, size=32, dtype=np.uint32)
+        orig = ary.copy()
+        sig = 'void(uint32[:], uint32[:], uint32)'
+        cuda_func = cuda.jit(sig)(atomic_dec_global)
+        cuda_func[1, 32](idx, ary, rand_const)
+
+        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const, 
+                                               np.where(orig > rand_const, rand_const,
+                                               orig - 1))))
+
+    
+    def test_atomic_dec_global_2(self):
+        rand_const = np.random.randint(32)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+        orig = ary.copy()
+        cuda_func = cuda.jit('void(uint32[:,:], uint32)')(atomic_dec_global_2)
+        cuda_func[1, (4, 8)](ary, rand_const)
+
+        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const, 
+                                               np.where(orig > rand_const, rand_const,
+                                               orig - 1))))
+     
+    def test_atomic_exch2(self):
+        rand_const = np.random.randint(50, 100, dtype=np.uint32)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+        gold = ary.copy()
+        gold.fill(rand_const)
+
+        cuda_func = cuda.jit('void(uint32[:,:], uint32)')(atomic_exch2)
+        cuda_func[1, (4, 8)](ary, rand_const)
+        np.testing.assert_equal(ary, gold)
+
+    def test_atomic_exch3(self):
+        rand_const = np.random.randint(50, 100, dtype=np.uint64)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint64).reshape(4, 8)
+        gold = ary.copy()
+        gold.fill(rand_const)
+
+        cuda_func = cuda.jit('void(uint64[:,:], uint64)')(atomic_exch2)
+        cuda_func[1, (4, 8)](ary, rand_const)
+        np.testing.assert_equal(ary, gold)
+
+    def test_atomic_exch4(self):
+        rand_const = np.random.random_sample() * 10
+        ary = np.random.random_sample((4, 8))
+        gold = ary.copy()
+        gold.fill(rand_const)
+
+        cuda_func = cuda.jit('void(float32[:,:], float32)')(atomic_exch3)
+        cuda_func[1, (4, 8)](ary, rand_const)
+        print(ary)
+        #np.testing.assert_equal(ary, gold)
+
     def check_atomic_max(self, dtype, lo, hi):
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
         res = np.zeros(1, dtype=vals.dtype)
@@ -876,25 +1096,108 @@ class TestCudaAtomics(CUDATestCase):
 
     def test_atomic_compare_and_swap(self):
         n = 100
-        res = [-99] * (n // 2) + [-1] * (n // 2)
+        fill = -99
+        unfill = -1
+        res = [fill] * (n // 2) + [unfill] * (n // 2)
         random.shuffle(res)
         res = np.asarray(res, dtype=np.int32)
         out = np.zeros_like(res)
         ary = np.random.randint(1, 10, size=res.size).astype(res.dtype)
 
-        fill_mask = res == -99
-        unfill_mask = res == -1
+        fill_mask = res == fill
+        unfill_mask = res == unfill
 
         expect_res = np.zeros_like(res)
         expect_res[fill_mask] = ary[fill_mask]
-        expect_res[unfill_mask] = -1
+        expect_res[unfill_mask] = unfill
 
         expect_out = np.zeros_like(out)
         expect_out[fill_mask] = res[fill_mask]
-        expect_out[unfill_mask] = -1
+        expect_out[unfill_mask] = unfill
 
         cuda_func = cuda.jit(atomic_compare_and_swap)
-        cuda_func[10, 10](res, out, ary)
+        cuda_func[10, 10](res, out, ary, fill)
+
+        np.testing.assert_array_equal(expect_res, res)
+        np.testing.assert_array_equal(expect_out, out)
+
+    def test_atomic_compare_and_swap2(self):
+        n = 100
+        fill = -45
+        unfill = -1
+        res = [fill] * (n // 2) + [-1] * (n // 2)
+        random.shuffle(res)
+        res = np.asarray(res, dtype=np.int64)
+        out = np.zeros_like(res)
+        ary = np.random.randint(1, 10, size=res.size).astype(res.dtype)
+
+        fill_mask = res == fill
+        unfill_mask = res == unfill
+
+        expect_res = np.zeros_like(res)
+        expect_res[fill_mask] = ary[fill_mask]
+        expect_res[unfill_mask] = unfill
+
+        expect_out = np.zeros_like(out)
+        expect_out[fill_mask] = res[fill_mask]
+        expect_out[unfill_mask] = unfill
+
+        cuda_func = cuda.jit(atomic_compare_and_swap)
+        cuda_func[10, 10](res, out, ary, fill)
+
+        np.testing.assert_array_equal(expect_res, res)
+        np.testing.assert_array_equal(expect_out, out)
+    
+    def test_atomic_compare_and_swap3(self):
+        n = 100
+        fill = np.random.randint(50, 500, dtype=np.uint32)
+        unfill = np.random.randint(1, 25, dtype=np.uint32)
+        res = [fill] * (n // 2) + [unfill] * (n // 2)
+        random.shuffle(res)
+        res = np.asarray(res, dtype=np.uint32)
+        out = np.zeros_like(res)
+        ary = np.random.randint(1, 10, size=res.size).astype(res.dtype)
+
+        fill_mask = res == fill
+        unfill_mask = res == unfill
+
+        expect_res = np.zeros_like(res)
+        expect_res[fill_mask] = ary[fill_mask]
+        expect_res[unfill_mask] = unfill
+
+        expect_out = np.zeros_like(out)
+        expect_out[fill_mask] = res[fill_mask]
+        expect_out[unfill_mask] = unfill
+
+        cuda_func = cuda.jit(atomic_compare_and_swap)
+        cuda_func[10, 10](res, out, ary, fill)
+
+        np.testing.assert_array_equal(expect_res, res)
+        np.testing.assert_array_equal(expect_out, out)
+
+    def test_atomic_compare_and_swap4(self):
+        n = 100
+        fill = np.random.randint(50, 500, dtype=np.uint64)
+        unfill = np.random.randint(1, 25, dtype=np.uint64)
+        res = [fill] * (n // 2) + [unfill] * (n // 2)
+        random.shuffle(res)
+        res = np.asarray(res, dtype=np.uint64)
+        out = np.zeros_like(res)
+        ary = np.random.randint(1, 10, size=res.size).astype(res.dtype)
+
+        fill_mask = res == fill
+        unfill_mask = res == unfill
+
+        expect_res = np.zeros_like(res)
+        expect_res[fill_mask] = ary[fill_mask]
+        expect_res[unfill_mask] = unfill
+
+        expect_out = np.zeros_like(out)
+        expect_out[fill_mask] = res[fill_mask]
+        expect_out[unfill_mask] = unfill
+
+        cuda_func = cuda.jit(atomic_compare_and_swap)
+        cuda_func[10, 10](res, out, ary, fill)
 
         np.testing.assert_array_equal(expect_res, res)
         np.testing.assert_array_equal(expect_out, out)
