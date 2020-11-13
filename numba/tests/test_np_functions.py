@@ -257,6 +257,10 @@ def asfarray(a, dtype=np.float64):
     return np.asfarray(a, dtype=dtype)
 
 
+def asfarray_default_kwarg(a):
+    return np.asfarray(a)
+
+
 def extract(condition, arr):
     return np.extract(condition, arr)
 
@@ -3391,6 +3395,15 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
             self.assertPreciseEqual(expected, got)
             self.assertTrue(np.issubdtype(got.dtype, np.inexact), got.dtype)
+
+        # test default kwarg variant
+        pyfunc = asfarray_default_kwarg
+        cfunc = jit(nopython=True)(pyfunc)
+        arr = np.array([1, 2, 3])
+        expected = pyfunc(arr)
+        got = cfunc(arr)
+        self.assertPreciseEqual(expected, got)
+        self.assertTrue(np.issubdtype(got.dtype, np.inexact), got.dtype)
 
     def test_repeat(self):
         # np.repeat(a, repeats)
