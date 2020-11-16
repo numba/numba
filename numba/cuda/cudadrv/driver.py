@@ -2071,7 +2071,8 @@ def launch_kernel(cufunc_handle,
                   bx, by, bz,
                   sharedmem,
                   hstream,
-                  args):
+                  args,
+                  cooperative=False):
 
     param_vals = []
     for arg in args:
@@ -2082,19 +2083,28 @@ def launch_kernel(cufunc_handle,
 
     params = (c_void_p * len(param_vals))(*param_vals)
 
-    driver.cuLaunchKernel(cufunc_handle,
-                          gx, gy, gz,
-                          bx, by, bz,
-                          sharedmem,
-                          hstream,
-                          params,
-                          None)
+    if cooperative:
+        driver.cuLaunchCooperativeKernel(cufunc_handle,
+                                         gx, gy, gz,
+                                         bx, by, bz,
+                                         sharedmem,
+                                         hstream,
+                                         params)
+    else:
+        driver.cuLaunchKernel(cufunc_handle,
+                              gx, gy, gz,
+                              bx, by, bz,
+                              sharedmem,
+                              hstream,
+                              params,
+                              None)
 
 
 FILE_EXTENSION_MAP = {
     'o': enums.CU_JIT_INPUT_OBJECT,
     'ptx': enums.CU_JIT_INPUT_PTX,
     'a': enums.CU_JIT_INPUT_LIBRARY,
+    'lib': enums.CU_JIT_INPUT_LIBRARY,
     'cubin': enums.CU_JIT_INPUT_CUBIN,
     'fatbin': enums.CU_JIT_INPUT_FATBINAR,
 }
@@ -2159,7 +2169,11 @@ class Linker(object):
         try:
             driver.cuLinkAddFile(self.handle, kind, pathbuf, 0, None, None)
         except CudaAPIError as e:
-            raise LinkerError("%s\n%s" % (e, self.error_log))
+            if e.code == enums.CUDA_ERROR_FILE_NOT_FOUND:
+                msg = f'{path} not found'
+            else:
+                msg = "%s\n%s" % (e, self.error_log)
+            raise LinkerError(msg)
 
     def add_file_guess_ext(self, path):
         ext = path.rsplit('.', 1)[1]
