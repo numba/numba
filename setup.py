@@ -11,6 +11,7 @@ from setuptools import Extension, find_packages, setup
 import versioneer
 
 min_python_version = "3.6"
+max_python_version = "3.9"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
 min_llvmlite_version = "0.36.0.dev0"
@@ -372,7 +373,7 @@ metadata = dict(
     packages=packages,
     setup_requires=build_requires,
     install_requires=install_requires,
-    python_requires=">={}".format(min_python_version),
+    python_requires=">={},<{}".format(min_python_version, max_python_version),
     license="BSD",
     cmdclass=cmdclass,
 )
