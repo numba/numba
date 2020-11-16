@@ -156,11 +156,10 @@ Why are the ``typed`` containers slower when used from the interpreter?
 The Numba ``typed`` containers found in ``numba.typed`` e.g.
 ``numba.typed.List`` store their data in an efficient form for access from JIT
 compiled code. When these containers are used from the CPython interpreter, the
-data involved has to be converted to/from a form that the interpreter
-understands from/to the container format, this process is relatively costly and
-as a result impacts performance. In JIT compiled code no such penalty exists and
-so operations on the containers are much quicker and often faster than the pure
-python equivalent.
+data involved has to be converted from/to the container format. This process is
+relatively costly and as a result impacts performance. In JIT compiled code no
+such penalty exists and so operations on the containers are much quicker and
+often faster than the pure python equivalent.
 
 Does Numba automatically parallelize code?
 ------------------------------------------
