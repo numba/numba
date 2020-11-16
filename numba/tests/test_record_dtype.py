@@ -1303,5 +1303,24 @@ class TestSubtyping(TestCase):
         self.assertEqual(foo(self.ab_rec1, flag=1), self.ab_rec1[0] + k + 20)
 
 
+class TestRecordArrayExceptions(TestCase):
+
+    def test_nested_array_in_buffer_raises(self):
+        # see issue #6473
+        @njit()
+        def foo(x):
+            x["y"][0] = 1
+
+        dt = np.dtype([("y", (np.uint64, 5)),])
+        x = np.ones(1, dtype=dt)
+        with self.assertRaises(TypingError) as e:
+            foo(x)
+        ex1 = "The dtype of a Buffer type cannot itself be a Buffer type"
+        ex2 = "offending Buffer was: nestedarray(uint64, (5,))"
+        excstr = str(e.exception)
+        self.assertIn(ex1, excstr)
+        self.assertIn(ex2, excstr)
+
+
 if __name__ == '__main__':
     unittest.main()
