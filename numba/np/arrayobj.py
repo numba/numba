@@ -5052,7 +5052,7 @@ def array_to_array(context, builder, fromty, toty, val):
 @lower_cast(types.Array, types.Complex)
 def array0d_to_scalar(context, builder, fromty, toty, val):
     def impl(a):
-        # a is an array(T, 0d, C)
+        # a is an array(T, 0d, O), T is type, O is order
         return a.take(0)
 
     sig = signature(toty, fromty)
