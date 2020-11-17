@@ -156,6 +156,8 @@ Fixes:
 * PR #6446: Fix #6444: pruner issues with reference stealing functions (Siu
   Kwan Lam)
 * PR #6450: Fix asfarray kwarg default handling. (Stuart Archibald)
+* PR #6486: fix abstract base class import (Valentin Haenel)
+* PR #6487: Restrict maximum version of python (Siu Kwan Lam)
 
 CUDA Enhancements/Fixes:
 
