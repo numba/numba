@@ -80,6 +80,15 @@ class TestCasting(unittest.TestCase):
         self.assertEqual(driver(x), x[0])
         self.assertEqual(len(inner.overloads), 1)
 
+    def test_0darrayT_to_T(self):
+        @njit
+        def inner(x):
+            return T(x)
+        
+        for T in (np.float32, np.int64):
+            x = np.array(12.3, dtype=T)
+            self.assertEqual(inner(x), x[()])
+
     def test_optional_to_optional(self):
         """
         Test error due mishandling of Optional to Optional casting
