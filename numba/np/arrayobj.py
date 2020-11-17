@@ -5061,7 +5061,7 @@ def array0d_to_scalar(context, builder, fromty, toty, val):
 
 
 @lower_cast(types.Array, types.UnicodeCharSeq)
-def unichr_to_unichr(context, builder, fromty, toty, val):
+def array_to_unichrseq(context, builder, fromty, toty, val):
     def impl(a):
         return str(a[()])
 
