@@ -85,6 +85,13 @@ skip_ppc64le_issue4563 = unittest.skipIf(platform.machine() == 'ppc64le',
                                          ("Hits: 'Parameter area must exist "
                                           "to pass an argument in memory'"))
 
+# Typeguard
+has_typeguard = bool(os.environ.get('NUMBA_USE_TYPEGUARD', 0))
+
+skip_unless_typeguard = unittest.skipUnless(
+    has_typeguard, "Typeguard is not enabled",
+)
+
 try:
     import scipy.linalg.cython_lapack
     has_lapack = True
