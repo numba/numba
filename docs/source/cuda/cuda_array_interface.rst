@@ -5,7 +5,7 @@ CUDA Array Interface (Version 3)
 ================================
 
 The *CUDA Array Interface* (or CAI) is created for interoperability between
-different implementation of GPU array-like objects in various projects.  The
+different implementations of GPU array-like objects in various projects. The
 idea is borrowed from the `NumPy array interface`_.
 
 
