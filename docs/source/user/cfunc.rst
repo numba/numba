@@ -194,11 +194,6 @@ Due to ABI limitations, structures should be passed as pointers
 using ``types.CPointer(my_struct)`` as the argument type.  Inside the ``cfunc``
 body, the ``my_struct*`` can be accessed with ``carray``.
 
-Full example
-------------
-
-See full example in ``examples/notebooks/Accessing C Struct Data.ipynb``.
-
 
 Signature specification
 =======================
