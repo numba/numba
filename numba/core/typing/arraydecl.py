@@ -217,7 +217,7 @@ class SetItemBuffer(AbstractTemplate):
             res = val
         elif isinstance(val, types.Array) and val.ndim == 0 \
             and self.context.can_convert(val.dtype, res):
-            # val is an array(T, 0d, C), where T is the type of res
+            # val is an array(T, 0d, O), where T is the type of res, O is order
             res = val
         else:
             return
