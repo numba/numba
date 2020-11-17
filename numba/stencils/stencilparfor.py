@@ -281,6 +281,11 @@ class StencilPass(object):
             none_assign = ir.Assign(ir.Const(None, loc), none_var, loc)
             stmts.append(none_assign)
             self.typemap[none_var.name] = types.none
+            # Generate a zero var to use in slicing.
+            zero_index_var = ir.Var(scope, mk_unique_var("$zero_index_var"), loc)
+            zero_index_assign = ir.Assign(ir.Const(0, loc), zero_index_var, loc)
+            stmts.append(zero_index_assign)
+            self.typemap[zero_index_var.name] = types.intp
             # Generate generic ":" slice.
             # ---- Generate var to hold slice func var.
             slice_func_var = ir.Var(scope, mk_unique_var("$slice_func_var"), loc)
@@ -313,7 +318,7 @@ class StencilPass(object):
                 # Handle the border at the start of the index range.
                 # ---- Generate call to slice func.
                 sig = self.typingctx.resolve_function_type(slice_fn_ty,
-                                                           (types.none,types.intp),
+                                                           (types.intp,types.intp),
                                                            {})
                 si = start_inds[dim]
                 assert(isinstance(si, (int, ir.Var)))
@@ -326,7 +331,7 @@ class StencilPass(object):
                 stmts.append(si_assign)
 
                 slice_callexpr = ir.Expr.call(func=slice_func_var,
-                                              args=(none_var, si_var),
+                                              args=(zero_index_var, si_var),
                                               kws=(),
                                               loc=loc)
                 self.calltypes[slice_callexpr] = sig
@@ -356,7 +361,7 @@ class StencilPass(object):
                 # Handle the border at the end of the index range.
                 # ---- Generate call to slice func.
                 sig = self.typingctx.resolve_function_type(slice_fn_ty,
-                                                           (types.intp, types.none),
+                                                           (types.intp, types.intp),
                                                            {})
                 si = last_inds[dim]
                 assert(isinstance(si, (int, ir.Var)))
@@ -369,7 +374,7 @@ class StencilPass(object):
                 stmts.append(si_assign)
 
                 slice_callexpr = ir.Expr.call(func=slice_func_var,
-                                              args=(si_var, none_var),
+                                              args=(si_var, in_arr_dim_sizes[dim]),
                                               kws=(),
                                               loc=loc)
                 self.calltypes[slice_callexpr] = sig
