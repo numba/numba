@@ -35,5 +35,12 @@ jobs:
 
     - script: |
         export PATH=$HOME/miniconda3/bin:$PATH
+        conda install -y mypy
+        mypy
+      displayName: 'Mypy'
+      condition: eq(variables['RUN_MYPY'], 'yes')
+
+    - script: |
+        export PATH=$HOME/miniconda3/bin:$PATH
         buildscripts/incremental/test.sh
       displayName: 'Test'

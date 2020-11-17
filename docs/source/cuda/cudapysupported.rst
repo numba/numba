@@ -77,6 +77,7 @@ The following built-in functions are supported:
 * :func:`len`
 * :func:`min`: only the multiple-argument form
 * :func:`max`: only the multiple-argument form
+* :func:`pow`
 * :class:`range`
 * :func:`round`
 * :func:`zip`
@@ -138,12 +139,16 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.exp`
 * :func:`math.expm1`
 * :func:`math.fabs`
+* :func:`math.frexp`
+* :func:`math.ldexp`
 * :func:`math.gamma`
 * :func:`math.lgamma`
 * :func:`math.log`
+* :func:`math.log2`
 * :func:`math.log10`
 * :func:`math.log1p`
 * :func:`math.sqrt`
+* :func:`math.remainder`: Python 3.7+
 * :func:`math.pow`
 * :func:`math.ceil`
 * :func:`math.floor`
@@ -152,6 +157,7 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.modf`
 * :func:`math.isnan`
 * :func:`math.isinf`
+* :func:`math.isfinite`
 
 
 ``operator``
