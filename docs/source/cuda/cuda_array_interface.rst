@@ -275,8 +275,9 @@ synchronization of the interface:
 
 - When Numba acts as a Consumer (for example when an array-like object is passed
   to a kernel launch): If ``stream`` is an integer, then Numba will immediately
-  synchronize on the provided ``stream``, and set the *default stream* of the
-  array to the provided stream.
+  synchronize on the provided ``stream``. A Numba Device Array created from an
+  array-like object has its *default stream* set to the provided stream.
+
 - When Numba acts as a Producer (when the ``__cuda_array_interface__`` property
   of a Numba Device Array is accessed): If the exported Device Array has a
   *default stream*, then it is given as the ``stream`` entry. Otherwise,
@@ -296,13 +297,14 @@ consequences:
 - Exchanging data either as a Producer or a Consumer will be correct without
   the need for any further action from the User, provided that the other side
   of the interaction also follows the CAI synchronization semantics.
-- The User is expected not to launch kernels or other operations on streams that
-  are not the default stream for their parameters, because doing so would
-  violate the requirements for a Producer.
+- The User is expected to either:
 
-  - Warning the User when they do this could be added. The present
-    implementation is a minimal prototype to help illustrate the interface
-    specification.
+  - Avoid launching kernels or other operations on streams that
+    are not the default stream for their parameters, or
+  - When launching operations on a stream that is not the default stream for
+    a given parameter, they should then insert an event into the stream that
+    they are operating in, and wait on that event in the default stream for
+    the parameter.
 
 The User may override synchronization behavior in Numba by setting the
 environment variable ``NUMBA_CUDA_ARRAY_INTERFACE_SYNC`` or the config variable
