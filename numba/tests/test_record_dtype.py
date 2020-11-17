@@ -1316,7 +1316,7 @@ class TestRecordArrayExceptions(TestCase):
         with self.assertRaises(TypingError) as e:
             foo(x)
         ex1 = "The dtype of a Buffer type cannot itself be a Buffer type"
-        ex2 = "offending Buffer was: nestedarray(uint64, (5,))"
+        ex2 = "unsupported Buffer was: nestedarray(uint64, (5,))"
         excstr = str(e.exception)
         self.assertIn(ex1, excstr)
         self.assertIn(ex2, excstr)
