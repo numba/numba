@@ -1,7 +1,7 @@
 # Numba's codeowners file is dual purpose, it:
 #
 # 1. Provides information to github about who should be requested to review a PR
-# 2. Provides users/contributors/czars general information about who to contact
+# 2. Provides contributors/czars general information about who to contact
 #    first about various parts of the code base. A lot of concepts in Numba are
 #    necessarily spread throughout the code base, consequently some of the
 #    "code ownership"/first contact is concept based opposed to file/directory
@@ -21,7 +21,7 @@
 /numba/stencils @DrTodd13
 
 # ------------------------------------------------------------------------------
-# Information for users/contributors
+# Information for contributors
 # ------------------------------------------------------------------------------
 # This section provides a rough list of who to contact first for help with
 # various parts/concepts in the code base, first contact does not imply
