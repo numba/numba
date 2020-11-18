@@ -448,7 +448,7 @@ class atomic(Stub):
         Returns the old value at the index location as if it is loaded
         atomically.
         """
-    
+
     class exch(Stub):
         """exch(ary, idx, val)
 
@@ -458,7 +458,7 @@ class atomic(Stub):
         Returns the old value at the index location as if it is loaded
         atomically.
         """
-    
+
     class max(Stub):
         """max(ary, idx, val)
 

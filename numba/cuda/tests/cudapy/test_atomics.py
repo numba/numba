@@ -325,17 +325,25 @@ def atomic_dec_global_2(ary, op2):
     atomic_binary_2dim_global(ary, op2, cuda.atomic.dec,
                               atomic_cast_none)
 
-def atomic_exch(res, ary):
-        tx = cuda.threadIdx.x
-        cuda.atomic.exch(res, 0, ary[tx])
+
+def atomic_exch(ary, idx, op2):
+    atomic_binary_1dim_shared2(ary, idx, op2, uint32, 32,
+                               cuda.atomic.exch, atomic_cast_none)
+
 
 def atomic_exch2(ary, op2):
     atomic_binary_2dim_shared(ary, op2, uint32, (4, 8),
                               cuda.atomic.exch, atomic_cast_none)
 
+
 def atomic_exch3(ary, op2):
-    atomic_binary_2dim_shared(ary, op2, float32, (4, 8),
+    atomic_binary_2dim_shared(ary, op2, uint64, (4, 8),
                               cuda.atomic.exch, atomic_cast_none)
+
+
+def atomic_exch_global(idx, ary, op2):
+    atomic_binary_1dim_global(ary, idx, 32, op2, cuda.atomic.exch)
+
 
 def gen_atomic_extreme_funcs(func):
 
@@ -390,6 +398,7 @@ def atomic_compare_and_swap(res, old, ary, fill_val):
     if gid < res.size:
         out = cuda.atomic.compare_and_swap(res[gid:], fill_val, ary[gid])
         old[gid] = out
+
 
 class TestCudaAtomics(CUDATestCase):
     def setUp(self):
@@ -848,10 +857,10 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func = cuda.jit('void(uint32[:], uint32[:], uint32)')(atomic_dec)
         cuda_func[1, 32](ary, idx, rand_const)
 
-        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const, 
-                                               np.where(orig > rand_const, rand_const,
-                                               orig - 1))))
-    
+        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const,
+                                               np.where(orig > rand_const,
+                                                        rand_const,
+                                                        orig - 1))))
 
     def test_atomic_dec2(self):
         rand_const = np.random.randint(32)
@@ -861,10 +870,10 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func = cuda.jit('void(uint32[:,:], uint32)')(atomic_dec2)
         cuda_func[1, (4, 8)](ary, rand_const)
 
-        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const, 
-                                               np.where(orig > rand_const, rand_const,
-                                               orig - 1))))
-    
+        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const,
+                                               np.where(orig > rand_const,
+                                                        rand_const,
+                                                        orig - 1))))
 
     def test_atomic_dec3(self):
         rand_const = np.random.randint(32)
@@ -874,10 +883,10 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func = cuda.jit('void(uint32[:,:], uint32)')(atomic_dec3)
         cuda_func[1, (4, 8)](ary, rand_const)
 
-        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const, 
-                                               np.where(orig > rand_const, rand_const,
-                                               orig - 1))))
-    
+        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const,
+                                               np.where(orig > rand_const,
+                                                        rand_const,
+                                                        orig - 1))))
 
     def test_atomic_dec_global(self):
         rand_const = np.random.randint(32)
@@ -888,11 +897,11 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func = cuda.jit(sig)(atomic_dec_global)
         cuda_func[1, 32](idx, ary, rand_const)
 
-        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const, 
-                                               np.where(orig > rand_const, rand_const,
-                                               orig - 1))))
+        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const,
+                                               np.where(orig > rand_const,
+                                                        rand_const,
+                                                        orig - 1))))
 
-    
     def test_atomic_dec_global_2(self):
         rand_const = np.random.randint(32)
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
@@ -900,10 +909,22 @@ class TestCudaAtomics(CUDATestCase):
         cuda_func = cuda.jit('void(uint32[:,:], uint32)')(atomic_dec_global_2)
         cuda_func[1, (4, 8)](ary, rand_const)
 
-        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const, 
-                                               np.where(orig > rand_const, rand_const,
-                                               orig - 1))))
-     
+        self.assertTrue(np.all(ary == np.where(orig == 0, rand_const,
+                                               np.where(orig > rand_const,
+                                                        rand_const,
+                                                        orig - 1))))
+
+    def test_atomic_exch(self):
+        rand_const = np.random.randint(50, 100, dtype=np.uint32)
+        ary = np.random.randint(0, 32, size=32).astype(np.uint32)
+        idx = np.arange(32, dtype=np.uint32)
+        gold = ary.copy()
+        gold.fill(rand_const)
+        cuda_func = cuda.jit('void(uint32[:], uint32[:], uint32)')(atomic_exch)
+        cuda_func[1, 32](ary, idx, rand_const)
+
+        np.testing.assert_equal(ary, gold)
+
     def test_atomic_exch2(self):
         rand_const = np.random.randint(50, 100, dtype=np.uint32)
         ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
@@ -920,20 +941,21 @@ class TestCudaAtomics(CUDATestCase):
         gold = ary.copy()
         gold.fill(rand_const)
 
-        cuda_func = cuda.jit('void(uint64[:,:], uint64)')(atomic_exch2)
+        cuda_func = cuda.jit('void(uint64[:,:], uint64)')(atomic_exch3)
         cuda_func[1, (4, 8)](ary, rand_const)
         np.testing.assert_equal(ary, gold)
 
-    def test_atomic_exch4(self):
-        rand_const = np.random.random_sample() * 10
-        ary = np.random.random_sample((4, 8))
+    def test_atomic_exch_global(self):
+        rand_const = np.random.randint(50, 100, dtype=np.uint32)
+        idx = np.arange(32, dtype=np.uint32)
+        ary = np.random.randint(0, 32, size=32, dtype=np.uint32)
         gold = ary.copy()
         gold.fill(rand_const)
 
-        cuda_func = cuda.jit('void(float32[:,:], float32)')(atomic_exch3)
-        cuda_func[1, (4, 8)](ary, rand_const)
-        print(ary)
-        #np.testing.assert_equal(ary, gold)
+        sig = 'void(uint32[:], uint32[:], uint32)'
+        cuda_func = cuda.jit(sig)(atomic_exch_global)
+        cuda_func[1, 32](idx, ary, rand_const)
+        np.testing.assert_equal(ary, gold)
 
     def check_atomic_max(self, dtype, lo, hi):
         vals = np.random.randint(lo, hi, size=(32, 32)).astype(dtype)
@@ -1147,7 +1169,7 @@ class TestCudaAtomics(CUDATestCase):
 
         np.testing.assert_array_equal(expect_res, res)
         np.testing.assert_array_equal(expect_out, out)
-    
+
     def test_atomic_compare_and_swap3(self):
         n = 100
         fill = np.random.randint(50, 500, dtype=np.uint32)

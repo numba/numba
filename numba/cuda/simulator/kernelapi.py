@@ -109,6 +109,7 @@ inclock = threading.Lock()
 declock = threading.Lock()
 exchlock = threading.Lock()
 
+
 class FakeCUDAAtomic(object):
     def add(self, array, index, val):
         with addlock:
@@ -157,13 +158,13 @@ class FakeCUDAAtomic(object):
             else:
                 array[index] -= 1
         return old
-    
+
     def exch(self, array, index, val):
         with exchlock:
             old = array[index]
             array[index] = val
         return old
-    
+
     def max(self, array, index, val):
         with maxlock:
             old = array[index]

@@ -327,7 +327,7 @@ class Cuda_atomic_compare_and_swap(AbstractTemplate):
         assert not kws
         ary, old, val = args
         dty = ary.dtype
-        
+
         if dty in integer_numba_types and ary.ndim == 1:
             return signature(dty, ary, dty, dty)
 
@@ -397,7 +397,7 @@ class CudaAtomicTemplate(AttributeTemplate):
 
     def resolve_exch(self, mod):
         return types.Function(Cuda_atomic_exch)
-    
+
     def resolve_max(self, mod):
         return types.Function(Cuda_atomic_max)
 

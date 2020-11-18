@@ -398,6 +398,7 @@ class LibDevice(object):
     def get(self):
         return self.bc
 
+
 ir_numba_atomic_cas = """
 define internal {T} @___numba_atomic_{T}_cas_hack({T}* %ptr, {T} %cmp, {T} %val) alwaysinline {{
     %out = cmpxchg volatile {T}* %ptr, {T} %cmp, {T} %val monotonic
@@ -465,27 +466,6 @@ attempt:
 
 done:
     ret {T} %old
-}}
-""" # noqa: E501
-
-ir_numba_atomic_exch = """
-define internal {T} @___numba_atomic_{T}_exch({T}* %ptr, {T} %val) alwaysinline {{
-entry:
-    %old2 = load volatile {T}, {T}* %ptr
-    %ival = bitcast {T} %val to {Ti}
-    %iptr = bitcast {T}* %ptr to {Ti}*
-    br label %attempt
-
-attempt:
-    %old = phi {T} [ %old2, %entry ], [ %dcas, %attempt ]
-    %iold = bitcast {T} %old to {Ti}
-    %cas = cmpxchg volatile {Ti}* %iptr, {Ti} %iold, {Ti} %ival monotonic
-    %dcas = bitcast {Ti} %cas to {T}
-    %repeat = icmp ne {Ti} %cas, %old
-    br i1 %repeat, label %attempt, label %done
-
-done:
-    ret {T} %old2
 }}
 """ # noqa: E501
 
@@ -567,10 +547,6 @@ def llvm_to_ptx(llvmir, **opts):
          ir_numba_atomic_dec.format(T='i32')),
         ('declare i64 @___numba_atomic_i64_dec(i64*, i64)',
          ir_numba_atomic_dec.format(T='i64')),
-        ('declare float @___numba_atomic_float_exch(float*, float)',
-         ir_numba_atomic_exch.format(T='float', Ti='i32')),
-        ('declare double @___numba_atomic_double_exch(double*, double)',
-         ir_numba_atomic_exch.format(T='double', Ti='i64')),
         ('declare i32 @___numba_atomic_i32_cas_hack(i32*, i32, i32)',
          ir_numba_atomic_cas.format(T='i32')),
         ('declare i64 @___numba_atomic_i64_cas_hack(i64*, i64, i64)',
@@ -616,7 +592,6 @@ def llvm_to_ptx(llvmir, **opts):
     llvmir = llvmir.replace('llvm.numba_nvvm.atomic', 'llvm.nvvm.atomic')
 
     llvmir = llvm39_to_34_ir(llvmir)
-    print(llvmir)
     cu.add_module(llvmir.encode('utf8'))
     cu.add_module(libdevice.get())
 

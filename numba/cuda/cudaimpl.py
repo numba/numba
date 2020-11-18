@@ -655,21 +655,17 @@ ptx_atomic_bitwise(stubs.atomic.and_, 'and')
 ptx_atomic_bitwise(stubs.atomic.or_, 'or')
 ptx_atomic_bitwise(stubs.atomic.xor, 'xor')
 
+
 @lower(stubs.atomic.exch, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.exch, types.Array, types.UniTuple, types.Any)
 @lower(stubs.atomic.exch, types.Array, types.Tuple, types.Any)
 @_atomic_dispatcher
 def ptx_atomic_exch(context, builder, dtype, ptr, val):
-    if dtype == types.float32:
-        lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_exch_float32(lmod),
-                            (ptr, val))
-    elif dtype == types.float64:
-        lmod = builder.module
-        return builder.call(nvvmutils.declare_atomic_exch_float64(lmod),
-                            (ptr, val))
-    else:
+    if dtype in (cuda.cudadecl.integer_numba_types):
         return builder.atomic_rmw('xchg', ptr, val, 'monotonic')
+    else:
+        raise TypeError(f'Unimplemented atomic exch with {dtype} array')
+
 
 @lower(stubs.atomic.max, types.Array, types.intp, types.Any)
 @lower(stubs.atomic.max, types.Array, types.Tuple, types.Any)
@@ -760,7 +756,7 @@ def ptx_atomic_cas_tuple(context, builder, sig, args):
     lary = context.make_array(aryty)(context, builder, ary)
     zero = context.get_constant(types.intp, 0)
     ptr = cgutils.get_item_pointer(context, builder, aryty, lary, (zero,))
-    
+
     if aryty.dtype == types.int32 or aryty.dtype == types.uint32:
         lmod = builder.module
         return builder.call(nvvmutils.declare_atomic_cas_int(lmod, 32),
