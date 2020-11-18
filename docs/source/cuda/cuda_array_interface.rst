@@ -304,7 +304,8 @@ consequences:
   - When launching operations on a stream that is not the default stream for
     a given parameter, they should then insert an event into the stream that
     they are operating in, and wait on that event in the default stream for
-    the parameter.
+    the parameter. For an example of this, :ref:`see below
+    <example-multi-streams>`.
 
 The User may override synchronization behavior in Numba by setting the
 environment variable ``NUMBA_CUDA_ARRAY_INTERFACE_SYNC`` or the config variable
@@ -321,6 +322,78 @@ There is scope for Numba's synchronization implementation to be optimized in
 the future, by eliding synchronizations when a kernel or driver API operation
 (e.g.  a memcopy or memset) is launched on the same stream as an imported
 array.
+
+
+.. _example-multi-streams:
+
+An example launching on an array's non-default stream
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This example shows how to ensure that a Consumer can safely consume an array
+with a default stream when it is passed to a kernel launched in a different
+stream.
+
+First we need to import Numba and a consumer library (a fictitious library named
+``other_cai_library`` for this example):
+
+.. code-block:: python
+
+   from numba import cuda, int32, void
+   import other_cai_library
+
+Now we'll define a kernel - this initializes the elements of the array, setting
+each entry to its index:
+
+.. code-block:: python
+
+   @cuda.jit(void, int32[::1])
+   def initialize_array(x):
+       i = cuda.grid(1)
+       if i < len(x):
+           x[i] = i
+
+Next we will create two streams:
+
+.. code-block:: python
+
+   array_stream = cuda.stream()
+   kernel_stream = cuda.stream()
+
+Then create an array with one of the streams as its default stream:
+
+.. code-block:: python
+
+   N = 16384
+   x = cuda.device_array(N, stream=array_stream)
+
+Now we launch the kernel in the other stream:
+
+.. code-block:: python
+
+   nthreads = 256
+   nblocks = N // nthreads
+
+   initialize_array[nthreads, nblocks, kernel_stream](x)
+
+If we were to pass ``x`` to a Consumer now, there is a risk that it may operate on
+it in ``array_stream`` whilst the kernel is still running in ``kernel_stream``.
+To prevent operations in ``array_stream`` starting before the kernel launch is
+finished, we create an event and wait on it:
+
+.. code-block:: python
+
+   # Create event
+   evt = cuda.event()
+   # Record the event after the kernel launch in kernel_stream
+   evt.record(kernel_stream)
+   # Wait for the event in array_stream
+   evt.wait(array_stream)
+
+It is now safe for ``other_cai_library`` to consume ``x``:
+
+.. code-block:: python
+
+   other_cai_library.consume(x)
 
 
 Lifetime management
