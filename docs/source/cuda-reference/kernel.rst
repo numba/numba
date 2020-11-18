@@ -185,6 +185,36 @@ Synchronization and Atomic Operations
     Returns the value of ``array[idx]`` before the storing the new value.
     Behaves like an atomic load.
 
+.. function:: numba.cuda.atomic.and_(array, idx, value)
+
+    Perform ``array[idx] &= value``. Supports int32, uint32, int64,
+    and uint64 only. The ``idx`` argument can be an integer or a tuple of
+    integer indices for indexing into multi-dimensional arrays. The number
+    of elements in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.or_(array, idx, value)
+
+    Perform ``array[idx] |= value``. Supports int32, uint32, int64,
+    and uint64 only. The ``idx`` argument can be an integer or a tuple of
+    integer indices for indexing into multi-dimensional arrays. The number
+    of elements in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
+.. function:: numba.cuda.atomic.xor(array, idx, value)
+
+    Perform ``array[idx] ^= value``. Supports int32, uint32, int64,
+    and uint64 only. The ``idx`` argument can be an integer or a tuple of
+    integer indices for indexing into multi-dimensional arrays. The number
+    of elements in ``idx`` must match the number of dimensions of ``array``.
+
+    Returns the value of ``array[idx]`` before the storing the new value.
+    Behaves like an atomic load.
+
 .. function:: numba.cuda.atomic.max(array, idx, value)
 
     Perform ``array[idx] = max(array[idx], value)``. Support int32, int64,
@@ -222,6 +252,27 @@ Synchronization and Atomic Operations
     .. warning:: All syncthreads functions must be called by every thread in the
                  thread-block. Falling to do so may result in undefined behavior.
 
+
+Cooperative Groups
+~~~~~~~~~~~~~~~~~~
+
+.. function:: numba.cuda.cg.this_grid()
+
+   Get the current grid group.
+
+   :return: The current grid group
+   :rtype: numba.cuda.cg.GridGroup
+
+.. class:: numba.cuda.cg.GridGroup
+
+   A grid group. Users should not construct a GridGroup directly - instead, get
+   the current grid group using :func:`cg.this_grid() <numba.cuda.cg.this_grid>`.
+
+   .. method:: sync()
+
+      Synchronize the current grid group.
+
+
 Memory Fences
 ~~~~~~~~~~~~~
 
@@ -249,7 +300,7 @@ are guaranteed to not move across the memory fences by optimization passes.
    A memory fence at system level (across GPUs).
 
 Warp Intrinsics
-~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
 
 The argument ``membermask`` is a 32 bit integer mask with each bit
 corresponding to a thread in the warp, with 1 meaning the thread is in the
