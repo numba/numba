@@ -152,7 +152,7 @@ def jit(signature_or_function=None, locals={}, cache=False,
         target = options.pop('target')
         warnings.warn("The 'target' keyword argument is deprecated.", NumbaDeprecationWarning)
     else:
-        target = options.pop('_target', 'cpu')
+        target = options.pop('_target', None)
 
     options['boundscheck'] = boundscheck
 
@@ -186,27 +186,16 @@ def jit(signature_or_function=None, locals={}, cache=False,
 
 
 def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
-    dispatcher = registry.dispatcher_registry[target]
 
-    def wrapper(func):
-        if extending.is_jitted(func):
-            raise TypeError(
-                "A jit decorator was called on an already jitted function "
-                f"{func}.  If trying to access the original python "
-                f"function, use the {func}.py_func attribute."
-            )
-
-        if not inspect.isfunction(func):
-            raise TypeError(
-                "The decorated object is not a function (got type "
-                f"{type(func)})."
-            )
-
+    def wrapper(func, dispatcher):
         if config.ENABLE_CUDASIM and target == 'cuda':
             from numba import cuda
             return cuda.jit(func)
         if config.DISABLE_JIT and not target == 'npyufunc':
             return func
+        if target == 'dppl':
+            from . import dppl
+            return dppl.jit(func)
         disp = dispatcher(py_func=func, locals=locals,
                           targetoptions=targetoptions,
                           **dispatcher_args)
@@ -222,7 +211,42 @@ def _jit(sigs, locals, target, cache, targetoptions, **dispatcher_args):
                 disp.disable_compile()
         return disp
 
-    return wrapper
+    def __wrapper(func):
+        if extending.is_jitted(func):
+            raise TypeError(
+                "A jit decorator was called on an already jitted function "
+                f"{func}.  If trying to access the original python "
+                f"function, use the {func}.py_func attribute."
+            )
+
+        if not inspect.isfunction(func):
+            raise TypeError(
+                "The decorated object is not a function (got type "
+                f"{type(func)})."
+            )
+
+        is_numba_dppy_present = False
+        try:
+            import numba_dppy.config as dppy_config
+
+            is_numba_dppy_present = dppy_config.dppy_present
+        except ImportError:
+            pass
+
+        if (not is_numba_dppy_present
+            or target == 'npyufunc' or targetoptions.get('no_cpython_wrapper')
+            or sigs or config.DISABLE_JIT or not targetoptions.get('nopython')):
+            target_ = target
+            if target_ is None:
+                target_ = 'cpu'
+            disp = registry.dispatcher_registry[target_]
+            return wrapper(func, disp)
+
+        from numba_dppy.target_dispatcher import TargetDispatcher
+        disp = TargetDispatcher(func, wrapper, target, targetoptions.get('parallel'))
+        return disp
+
+    return __wrapper
 
 
 def generated_jit(function=None, target='cpu', cache=False,

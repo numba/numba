@@ -234,6 +234,14 @@ class BaseContext(object):
         if functy is not None:
             func = functy
 
+        from numba.core.registry import CPUDispatcher
+        if isinstance(func, CPUDispatcher) and func is not CPUDispatcher:
+        # if we are here it's numba-dppy case and we got TargetDispatcher, so get compiled version
+            func = func.get_compiled()
+            functy = self._lookup_global(func)
+            if functy is not None:
+               func = functy
+
         if isinstance(func, types.Type):
             # If it's a type, it may support a __call__ method
             func_type = self.resolve_getattr(func, "__call__")
