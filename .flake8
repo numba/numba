@@ -171,7 +171,6 @@ exclude =
     numba/tests/test_extended_arg.py
     numba/tests/test_alignment.py
     numba/tests/test_multi3.py
-    numba/tests/test_import.py
     numba/tests/test_overlap.py
     numba/tests/test_array_attr.py
     numba/tests/test_array_methods.py
