@@ -163,6 +163,7 @@ declmethod(MemInfo_alloc);
 declmethod(MemInfo_alloc_safe);
 declmethod(MemInfo_alloc_aligned);
 declmethod(MemInfo_alloc_safe_aligned);
+declmethod(MemInfo_alloc_safe_aligned_external);
 declmethod(MemInfo_alloc_dtor_safe);
 declmethod(MemInfo_call_dtor);
 declmethod(MemInfo_new_varsize);

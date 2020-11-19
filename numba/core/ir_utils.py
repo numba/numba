@@ -110,13 +110,13 @@ def mk_alloc(typemap, calltypes, lhs, size_var, dtype, scope, loc):
     typ_var_assign = ir.Assign(np_typ_getattr, typ_var, loc)
     alloc_call = ir.Expr.call(attr_var, [size_var, typ_var], (), loc)
     if calltypes:
+        cac = typemap[attr_var.name].get_call_type(
+            typing.Context(), [size_typ, types.functions.NumberClass(dtype)], {})
         # By default, all calls to "empty" are typed as returning a standard
         # Numpy ndarray.  If we are allocating a ndarray subclass here then
         # just change the return type to be that of the subclass.
-        calltypes[alloc_call] = typemap[attr_var.name].get_call_type(
-             typing.Context(),
-             [size_typ, types.functions.NumberClass(dtype)], {}).replace(
-                 return_type=arr_typ)
+        cac._return_type = arr_typ
+        calltypes[alloc_call] = cac
     alloc_assign = ir.Assign(alloc_call, lhs, loc)
 
     out.extend([g_np_assign, attr_assign, typ_var_assign, alloc_assign])

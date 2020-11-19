@@ -796,8 +796,8 @@ typeof_typecode(PyObject *dispatcher, PyObject *val)
     }
     /* Array handling */
     else if (tyobj == &PyArray_Type) {
-         return typecode_ndarray(dispatcher, (PyArrayObject*)val);
-     }
+        return typecode_ndarray(dispatcher, (PyArrayObject*)val);
+    }
     /* Subtypes of Array handling */
     else if (PyType_IsSubtype(tyobj, &PyArray_Type)) {
         /* If the class has an attribute named __numba_no_subtype_ndarray then
