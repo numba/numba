@@ -163,6 +163,21 @@ class _TestModule(TestCase):
         raise NotImplementedError
 
 
+@jit(cache=True)
+def first_class_function_mul(x):
+    return x * x
+
+
+@jit(cache=True)
+def first_class_function_add(x):
+    return x + x
+
+
+@jit(cache=True)
+def first_class_function_usecase(f, x):
+    return f(x)
+
+
 def self_test():
     mod = sys.modules[__name__]
     _TestModule().check_module(mod)

@@ -1,7 +1,7 @@
 import math
 import operator
 from llvmlite import ir
-from numba.core import types, typing
+from numba.core import types, typing, utils
 from numba.core.imputils import Registry
 from numba.types import float32, float64, int64, uint64
 from numba.cuda import libdevice
@@ -27,6 +27,7 @@ unarys += [('tgamma', 'tgammaf', math.gamma)]
 unarys += [('lgamma', 'lgammaf', math.lgamma)]
 unarys += [('sqrt', 'sqrtf', math.sqrt)]
 unarys += [('log', 'logf', math.log)]
+unarys += [('log2', 'log2f', math.log2)]
 unarys += [('log10', 'log10f', math.log10)]
 unarys += [('log1p', 'log1pf', math.log1p)]
 unarys += [('acosh', 'acoshf', math.acosh)]
@@ -48,6 +49,8 @@ binarys += [('atan2', 'atan2f', math.atan2)]
 binarys += [('pow', 'powf', math.pow)]
 binarys += [('fmod', 'fmodf', math.fmod)]
 binarys += [('hypot', 'hypotf', math.hypot)]
+if utils.PYVERSION >= (3, 7):
+    binarys += [('remainder', 'remainderf', math.remainder)]
 
 
 @lower(math.isinf, types.Integer)

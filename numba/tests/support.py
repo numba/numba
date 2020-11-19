@@ -92,6 +92,16 @@ skip_unless_typeguard = unittest.skipUnless(
     has_typeguard, "Typeguard is not enabled",
 )
 
+# See issue #6465, PPC64LE LLVM bug
+skip_ppc64le_issue6465 = unittest.skipIf(platform.machine() == 'ppc64le',
+                                         ("Hits: 'mismatch in size of "
+                                          "parameter area' in "
+                                          "LowerCall_64SVR4"))
+
+skip_unless_py37_or_later = lambda reason: \
+    unittest.skipIf(utils.PYVERSION < (3, 7),
+    reason)
+
 try:
     import scipy.linalg.cython_lapack
     has_lapack = True

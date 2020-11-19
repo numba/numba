@@ -24,6 +24,7 @@ class TestVectorization(TestCase):
         ), override_env_config("NUMBA_CPU_FEATURES", ""):
             _flags = Flags()
             _flags.set('fastmath', FastMathOptions(fastmath))
+            _flags.set('nrt', True)
             jitted = compile_isolated(func, args_tuple, flags=_flags)
             return jitted.library.get_llvm_str()
 
@@ -52,3 +53,21 @@ class TestVectorization(TestCase):
         ty = types.float64
         llvm_ir = self.gen_ir(foo, ((ty,) * 4 + (ty[::1],)), fastmath=True)
         self.assertIn("2 x double", llvm_ir)
+
+    def test_instcombine_effect(self):
+        # Without instcombine running ahead of refprune, the IR has refops that
+        # are trivially prunable (same BB) but the arguments are obfuscated
+        # through aliases etc. The follow case triggers this situation as the
+        # typed.List has a structproxy call for computing `len` and getting the
+        # base pointer for use in iteration.
+
+        def sum_sqrt_list(lst):
+            acc = 0.0
+            for item in lst:
+                acc += np.sqrt(item)
+            return acc
+
+        llvm_ir = self.gen_ir(sum_sqrt_list, (types.ListType(types.float64),),
+                              fastmath=True)
+        self.assertIn("vector.body", llvm_ir)
+        self.assertIn("llvm.loop.isvectorized", llvm_ir)
