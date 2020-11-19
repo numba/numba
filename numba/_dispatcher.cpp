@@ -165,7 +165,7 @@ public:
        - allow_unsafe: whether to match overloads that would require an unsafe
                        cast.
        - exact_match_required: Whether all arguments types must match the
-                               overload's types exactly. When not true,
+                               overload's types exactly. When false,
                                overloads that would require a type conversion
                                can also be matched. */
     PyObject* resolve(Type sig[], int &matches, bool allow_unsafe,
