@@ -3,7 +3,8 @@ from itertools import product
 import numpy as np
 
 from numba import cuda
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest, CUDATestCase, skip_on_cudasim
+from unittest.mock import patch, call
 
 
 class CudaArrayIndexing(CUDATestCase):
@@ -307,6 +308,53 @@ class CudaArraySetting(CUDATestCase):
                 "cannot copy sequence with size 2 to array axis with "
                 "dimension 5",  # simulator
             ])
+
+    @skip_on_cudasim('cudasim does not use streams and operates synchronously')
+    def test_sync(self):
+        # There should be a synchronization when no stream is supplied
+        darr = cuda.to_device(np.arange(5))
+
+        with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                          return_value = None) as mock_sync:
+            darr[0] = 10
+
+        mock_sync.assert_called_once()
+
+    @skip_on_cudasim('cudasim does not use streams and operates synchronously')
+    def test_no_sync_default_stream(self):
+        # There should not be a synchronization when a the array has a default
+        # stream, whether it is the default stream, the legacy default stream,
+        # the per-thread default stream, or another stream.
+        streams = (cuda.stream(), cuda.default_stream(),
+                   cuda.legacy_default_stream(),
+                   cuda.per_thread_default_stream())
+
+        for stream in streams:
+            darr = cuda.to_device(np.arange(5), stream=stream)
+
+            with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                            return_value = None) as mock_sync:
+                darr[0] = 10
+
+            mock_sync.assert_not_called()
+
+    @skip_on_cudasim('cudasim does not use streams and operates synchronously')
+    def test_no_sync_supplied_stream(self):
+        # There should not be a synchronization when a stream is supplied for
+        # the setitem call, whether it is the default stream, the legacy default
+        # stream, the per-thread default stream, or another stream.
+        streams = (cuda.stream(), cuda.default_stream(),
+                   cuda.legacy_default_stream(),
+                   cuda.per_thread_default_stream())
+
+        for stream in streams:
+            darr = cuda.to_device(np.arange(5))
+
+            with patch.object(cuda.cudadrv.driver.Stream, 'synchronize',
+                            return_value = None) as mock_sync:
+                darr.setitem(0, 10, stream=stream)
+
+            mock_sync.assert_not_called()
 
 
 if __name__ == '__main__':
