@@ -468,18 +468,43 @@ class List(MutableSequence, InitialValue):
                     initial_value=None)
 
 
-class LiteralList(Literal, _HeterogeneousTuple):
+class LiteralList(Literal, ConstSized, Hashable):
     """A heterogeneous immutable list (basically a tuple with list semantics).
     """
 
     mutable = False
 
     def __init__(self, literal_value):
-        _HeterogeneousTuple.is_types_iterable(literal_value)
+        self.is_types_iterable(literal_value)
         self._literal_init(list(literal_value))
         self.types = tuple(literal_value)
         self.count = len(self.types)
         self.name = "LiteralList({})".format(literal_value)
+
+    def __getitem__(self, i):
+        """
+        Return element at position i
+        """
+        return self.types[i]
+
+    def __len__(self):
+        return len(self.types)
+
+    def __iter__(self):
+        return iter(self.types)
+
+    @classmethod
+    def from_types(cls, tys):
+        return LiteralList(tys)
+
+    @staticmethod
+    def is_types_iterable(types):
+        if not isinstance(types, Iterable):
+            raise TypingError("Argument 'types' is not iterable")
+
+    @property
+    def iterator_type(self):
+        return ListIter(self)
 
     def __unliteral__(self):
         return Poison(self)
@@ -601,6 +626,10 @@ class ListType(IterableType):
         self.dtype = itemty
         name = "{}[{}]".format(self.__class__.__name__, itemty,)
         super(ListType, self).__init__(name)
+
+    @property
+    def key(self):
+        return self.item_type
 
     def is_precise(self):
         return not isinstance(self.item_type, Undefined)
@@ -732,7 +761,7 @@ class DictType(IterableType, InitialValue):
         return DictType(self.key_type, self.value_type)
 
 
-class LiteralStrKeyDict(Literal, NamedTuple):
+class LiteralStrKeyDict(Literal, ConstSized, Hashable):
     """A Dictionary of string keys to heterogeneous values (basically a
     namedtuple with dict semantics).
     """
@@ -745,7 +774,10 @@ class LiteralStrKeyDict(Literal, NamedTuple):
         strkeys = [x.literal_value for x in literal_value.keys()]
         self.tuple_ty = namedtuple("_ntclazz", " ".join(strkeys))
         tys = [x for x in literal_value.values()]
-        NamedTuple.__init__(self, tys, self.tuple_ty)
+        self.types = tuple(tys)
+        self.count = len(self.types)
+        self.fields = tuple(self.tuple_ty._fields)
+        self.instance_class = self.tuple_ty
         self.name = "LiteralStrKey[Dict]({})".format(literal_value)
 
     def __unliteral__(self):
@@ -767,6 +799,12 @@ class LiteralStrKeyDict(Literal, NamedTuple):
                 if all(tys):
                     d = {k: v for k, v in zip(self.literal_value.keys(), tys)}
                     return LiteralStrKeyDict(d)
+
+    def __len__(self):
+        return len(self.types)
+
+    def __iter__(self):
+        return iter(self.types)
 
     @property
     def key(self):

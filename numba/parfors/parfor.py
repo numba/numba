@@ -1884,12 +1884,13 @@ class ConvertNumpyPass:
                         # only translate C order since we can't allocate F
                         if guard(self._is_supported_npycall, expr):
                             new_instr = self._numpy_to_parfor(equiv_set, lhs, expr)
-                            self.rewritten.append(dict(
-                                old=instr,
-                                new=new_instr,
-                                reason='numpy_allocator',
-                            ))
-                            instr = new_instr
+                            if new_instr is not None:
+                                self.rewritten.append(dict(
+                                    old=instr,
+                                    new=new_instr,
+                                    reason='numpy_allocator',
+                                ))
+                                instr = new_instr
                         elif isinstance(expr, ir.Expr) and expr.op == 'arrayexpr':
                             new_instr = self._arrayexpr_to_parfor(
                                 equiv_set, lhs, expr, avail_vars)
@@ -1998,6 +1999,11 @@ class ConvertNumpyPass:
 
         # generate loopnests and size variables from lhs correlations
         size_vars = equiv_set.get_shape(lhs)
+        if size_vars is None:
+            if config.DEBUG_ARRAY_OPT >= 1:
+                print("Could not convert numpy map to parfor, unknown size")
+            return None
+
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
 
         # generate init block and body
@@ -2027,7 +2033,7 @@ class ConvertNumpyPass:
                 typing.Context(), new_arg_typs, new_kw_types)
             value = expr
         else:
-            NotImplementedError(
+            raise NotImplementedError(
                 "Map of numpy.{} to parfor is not implemented".format(call_name))
 
         value_assign = ir.Assign(value, expr_out_var, loc)
@@ -2109,6 +2115,9 @@ class ConvertReducePass:
 
         init_val = args[2]
         size_vars = equiv_set.get_shape(in_arr if mask_indices is None else mask_var)
+        if size_vars is None:
+            return None
+
         index_vars, loopnests = _mk_parfor_loops(pass_states.typemap, size_vars, scope, loc)
         mask_index = index_vars
         if mask_indices:
@@ -2679,8 +2688,6 @@ def _find_mask(typemap, func_ir, arr_def):
                 mask_indices.append(None)
             # Handle integer index
             elif isinstance(index_typ, types.Integer):
-                # The follow is never tested
-                raise AssertionError('unreachable')
                 count_consts += 1
                 mask_indices.append(ind)
 
@@ -2700,6 +2707,9 @@ class ParforPass(ParforPassStates):
     def _pre_run(self):
         # run array analysis, a pre-requisite for parfor translation
         self.array_analysis.run(self.func_ir.blocks)
+        # NOTE: Prepare _max_label. See #6102
+        ir_utils._max_label = max(ir_utils._max_label,
+                                  ir_utils.find_max_label(self.func_ir.blocks))
 
     def run(self):
         """run parfor conversion pass: replace Numpy calls
@@ -3426,7 +3436,7 @@ def get_parfor_reductions(func_ir, parfor, parfor_params, calltypes, reductions=
             if isinstance(stmt, Parfor):
                 # recursive parfors can have reductions like test_prange8
                 get_parfor_reductions(func_ir, stmt, parfor_params, calltypes,
-                    reductions, reduce_varnames, param_uses, param_nodes, var_to_param)
+                    reductions, reduce_varnames, None, param_nodes, var_to_param)
 
     for param, used_vars in param_uses.items():
         # a parameter is a reduction variable if its value is used to update it

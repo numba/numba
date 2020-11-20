@@ -347,10 +347,12 @@ class BuildMapConstraint(object):
                 # Single key:value in ctor, key is str, value is an otherwise
                 # illegal container type, e.g. LiteralStrKeyDict or
                 # List, there's no way to put this into a typed.Dict, so make it
-                # a LiteralStrKeyDict.
+                # a LiteralStrKeyDict, same goes for LiteralList.
                 if len(vtys) == 1:
                     valty = vtys[0]
-                    if isinstance(valty, (types.LiteralStrKeyDict, types.List)):
+                    if isinstance(valty, (types.LiteralStrKeyDict,
+                                          types.List,
+                                          types.LiteralList)):
                         homogeneous = False
 
                 if strkey and not homogeneous:
@@ -991,7 +993,7 @@ class TypeInferer(object):
 
     def _get_return_vars(self):
         rets = []
-        for blk in utils.itervalues(self.blocks):
+        for blk in self.blocks.values():
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 rets.append(inst.value)
@@ -1017,7 +1019,7 @@ class TypeInferer(object):
             self.lock_type(var.name, typ, loc=None)
 
     def build_constraint(self):
-        for blk in utils.itervalues(self.blocks):
+        for blk in self.blocks.values():
             for inst in blk.body:
                 self.constrain_statement(inst)
 
@@ -1212,6 +1214,9 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
                 raise e
             else:
                 retty = None
+        else:
+            typdict = utils.UniqueDict(
+                typdict, **{v.name: retty for v in self._get_return_vars()})
 
         try:
             fntys = self.get_function_types(typdict)
@@ -1479,8 +1484,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
         """
         Ensure that builtins are not modified.
         """
-        if (gvar.name in ('range', 'xrange') and
-                gvar.value not in utils.RANGE_ITER_OBJECTS):
+        if gvar.name == 'range' and gvar.value is not range:
             bad = True
         elif gvar.name == 'slice' and gvar.value is not slice:
             bad = True
@@ -1602,12 +1606,7 @@ https://numba.pydata.org/numba-doc/latest/user/troubleshoot.html#my-code-has-an-
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
-            if isinstance(expr.func, ir.Intrinsic):
-                sig = expr.func.type
-                self.add_type(target.name, sig.return_type, loc=inst.loc)
-                self.add_calltype(expr, sig)
-            else:
-                self.typeof_call(inst, target, expr)
+            self.typeof_call(inst, target, expr)
         elif expr.op in ('getiter', 'iternext'):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'exhaust_iter':

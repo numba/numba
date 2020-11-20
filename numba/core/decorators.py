@@ -24,7 +24,7 @@ _msg_deprecated_signature_arg = ("Deprecated keyword argument `{0}`. "
                                  "positional argument.")
 
 def jit(signature_or_function=None, locals={}, cache=False,
-        pipeline_class=None, boundscheck=False, **options):
+        pipeline_class=None, boundscheck=None, **options):
     """
     This decorator is used to compile a Python function into native code.
 
@@ -84,15 +84,18 @@ def jit(signature_or_function=None, locals={}, cache=False,
                 NOTE: This inlining is performed at the Numba IR level and is in
                 no way related to LLVM inlining.
 
-            boundscheck: bool
+            boundscheck: bool or None
                 Set to True to enable bounds checking for array indices. Out
                 of bounds accesses will raise IndexError. The default is to
-                not do bounds checking. If bounds checking is disabled, out of
-                bounds accesses can produce garbage results or segfaults.
+                not do bounds checking. If False, bounds checking is disabled,
+                out of bounds accesses can produce garbage results or segfaults.
                 However, enabling bounds checking will slow down typical
                 functions, so it is recommended to only use this flag for
                 debugging. You can also set the NUMBA_BOUNDSCHECK environment
-                variable to 0 or 1 to globally override this flag.
+                variable to 0 or 1 to globally override this flag. The default
+                value is None, which under normal execution equates to False,
+                but if debug is set to True then bounds checking will be
+                enabled.
 
     Returns
     --------
@@ -257,7 +260,7 @@ def njit(*args, **kws):
     return jit(*args, **kws)
 
 
-def cfunc(sig, locals={}, cache=False, **options):
+def cfunc(sig, locals={}, cache=False, pipeline_class=None, **options):
     """
     This decorator is used to compile a Python function into a C callback
     usable with foreign C libraries.
@@ -272,7 +275,10 @@ def cfunc(sig, locals={}, cache=False, **options):
 
     def wrapper(func):
         from numba.core.ccallback import CFunc
-        res = CFunc(func, sig, locals=locals, options=options)
+        additional_args = {}
+        if pipeline_class is not None:
+            additional_args['pipeline_class'] = pipeline_class
+        res = CFunc(func, sig, locals=locals, options=options, **additional_args)
         if cache:
             res.enable_caching()
         res.compile()

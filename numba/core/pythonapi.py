@@ -2,6 +2,7 @@ from collections import namedtuple
 import contextlib
 import pickle
 import hashlib
+import sys
 
 from llvmlite import ir
 from llvmlite.llvmpy.core import Type, Constant
@@ -121,7 +122,7 @@ class EnvironmentManager(object):
         """
         # All constants are frozen inside the environment
         if isinstance(const, str):
-            const = utils.intern(const)
+            const = sys.intern(const)
         for index, val in enumerate(self.env.consts):
             if val is const:
                 break
@@ -134,10 +135,28 @@ class EnvironmentManager(object):
         """
         Look up constant number *index* inside the environment body.
         A borrowed reference is returned.
+
+        The returned LLVM value may have NULL value at runtime which indicates
+        an error at runtime.
         """
         assert index < len(self.env.consts)
 
-        return self.pyapi.list_getitem(self.env_body.consts, index)
+        builder = self.pyapi.builder
+        consts = self.env_body.consts
+        ret = cgutils.alloca_once(builder, self.pyapi.pyobj, zfill=True)
+        with builder.if_else(cgutils.is_not_null(builder, consts)) as \
+                (br_not_null, br_null):
+            with br_not_null:
+                getitem = self.pyapi.list_getitem(consts, index)
+                builder.store(getitem, ret)
+            with br_null:
+                # This can happen when the Environment is accidentally released
+                # and has subsequently been garbage collected.
+                self.pyapi.err_set_string(
+                    "PyExc_RuntimeError",
+                    "`env.consts` is NULL in `read_const`",
+                )
+        return builder.load(ret)
 
 
 _IteratorLoop = namedtuple('_IteratorLoop', ('value', 'do_break'))
@@ -1176,7 +1195,7 @@ class PythonAPI(object):
 
         fnty = Type.function(self.pyobj,
                              [self.voidptr, self.pyobj, intty, intty, self.pyobj])
-        fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python")
+        fn = self._get_function(fnty, name="NRT_adapt_ndarray_to_python_acqref")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
 
         ndim = self.context.get_constant(types.int32, aryty.ndim)

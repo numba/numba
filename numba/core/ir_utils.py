@@ -539,7 +539,9 @@ def remove_dead(blocks, args, func_ir, typemap=None, alias_map=None, arg_aliases
         alias_map, arg_aliases = find_potential_aliases(blocks, args, typemap,
                                                         func_ir)
     if config.DEBUG_ARRAY_OPT >= 1:
-        print("remove_dead alias map:", alias_map)
+        print("args:", args)
+        print("alias map:", alias_map)
+        print("arg_aliases:", arg_aliases)
         print("live_map:", live_map)
         print("usemap:", usedefs.usemap)
         print("defmap:", usedefs.defmap)
@@ -740,7 +742,7 @@ alias_analysis_extensions = {}
 alias_func_extensions = {}
 
 def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
-                                                            arg_aliases=None):
+                                                           arg_aliases=None):
     "find all array aliases and argument aliases to avoid remove as dead"
     if alias_map is None:
         alias_map = {}
@@ -775,6 +777,7 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                 # a = b.c.  a should alias b
                 if (isinstance(expr, ir.Expr) and expr.op == 'getattr'
+                        and expr.attr not in ['shape']
                         and expr.value.name in arg_aliases):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
                 # calls that can create aliases such as B = A.ravel()
@@ -825,12 +828,11 @@ def is_immutable_type(var, typemap):
     typ = typemap[var]
     # TODO: add more immutable types
     if isinstance(typ, (types.Number, types.scalars._NPDatetimeBase,
-                        types.containers.BaseTuple,
                         types.iterators.RangeType)):
         return True
     if typ==types.string:
         return True
-    # consevatively, assume mutable
+    # conservatively, assume mutable
     return False
 
 def copy_propagate(blocks, typemap):
@@ -1507,7 +1509,7 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
         if isinstance(callee_def, (ir.Global, ir.FreeVar)):
             # require(callee_def.value == numpy)
             # these checks support modules like numpy, numpy.random as well as
-            # calls like len() and intrinsitcs like assertEquiv
+            # calls like len() and intrinsics like assertEquiv
             keys = ['name', '_name', '__name__']
             value = None
             for key in keys:
@@ -1525,15 +1527,25 @@ def find_callname(func_ir, expr, typemap=None, definition_finder=get_definition)
                 def_val = def_val._defn
             if hasattr(def_val, '__module__'):
                 mod_name = def_val.__module__
+                # The reason for first checking if the function is in NumPy's
+                # top level name space by module is that some functions are
+                # deprecated in NumPy but the functions' names are aliased with
+                # other common names. This prevents deprecation warnings on
+                # e.g. getattr(numpy, 'bool') were a bool the target.
+                # For context see #6175, impacts NumPy>=1.20.
+                mod_not_none = mod_name is not None
+                numpy_toplevel = (mod_not_none and
+                                  (mod_name == 'numpy'
+                                   or mod_name.startswith('numpy.')))
                 # it might be a numpy function imported directly
-                if (hasattr(numpy, value)
+                if (numpy_toplevel and hasattr(numpy, value)
                         and def_val == getattr(numpy, value)):
                     attrs += ['numpy']
                 # it might be a np.random function imported directly
                 elif (hasattr(numpy.random, value)
                         and def_val == getattr(numpy.random, value)):
                     attrs += ['random', 'numpy']
-                elif mod_name is not None:
+                elif mod_not_none:
                     attrs.append(mod_name)
             else:
                 class_name = def_val.__class__.__name__
@@ -1673,12 +1685,30 @@ def get_ir_of_code(glbls, fcode):
             self.state.typemap = None
             self.state.return_type = None
             self.state.calltypes = None
-    rewrites.rewrite_registry.apply('before-inference', DummyPipeline(ir).state)
+    state = DummyPipeline(ir).state
+    rewrites.rewrite_registry.apply('before-inference', state)
     # call inline pass to handle cases like stencils and comprehensions
     swapped = {} # TODO: get this from diagnostics store
     inline_pass = numba.core.inline_closurecall.InlineClosureCallPass(
         ir, numba.core.cpu.ParallelOptions(False), swapped)
     inline_pass.run()
+
+    # TODO: DO NOT ADD MORE THINGS HERE!
+    # If adding more things here is being contemplated, it really is time to
+    # retire this function and work on getting the InlineWorker class from
+    # numba.core.inline_closurecall into sufficient shape as a replacement.
+    # The issue with `get_ir_of_code` is that it doesn't run a full compilation
+    # pipeline and as a result various additional things keep needing to be
+    # added to create valid IR.
+
+    # rebuild IR in SSA form
+    from numba.core.untyped_passes import ReconstructSSA
+    from numba.core.typed_passes import PreLowerStripPhis
+    reconstruct_ssa = ReconstructSSA()
+    phistrip = PreLowerStripPhis()
+    reconstruct_ssa.run_pass(state)
+    phistrip.run_pass(state)
+
     post_proc = postproc.PostProcessor(ir)
     post_proc.run(True)
     return ir
@@ -1740,6 +1770,12 @@ def dump_blocks(blocks):
         print(label, ":")
         for stmt in block.body:
             print("    ", stmt)
+
+def is_operator_or_getitem(expr):
+    """true if expr is unary or binary operator or getitem"""
+    return (isinstance(expr, ir.Expr)
+            and getattr(expr, 'op', False)
+            and expr.op in ['unary', 'binop', 'inplace_binop', 'getitem', 'static_getitem'])
 
 def is_get_setitem(stmt):
     """stmt is getitem assignment or setitem (and static cases)"""

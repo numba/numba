@@ -2605,41 +2605,29 @@ def _check_scalar_or_lt_2d_mat(a, func_name, la_prefix=True):
                               % interp, highlighting=False)
 
 
-def _get_as_array(x):
-    if not isinstance(x, types.Array):
-        @register_jitable
-        def asarray(x):
-            return np.array((x,))
-        return asarray
-    else:
-        @register_jitable
-        def asarray(x):
-            return x
-        return asarray
+@register_jitable
+def outer_impl_none(a, b, out):
+    aa = np.asarray(a)
+    bb = np.asarray(b)
+    return np.multiply(aa.ravel().reshape((aa.size, 1)),
+                        bb.ravel().reshape((1, bb.size)))
+
+
+@register_jitable
+def outer_impl_arr(a, b, out):
+    aa = np.asarray(a)
+    bb = np.asarray(b)
+    np.multiply(aa.ravel().reshape((aa.size, 1)),
+                bb.ravel().reshape((1, bb.size)),
+                out)
+    return out
 
 
 def _get_outer_impl(a, b, out):
-    a_arr = _get_as_array(a)
-    b_arr = _get_as_array(b)
-
     if out in (None, types.none):
-        @register_jitable
-        def outer_impl(a, b, out):
-            aa = a_arr(a)
-            bb = b_arr(b)
-            return np.multiply(aa.ravel().reshape((aa.size, 1)),
-                               bb.ravel().reshape((1, bb.size)))
-        return outer_impl
+        return outer_impl_none
     else:
-        @register_jitable
-        def outer_impl(a, b, out):
-            aa = a_arr(a)
-            bb = b_arr(b)
-            np.multiply(aa.ravel().reshape((aa.size, 1)),
-                        bb.ravel().reshape((1, bb.size)),
-                        out)
-            return out
-        return outer_impl
+        return outer_impl_arr
 
 
 @overload(np.outer)

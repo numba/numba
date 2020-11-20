@@ -3,21 +3,51 @@ import platform
 import sys
 from distutils import sysconfig
 from distutils.command import build
+from distutils.command.build_ext import build_ext
 from distutils.spawn import spawn
 
 from setuptools import Extension, find_packages, setup
-
 import versioneer
 
+_version_module = None
+try:
+    from packaging import version as _version_module
+except ImportError:
+    try:
+        from setuptools._vendor.packaging import version as _version_module
+    except ImportError:
+        pass
+
+
 min_python_version = "3.6"
+max_python_version = "3.9"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.15"
-min_llvmlite_version = "0.33"
-max_llvmlite_version = "0.35"
+min_llvmlite_version = "0.36.0.dev0"
+max_llvmlite_version = "0.37"
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
     sysconfig.get_config_vars()['Py_ENABLE_SHARED'] = 0
+
+
+def _guard_py_ver():
+    if _version_module is None:
+        return
+
+    parse = _version_module.parse
+
+    min_py = parse(min_python_version)
+    max_py = parse(max_python_version)
+    cur_py = parse('.'.join(map(str, sys.version_info[:3])))
+
+    if not min_py <= cur_py < max_py:
+        msg = ('Cannot install on Python version {}; only versions >={},<{} ',
+               'are supported.')
+        raise RuntimeError(msg.format(cur_py, min_py, max_py))
+
+
+_guard_py_ver()
 
 
 class build_doc(build.build):
@@ -36,17 +66,48 @@ versioneer.parentdir_prefix = 'numba-'
 cmdclass = versioneer.get_cmdclass()
 cmdclass['build_doc'] = build_doc
 
-
-GCCFLAGS = ["-std=c89", "-Wdeclaration-after-statement", "-Werror"]
-
-if os.environ.get("NUMBA_GCC_FLAGS"):
-    CFLAGS = GCCFLAGS
-else:
-    CFLAGS = ['-g']
-
 install_name_tool_fixer = []
 if sys.platform == 'darwin':
     install_name_tool_fixer += ['-headerpad_max_install_names']
+
+build_ext = cmdclass.get('build_ext', build_ext)
+
+numba_be_user_options = [
+    ('werror', None, 'Build extensions with -Werror'),
+    ('wall', None, 'Build extensions with -Wall'),
+    ('noopt', None, 'Build extensions without optimization'),
+]
+
+
+class NumbaBuildExt(build_ext):
+
+    user_options = build_ext.user_options + numba_be_user_options
+    boolean_options = build_ext.boolean_options + ['werror', 'wall', 'noopt']
+
+    def initialize_options(self):
+        super().initialize_options()
+        self.werror = 0
+        self.wall = 0
+        self.noopt = 0
+
+    def run(self):
+        extra_compile_args = []
+        if self.noopt:
+            if sys.platform == 'win32':
+                extra_compile_args.append('/Od')
+            else:
+                extra_compile_args.append('-O0')
+        if self.werror:
+            extra_compile_args.append('-Werror')
+        if self.wall:
+            extra_compile_args.append('-Wall')
+        for ext in self.extensions:
+            ext.extra_compile_args.extend(extra_compile_args)
+
+        super().run()
+
+
+cmdclass['build_ext'] = NumbaBuildExt
 
 
 def is_building():
@@ -92,7 +153,6 @@ def get_ext_modules():
 
     ext_dynfunc = Extension(name='numba._dynfunc',
                             sources=['numba/_dynfuncmod.c'],
-                            extra_compile_args=CFLAGS,
                             depends=['numba/_pymodule.h',
                                      'numba/_dynfunc.c'])
 
@@ -114,7 +174,6 @@ def get_ext_modules():
                                        "numba/cext/dictobject.c",
                                        "numba/cext/listobject.c",
                                        ],
-                              extra_compile_args=CFLAGS,
                               extra_link_args=install_name_tool_fixer,
                               depends=["numba/_pymodule.h",
                                        "numba/_helperlib.c",
@@ -338,11 +397,11 @@ metadata = dict(
     scripts=["numba/pycc/pycc", "bin/numba"],
     author="Anaconda, Inc.",
     author_email="numba-users@continuum.io",
-    url="https://numba.github.com",
+    url="https://numba.pydata.org",
     packages=packages,
     setup_requires=build_requires,
     install_requires=install_requires,
-    python_requires=">={}".format(min_python_version),
+    python_requires=">={},<{}".format(min_python_version, max_python_version),
     license="BSD",
     cmdclass=cmdclass,
 )

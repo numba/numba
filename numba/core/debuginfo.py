@@ -8,11 +8,8 @@ import os.path
 
 from llvmlite import ir
 
-from numba.core.utils import add_metaclass
 
-
-@add_metaclass(abc.ABCMeta)
-class AbstractDIBuilder(object):
+class AbstractDIBuilder(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def mark_variable(self, builder, allocavalue, name, lltype, size, loc):
         """Emit debug info for the variable.

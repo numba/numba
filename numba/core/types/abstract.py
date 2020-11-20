@@ -5,7 +5,7 @@ import weakref
 
 import numpy as np
 
-from numba.core.utils import cached_property, add_metaclass
+from numba.core.utils import cached_property
 
 # Types are added to a global registry (_typecache) in order to assign
 # them unique integer codes for fast matching in _dispatcher.c.
@@ -77,8 +77,7 @@ def _type_reconstructor(reconstructor, reconstructor_args, state):
     return type(obj)._intern(obj)
 
 
-@add_metaclass(_TypeMetaclass)
-class Type(object):
+class Type(metaclass=_TypeMetaclass):
     """
     The base class for all Numba types.
     It is essential that proper equality comparison is implemented.  The
@@ -464,6 +463,10 @@ class TypeRef(Dummy):
     def __init__(self, instance_type):
         self.instance_type = instance_type
         super(TypeRef, self).__init__('typeref[{}]'.format(self.instance_type))
+
+    @property
+    def key(self):
+        return self.instance_type
 
 
 class InitialValue(object):

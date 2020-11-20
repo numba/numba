@@ -18,7 +18,6 @@ from numba.core.typeconv.rules import default_type_manager
 from numba.core.typing.templates import fold_arguments
 from numba.core.typing.typeof import Purpose, typeof
 from numba.core.bytecode import get_code_object
-from numba.core.utils import reraise
 from numba.core.caching import NullCache, FunctionCache
 from numba.core import entrypoints
 
@@ -276,7 +275,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
     @property
     def nopython_signatures(self):
         return [cres.signature for cres in self.overloads.values()
-                if not cres.objectmode and not cres.interpmode]
+                if not cres.objectmode]
 
     def disable_compile(self, val=True):
         """Disable the compilation of new signatures at call time.
@@ -288,7 +287,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
     def add_overload(self, cres):
         args = tuple(cres.signature.args)
         sig = [a._code for a in args]
-        self._insert(sig, cres.entry_point, cres.objectmode, cres.interpmode)
+        self._insert(sig, cres.entry_point, cres.objectmode)
         self.overloads[args] = cres
 
     def fold_argument_types(self, args, kws):
@@ -355,7 +354,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             if config.FULL_TRACEBACKS:
                 raise e
             else:
-                reraise(type(e), e, None)
+                raise e.with_traceback(None)
 
         argtypes = []
         for a in args:
@@ -515,7 +514,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             if file is None:
                 file = sys.stdout
 
-            for ver, res in utils.iteritems(overloads):
+            for ver, res in overloads.items():
                 print("%s %s" % (self.py_func.__name__, ver), file=file)
                 print('-' * 80, file=file)
                 print(res.type_annotation, file=file)
@@ -526,13 +525,52 @@ class _DispatcherBase(_dispatcher.Dispatcher):
             from numba.core.annotations.pretty_annotate import Annotate
             return Annotate(self, signature=signature, style=style)
 
-    def inspect_cfg(self, signature=None, show_wrapper=None):
+    def inspect_cfg(self, signature=None, show_wrapper=None, **kwargs):
         """
         For inspecting the CFG of the function.
 
         By default the CFG of the user function is shown.  The *show_wrapper*
         option can be set to "python" or "cfunc" to show the python wrapper
         function or the *cfunc* wrapper function, respectively.
+
+        Parameters accepted in kwargs
+        -----------------------------
+        filename : string, optional
+            the name of the output file, if given this will write the output to
+            filename
+        view : bool, optional
+            whether to immediately view the optional output file
+        highlight : bool, set, dict, optional
+            what, if anything, to highlight, options are:
+            { incref : bool, # highlight NRT_incref calls
+              decref : bool, # highlight NRT_decref calls
+              returns : bool, # highlight exits which are normal returns
+              raises : bool, # highlight exits which are from raise
+              meminfo : bool, # highlight calls to NRT*meminfo
+              branches : bool, # highlight true/false branches
+             }
+            Default is True which sets all of the above to True. Supplying a set
+            of strings is also accepted, these are interpreted as key:True with
+            respect to the above dictionary. e.g. {'incref', 'decref'} would
+            switch on highlighting on increfs and decrefs.
+        interleave: bool, set, dict, optional
+            what, if anything, to interleave in the LLVM IR, options are:
+            { python: bool # interleave python source code with the LLVM IR
+              lineinfo: bool # interleave line information markers with the LLVM
+                             # IR
+            }
+            Default is True which sets all of the above to True. Supplying a set
+            of strings is also accepted, these are interpreted as key:True with
+            respect to the above dictionary. e.g. {'python',} would
+            switch on interleaving of python source code in the LLVM IR.
+        strip_ir : bool, optional
+            Default is False. If set to True all LLVM IR that is superfluous to
+            that requested in kwarg `highlight` will be removed.
+        show_key : bool, optional
+            Default is True. Create a "key" for the highlighting in the rendered
+            CFG.
+        fontsize : int, optional
+            Default is 8. Set the fontsize in the output to this value.
         """
         if signature is not None:
             cres = self.overloads[signature]
@@ -543,7 +581,7 @@ class _DispatcherBase(_dispatcher.Dispatcher):
                 fname = cres.fndesc.llvm_cfunc_wrapper_name
             else:
                 fname = cres.fndesc.mangled_name
-            return lib.get_function_cfg(fname)
+            return lib.get_function_cfg(fname, py_func=self.py_func, **kwargs)
 
         return dict((sig, self.inspect_cfg(sig, show_wrapper=show_wrapper))
                     for sig in self.signatures)
@@ -808,7 +846,7 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
             if cres is not None:
                 self._cache_hits[sig] += 1
                 # XXX fold this in add_overload()? (also see compiler.py)
-                if not cres.objectmode and not cres.interpmode:
+                if not cres.objectmode:
                     self.targetctx.insert_user_function(cres.entry_point,
                                                         cres.fndesc, [cres.library])
                 self.add_overload(cres)
@@ -1057,6 +1095,8 @@ class ObjModeLiftedWith(LiftedWith):
             raise ValueError("expecting `flags.force_pyobject`")
         if self.output_types is None:
             raise TypeError('`output_types` must be provided')
+        # switch off rewrites, they have no effect
+        self.flags.no_rewrites = True
 
     @property
     def _numba_type_(self):
@@ -1100,6 +1140,12 @@ class ObjModeLiftedWith(LiftedWith):
                     'with-context for arg {}'
                 )
                 raise errors.TypingError(msg.format(i))
+
+    @global_compiler_lock
+    def compile(self, sig):
+        args, _ = sigutils.normalize_signature(sig)
+        sig = (types.ffi_forced_object,) * len(args)
+        return super().compile(sig)
 
 
 # Initialize typeof machinery

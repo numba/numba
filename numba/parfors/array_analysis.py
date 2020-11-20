@@ -19,6 +19,7 @@ from numba.core.ir_utils import (
     find_const,
     is_namedtuple_class,
     build_definitions,
+    GuardException,
 )
 from numba.core.analysis import compute_cfg_from_blocks
 from numba.core.typing import npydecl, signature
@@ -2030,8 +2031,12 @@ class ArrayAnalysis(object):
                 expr.index_var = result[0]
             return result[1]
         shape = equiv_set._get_shape(var)
-        require(isinstance(expr.index, int) and expr.index < len(shape))
-        return shape[expr.index], []
+        if isinstance(expr.index, int):
+            require(expr.index < len(shape))
+            return shape[expr.index], []
+        elif isinstance(expr.index, slice):
+            return shape[expr.index], []
+        require(False)
 
     def _analyze_op_unary(self, scope, equiv_set, expr):
         require(expr.fn in UNARY_MAP_OP)
@@ -2044,21 +2049,33 @@ class ArrayAnalysis(object):
     def _analyze_op_binop(self, scope, equiv_set, expr):
         require(expr.fn in BINARY_MAP_OP)
         return self._analyze_broadcast(
-            scope, equiv_set, expr.loc, [expr.lhs, expr.rhs]
+            scope, equiv_set, expr.loc, [expr.lhs, expr.rhs], expr.fn
         )
 
     def _analyze_op_inplace_binop(self, scope, equiv_set, expr):
         require(expr.fn in INPLACE_BINARY_MAP_OP)
         return self._analyze_broadcast(
-            scope, equiv_set, expr.loc, [expr.lhs, expr.rhs]
+            scope, equiv_set, expr.loc, [expr.lhs, expr.rhs], expr.fn
         )
 
     def _analyze_op_arrayexpr(self, scope, equiv_set, expr):
         return self._analyze_broadcast(
-            scope, equiv_set, expr.loc, expr.list_vars()
+            scope, equiv_set, expr.loc, expr.list_vars(), None
         )
 
     def _analyze_op_build_tuple(self, scope, equiv_set, expr):
+        # For the moment, we can't do anything with tuples that
+        # contain multi-dimensional arrays, compared to array dimensions.
+        # Return None to say we won't track this tuple if a part of it
+        # is an array.
+        for x in expr.items:
+            if (
+                isinstance(x, ir.Var)
+                and isinstance(self.typemap[x.name], types.ArrayCompatible)
+                and self.typemap[x.name].ndim > 1
+            ):
+                return None
+
         consts = []
         for var in expr.items:
             x = guard(find_const, self.func_ir, var)
@@ -2112,7 +2129,8 @@ class ArrayAnalysis(object):
             ".", "_"
         )
         if fname in UFUNC_MAP_OP:  # known numpy ufuncs
-            return self._analyze_broadcast(scope, equiv_set, expr.loc, args)
+            return self._analyze_broadcast(scope, equiv_set,
+                                           expr.loc, args, None)
         else:
             try:
                 fn = getattr(self, fname)
@@ -2795,11 +2813,33 @@ class ArrayAnalysis(object):
         require(len(args) >= 1)
         return equiv_set._get_shape(args[0]), []
 
-    def _analyze_broadcast(self, scope, equiv_set, loc, args):
+    def _analyze_broadcast(self, scope, equiv_set, loc, args, fn):
         """Infer shape equivalence of arguments based on Numpy broadcast rules
         and return shape of output
         https://docs.scipy.org/doc/numpy/user/basics.broadcasting.html
         """
+        tups = list(filter(lambda a: self._istuple(a.name), args))
+        # Here we have a tuple concatenation.
+        if len(tups) == 2 and fn.__name__ == 'add':
+            # If either of the tuples is empty then the resulting shape
+            # is just the other tuple.
+            tup0typ = self.typemap[tups[0].name]
+            tup1typ = self.typemap[tups[1].name]
+            if tup0typ.count == 0:
+                return (equiv_set.get_shape(tups[1]), [])
+            if tup1typ.count == 0:
+                return (equiv_set.get_shape(tups[0]), [])
+
+            try:
+                shapes = [equiv_set.get_shape(x) for x in tups]
+                if None in shapes:
+                    return None
+                concat_shapes = sum(shapes, ())
+                return (concat_shapes, [])
+            except GuardException:
+                return None
+
+        # else arrays
         arrs = list(filter(lambda a: self._isarray(a.name), args))
         require(len(arrs) > 0)
         names = [x.name for x in arrs]
@@ -2808,7 +2848,7 @@ class ArrayAnalysis(object):
         require(max_dim > 0)
         try:
             shapes = [equiv_set.get_shape(x) for x in arrs]
-        except errors.GuardException:
+        except GuardException:
             return (
                 arrs[0],
                 self._call_assert_equiv(scope, loc, equiv_set, arrs),
@@ -2988,6 +3028,10 @@ class ArrayAnalysis(object):
     def _isarray(self, varname):
         typ = self.typemap[varname]
         return isinstance(typ, types.npytypes.Array) and typ.ndim > 0
+
+    def _istuple(self, varname):
+        typ = self.typemap[varname]
+        return isinstance(typ, types.BaseTuple)
 
     def _sum_size(self, equiv_set, sizes):
         """Return the sum of the given list of sizes if they are all equivalent

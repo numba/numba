@@ -452,6 +452,10 @@ def parse_dtype(dtype):
         return dtype.dtype
     elif isinstance(dtype, types.TypeRef):
         return dtype.instance_type
+    elif isinstance(dtype, types.StringLiteral):
+        dt = getattr(np, dtype.literal_value, None)
+        if dt is not None:
+            return from_dtype(dt)
 
 def _parse_nested_sequence(context, typ):
     """
@@ -484,7 +488,6 @@ def _parse_nested_sequence(context, typ):
         # Scalar type => check it's valid as a Numpy array dtype
         as_dtype(typ)
         return 0, typ
-
 
 
 @infer_global(np.array)

@@ -395,21 +395,6 @@ class TestLists(MemoryLeakMixin, TestCase):
         cfunc = cr.entry_point
         self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
 
-    @testing.allow_interpreter_mode
-    def test_list_comprehension(self):
-        list_tests = [list_comprehension1,
-                      list_comprehension2,
-                      list_comprehension3,
-                      list_comprehension4,
-                      list_comprehension5,
-                      list_comprehension6]
-
-        for test in list_tests:
-            pyfunc = test
-            cr = compile_isolated(pyfunc, ())
-            cfunc = cr.entry_point
-            self.assertEqual(cfunc(), pyfunc())
-
     def check_unary_with_size(self, pyfunc, precise=True):
         cfunc = jit(nopython=True)(pyfunc)
         # Use various sizes, to stress the allocation algorithm
@@ -1735,6 +1720,19 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
 
         self.assertEqual(foo.py_func(), foo())
 
+    def test_staticgetitem_slice(self):
+        # this is forbidden by typing as there's no way to serialize a list of
+        # any kind as required by returning a (static) slice of a LiteralList
+        @njit
+        def foo():
+            l = ['a', 'b', 1]
+            return l[:2]
+
+        with self.assertRaises(errors.TypingError) as raises:
+            foo()
+        expect = "Cannot __getitem__ on a literal list"
+        self.assertIn(expect, str(raises.exception))
+
     def test_setitem(self):
 
         @njit
@@ -1793,6 +1791,25 @@ class TestLiteralLists(MemoryLeakMixin, TestCase):
             return l[0], l[1]
 
         self.assertEqual(foo(), foo.py_func())
+
+    def test_tuple_not_in_mro(self):
+        # Related to #6094, make sure that LiteralList does not inherit from
+        # types.BaseTuple as this breaks isinstance checks.
+        def bar(x):
+            pass
+
+        @overload(bar)
+        def ol_bar(x):
+            self.assertFalse(isinstance(x, types.BaseTuple))
+            self.assertTrue(isinstance(x, types.LiteralList))
+            return lambda x: ...
+
+        @njit
+        def foo():
+            l = ['a', 1]
+            bar(l)
+
+        foo()
 
 
 if __name__ == '__main__':
